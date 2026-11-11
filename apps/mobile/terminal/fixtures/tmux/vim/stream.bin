@@ -1,0 +1,91 @@
+[?1049h[?1h=[H[2J[?12l[?25h[?1000l[?1002l[?1003l[?1006l[?1005l(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[?2004l[1;1H[1;24r[>c[>q[24;47H[?25l[?2004hP=1s\[H[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+"/tmp/wk-fixture-hazNhF/sample.ts" 120L, 8504B[KP=2s\(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[?2004l[1;1H[1;24r[24;47H[?25l[?2004hP=1s\[H[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+[K
+"/tmp/wk-fixture-hazNhF/sample.ts" 120L, 8504B[KP=2s\[2;1H▽  
+           [H[38;5;130m  1 [34m// section 0: 中文注释与 emoji 🙂
+[38;5;130m  2 [35mexport[39m [38;5;130mfunction[39m [36mstep1[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m1[38;5;130m}[31m`[39m; [36m}[39m[K
+[38;5;130m  3 [35mexport[39m [38;5;130mfunction[39m [36mstep2[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m2[38;5;130m}[31m`[39m; [36m}[39m[K
+[38;5;130m  4 [35mexport[39m [38;5;130mfunction[39m [36mstep3[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m3[38;5;130m}[31m`[39m; [36m}
+[38;5;130m  5 [35mexport[39m [38;5;130mfunction[39m [36mstep4[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m4[38;5;130m}[31m`[39m; [36m}
+[38;5;130m  6 [35mexport[39m [38;5;130mfunction[39m [36mstep5[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m5[38;5;130m}[31m`[39m; [36m}
+[38;5;130m  7 [35mexport[39m [38;5;130mfunction[39m [36mstep6[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m6[38;5;130m}[31m`[39m; [36m}
+[38;5;130m  8 [35mexport[39m [38;5;130mfunction[39m [36mstep7[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m7[38;5;130m}[31m`[39m; [36m}
+[38;5;130m  9 [35mexport[39m [38;5;130mfunction[39m [36mstep8[39m([35mvalue[39m:[35m [32mnumber(B[m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m8[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 10 [35mexport[39m [38;5;130mfunction[39m [36mstep9[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m9[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 11 [34m// section 1: 中文注释与 emoji 🙂
+[38;5;130m 12 [35mexport[39m [38;5;130mfunction[39m [36mstep11[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m11[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 13 [35mexport[39m [38;5;130mfunction[39m [36mstep12[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m12[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 14 [35mexport[39m [38;5;130mfunction[39m [36mstep13[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m13[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 15 [35mexport[39m [38;5;130mfunction[39m [36mstep14[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m14[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 16 [35mexport[39m [38;5;130mfunction[39m [36mstep15[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m15[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 17 [35mexport[39m [38;5;130mfunction[39m [36mstep16[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m16[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 18 [35mexport[39m [38;5;130mfunction[39m [36mstep17[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m17[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 19 [35mexport[39m [38;5;130mfunction[39m [36mstep18[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m18[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 20 [35mexport[39m [38;5;130mfunction[39m [36mstep19[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m19[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 21 [34m// section 2: 中文注释与 emoji 🙂
+[38;5;130m 22 [35mexport[39m [38;5;130mfunction[39m [36mstep21[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m21[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 23 [35mexport[39m [38;5;130mfunction[39m [36mstep22[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m22[38;5;130m}[31m`[39m; [36m}[1;5H[?12l[?25h(B[mP=1s\[1;23r[1;1H[11M[13;1H[38;5;130m 24 [35mexport[39m [38;5;130mfunction[39m [36mstep23[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m23[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 25 [35mexport[39m [38;5;130mfunction[39m [36mstep24[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m24[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 26 [35mexport[39m [38;5;130mfunction[39m [36mstep25[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m25[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 27 [35mexport[39m [38;5;130mfunction[39m [36mstep26[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m26[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 28 [35mexport[39m [38;5;130mfunction[39m [36mstep27[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m27[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 29 [35mexport[39m [38;5;130mfunction[39m [36mstep28[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m28[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 30 [35mexport[39m [38;5;130mfunction[39m [36mstep29[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m29[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 31 [34m// section 3: 中文注释与 emoji 🙂
+[38;5;130m 32 [35mexport[39m [38;5;130mfunction[39m [36mstep31[39m([35mvalue[1;24r[21;33H[?25l(B[mP=2s\:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m31[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 33 [35mexport[39m [38;5;130mfunction[39m [36mstep32[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m32[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 34 [35mexport[39m [38;5;130mfunction[39m [36mstep33[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m33[38;5;130m}[31m`[39m; [36m}[39m
+[K[1;5H[?12l[?25hP=1s\[1;23r[1;1H[11M[13;1H[38;5;130m 35 [35mexport[39m [38;5;130mfunction[39m [36mstep34[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m34[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 36 [35mexport[39m [38;5;130mfunction[39m [36mstep35[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m35[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 37 [35mexport[39m [38;5;130mfunction[39m [36mstep36[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m36[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 38 [35mexport[39m [38;5;130mfunction[39m [36mstep37[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m37[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 39 [35mexport[39m [38;5;130mfunction[39m [36mstep38[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m38[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 40 [35mexport[39m [38;5;130mfunction[39m [36mstep39[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m39[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 41 [34m// section 4: 中文注释与 emoji 🙂
+[38;5;130m 42 [35mexport[39m [38;5;130mfunction[39m [36mstep41[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m41[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 43 [35mexport[39m [38;5;130mfunction[39m [36mstep42[39m([35mvalue[1;24r[21;33H[?25l(B[mP=2s\:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m42[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 44 [35mexport[39m [38;5;130mfunction[39m [36mstep43[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m43[38;5;130m}[31m`[39m; [36m}
+[38;5;130m 45 [35mexport[39m [38;5;130mfunction[39m [36mstep44[39m([35mvalue[39m:[35m [32mnumber[39m): [32mstring[39m [36m{[39m [38;5;130mreturn[39m [31m`[38;5;130m${[39mvalue * [31m44[38;5;130m}[31m`[39m; [36m}[1;5H[?12l[?25h(B[m[24;1H/中文[?25l[9;19H[?12l[?25h

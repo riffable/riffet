@@ -1,0 +1,30 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "发送到 Riffet" : {
+      "comment" : "Services menu item (NSServices in project.yml)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send to Riffet"
+          }
+        }
+      }
+    },
+    "在 Riffet 中新建会话" : {
+      "comment" : "Services menu item for Finder items (NSServices in project.yml)",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Session in Riffet"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

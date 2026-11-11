@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The app had no `android:theme` at all, so `windowLightStatusBar` came from whatever the platform
+  default happened to be and had nothing to do with the palette Compose actually draws. That is why
+  the status bar icons could be dark on a dark background.
+
+  Declaring it fixes the very first frame, before Compose runs and before RiffetSystemBars gets a
+  chance to set anything. The runtime setter still owns every later change (and the system dark
+  toggle); this only removes the window between process start and the first composition.
+
+  AppCompat supplies cross-version app-language configuration; Compose owns the visible controls.
+  See values-night/themes.xml for the dark variant.
+-->
+<resources>
+    <style name="Theme.Riffet" parent="Theme.AppCompat.Light.NoActionBar">
+        <!-- Light background, so the icons must be dark. -->
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <!-- Match the runtime's transparent navigation bar from the starting window onward. -->
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <!--
+          The default palette's page colour, so the starting window (and Android 12's splash, which
+          takes this colour) hands over to the first Compose frame without a flash of the OEM's.
+        -->
+        <item name="android:windowBackground">@color/riffet_window_background</item>
+    </style>
+
+    <!--
+      The quick chat entry draws a sheet over the app the reader came from, so its window must be
+      transparent and not dim the app itself; the sheet's own scrim does that.
+    -->
+    <style name="Theme.Riffet.QuickChat" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+    </style>
+</resources>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The dark half of Theme.Riffet; see values/themes.xml for why the theme is declared at all. -->
+<resources>
+    <style name="Theme.Riffet" parent="Theme.AppCompat.NoActionBar">
+        <!-- Dark background, so the icons must be light. -->
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceNavigationBarContrast">false</item>
+        <!--
+          The default palette's page colour, so the starting window (and Android 12's splash, which
+          takes this colour) hands over to the first Compose frame without a flash of the OEM's.
+        -->
+        <item name="android:windowBackground">@color/riffet_window_background</item>
+    </style>
+</resources>

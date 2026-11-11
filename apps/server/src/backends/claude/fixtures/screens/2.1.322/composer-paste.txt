@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word S1_OK. (S1_NEEDLE_ALPHA)
+
+⏺ S1_OK
+
+✻ Crunched for 55s · done 3:52 PM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯ [Pasted text #1 +4 lines]
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  paste again to expand

@@ -1,0 +1,33 @@
+{
+  "name": "@riffet/plugin-web",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./bridge": {
+      "types": "./dist/bridge.d.ts",
+      "import": "./dist/bridge.js"
+    },
+    "./bridge-client": {
+      "types": "./dist/bridge-client.d.ts",
+      "import": "./dist/bridge-client.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=24.19.0"
+  },
+  "peerDependencies": {
+    "@riffet/contracts": "0.6.0",
+    "react": "^19.1.0"
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "关闭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "正在交给 Riffet…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Handing off to Riffet…"
+          }
+        }
+      }
+    },
+    "没有可交给 Riffet 的内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing to hand off to Riffet"
+          }
+        }
+      }
+    },
+    "无法打开 Riffet，请确认应用已安装后重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't open Riffet. Make sure the app is installed, then try again."
+          }
+        }
+      }
+    },
+    "无法生成要交给 Riffet 的内容" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't prepare the content to hand off to Riffet"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

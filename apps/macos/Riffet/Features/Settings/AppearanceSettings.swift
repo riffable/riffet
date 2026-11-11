@@ -1,0 +1,468 @@
+import SwiftUI
+
+// The 外观 group's pages. Everything here is this Mac's, except the custom theme library.
+
+/// 主题: light or dark, the colour theme, and the shared library of custom themes.
+struct ThemeSettings: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.palette) private var palette
+    @State private var editorTarget: ThemeEditorTarget?
+    @State private var refreshedAt = Date.distantPast
+    private var appearance: AppearanceStore { .shared }
+
+    var body: some View {
+        @Bindable var prefs = DisplayPreferences.shared
+        @Bindable var theme = model.theme
+        Form {
+            Section {
+                SettingsRow("明暗") {
+                    FormSegmented("明暗", selection: $prefs.appearance) {
+                        Label("跟随系统", icon: "circle.lefthalf.filled").tag("system")
+                        Label("浅色", icon: "sun.max").tag("light")
+                        Label("深色", icon: "moon").tag("dark")
+                    }
+                    .labelsHidden()
+                }
+            }
+
+            Section {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190, maximum: 260), spacing: Space.md)], spacing: Space.md) {
+                    ForEach(theme.catalog, id: \.id) { entry in
+                        ThemePreviewCard(
+                            entry: entry,
+                            selected: appearance.paletteEntry == nil && entry.id == theme.themeId,
+                            dark: colorScheme == .dark
+                        ) {
+                            theme.themeId = entry.id
+                        }
+                        .overlay(alignment: .topTrailing) {
+                            // Beside the card's own button rather than inside it, so both stay real buttons.
+                            if theme.canEditThemes, theme.customThemes.contains(where: { $0.id == entry.id }) {
+                                Button { editorTarget = .edit(entry.id) } label: { Image(icon: "pencil") }
+                                    .buttonStyle(IconButtonStyle(size: 22))
+                                    .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                                    .padding(Space.sm + Space.xs)
+                                    .help(Text("编辑主题"))
+                                    .accessibilityLabel(Text("编辑“\(entry.name)”"))
+                            }
+                        }
+                    }
+                    // Plugin palettes sit beside the themes; picking one never changes the theme choice.
+                    ForEach(appearance.catalog.palettes) { palette in
+                        if let entry = appearance.paletteEntries[palette.id] {
+                            ThemePreviewCard(
+                                entry: entry,
+                                selected: appearance.paletteEntry?.id == entry.id,
+                                dark: colorScheme == .dark
+                            ) {
+                                appearance.selectPalette(palette.id)
+                            }
+                        }
+                    }
+                    // A new theme starts from the one on screen: pick the closest, then reshape it.
+                    NewThemeCard { editorTarget = .new(theme.entry) }
+                        .disabled(!theme.canEditThemes)
+                        .help(theme.canEditThemes ? Text("保存在服务器；每台设备各自选择。") : Text("连接服务器后可管理。"))
+                }
+                .padding(.vertical, Space.xs)
+            }
+
+            AppearancePackRows()
+
+            SettingsScopeFooter()
+        }
+        .riffetForm()
+        // Another device may have changed the shared library; opening this page is the moment to ask.
+        .task { refreshThemes() }
+        .onReceive(NotificationCenter.default.publisher(for: .settingsSectionDidShow)) { note in
+            guard note.object as? String == SettingsSection.appearance.rawValue,
+                  Date.now.timeIntervalSince(refreshedAt) > 30 else { return }
+            refreshThemes()
+        }
+        .sheet(item: $editorTarget) { target in ThemeEditorView(target: target) }
+    }
+
+    private func refreshThemes() {
+        refreshedAt = .now
+        model.theme.refresh()
+        appearance.refresh()
+    }
+}
+
+/// 窗口: what shows behind the window and how much of it shows through.
+struct WindowSettings: View {
+
+    var body: some View {
+        @Bindable var prefs = DisplayPreferences.shared
+        @Bindable var iconPack = IconPack.shared
+        Form {
+            Section {
+                SettingsRow("界面风格") {
+                    FormSegmented("界面风格", selection: $prefs.interfaceStyle) {
+                        ForEach(InterfaceStyle.allCases) { style in
+                            Text(style.title).tag(style)
+                        }
+                    }
+                    .labelsHidden()
+                }
+
+                SettingsRow("图标") {
+                    Picker("图标", selection: $iconPack.choice) {
+                        Text("跟随界面风格").tag("")
+                        Divider()
+                        ForEach(IconPack.choices, id: \.id) { pack in
+                            Text(verbatim: pack.title).tag(pack.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .formPicker()
+                    .fixedSize()
+                }
+            }
+
+            Section {
+                SettingsRow(String(localized: "材质"), detail: prefs.reduceTransparency ? String(localized: "系统已开启「降低透明度」。") : nil) {
+                    FormSegmented("材质", selection: $prefs.windowMaterial) {
+                        ForEach(WindowMaterial.available) { material in
+                            Text(material.title).tag(material)
+                        }
+                    }
+                    .labelsHidden()
+                    .disabled(prefs.reduceTransparency)
+                }
+
+                if !prefs.reduceTransparency, prefs.windowMaterial != .solid {
+                    SettingsRow("侧栏透明度") {
+                        SettingsNumberSlider(value: $prefs.sidebarTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 60)
+                    }
+                    SettingsRow("主区透明度") {
+                        SettingsNumberSlider(value: $prefs.contentTransparency, range: 0...WindowMaterial.contentLimit, step: 2, suffix: "%", defaultValue: 0)
+                    }
+                }
+            }
+
+            InspectorViewsSettings()
+
+            SettingsScopeFooter()
+        }
+        .riffetForm()
+    }
+}
+
+/// 排版: the transcript's text size, spacing and reading width, with a sample that follows them.
+struct TypographySettings: View {
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        @Bindable var prefs = DisplayPreferences.shared
+        Form {
+            Section {
+                SettingsRow("文字大小") {
+                    FormSegmented("文字大小", selection: $prefs.textScale) {
+                        Text("小").tag(0.9)
+                        Text("标准").tag(1.0)
+                        Text("大").tag(1.1)
+                        Text("特大").tag(1.2)
+                    }
+                    .labelsHidden()
+                }
+
+                SettingsRow("间距") {
+                    FormSegmented("间距", selection: $prefs.density) {
+                        Text("紧凑").tag(0.75)
+                        Text("标准").tag(1.0)
+                        Text("宽松").tag(1.25)
+                    }
+                    .labelsHidden()
+                }
+
+                SettingsRow("阅读宽度") {
+                    SettingsNumberSlider(value: $prefs.contentWidth, range: 640...1600, step: 20, suffix: " pt", defaultValue: 640)
+                }
+
+                SettingsRow("章节导航") {
+                    Toggle("章节导航", isOn: $prefs.chapterNavigation)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
+
+            Section {
+                preview(density: prefs.density, contentWidth: prefs.contentWidth)
+            }
+
+            SettingsScopeFooter()
+        }
+        .riffetForm()
+    }
+
+    /// The preview keeps the app's real palette and spacing; its column narrows with the reading
+    /// width preference (640–1600 maps to 300–600) so moving the slider has a visible effect.
+    private func preview(density: Double, contentWidth: Double) -> some View {
+        let fraction = min(max((contentWidth - 640) / (1600 - 640), 0), 1)
+        let width = 300 + CGFloat(fraction) * 300
+        return VStack(alignment: .leading, spacing: Space.md * CGFloat(density)) {
+            Text("今天的工作")
+                .font(.riffet(size: S(15), weight: .semibold))
+                .foregroundStyle(palette.fg)
+            Text("先检查项目进度，再继续处理等待确认的会话。")
+                .font(.riffet(size: S(13)))
+                .foregroundStyle(palette.fg2)
+        }
+        .padding(Space.lg)
+        .frame(maxWidth: width, alignment: .leading)
+        .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.card, style: .continuous)
+                .strokeBorder(palette.line)
+        )
+        .padding(.vertical, Space.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 终端: the embedded terminal's font size and padding.
+struct TerminalSettings: View {
+    var body: some View {
+        @Bindable var prefs = DisplayPreferences.shared
+        Form {
+            Section {
+                SettingsRow("字号") {
+                    SettingsNumberSlider(value: $prefs.terminalFontSize, range: 11...16, step: 1, suffix: " pt", defaultValue: 12)
+                }
+
+                SettingsRow("水平边距") {
+                    SettingsNumberSlider(
+                        value: $prefs.terminalHorizontalPadding, range: 0...48, step: 2, suffix: " pt",
+                        defaultValue: DisplayPreferences.defaultTerminalHorizontalPadding
+                    )
+                }
+
+                SettingsRow("垂直边距") {
+                    SettingsNumberSlider(
+                        value: $prefs.terminalVerticalPadding, range: 0...32, step: 2, suffix: " pt",
+                        defaultValue: DisplayPreferences.defaultTerminalVerticalPadding
+                    )
+                }
+            }
+
+            SettingsScopeFooter()
+        }
+        .riffetForm()
+    }
+}
+
+/// 应用图标: the Dock icon while Riffet runs.
+struct AppIconSettings: View {
+    var body: some View {
+        @Bindable var prefs = DisplayPreferences.shared
+        Form {
+            Section {
+                let current = AppIconVariant.named(prefs.appIcon).id
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: AppIconTile.width, maximum: AppIconTile.width), spacing: Space.md)],
+                    alignment: .leading,
+                    spacing: Space.md
+                ) {
+                    ForEach(AppIconVariant.all) { variant in
+                        AppIconTile(variant: variant, selected: variant.id == current) {
+                            prefs.appIcon = variant.id
+                        }
+                    }
+                }
+                .padding(.vertical, Space.xs)
+
+                SettingsHint("退出后 Dock 显示默认图标。")
+            }
+
+            SettingsScopeFooter()
+        }
+        .riffetForm()
+    }
+}
+
+/// A slider with its value and a reset to the default beside it.
+private struct SettingsNumberSlider: View {
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    var suffix = ""
+    let defaultValue: Double
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            Slider(value: $value, in: range, step: step)
+                .frame(minWidth: 150)
+            Text(verbatim: "\(Int(value.rounded()))\(suffix)")
+                .font(.riffet(size: S(12)))
+                .foregroundStyle(palette.fg2)
+                .monospacedDigit()
+                .frame(width: 52, alignment: .trailing)
+            Button { value = defaultValue } label: {
+                Image(icon: "arrow.counterclockwise")
+                    .font(.riffet(size: S(12)))
+            }
+            .buttonStyle(IconButtonStyle(size: 24))
+            .help("恢复默认")
+            .disabled(value == defaultValue)
+        }
+    }
+}
+
+/// One theme in the picker: a miniature of the palette it would paint and its name. The line that
+/// tells the reader what it feels like is the tooltip.
+private struct ThemePreviewCard: View {
+    let entry: ThemeEntry
+    let selected: Bool
+    let dark: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    private var values: RiffetPaletteValues { dark ? entry.values.dark : entry.values.light }
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                preview
+                HStack(spacing: Space.xs) {
+                    Text(entry.name)
+                        .font(.riffet(size: S(12.5), weight: .medium))
+                        .foregroundStyle(palette.fg)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    if selected {
+                        Image(icon: "checkmark.circle.fill")
+                            .font(.riffet(size: S(12), weight: .semibold))
+                            .foregroundStyle(palette.accent)
+                    }
+                }
+            }
+            .padding(Space.sm)
+            .background(palette.formFill(palette.bgElevated), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.container, style: .continuous)
+                    .strokeBorder(selected ? palette.accent : palette.lineSoft, lineWidth: selected ? 1.5 : 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(entry.summary)
+        .accessibilityLabel("\(entry.name)，\(entry.summary)")
+        .accessibilityAddTraits(selected ? .isSelected : AccessibilityTraits())
+    }
+
+    private var preview: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(color(values.bgSidebar))
+                .frame(width: Space.lg + Space.xxs)
+            VStack(alignment: .leading, spacing: Space.xs) {
+                HStack(spacing: Space.xxs) {
+                    Circle()
+                        .fill(color(values.accent))
+                        .frame(width: 6, height: 6)
+                    line(values.fg, width: 46)
+                }
+                line(values.fg2, width: 38)
+                line(values.fg3, width: 30)
+            }
+            .padding(Space.sm)
+            Spacer(minLength: 0)
+        }
+        .frame(height: Space.xxl + Space.xl)
+        .background(color(values.bg))
+        .clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
+                .strokeBorder(color(values.lineSoft))
+        )
+    }
+
+    private func line(_ rgba: RiffetRGBA, width: CGFloat) -> some View {
+        Capsule()
+            .fill(color(rgba))
+            .frame(width: width, height: 3)
+    }
+
+    private func color(_ rgba: RiffetRGBA) -> Color {
+        Color(.sRGB, red: rgba.red, green: rgba.green, blue: rgba.blue, opacity: rgba.alpha)
+    }
+}
+
+/// The gallery's last card: a new custom theme, shaped like the theme cards around it.
+private struct NewThemeCard: View {
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.isEnabled) private var enabled
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                Image(icon: "plus")
+                    .font(.riffet(size: S(14), weight: .medium))
+                    .foregroundStyle(palette.fg3)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: Space.xxl + Space.xl)
+                    .background(hovering ? palette.bgHover : .clear, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                Text("新建主题")
+                    .font(.riffet(size: S(12.5), weight: .medium))
+                    .foregroundStyle(palette.fg2)
+                    .lineLimit(1)
+            }
+            .padding(Space.sm)
+            .overlay(
+                RoundedRectangle(cornerRadius: Radius.container, style: .continuous)
+                    .strokeBorder(palette.lineStrong, style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .opacity(enabled ? 1 : 0.5)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 && enabled }
+    }
+}
+
+/// One Dock icon choice: the icon's dark tile with the mark sized as in the favicon, selected the
+/// way a theme card is.
+private struct AppIconTile: View {
+    static let side: CGFloat = 52
+    /// The tile plus the gap to its selection ring.
+    static let width = side + 2 * Space.xs
+
+    let variant: AppIconVariant
+    let selected: Bool
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let radius = Self.side * 0.22
+        Button(action: action) {
+            BrandMark(front: .white, back: variant.accent)
+                .frame(width: Self.side * 0.87, height: Self.side * 0.87)
+                .frame(width: Self.side, height: Self.side)
+                .background(AppIconVariant.tile, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+                .padding(Space.xs)
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius + Space.xs, style: .continuous)
+                        .strokeBorder(selected ? palette.accent : palette.lineSoft, lineWidth: selected ? 1.5 : 1)
+                )
+                .overlay(alignment: .topTrailing) {
+                    if selected {
+                        Image(icon: "checkmark.circle.fill")
+                            .font(.riffet(size: S(13), weight: .semibold))
+                            .symbolRenderingMode(.palette)
+                            .foregroundStyle(.white, palette.accent)
+                            .offset(x: Space.xs, y: -Space.xs)
+                    }
+                }
+                .contentShape(RoundedRectangle(cornerRadius: radius + Space.xs, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(variant.name)
+        .accessibilityLabel(variant.name)
+        .accessibilityAddTraits(selected ? .isSelected : AccessibilityTraits())
+    }
+}

@@ -1,0 +1,278 @@
+import { submissionFingerprint } from '../orchestration/session-commands.js';
+import type { FastifyInstance } from 'fastify';
+import { AppError, requireString } from '../errors.js';
+import type { SessionKind, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import { recordTerminalAppearance } from '../terminal/appearance.js';
+import { resolveNativeSessionInput } from '../native/session-input.js';
+import { requestedNativeSessionId, startsWithBareTerminal, type RequestedNativeSession } from '../session-identity.js';
+import { revisionedList, sequence, tags } from './params.js';
+import type { RouteDeps, NativeMessageBody } from './deps.js';
+import { withoutQuickChats } from '../chat/quick-chat.js';
+import { clientSupportsFeature, requireBackendVisibleToClient, projectVisibleToClient, requireSessionVisibleToClient, sessionVisibleToClient, visibleSessionsForClient } from '../native/client-features.js';
+import { assertTaskWorkspaceAvailable, taskWorkspaceRequestDigest } from '../task-workspaces/index.js';
+import { requirePairedDevices, toolGroupList } from '../riffet-mcp/groups.js';
+import { applicableExtensionsOff, extensionsOffList } from '../extensions/toggles.js';
+import type { PreparedSessionReference } from '../context-references/service.js';
+import { registerDiscussionRoutes } from '../chat/discussions.js';
+
+/** `toolGroups` overrides the conversation's snapshot; a running CLI keeps the tools it was launched with until its next launch. */
+export interface SessionPatch { title?: string; tags?: string[]; archived?: boolean; pinned?: boolean; toolGroups?: unknown; extensionsOff?: unknown }
+
+/** A durable creation receipt is the only authority for releasing a pending submission. */
+function creationRejection(error: unknown, store: RouteDeps['store'], clientSessionId: unknown): unknown {
+  if(!(error instanceof AppError)||error.statusCode>=500||['SESSION_ID_CONFLICT','TASK_WORKSPACE_CONFLICT','COMMAND_ID_CONFLICT'].includes(error.code))return error;
+  if(typeof clientSessionId==='string') {
+    try { store.getSession(clientSessionId); return error; }
+    catch(lookup) { if(!(lookup instanceof AppError)||lookup.code!=='SESSION_NOT_FOUND')return lookup; }
+  }
+  return new AppError(error.code,error.message,error.statusCode,{...(error.details&&typeof error.details==='object'?error.details:{}),accepted:false},error.params);
+}
+
+export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): void {
+  registerDiscussionRoutes(app, deps);
+  const {store,auth,settings,terminal,sessionLock,nativeBackends,dispatch,streams,sessionCommands,renameNative,readNativeInput,nativeRuns,contextReferences}=deps;
+  const LIST_CHANGE_DEBOUNCE_MS=250;
+  app.get('/api/sessions',async(request,reply)=>revisionedList(request,reply,store.listRevision,()=>visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id))));
+  app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
+    const create=async()=>{
+    const body=request.body;
+    try {
+    if (!body||body.kind!=='native') throw new AppError('INVALID_SESSION_KIND','Choose a native conversation');
+    if(body.projectless!==undefined&&typeof body.projectless!=='boolean')throw new AppError('INVALID_SUBMISSION','projectless must be a boolean');
+    if(body.projectless===true){
+      if(!clientSupportsFeature(request.headers,'projectless-tasks'))throw new AppError('FEATURE_REQUIRED','Update the client to create a task without a project',409);
+      if(body.projectId!==undefined||body.backendId==='chat'||requestedNativeSessionId(body)!==undefined||body.resumePicker)throw new AppError('INVALID_SUBMISSION','A projectless task must start a new agent conversation without a project');
+      const clientSessionId=requireString(body.clientSessionId,'clientSessionId',100),commandId=requireString(body.initialMessage?.commandId,'commandId',100);
+      const input=await readNativeInput(body.initialMessage!,{validateAttachments:false});
+      contextReferences.requireFeature(request.headers,input);
+      let prepared:PreparedSessionReference[]=[];
+      if(input.context.length)throw new AppError('INVALID_CONTEXT','A projectless draft has no project file references');
+      const result=await deps.taskWorkspaces.create({clientSessionId,commandId,text:input.text,requestDigest:taskWorkspaceRequestDigest(body)},async project=>{const sessionInput=await resolveNativeSessionInput(deps,body,request.headers,project);if(input.references?.length)await nativeBackends.assertSessionReferences(sessionInput);return sessionInput;},async()=>{const message=await readNativeInput(body.initialMessage!);prepared=await contextReferences.prepare(clientSessionId,message,request.headers);return message;},async sessionInput=>{
+        if(input.references?.length)await nativeBackends.assertSessionReferences(sessionInput);
+        // Validate the saved provider while keeping every resolved option pinned to the receipt.
+        const backendId=sessionInput.backendId!;
+        requireBackendVisibleToClient(request.headers,backendId);
+        const profile=nativeBackends.validateProfile(backendId,sessionInput.backendProfileId);
+        const capabilities=await nativeBackends.capabilitiesFor(backendId,profile.id);
+        if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===sessionInput.mode):sessionInput.mode!=='agent')throw new AppError('INVALID_MODE','The saved task mode is no longer available');
+        if(sessionInput.approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===sessionInput.approval)))throw new AppError('INVALID_APPROVAL_MODE','The saved task permission is no longer available');
+      },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);return store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);}));
+      requireSessionVisibleToClient(request.headers,result.session,id=>store.getProject(id));
+      reply.code(202);dispatch.kick();return result;
+    }
+    if(body.initialMessage!==undefined){
+      if(body.resumePicker)throw new AppError('INVALID_SUBMISSION','Only a new Native conversation accepts an initial message');
+      const clientSessionId=requireString(body.clientSessionId,'clientSessionId',100),commandId=requireString(body.initialMessage?.commandId,'commandId',100);
+      const existing=store.findRunByCommand(clientSessionId,commandId);
+      const message=await readNativeInput(body.initialMessage,{validateAttachments:!existing});
+      contextReferences.requireFeature(request.headers,message);
+      if(existing&&!message.references?.length){const resolved=await resolveNativeSessionInput(deps,body,request.headers);reply.code(202);return store.createNativeSubmission(clientSessionId,resolved,commandId,message);}
+      if(existing){
+        const receipt=store.getSession(clientSessionId);
+        requireSessionVisibleToClient(request.headers,receipt,id=>store.getProject(id));
+        const fingerprint=submissionFingerprint(body);
+        const identity=store.getSetting<string|undefined>(`session-reference-creation:${clientSessionId}`,undefined);
+        if(message.references?.length&&identity!==fingerprint)throw new AppError('SESSION_ID_CONFLICT','This creation ID belongs to another request',409);
+        const run=store.acceptNativeRun(clientSessionId,commandId,message,existing.native!.config);
+        reply.code(202);return {session:receipt,run};
+      }
+      const input=await resolveNativeSessionInput(deps,body,request.headers);
+      if(message.references?.length)await nativeBackends.assertSessionReferences(input);
+      const prepared=await contextReferences.prepare(clientSessionId,message,request.headers);
+      const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));return accepted;});
+      reply.code(202);dispatch.kick();return result;
+    }
+    const input=await resolveNativeSessionInput(deps,body,request.headers);
+    return store.createSession({...input,kind:body.kind});
+    } catch(error) { throw creationRejection(error,store,body?.clientSessionId); }
+    };
+    const pending=request.body;
+    if(pending?.initialMessage!==undefined){
+      reply.code(202);
+      try {
+        return await sessionCommands.submit(store,requireString(pending.clientSessionId,'clientSessionId',100),requireString(pending.initialMessage?.commandId,'commandId',100),{operation:'create',body:pending},create);
+      } catch(error) { throw creationRejection(error,store,pending.clientSessionId); }
+    }
+    return create();
+  });
+  app.patch<{Params:{id:string};Body:SessionPatch}>('/api/sessions/:id',async(request)=>patchSession(deps,request.params.id,request.body??{}));
+  app.put<{Body:{sessionIds?:unknown}}>('/api/sessions/pin-order',async(request)=>setPinOrder(deps,request.body?.sessionIds));
+  app.get<{Params:{id:string};Querystring:{after?:string}}>('/api/sessions/:id/events',async(request)=>{store.getSession(request.params.id);return store.getEvents(request.params.id,sequence(request.query.after));});
+  app.get<{Params:{id:string};Querystring:{after?:string}}>('/api/sessions/:id/stream',async(request,reply)=>{
+    const id=request.params.id;store.getSession(id);
+    let last=Math.max(sequence(request.query.after),sequence(request.headers['last-event-id']));
+    const unwatch=auth.onRevoke(request,()=>reply.raw.destroy());
+    reply.raw.once('close',unwatch);
+    // A deleted conversation's stream ends; reconnecting answers 410.
+    reply.raw.once('close',store.onSessionDeleted(id,()=>reply.raw.destroy()));
+    reply.hijack(); streams.add(reply.raw);
+    reply.raw.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+    reply.raw.write(': connected\n\n');
+    const write=(event:WorkbenchEvent)=>{
+      if(event.sequence<=last||reply.raw.destroyed||reply.raw.writableEnded)return;
+      if(reply.raw.writableLength>4*1024*1024){reply.raw.end();return;}
+      last=event.sequence;reply.raw.write(`id: ${event.sequence}\ndata: ${JSON.stringify(event)}\n\n`);
+    };
+    // Subscribe before replay. SQLite reads are synchronous; sequence dedup handles overlap.
+    const unsubscribe=store.subscribe(id,write);
+    while(!reply.raw.destroyed&&!reply.raw.writableEnded){const page=store.getEvents(id,last);for(const event of page)write(event);if(page.length<5000)break;}
+    const heartbeat=setInterval(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(': heartbeat\n\n');},15_000);
+    reply.raw.on('close',()=>{clearInterval(heartbeat);unsubscribe();streams.delete(reply.raw);});
+  });
+  /**
+   * Tells open workbenches the session, terminal or project lists moved so they re-read them. Carries
+   * separate project, marks and folder-favorites revisions; a client re-reads only the data that moved.
+   */
+  app.get('/api/lists/stream',async(request,reply)=>{
+    const unwatch=auth.onRevoke(request,()=>reply.raw.destroy());
+    reply.raw.once('close',unwatch);
+    reply.hijack(); streams.add(reply.raw);
+    reply.raw.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+    reply.raw.write(': connected\n\n');
+    let pending:NodeJS.Timeout|undefined;
+    const unsubscribe=store.onListsChanged(()=>{
+      if(pending)return;
+      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,projects:store.projectRevision,marks:store.marksRevision,favorites:store.favoritesRevision})}\n\n`);},LIST_CHANGE_DEBOUNCE_MS);
+    });
+    // An agent's notice (docs/DEVICES.md §2). A client listening only for `changed` never sees it.
+    const unsubscribeNotices=deps.notices.subscribe(notice=>{
+      if(reply.raw.destroyed||reply.raw.writableEnded)return;
+      try{if(!sessionVisibleToClient(request.headers,store.getSession(notice.sessionId),id=>store.getProject(id)))return;}catch{return;}
+      reply.raw.write(`event: notice\ndata: ${JSON.stringify(notice)}\n\n`);
+    });
+    // A task changed state (docs/TASKS.md): the client reads the task itself.
+    const unsubscribeTasks=deps.tasks.subscribe(task=>{
+      if(reply.raw.destroyed||reply.raw.writableEnded)return;
+      try{if(!projectVisibleToClient(request.headers,store.getProject(task.projectId)))return;}catch{return;}
+      reply.raw.write(`event: task\ndata: ${JSON.stringify(task)}\n\n`);
+    });
+    // A plugin was turned on or off (docs/PLUGIN_ARCHITECTURE.md): clients read the plugins and appearance again.
+    const unsubscribePlugins=deps.plugins.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: integrations\ndata: {}\n\n');});
+    // The owner's name or avatar changed (docs/OWNER.md): the whole record, so a client replaces its copy without asking.
+    const unsubscribeOwner=deps.owner.subscribe(owner=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: owner\ndata: ${JSON.stringify(owner)}\n\n`);});
+    // A device came online, went offline, reported or was unpaired (docs/DEVICES.md §2): clients read the devices again.
+    const unsubscribeDevices=deps.devices.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: devices\ndata: {}\n\n');});
+    // Channel accounts, bound users or chats changed (docs/design/channels.md): the settings page reads them again.
+    const unsubscribeChannels=deps.channels.onChange(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write('event: channels\ndata: {}\n\n');});
+    const heartbeat=setInterval(()=>{if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(': heartbeat\n\n');},15_000);
+    reply.raw.on('close',()=>{clearInterval(heartbeat);if(pending)clearTimeout(pending);unsubscribe();unsubscribeChannels();unsubscribeNotices();unsubscribeTasks();unsubscribePlugins();unsubscribeOwner();unsubscribeDevices();streams.delete(reply.raw);});
+  });
+  app.get<{Params:{id:string};Querystring:{commandId?:string}}>('/api/sessions/:id/runs',async(request)=>{
+    const session=store.getSession(request.params.id);
+    if(session.kind!=='native')throw new AppError('NOT_NATIVE','Only native conversations have runs',409);
+    if(request.query.commandId!==undefined){
+      const run=store.findRunByCommand(session.id,requireString(request.query.commandId,'commandId',100));
+      return run?[run]:[];
+    }
+    return nativeRuns(request.params.id);
+  });
+  app.post<{Params:{id:string};Body:{restartFingerprint?:string;restartAddress?:string}}>('/api/sessions/:id/start',async(request)=>{
+    const id=request.params.id;
+    const restartFingerprint=request.body?.restartFingerprint;
+    const restartAddress=request.body?.restartAddress;
+    if(restartFingerprint!==undefined||restartAddress!==undefined){
+      if(typeof restartFingerprint!=='string'||!/^[a-f0-9]{64}$/.test(restartFingerprint)||typeof restartAddress!=='string'||!restartAddress||restartAddress.length>8192)throw new AppError('INVALID_SUBMISSION','Invalid backend launch binding');
+    }
+    const releaseSessionStart=dispatch.reserveSessionStart(id);
+    try{return await sessionLock.withSession(id,async()=>{
+      const session=recordTerminalAppearance(store,id,request.headers),project=store.getProject(session.projectId);
+      await assertTaskWorkspaceAvailable(project);
+      if(session.archivedAt)throw new AppError('ARCHIVED_SESSION','Restore this conversation before running it',409);
+      if(restartFingerprint&&(session.backendId!=='codex'&&session.backendId!=='traex'))throw new AppError('NATIVE_LAUNCH_ABORTED','This backend does not support applying launch settings',409);
+      const opened=await nativeBackends.ensure(session,{restartFingerprint,restartAddress});
+      if(startsWithBareTerminal(session.backendId)&&opened.terminal)return opened.terminal;
+      return {session:opened.session,status:opened.status,...(opened.nativeSessionId?{nativeSessionId:opened.nativeSessionId}:{}),...(opened.terminal?{terminal:opened.terminal}:{})};
+    });}finally{releaseSessionStart();}
+  });
+}
+
+type PinStore = Pick<RouteDeps['store'], 'listSessions'>;
+
+/** Pinned, unarchived conversations in display order: ranked ones by rank, an unranked one before them, equal ranks by newest pin. */
+function pinnedSessions(store: PinStore) {
+  return store.listSessions().filter(item=>item.pinnedAt&&!item.archivedAt).sort((a,b)=>{
+    if((a.pinRank===undefined)!==(b.pinRank===undefined))return a.pinRank===undefined?-1:1;
+    if(a.pinRank!==undefined&&b.pinRank!==undefined&&a.pinRank!==b.pinRank)return a.pinRank-b.pinRank;
+    return (b.pinnedAt??'').localeCompare(a.pinnedAt??'');
+  });
+}
+
+/** `PUT /api/sessions/pin-order`: ranks the listed pinned conversations 0..n-1 in the given order; a rank that does not change writes nothing. */
+export function setPinOrder(deps: RouteDeps, sessionIds: unknown): { sessions: ReturnType<typeof pinnedSessions> } {
+  const {store}=deps;
+  if(!Array.isArray(sessionIds)||sessionIds.some(id=>typeof id!=='string'))throw new AppError('INVALID_PIN_ORDER','sessionIds must be an array of session ids');
+  const ids=sessionIds as string[];
+  if(new Set(ids).size!==ids.length)throw new AppError('INVALID_PIN_ORDER','sessionIds must not repeat a conversation');
+  const pinned=new Map(pinnedSessions(store).map(item=>[item.id,item]));
+  const stray=ids.find(id=>!pinned.has(id));
+  if(stray!==undefined)throw new AppError('INVALID_PIN_ORDER','Only pinned conversations can be ordered',400,{sessionId:stray});
+  ids.forEach((id,rank)=>{
+    if(pinned.get(id)!.pinRank===rank)return;
+    const session=store.updateSession(id,{pinRank:rank});store.appendEvent(id,'session',{session});
+  });
+  return {sessions:pinnedSessions(store)};
+}
+
+/** `PATCH /api/sessions/:id`; also how the workbench archives a quick chat nobody kept. */
+export async function patchSession(deps: RouteDeps, id: string, body: SessionPatch) {
+  const {store,terminal,sessionLock,nativeBackends,dispatch,sessionCommands,renameNative}=deps;
+  const patch:Record<string,unknown>={};
+  store.getSession(id);
+  if(body.archived!==undefined&&typeof body.archived!=='boolean')throw new AppError('INVALID_ARCHIVED','archived must be a boolean');
+  if(body.pinned!==undefined&&typeof body.pinned!=='boolean')throw new AppError('INVALID_PINNED','pinned must be a boolean');
+  if(body.title!==undefined){patch.title=requireString(body.title,'title',200);patch.titleSource='user';}
+  if(body.tags!==undefined)patch.tags=tags(body.tags);
+  if(body.toolGroups!==undefined){
+    const groups=toolGroupList(body.toolGroups);
+    requirePairedDevices(groups,deviceId=>Boolean(deps.auth.device(deviceId)));
+    if(groups.length&&store.getSession(id).backendId==='chat')throw new AppError('INVALID_TOOL_GROUPS','A quick chat has no Riffet tools');
+    patch.toolGroups=groups.length?groups:undefined;
+  }
+  if(body.extensionsOff!==undefined){
+    const off=extensionsOffList(body.extensionsOff);
+    const target=store.getSession(id);
+    if(off.length&&target.backendId==='chat')throw new AppError('INVALID_EXTENSIONS_OFF','A quick chat has no extensions to switch off');
+    // Kinds the backend cannot switch off are dropped, so the stored list is what a launch applies.
+    const applicable=off.length?applicableExtensionsOff(off,(await nativeBackends.capabilitiesFor(target.backendId??'cursor',target.backendProfileId)).extensionToggles):[];
+    patch.extensionsOff=applicable.length?applicable:undefined;
+  }
+  // The tools and extensions of a conversation are read when its CLI launches. A backend that relaunches an idle CLI for a
+  // pending launch change (as for a model switch) is told there is one; a running turn is never interrupted.
+  const launched=store.getSession(id) as unknown as Record<string,unknown>;
+  const launchChanged=['toolGroups','extensionsOff'].some(key=>key in patch&&JSON.stringify(patch[key]??[])!==JSON.stringify(launched[key]??[]));
+  if(launchChanged&&launched.terminalId&&nativeBackends.registry.require(store.getSession(id).backendId??'cursor').traits?.relaunchesForPendingConfig)patch.configPending=true;
+  // Fence new submissions and cancel uncommitted inputs before waiting for a startup worker.
+  const archived=body.archived?sessionCommands.beginArchive(id):undefined;
+  try{
+  if(body.archived){
+    for(const run of store.listUnfinishedNativeRuns(id))if(['queued','preparing'].includes(run.native!.delivery))dispatch.cancel(id,run.id);
+  }
+  return await sessionLock.withSession(id,async()=>{
+    if(body.pinned!==undefined){
+      const current=store.getSession(id);
+      if(body.pinned&&!current.pinnedAt){
+        patch.pinnedAt=new Date().toISOString();
+        // The new pin lands before every ranked one; with none ranked it stays unranked and sorts by pin time.
+        const ranks=pinnedSessions(store).flatMap(item=>item.pinRank===undefined?[]:[item.pinRank]);
+        patch.pinRank=ranks.length?Math.min(...ranks)-1:undefined;
+      }else if(!body.pinned&&current.pinnedAt){patch.pinnedAt=undefined;patch.pinRank=undefined;}
+    }
+    if(body.archived!==undefined){
+      if(body.archived){
+        const session=store.getSession(id);
+        const activeRuns=store.listUnfinishedNativeRuns(id).some(run=>!['queued','preparing'].includes(run.native!.delivery));
+        if(activeRuns)await dispatch.interrupt(id);
+        await nativeBackends.dispose(id);
+        if(session.terminalId)await terminal.stop(session.terminalId);
+        patch.archivedAt=new Date().toISOString();patch.state='archived';
+        // A restored pin is unranked, so it sorts first rather than into a slot that has since been taken.
+        patch.pinRank=undefined;
+      }else{patch.archivedAt=undefined;patch.state='idle';}
+    }
+    const session=store.updateSession(id,patch);store.appendEvent(id,'session',{session});
+    // An archived conversation keeps no Riffet MCP credential.
+    if(session.archivedAt)deps.riffetMcp.revoke(id);
+    if(body.title!==undefined&&!session.archivedAt)renameNative(session);
+    return session;
+  });}finally{archived?.();}
+}

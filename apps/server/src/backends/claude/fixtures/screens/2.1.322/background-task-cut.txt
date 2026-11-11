@@ -1,0 +1,40 @@
+
+⏺ Background command "quick job" failed with exit code 3
+
+⏺ Quick job finished with exit code 3, as the command specified (it printed QUICK_OUT then exited
+  3). The long job and ticker monitor are still running.
+
+✻ Churned for 1s · done 2:25 PM · 1 shell, 1 monitor still running
+
+⏺ Monitor event: tick2 · ticker
+
+⏺ tick2 received.
+
+✻ Crunched for 0s · done 2:26 PM · 1 shell, 1 monitor still running
+
+⏺ Monitor event: tick3 · ticker
+
+⏺ tick3 received — the three ticks are done; the monitor is now idling in its final sleep 600 and
+  will report at expiry.
+
+✻ Cogitated for 1s · done 2:26 PM · 1 shell, 1 monitor still running
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Monitor details
+
+  Status:   running
+  Runtime:  1m 11s
+  Script:   for i in 1 2 3; do echo tick$i; sleep 5; done; sleep 600
+
+  Output:
+  ╭────────────────────────────────────────────────────────────────────────────────────────────╮
+  │ tick1                                                                                      │
+  │ tick2                                                                                      │
+  │ tick3                                                                                      │
+  │                                                                                            │
+  │                                                                                            │
+  │                                                                                            │
+  │                                                                                            │
+  │                                                                                            │
+  │                                                                                            │
+  │                                                                                            │

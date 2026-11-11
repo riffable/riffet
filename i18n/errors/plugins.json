@@ -1,0 +1,30 @@
+{
+  "COMMAND_ARGS_INVALID": {
+    "zh": "命令参数无效：{message}",
+    "en": "Invalid command arguments: {message}"
+  },
+  "COMMAND_FAILED": {
+    "zh": "命令执行失败：{message}",
+    "en": "The command failed: {message}"
+  },
+  "COMMAND_NOT_FOUND": {
+    "zh": "找不到这个命令",
+    "en": "Unknown command"
+  },
+  "COMMAND_REQUEST_CONFLICT": {
+    "zh": "这个请求编号已用于另一次命令",
+    "en": "This request id was already used for a different command"
+  },
+  "COMMAND_UNAVAILABLE": {
+    "zh": "这个命令现在不可用",
+    "en": "This command is not available right now"
+  },
+  "PLUGIN_CONFIG_CONFLICT": {
+    "zh": "插件配置已被修改，请重新读取后保存",
+    "en": "Plugin configuration changed; reload it before saving"
+  },
+  "PLUGIN_TASKS_RUNNING": {
+    "zh": "请等待运行中的任务结束后再重载插件",
+    "en": "Wait for running tasks before reloading this plugin"
+  }
+}

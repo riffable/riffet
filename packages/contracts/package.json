@@ -1,0 +1,24 @@
+{
+  "name": "@riffet/contracts",
+  "version": "0.6.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md"
+  ],
+  "dependencies": {
+    "zod": "3.25.67"
+  },
+  "engines": {
+    "node": ">=24.19.0"
+  }
+}

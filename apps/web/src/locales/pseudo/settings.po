@@ -1,0 +1,2539 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: formatCount(row.errors)
+#: src/app/settings/ServiceCharts.tsx
+msgid " · 5xx {0}"
+msgstr ""
+
+#. placeholder {0}: check.minimum
+#: src/app/settings/ThemeEditor.tsx
+msgid " · 建议 ≥ {0}:1"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "，"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "“{name}”会从所有设备上移除，正在使用它的设备会回到 Riffet。"
+msgstr ""
+
+#. placeholder {0}: build.version
+#: src/app/settings/UpdateSection.tsx
+msgid "{0} · 开发构建"
+msgstr ""
+
+#. placeholder {0}: health.version
+#: src/app/settings/UpdateSection.tsx
+msgid "{0} · 未记录发布版本"
+msgstr ""
+
+#. placeholder {0}: kindLabel(KIND_META[item.kind].label)
+#. placeholder {1}: formatBytes(item.bytes)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "{0} {1}"
+msgstr ""
+
+#. placeholder {0}: kindLabel(KIND_META[item.kind].label)
+#. placeholder {1}: item.count
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "{0} × {1}"
+msgstr ""
+
+#. placeholder {0}: shortLabel(profile.backendId)
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "{0} CLI 自带登录"
+msgstr ""
+
+#. placeholder {0}: model.value
+#: src/app/settings/ProviderModelList.tsx
+msgid "{0} 上下文长度"
+msgstr ""
+
+#. placeholder {0}: profile.enabledModels.length
+#. placeholder {0}: status.count
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "{0} 个模型"
+msgstr ""
+
+#. placeholder {0}: label.minutes
+#: src/app/settings/ServiceCharts.tsx
+msgid "{0} 分钟前"
+msgstr ""
+
+#. placeholder {0}: minutes / 60
+#: src/app/settings/PreferencesSections.tsx
+msgid "{0} 小时"
+msgstr ""
+
+#. placeholder {0}: current.model
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "{0}（提供商里已不可用）"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "{count} 条"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "{days} 天"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "{label} 取色"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "{label}：{message}"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "{minutes} 分钟"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "{value} 个"
+msgstr ""
+
+#. placeholder {0}: formatCount(terminals.total)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "/ {0} 存活"
+msgstr ""
+
+#. placeholder {0}: host.cpuCount
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "/ {0} 核"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "/bind <码>"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "~/.riffet/dsh（默认）"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "2 个文件 · 用时 1 分钟"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "2xx 成功"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "3xx 重定向"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "4xx 客户端"
+msgstr ""
+
+#. placeholder {0}: formatLoad(host.loadAvg[1])
+#. placeholder {1}: formatLoad(host.loadAvg[2])
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "5 分钟 {0} · 15 分钟 {1}"
+msgstr ""
+
+#. placeholder {0}: formatCount(errors)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "5xx {0}"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "5xx 服务器"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "Agent"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "CLI 入口"
+msgstr ""
+
+#. placeholder {0}: entry.reason
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "CLI 可用，但读取模型失败：{0}"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "CLI 自带登录"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "CLI 默认"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "CPU 与内存"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "DSH 源码目录"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "Enter 键"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "Server 构建"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "Web 构建"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "上下文"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "上下文占用"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "上下文长度"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "上移{name}"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "下移{name}"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "不使用"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "不可用"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "不支持"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不是有效的主题字段"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不是有效的颜色角色"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不能为空"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不能包含控制字符"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "不设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "不限"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "个人资料"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "中断"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "中断按钮"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "临时标签"
+msgstr ""
+
+#. placeholder {0}: formatBytes(usedMem)
+#. placeholder {1}: formatBytes(host.totalMemBytes)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "主机内存 {0} / {1}"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "主机已运行"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "主题"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题 id"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题名称"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题库已在其他设备上更新。"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题库已更新，请确认后再删除"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题画板"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "主题说明"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "事件循环延迟"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "事件循环曾长时间阻塞"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "事件流连接"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "二维码"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "交接摘要"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "仅保存到服务器，不会回显"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "仅保存到服务器；留空保留现有 Key，不会回显"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅保存在这个浏览器。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+#: src/app/settings/ViewsSection.tsx
+msgid "仅保存在这台设备"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "仅导航条"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "仅手动加入"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "今天的工作"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "以本地版本覆盖"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "任务文件位置"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgctxt "settings-session-label"
+msgid "会话"
+msgstr ""
+
+#. placeholder {0}: process.sessionTitle
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "会话「{0}」"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/settingsSections.ts
+msgid "会话分享"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "会话右侧"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "会话提醒"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "会话标题"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "会话概览"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "会话间距"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "使用 CLI 默认目录"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "使用来源默认地址"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "例如 公司网关"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "侧板视图"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "侧栏色"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "保存"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "保存中…"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "保存凭据"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "保存后清除已存 Key"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "保存在服务器，所有设备生效。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "保存在服务器，所有设备生效。只影响物理键盘，手机软键盘始终换行。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "保存在服务器；每个浏览器需单独允许通知。页面打开并连接服务器时才会通知；关闭标签页或断开后不推送。"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "保存在服务器；每台设备各自选择。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "保存的地址和 API Key 会一并删除。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "停止记录"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "停止进行中的回合"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "允许 Agent 操作"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "允许预览项目外的文件"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "先停止 App 托管的服务器并退出 App，再在终端执行。"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "全不选"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "全选"
+msgstr ""
+
+#. placeholder {0}: candidates.length
+#: src/app/settings/ProviderModelList.tsx
+msgid "全部 {0} 个"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "全部模型"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "全部移除"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "关于 Riffet"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "关闭"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "option-off"
+msgid "关闭"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "关闭自动更新"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "其他以 / 开头的消息原样发给会话"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "内存"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "内存占用分布"
+msgstr ""
+
+#. placeholder {0}: timeAgo(device.lastSeenAt)
+#: src/app/settings/DevicesSection.tsx
+msgid "最后在线 {0}"
+msgstr ""
+
+#. placeholder {0}: atMost[1]
+#: src/app/settings/ThemeEditor.tsx
+msgid "最多 {0} 个字符"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "最多 {limit} 个字符"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "最多同时运行"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "最新发布"
+msgstr ""
+
+#. placeholder {0}: formatExactTimestamp(eventLoop.lastStallAt)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "最近一次：{0}"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "凭据由服务器解析。"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "切换模型、推理强度、上下文窗口和速度"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "切换这个聊天的项目"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "创建备份"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "创建应用"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "删除"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ProfileSection.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgctxt "settings-delete-action"
+msgid "删除"
+msgstr ""
+
+#. placeholder {0}: botName(account)
+#: src/app/settings/channels/BotDetail.tsx
+msgid "删除 {0}？"
+msgstr ""
+
+#. placeholder {0}: provider.name
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "删除「{0}」？"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "删除主题？"
+msgstr ""
+
+#. placeholder {0}: formatPercent(eventLoop.utilization)
+#. placeholder {1}: formatDuration(eventLoop.p99Ms)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "利用率 {0} · p99 {1}"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "刷新"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "刷新页面"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "包含运行环境与设置，API Key 不包含在内。"
+msgstr ""
+
+#. placeholder {0}: host.cpuCount
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "单核占比 · 主机 {0} 核"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "单独一条消息，展示思考与工具调用"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/channels/CardSettings.tsx
+msgid "卡片"
+msgstr ""
+
+#. placeholder {0}: formatCount(eventLoop.stalls)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "卡顿 {0}"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "历史头像"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "去申请"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "发布 tag 冲突"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "发布说明"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "发送"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "发送中…"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "发送到当前服务器。发送后记录仍会保留。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "发送诊断"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "发送诊断失败"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "取消"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgctxt "settings-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "只用 CLI 标题"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "只读打开项目外路径；文件树与搜索仍限定在项目内。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "只退出这个浏览器。"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "可以使用的人"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "可用"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "可选源码 checkout"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "同步失败排查"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ProfileSection.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "名称"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "启动于"
+msgstr ""
+
+#. placeholder {0}: formatCount(requests.total)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "启动以来共 {0} 次"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "启动设置"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "启用"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "启用机器人"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "命令"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "回复中"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgctxt "settings-image-modality"
+msgid "图片"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "圆点"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "在服务器所在电脑的终端执行。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "在服务器电脑上执行恢复命令，指定备份目录和空的目标状态目录："
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "在服务器电脑上运行。"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "在浏览器中打开"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "在线"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在飞书中打开"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在飞书私聊机器人发一条消息"
+msgstr ""
+
+#. placeholder {0}: code.code
+#: src/app/settings/channels/shared.tsx
+msgid "在飞书私聊机器人发送 <0>/bind {0}</0>"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "在飞书里列出这些命令"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "地址"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "地址与凭据由服务器解析。"
+msgstr ""
+
+#. placeholder {0}: namedEntry.source.label
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "地址留空则使用 {0} 的默认地址"
+msgstr ""
+
+#. placeholder {0}: formatDuration(row.avgMs)
+#. placeholder {1}: formatDuration(row.p95Ms)
+#: src/app/settings/ServiceCharts.tsx
+msgid "均 {0} · p95 {1}"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "垂直边距"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "域名"
+msgstr ""
+
+#. placeholder {0}: formatBytes(process.heapUsedBytes)
+#. placeholder {1}: formatBytes(process.heapTotalBytes)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "堆 {0} / {1}"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "处理中"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "备份不包含项目与任务目录中的工作文件。"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "备份与恢复"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "备份中…"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "备份包含凭证，请保存在可信位置。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "备份失败"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "备份已完成"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "复制 App ID"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+msgid "复制配对码"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "外观"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "大"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "子进程"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "字号"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "它所在的会话"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "完成"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "定位重定向问题"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "定时任务"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "宽松"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "对比度提示（{modeLabel}）"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "导出"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "导出诊断信息"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "导航条样式"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "将向该进程发送 SIGTERM，依赖它的终端或会话可能随之退出。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "将向该进程发送 SIGTERM。{session}正在进行的任务会中断。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "小"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "尚无发布版本"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "尚未授权"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "尚未检测"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "尚未检测到运行环境。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "工作台备份"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "已修复登录页的重定向问题，并补充了对应的回归用例。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "已停止"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "已停用"
+msgstr ""
+
+#. placeholder {0}: process.name
+#. placeholder {1}: process.pid
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "已向 {0}（PID {1}）发送结束信号"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "已完成"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "已拒绝"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "已是最新发布版本"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "已有会话保持原配置。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "已登录"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "已调用 2 次工具"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/shared.tsx
+#: src/app/settings/PairingDialogs.tsx
+msgid "已过期"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgctxt "settings-process-uptime"
+msgid "已运行"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "已连接"
+msgstr ""
+
+#. placeholder {0}: timeAgo(last)
+#: src/app/settings/ChannelsSection.tsx
+msgid "已连接 · {0}"
+msgstr ""
+
+#. placeholder {0}: value.length
+#. placeholder {1}: candidates.length
+#: src/app/settings/ProviderModelList.tsx
+msgid "已选 {0} / {1} 个"
+msgstr ""
+
+#. placeholder {0}: cliVersion.testedThrough ?? ''
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "已验证至 {0}"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "常驻内存"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "平台"
+msgstr ""
+
+#. placeholder {0}: formatDuration(requests.p95Ms)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "平均 · p95 {0}"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "平均延迟"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "应用图标"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "底色"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "底部圆点"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "延迟"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "开发版本"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "开始新会话"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "开始记录"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "开通权限"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "强调色"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "当前不可用"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "当前是开发构建"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "当前服务器"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "当前版本较新"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "待完成"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "待完成 {pending} 项"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "必填"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "必须是 #rrggbb"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "必须是 #rrggbb 或 #rrggbbaa"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "必须是 16 个颜色"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "必须是文本"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "快捷键"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "快速对话"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "思考中"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "思考过程"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "恢复备份"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "恢复完成后，使用目标状态目录启动 Riffet。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "恢复默认：{label}"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "我的主题"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "所有连接这台服务器的设备共用"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "手动填写"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "手动添加模型 ID"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "打开会话时"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "打开开发者后台"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "扫码"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "把事件订阅改为长连接"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "把配色改成画板"
+msgstr ""
+
+#: src/app/settings/AvatarStylePicker.tsx
+msgid "换一批"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "换一种搭配"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "换行"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "授权失败"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "排版"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-composer-queue"
+msgid "排队"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "提供商来源"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "搜索内容"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "操作"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "支持"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "收到第一条消息"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "改动行数"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "改好了，入口在 <0>ThemeCanvas.tsx</0>。"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "整群一个会话"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "文件与编辑器"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "文件访问"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "文字大小"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "文本"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "新会话"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgctxt "workbench-sidebar-new-action"
+msgid "新会话"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "新会话默认"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "新建主题"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "新设置从下一条回复开始生效"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/channels/CardSettings.tsx
+msgid "无法保存"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法保存，请检查输入后重试。"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "无法保存主题"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "无法保存名称"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "无法保存头像"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "无法保存快速对话设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存文件访问设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存消息输入设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存编辑器设置"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存资源回收设置"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "无法保存辅助模型"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法保存通知设置"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法保存默认 Agent"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法保存默认审批模式"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法保存默认提供商"
+msgstr ""
+
+#: src/app/settings/SettingsDialog.tsx
+msgid "无法切换设置分区"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "无法删除"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "无法删除主题"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法删除提供商"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "无法加载审批模式，请重试"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法加载模型提供商"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "无法检查更新"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "无法检查更新，请确认 Server 已连接且支持更新检查，然后重试。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "无法检测运行环境"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法添加提供商"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "无法生成二维码"
+msgstr ""
+
+#: src/app/settings/channels/shared.tsx
+msgid "无法生成绑定码"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+msgid "无法生成配对码"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "无法移除头像"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "无法移除聊天"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "无法移除设备"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "无法解绑"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "无法计算"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgctxt "settings-build-read-failed"
+msgid "无法读取"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "无法读取任务文件位置"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "无法读取可用模型"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法读取插件"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "无法读取服务器状态"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "无法读取机器人"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "无法读取设备"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "无法读取这张图片"
+msgstr ""
+
+#: src/app/settings/SettingsDialog.tsx
+msgid "无法返回设置分区"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "无障碍已开启"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "明暗"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "显示的视图"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "暂不支持选择"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "暮色"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "更多"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "更换凭据"
+msgstr ""
+
+#: src/app/settings/ProfileSection.tsx
+msgid "更换头像"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "更新"
+msgstr ""
+
+#. placeholder {0}: formatClock(data.generatedAt)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "更新于 {0}"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "更新失败，显示的是上一次的数据"
+msgstr ""
+
+#. placeholder {0}: formatTime(code.expiresAt)
+#. placeholder {0}: formatTime(new Date(pairing.expiresAt).toISOString())
+#. placeholder {0}: formatTime(registration.expiresAt)
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/shared.tsx
+#: src/app/settings/PairingDialogs.tsx
+msgid "有效至 {0}"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "有新版本可用"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "有本地修改"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "服务器"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "服务器刚启动，第一个 10 秒区间还没结束"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+msgid "服务器只监听本机，其他设备无法连接。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "服务器没有返回状态数据。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "服务器目录，仅影响新任务。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "服务器进程"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "服务地址"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "未命名会话"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "未声明"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "未安装"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "未授予通知权限。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "未检测到"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "未配置 Key"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "本地源码"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "本机服务器"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "本机环境"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/settingsSections.ts
+msgid "机器人"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "来源"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "柔和度"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "查看项目、会话和模型"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "标准"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "标签样式"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "标签页"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "标题栏"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "标题栏图标"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "格式不正确"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "检查中…"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "检查更新"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "检查结果"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "检查项目进度，继续处理会话。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "检测失败"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "检测时间"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/channels/CardSettings.tsx
+#: src/app/settings/settingsSections.ts
+msgid "模型"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "模型提供商"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "模型来源"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "模型设置"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "次/分"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "正在读取服务器状态"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "此浏览器不支持通知。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "每 10 秒一格"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "水平边距"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "永不"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "沙丘"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "没有匹配的模型。"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "没有已配对的设备"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "没有读取到进程信息"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "沿用 CLI 默认"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "浅色"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "浏览…"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "浏览器已拒绝通知，请在网站设置中允许后重试。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "浏览器拒绝了通知权限。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "浏览器通知权限"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "海"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "深色"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/ChannelsSection.tsx
+#: src/app/settings/ProviderModelList.tsx
+msgid "添加"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "添加侧栏色"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "添加强调色"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/ChannelsSection.tsx
+msgid "添加飞书机器人"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/SupportSections.tsx
+msgid "清除"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "源码已切到最新发布，当前 Server 尚未使用该提交；请完成构建并重启。"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "热门接口"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "特大"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "状态码分布"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "玫瑰"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "现在"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "生成"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "生成中…"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "生成配对码"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "用时"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "用这里生成的绑定码绑定账号，只在私聊"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "用飞书扫码"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "画布摘要"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "界面字体"
+msgstr ""
+
+#. placeholder {0}: addingEntry.source.label
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "留空则使用 {0} 的默认地址"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "留空则使用服务器解析出的凭据"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "留空则沿用 CLI 自己的默认值。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "留空沿用 CLI 默认目录；更换后会切换账号与原生历史范围"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "留空沿用服务器启动环境中的 CLI"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "登录"
+msgstr ""
+
+#: src/app/settings/TabsSection.tsx
+msgid "直接加入"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "石墨"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "示例会话"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "视图"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "视图切换"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/DevicesSection.tsx
+#: src/app/settings/ProfileSection.tsx
+msgid "移除"
+msgstr ""
+
+#. placeholder {0}: model.value
+#: src/app/settings/ProviderModelList.tsx
+msgid "移除 {0}"
+msgstr ""
+
+#. placeholder {0}: folded.length
+#: src/app/settings/DevicesSection.tsx
+msgid "移除 {0} 台设备？"
+msgstr ""
+
+#. placeholder {0}: device.name
+#: src/app/settings/DevicesSection.tsx
+msgid "移除 {0}？"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "移除 {name}？"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "移除侧栏色"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "移除后需要重新配对"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "移除后需要重新配对，这个浏览器会退出登录"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "移除强调色"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "空闲后停止 CLI"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "等宽字体"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgctxt "settings-model-filter"
+msgid "筛选"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "筛选模型"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "粘贴对话内容"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "系统负载"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "素"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "紧凑"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "纸张"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "线"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/settingsSections.ts
+#: src/app/settings/ThemeEditor.tsx
+msgid "终端"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "终端只接受 #rrggbb，透明度会被忽略。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "终端字号"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "终端更新命令"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "终端连接"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "终端颜色（16 色）"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+msgid "绑定你的飞书账号"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "结束进程"
+msgstr ""
+
+#. placeholder {0}: process.name
+#. placeholder {1}: process.pid
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "结束进程 {0}（PID {1}）？"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "结束进程失败"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "结果"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "继续描述…"
+msgstr ""
+
+#. placeholder {0}: theme.name
+#: src/app/settings/PreferencesSections.tsx
+msgid "编辑“{0}”"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "编辑主题"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "编辑器"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "编辑器命令"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "缺少"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "网关模型不在 DSH 目录时会按纯文本处理；勾选「图片」才能收到图。"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "网页交互诊断"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "置顶或有收藏的对话不会归档"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "群里共用一个会话，或按话题分会话"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "聊天"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "背景"
+msgstr ""
+
+#: src/app/settings/QuickChatSection.tsx
+msgid "自动归档"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "自定义 API"
+msgstr ""
+
+#: src/app/settings/ThemeCanvas.tsx
+msgid "苔藓"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "获取模型列表"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "行为"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "补充到当前任务"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "解绑"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "解绑 {name}？"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "记录中"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "记录浏览器交互"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "记录浏览器版本、页面加载和历史记录操作，不包含聊天内容、输入内容或令牌。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "设为默认"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "设备管理"
+msgstr ""
+
+#: src/app/settings/SettingsDialog.tsx
+msgid "设置"
+msgstr ""
+
+#: src/app/settings/SettingsDialog.tsx
+msgid "设置分区"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "访问"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "诊断"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "诊断信息"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "诊断已发送到当前服务器"
+msgstr ""
+
+#: src/app/settings/SupportSections.tsx
+msgid "诊断记录"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "试用"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "该 Agent 尚未配置提供商"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "语言"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgctxt "settings-theme-description"
+msgid "说明"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "说明（可选）"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "请求"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "请求与延迟"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "请求数"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "请求速率"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/UpdateSection.tsx
+msgid "读取中…"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "读取失败，可以在下方手动填写模型 ID。"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "资源回收"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
+msgstr ""
+
+#. placeholder {0}: folded.length
+#: src/app/settings/DevicesSection.tsx
+msgid "超过 7 天未使用 · {0}"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "跟随系统"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "辅助模型"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+#: src/app/settings/settingsSections.ts
+msgid "输入"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "输入 API Key"
+msgstr ""
+
+#: src/app/settings/AuxiliaryPreviewDialog.tsx
+msgid "输入一条会话消息"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "输入新 Key 替换现有值"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "输入类型"
+msgstr ""
+
+#. placeholder {0}: formatCount(sessions.waiting)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "运行 · {0} 等待"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "运行中发送的消息"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "运行时长"
+msgstr ""
+
+#. placeholder {0}: parent.label
+#: src/app/settings/SettingsDialog.tsx
+msgid "返回{0}"
+msgstr ""
+
+#: src/app/settings/SettingsDialog.tsx
+msgid "返回设置分区"
+msgstr ""
+
+#. placeholder {0}: issues.length - 8
+#: src/app/settings/ThemeEditor.tsx
+msgid "还有 {0} 处问题…"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "还没有人"
+msgstr ""
+
+#: src/app/settings/ServiceCharts.tsx
+msgid "还没有完成的请求"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "还没有提供商。"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "还没有机器人"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "还没有模型。拉取或在下方手动添加。"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "这个地址没有返回任何模型，可以在下方手动填写模型 ID。"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "这个聊天里的会话绑定一并忘记"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "这台设备"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "这套主题"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "这套主题已经被其他设备删除，请重新加载主题库。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "进程"
+msgstr ""
+
+#. placeholder {0}: processes.length
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "进程 · {0} 个"
+msgstr ""
+
+#. placeholder {0}: processes.length
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "进程 · {0} 个，其中 Agent {agents} 个"
+msgstr ""
+
+#. placeholder {0}: requests.inFlight
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "进行中 {0}"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "连接"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-connect-action"
+msgid "连接"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "连接与访问"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "连接中"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "连接其他服务器"
+msgstr ""
+
+#: src/app/settings/ChannelsSection.tsx
+msgid "连接失败"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "连接飞书"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "退出"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "退出登录"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "逐项调整"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "通用设置"
+msgstr ""
+
+#: src/app/settings/settingsSections.ts
+msgid "通知"
+msgstr ""
+
+#. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
+#: src/app/settings/DevicesSection.tsx
+msgid "配对于 {0}"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/PreferencesSections.tsx
+msgid "配对新设备"
+msgstr ""
+
+#: src/app/settings/PairingDialogs.tsx
+msgid "配对码"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "配置目录"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "配色"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "配色来源：{credits}"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "配色模式"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "重新加载最新版"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "重新扫码授权"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "重新检查"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/SupportSections.tsx
+msgid "重新检测"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/shared.tsx
+#: src/app/settings/PairingDialogs.tsx
+msgid "重新生成"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/shared.tsx
+#: src/app/settings/ChannelsSection.tsx
+#: src/app/settings/DefaultApprovalSetting.tsx
+#: src/app/settings/DevicesSection.tsx
+#: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/settings/AvatarStylePicker.tsx
+msgid "随机头像"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "需兼容 Anthropic Messages API，地址不要带 /v1"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "需兼容 DeepSeek 接口"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "需兼容 OpenAI Responses API，地址要带 /v1"
+msgstr ""
+
+#. placeholder {0}: cliVersion.minimum ?? ''
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "需要 {0} 或更高"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "需要包含已构建 lib；也可使用已安装的 dsh 0.2.0-rc.2"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "需要通过 localhost 或 HTTPS 访问才能启用通知。"
+msgstr ""
+
+#: src/app/settings/ViewsSection.tsx
+msgid "章节导航"
+msgstr ""
+
+#: src/app/settings/channels/CardSettings.tsx
+msgid "页脚"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "项目"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "预览"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "预设"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "颜色"
+msgstr ""
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "颜色支持 #rrggbb 与 #rrggbbaa"
+msgstr ""
+
+#: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/channels/BotDetail.tsx
+msgid "飞书"
+msgstr ""
+
+#: src/app/settings/channels/BotDetail.tsx
+msgid "飞书里的应用不会被删除"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ProviderModelList.tsx
+msgid "默认"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "默认 Agent"
+msgstr ""
+
+#: src/app/settings/ProviderModelList.tsx
+msgid "默认（{size}）"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "默认使用独立目录；更换后会切换配置与原生历史范围"
+msgstr ""
+
+#: src/app/settings/DefaultApprovalSetting.tsx
+msgid "默认审批模式"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/QuickChatSection.tsx
+msgid "默认模型"
+msgstr ""

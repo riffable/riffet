@@ -1,0 +1,7 @@
+{
+  "INVALID_SESSION_REFERENCES": { "zh": "请选择至多 5 个不同的会话", "en": "Choose at most five different conversations" },
+  "SESSION_REFERENCE_UNAVAILABLE": { "zh": "会话引用暂时无法读取", "en": "This session reference is unavailable" },
+  "SESSION_REFERENCE_TOO_LARGE": { "zh": "会话历史过大，请移除此引用后发送", "en": "The session history is too large; remove this reference to send" },
+  "SESSION_REFERENCE_TIMEOUT": { "zh": "读取会话超时，请重试原请求", "en": "Reading the session timed out; retry the original request" },
+  "SESSION_REFERENCES_UNSUPPORTED": { "zh": "当前客户端或 Agent 不支持会话引用", "en": "This client or agent does not support session references" }
+}

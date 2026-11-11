@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared timeline actions -->
+    <string name="timeline_cancel">Cancel</string>
+    <string name="timeline_retry">Retry</string>
+    <string name="timeline_close">Close</string>
+    <string name="timeline_download">Download</string>
+    <string name="timeline_copy">Copy</string>
+    <string name="timeline_copy_path">Copy path</string>
+    <string name="timeline_copy_code">Copy code</string>
+    <string name="timeline_download_file">Download file</string>
+    <string name="timeline_more_actions">More actions</string>
+    <string name="timeline_quote">Quote</string>
+    <string name="timeline_restore_unsent">Restore unsent</string>
+    <string name="timeline_preview">Preview</string>
+    <string name="timeline_source">Source</string>
+    <string name="timeline_image">Image</string>
+    <string name="timeline_unknown_type">Unknown type</string>
+    <string name="timeline_stop">Stop</string>
+    <string name="timeline_collapse">Collapse</string>
+    <string name="timeline_more">More</string>
+
+    <!-- Activity rows -->
+    <string name="timeline_activity_loading_full">Loading full text…</string>
+    <string name="timeline_activity_load_failed_retry">Load failed · Retry</string>
+    <string name="timeline_activity_view_full">View full text</string>
+    <string name="timeline_stop_background_task_title">Stop background task?</string>
+
+    <!-- Diffs -->
+    <string name="timeline_changed_files">Changes</string>
+    <string name="timeline_new_file">New file</string>
+
+    <!-- Attachments and markdown media -->
+    <string name="timeline_attachment">Attachment</string>
+    <string name="timeline_interactive_preview">Interactive preview · %1$s</string>
+    <string name="timeline_open_interactive_preview">Open interactive preview</string>
+    <string name="timeline_image_load_failed">Failed to load image</string>
+    <string name="timeline_attachment_unavailable">Attachment unavailable</string>
+    <string name="timeline_preview_failed">Preview unavailable</string>
+    <string name="timeline_preview_status_failed">Preview failed (%1$d)</string>
+    <string name="timeline_preview_not_html">Preview content is not HTML</string>
+    <string name="timeline_not_connected">Not connected to the server</string>
+
+    <!-- Messages -->
+    <string name="timeline_copy_message">Copy message</string>
+    <string name="timeline_steer">Follow-up message</string>
+    <string name="timeline_thinking">Thinking…</string>
+
+    <!-- Plans, notifications and statuses -->
+    <string name="timeline_todo">Plan</string>
+    <string name="timeline_task_number">Task %1$d</string>
+    <string name="timeline_task_id">Task %1$s</string>
+    <string name="timeline_cli_status">CLI status: %1$s</string>
+    <string name="timeline_status_failed">Failed</string>
+
+    <!-- Tool calls -->
+    <string name="timeline_job_status_incomplete">Incomplete</string>
+    <string name="timeline_output_pending">No output yet…</string>
+    <string name="timeline_no_output">No output</string>
+    <string name="timeline_matched">Matched %1$s</string>
+    <string name="timeline_output_truncated">Output too large; showing the end</string>
+    <string name="timeline_view_full_log">View full log</string>
+    <string name="timeline_file_count">%1$d files</string>
+    <string name="timeline_image_with_caption">Image · %1$s</string>
+    <string name="timeline_no_more_details">No more details</string>
+    <string name="timeline_options">Options: %1$s</string>
+    <string name="timeline_list_separator">,</string>
+    <string name="timeline_skipped">Skipped</string>
+    <string name="timeline_terminal_output">Terminal output · %1$s</string>
+
+    <!-- Tool runs -->
+    <string name="timeline_tool_run_read">Read files</string>
+    <string name="timeline_tool_run_search">Search</string>
+    <string name="timeline_tool_run_execute">Run commands</string>
+    <string name="timeline_tool_run_edit">Edit files</string>
+    <string name="timeline_tool_run_delete">Delete files</string>
+    <string name="timeline_tool_run_move">Move files</string>
+    <string name="timeline_tool_run_fetch">Browse the web</string>
+    <string name="timeline_tool_run_agent">Delegate tasks</string>
+    <string name="timeline_tool_run_think">Thinking</string>
+    <string name="timeline_tool_run_switch_mode">Switch modes</string>
+    <string name="timeline_tool_run_question">Ask the user</string>
+    <string name="timeline_tool_run_plan">Update plan</string>
+    <string name="timeline_tool_run_other">Use tools</string>
+    <string name="timeline_tool_run_pair">%1$s, %2$s</string>
+    <string name="timeline_tool_run_more">%1$s, and more</string>
+
+    <!-- Turn process header -->
+    <string name="timeline_process_working">Working · %1$s</string>
+    <string name="timeline_process_processed_elapsed">Processed · %1$s</string>
+    <string name="timeline_process_processed">Processed</string>
+    <string name="timeline_copy_answer">Copy answer</string>
+
+    <!-- Interaction cards -->
+    <string name="timeline_interaction_draft_stale">The question changed; the old draft was not submitted.</string>
+    <string name="timeline_interaction_result_uncertain">Unable to confirm whether the response was submitted</string>
+    <string name="timeline_interaction_changed">The question changed. Sync and continue.</string>
+    <string name="timeline_interaction_result_unknown">Unable to confirm whether the response was submitted</string>
+    <string name="timeline_interaction_submit_failed">Could not submit the interaction</string>
+    <string name="timeline_interaction_sync_unconfirmed">Unable to confirm whether the response was submitted</string>
+    <string name="timeline_interaction_sync_failed">Could not check the response status</string>
+    <string name="timeline_interaction_need_answer">Answer required</string>
+    <string name="timeline_interaction_need_choice">Choice required</string>
+    <string name="timeline_interaction_answer_placeholder">Enter an answer</string>
+    <string name="timeline_interaction_other_placeholder">Other…</string>
+    <string name="timeline_interaction_other_locked">The custom answer cannot be cleared yet.</string>
+    <string name="timeline_interaction_previous">Previous</string>
+    <string name="timeline_interaction_submit">Submit</string>
+    <string name="timeline_interaction_next">Next</string>
+    <string name="timeline_interaction_skip">Skip</string>
+    <string name="timeline_interaction_submitting">Submitting…</string>
+    <string name="timeline_interaction_syncing">Checking…</string>
+    <string name="timeline_interaction_sync">Check status</string>
+    <string name="timeline_interaction_disconnected">Disconnected. Reconnect to submit.</string>
+    <string name="timeline_interaction_terminal_required">Action needed in the terminal</string>
+    <string name="timeline_interaction_answer_in_terminal">Answer in terminal</string>
+    <string name="timeline_interaction_terminal_fallback">This interaction cannot be shown reliably on a phone. Open the terminal for this session on the Mac, answer there, then come back and sync.</string>
+
+    <!-- Terminal page -->
+    <string name="timeline_terminal_connecting">Connecting</string>
+    <string name="timeline_terminal_reconnecting">Reconnecting</string>
+    <string name="timeline_terminal_exited">Exited with code %1$d</string>
+    <string name="timeline_terminal_token_expired">Token expired</string>
+    <string name="timeline_terminal_other_controller">Another device is controlling</string>
+    <string name="timeline_terminal_read_only">Typing takes control of the terminal</string>
+    <string name="timeline_terminal_take_over">Take over</string>
+    <string name="timeline_terminal_interrupt_process">Interrupt process</string>
+    <string name="timeline_terminal_back_to_live">Back to live</string>
+    <string name="timeline_terminal_connecting_message">Connecting to terminal…</string>
+    <string name="timeline_terminal_paste">Paste</string>
+    <string name="timeline_terminal_line_input_off">Close line input</string>
+    <string name="timeline_terminal_line_input_on">Line input</string>
+    <string name="timeline_terminal_release_control">Release control</string>
+    <string name="timeline_terminal_insert">Insert</string>
+    <string name="timeline_terminal_send">Send</string>
+
+    <!-- Terminal render benchmark -->
+    <string name="timeline_bench_measuring">Measuring…</string>
+    <string name="timeline_bench_title">Terminal render test</string>
+    <string name="timeline_bench_mode_idle">Idle</string>
+    <string name="timeline_bench_mode_agent">Agent output</string>
+    <string name="timeline_bench_mode_redraw">Full redraw</string>
+    <string name="timeline_bench_mode_flood">Fast scroll</string>
+    <string name="timeline_bench_draw_summary">%1$d×%2$d draw p50 %3$s / p95 %4$s ms</string>
+    <string name="timeline_bench_frame_summary">Frame interval p50 %1$s / p95 %2$s ms · parse %3$s MB/s</string>
+    <string name="timeline_mark_reply">Save reply</string>
+    <string name="timeline_unmark_reply">Remove saved reply</string>
+    <string name="terminal_paste_unknown">Paste result unknown; check the terminal before trying again</string>
+    <string name="timeline_diagnostics">Diagnostics</string>
+</resources>

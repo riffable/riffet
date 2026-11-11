@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riffet · 回复导出图片 排版原型</title>
+<style>
+/* ---------- 演示外壳：模拟 Riffet 浅色界面 ---------- */
+:root{
+  --app-bg:#fff;--app-muted:#eef0f3;--app-subtle:#f5f6f8;--app-fg:#121417;--app-fg2:#50555d;--app-fg3:#60666e;--app-fg4:#adb2ba;
+  --app-line:rgb(15 23 42/.09);--app-line2:rgb(15 23 42/.15);--app-accent:#3867f0;--app-accent-soft:rgb(56 103 240/.1);
+  --ui:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:var(--ui);font-size:13px;color:var(--app-fg);background:var(--app-muted);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+.demo-bar{position:sticky;top:0;z-index:20;height:48px;display:flex;align-items:center;gap:10px;padding:0 16px;background:var(--app-bg);border-bottom:1px solid var(--app-line)}
+.demo-bar b{font-size:13.5px}
+.demo-bar .tag{font-size:11px;font-weight:600;color:var(--app-accent);background:var(--app-accent-soft);padding:3px 8px;border-radius:99px}
+.demo-bar .sp{flex:1}
+.seg{display:inline-flex;padding:2px;border-radius:8px;background:var(--app-subtle);border:1px solid var(--app-line)}
+.seg button{padding:4px 10px;border-radius:6px;font-size:12.5px;color:var(--app-fg3)}
+.seg button.on{background:var(--app-bg);color:var(--app-fg);font-weight:550;box-shadow:0 1px 2px rgb(0 0 0/.06),0 0 0 1px var(--app-line)}
+
+/* 导出面板 */
+.stage{display:flex;justify-content:center;padding:36px 24px 64px}
+.dialog{display:flex;width:min(1080px,100%);height:calc(100vh - 48px - 72px);min-height:560px;background:var(--app-bg);border-radius:14px;box-shadow:0 24px 64px -16px rgb(15 23 42/.28),0 0 0 1px var(--app-line2);overflow:hidden}
+.preview{flex:1;min-width:0;overflow:auto;background:#e7e8eb;display:flex;justify-content:center;align-items:flex-start;padding:40px 32px}
+.preview.dark{background:#2a2b2e}
+.panel{width:280px;flex:none;border-left:1px solid var(--app-line);display:flex;flex-direction:column}
+.panel header{height:52px;display:flex;align-items:center;padding:0 20px;font-size:14px;font-weight:600;border-bottom:1px solid var(--app-line)}
+.panel .opts{flex:1;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:20px}
+.opt label.t{display:block;font-size:12px;font-weight:550;color:var(--app-fg2);margin-bottom:8px}
+.opt .seg{display:flex}.opt .seg button{flex:1}
+.check{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--app-fg2);padding:2px 0}
+.check small{display:block;font-size:11.5px;color:var(--app-fg4);margin-top:2px}
+.switch{width:30px;height:18px;border-radius:99px;background:var(--app-line2);position:relative;flex:none;transition:background .15s}
+.switch::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgb(0 0 0/.2);transition:transform .15s}
+.switch.on{background:var(--app-accent)}.switch.on::after{transform:translateX(12px)}
+.switch.disabled{opacity:.4;cursor:not-allowed}
+.panel footer{padding:16px 20px;border-top:1px solid var(--app-line);display:flex;flex-direction:column;gap:10px}
+.dims{font-size:11.5px;color:var(--app-fg4);font-variant-numeric:tabular-nums}
+.btns{display:flex;gap:8px}
+.btn{flex:1;height:32px;border-radius:8px;font-size:13px;font-weight:550;border:1px solid var(--app-line2);background:var(--app-bg)}
+.btn:hover{background:var(--app-subtle)}
+.btn.pri{background:var(--app-fg);color:#fff;border-color:transparent}
+.btn.pri:hover{background:#2a2d33}
+.toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(12px);opacity:0;padding:8px 14px;border-radius:9px;background:#121417;color:#fff;font-size:12.5px;transition:all .2s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%)}
+
+.gallery{display:flex;flex-wrap:wrap;gap:32px;justify-content:center;align-items:flex-start;padding:36px 24px 80px}
+.gallery figure{margin:0;display:flex;flex-direction:column;gap:10px}
+.gallery figcaption{font-size:12px;color:var(--app-fg3)}
+.gallery.dark{background:#2a2b2e}.gallery.dark figcaption{color:#9a9ca2}
+
+/* =====================================================================
+   分享卡片：真正的排版规范（web 与 macOS 共用这份数值）
+   ===================================================================== */
+.sc{
+  --sans:"Inter","SF Pro Text",-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Noto Sans CJK SC","Microsoft YaHei",sans-serif;
+  --serif:ui-serif,"Songti SC","Noto Serif CJK SC","Source Han Serif SC","STSong",Georgia,serif;
+  --mono:"JetBrains Mono","SF Mono",ui-monospace,Menlo,Consolas,"PingFang SC",monospace;
+  --w:480px;--pad:20px;--card-px:36px;--card-pt:40px;--base:16px;
+  width:var(--w);padding:var(--pad);background:var(--canvas);flex:none;
+  font-family:var(--sans);color:var(--ink);
+  -webkit-font-smoothing:antialiased;font-kerning:normal;
+}
+.sc.wide{--w:720px;--pad:28px;--card-px:48px;--card-pt:48px;--base:16px}
+.sc.serif{--body:var(--serif)}
+.sc:not(.serif){--body:var(--sans)}
+
+/* 纸白 */
+.sc.paper{--canvas:#EFECE6;--card:#FBFAF7;--ink:#1C1B19;--ink2:#4A4740;--ink3:#6F6B64;--ink4:#A29D94;--hair:rgb(28 27 25/.08);--hair2:rgb(28 27 25/.16);--code:#F2EFE9;
+  --shadow:0 0 0 1px rgb(28 27 25/.06),0 1px 2px rgb(28 27 25/.04),0 18px 40px -20px rgb(60 45 20/.22);
+  --k:#9A4D8C;--s:#4F7F3A;--n:#B5622C;--c:#A29D94;--f:#2F5D9E;--p:#6F6B64}
+/* 墨黑 */
+.sc.ink{--canvas:#0E0E0F;--card:#18181A;--ink:#ECEAE6;--ink2:#C9C6C0;--ink3:#A09D97;--ink4:#6E6B66;--hair:rgb(255 255 255/.07);--hair2:rgb(255 255 255/.14);--code:#212123;
+  --shadow:0 0 0 1px rgb(255 255 255/.06),0 24px 56px -24px rgb(0 0 0/.7);
+  --k:#D49BD0;--s:#A8C98A;--n:#E3A578;--c:#6E6B66;--f:#8FB4E8;--p:#A09D97}
+/* 跟随主题（此处用 Riffet 默认浅色主题演示） */
+.sc.theme{--canvas:#F1F2F5;--card:#FFFFFF;--ink:#121417;--ink2:#3E434A;--ink3:#60666E;--ink4:#ADB2BA;--hair:rgb(15 23 42/.08);--hair2:rgb(15 23 42/.15);--code:#F5F6F8;
+  --shadow:0 0 0 1px rgb(15 23 42/.07),0 1px 2px rgb(15 23 42/.04),0 18px 40px -20px rgb(15 23 42/.2);
+  --k:#A626A4;--s:#50A14F;--n:#C18401;--c:#A0A1A7;--f:#4078F2;--p:#60666E}
+
+/* 高亮色只作点缀 */
+.sc[data-mark=yellow]{--accent:#C9951A}.sc[data-mark=green]{--accent:#3C9A5F}
+.sc[data-mark=blue]{--accent:#3A74D0}.sc[data-mark=red]{--accent:#CC4F46}
+.sc.ink[data-mark=yellow]{--accent:#E2B341}.sc.ink[data-mark=green]{--accent:#6CC08A}
+.sc.ink[data-mark=blue]{--accent:#78A6EE}.sc.ink[data-mark=red]{--accent:#EC7C73}
+
+.sc-card{background:var(--card);border-radius:16px;box-shadow:var(--shadow);padding:var(--card-pt) var(--card-px) 26px}
+
+/* 中文排版细节：中英间距、标点挤压、行尾标点悬挂、避头尾 */
+.sc-text{
+  font-family:var(--body);
+  text-autospace:normal;text-spacing-trim:normal;hanging-punctuation:allow-end;
+  line-break:strict;overflow-wrap:break-word;text-wrap:pretty;
+}
+
+/* 提问（可选） */
+.sc-ask{margin-bottom:26px}
+.sc-label{font-family:var(--sans);font-size:11px;font-weight:600;letter-spacing:.12em;color:var(--ink4);margin-bottom:7px}
+.sc-ask p{margin:0;font-size:14px;line-height:1.75;color:var(--ink3);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.sc-ask::after{content:"";display:block;width:20px;height:1px;background:var(--hair2);margin-top:22px}
+
+/* 片段 */
+.sc-qmark{font-family:Georgia,"Times New Roman",serif;font-size:68px;line-height:1;height:34px;margin:-4px 0 14px -3px;color:var(--accent);opacity:.85;user-select:none}
+.sc-quote{margin:0;font-weight:400;color:var(--ink);letter-spacing:.01em}
+.sc-quote.l{font-size:26px;line-height:1.62;text-wrap:balance}
+.sc-quote.m{font-size:21px;line-height:1.72}
+.sc-quote.s{font-size:18px;line-height:1.8}
+.sc.serif .sc-quote{letter-spacing:.02em}
+
+/* 整条回复：导出专用 Markdown 样式 */
+.sc-md{font-size:var(--base);line-height:1.8;color:var(--ink);letter-spacing:.01em}
+.sc-md>*:first-child{margin-top:0}
+.sc-md>*:last-child{margin-bottom:0}
+.sc-md p{margin:0 0 .95em}
+.sc-md h1,.sc-md h2,.sc-md h3{font-family:var(--sans);font-weight:600;color:var(--ink);letter-spacing:0;line-height:1.45}
+.sc.serif .sc-md h1,.sc.serif .sc-md h2,.sc.serif .sc-md h3{font-family:var(--serif);font-weight:700}
+.sc-md h1{font-size:22px;margin:1.4em 0 .6em}
+.sc-md h2{font-size:19px;margin:1.5em 0 .55em}
+.sc-md h3{font-size:16.5px;margin:1.4em 0 .45em}
+.sc-md strong{font-weight:600;color:var(--ink)}
+.sc-md em{font-style:normal;color:var(--ink2);text-emphasis:filled dot;text-emphasis-position:under right}
+.sc-md a{color:var(--ink);text-decoration:underline;text-decoration-color:var(--hair2);text-decoration-thickness:1px;text-underline-offset:3px}
+.sc-md ul,.sc-md ol{margin:0 0 .95em;padding-left:1.35em}
+.sc-md li{margin:.28em 0;padding-left:.15em}
+.sc-md li::marker{color:var(--ink4)}
+.sc-md ol li::marker{font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:.92em}
+.sc-md code{font-family:var(--mono);font-size:.84em;background:var(--code);padding:.14em .4em;border-radius:5px;color:var(--ink2);letter-spacing:0}
+.sc-md pre{margin:0 0 1em;background:var(--code);border-radius:10px;padding:14px 16px;font:13px/1.65 var(--mono);color:var(--ink2);white-space:pre-wrap;word-break:break-word;letter-spacing:0}
+.sc.wide .sc-md pre{padding:16px 20px}
+.sc-md pre code{background:none;padding:0;font-size:inherit;color:inherit}
+.sc-md .k{color:var(--k)}.sc-md .s{color:var(--s)}.sc-md .n{color:var(--n)}.sc-md .c{color:var(--c);font-style:italic}.sc-md .f{color:var(--f)}.sc-md .p{color:var(--p)}
+.sc-md table{width:100%;border-collapse:collapse;margin:0 0 1.1em;font-family:var(--sans);font-size:14px;line-height:1.6}
+.sc-md th{text-align:left;font-weight:600;color:var(--ink2);padding:0 16px 8px 0;border-bottom:1px solid var(--hair2)}
+.sc-md td{padding:9px 16px 9px 0;border-bottom:1px solid var(--hair);color:var(--ink);font-variant-numeric:tabular-nums}
+.sc-md tr:last-child td{border-bottom:0}
+.sc-md th:last-child,.sc-md td:last-child{padding-right:0}
+.sc-md blockquote{margin:0 0 1em;padding-left:16px;border-left:2px solid var(--hair2);color:var(--ink3)}
+.sc-md hr{border:0;margin:1.7em 0;text-align:center;height:auto}
+.sc-md hr::before{content:"·  ·  ·";white-space:pre;color:var(--ink4);letter-spacing:.3em;font-size:14px}
+.sc-more{margin-top:.4em;color:var(--ink4);font-size:15px;letter-spacing:.2em}
+
+/* 批注（可选，默认关闭） */
+.sc-note{margin-top:30px;padding-left:14px;border-left:2px solid var(--accent,var(--hair2))}
+.sc-note p{margin:0;font-size:14px;line-height:1.75;color:var(--ink2);white-space:pre-wrap}
+
+/* 页脚 */
+.sc-foot{margin-top:34px;padding-top:16px;border-top:1px solid var(--hair);display:flex;align-items:flex-end;gap:20px;font-family:var(--sans)}
+.sc-foot .meta{flex:1;min-width:0}
+.sc-foot .title{font-size:13px;font-weight:550;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-foot .sub{margin-top:3px;font-size:12px;color:var(--ink4);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sc-foot .sub i{font-style:normal;padding:0 .45em;opacity:.7}
+.sc-foot svg{height:12px;width:auto;flex:none;color:var(--ink4);margin-bottom:3px}
+.sc-foot.bare{justify-content:flex-end}
+</style>
+</head>
+<body>
+<div class="demo-bar">
+  <b>回复导出图片</b><span class="tag">排版原型</span>
+  <div class="seg" id="samples"></div>
+  <span class="sp"></span>
+  <div class="seg" id="view">
+    <button data-v="dialog" class="on">导出面板</button>
+    <button data-v="gallery">全部样例</button>
+  </div>
+</div>
+<div id="root"></div>
+<div class="toast" id="toast">原型只演示排版，不导出文件</div>
+
+<script>
+const wordmark = '<svg viewBox="-1.6 0 67.2 22" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M0 20V2h5a4.5 4.5 0 0 1 0 9H0M3.6 11l6.4 9"/><path d="M15.4 8v12"/><circle cx="15.4" cy="2.6" r="1.736" fill="currentColor" stroke="none"/><path d="M23 20V6a4 4 0 0 1 4-4M20.8 8h4.4"/><path d="M32.8 20V6a4 4 0 0 1 4-4M30.6 8h4.4"/><path d="M40.4 14h12a6 6 0 1 0-1.76 4.24"/><path d="M60 2v14a4 4 0 0 0 4 4M57.8 8h4.4"/></svg>';
+
+const samples = [
+  {
+    id: 'short', name: '短片段', kind: 'span', color: 'yellow',
+    text: '好的抽象不是把代码藏起来，而是让读代码的人少想一件事。',
+    note: '以后 review 时拿这句话问自己。',
+    title: '重构 TranscriptController 的滚动锚点', agent: 'Claude Code', project: 'riffet', date: '2026年10月19日',
+  },
+  {
+    id: 'long', name: '长片段', kind: 'span', color: 'blue',
+    text: 'SQLite 在 WAL 模式下，读不会阻塞写，写也不会阻塞读；真正要留意的是 checkpoint。只要有一个长事务一直挂着，WAL 文件就会持续增长，checkpoint 永远追不上。所以 Store 里的每个 transaction 都要尽快结束，别在事务里 await 网络请求或读 transcript。',
+    note: '这就是 workbench.db-wal 涨到 2 GB 的原因。',
+    title: '排查 workbench.db 体积暴涨', agent: 'Codex', project: 'riffet', date: '2026年10月14日',
+  },
+  {
+    id: 'table', name: '回复 · 表格与代码', kind: 'message', wide: true,
+    ask: '收藏的定位为什么不直接用 messageId？感觉多此一举。',
+    html: `
+<h2>为什么不能只靠 messageId</h2>
+<p>各后端消息 id 的稳定性差别很大，同一个 id 在回退或分叉之后可能指向另一条消息：</p>
+<table>
+<thead><tr><th>后端</th><th>id 来源</th><th>回退或分叉后</th></tr></thead>
+<tbody>
+<tr><td>Claude Code</td><td>JSONL 里的 uuid</td><td>稳定</td></tr>
+<tr><td>Codex / TRAE</td><td>item id</td><td>有 id 时稳定</td></tr>
+<tr><td>Cursor</td><td>按位置生成</td><td>可能错位</td></tr>
+</tbody>
+</table>
+<p>所以定位按“线索由强到弱”依次尝试：</p>
+<ol>
+<li><strong>别名</strong>命中 <code>nativeAliases</code>，它就是身份，不需要再校验；</li>
+<li>id 相同，并且文本骨架也对得上；</li>
+<li>在所属回合内按引文查找；</li>
+<li>全会话检索，都失败才标为 <code>orphaned</code>，但不删除。</li>
+</ol>
+<p>比较文本时用的是“骨架”，渲染后的纯文本和 Markdown 源因此可以直接比：</p>
+<pre><code><span class="k">const</span> <span class="f">skeleton</span> <span class="p">=</span> (text<span class="p">:</span> <span class="k">string</span>) <span class="p">=&gt;</span> text
+  .<span class="f">replace</span>(<span class="s">/^[ \\t&gt;]*\\d+[.)][ \\t]+/gm</span>, <span class="s">''</span>)  <span class="c">// 列表序号</span>
+  .<span class="f">replace</span>(<span class="s">/[^\\p{L}\\p{N}]+/gu</span>, <span class="s">''</span>)
+  .<span class="f">toLowerCase</span>();</code></pre>
+<p>代价是一次 transcript 读取，只在 id 失效时发生。</p>`,
+    note: '和 Readwise 的思路一致。',
+    title: '收藏的重新定位方案', agent: 'Claude Code', project: 'riffet', date: '2026年10月18日',
+  },
+  {
+    id: 'prose', name: '回复 · 长文节选', kind: 'message',
+    ask: '分享图片的排版，有哪些容易被忽略、但很影响质感的细节？',
+    html: `
+<h3>先说结论</h3>
+<p>质感几乎都来自<strong>克制</strong>：少一种颜色、少一种字号、少一条线。读者不会注意到你做对了什么，只会在某处“卡一下”时觉得廉价。</p>
+<h3>容易被忽略的几处</h3>
+<ul>
+<li>中英文之间留出约四分之一个字的空隙，比如 Claude Code 和 Markdown 这样的词；</li>
+<li>行尾的句号、逗号悬挂到版心外，右边缘看起来才是齐的；</li>
+<li>最后一行不要只剩一个字，宁可让上一行少放几个；</li>
+<li>代码块自动换行，图片不能横向滚动，截断的代码等于没有。</li>
+</ul>
+<blockquote>排版的目标不是好看，而是让读的人感觉不到排版的存在。</blockquote>
+<p>颜色上，正文不用纯黑，背景不用纯白。纸白主题的画布比卡片略深一档，卡片像一张放在桌面上的纸，阴影只在底部轻轻落下。</p>
+<hr>
+<p>来源信息放在页脚，用最小的字号和最淡的颜色，它是署名，不是标题。</p>`,
+    excerpt: '全文约 3,200 字',
+    title: '分享卡片的视觉细节', agent: 'Droid', project: 'riffet', date: '2026年10月21日',
+  },
+];
+
+const state = { sample: 'short', theme: 'paper', font: 'sans', width: 'auto', ask: false, note: false, source: true, view: 'dialog' };
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const quoteSize = (text) => text.length <= 60 ? 'l' : text.length <= 160 ? 'm' : 's';
+
+function card(s, opt) {
+  const wide = opt.width === 'wide' || (opt.width === 'auto' && s.wide);
+  const cls = ['sc', opt.theme, wide ? 'wide' : '', opt.font === 'serif' ? 'serif' : ''].join(' ');
+  const ask = s.kind === 'message' && opt.ask && s.ask
+    ? `<div class="sc-ask"><div class="sc-label">提问</div><p class="sc-text">${esc(s.ask)}</p></div>` : '';
+  const body = s.kind === 'span'
+    ? `<div class="sc-qmark">“</div><p class="sc-quote sc-text ${quoteSize(s.text)}">${esc(s.text)}</p>`
+    : `<div class="sc-md sc-text">${s.html}</div>${s.excerpt ? '<div class="sc-more">……</div>' : ''}`;
+  const note = opt.note && s.note ? `<div class="sc-note"><div class="sc-label">批注</div><p class="sc-text">${esc(s.note)}</p></div>` : '';
+  const sub = [s.agent, s.project, s.date, s.excerpt ? `节选 · ${s.excerpt}` : ''].filter(Boolean).join('<i>·</i>');
+  const foot = opt.source
+    ? `<div class="sc-foot"><div class="meta"><div class="title">${esc(s.title)}</div><div class="sub">${sub}</div></div>${wordmark}</div>`
+    : `<div class="sc-foot bare">${wordmark}</div>`;
+  return `<div class="${cls}" ${s.color ? `data-mark="${s.color}"` : ''}><div class="sc-card">${ask}${body}${note}${foot}</div></div>`;
+}
+
+const seg = (key, options, disabled) => `<div class="seg">${options.map(([v, l]) =>
+  `<button data-k="${key}" data-v="${v}" class="${state[key] === v ? 'on' : ''}" ${disabled ? 'disabled' : ''}>${l}</button>`).join('')}</div>`;
+const toggle = (key, label, hint, disabled) => `<div class="check"><span>${label}${hint ? `<small>${hint}</small>` : ''}</span>
+  <button class="switch ${state[key] && !disabled ? 'on' : ''} ${disabled ? 'disabled' : ''}" data-t="${key}" ${disabled ? 'disabled' : ''} aria-label="${label}"></button></div>`;
+
+function render() {
+  document.getElementById('samples').innerHTML = samples.map((s) =>
+    `<button data-s="${s.id}" class="${state.sample === s.id ? 'on' : ''}">${s.name}</button>`).join('');
+  document.querySelectorAll('#view button').forEach((b) => b.classList.toggle('on', b.dataset.v === state.view));
+  document.getElementById('samples').style.visibility = state.view === 'dialog' ? 'visible' : 'hidden';
+  const root = document.getElementById('root');
+  const dark = state.theme === 'ink';
+  if (state.view === 'gallery') {
+    root.innerHTML = `<div class="gallery ${dark ? 'dark' : ''}">${samples.map((s) =>
+      `<figure><figcaption>${s.name}</figcaption>${card(s, { ...state, ask: s.kind === 'message', note: true })}</figure>`).join('')}</div>`;
+    return;
+  }
+  const s = samples.find((x) => x.id === state.sample);
+  root.innerHTML = `<div class="stage"><div class="dialog">
+    <div class="preview ${dark ? 'dark' : ''}" id="preview">${card(s, state)}</div>
+    <aside class="panel">
+      <header>导出图片</header>
+      <div class="opts">
+        <div class="opt"><label class="t">主题</label>${seg('theme', [['paper', '纸白'], ['ink', '墨黑'], ['theme', '跟随主题']])}</div>
+        <div class="opt"><label class="t">字体</label>${seg('font', [['sans', '黑体'], ['serif', '宋体']])}</div>
+        <div class="opt"><label class="t">宽度</label>${seg('width', [['auto', '自动'], ['narrow', '竖版'], ['wide', '宽版']])}</div>
+        <div class="opt" style="display:flex;flex-direction:column;gap:12px">
+          ${toggle('ask', '显示提问', s.kind === 'message' ? '这条回复对应的用户提问' : '仅整条回复可用', s.kind !== 'message')}
+          ${toggle('note', '显示批注', s.note ? '收藏时写的备注' : '这条收藏没有备注', !s.note)}
+          ${toggle('source', '显示来源', '会话标题、Agent、项目与日期')}
+        </div>
+      </div>
+      <footer>
+        <div class="dims" id="dims"></div>
+        <div class="btns"><button class="btn" data-a="save">保存 PNG</button><button class="btn pri" data-a="copy">复制图片</button></div>
+      </footer>
+    </aside></div></div>`;
+  requestAnimationFrame(() => {
+    const el = document.querySelector('#preview .sc');
+    const scale = el.classList.contains('wide') ? 2 : 3;
+    document.getElementById('dims').textContent = `${Math.round(el.offsetWidth * scale)} × ${Math.round(el.offsetHeight * scale)} px · PNG · ${scale}×`;
+  });
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b || b.disabled) return;
+  if (b.dataset.s) state.sample = b.dataset.s;
+  else if (b.dataset.k) state[b.dataset.k] = b.dataset.v;
+  else if (b.dataset.t) state[b.dataset.t] = !state[b.dataset.t];
+  else if (b.dataset.v && b.closest('#view')) state.view = b.dataset.v;
+  else if (b.dataset.a) { const t = document.getElementById('toast'); t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 1600); return; }
+  else return;
+  render();
+});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+{
+  "ARCHIVED_SESSION": {
+    "zh": "会话已归档",
+    "en": "This conversation is archived"
+  },
+  "COMMAND_ID_CONFLICT": {
+    "zh": "该请求已用于其他消息",
+    "en": "This request was already used for another message"
+  },
+  "CONFIGURATION_CHANGING": {
+    "zh": "{action, select, steer {模型正在切换，请稍后补充} other {模型正在切换，请稍后发送}}",
+    "en": "{action, select, steer {The model is switching; add your follow-up after it finishes} other {The model is switching; send after it finishes}}"
+  },
+  "RUN_CANCELLED": {
+    "zh": "消息已取消",
+    "en": "The message was cancelled"
+  },
+  "RUN_NOT_FOUND": {
+    "zh": "消息不存在",
+    "en": "The message does not exist"
+  },
+  "RUN_NOT_QUEUED": {
+    "zh": "这条消息已离开队列，请刷新后重试",
+    "en": "This message has left the queue; refresh and try again"
+  },
+  "STEER_TARGET_CHANGED": {
+    "zh": "当前任务已改变，补充消息尚未发送",
+    "en": "The current task changed; the follow-up message was not sent"
+  },
+  "INVALID_PROMPT": {
+    "zh": "请输入消息",
+    "en": "Enter a message"
+  },
+  "TITLE_MODEL_FAILED": {
+    "zh": "{message}",
+    "en": "{message}"
+  },
+  "AUXILIARY_MODEL_FAILED": {
+    "zh": "{message}",
+    "en": "{message}"
+  },
+  "TASK_WORKSPACE_UNAVAILABLE": {
+    "zh": "工作目录不可用，请恢复原位置后重试",
+    "en": "The task directory is unavailable; restore its original location and retry"
+  },
+  "INVALID_TASK_WORKSPACE_ROOT": {
+    "zh": "无法使用此位置，请选择可写入的目录",
+    "en": "Choose a writable directory for task files"
+  },
+  "TASK_WORKSPACE_CONFLICT": {
+    "zh": "工作目录与创建记录不一致，请检查原目录后重试",
+    "en": "The task directory does not match its creation record; check the original directory before retrying"
+  },
+  "PROJECT_PROMOTION_CONFLICT": {
+    "zh": "该任务已用其他名称保存为项目",
+    "en": "This task was already saved as a project under another name"
+  },
+  "INVALID_PROJECT_PROMOTION": {
+    "zh": "只有未关联项目的任务可以保存为项目",
+    "en": "Only an unassociated task can be saved as a project"
+  },
+  "TASK_WORKSPACE_SAVE_REQUIRED": {
+    "zh": "请先将任务保存为项目",
+    "en": "Save this task as a project first"
+  },
+  "FEATURE_REQUIRED": {
+    "zh": "请更新客户端后重试",
+    "en": "Update the client and try again"
+  },
+  "INVALID_QUERY_SCOPE": {
+    "zh": "查询范围无效，请重新选择项目",
+    "en": "The query scope is invalid; select the project again"
+  },
+  "NATIVE_QUERY_DIRECTORY_UNAVAILABLE": {
+    "zh": "模型查询目录不可用，请检查服务器缓存位置",
+    "en": "The model query directory is unavailable; check the server cache location"
+  },
+  "SESSION_DELETED": {
+    "zh": "会话已删除",
+    "en": "This conversation was deleted"
+  },
+  "SESSION_DELETING": {
+    "zh": "会话正在删除",
+    "en": "This conversation is being deleted"
+  },
+  "SESSION_DELETE_BLOCKED": {
+    "zh": "{reason, select, share {分享操作进行中，完成后再删除} other {先停止或处理未完成的任务，再删除会话}}",
+    "en": "{reason, select, share {A share operation is in progress; delete after it finishes} other {Stop or finish this conversation’s tasks before deleting it}}"
+  },
+  "SESSION_DELETE_SCOPE_CHANGED": {
+    "zh": "会话已变化，请重新确认",
+    "en": "The conversation changed; confirm again"
+  },
+  "SESSION_IN_TERMINAL": {
+    "zh": "这个会话正在终端中进行",
+    "en": "This conversation is open in a terminal"
+  },
+  "NATIVE_SESSION_HELD_EXTERNALLY": {
+    "zh": "这个会话正在 Riffet 之外的终端里运行，先在那里退出",
+    "en": "This conversation is running in a terminal outside Riffet; exit it there first"
+  },
+  "TERMINAL_STILL_RUNNING": {
+    "zh": "终端中的进程仍在运行",
+    "en": "The process in the terminal is still running"
+  },
+  "SESSION_BUSY": {
+    "zh": "等当前回合结束后再试",
+    "en": "Wait for the current turn to finish"
+  },
+  "TERMINAL_RESUME_UNSUPPORTED": {
+    "zh": "这个 Agent 不支持在终端恢复",
+    "en": "This agent cannot be resumed in a terminal"
+  },
+  "NATIVE_SESSION_NOT_STARTED": {
+    "zh": "会话还没有开始，先发一条消息",
+    "en": "This conversation has not started yet; send a message first"
+  },
+  "EXTERNAL_SESSION_NOT_FOUND": {
+    "zh": "这个会话已不在本机",
+    "en": "This conversation is no longer stored on this machine"
+  },
+  "EXTERNAL_SESSION_DIRECTORY_MISSING": {
+    "zh": "会话所在的目录已不存在",
+    "en": "The directory this conversation ran in no longer exists"
+  }
+}

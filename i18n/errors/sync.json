@@ -1,0 +1,8 @@
+{
+  "INVALID_SYNC_GENERATION": { "zh": "同步参数无效，请刷新", "en": "Invalid sync request; refresh" },
+  "INVALID_SYNC_LANE": { "zh": "同步参数无效，请刷新", "en": "Invalid sync request; refresh" },
+  "INVALID_TIMELINE_POSITION": { "zh": "同步参数无效，请刷新", "en": "Invalid sync request; refresh" },
+  "NATIVE_STATUS_UNAVAILABLE": { "zh": "暂时无法读取会话状态", "en": "The conversation status is unavailable for now" },
+  "SYNC_GENERATION_CHANGED": { "zh": "会话记录已重建，请重新载入", "en": "The conversation was rebuilt; reload it" },
+  "TRANSCRIPT_READ_FAILED": { "zh": "读取会话记录失败，稍后自动重试", "en": "Could not read the conversation; retrying shortly" }
+}

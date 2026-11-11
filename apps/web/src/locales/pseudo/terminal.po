@@ -1,0 +1,531 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: message.exitCode
+#: src/app/terminal/TerminalView.tsx
+msgid "[进程已退出，退出码 {0}]"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "[进程已退出]"
+msgstr ""
+
+#. placeholder {0}: terminal.title
+#: src/app/terminal/TerminalView.tsx
+msgid "{0} 终端"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "{backendLabel} 当前未运行。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "{backendLabel} 正在等待操作。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "{backendLabel} 终端"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "{height} 像素"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "Agent 正在运行，等它停下后再回退代码"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "上"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "上一条消息是否已执行仍无法确认"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "下"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "下次启动时生效"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgctxt "terminal-interrupt-action"
+msgid "中断"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "中断当前进程？"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "中断进程 (SIGINT)"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "交接会话…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "代码与本轮开始前一致，无需回退"
+msgstr ""
+
+#. placeholder {0}: changes.length
+#: src/app/terminal/NativeSession.tsx
+msgid "代码将回到本轮开始前，撤销 {0} 个文件自那之后的改动。对话记录会保留，Agent 不会感知到回退，可以接着告诉它。"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "会向终端发送 Ctrl+C。Agent CLI 会停止当前任务，并可能接着发送它自己排队的消息。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "会话已归档"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "会话视图"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "停止中"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "停止任务"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "关闭终端"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "其他 Agent"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "其他设备正在控制"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "分享会话…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "切换对话视图"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "切换权限后会恢复原生会话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "切换终端视图"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgctxt "terminal-change-delete"
+msgid "删除"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "加入队列"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "发送给 {backendLabel}"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "只读"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "可输入"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "右"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "启动中"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "回到实时"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "回车"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "回退"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "回退代码到本轮开始前？"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "在终端中"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "存为任务模板…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "导出为 PDF…"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "左"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "已交接给 {successorAgentLabel}，在新会话中继续。"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "已停止"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "已删除的会话"
+msgstr ""
+
+#. placeholder {0}: changes.length
+#: src/app/terminal/NativeSession.tsx
+msgid "已回退 {0} 个文件"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "已连接"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "已退出"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "当前任务暂不接受补充"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "当前任务暂不接受补充，输入已保留"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "待恢复"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "恢复"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgctxt "terminal-resume-session"
+msgid "恢复"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgctxt "terminal-resume-session"
+msgid "恢复会话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "打开"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "打开终端"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "接管"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "收起"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+#: src/app/terminal/TerminalDock.tsx
+msgctxt "terminal-collapse-terminal"
+msgid "收起终端"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "新建终端"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "新配置将在后端重启后生效"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "无法中断进程"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法保存模型设置"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法切换权限模式"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法切换模型"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法另开会话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法回退代码"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法更新技能与工具"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "无法粘贴附件"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法解析 {backendLabel} 的会话存储，请查看后端版本与诊断信息。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "无法读取附件"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "无法调整终端尺寸"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "更多操作"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "未命名会话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "本轮开始前没有检查点，无法回退代码。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "来源会话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在停止"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在加载终端…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在压缩上下文"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "正在接管"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "正在检查控制权"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "正在申请"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "正在重新连接"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "没有可用模型"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "没有运行中的终端"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "由 {parentAgentLabel} 交接自"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "空格"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "等待交互"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgctxt "terminal-awaiting-confirmation"
+msgid "等待确认"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "等待终端操作"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "粘贴结果待确认，请检查终端。"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "终端已关闭"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "终端控制权或输入位置已变更，请重新粘贴。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "终端未在运行"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "终端正在重连，请稍后再试。"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "终端运行在服务器，关闭浏览器后仍会保留。"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "终端面板"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "继续发送 {count} 条消息"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "继续对话"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "获取控制权"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "补充当前任务…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "请打开终端继续。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "请重新选择文件"
+msgstr ""
+
+#: src/app/terminal/TerminalDock.tsx
+msgid "调整终端高度"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "输入下一条消息…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "输入消息…"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "运行中"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "运行中的任务会中断，对话记录保留"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+#: src/app/terminal/TerminalDock.tsx
+msgid "返回对话"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "还原"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "连接中"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "连接冲突"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "连接已断开"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgctxt "terminal-model-picker-label"
+msgid "选择模型"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "释放控制权"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "重启并应用"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "重启并应用？"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "重新打开"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "重新打开 {backendLabel} 后继续原生会话。"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+#: src/app/terminal/TerminalView.tsx
+msgid "重新连接"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "重试连接"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "重连中"
+msgstr ""
+
+#: src/app/terminal/NativeSession.tsx
+msgid "附件"
+msgstr ""
+
+#: src/app/terminal/TerminalView.tsx
+msgid "附件正在上传"
+msgstr ""

@@ -1,0 +1,109 @@
+/**
+ * A semantic reading position survives prepends, message updates and delayed image layout. The row
+ * at the top of the view also names the block inside it there (a paragraph, a picture, a fence), so
+ * a picture or a formula growing earlier in the same long message does not move the words being read.
+ */
+export interface ReadingAnchor { rows: { key: string; top: number; block?: { element: Element; top: number } }[]; scrollTop: number }
+
+/** Blocks a reading anchor does not look inside: text runs, media and fences. */
+const LEAF = 'p,h1,h2,h3,h4,h5,h6,pre,table,img,picture,video,canvas,svg,iframe,hr,math,.katex-display';
+const MAX_DEPTH = 12;
+
+/**
+ * The innermost block of [row] at or just below [line] (a viewport y), before [limit]: down through
+ * the first child whose bottom is past the line, until a leaf or a child laid out inline. Children
+ * stack in block flow, so the first one past the line is found by bisecting their bottoms.
+ */
+function blockAt(row: Element, line: number, limit: number): Element | undefined {
+  let block: Element | undefined;
+  let parent = row;
+  for (let depth = 0; depth < MAX_DEPTH; depth += 1) {
+    const children = parent.children;
+    let low = 0;
+    let high = children.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (children[middle]!.getBoundingClientRect().bottom <= line) low = middle + 1;
+      else high = middle;
+    }
+    let next: Element | undefined;
+    for (let index = low; index < children.length; index += 1) {
+      const child = children[index]!;
+      const rect = child.getBoundingClientRect();
+      if (rect.top >= limit) break;
+      if (rect.height === 0 || rect.bottom <= line) continue;
+      const style = getComputedStyle(child);
+      if (style.position === 'absolute' || style.position === 'fixed') continue;
+      // Inline content is part of its parent's text, which is the block.
+      if (!style.display.startsWith('inline')) next = child;
+      break;
+    }
+    if (!next) break;
+    block = next;
+    if (next.matches(LEAF)) break;
+    parent = next;
+  }
+  return block;
+}
+
+/**
+ * The transcript's rows in order: the column's direct children, of which the rows are the ones
+ * carrying a key. They stack top to bottom, so their edges only grow, which is what lets a lookup
+ * bisect them instead of measuring every one from the first.
+ */
+function columnChildren(scroller: HTMLElement): HTMLCollection | undefined {
+  return scroller.querySelector(':scope > [data-content-column]')?.children;
+}
+
+/** The row with [key], without collecting every row first. */
+export function findRow(scroller: HTMLElement, key: string): HTMLElement | undefined {
+  return scroller.querySelector<HTMLElement>(`[data-row-key="${CSS.escape(key)}"]`) ?? undefined;
+}
+
+/**
+ * [fallback] answers when no row is mounted at the viewport — a windowed list the reader just
+ * jumped through, where the position is only known from the list's own index.
+ */
+export function captureReadingAnchor(scroller: HTMLElement, fallback?: () => ReadingAnchor | undefined): ReadingAnchor {
+  const bounds = scroller.getBoundingClientRect();
+  const children = columnChildren(scroller);
+  const rows: ReadingAnchor['rows'] = [];
+  if (!children) return { rows, scrollTop: scroller.scrollTop };
+  // The first child whose bottom is below the viewport's top edge.
+  let low = 0;
+  let high = children.length;
+  while (low < high) {
+    const middle = (low + high) >> 1;
+    if (children[middle]!.getBoundingClientRect().bottom <= bounds.top) low = middle + 1;
+    else high = middle;
+  }
+  for (let index = low; index < children.length && rows.length < 3; index += 1) {
+    const row = children[index] as HTMLElement;
+    const rect = row.getBoundingClientRect();
+    if (rect.top >= bounds.bottom) break;
+    if (rect.height === 0 || !row.dataset.rowKey) continue;
+    // Only a row that starts above the view has something above the reader that could grow.
+    const block = !rows.length && rect.top < bounds.top ? blockAt(row, bounds.top, bounds.bottom) : undefined;
+    rows.push({ key: row.dataset.rowKey, top: rect.top - bounds.top, ...(block ? { block: { element: block, top: block.getBoundingClientRect().top - bounds.top } } : {}) });
+  }
+  if (!rows.length) return fallback?.() ?? { rows, scrollTop: scroller.scrollTop };
+  return { rows, scrollTop: scroller.scrollTop };
+}
+
+/**
+ * [locate] gives the content-space top of a row that is not mounted, for a windowed list: the
+ * anchor still names where the reader was, and the list's index knows where that row would be.
+ */
+export function readingAnchorTop(scroller: HTMLElement, anchor: ReadingAnchor, locate?: (key: string) => number | undefined): number {
+  for (const saved of anchor.rows) {
+    const row = findRow(scroller, saved.key);
+    if (!row) continue;
+    // The block, while the row still holds it; a re-rendered message falls back to the row.
+    const block = saved.block && saved.block.element.isConnected && row.contains(saved.block.element) ? saved.block : undefined;
+    const top = block ? block.element.getBoundingClientRect().top - block.top : row.getBoundingClientRect().top - saved.top;
+    return scroller.scrollTop + top - scroller.getBoundingClientRect().top;
+  }
+  const first = anchor.rows[0];
+  const at = first && locate ? locate(first.key) : undefined;
+  return at !== undefined ? at - first!.top : anchor.scrollTop;
+}

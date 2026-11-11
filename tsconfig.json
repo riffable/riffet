@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": { "@/*": ["apps/web/src/*"], "@contracts": ["packages/contracts/src/index.ts"], "@riffet/contracts": ["packages/contracts/src/index.ts"], "@riffet/plugin-api": ["packages/plugin-api/src/index.ts"], "@riffet/plugin-web": ["packages/plugin-web/src/index.ts"] },
+    "types": ["node", "vite/client"]
+  },
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "plugins/**/*.ts", "plugins/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+  // The mobile client is a Gradle/Kotlin tree with its own toolchain; nothing there belongs to tsc.
+  "exclude": ["apps/mobile", "node_modules", "dist"]
+}

@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings home: section labels and groups -->
+    <string name="settings_extra_section_appearance">Appearance &amp; display</string>
+    <string name="settings_extra_section_notifications">Notifications &amp; background</string>
+    <string name="settings_extra_section_interaction">Interaction &amp; input</string>
+    <string name="settings_extra_section_connection">Connection &amp; pairing</string>
+    <string name="settings_extra_section_backends">Agents &amp; models</string>
+    <string name="settings_extra_section_extensions">Agent extensions</string>
+    <string name="settings_extra_section_files">Files &amp; editor</string>
+    <string name="settings_extra_section_service">Service status</string>
+    <string name="settings_extra_section_diagnostics">Diagnostics &amp; logs</string>
+    <string name="settings_extra_section_about">About Riffet</string>
+    <string name="settings_extra_group_preferences">Preferences</string>
+    <string name="settings_extra_group_environment">Environment</string>
+    <string name="settings_extra_group_support">Support</string>
+
+    <!-- Appearance: enum labels kept out of the shared model -->
+    <string name="settings_text_size_small">Small</string>
+    <string name="settings_text_size_default">Default</string>
+    <string name="settings_text_size_large">Large</string>
+    <string name="settings_text_size_larger">Extra large</string>
+    <string name="settings_spacing_compact">Compact</string>
+    <string name="settings_spacing_default">Default</string>
+    <string name="settings_spacing_relaxed">Relaxed</string>
+    <string name="settings_app_icon_blue">Blue</string>
+    <string name="settings_app_icon_purple">Purple</string>
+    <string name="settings_app_icon_magenta">Magenta</string>
+    <string name="settings_app_icon_pink">Pink</string>
+    <string name="settings_app_icon_red">Red</string>
+    <string name="settings_app_icon_orange">Orange</string>
+    <string name="settings_app_icon_yellow">Yellow</string>
+    <string name="settings_app_icon_lime">Lime</string>
+    <string name="settings_app_icon_green">Green</string>
+    <string name="settings_app_icon_cyan">Cyan</string>
+    <string name="settings_app_icon_graphite">Graphite</string>
+    <string name="settings_app_icon_white">White</string>
+    <string name="settings_theme_summary_riffet">Default look: cool neutral greys with a blue accent.</string>
+    <string name="settings_theme_summary_solarized">Cream paper and dark green-black, designed for long reading.</string>
+    <string name="settings_theme_summary_catppuccin">Soft low-contrast purple tones for low light.</string>
+    <string name="settings_theme_summary_rose_pine">Warm rose-purple with muted paper tones.</string>
+    <string name="settings_theme_summary_kiln">Warm ivory with clay orange.</string>
+    <string name="settings_theme_summary_everforest">Muted greens, warm and calm.</string>
+    <string name="settings_theme_summary_ink">Neutral paper and ink blue.</string>
+    <string name="settings_theme_summary_sepia">Old-book paper and oxblood.</string>
+    <string name="settings_theme_summary_moss">Grey-green paper and olive moss.</string>
+    <string name="settings_theme_summary_slate">Cool paper and slate blue.</string>
+    <string name="settings_theme_summary_pencil">Pure neutral greys, no coloured accent.</string>
+    <string name="settings_theme_summary_celadon">Celadon paper and deep teal.</string>
+
+    <!-- Idle reclaim presets -->
+    <string name="settings_extra_idle_off">Off</string>
+    <string name="settings_extra_idle_hours">%1$d h</string>
+    <string name="settings_extra_idle_minutes">%1$d min</string>
+
+    <!-- Service uptime -->
+    <string name="settings_extra_duration_days_hours">%1$d d %2$d h</string>
+    <string name="settings_extra_duration_hours_minutes">%1$d h %2$d min</string>
+    <string name="settings_extra_duration_minutes">%1$d min</string>
+    <string name="settings_extra_duration_seconds">%1$d s</string>
+
+    <!-- Backend profiles: endpoint placeholders and hints -->
+    <string name="settings_extra_endpoint_placeholder_droid">Use the built-in Droid sign-in</string>
+    <string name="settings_extra_endpoint_placeholder_traex">Use the built-in TRAE CLI sign-in</string>
+    <string name="settings_extra_endpoint_placeholder_cursor">Use the default Cursor service</string>
+    <string name="settings_extra_endpoint_hint_claude">Must be compatible with the Anthropic Messages API; do not include /v1 in the address</string>
+    <string name="settings_extra_endpoint_hint_codex">Must be compatible with the OpenAI Responses API; include /v1 in the address</string>
+    <string name="settings_extra_endpoint_hint_dsh">Must be compatible with the DeepSeek API</string>
+    <string name="settings_extra_endpoint_hint_droid">Droid only uses Factory sign-in; the service address has no effect</string>
+    <string name="settings_extra_endpoint_hint_traex">TRAE CLI only uses its own sign-in; the service address has no effect</string>
+    <string name="settings_extra_input_type_text">Text</string>
+    <string name="settings_extra_input_type_image">Image</string>
+
+    <!-- Extensions -->
+    <string name="settings_extra_ext_action_failed">The operation failed. Try again.</string>
+    <string name="settings_extra_ext_saved_refresh_failed">Saved, but the directory refresh failed. Refresh again later.</string>
+    <string name="settings_extra_ext_template_skill">---\nname: my-skill\ndescription: Describe when this skill applies\n---\n\n</string>
+    <string name="settings_extra_ext_template_instructions"># Instructions\n\n</string>
+    <string name="settings_extra_ext_kind_skill">Skill</string>
+    <string name="settings_extra_ext_kind_plugin">Plugin</string>
+    <string name="settings_extra_ext_kind_rule">Rule</string>
+    <string name="settings_extra_ext_kind_command">Command</string>
+    <string name="settings_extra_ext_kind_config">Configuration file</string>
+    <string name="settings_extra_ext_scope_user">User</string>
+    <string name="settings_extra_ext_scope_project">Project</string>
+    <string name="settings_extra_ext_scope_managed">Managed</string>
+    <string name="settings_extra_ext_scope_builtin">Built-in</string>
+    <string name="settings_extra_ext_action_enable">Enable</string>
+    <string name="settings_extra_ext_action_disable">Disable</string>
+    <string name="settings_extra_ext_action_uninstall">Uninstall</string>
+    <string name="settings_extra_ext_action_update">Update</string>
+    <string name="settings_extra_ext_action_login">Authenticate</string>
+    <string name="settings_extra_ext_runtime_loaded">Connected</string>
+    <string name="settings_extra_ext_runtime_error">Connection error</string>
+    <string name="settings_extra_ext_runtime_pending">Waiting to load</string>
+    <string name="settings_extra_ext_runtime_unknown">Unconfirmed</string>
+    <string name="settings_extra_ext_confirm_title">%1$s %2$s?</string>
+    <string name="settings_extra_ext_confirm_skill_note">This setting also affects other projects that use this skill.</string>
+    <string name="settings_extra_ext_install_confirm">Install %1$s (%2$s)?</string>
+
+    <!-- Pairing errors -->
+    <string name="settings_extra_pair_invalid_code_title">Incorrect or expired pairing code</string>
+    <string name="settings_extra_pair_invalid_code_body">A code is valid for 5 minutes and can be used once. Run riffet status on the Mac for a new code, then try again.</string>
+    <string name="settings_extra_pair_device_revoked_title">Device revoked</string>
+    <string name="settings_extra_pair_device_revoked_body">This device was removed on the Mac. Pair again; if it keeps happening, check the device list on the Mac and restart the server.</string>
+    <string name="settings_extra_pair_unreachable_title">Cannot reach the server</string>
+    <string name="settings_extra_pair_unreachable_body">Could not connect to %1$s. Make sure the phone and Mac are on the same network, the server is running (riffet start --host 0.0.0.0), and the address and port are correct.</string>
+    <string name="settings_extra_pair_not_riffet_title">This address is not a Riffet server</string>
+    <string name="settings_extra_pair_not_riffet_body">The address responded, but not as a Riffet API. Check that the address and port point to Riffet running on the Mac.</string>
+    <string name="settings_extra_pair_failed_title">Pairing failed</string>
+    <string name="settings_extra_pair_upgrade_title">Update the app</string>
+    <string name="settings_extra_pair_upgrade_body_prefix">This QR code was generated by a newer version of Riffet</string>
+    <string name="settings_extra_pair_upgrade_version"> (protocol version %1$d)</string>
+    <string name="settings_extra_pair_upgrade_body_suffix">, which this app cannot read. Update the app and try again, or type the pairing code instead.</string>
+    <string name="settings_extra_pair_scanned_invalid_title">The QR code is not valid pairing information</string>
+    <string name="settings_extra_pair_scanned_invalid_body">%1$s Reverted to manual entry; make sure the QR code comes from riffet status on the Mac.</string>
+    <string name="settings_extra_pair_scanned_unreadable">Could not parse the QR code.</string>
+    <string name="settings_extra_pair_server_status">Server returned %1$d</string>
+    <string name="settings_extra_section_quick_chat">Quick chat</string>
+    <string name="settings_quick_chat">Quick chat</string>
+    <string name="settings_quick_chat_default_model">Default model</string>
+    <string name="settings_quick_chat_none">Not set</string>
+    <string name="settings_quick_chat_archive">Auto-archive</string>
+    <string name="settings_quick_chat_days">%1$d days</string>
+    <string name="settings_quick_chat_never">Never</string>
+    <string name="settings_quick_chat_hint">Pinned chats and chats with saved replies are never archived</string>
+    <string name="settings_quick_chat_models_failed">Could not load available models</string>
+    <string name="settings_quick_chat_open_mode">Open in</string>
+    <string name="settings_quick_chat_open_sheet">Sheet</string>
+    <string name="settings_quick_chat_open_page">Full page</string>
+    <string name="settings_quick_chat_presets">Presets</string>
+    <string name="settings_quick_chat_edit">Edit</string>
+    <string name="settings_quick_chat_add">Add</string>
+    <string name="settings_quick_chat_new_preset">New preset</string>
+    <string name="settings_quick_chat_edit_preset">Edit preset</string>
+    <string name="settings_quick_chat_preset_name">Name</string>
+    <string name="settings_quick_chat_preset_prompt">Prompt</string>
+    <string name="settings_quick_chat_delete">Delete</string>
+    <string name="settings_quick_chat_delete_title">Delete this preset?</string>
+    <string name="settings_quick_chat_restore_defaults">Restore default presets</string>
+    <string name="settings_quick_chat_restore">Restore</string>
+    <string name="settings_quick_chat_restore_title">Restore the default presets?</string>
+    <string name="settings_quick_chat_presets_limit">Up to 12 presets; names are 20 characters or fewer</string>
+
+    <!-- Keep-alive (通知与后台) -->
+    <string name="settings_keepalive_battery">Ignore battery optimization</string>
+    <string name="settings_keepalive_allow">Allow</string>
+    <string name="settings_keepalive_background">Allow background activity</string>
+    <string name="settings_keepalive_hint_oppo">Battery usage › Allow background activity</string>
+    <string name="settings_keepalive_hint_xiaomi">Battery saver › No restrictions</string>
+    <string name="settings_keepalive_hint_vivo">Allow high background power consumption</string>
+    <string name="settings_keepalive_hint_huawei">App launch › Turn off Manage automatically, allow background activity</string>
+    <string name="settings_keepalive_hint_default">Battery › Unrestricted</string>
+    <string name="settings_keepalive_autostart">Auto-start</string>
+    <string name="settings_keepalive_cutoff">The connection dropped after you left the app. Check the settings above.</string>
+    <string name="settings_keepalive_cutoff_summary">Background connection dropped</string>
+
+    <!-- 确认操作前验证本人 -->
+    <string name="settings_verify_group">Verification</string>
+    <string name="settings_verify_approvals">Verify identity before confirming actions</string>
+    <string name="settings_verify_approvals_desc">Approvals from notifications open the app instead</string>
+    <string name="settings_verify_unavailable">Set up a screen lock first</string>
+    <string name="settings_verify_enable_reason">Verify your identity before enabling action confirmation</string>
+    <string name="settings_verify_enable_failed">Identity verification was not completed, so the setting stays off</string>
+    <string name="approval_verify_reason">Confirm the Agent's action</string>
+    <string name="approval_verify_failed">Device verification was not completed and the action was not submitted.</string>
+    <string name="approval_verify_changed">The session or request changed and the action was not submitted. Sync the current request.</string>
+
+    <!-- 能力与设备 (docs/DEVICES.md) -->
+    <string name="settings_extra_section_devices">Capabilities &amp; devices</string>
+    <string name="settings_device_group">This device</string>
+    <string name="settings_device_allow">Let agents operate this device</string>
+    <string name="settings_device_allow_desc">Stored on this device only; keeps a persistent connection while on</string>
+    <string name="settings_device_capabilities">Capabilities</string>
+    <string name="settings_device_cap_notify">Notifications</string>
+    <string name="settings_device_cap_clipboard">Clipboard</string>
+    <string name="settings_device_cap_location">Location</string>
+    <string name="settings_device_cap_photo">Camera &amp; photos</string>
+    <string name="settings_device_cap_open_url">Open links</string>
+    <string name="settings_device_cap_alarm">Alarms</string>
+    <string name="settings_device_available">Available</string>
+    <string name="settings_device_unavailable">Unavailable</string>
+    <string name="settings_device_exact_alarm">Exact wake-ups</string>
+    <string name="settings_device_exact_alarm_off">Without it, scheduled calls may wake the phone late</string>
+    <string name="settings_device_background_note">In the background, clipboard reads, photos, links and alarms wait for a tap on the notification</string>
+    <string name="settings_device_accessibility">Accessibility</string>
+    <string name="settings_device_a11y_running">Running</string>
+    <string name="settings_device_a11y_stalled">On, but not running</string>
+    <string name="settings_device_a11y_restart">Restart</string>
+    <string name="settings_device_a11y_enable">Turn on</string>
+    <string name="settings_device_a11y_sheet">Turn on accessibility</string>
+    <string name="settings_device_a11y_computer">Turn on from a computer</string>
+    <string name="settings_device_a11y_unauthorized">Available once you allow USB debugging on the phone</string>
+    <string name="settings_device_a11y_restricted">Allow restricted settings</string>
+    <string name="settings_device_a11y_reinstall">If you cannot find it, install the app once more with the system file manager</string>
+    <string name="settings_device_a11y_open">Turn on Riffet in Accessibility</string>
+    <string name="settings_device_a11y_go">Open</string>
+    <string name="settings_device_a11y_oppo_monitor">Turn off "Permission monitoring" in Developer options, then retry</string>
+    <string name="settings_device_a11y_xiaomi_secure">Turn on "USB debugging (Security settings)" in Developer options, then retry</string>
+    <string name="settings_device_apps">Apps</string>
+    <string name="settings_device_app_allow">Allow</string>
+    <string name="settings_device_app_ask">Ask</string>
+    <string name="settings_device_app_block">Block</string>
+    <string name="settings_device_apps_note">Paying is always left to you; with Ask, sending, deleting and submitting need your confirmation on the phone</string>
+</resources>

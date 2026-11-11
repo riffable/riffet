@@ -1,0 +1,40 @@
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+⚠ Model "synthetic-model-001" isn't recognized · context assumed to be 200k tokens · update Claude
+  Code, or see the docs
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Cooked for 5s · done 7:52 PM · 1 shell still running
+
+❯ Use the Agent tool to launch the "sleeper" subagent (subagent_type sleeper, run_in_background
+  true) with the prompt "go". As soon as it is launched, end your turn by replying only LAUNCHED.
+  Do not wait for it and do not use any other tool.
+
+⏺ sleeper(Sleep in background)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ LAUNCHED
+
+✻ Waiting for 1 background agent to finish
+
+⏺ Agent "Sleep in background" is waiting on its own background work · 9s
+
+⏺ The sleeper agent is still waiting on its own background sleep; no output to relay yet.
+
+· Processing… (running Stop hooks… 6/7 · 3s · ↓ 13 tokens)
+  ⎿  Tip: Use --agent <agent_name> to directly start a conversation with a subagent
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 14% · /tmp/wo…
+  ⏵⏵ bypass permissions on · 1 shell
+
+  ⏺ main
+  ◯ sleeper  Sleep in background                                                9s · ↓ 2.9k tokens

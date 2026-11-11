@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Riffet's server has no TLS by design on the LAN: docs/MOBILE.md ("网络接入") recommends
+  `tailscale serve` for HTTPS and cross-network use, and accepts plain HTTP for direct LAN access.
+  Android's network security config matches host names, not IP ranges, so "cleartext only for
+  private address ranges" cannot be expressed here — the QR host is usually a 192.168.x.x address,
+  and a base-config that forbade cleartext would break the primary pairing flow.
+
+  The consequence, stated rather than hidden: over direct LAN access the device token crosses the
+  network in plaintext. That is the known tradeoff the operator accepts by exposing the server on
+  the LAN; use Tailscale for anything beyond it.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- The mDNS name is the address that survives a network change, so it is named explicitly. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">local</domain>
+        <domain includeSubdomains="true">localhost</domain>
+    </domain-config>
+</network-security-config>

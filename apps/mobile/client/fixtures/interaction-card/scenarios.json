@@ -1,0 +1,232 @@
+{
+  "about": "Scenarios every answer card must pass: the Kotlin state machine (InteractionCard.kt, run by Android, macOS and iOS) and its web port (nativeInteractionCardState.ts). Each step applies one event and checks only the keys its `expect` names.",
+  "interactions": {
+    "ask1": { "id": "ask", "revision": "1", "transport": "protocol", "kind": "question", "title": "First", "options": [{ "id": "a", "label": "A", "selected": false }, { "id": "b", "label": "B", "selected": false }], "allowOther": true, "actions": [{ "id": "answer", "label": "Continue", "tone": "primary" }] },
+    "terminalAsk1": { "id": "ask", "revision": "1", "transport": "terminal", "terminalId": "terminal-1", "epoch": 1, "kind": "question", "title": "First", "options": [{ "id": "a", "label": "A", "selected": false }, { "id": "b", "label": "B", "selected": false }], "allowOther": true, "actions": [{ "id": "answer", "label": "Continue", "tone": "primary" }] },
+    "ask2": { "id": "ask", "revision": "2", "transport": "protocol", "kind": "question", "title": "Second", "options": [{ "id": "c", "label": "C", "selected": false }, { "id": "d", "label": "D", "selected": false }], "allowOther": true, "actions": [{ "id": "previous", "label": "Previous" }, { "id": "answer", "label": "Submit", "tone": "primary" }] },
+    "locked": { "id": "multi", "revision": "1", "kind": "question", "title": "Several", "options": [{ "id": "a", "label": "A", "selected": false }, { "id": "b", "label": "B", "selected": false }], "multiple": true, "allowOther": true, "otherSelected": true, "otherValue": "x", "actions": [{ "id": "answer", "label": "Submit" }] },
+    "closed": { "id": "closed", "revision": "1", "kind": "question", "title": "No free text", "options": [{ "id": "a", "label": "A", "selected": true }], "actions": [{ "id": "answer", "label": "Submit" }] }
+  },
+  "scenarios": [
+    {
+      "name": "the next question after a taken answer says nothing",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a", "expect": { "edited": true, "storedDraft": true, "draft": { "revision": "1", "selectedIds": ["a"], "otherText": "" } } },
+        { "do": "submit", "action": "answer", "requestId": "r1", "expect": { "phase": "posting", "frozen": true, "busy": true, "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "selectedIds": ["a"] } } },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": "posting", "appliedRevision": "1", "shownRevision": "1" } },
+        { "do": "responded", "requestId": "r1", "status": "advanced", "expect": { "phase": null, "notice": null, "appliedRevision": "2", "shownRevision": "2", "busy": false, "edited": false, "storedDraft": false, "draft": { "revision": "2", "selectedIds": [], "otherText": "" } } }
+      ]
+    },
+    {
+      "name": "a redraw of an untouched card says nothing",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "interaction", "interaction": "ask2", "expect": { "notice": null, "appliedRevision": "2", "edited": false } }
+      ]
+    },
+    {
+      "name": "a redraw drops changed input and says so",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "b" },
+        { "do": "interaction", "interaction": "ask2", "expect": { "notice": "draft_stale", "appliedRevision": "2", "edited": false, "storedDraft": false, "draft": { "revision": "2", "selectedIds": [], "otherText": "" } } }
+      ]
+    },
+    {
+      "name": "an answer with no response waits for its retry, sent as the same request",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "failed", "requestId": "r1", "status": null, "expect": { "phase": "unknown", "frozen": true, "busy": true, "canRetry": true, "canSync": true } },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": "unknown", "appliedRevision": "1", "shownRevision": "1" } },
+        { "do": "select", "id": "b", "expect": { "draft": { "revision": "1", "selectedIds": ["a"], "otherText": "" } } },
+        { "do": "retry", "expect": { "phase": "posting", "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "selectedIds": ["a"] } } },
+        { "do": "responded", "requestId": "r1", "status": "completed", "expect": { "phase": null, "notice": null, "appliedRevision": "2", "busy": false } }
+      ]
+    },
+    {
+      "name": "a refused revision can be answered again; a rejected answer keeps the draft",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "failed", "requestId": "r1", "status": 409, "expect": { "phase": "stale", "frozen": false, "busy": false, "canSync": true, "canRetry": false } },
+        { "do": "select", "id": "b", "expect": { "edited": true, "draft": { "revision": "1", "selectedIds": ["b"], "otherText": "" } } },
+        { "do": "submit", "action": "answer", "requestId": "r2", "expect": { "phase": "posting", "request": { "interactionId": "ask", "revision": "1", "requestId": "r2", "action": "answer", "selectedIds": ["b"] } } },
+        { "do": "failed", "requestId": "r2", "status": 400, "message": "bad", "expect": { "phase": null, "error": "submit", "busy": false, "draft": { "revision": "1", "selectedIds": ["b"], "otherText": "" } } }
+      ]
+    },
+    {
+      "name": "a late answer to another request changes nothing",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "responded", "requestId": "r0", "status": "completed", "expect": { "phase": "posting" } },
+        { "do": "failed", "requestId": "r0", "status": 500, "expect": { "phase": "posting" } }
+      ]
+    },
+    {
+      "name": "a fresh terminal sync finding the same question allows an uncertain answer to be reconsidered",
+      "interaction": "terminalAsk1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "responded", "requestId": "r1", "status": "uncertain", "message": "maybe", "expect": { "phase": "uncertain", "frozen": true, "busy": true, "canSync": true, "canRetry": false } },
+        { "do": "syncStarted", "expect": { "busy": true } },
+        { "do": "synced", "fresh": "terminalAsk1", "expect": { "phase": null, "notice": "unconfirmed", "busy": false, "edited": true, "appliedRevision": "1", "draft": { "revision": "1", "selectedIds": ["a"], "otherText": "" } } },
+        { "do": "submit", "action": "answer", "requestId": "r2", "expect": { "phase": "posting", "request": { "interactionId": "ask", "revision": "1", "requestId": "r2", "action": "answer", "selectedIds": ["a"] } } }
+      ]
+    },
+    {
+      "name": "unchanged protocol syncs cannot repeat an uncertain side effect with a fresh request",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "responded", "requestId": "r1", "status": "uncertain" },
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask1", "expect": { "phase": "uncertain", "canRetry": false } },
+        { "do": "submit", "action": "answer", "requestId": "r2", "expect": { "phase": "uncertain", "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "selectedIds": ["a"] } } },
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask1", "expect": { "phase": "uncertain" } },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": "uncertain", "appliedRevision": "1" } },
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask2", "expect": { "phase": null, "appliedRevision": "2" } },
+        { "do": "select", "id": "c" },
+        { "do": "submit", "action": "answer", "requestId": "r2", "expect": { "phase": "posting", "request": { "interactionId": "ask", "revision": "2", "requestId": "r2", "action": "answer", "selectedIds": ["c"] } } }
+      ]
+    },
+    {
+      "name": "a sync applies the question that waited behind an inconclusive answer",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "failed", "requestId": "r1", "status": 503 },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": "unknown", "appliedRevision": "1" } },
+        { "do": "syncStarted", "expect": { "canRetry": false } },
+        { "do": "synced", "fresh": "ask2", "expect": { "phase": null, "notice": "unconfirmed", "appliedRevision": "2", "busy": false } }
+      ]
+    },
+    {
+      "name": "a sync before the newer question arrives lets it apply when it does",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "responded", "requestId": "r1", "status": "uncertain" },
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask2", "expect": { "phase": "uncertain", "appliedRevision": "1" } },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": null, "notice": "unconfirmed", "appliedRevision": "2" } }
+      ]
+    },
+    {
+      "name": "a sync that changed nothing does not let a redraw drop the next answer",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask1" },
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "interaction", "interaction": "ask2", "expect": { "phase": "posting", "appliedRevision": "1" } },
+        { "do": "responded", "requestId": "r1", "status": "advanced", "expect": { "phase": null, "notice": null, "appliedRevision": "2" } }
+      ]
+    },
+    {
+      "name": "a sync to the same question keeps an unknown answer's retry",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "submit", "action": "answer", "requestId": "r1" },
+        { "do": "failed", "requestId": "r1", "status": null },
+        { "do": "syncStarted" },
+        { "do": "synced", "fresh": "ask1", "expect": { "phase": "unknown", "canRetry": true, "notice": null } }
+      ]
+    },
+    {
+      "name": "a sync with nothing sent keeps the draft",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "syncStarted", "expect": { "busy": true } },
+        { "do": "synced", "fresh": "ask1", "expect": { "busy": false, "edited": true, "notice": null, "draft": { "revision": "1", "selectedIds": ["a"], "otherText": "" } } },
+        { "do": "syncStarted" },
+        { "do": "syncFailed", "message": "offline", "expect": { "error": "sync", "busy": false } }
+      ]
+    },
+    {
+      "name": "an answer that was still posting comes back unknown after a remount",
+      "interaction": "ask1",
+      "saved": {
+        "submission": { "phase": "posting", "interaction": "ask1", "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "selectedIds": ["a"] }, "draft": { "revision": "1", "selectedIds": ["a"], "otherText": "" } }
+      },
+      "steps": [
+        { "do": "none", "expect": { "phase": "unknown", "frozen": true, "canRetry": true, "shownRevision": "1" } },
+        { "do": "retry", "expect": { "phase": "posting", "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "selectedIds": ["a"] } } }
+      ]
+    },
+    {
+      "name": "a stored answer to an older revision is dropped on remount",
+      "interaction": "ask2",
+      "saved": {
+        "submission": { "phase": "unknown", "interaction": "ask1", "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer" }, "draft": { "revision": "1", "selectedIds": [], "otherText": "" } }
+      },
+      "steps": [
+        { "do": "none", "expect": { "phase": null, "busy": false } }
+      ]
+    },
+    {
+      "name": "a stored draft for an older revision is reported, one for this revision is restored",
+      "interaction": "ask1",
+      "saved": { "draft": { "revision": "0", "selectedIds": ["a"], "otherText": "" } },
+      "steps": [
+        { "do": "none", "expect": { "notice": "draft_stale", "edited": false, "storedDraft": false } }
+      ]
+    },
+    {
+      "name": "a stored draft for this revision is restored without options that no longer exist",
+      "interaction": "ask1",
+      "saved": { "draft": { "revision": "1", "selectedIds": ["zz", "b"], "otherText": "" } },
+      "steps": [
+        { "do": "none", "expect": { "notice": null, "edited": true, "storedDraft": true, "draft": { "revision": "1", "selectedIds": ["b"], "otherText": "" } } }
+      ]
+    },
+    {
+      "name": "free text replaces a single choice and is sent as typed",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "select", "id": "a" },
+        { "do": "other", "text": " hi\u0007 ", "expect": { "draft": { "revision": "1", "selectedIds": [], "otherText": " hi " } } },
+        { "do": "submit", "action": "answer", "requestId": "r1", "expect": { "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer", "otherText": " hi " } } }
+      ]
+    },
+    {
+      "name": "blank free text is not sent",
+      "interaction": "ask1",
+      "steps": [
+        { "do": "other", "text": "   " },
+        { "do": "submit", "action": "answer", "requestId": "r1", "expect": { "request": { "interactionId": "ask", "revision": "1", "requestId": "r1", "action": "answer" } } }
+      ]
+    },
+    {
+      "name": "free text goes nowhere an interaction does not take it",
+      "interaction": "closed",
+      "steps": [
+        { "do": "other", "text": "note" },
+        { "do": "submit", "action": "answer", "requestId": "r1", "expect": { "request": { "interactionId": "closed", "revision": "1", "requestId": "r1", "action": "answer" } } }
+      ]
+    },
+    {
+      "name": "a multi-select toggles and cannot clear the free text the CLI holds",
+      "interaction": "locked",
+      "steps": [
+        { "do": "none", "expect": { "draft": { "revision": "1", "selectedIds": [], "otherText": "x" } } },
+        { "do": "other", "text": "", "expect": { "edited": false, "draft": { "revision": "1", "selectedIds": [], "otherText": "x" } } },
+        { "do": "select", "id": "a" },
+        { "do": "select", "id": "b" },
+        { "do": "select", "id": "a", "expect": { "draft": { "revision": "1", "selectedIds": ["b"], "otherText": "x" } } }
+      ]
+    }
+  ]
+}

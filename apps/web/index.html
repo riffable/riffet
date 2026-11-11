@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!--
+      The manifest can hold one static colour while the app follows the device preference, so the
+      static value is the default theme's light `--bg` (#ffffff), the same as this meta: the launch
+      splash then matches the page a first visit paints. The mark is a self-contained dark tile, so
+      it keeps its own colours on that surround. theme-init.js still sets this meta from the device
+      preference, so the live window follows the device either way.
+    -->
+    <meta name="theme-color" content="#ffffff" />
+    <title>Riffet</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <!-- Served as .json because the static handler has no `application/manifest+json` in its MIME map. -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Riffet" />
+    <!-- `default` keeps dark status-bar text legible on every light theme; `black-translucent` would not. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <script src="/theme-init.js"></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

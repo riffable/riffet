@@ -1,0 +1,42 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "NSAppleEventsUsageDescription" : {
+      "comment" : "Privacy - AppleEvents Sending Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riffet uses this to open files in the editor you choose."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Riffet 用它在你选择的编辑器里打开文件。"
+          }
+        }
+      }
+    },
+    "NSUserNotificationsUsageDescription" : {
+      "comment" : "Privacy - User Notifications Usage Description",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Riffet lets you know when a session finishes, fails or needs your confirmation."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Riffet 在会话完成、失败或等待确认时提醒你。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

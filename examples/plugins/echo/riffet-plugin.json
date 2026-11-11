@@ -1,0 +1,20 @@
+{
+  "id": "example.echo",
+  "vendor": "Example",
+  "name": "Echo",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "title": { "zh-Hans": "回声", "en": "Echo" },
+  "description": {
+    "zh-Hans": "最小的 Agent：把收到的文字原样回复。",
+    "en": "The smallest Agent: it replies with the text it was sent."
+  },
+  "hostApi": { "server": "^1", "agent": "^1" },
+  "contributes": {
+    "agentBackends": [
+      { "id": "example.echo", "title": { "zh-Hans": "回声", "en": "Echo" } }
+    ]
+  },
+  "entries": { "server": "server/index.mjs" }
+}

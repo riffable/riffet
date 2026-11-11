@@ -1,0 +1,343 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#: src/app/marks/MarksPage.tsx
+msgid "{total} 条"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "主题"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "仅整条回复可用"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "今天"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "会话标题、Agent、项目与日期"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "保存 PNG"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "全部"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "全部项目"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "写点什么，方便以后找到它…"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-delete-action"
+msgid "删除"
+msgstr ""
+
+#. placeholder {0}: chosen.size
+#: src/app/marks/MarksPage.tsx
+msgid "删除 {0} 条"
+msgstr ""
+
+#. placeholder {0}: chosen.size
+#: src/app/marks/MarksPage.tsx
+msgid "删除 {0} 条收藏"
+msgstr ""
+
+#. placeholder {0}: ids.length
+#: src/app/marks/MarksPage.tsx
+msgid "删除 {0} 条收藏？"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "删除后无法恢复。"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "删除收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "原文已找不到"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-replies-tab"
+msgid "回复"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-image-name"
+msgid "图片"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "图片与文件"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "备注"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "复制内容"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "复制图片"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "复制路径"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "字体"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "宋体"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-done-action"
+msgid "完成"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "宽度"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "宽版"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+#: src/app/marks/ShareImage.tsx
+msgid "导出图片"
+msgstr ""
+
+#. placeholder {0}: ids.length
+#: src/app/marks/MarksPage.tsx
+msgid "已删除 {0} 条收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "已删除收藏"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "已复制图片"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "已移除的项目"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "当前连接不支持复制图片，请改用保存"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "打开侧边栏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "打开原会话"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "打开文件"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "批注"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "找不到原文"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "找不到对应的提问"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "按项目筛选"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "提问"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "搜索收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "搜索收藏的内容、备注或会话"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "撤销"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "收藏夹"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "收藏时写的备注"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "无法加载收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "无法加载更多收藏"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "无法复制图片"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "无法生成图片"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "昨天"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "显示批注"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "显示提问"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "显示来源"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "更早"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "未命名会话"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "查看大图"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "正在查找…"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "没有备注"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "没有符合条件的收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "添加备注"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "清除搜索"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "竖版"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "筛选收藏"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "纸白"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "编辑备注"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "自动"
+msgstr ""
+
+#. placeholder {0}: formatNumber(excerpt.total)
+#: src/app/marks/ShareImage.tsx
+msgid "节选 · 全文约 {0} 字"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "跟随主题"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "还没有收藏"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "这条回复对应的用户提问"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "选择"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "选择收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "选择这条收藏"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/marks/MarksPage.tsx
+msgctxt "marks-highlights-tab"
+msgid "高亮"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "黑体"
+msgstr ""
+
+#: src/app/marks/ShareImage.tsx
+msgid "墨黑"
+msgstr ""

@@ -1,0 +1,169 @@
+# Version catalog for the Riffet mobile client.
+#
+# EVERY version used by this build lives here. Versions were resolved from Maven Central
+# (https://repo1.maven.org/maven2/...), Google Maven and the Gradle Plugin Portal before being
+# pinned; docs/MOBILE.md has the verification commands.
+#
+# Kotlin leads; everything else follows it. A library can only be taken if two things in its
+# published artifacts are within reach of this build — check both before bumping anything:
+#   1. the `kotlin-stdlib` version in its `.module` file is <= `kotlin` below (an older compiler
+#      cannot read newer klib/class metadata, and the failure is a compile error far from the cause);
+#   2. the class-file major version in its JVM/Android jar is <= the JDK the build runs on (21:
+#      major 65). The application still targets JVM 17; verify D8 and any inline calls separately.
+# The Kotlin <-> Gradle <-> AGP ranges are in Kotlin's KMP compatibility guide
+# (https://kotlinlang.org/docs/multiplatform/multiplatform-compatibility-guide.html); for 2.4.20 they
+# are Gradle 7.6.3–9.7.0 and AGP 8.5.2–9.3.1, which is why AGP is 9.3.1 and not newer, and the
+# wrapper is Gradle 9.7.0.
+#
+# AGP 9 is required, not chosen: the androidx Compose 1.12 artifacts behind CMP 1.12 declare
+# minAndroidGradlePluginVersion=9.1.0 and minCompileSdk=37 in their AAR metadata (1.11.x asked for
+# 8.6.0 / 35). Under AGP 9 a module cannot apply `org.jetbrains.kotlin.multiplatform` together with
+# `com.android.library` or `com.android.application`, so the library modules use
+# `com.android.kotlin.multiplatform.library` and the host (`androidApp`) is a plain Android module.
+#
+# Compose Multiplatform 1.11 dropped the iosX64 (Intel-Mac simulator) target; the modules declare
+# iosArm64 and iosSimulatorArm64 only.
+[versions]
+kotlin = "2.4.20"
+agp = "9.3.1"
+composeMultiplatform = "1.12.1"
+# Material 3 has its own version line since CMP 1.10. 1.9.0 is what the CMP 1.12.1 Gradle plugin's
+# (deprecated) `compose.material3` accessor resolves to.
+composeMaterial3 = "1.9.0"
+miuix = "0.9.4"
+haze = "2.0.1"
+# Haze core/blur/glass share one version; Kotlin 2.4.20 and Compose 1.12.1 match this build.
+# Only its source-backed public API is used; platform window-backdrop remains experimental/off.
+# Miuix publishes Java 21 classes on Android and desktop. Mobile CI and local JVM UI runs
+# require JDK 21+, while application/compiler targets remain 17. Kotlin 2.4.20 / Foundation 1.12.0.
+ktor = "3.6.0"
+coroutines = "1.11.0"
+serialization = "1.11.0"
+
+# The transcript's markdown renderer (mikepenz/multiplatform-markdown-renderer, Apache-2.0, CMP,
+# Android + iOS + jvm). Retained at the version verified with JVM 17 output: 0.40.0 and later ship
+# Java 21 class files (major 65) in both the jvm jar and Android AAR. The Miuix runtime requirement
+# does not automatically upgrade the renderer: check inline calls before changing its version
+# because Kotlin refuses to inline JVM 21 bytecode into the JVM 17 application target.
+# 0.39.2 is major 61, declares kotlin-stdlib 2.3.0, and is built against Compose 1.10.
+#
+# Its Compose dependency is `compileOnly` upstream, so the Compose version of this build is the one
+# that is used and Gradle cannot catch a Compose API it calls that this build lacks: never pair it
+# with a Compose older than the one it was built against.
+#
+# Only the material-free core artifact is taken. The `-m3` variant would only supply
+# `markdownColor()`/`markdownTypography()` defaults, and the ones here come from RiffetColors /
+# RiffetTypography; `-code` would add dev.snipme:highlights, which is a second dependency for a
+# behaviour the web's transcript renderer does not have (see PlainText.kt).
+#
+# Transitive: org.jetbrains:markdown (the CommonMark/GFM parser), kotlinx-collections-immutable
+# and, at runtime, the kotlinx-coroutines-core already pinned below.
+markdownRenderer = "0.39.2"
+
+# Image loading (Coil 3, Apache-2.0). Two artifacts: `coil-compose` (the `AsyncImage` /
+# `rememberAsyncImagePainter` Compose API) and `coil-network-ktor3` (the Ktor 3 network fetcher).
+# Both are commonMain and cover Android + iOS + jvm, so no expect/actual is needed.
+# 3.6.3 declares kotlin-stdlib 2.4.10 and Compose foundation 1.12.0, and ships Java 11 class files.
+#
+# `coil-network-ktor3`, not `coil-network-okhttp`: this project's HTTP stack is Ktor 3 everywhere,
+# and the ktor3 variant hands Coil the same Ktor engine the rest of the client uses.
+coil = "3.6.3"
+
+# Kotlin -> Swift interop for the macOS app's RiffetKit framework (touchlab/SKIE, Apache-2.0):
+# sealed hierarchies become Swift enums, Flow becomes AsyncSequence, suspend becomes async.
+# 0.10.15 is the first release that supports Kotlin 2.4.20 (release notes, 2026-09-25).
+skie = "0.10.15"
+
+# Android host. Not needed by contracts/core/shared.
+androidxActivityCompose = "1.13.0"
+# Official app-language backport for Android 8–12.
+androidxAppcompat = "1.7.1"
+androidxCoreKtx = "1.19.1"
+androidxLifecycle = "2.11.0"
+androidxWindow = "1.5.1"
+woff2Decoder = "0.0.3"
+# 37: androidx Compose 1.12, Coil 3.6 and OkHttp 5.5 all declare minCompileSdk=37. targetSdk stays
+# 35 until the Android 16/17 behaviour changes are checked on a device; raising it opts the app into
+# new runtime behaviour and is not part of a compiler bump.
+androidCompileSdk = "37"
+androidMinSdk = "26"
+androidTargetSdk = "35"
+
+# QR pairing scanner. NOT com.google.mlkit:barcode-scanning: that artifact pulls in Google Play
+# Services (or makes you bundle a model), which contradicts Riffet's local-first stance
+# (docs/MOBILE.md, 非目标). CameraX frames + a pure-Java zxing decoder need neither.
+#
+# 1.4.2 is the newest of the 1.4 line and its AAR metadata asks for minCompileSdk=34 / no AGP
+# requirement. (1.5.3 also exists and resolves, but it raises the floor to minCompileSdk=35 and
+# AGP 8.6.0 for no API this code uses.)
+androidxCamera = "1.4.2"
+zxing = "3.5.3"
+
+[libraries]
+miuix-ui = { module = "top.yukonga.miuix.kmp:miuix-ui", version.ref = "miuix" }
+haze-core = { module = "dev.chrisbanes.haze:haze", version.ref = "haze" }
+haze-blur = { module = "dev.chrisbanes.haze:haze-blur", version.ref = "haze" }
+haze-glass = { module = "dev.chrisbanes.haze:haze-glass", version.ref = "haze" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization" }
+
+# Compose Multiplatform, by coordinate: the plugin's `compose.runtime` / `compose.ui` / … accessors
+# are deprecated since CMP 1.10 ("Specify dependency directly").
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "composeMultiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMultiplatform" }
+compose-ui-test-junit4 = { module = "org.jetbrains.compose.ui:ui-test-junit4", version.ref = "composeMultiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "composeMultiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+# The common `BackHandler`: sheets and the sidebar drawer consume the system back gesture
+# themselves instead of letting it close the whole session underneath them.
+compose-ui-backhandler = { module = "org.jetbrains.compose.ui:ui-backhandler", version.ref = "composeMultiplatform" }
+
+# Ktor client. The SSE plugin ships inside ktor-client-core (io.ktor.client.plugins.sse); no
+# separate artifact is needed. See shared/.../SseClient.kt for the confirmation note.
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-content-negotiation = { module = "io.ktor:ktor-client-content-negotiation", version.ref = "ktor" }
+ktor-serialization-kotlinx-json = { module = "io.ktor:ktor-serialization-kotlinx-json", version.ref = "ktor" }
+ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
+ktor-client-darwin = { module = "io.ktor:ktor-client-darwin", version.ref = "ktor" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
+
+# Agent prose and reasoning: CommonMark/GFM in, Compose out. Themed from RiffetColors /
+# RiffetTypography in riffet/ui/timeline/MarkdownRender.kt; the library's own defaults are never
+# reached.
+markdown-renderer = { module = "com.mikepenz:multiplatform-markdown-renderer", version.ref = "markdownRenderer" }
+
+# Attachment and agent-image rendering. `implementation` in shared: nothing outside this module
+# names a Coil type — the timeline entry points still take Strings and UserAttachment.
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-ktor3 = { module = "io.coil-kt.coil3:coil-network-ktor3", version.ref = "coil" }
+
+kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
+
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidxActivityCompose" }
+androidx-appcompat = { module = "androidx.appcompat:appcompat", version.ref = "androidxAppcompat" }
+androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "androidxCoreKtx" }
+androidx-lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "androidxLifecycle" }
+androidx-window = { module = "androidx.window:window", version.ref = "androidxWindow" }
+woff2-decoder = { module = "io.github.khoben.woff2-android:decoder", version.ref = "woff2Decoder" }
+
+# CameraX: the preview surface and the frame pipeline. camera-camera2 is the Camera2 backend
+# camera-lifecycle selects on Android; camera-view supplies PreviewView, which is what puts the
+# preview on screen.
+androidx-camera-core = { module = "androidx.camera:camera-core", version.ref = "androidxCamera" }
+androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "androidxCamera" }
+androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "androidxCamera" }
+androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "androidxCamera" }
+# Pure-Java QR decoder, ~500 KB, no Play Services. Driven from an ImageAnalysis frame.
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
+
+[plugins]
+kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+androidApplication = { id = "com.android.application", version.ref = "agp" }
+androidKotlinMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
+skie = { id = "co.touchlab.skie", version.ref = "skie" }

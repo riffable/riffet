@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Notification small icon: the Riffet mark as a white silhouette, as the status bar requires. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M3.5,7.8 L6.55,17.4 L9.5,11.85 M14.5,11.85 L17.45,17.4 L20.5,7.8"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9.85,8.8 a2.15,2.15 0 1,1 4.3,0 a2.15,2.15 0 1,1 -4.3,0 Z" />
+</vector>

@@ -1,0 +1,194 @@
+{
+  "CLI_ALREADY_RUNNING": {
+    "zh": "CLI 已就绪",
+    "en": "The CLI is already running"
+  },
+  "CLI_BUSY": {
+    "zh": "CLI 正在处理上一条消息，请稍后重试",
+    "en": "The CLI is still busy; try again shortly"
+  },
+  "CLI_INTERACTION_REQUIRED": {
+    "zh": "请先完成当前选择",
+    "en": "Finish the current selection first"
+  },
+  "CLI_INTERRUPT_TIMEOUT": {
+    "zh": "尚未确认任务停止，请稍后重试",
+    "en": "Could not confirm that the turn stopped; try again shortly"
+  },
+  "CLI_NEEDS_ATTENTION": {
+    "zh": "CLI 需要你先在终端中处理当前操作",
+    "en": "The CLI needs you to handle something in the terminal"
+  },
+  "DISPATCH_STOPPED": {
+    "zh": "服务器正在重启，请稍后重试",
+    "en": "The server is restarting; try again shortly"
+  },
+  "DSH_HISTORY_UNAVAILABLE": {
+    "zh": "当前 DSH 安装缺少官方会话存储读取器",
+    "en": "This DSH installation lacks the official session store reader"
+  },
+  "DSH_PROFILE_BUSY": {
+    "zh": "此 DSH 配置仍有运行中或等待交互的会话；结束后再应用新的连接设置。",
+    "en": "Conversations are still running or waiting for input on this DSH profile; apply the new connection settings after they finish."
+  },
+  "EXTENSION_RUNTIME_REQUIRED": {
+    "zh": "先打开使用此 MCP 的会话，再开始授权。",
+    "en": "Open a conversation that uses this MCP server before authorizing."
+  },
+  "INTERACTION_BUSY": {
+    "zh": "交互请求过多，请稍后重试",
+    "en": "Too many interaction requests; try again shortly"
+  },
+  "INTERACTION_REQUEST_REUSED": {
+    "zh": "此请求已用于另一份答案，请同步后重新提交",
+    "en": "This request was already used for a different answer; sync and submit again"
+  },
+  "INVALID_INTERACTION": {
+    "zh": "{reason, select, request {交互请求无效，请刷新后重试} selection {所选选项无效，请重新选择} otherText {其他答案必须是一行且不超过 2000 个字符} other {交互请求无效，请刷新后重试}}",
+    "en": "{reason, select, request {The interaction request is invalid; refresh and try again} selection {The selected options are invalid; choose again} otherText {The other answer must be one line of at most 2000 characters} other {The interaction request is invalid; refresh and try again}}"
+  },
+  "INVALID_INTERACTION_ACTION": {
+    "zh": "当前交互不支持此操作",
+    "en": "The current interaction does not support this action"
+  },
+  "INVALID_INTERACTION_ANSWER": {
+    "zh": "答案无效，请重新选择",
+    "en": "The answer is invalid; choose again"
+  },
+  "INVALID_NATIVE_MODEL": {
+    "zh": "{reason, select, model {当前原生 CLI 没有模型「{model}」，请重新选择} fast {当前原生 CLI 不支持该模型的 Fast 模式，请关闭 Fast 后重试} context {TRAE CLI 不支持上下文模式「{context}」，请选择 Standard 或 Max} other {所选模型不可用，请重新选择}}",
+    "en": "{reason, select, model {The native CLI does not offer the model \"{model}\"; choose another} fast {The native CLI does not support Fast for this model; turn Fast off and try again} context {The TRAE CLI does not support context mode \"{context}\"; choose Standard or Max} other {That model is not available; choose another}}"
+  },
+  "INVALID_RUNTIME_CONTROL": {
+    "zh": "无法执行该操作",
+    "en": "This action can't run"
+  },
+  "MODEL_CATALOG_UNAVAILABLE": {
+    "zh": "暂时无法获取模型列表，请稍后重试",
+    "en": "The model list is unavailable right now; try again shortly"
+  },
+  "NATIVE_CONFIG_CHANGED": {
+    "zh": "会话配置已改变，请重新提交",
+    "en": "The conversation settings changed; submit again"
+  },
+  "NATIVE_DELIVERY_UNCERTAIN": {
+    "zh": "上一条消息的状态尚未确认，请先检查状态",
+    "en": "The previous message is still unconfirmed; check its status first"
+  },
+  "NATIVE_INTERACTION_STALE": {
+    "zh": "CLI 中的问题或选项已经变化，请同步后再操作",
+    "en": "The CLI prompt changed; sync and try again"
+  },
+  "NATIVE_INTERACTION_UNCONFIRMED": {
+    "zh": "CLI 未确认选项变化，请同步状态",
+    "en": "The CLI did not confirm the selection change; sync the status"
+  },
+  "NATIVE_INTERRUPT_IN_PROGRESS": {
+    "zh": "正在停止当前任务，请稍后重试",
+    "en": "The current turn is stopping; try again shortly"
+  },
+  "NATIVE_INTERRUPT_SUBMISSION_FAILED": {
+    "zh": "停止已确认，但后续操作未能完成，请重试",
+    "en": "The turn stopped, but the follow-up did not complete; try again"
+  },
+  "NATIVE_MODEL_PROBE_FAILED": {
+    "zh": "{message}",
+    "en": "{message}"
+  },
+  "NATIVE_QUEUE_CHANGED": {
+    "zh": "排队消息已改变，请重新确认",
+    "en": "The queued messages changed; review them again"
+  },
+  "NATIVE_RECOVERY_BUSY": {
+    "zh": "正在检查这条消息，请稍后重试",
+    "en": "This message is being checked; try again shortly"
+  },
+  "NATIVE_RECOVERY_REQUIRED": {
+    "zh": "请更新客户端后检查消息状态",
+    "en": "Update the app to check this message before continuing"
+  },
+  "NATIVE_RECOVERY_UNSAFE": {
+    "zh": "暂时无法继续发送，请先检查消息状态",
+    "en": "Sending cannot safely continue yet; check the message status"
+  },
+  "NATIVE_RUN_NOT_QUEUED": {
+    "zh": "这条消息已离开队列，请刷新后重试",
+    "en": "This message is no longer queued; refresh and try again"
+  },
+  "NATIVE_SESSION_BUSY": {
+    "zh": "这个会话正在启动中，请稍候",
+    "en": "This conversation is starting; try again shortly"
+  },
+  "NATIVE_STOP_CONFLICT": {
+    "zh": "停止请求与原任务不一致，请刷新状态",
+    "en": "This stop request does not match the original task; refresh its status"
+  },
+  "NATIVE_STOP_TARGET_CHANGED": {
+    "zh": "原任务已改变，没有停止其他任务",
+    "en": "The original task changed; no other task was stopped"
+  },
+  "NATIVE_STOP_TARGET_REQUIRED": {
+    "zh": "请更新客户端后停止任务",
+    "en": "Update the app to stop this task safely"
+  },
+  "NATIVE_STOP_UNCONFIRMED": {
+    "zh": "暂时无法确认任务是否已停止，请检查状态",
+    "en": "The stop has not been confirmed; check the task status"
+  },
+  "RUNTIME_CONTROL_CHANGED": {
+    "zh": "状态已变化，请重试",
+    "en": "The state changed; try again"
+  },
+  "RUNTIME_CONTROL_UNAVAILABLE": {
+    "zh": "暂时无法执行，请稍后重试",
+    "en": "This can't run right now; try again shortly"
+  },
+  "RUN_ALREADY_DISPATCHED": {
+    "zh": "消息可能已经执行，请使用停止操作",
+    "en": "The message may already be running; use Stop instead"
+  },
+  "SHARE_HISTORY_CHANGED": {
+    "zh": "会话历史已变化，请重新生成预览",
+    "en": "The conversation history changed; generate the preview again"
+  },
+  "SHARE_HISTORY_NOT_FOUND": {
+    "zh": "会话历史文件不存在",
+    "en": "The conversation history file does not exist"
+  },
+  "SHARE_HISTORY_SCOPE_MISMATCH": {
+    "zh": "会话历史不属于当前会话",
+    "en": "The conversation history belongs to another conversation"
+  },
+  "SHARE_HISTORY_TOO_LARGE": {
+    "zh": "会话历史过大，请缩小分享范围",
+    "en": "The conversation history is too large; share less"
+  },
+  "SHARE_HISTORY_UNAVAILABLE": {
+    "zh": "无法读取会话历史，请稍后重试",
+    "en": "The conversation history could not be read; try again shortly"
+  },
+  "SHARE_SELECTION_INVALID": {
+    "zh": "{reason, select, count {分享的轮数无效，请重新选择} changed {所选消息已变化，请重新选择} session {所选消息不属于当前会话} other {所选消息无效，请重新选择}}",
+    "en": "{reason, select, count {The number of shared turns is invalid} changed {The selected messages changed; select them again} session {The selected messages do not belong to this conversation} other {The selected messages are invalid; select them again}}"
+  },
+  "STEER_ACTION_UNSUPPORTED": {
+    "zh": "此操作不适用于补充消息",
+    "en": "This action does not apply to a follow-up message"
+  },
+  "STEER_CONFIG_UNSUPPORTED": {
+    "zh": "补充消息沿用当前任务的配置",
+    "en": "A follow-up message uses the current task settings"
+  },
+  "STEER_REJECTED": {
+    "zh": "补充消息未能发送，请检查内容后重试",
+    "en": "The follow-up message was not sent; check it and try again"
+  },
+  "STEER_UNSUPPORTED": {
+    "zh": "当前 Agent 不支持补充消息",
+    "en": "This agent does not support follow-up messages during a task"
+  },
+  "UNSUPPORTED_OTHER_DESELECT": {
+    "zh": "当前 CLI 无法取消已经选中的多选 Other；请保留或修改其他答案，或跳过整组问题",
+    "en": "The CLI cannot deselect a selected Other option; keep or change it, or skip the question"
+  }
+}

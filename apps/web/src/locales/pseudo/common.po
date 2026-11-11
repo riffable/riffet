@@ -1,0 +1,941 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 个月}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 个月前}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 分钟}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 分钟前}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 天}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 天前}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 小时}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 小时前}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 年}}"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "{count, plural, other {# 年前}}"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{hours} 小时"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{hours} 小时后重置"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{left}，{reset}"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{minutes} 分钟"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{minutes} 分钟后重置"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{month}月{day}日重置"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{name}剩余 {left}%"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "{name}额度剩余 {leftPercent}%"
+msgstr ""
+
+#: src/lib/document-title.ts
+msgid "⏸ 待确认 · {name} — {APP_TITLE}"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "5 小时"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "credits {balance}"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "credits 不限"
+msgstr ""
+
+#: src/components/ContentPreview.tsx
+msgid "下载"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "中性纸底与墨水蓝。"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgctxt "common-status-interrupted"
+msgid "中断"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "主按钮"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "主按钮悬停"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "主按钮文字"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "主按钮文字 / 主按钮"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgctxt "common-theme-role-primary"
+msgid "主要操作"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "二维码不是 Riffet 配对码"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮品红"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮白"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮红"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮绿"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮蓝"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮青"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮黄"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "亮黑"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "今天"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgctxt "common-metric-sessions"
+msgid "会话"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "低优先级"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "低饱和绿色系，暖而沉稳。"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "余 {remaining}/{limit}"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "侧栏"
+msgstr ""
+
+#: src/lib/api.ts
+#: src/lib/native-outbox-storage.ts
+msgid "保存的消息存在冲突，无法重试"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "全部时间"
+msgstr ""
+
+#: src/lib/models.ts
+msgid "关"
+msgstr ""
+
+#: src/components/ui/dialog.tsx
+msgid "关闭"
+msgstr ""
+
+#: src/components/ui/overlays.tsx
+msgid "关闭通知"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "内置"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "分享服务暂不可用"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "分隔线"
+msgstr ""
+
+#: src/lib/i18n/index.ts
+msgid "刚刚"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "删除强调"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "删除标记"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "删除行"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "删除行号"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "剩余 {left}%"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "占位文本"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险 / 页面"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险提示"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险提示 / 提示条"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险文字"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "危险浅底"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "即将重置"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "发布此分享的插件未启用"
+msgstr ""
+
+#: src/components/ui/overlays.tsx
+msgctxt "common-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgctxt "run-state"
+msgid "取消"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周一"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周三"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周二"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周五"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周六"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周四"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "周日"
+msgstr ""
+
+#: src/lib/app-icon.ts
+#: src/lib/theme-role-labels.ts
+msgid "品红"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 1"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 2"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 3"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 4"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 5"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 6"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 7"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "图表 8"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "在这里编写操作说明。"
+msgstr ""
+
+#: src/components/ui/feedback-notice.tsx
+msgid "复制"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "外部维护"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgid "失败"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "奶油纸底与墨绿黑，为长时间阅读设计。"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgctxt "common-status-completed"
+msgid "完成"
+msgstr ""
+
+#: src/lib/api.ts
+msgid "导出失败"
+msgstr ""
+
+#: src/lib/files.ts
+msgid "已复制"
+msgstr ""
+
+#: src/components/ui/feedback-notice.tsx
+msgid "已恢复"
+msgstr ""
+
+#: src/lib/models.ts
+msgid "开"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "弱化背景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "弹出层"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调分隔线"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调文字 / 强调色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调浅底"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调色 / 页面"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调色悬停"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "强调色文字"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "当前负载 {percent}%"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "当前负载 {percent}%，超出容量，请求会排队"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "当前账号没有发布权限"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "微冷纸底与石板蓝。"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "微绿灰纸底与橄榄苔绿。"
+msgstr ""
+
+#: src/lib/backends.ts
+msgid "快速对话"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "总 token"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "悬停背景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "成功"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "成功 / 页面"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "成功提示"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "成功提示 / 提示条"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "成功浅底"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "成功率"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "扫描配对二维码"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "拍摄二维码"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgctxt "common-status-queued"
+msgid "排队"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "描述适用场景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "提示条"
+msgstr ""
+
+#: src/lib/errors.ts
+msgctxt "common-error-fallback"
+msgid "操作失败"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "操作说明"
+msgstr ""
+
+#: src/lib/dialogs.ts
+msgid "放弃修改"
+msgstr ""
+
+#: src/lib/dialogs.ts
+msgid "放弃未保存的修改？"
+msgstr ""
+
+#: src/lib/files.ts
+msgid "文件夹太大，无法打包下载（上限 2 万个文件或 2 GiB）"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "文本"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "新增强调"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "新增标记"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "新增行"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "新增行号"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "无法使用相机，可拍摄二维码或选择图片"
+msgstr ""
+
+#: src/lib/native-outbox-storage.ts
+msgid "无法保存待发送消息，请检查浏览器存储空间"
+msgstr ""
+
+#: src/lib/files.ts
+msgid "无法打包下载"
+msgstr ""
+
+#: src/lib/files.ts
+msgid "无法访问剪贴板"
+msgstr ""
+
+#: src/components/ContentPreview.tsx
+msgid "无法预览此文件"
+msgstr ""
+
+#. placeholder {0}: formatQuotaAmount(quota.remaining)
+#. placeholder {1}: formatQuotaAmount(quota.limit)
+#: src/lib/usage.ts
+msgid "日余 {0}/{1}"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "旧书纸底与牛血红。"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgid "昨天 {time}"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "暖紫玫瑰调，低饱和的纸感配色。"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "暖象牙底与黏土橙。"
+msgstr ""
+
+#: src/lib/api.ts
+msgid "服务器版本过旧，请更新后重试"
+msgstr ""
+
+#: src/lib/theme-library.ts
+msgid "服务器返回的主题库无法读取"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "未安装发布所需的命令行工具"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "未识别到配对二维码"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "柔和的低对比紫调，适合暗光环境。"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "橙色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "次级背景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "次要文本"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "次要文本 / 页面"
+msgstr ""
+
+#: src/lib/dialogs.ts
+msgid "正在处理，请稍候再离开"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "正在打开相机…"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgctxt "common-theme-role-body"
+msgid "正文"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "正文 / 页面"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "每周"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "每日"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "每日额度用尽，请求仍可用"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "每月"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "气泡背景"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "活跃天数"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "浮层背景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "淡分隔线"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "激活背景"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgctxt "common-theme-role-state"
+msgid "状态"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgctxt "common-scope-user"
+msgid "用户级"
+msgstr ""
+
+#: src/components/ErrorBoundary.tsx
+msgid "界面渲染出错"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "白"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "白色"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "石墨"
+msgstr ""
+
+#: src/components/ui/overlays.tsx
+msgid "确定"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "粉色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "红"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "红色"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "纯中性灰阶，不用彩色强调。"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "紫色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "绿"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "绿色"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "缓存命中率"
+msgstr ""
+
+#: src/lib/models.ts
+msgid "联网搜索"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "背景"
+msgstr ""
+
+#: src/lib/theme-library.ts
+msgid "自定义主题"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "蓝"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "蓝色"
+msgstr ""
+
+#: src/lib/api.ts
+msgid "补充消息的发送记录不完整，请恢复内容后重试"
+msgstr ""
+
+#: src/lib/api.ts
+msgid "补充消息的发送记录无法读取，请恢复内容后重试"
+msgstr ""
+
+#: src/components/ui/feedback-notice.tsx
+#: src/components/ui/overlays.tsx
+msgid "详情"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "请先登录发布账号"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "请更新发布所需的命令行工具"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "警告"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "警告 / 页面"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "警告浅底"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "轮次"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "辅助文本"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "辅助文本 / 页面"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "输出速度 p50"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "近 30 天"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "近 7 天"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "近 90 天"
+msgstr ""
+
+#: src/lib/stats-query.ts
+msgid "近一年"
+msgstr ""
+
+#: src/components/ErrorBoundary.tsx
+msgid "这块内容没能画出来。"
+msgstr ""
+
+#: src/lib/stats-format.ts
+msgctxt "common-status-running"
+msgid "进行中"
+msgstr ""
+
+#. placeholder {0}: summary.streakDays
+#: src/lib/stats-series.ts
+msgid "连续 {0} 天"
+msgstr ""
+
+#: src/components/PairingQrScanner.tsx
+msgid "选择图片"
+msgstr ""
+
+#: src/components/ui/feedback-notice.tsx
+#: src/components/ui/overlays.tsx
+msgid "通知详情"
+msgstr ""
+
+#: src/lib/api.ts
+msgid "配置已提交，但无法确认保存结果"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgid "配置文件"
+msgstr ""
+
+#: src/components/ErrorBoundary.tsx
+msgid "重新加载"
+msgstr ""
+
+#: src/components/ContentPreview.tsx
+#: src/components/ErrorBoundary.tsx
+msgid "重试"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "青"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "青柠"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "青瓷纸底与深青。"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "青色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "页面背景"
+msgstr ""
+
+#: src/lib/extensions.ts
+msgctxt "common-scope-project"
+msgid "项目级"
+msgstr ""
+
+#: src/lib/shares.ts
+msgid "预览连接已中断，请重试"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "额度"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "额度暂不可用"
+msgstr ""
+
+#: src/lib/usage.ts
+msgid "额度用尽"
+msgstr ""
+
+#: src/lib/stats-series.ts
+msgid "首字延迟 p50"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "黄"
+msgstr ""
+
+#: src/lib/app-icon.ts
+msgid "黄色"
+msgstr ""
+
+#: src/lib/theme-role-labels.ts
+msgid "黑"
+msgstr ""
+
+#: src/lib/native-models.ts
+msgid "默认"
+msgstr ""
+
+#: src/lib/themes.ts
+msgid "默认外观：冷中性灰阶配蓝色强调。"
+msgstr ""

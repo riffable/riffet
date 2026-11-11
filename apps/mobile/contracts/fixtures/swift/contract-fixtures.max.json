@@ -1,0 +1,6330 @@
+{
+  "ShareDraftRequest": {
+    "selection": {
+      "mode": "all"
+    },
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraftRequest#$.selection=branch1": {
+    "selection": {
+      "mode": "recent",
+      "count": 1
+    },
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraftRequest#$.selection=branch2": {
+    "selection": {
+      "mode": "selected",
+      "turnIds": [
+        "text"
+      ],
+      "nativeChatId": "text"
+    },
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraftRequest#$.appearance.mode=light": {
+    "selection": {
+      "mode": "all"
+    },
+    "appearance": {
+      "themeId": "text",
+      "mode": "light",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraftRequest#$.appearance.mode=dark": {
+    "selection": {
+      "mode": "all"
+    },
+    "appearance": {
+      "themeId": "text",
+      "mode": "dark",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareCapability": {
+    "available": true,
+    "reason": "missing_cli",
+    "message": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": {
+      "id": "text",
+      "label": "text",
+      "audience": "text"
+    },
+    "publishers": [
+      {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      }
+    ]
+  },
+  "ShareCapability#$.reason=unsupported_cli": {
+    "available": true,
+    "reason": "unsupported_cli",
+    "message": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": {
+      "id": "text",
+      "label": "text",
+      "audience": "text"
+    },
+    "publishers": [
+      {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      }
+    ]
+  },
+  "ShareCapability#$.reason=login_required": {
+    "available": true,
+    "reason": "login_required",
+    "message": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": {
+      "id": "text",
+      "label": "text",
+      "audience": "text"
+    },
+    "publishers": [
+      {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      }
+    ]
+  },
+  "ShareCapability#$.reason=permission_denied": {
+    "available": true,
+    "reason": "permission_denied",
+    "message": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": {
+      "id": "text",
+      "label": "text",
+      "audience": "text"
+    },
+    "publishers": [
+      {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      }
+    ]
+  },
+  "ShareCapability#$.reason=unavailable": {
+    "available": true,
+    "reason": "unavailable",
+    "message": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": {
+      "id": "text",
+      "label": "text",
+      "audience": "text"
+    },
+    "publishers": [
+      {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      }
+    ]
+  },
+  "SessionShare": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.appearance.mode=light": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "light",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.appearance.mode=dark": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "dark",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.state=published": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "published",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.state=removed": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "removed",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.operation=removing": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "removing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.operation=uncertain": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "uncertain",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    },
+    "updatedAt": "text"
+  },
+  "SessionShare#$.errorRef.params.*=branch1": {
+    "id": "text",
+    "sessionId": "text",
+    "title": "text",
+    "alias": "text",
+    "username": "text",
+    "profile": "text",
+    "publisher": "text",
+    "url": "text",
+    "previewId": "text",
+    "deploymentId": "text",
+    "capturedAt": "text",
+    "expiresAt": "text",
+    "publishedHash": "text",
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true,
+    "state": "unpublished",
+    "operation": "publishing",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": 1
+      }
+    },
+    "updatedAt": "text"
+  },
+  "ShareStatus": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.capability.reason=unsupported_cli": {
+    "capability": {
+      "available": true,
+      "reason": "unsupported_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.capability.reason=login_required": {
+    "capability": {
+      "available": true,
+      "reason": "login_required",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.capability.reason=permission_denied": {
+    "capability": {
+      "available": true,
+      "reason": "permission_denied",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.capability.reason=unavailable": {
+    "capability": {
+      "available": true,
+      "reason": "unavailable",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share=branch1": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": null,
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.appearance.mode=light": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "light",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.appearance.mode=dark": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "dark",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.state=published": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "published",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.state=removed": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "removed",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.operation=removing": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "removing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.operation=uncertain": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "uncertain",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.share.errorRef.params.*=branch1": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": 1
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareStatus#$.blocker.messageRef.params.*=branch1": {
+    "capability": {
+      "available": true,
+      "reason": "missing_cli",
+      "message": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": {
+        "id": "text",
+        "label": "text",
+        "audience": "text"
+      },
+      "publishers": [
+        {
+          "id": "text",
+          "label": "text",
+          "audience": "text"
+        }
+      ]
+    },
+    "share": {
+      "id": "text",
+      "sessionId": "text",
+      "title": "text",
+      "alias": "text",
+      "username": "text",
+      "profile": "text",
+      "publisher": "text",
+      "url": "text",
+      "previewId": "text",
+      "deploymentId": "text",
+      "capturedAt": "text",
+      "expiresAt": "text",
+      "publishedHash": "text",
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true,
+      "state": "unpublished",
+      "operation": "publishing",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      },
+      "updatedAt": "text"
+    },
+    "blocker": {
+      "code": "text",
+      "message": "text",
+      "messageRef": {
+        "code": "text",
+        "params": {
+          "key": 1
+        }
+      }
+    },
+    "actions": {
+      "preview": true,
+      "publish": true,
+      "remove": true,
+      "reconcile": true,
+      "retry": true
+    }
+  },
+  "ShareDraft": {
+    "id": "text",
+    "sessionId": "text",
+    "capturedAt": "text",
+    "previewUrl": "text",
+    "warnings": [
+      "text"
+    ],
+    "warningRefs": [
+      {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    ],
+    "bytes": 1,
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraft#$.warningRefs[].params.*=branch1": {
+    "id": "text",
+    "sessionId": "text",
+    "capturedAt": "text",
+    "previewUrl": "text",
+    "warnings": [
+      "text"
+    ],
+    "warningRefs": [
+      {
+        "code": "text",
+        "params": {
+          "key": 1
+        }
+      }
+    ],
+    "bytes": 1,
+    "appearance": {
+      "themeId": "text",
+      "mode": "system",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraft#$.appearance.mode=light": {
+    "id": "text",
+    "sessionId": "text",
+    "capturedAt": "text",
+    "previewUrl": "text",
+    "warnings": [
+      "text"
+    ],
+    "warningRefs": [
+      {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    ],
+    "bytes": 1,
+    "appearance": {
+      "themeId": "text",
+      "mode": "light",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareDraft#$.appearance.mode=dark": {
+    "id": "text",
+    "sessionId": "text",
+    "capturedAt": "text",
+    "previewUrl": "text",
+    "warnings": [
+      "text"
+    ],
+    "warningRefs": [
+      {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    ],
+    "bytes": 1,
+    "appearance": {
+      "themeId": "text",
+      "mode": "dark",
+      "themeRevision": "text",
+      "uiFont": "text",
+      "monoFont": "text",
+      "background": "text"
+    },
+    "author": true
+  },
+  "ShareTurnCatalog": {
+    "turns": [
+      {
+        "id": "text",
+        "text": "text",
+        "createdAt": "text"
+      }
+    ],
+    "nativeChatId": "text"
+  },
+  "ShareDraftEvent": {
+    "type": "progress",
+    "progress": {
+      "stage": "auth"
+    }
+  },
+  "ShareDraftEvent#$=branch1": {
+    "type": "ready",
+    "draft": {
+      "id": "text",
+      "sessionId": "text",
+      "capturedAt": "text",
+      "previewUrl": "text",
+      "warnings": [
+        "text"
+      ],
+      "warningRefs": [
+        {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      ],
+      "bytes": 1,
+      "appearance": {
+        "themeId": "text",
+        "mode": "system",
+        "themeRevision": "text",
+        "uiFont": "text",
+        "monoFont": "text",
+        "background": "text"
+      },
+      "author": true
+    }
+  },
+  "ShareDraftEvent#$=branch2": {
+    "type": "error",
+    "message": "text",
+    "messageRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "ShareDraftEvent#$.progress.stage=history": {
+    "type": "progress",
+    "progress": {
+      "stage": "history"
+    }
+  },
+  "ShareDraftEvent#$.progress.stage=assets": {
+    "type": "progress",
+    "progress": {
+      "stage": "assets"
+    }
+  },
+  "ShareDraftEvent#$.progress.stage=resources": {
+    "type": "progress",
+    "progress": {
+      "stage": "resources"
+    }
+  },
+  "ShareDraftEvent#$.progress.stage=finalizing": {
+    "type": "progress",
+    "progress": {
+      "stage": "finalizing"
+    }
+  },
+  "Session": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=starting": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "starting",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=running": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "running",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=waiting": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "waiting",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=cancelling": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "cancelling",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=interrupted": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "interrupted",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=failed": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "failed",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.state=archived": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "archived",
+    "titleSource": "prompt",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.titleSource=provider": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "provider",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.titleSource=generated": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "generated",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.titleSource=user": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "user",
+    "backendId": "cursor",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=codex": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "codex",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=claude": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "claude",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=dsh": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "dsh",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=droid": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "droid",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=traex": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "traex",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=pi": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "pi",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "Session#$.backendId=chat": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "chat",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text"
+      }
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text"
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text"
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text"
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text"
+      }
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1
+    },
+    "createdAt": "text",
+    "updatedAt": "text"
+  },
+  "SessionState": "idle",
+  "SessionState#$=starting": "starting",
+  "SessionState#$=running": "running",
+  "SessionState#$=waiting": "waiting",
+  "SessionState#$=cancelling": "cancelling",
+  "SessionState#$=interrupted": "interrupted",
+  "SessionState#$=failed": "failed",
+  "SessionState#$=archived": "archived",
+  "Run": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "queued",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "Run#$.state=running": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "running",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "Run#$.state=completed": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "completed",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "Run#$.state=failed": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "failed",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "Run#$.state=cancelled": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "cancelled",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "Run#$.state=interrupted": {
+    "id": "text",
+    "sessionId": "text",
+    "commandId": "text",
+    "prompt": "text",
+    "state": "interrupted",
+    "native": {
+      "checkpointAttempted": true,
+      "input": {
+        "text": "text",
+        "attachmentIds": [
+          "text"
+        ],
+        "context": [
+          {
+            "path": "text",
+            "line": 1
+          }
+        ],
+        "references": [
+          {
+            "kind": "session",
+            "sessionId": "text",
+            "fromRunId": "text"
+          }
+        ]
+      },
+      "contextSnapshots": [
+        {
+          "sessionId": "text",
+          "title": "text",
+          "backendId": "cursor",
+          "projectName": "text",
+          "capturedAt": "text",
+          "snapshotRef": "text",
+          "excerpt": "text",
+          "coverage": {
+            "source": "native",
+            "completeness": "complete",
+            "messages": 1,
+            "bytes": 1,
+            "from": "text",
+            "through": "text",
+            "activeTurnIncomplete": true,
+            "reason": "text"
+          }
+        }
+      ],
+      "config": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "intent": "steer",
+      "nativeTurnId": "text",
+      "ownerRunId": "text",
+      "sourceRunId": "text",
+      "expectsTurnOutcome": true,
+      "resolvedConfig": {
+        "model": "text",
+        "mode": "text",
+        "approval": "text"
+      },
+      "fingerprint": "text",
+      "delivery": "queued",
+      "attempt": 1,
+      "terminalId": "text",
+      "terminalEpoch": 1,
+      "nativeSessionId": "text",
+      "backendId": "cursor",
+      "cursorSessionId": "text",
+      "nativeMessageId": "text",
+      "stage": "text",
+      "timings": {
+        "key": 1
+      },
+      "baselineSequence": 1,
+      "renderedText": "text",
+      "nativeInputBoundary": "text",
+      "queueReleasedAt": "text",
+      "diagnostic": {
+        "code": "text",
+        "message": "text",
+        "stage": "text",
+        "at": "text"
+      },
+      "slashCommand": true,
+      "configRevision": 1,
+      "metrics": {
+        "outputTokens": 1,
+        "durationMs": 1,
+        "tokens": "provider",
+        "window": "stream",
+        "steps": 1
+      }
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "error": "text",
+    "errorRef": {
+      "code": "text",
+      "params": {
+        "key": "text"
+      }
+    }
+  },
+  "RunState": "queued",
+  "RunState#$=running": "running",
+  "RunState#$=completed": "completed",
+  "RunState#$=failed": "failed",
+  "RunState#$=cancelled": "cancelled",
+  "RunState#$=interrupted": "interrupted",
+  "NativeRunRecovery": {
+    "run": {
+      "id": "text",
+      "sessionId": "text",
+      "commandId": "text",
+      "prompt": "text",
+      "state": "queued",
+      "native": {
+        "checkpointAttempted": true,
+        "input": {
+          "text": "text",
+          "attachmentIds": [
+            "text"
+          ],
+          "context": [
+            {
+              "path": "text",
+              "line": 1
+            }
+          ],
+          "references": [
+            {
+              "kind": "session",
+              "sessionId": "text",
+              "fromRunId": "text"
+            }
+          ]
+        },
+        "contextSnapshots": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "config": {
+          "model": "text",
+          "mode": "text",
+          "approval": "text"
+        },
+        "intent": "steer",
+        "nativeTurnId": "text",
+        "ownerRunId": "text",
+        "sourceRunId": "text",
+        "expectsTurnOutcome": true,
+        "resolvedConfig": {
+          "model": "text",
+          "mode": "text",
+          "approval": "text"
+        },
+        "fingerprint": "text",
+        "delivery": "queued",
+        "attempt": 1,
+        "terminalId": "text",
+        "terminalEpoch": 1,
+        "nativeSessionId": "text",
+        "backendId": "cursor",
+        "cursorSessionId": "text",
+        "nativeMessageId": "text",
+        "stage": "text",
+        "timings": {
+          "key": 1
+        },
+        "baselineSequence": 1,
+        "renderedText": "text",
+        "nativeInputBoundary": "text",
+        "queueReleasedAt": "text",
+        "diagnostic": {
+          "code": "text",
+          "message": "text",
+          "stage": "text",
+          "at": "text"
+        },
+        "slashCommand": true,
+        "configRevision": 1,
+        "metrics": {
+          "outputTokens": 1,
+          "durationMs": 1,
+          "tokens": "provider",
+          "window": "stream",
+          "steps": 1
+        }
+      },
+      "createdAt": "text",
+      "updatedAt": "text",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    },
+    "canContinue": true,
+    "queuedRunIds": [
+      "text"
+    ]
+  },
+  "NativeStopRequest": {
+    "requestId": "text",
+    "nativeSessionId": "text",
+    "turnId": "text",
+    "terminalId": "text",
+    "terminalEpoch": 1
+  },
+  "NativeRuntimeActionRequest": {
+    "action": "text",
+    "revision": "text"
+  },
+  "SyncFrame": {
+    "type": "hello",
+    "protocol": 3,
+    "lane": "main",
+    "generation": "text",
+    "headSeq": 1,
+    "mode": "delta",
+    "session": {
+      "id": "text",
+      "projectId": "text",
+      "kind": "native",
+      "title": "text",
+      "tags": [
+        "text"
+      ],
+      "state": "idle",
+      "titleSource": "prompt",
+      "backendId": "cursor",
+      "backendProfileId": "text",
+      "nativeSessionId": "text",
+      "previousNativeSessionIds": [
+        "text"
+      ],
+      "quickExitCount": 1,
+      "nativeRuntime": {
+        "address": "text",
+        "fingerprint": "text",
+        "scopeFingerprint": "text",
+        "attachment": {
+          "hook": "text",
+          "id": "text"
+        }
+      },
+      "cursorSessionId": "text",
+      "terminalId": "text",
+      "terminalAppearance": {
+        "foreground": "text",
+        "background": "text"
+      },
+      "resumePicker": true,
+      "model": "text",
+      "mode": "text",
+      "approval": "text",
+      "archivedAt": "text",
+      "error": "text",
+      "configRevision": 1,
+      "configPending": true,
+      "creationFingerprint": "text",
+      "lastActivityAt": "text",
+      "activeSince": "text",
+      "pinnedAt": "text",
+      "pinRank": 1,
+      "origin": {
+        "kind": "fork",
+        "sessionId": "text",
+        "runId": "text",
+        "groupId": "text",
+        "templateId": "text",
+        "scheduleId": "text",
+        "channel": {
+          "kind": "text",
+          "account": "text",
+          "chatId": "text"
+        },
+        "discussion": {
+          "anchor": {
+            "messageId": "text",
+            "aliases": [
+              "text"
+            ],
+            "runId": "text",
+            "nativeTurnId": "text",
+            "sequence": 1,
+            "generation": "text"
+          },
+          "quote": {
+            "exact": "text",
+            "prefix": "text",
+            "suffix": "text",
+            "start": 1,
+            "end": 1
+          },
+          "capturedAt": "text",
+          "contextRef": "text",
+          "requestFingerprint": "text"
+        }
+      },
+      "handedOffTo": "text",
+      "toolGroups": [
+        "text"
+      ],
+      "extensionsOff": [
+        "text"
+      ],
+      "terminalHold": {
+        "since": "text",
+        "pid": 1
+      },
+      "createdAt": "text",
+      "updatedAt": "text"
+    },
+    "status": {
+      "profilePending": true,
+      "runtimeControl": {
+        "owner": "text",
+        "revision": "text",
+        "notice": {
+          "tone": "neutral",
+          "label": {
+            "key": "text"
+          },
+          "detail": "text",
+          "action": {
+            "id": "text",
+            "label": {
+              "key": "text"
+            },
+            "hint": {
+              "key": "text"
+            },
+            "disabled": true
+          }
+        },
+        "actions": [
+          {
+            "id": "text",
+            "label": {
+              "key": "text"
+            },
+            "hint": {
+              "key": "text"
+            },
+            "disabled": true
+          }
+        ]
+      },
+      "activity": {
+        "compacting": true,
+        "background": 1
+      },
+      "phase": "offline",
+      "activeTurnId": "text",
+      "activeTurn": {
+        "nativeSessionId": "text",
+        "turnId": "text",
+        "ownerRunId": "text"
+      },
+      "outputRate": {
+        "state": "no_data",
+        "windowSeconds": 1,
+        "outputTokens": 1,
+        "tokensPerSecond": 1,
+        "durationMs": 1,
+        "window": "stream",
+        "tokens": "provider"
+      },
+      "connection": {
+        "state": "connected",
+        "message": "text",
+        "messageRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      },
+      "history": {
+        "state": "loading",
+        "message": "text",
+        "messageRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      },
+      "model": "text",
+      "permission": "text",
+      "approval": "text",
+      "transcript": "ok",
+      "notice": "text",
+      "noticeLevel": "info",
+      "interaction": {
+        "id": "text",
+        "revision": "text",
+        "transport": "terminal",
+        "terminalId": "text",
+        "epoch": 1,
+        "requestId": "text",
+        "request": {
+          "key": null
+        },
+        "kind": "question",
+        "title": "text",
+        "message": "text",
+        "options": [
+          {
+            "id": "text",
+            "label": "text",
+            "selected": true
+          }
+        ],
+        "multiple": true,
+        "allowOther": true,
+        "otherValue": "text",
+        "otherSelected": true,
+        "questionIndex": 1,
+        "questionCount": 1,
+        "actions": [
+          {
+            "id": "text",
+            "label": "text",
+            "tone": "primary"
+          }
+        ],
+        "expiresAt": "text",
+        "extendableUntil": "text"
+      },
+      "queue": {
+        "next": "text",
+        "held": {
+          "reason": "turn_running",
+          "runId": "text"
+        }
+      }
+    },
+    "interaction": {
+      "id": "text",
+      "revision": "text",
+      "transport": "terminal",
+      "terminalId": "text",
+      "epoch": 1,
+      "requestId": "text",
+      "request": {
+        "key": null
+      },
+      "kind": "question",
+      "title": "text",
+      "message": "text",
+      "options": [
+        {
+          "id": "text",
+          "label": "text",
+          "selected": true
+        }
+      ],
+      "multiple": true,
+      "allowOther": true,
+      "otherValue": "text",
+      "otherSelected": true,
+      "questionIndex": 1,
+      "questionCount": 1,
+      "actions": [
+        {
+          "id": "text",
+          "label": "text",
+          "tone": "primary"
+        }
+      ],
+      "expiresAt": "text",
+      "extendableUntil": "text"
+    },
+    "runs": [
+      {
+        "id": "text",
+        "sessionId": "text",
+        "commandId": "text",
+        "prompt": "text",
+        "state": "queued",
+        "native": {
+          "checkpointAttempted": true,
+          "input": {
+            "text": "text",
+            "attachmentIds": [
+              "text"
+            ],
+            "context": [
+              {
+                "path": "text",
+                "line": 1
+              }
+            ],
+            "references": [
+              {
+                "kind": "session",
+                "sessionId": "text",
+                "fromRunId": "text"
+              }
+            ]
+          },
+          "contextSnapshots": [
+            {
+              "sessionId": "text",
+              "title": "text",
+              "backendId": "cursor",
+              "projectName": "text",
+              "capturedAt": "text",
+              "snapshotRef": "text",
+              "excerpt": "text",
+              "coverage": {
+                "source": "native",
+                "completeness": "complete",
+                "messages": 1,
+                "bytes": 1,
+                "from": "text",
+                "through": "text",
+                "activeTurnIncomplete": true,
+                "reason": "text"
+              }
+            }
+          ],
+          "config": {
+            "model": "text",
+            "mode": "text",
+            "approval": "text"
+          },
+          "intent": "steer",
+          "nativeTurnId": "text",
+          "ownerRunId": "text",
+          "sourceRunId": "text",
+          "expectsTurnOutcome": true,
+          "resolvedConfig": {
+            "model": "text",
+            "mode": "text",
+            "approval": "text"
+          },
+          "fingerprint": "text",
+          "delivery": "queued",
+          "attempt": 1,
+          "terminalId": "text",
+          "terminalEpoch": 1,
+          "nativeSessionId": "text",
+          "backendId": "cursor",
+          "cursorSessionId": "text",
+          "nativeMessageId": "text",
+          "stage": "text",
+          "timings": {
+            "key": 1
+          },
+          "baselineSequence": 1,
+          "renderedText": "text",
+          "nativeInputBoundary": "text",
+          "queueReleasedAt": "text",
+          "diagnostic": {
+            "code": "text",
+            "message": "text",
+            "stage": "text",
+            "at": "text"
+          },
+          "slashCommand": true,
+          "configRevision": 1,
+          "metrics": {
+            "outputTokens": 1,
+            "durationMs": 1,
+            "tokens": "provider",
+            "window": "stream",
+            "steps": 1
+          }
+        },
+        "createdAt": "text",
+        "updatedAt": "text",
+        "error": "text",
+        "errorRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      }
+    ],
+    "activities": [
+      {
+        "id": "text",
+        "kind": "compaction",
+        "status": "running",
+        "title": "text",
+        "detail": "text",
+        "blobRef": "text",
+        "toolCallId": "text",
+        "startedAt": "text",
+        "endedAt": "text",
+        "durationMs": 1,
+        "stop": {
+          "via": "protocol"
+        },
+        "compaction": {
+          "trigger": "manual",
+          "preTokens": 1,
+          "postTokens": 1
+        },
+        "task": {
+          "kind": "shell",
+          "command": "text",
+          "exitCode": 1
+        },
+        "command": {
+          "name": "text"
+        }
+      }
+    ],
+    "context": {
+      "used": 1,
+      "size": 1,
+      "breakdown": [
+        {
+          "id": "text",
+          "label": "text",
+          "tokens": 1
+        }
+      ],
+      "limitKind": "compaction",
+      "breakdownEstimated": true
+    },
+    "outline": {
+      "turnCount": 1,
+      "turns": [
+        {
+          "turn": "text",
+          "turnId": "text",
+          "startPos": 1,
+          "endPos": 1,
+          "status": "running",
+          "at": "text",
+          "endedAt": "text",
+          "preview": "text",
+          "hasUserMessage": true,
+          "hasAttachments": true,
+          "rows": 1,
+          "runId": "text"
+        }
+      ]
+    }
+  },
+  "SyncFrame#$=branch1": {
+    "type": "snapshot",
+    "generation": "text",
+    "asOfSeq": 1,
+    "part": 1,
+    "final": true,
+    "rows": [
+      {
+        "key": "text",
+        "pos": 1,
+        "turn": "text",
+        "seq": 1,
+        "rev": 1,
+        "runId": "text",
+        "event": {
+          "type": "text",
+          "data": {
+            "key": null
+          },
+          "createdAt": "text",
+          "lastAt": "text",
+          "runId": "text",
+          "nativeId": "text",
+          "nativeTurnId": "text",
+          "sourceIds": [
+            "text"
+          ]
+        },
+        "truncated": {
+          "blobRef": "text",
+          "bytes": 1
+        },
+        "kind": "user",
+        "text": "text",
+        "attachments": [
+          {
+            "name": "text",
+            "id": "text",
+            "path": "text",
+            "type": "image",
+            "mimeType": "text",
+            "size": 1,
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "references": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "pending": "queued"
+      }
+    ],
+    "hasBefore": true
+  },
+  "SyncFrame#$=branch2": {
+    "type": "rows",
+    "generation": "text",
+    "from": 1,
+    "to": 1,
+    "upserts": [
+      {
+        "key": "text",
+        "pos": 1,
+        "turn": "text",
+        "seq": 1,
+        "rev": 1,
+        "runId": "text",
+        "event": {
+          "type": "text",
+          "data": {
+            "key": null
+          },
+          "createdAt": "text",
+          "lastAt": "text",
+          "runId": "text",
+          "nativeId": "text",
+          "nativeTurnId": "text",
+          "sourceIds": [
+            "text"
+          ]
+        },
+        "truncated": {
+          "blobRef": "text",
+          "bytes": 1
+        },
+        "kind": "user",
+        "text": "text",
+        "attachments": [
+          {
+            "name": "text",
+            "id": "text",
+            "path": "text",
+            "type": "image",
+            "mimeType": "text",
+            "size": 1,
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "references": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "pending": "queued"
+      }
+    ],
+    "deletes": [
+      "text"
+    ]
+  },
+  "SyncFrame#$=branch3": {
+    "type": "reset",
+    "generation": "text",
+    "reason": "rebuilt"
+  },
+  "SyncFrame#$=branch4": {
+    "type": "status",
+    "status": {
+      "profilePending": true,
+      "runtimeControl": {
+        "owner": "text",
+        "revision": "text",
+        "notice": {
+          "tone": "neutral",
+          "label": {
+            "key": "text"
+          },
+          "detail": "text",
+          "action": {
+            "id": "text",
+            "label": {
+              "key": "text"
+            },
+            "hint": {
+              "key": "text"
+            },
+            "disabled": true
+          }
+        },
+        "actions": [
+          {
+            "id": "text",
+            "label": {
+              "key": "text"
+            },
+            "hint": {
+              "key": "text"
+            },
+            "disabled": true
+          }
+        ]
+      },
+      "activity": {
+        "compacting": true,
+        "background": 1
+      },
+      "phase": "offline",
+      "activeTurnId": "text",
+      "activeTurn": {
+        "nativeSessionId": "text",
+        "turnId": "text",
+        "ownerRunId": "text"
+      },
+      "outputRate": {
+        "state": "no_data",
+        "windowSeconds": 1,
+        "outputTokens": 1,
+        "tokensPerSecond": 1,
+        "durationMs": 1,
+        "window": "stream",
+        "tokens": "provider"
+      },
+      "connection": {
+        "state": "connected",
+        "message": "text",
+        "messageRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      },
+      "history": {
+        "state": "loading",
+        "message": "text",
+        "messageRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      },
+      "model": "text",
+      "permission": "text",
+      "approval": "text",
+      "transcript": "ok",
+      "notice": "text",
+      "noticeLevel": "info",
+      "interaction": {
+        "id": "text",
+        "revision": "text",
+        "transport": "terminal",
+        "terminalId": "text",
+        "epoch": 1,
+        "requestId": "text",
+        "request": {
+          "key": null
+        },
+        "kind": "question",
+        "title": "text",
+        "message": "text",
+        "options": [
+          {
+            "id": "text",
+            "label": "text",
+            "selected": true
+          }
+        ],
+        "multiple": true,
+        "allowOther": true,
+        "otherValue": "text",
+        "otherSelected": true,
+        "questionIndex": 1,
+        "questionCount": 1,
+        "actions": [
+          {
+            "id": "text",
+            "label": "text",
+            "tone": "primary"
+          }
+        ],
+        "expiresAt": "text",
+        "extendableUntil": "text"
+      },
+      "queue": {
+        "next": "text",
+        "held": {
+          "reason": "turn_running",
+          "runId": "text"
+        }
+      }
+    }
+  },
+  "SyncFrame#$=branch5": {
+    "type": "interaction",
+    "interaction": {
+      "id": "text",
+      "revision": "text",
+      "transport": "terminal",
+      "terminalId": "text",
+      "epoch": 1,
+      "requestId": "text",
+      "request": {
+        "key": null
+      },
+      "kind": "question",
+      "title": "text",
+      "message": "text",
+      "options": [
+        {
+          "id": "text",
+          "label": "text",
+          "selected": true
+        }
+      ],
+      "multiple": true,
+      "allowOther": true,
+      "otherValue": "text",
+      "otherSelected": true,
+      "questionIndex": 1,
+      "questionCount": 1,
+      "actions": [
+        {
+          "id": "text",
+          "label": "text",
+          "tone": "primary"
+        }
+      ],
+      "expiresAt": "text",
+      "extendableUntil": "text"
+    }
+  },
+  "SyncFrame#$=branch6": {
+    "type": "runs",
+    "runs": [
+      {
+        "id": "text",
+        "sessionId": "text",
+        "commandId": "text",
+        "prompt": "text",
+        "state": "queued",
+        "native": {
+          "checkpointAttempted": true,
+          "input": {
+            "text": "text",
+            "attachmentIds": [
+              "text"
+            ],
+            "context": [
+              {
+                "path": "text",
+                "line": 1
+              }
+            ],
+            "references": [
+              {
+                "kind": "session",
+                "sessionId": "text",
+                "fromRunId": "text"
+              }
+            ]
+          },
+          "contextSnapshots": [
+            {
+              "sessionId": "text",
+              "title": "text",
+              "backendId": "cursor",
+              "projectName": "text",
+              "capturedAt": "text",
+              "snapshotRef": "text",
+              "excerpt": "text",
+              "coverage": {
+                "source": "native",
+                "completeness": "complete",
+                "messages": 1,
+                "bytes": 1,
+                "from": "text",
+                "through": "text",
+                "activeTurnIncomplete": true,
+                "reason": "text"
+              }
+            }
+          ],
+          "config": {
+            "model": "text",
+            "mode": "text",
+            "approval": "text"
+          },
+          "intent": "steer",
+          "nativeTurnId": "text",
+          "ownerRunId": "text",
+          "sourceRunId": "text",
+          "expectsTurnOutcome": true,
+          "resolvedConfig": {
+            "model": "text",
+            "mode": "text",
+            "approval": "text"
+          },
+          "fingerprint": "text",
+          "delivery": "queued",
+          "attempt": 1,
+          "terminalId": "text",
+          "terminalEpoch": 1,
+          "nativeSessionId": "text",
+          "backendId": "cursor",
+          "cursorSessionId": "text",
+          "nativeMessageId": "text",
+          "stage": "text",
+          "timings": {
+            "key": 1
+          },
+          "baselineSequence": 1,
+          "renderedText": "text",
+          "nativeInputBoundary": "text",
+          "queueReleasedAt": "text",
+          "diagnostic": {
+            "code": "text",
+            "message": "text",
+            "stage": "text",
+            "at": "text"
+          },
+          "slashCommand": true,
+          "configRevision": 1,
+          "metrics": {
+            "outputTokens": 1,
+            "durationMs": 1,
+            "tokens": "provider",
+            "window": "stream",
+            "steps": 1
+          }
+        },
+        "createdAt": "text",
+        "updatedAt": "text",
+        "error": "text",
+        "errorRef": {
+          "code": "text",
+          "params": {
+            "key": "text"
+          }
+        }
+      }
+    ]
+  },
+  "SyncFrame#$=branch7": {
+    "type": "run",
+    "run": {
+      "id": "text",
+      "sessionId": "text",
+      "commandId": "text",
+      "prompt": "text",
+      "state": "queued",
+      "native": {
+        "checkpointAttempted": true,
+        "input": {
+          "text": "text",
+          "attachmentIds": [
+            "text"
+          ],
+          "context": [
+            {
+              "path": "text",
+              "line": 1
+            }
+          ],
+          "references": [
+            {
+              "kind": "session",
+              "sessionId": "text",
+              "fromRunId": "text"
+            }
+          ]
+        },
+        "contextSnapshots": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "config": {
+          "model": "text",
+          "mode": "text",
+          "approval": "text"
+        },
+        "intent": "steer",
+        "nativeTurnId": "text",
+        "ownerRunId": "text",
+        "sourceRunId": "text",
+        "expectsTurnOutcome": true,
+        "resolvedConfig": {
+          "model": "text",
+          "mode": "text",
+          "approval": "text"
+        },
+        "fingerprint": "text",
+        "delivery": "queued",
+        "attempt": 1,
+        "terminalId": "text",
+        "terminalEpoch": 1,
+        "nativeSessionId": "text",
+        "backendId": "cursor",
+        "cursorSessionId": "text",
+        "nativeMessageId": "text",
+        "stage": "text",
+        "timings": {
+          "key": 1
+        },
+        "baselineSequence": 1,
+        "renderedText": "text",
+        "nativeInputBoundary": "text",
+        "queueReleasedAt": "text",
+        "diagnostic": {
+          "code": "text",
+          "message": "text",
+          "stage": "text",
+          "at": "text"
+        },
+        "slashCommand": true,
+        "configRevision": 1,
+        "metrics": {
+          "outputTokens": 1,
+          "durationMs": 1,
+          "tokens": "provider",
+          "window": "stream",
+          "steps": 1
+        }
+      },
+      "createdAt": "text",
+      "updatedAt": "text",
+      "error": "text",
+      "errorRef": {
+        "code": "text",
+        "params": {
+          "key": "text"
+        }
+      }
+    }
+  },
+  "SyncFrame#$=branch8": {
+    "type": "activities",
+    "live": [
+      {
+        "id": "text",
+        "kind": "compaction",
+        "status": "running",
+        "title": "text",
+        "detail": "text",
+        "blobRef": "text",
+        "toolCallId": "text",
+        "startedAt": "text",
+        "endedAt": "text",
+        "durationMs": 1,
+        "stop": {
+          "via": "protocol"
+        },
+        "compaction": {
+          "trigger": "manual",
+          "preTokens": 1,
+          "postTokens": 1
+        },
+        "task": {
+          "kind": "shell",
+          "command": "text",
+          "exitCode": 1
+        },
+        "command": {
+          "name": "text"
+        }
+      }
+    ]
+  },
+  "SyncFrame#$=branch9": {
+    "type": "outline",
+    "turnCount": 1,
+    "turns": [
+      {
+        "turn": "text",
+        "turnId": "text",
+        "startPos": 1,
+        "endPos": 1,
+        "status": "running",
+        "at": "text",
+        "endedAt": "text",
+        "preview": "text",
+        "hasUserMessage": true,
+        "hasAttachments": true,
+        "rows": 1,
+        "runId": "text"
+      }
+    ]
+  },
+  "SyncFrame#$=branch10": {
+    "type": "context",
+    "context": {
+      "used": 1,
+      "size": 1,
+      "breakdown": [
+        {
+          "id": "text",
+          "label": "text",
+          "tokens": 1
+        }
+      ],
+      "limitKind": "compaction",
+      "breakdownEstimated": true
+    }
+  },
+  "SyncFrame#$=branch11": {
+    "type": "metrics",
+    "metrics": {
+      "stepId": "text",
+      "outputTokens": 1,
+      "tokens": "provider",
+      "durationMs": 1,
+      "startedAt": 1,
+      "endedAt": 1,
+      "window": "stream",
+      "live": true,
+      "reasoningTokens": 1
+    },
+    "run": {
+      "outputTokens": 1,
+      "durationMs": 1,
+      "tokens": "provider",
+      "window": "stream",
+      "steps": 1
+    },
+    "runId": "text",
+    "nativeMessageId": "text"
+  },
+  "SyncFrame#$=branch12": {
+    "type": "session",
+    "session": {
+      "id": "text",
+      "projectId": "text",
+      "kind": "native",
+      "title": "text",
+      "tags": [
+        "text"
+      ],
+      "state": "idle",
+      "titleSource": "prompt",
+      "backendId": "cursor",
+      "backendProfileId": "text",
+      "nativeSessionId": "text",
+      "previousNativeSessionIds": [
+        "text"
+      ],
+      "quickExitCount": 1,
+      "nativeRuntime": {
+        "address": "text",
+        "fingerprint": "text",
+        "scopeFingerprint": "text",
+        "attachment": {
+          "hook": "text",
+          "id": "text"
+        }
+      },
+      "cursorSessionId": "text",
+      "terminalId": "text",
+      "terminalAppearance": {
+        "foreground": "text",
+        "background": "text"
+      },
+      "resumePicker": true,
+      "model": "text",
+      "mode": "text",
+      "approval": "text",
+      "archivedAt": "text",
+      "error": "text",
+      "configRevision": 1,
+      "configPending": true,
+      "creationFingerprint": "text",
+      "lastActivityAt": "text",
+      "activeSince": "text",
+      "pinnedAt": "text",
+      "pinRank": 1,
+      "origin": {
+        "kind": "fork",
+        "sessionId": "text",
+        "runId": "text",
+        "groupId": "text",
+        "templateId": "text",
+        "scheduleId": "text",
+        "channel": {
+          "kind": "text",
+          "account": "text",
+          "chatId": "text"
+        },
+        "discussion": {
+          "anchor": {
+            "messageId": "text",
+            "aliases": [
+              "text"
+            ],
+            "runId": "text",
+            "nativeTurnId": "text",
+            "sequence": 1,
+            "generation": "text"
+          },
+          "quote": {
+            "exact": "text",
+            "prefix": "text",
+            "suffix": "text",
+            "start": 1,
+            "end": 1
+          },
+          "capturedAt": "text",
+          "contextRef": "text",
+          "requestFingerprint": "text"
+        }
+      },
+      "handedOffTo": "text",
+      "toolGroups": [
+        "text"
+      ],
+      "extensionsOff": [
+        "text"
+      ],
+      "terminalHold": {
+        "since": "text",
+        "pid": 1
+      },
+      "createdAt": "text",
+      "updatedAt": "text"
+    }
+  },
+  "SyncFrame#$=branch13": {
+    "type": "error",
+    "code": "text",
+    "message": "text",
+    "retryable": true
+  },
+  "TimelineRow": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "user",
+    "text": "text",
+    "attachments": [
+      {
+        "name": "text",
+        "id": "text",
+        "path": "text",
+        "type": "image",
+        "mimeType": "text",
+        "size": 1,
+        "width": 1,
+        "height": 1
+      }
+    ],
+    "references": [
+      {
+        "sessionId": "text",
+        "title": "text",
+        "backendId": "cursor",
+        "projectName": "text",
+        "capturedAt": "text",
+        "snapshotRef": "text",
+        "excerpt": "text",
+        "coverage": {
+          "source": "native",
+          "completeness": "complete",
+          "messages": 1,
+          "bytes": 1,
+          "from": "text",
+          "through": "text",
+          "activeTurnIncomplete": true,
+          "reason": "text"
+        }
+      }
+    ],
+    "pending": "queued"
+  },
+  "TimelineRow#$=branch1": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "assistant",
+    "text": "text",
+    "phase": "commentary"
+  },
+  "TimelineRow#$=branch2": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "thought",
+    "text": "text",
+    "channel": "thinking"
+  },
+  "TimelineRow#$=branch3": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "tool",
+    "job": {
+      "toolCallId": "text",
+      "id": "text",
+      "title": "text",
+      "command": "text",
+      "status": "running",
+      "startedAt": "text",
+      "runningMs": 1,
+      "exitCode": 1,
+      "matched": "text",
+      "output": "text",
+      "truncated": true,
+      "outputPath": "text"
+    },
+    "activity": {
+      "id": "text",
+      "kind": "compaction",
+      "status": "running",
+      "title": "text",
+      "detail": "text",
+      "blobRef": "text",
+      "toolCallId": "text",
+      "startedAt": "text",
+      "endedAt": "text",
+      "durationMs": 1,
+      "stop": {
+        "via": "protocol"
+      },
+      "compaction": {
+        "trigger": "manual",
+        "preTokens": 1,
+        "postTokens": 1
+      },
+      "task": {
+        "kind": "shell",
+        "command": "text",
+        "exitCode": 1
+      },
+      "command": {
+        "name": "text"
+      }
+    },
+    "subagent": {
+      "lane": "main",
+      "agentId": "text",
+      "running": true,
+      "title": "text",
+      "subagentType": "text",
+      "model": "text",
+      "rows": 1,
+      "turnId": "text",
+      "status": "running",
+      "startedAt": "text",
+      "endedAt": "text"
+    }
+  },
+  "TimelineRow#$=branch4": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "plan",
+    "entries": [
+      {
+        "key": null
+      }
+    ]
+  },
+  "TimelineRow#$=branch5": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "image",
+    "src": "text"
+  },
+  "TimelineRow#$=branch6": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "status",
+    "tone": "danger",
+    "text": "text",
+    "detail": "text"
+  },
+  "TimelineRow#$=branch7": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "task_notification",
+    "taskId": "text",
+    "taskKind": "text",
+    "status": "running",
+    "sourceStatus": "text",
+    "title": "text",
+    "command": "text",
+    "detail": "text",
+    "jobResult": {
+      "id": "text",
+      "status": "running",
+      "exitCode": 1,
+      "runningMs": 1
+    },
+    "subagentToolCallId": "text",
+    "tokens": 1,
+    "durationMs": 1
+  },
+  "TimelineRow#$=branch8": {
+    "key": "text",
+    "pos": 1,
+    "turn": "text",
+    "seq": 1,
+    "rev": 1,
+    "runId": "text",
+    "event": {
+      "type": "text",
+      "data": {
+        "key": null
+      },
+      "createdAt": "text",
+      "lastAt": "text",
+      "runId": "text",
+      "nativeId": "text",
+      "nativeTurnId": "text",
+      "sourceIds": [
+        "text"
+      ]
+    },
+    "truncated": {
+      "blobRef": "text",
+      "bytes": 1
+    },
+    "kind": "activity",
+    "activity": {
+      "id": "text",
+      "kind": "compaction",
+      "status": "running",
+      "title": "text",
+      "detail": "text",
+      "blobRef": "text",
+      "toolCallId": "text",
+      "startedAt": "text",
+      "endedAt": "text",
+      "durationMs": 1,
+      "stop": {
+        "via": "protocol"
+      },
+      "compaction": {
+        "trigger": "manual",
+        "preTokens": 1,
+        "postTokens": 1
+      },
+      "task": {
+        "kind": "shell",
+        "command": "text",
+        "exitCode": 1
+      },
+      "command": {
+        "name": "text"
+      }
+    }
+  },
+  "TimelinePage": {
+    "generation": "text",
+    "rows": [
+      {
+        "key": "text",
+        "pos": 1,
+        "turn": "text",
+        "seq": 1,
+        "rev": 1,
+        "runId": "text",
+        "event": {
+          "type": "text",
+          "data": {
+            "key": null
+          },
+          "createdAt": "text",
+          "lastAt": "text",
+          "runId": "text",
+          "nativeId": "text",
+          "nativeTurnId": "text",
+          "sourceIds": [
+            "text"
+          ]
+        },
+        "truncated": {
+          "blobRef": "text",
+          "bytes": 1
+        },
+        "kind": "user",
+        "text": "text",
+        "attachments": [
+          {
+            "name": "text",
+            "id": "text",
+            "path": "text",
+            "type": "image",
+            "mimeType": "text",
+            "size": 1,
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "references": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "pending": "queued"
+      }
+    ],
+    "hasBefore": true,
+    "hasAfter": true
+  },
+  "TimelineChanges": {
+    "generation": "text",
+    "headSeq": 1,
+    "mode": "delta",
+    "from": 1,
+    "to": 1,
+    "rows": [
+      {
+        "key": "text",
+        "pos": 1,
+        "turn": "text",
+        "seq": 1,
+        "rev": 1,
+        "runId": "text",
+        "event": {
+          "type": "text",
+          "data": {
+            "key": null
+          },
+          "createdAt": "text",
+          "lastAt": "text",
+          "runId": "text",
+          "nativeId": "text",
+          "nativeTurnId": "text",
+          "sourceIds": [
+            "text"
+          ]
+        },
+        "truncated": {
+          "blobRef": "text",
+          "bytes": 1
+        },
+        "kind": "user",
+        "text": "text",
+        "attachments": [
+          {
+            "name": "text",
+            "id": "text",
+            "path": "text",
+            "type": "image",
+            "mimeType": "text",
+            "size": 1,
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "references": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "pending": "queued"
+      }
+    ],
+    "deletes": [
+      "text"
+    ],
+    "hasBefore": true
+  },
+  "TimelineChanges#$.mode=snapshot": {
+    "generation": "text",
+    "headSeq": 1,
+    "mode": "snapshot",
+    "from": 1,
+    "to": 1,
+    "rows": [
+      {
+        "key": "text",
+        "pos": 1,
+        "turn": "text",
+        "seq": 1,
+        "rev": 1,
+        "runId": "text",
+        "event": {
+          "type": "text",
+          "data": {
+            "key": null
+          },
+          "createdAt": "text",
+          "lastAt": "text",
+          "runId": "text",
+          "nativeId": "text",
+          "nativeTurnId": "text",
+          "sourceIds": [
+            "text"
+          ]
+        },
+        "truncated": {
+          "blobRef": "text",
+          "bytes": 1
+        },
+        "kind": "user",
+        "text": "text",
+        "attachments": [
+          {
+            "name": "text",
+            "id": "text",
+            "path": "text",
+            "type": "image",
+            "mimeType": "text",
+            "size": 1,
+            "width": 1,
+            "height": 1
+          }
+        ],
+        "references": [
+          {
+            "sessionId": "text",
+            "title": "text",
+            "backendId": "cursor",
+            "projectName": "text",
+            "capturedAt": "text",
+            "snapshotRef": "text",
+            "excerpt": "text",
+            "coverage": {
+              "source": "native",
+              "completeness": "complete",
+              "messages": 1,
+              "bytes": 1,
+              "from": "text",
+              "through": "text",
+              "activeTurnIncomplete": true,
+              "reason": "text"
+            }
+          }
+        ],
+        "pending": "queued"
+      }
+    ],
+    "deletes": [
+      "text"
+    ],
+    "hasBefore": true
+  },
+  "DeviceReport": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.platform=ios": {
+    "platform": "ios",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.platform=mac": {
+    "platform": "mac",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=clipboard.read": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "clipboard.read"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=clipboard.write": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "clipboard.write"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=location": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "location"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=photo": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "photo"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=open_url": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "open_url"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=alarm": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "alarm"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=screen.observe": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "screen.observe"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=screen.act": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "screen.act"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceReport#$.capabilities[]=app.launch": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "app.launch"
+    ],
+    "allowControl": true,
+    "installationId": "text"
+  },
+  "DeviceCallOutcome": {
+    "ok": true,
+    "result": {
+      "key": null
+    }
+  },
+  "DeviceCallOutcome#$=branch1": {
+    "ok": false,
+    "code": "text",
+    "message": "text"
+  },
+  "DeviceInfo": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.platform=ios": {
+    "id": "text",
+    "name": "text",
+    "platform": "ios",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.platform=mac": {
+    "id": "text",
+    "name": "text",
+    "platform": "mac",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=clipboard.read": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "clipboard.read"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=clipboard.write": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "clipboard.write"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=location": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "location"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=photo": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "photo"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=open_url": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "open_url"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=alarm": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "alarm"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=screen.observe": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "screen.observe"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=screen.act": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "screen.act"
+    ],
+    "allowControl": true
+  },
+  "DeviceInfo#$.capabilities[]=app.launch": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "app.launch"
+    ],
+    "allowControl": true
+  },
+  "DeviceCall": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "notify",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=clipboard.read": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "clipboard.read",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=clipboard.write": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "clipboard.write",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=location": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "location",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=photo": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "photo",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=open_url": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "open_url",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=alarm": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "alarm",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=screen.observe": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "screen.observe",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=screen.act": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "screen.act",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCall#$.capability=app.launch": {
+    "callId": "text",
+    "sessionId": "text",
+    "capability": "app.launch",
+    "args": {
+      "key": null
+    },
+    "deadline": "text",
+    "createdAt": "text"
+  },
+  "DeviceCallReceipt": {
+    "callId": "text",
+    "outcome": {
+      "ok": true,
+      "result": {
+        "key": null
+      }
+    },
+    "receivedAt": "text"
+  },
+  "DeviceCallReceipt#$.outcome=branch1": {
+    "callId": "text",
+    "outcome": {
+      "ok": false,
+      "code": "text",
+      "message": "text"
+    },
+    "receivedAt": "text"
+  },
+  "DeviceFile": {
+    "fileId": "text",
+    "name": "text",
+    "mimeType": "text",
+    "size": 1
+  },
+  "DeviceLease": {
+    "id": "text",
+    "sessionId": "text",
+    "at": "text",
+    "reason": "text"
+  },
+  "RiffetDeviceAction": {
+    "id": "text",
+    "sessionId": "text",
+    "deviceId": "text",
+    "createdAt": "text",
+    "kind": "act",
+    "package": "text",
+    "steps": [
+      {
+        "action": "text",
+        "target": "text",
+        "effect": "text",
+        "code": "text"
+      }
+    ],
+    "category": "text",
+    "authorizedBy": "text",
+    "ok": true,
+    "code": "text"
+  },
+  "RiffetDeviceAction#$.kind=launch": {
+    "id": "text",
+    "sessionId": "text",
+    "deviceId": "text",
+    "createdAt": "text",
+    "kind": "launch",
+    "package": "text",
+    "steps": [
+      {
+        "action": "text",
+        "target": "text",
+        "effect": "text",
+        "code": "text"
+      }
+    ],
+    "category": "text",
+    "authorizedBy": "text",
+    "ok": true,
+    "code": "text"
+  },
+  "RiffetDeviceAction#$.kind=authorize": {
+    "id": "text",
+    "sessionId": "text",
+    "deviceId": "text",
+    "createdAt": "text",
+    "kind": "authorize",
+    "package": "text",
+    "steps": [
+      {
+        "action": "text",
+        "target": "text",
+        "effect": "text",
+        "code": "text"
+      }
+    ],
+    "category": "text",
+    "authorizedBy": "text",
+    "ok": true,
+    "code": "text"
+  },
+  "DeviceAdbStatus": {
+    "state": "ready"
+  },
+  "DeviceAdbStatus#$.state=unauthorized": {
+    "state": "unauthorized"
+  },
+  "DeviceAdbStatus#$.state=absent": {
+    "state": "absent"
+  },
+  "DeviceAdbStatus#$.state=no-adb": {
+    "state": "no-adb"
+  },
+  "DeviceAdbGrant": {
+    "restrictedSettings": "allowed"
+  },
+  "DeviceAdbGrant#$.restrictedSettings=unsupported": {
+    "restrictedSettings": "unsupported"
+  }
+}

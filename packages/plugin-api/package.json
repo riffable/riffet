@@ -1,0 +1,50 @@
+{
+  "name": "@riffet/plugin-api",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./manifest": {
+      "types": "./dist/manifest.d.ts",
+      "import": "./dist/manifest.js"
+    },
+    "./tooling": {
+      "types": "./dist/tooling.d.ts",
+      "import": "./dist/tooling.js"
+    },
+    "./package-files": {
+      "types": "./dist/package-files.d.ts",
+      "import": "./dist/package-files.js"
+    },
+    "./experimental/agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
+    "./schema": "./riffet-plugin.schema.json"
+  },
+  "files": [
+    "dist",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "riffet-plugin.schema.json"
+  ],
+  "peerDependencies": {
+    "@riffet/contracts": "0.6.0"
+  },
+  "engines": {
+    "node": ">=24.19.0"
+  },
+  "bin": {
+    "riffet-plugin": "./dist/cli.js"
+  },
+  "dependencies": {
+    "esbuild": "0.25.12",
+    "fflate": "0.8.3",
+    "zod": "3.25.67"
+  }
+}

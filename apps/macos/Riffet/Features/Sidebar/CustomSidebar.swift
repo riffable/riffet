@@ -1,0 +1,407 @@
+import AppKit
+import SwiftUI
+import RiffetKit
+
+/// The sidebar of the drawn styles (`StyleSpec.backend == .custom`): a header, the main actions, a
+/// scrolling list of conversations and a footer, all drawn here instead of by `List(.sidebar)`. The
+/// data and the actions are the native sidebar's: `WorkbenchSidebar`'s groups and buckets, the same
+/// row menu, hover card and page routing. The window's chrome paints the column behind it.
+struct CustomSidebar: View {
+    let workbench: Workbench
+    @Environment(\.palette) private var palette
+    @AppStorage(WorkbenchSidebar.collapsedProjectsKey) private var collapsed = ""
+    @AppStorage(WorkbenchSidebar.collapsedTimeGroupsKey) private var collapsedTime = ""
+    @State private var renaming: Session?
+    @State private var renameText = ""
+    @State private var taggingSession: Session?
+    @State private var browsing = false
+    @State private var addError: String?
+    @State private var favorites = FolderFavoritesModel()
+    @State private var customAnchor = MenuAnchor()
+    @State private var moreAnchor = MenuAnchor()
+
+    init(workbench: Workbench) { self.workbench = workbench }
+
+    var body: some View {
+        let style = DisplayPreferences.shared.style
+        // The chrome is the style's; the list is the arrangement the reader picked.
+        let treeChrome = style.sidebar != .timeGroups
+        let tree = workbench.sidebar.layout == "PROJECT"
+        VStack(spacing: 0) {
+            if treeChrome { treeHeader(style) } else { timeHeader(style) }
+            if treeChrome { treeActions(style) } else { timeActions(style) }
+            list(style, tree: tree)
+            CustomSidebarFooter(workbench: workbench, style: style)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Opening a project at a favorite stamps it on the server; the list moves with the projects.
+        .task(id: workbench.projects.map(\.id)) { await favorites.load(workbench.host.api) }
+        .sidebarDialogs(
+            workbench: workbench, renaming: $renaming, renameText: $renameText,
+            tagging: $taggingSession, browsing: $browsing, addError: $addError
+        )
+    }
+
+    // MARK: Header
+
+    private func toggleButton() -> some View {
+        Button { NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench) } label: {
+            Image(icon: "sidebar.left")
+        }
+        .buttonStyle(IconButtonStyle())
+        .help("收起/展开侧栏")
+        .accessibilityLabel("收起/展开侧栏")
+    }
+
+    /// The top row runs level with the traffic lights: the header's height, and a card's gap above it.
+    private func headerHeight(_ style: StyleSpec) -> CGFloat { style.layout.header + (style.window == .insetCard ? Space.sm : 0) }
+
+    private func treeHeader(_ style: StyleSpec) -> some View {
+        HStack(spacing: Space.sm) {
+            Button { workbench.showHome() } label: {
+                HStack(spacing: Space.sm) {
+                    BrandMark(front: palette.fg, back: palette.accent)
+                        .frame(width: S(style.text.body + 6), height: S(style.text.body + 6))
+                    Text(verbatim: "Riffet")
+                        .font(.riffet(size: S(style.text.body + 1), weight: .semibold))
+                        .foregroundStyle(palette.fg)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("新会话 (⌘N)")
+            Spacer(minLength: 0)
+            toggleButton()
+        }
+        .padding(.leading, CustomChrome.trafficLights(style))
+        .padding(.trailing, Space.md)
+        .frame(height: headerHeight(style))
+    }
+
+    private func timeHeader(_ style: StyleSpec) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Space.xs) {
+                toggleButton()
+                Spacer(minLength: 0)
+            }
+            .padding(.leading, CustomChrome.trafficLights(style) + Space.xs)
+            .padding(.trailing, Space.md)
+            .frame(height: headerHeight(style))
+            CustomModeSwitch(workbench: workbench, style: style)
+                .padding(.horizontal, Space.sm)
+        }
+    }
+
+    // MARK: Actions
+
+    private var pages: [WorkbenchPage] {
+        WorkbenchPage.sidebarOrder.filter { !WorkbenchPage.footerMenu.contains($0) }
+    }
+
+    /// [page]'s row is drawn selected: the page is open, or a click picked it and it opens next frame.
+    private func shows(_ page: WorkbenchPage) -> Bool {
+        workbench.sidebar.picked.map { $0 == "page:" + page.rawValue } ?? (workbench.page == page)
+    }
+
+    private func treeActions(_ style: StyleSpec) -> some View {
+        VStack(spacing: Space.xxs) {
+            CustomNavRow(symbol: "square.and.pencil", title: String(localized: "新会话"), style: style) { workbench.showHome() }
+                .help("新会话 (⌘N)")
+            CustomNavRow(symbol: "magnifyingglass", title: String(localized: "搜索内容"), trailing: "⌘K", style: style) {
+                workbench.sidebar.searchRequested = .titles
+            }
+            .help("搜索内容 (⌘K)")
+            ForEach(pages, id: \.self) { page in
+                CustomNavRow(symbol: page.symbol, title: page.title, selected: shows(page), style: style) {
+                    workbench.sidebar.pick("page:" + page.rawValue, clicked: true)
+                }
+                .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
+            }
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.bottom, Space.sm)
+    }
+
+    private func timeActions(_ style: StyleSpec) -> some View {
+        VStack(spacing: Space.xxs) {
+            CustomNavRow(symbol: "plus", title: String(localized: "新会话"), selected: workbench.showingHome && workbench.page == nil, style: style) {
+                workbench.showHome()
+            }
+            .help("新会话 (⌘N)")
+            CustomNavRow(symbol: "magnifyingglass", title: String(localized: "搜索"), style: style) {
+                workbench.sidebar.searchRequested = .titles
+            }
+            .help("搜索内容 (⌘K)")
+            CustomNavRow(symbol: "briefcase", title: String(localized: "自定义"), anchor: customAnchor, style: style) {
+                showPages([.plugins, .extensions], at: customAnchor)
+            }
+            CustomNavRow(symbol: "ellipsis", title: String(localized: "更多"), anchor: moreAnchor, style: style) {
+                showPages([.tasks, .marks, .stats, .activity], at: moreAnchor)
+            }
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.top, Space.sm + Space.xxs)
+    }
+
+    /// Archive and tag filters, at a fixed place whatever the list holds. The time layout has no
+    /// project header, so its menu also adds a project.
+    private func filterButton(addProject: Bool) -> some View {
+        SidebarFilterButton {
+            SidebarFilterMenu.make(
+                workbench: workbench, includeLayout: DisplayPreferences.shared.style.sidebar == .timeGroups,
+                addProject: addProject ? { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } : nil
+            )
+        }
+    }
+
+
+    private func showPages(_ pages: [WorkbenchPage], at anchor: MenuAnchor) {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        var chosen: (() -> Void)?
+        for page in pages {
+            menu.addItem(MenuAction.item(page.title, symbol: page.symbol) { chosen = { workbench.page = page } })
+        }
+        _ = anchor.popUp(menu)
+        chosen?()
+    }
+
+    // MARK: List
+
+    private func list(_ style: StyleSpec, tree: Bool) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 0) {
+                    tagChip(style)
+                    if tree { projectRows(style) } else { timeRows(style) }
+                }
+                .padding(.horizontal, Space.sm)
+                .padding(.bottom, Space.md)
+            }
+            .scrollIndicators(.automatic)
+            // Focus by keyboard only: a click on a row or a header leaves the composer its focus.
+            .focusable(interactions: .activate)
+            .focusEffectDisabled()
+            .onKeyPress(.upArrow) { move(-1, proxy: proxy); return .handled }
+            .onKeyPress(.downArrow) { move(1, proxy: proxy); return .handled }
+            .onKeyPress(.return) {
+                NotificationCenter.default.post(name: .riffetFocusComposer, object: workbench)
+                return .handled
+            }
+            .onDeleteCommand {
+                // The row's menu (or the archived rows) brings it back.
+                if !workbench.showingHome, let session = workbench.selected, session.archivedAt == nil {
+                    Task { await workbench.update(session, archived: true) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func tagChip(_ style: StyleSpec) -> some View {
+        if !workbench.sidebar.tag.isEmpty {
+            HStack(spacing: 4) {
+                Image(icon: "tag").font(.riffet(size: S(style.text.label - 2)))
+                Text(workbench.sidebar.tag).font(.riffet(size: S(style.text.label)))
+                Button { workbench.sidebar.tag = "" } label: { Image(icon: "xmark").font(.riffet(size: S(style.text.label - 4), weight: .bold)) }
+                    .buttonStyle(.plain)
+                    .help("清除筛选")
+                    .accessibilityLabel("清除筛选")
+            }
+            .foregroundStyle(palette.accent)
+            .padding(.horizontal, 8)
+            .frame(height: 22)
+            .background(palette.accentSoft, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .padding(.leading, Space.sm)
+            .padding(.vertical, Space.xs)
+        }
+    }
+
+    // MARK: Project tree
+
+    @ViewBuilder private func projectRows(_ style: StyleSpec) -> some View {
+        CustomSectionTitle(title: String(localized: "项目"), style: style) {
+            HStack(spacing: Space.xxs) {
+                filterButton(addProject: false)
+                Button { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } label: { Image(icon: "folder.badge.plus") }
+                    .buttonStyle(IconButtonStyle(size: 24))
+                    .help("添加项目")
+                    .accessibilityLabel("添加项目")
+            }
+        }
+        if workbench.sidebar.groups.isEmpty {
+            VStack(spacing: Space.sm) {
+                Text(workbench.sidebar.tag.isEmpty ? "还没有项目" : "没有匹配的结果")
+                    .font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg3)
+                if workbench.sidebar.tag.isEmpty {
+                    Button { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } label: { Label("添加项目", icon: "folder.badge.plus") }.buttonStyle(SolidButtonStyle(kind: .secondary))
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, Space.xl)
+        }
+        ForEach(projectLines(style)) { entry in line(entry, style: style) }
+    }
+
+    private func projectLines(_ style: StyleSpec) -> [SidebarLine] {
+        let hidden = Set(collapsed.split(separator: ",").map(String.init))
+        let marked = style.sidebar == .projectTree
+        var lines: [SidebarLine] = []
+        for group in workbench.sidebar.groups {
+            let open = group.forceOpen || !hidden.contains(group.project.id)
+            lines.append(.project(group, open: open))
+            guard open else { continue }
+            let slice = workbench.sidebar.slice(for: group)
+            lines += slice.sessions.map { .session($0, leadingAgent: marked, timed: marked) }
+            if slice.hiddenCount > 0 { lines.append(.expand(group, hidden: slice.hiddenCount)) }
+            else if slice.canCollapse { lines.append(.collapse(group)) }
+            if group.sessions.isEmpty { lines.append(.empty(group)) }
+        }
+        return lines
+    }
+
+    // MARK: Time groups
+
+    @ViewBuilder private func timeRows(_ style: StyleSpec) -> some View {
+        let sections = workbench.sidebar.timeSections
+        // The filter menu holds 添加项目 and 显示已归档: it stays reachable with no band to carry it.
+        if sections.isEmpty {
+            CustomSectionTitle(title: "", style: style) { filterButton(addProject: true) }
+        }
+        if sections.isEmpty, !workbench.sidebar.tag.isEmpty {
+            Text("没有匹配的结果")
+                .font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg3)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, Space.xl)
+        }
+        ForEach(timeLines(sections)) { entry in line(entry, style: style) }
+    }
+
+    private func timeLines(_ sections: [WorkbenchSidebar.TimeSection]) -> [SidebarLine] {
+        let folded = Set(collapsedTime.split(separator: ",").map(String.init))
+        // The filters sit on the first band past the pinned one, where the list's order starts.
+        let filtered = sections.first { $0.band != .pinned }?.id ?? sections.first?.id
+        var lines: [SidebarLine] = []
+        for section in sections {
+            let open = !folded.contains(section.id)
+            lines.append(.band(section, open: open, filters: section.id == filtered))
+            guard open else { continue }
+            let visible = workbench.sidebar.shown(section)
+            lines += visible.sessions.map { .session($0, leadingAgent: false, timed: false) }
+            if visible.more { lines.append(.more) }
+        }
+        return lines
+    }
+
+    /// The list's rows, one flat `ForEach` for every band and project. Nested ones lost updates: in a
+    /// lazy stack, an `.equatable()` row that moved from one inner `ForEach` to another (a
+    /// conversation going up to 最近 as it opened) kept drawing what it showed before, so the
+    /// conversations picked earlier stayed selected.
+    @ViewBuilder private func line(_ line: SidebarLine, style: StyleSpec) -> some View {
+        switch line {
+        case let .band(section, open, filters):
+            CustomGroupTitle(title: section.title, expanded: open, style: style, toggle: {
+                collapsedTime = toggleCollapsed(raw: collapsedTime, id: section.id)
+            }) {
+                if filters { filterButton(addProject: true) }
+            }
+            .padding(.top, style.layout.sidebarGap)
+        case .more:
+            CustomLinkRow(symbol: nil, title: String(localized: "显示更多"), style: style) { workbench.sidebar.showAllEarlier = true }
+        case let .project(group, open):
+            CustomProjectRow(
+                workbench: workbench, project: group.project, favorites: favorites, expanded: open, style: style,
+                toggle: { collapsed = toggleCollapsed(raw: collapsed, id: group.project.id) }
+            )
+            .padding(.top, style.layout.sidebarGap)
+        case let .expand(group, hidden):
+            CustomLinkRow(symbol: "ellipsis", title: String(localized: "展开其余 \(hidden) 个会话"), style: style) {
+                workbench.sidebar.expandedProjects.insert(group.project.id)
+            }
+        case let .collapse(group):
+            CustomLinkRow(symbol: "chevron.up", title: String(localized: "收起历史会话"), style: style) {
+                workbench.sidebar.expandedProjects.remove(group.project.id)
+            }
+        case .empty:
+            Text("暂无会话").font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4)
+                .padding(.leading, Space.sm + Space.xxs + 16 + Space.sm)
+                .frame(height: style.layout.sidebarRow)
+        case let .session(session, leadingAgent, timed):
+            sessionRow(session, style: style, leadingAgent: leadingAgent, timed: timed)
+        }
+    }
+
+    // MARK: Rows
+
+    private func sessionRow(_ session: Session, style: StyleSpec, leadingAgent: Bool, timed: Bool) -> some View {
+        let project = workbench.project(session.projectId)
+        let now = Int64(workbench.minute.timeIntervalSince1970 * 1000)
+        return CustomSessionRow(
+            session: session,
+            info: { sessionHoverInfo(session: session, project: project?.name, models: workbench.catalogs.cached(for: session)?.models ?? [], now: now) },
+            selected: workbench.sidebarRowSelected(session),
+            leadingAgent: leadingAgent,
+            activity: timed ? relativeLabel(value: activityAt(session: session), now: now) : nil,
+            style: style,
+            menu: workbench.sidebarRowMenu(for: session, rename: { renameText = session.title; renaming = session }, editTags: { taggingSession = session }),
+            hover: { hovering in workbench.hover(sessionId: session.id, entered: hovering) },
+            open: { workbench.sidebar.pick(session.id, clicked: true) }
+        )
+        .equatable()
+        .id(session.id)
+    }
+
+    // MARK: Keyboard
+
+    private func move(_ delta: Int, proxy: ScrollViewProxy) {
+        let order = workbench.sidebar.visibleOrder
+        guard !order.isEmpty else { return }
+        let current = workbench.sidebar.picked ?? (workbench.page == nil && !workbench.showingHome ? workbench.selected?.id : nil)
+        let next: Int
+        if let index = order.firstIndex(where: { $0.id == current }) {
+            next = min(max(index + delta, 0), order.count - 1)
+        } else {
+            next = delta > 0 ? 0 : order.count - 1
+        }
+        let id = order[next].id
+        workbench.sidebar.pick(id, clicked: false)
+        proxy.scrollTo(id)
+    }
+}
+
+/// The filter button. Each place it appears (the project tree's title, a time band's) owns its
+/// anchor: switching the arrangement swaps one for the other, and a shared anchor would be left
+/// pointing at the one that went away.
+private struct SidebarFilterButton: View {
+    let menu: () -> NSMenu
+    @State private var anchor = MenuAnchor()
+
+    var body: some View {
+        Button { anchor.popUp(menu()) } label: { Image(icon: "line.3.horizontal.decrease") }
+            .buttonStyle(IconButtonStyle())
+            .background(MenuAnchorView(anchor: anchor))
+            .help("排列方式、归档与标签")
+    }
+}
+
+/// A line of the drawn sidebar's list (`CustomSidebar.line`).
+private enum SidebarLine: Identifiable {
+    case band(WorkbenchSidebar.TimeSection, open: Bool, filters: Bool)
+    case more
+    case project(ProjectGroup, open: Bool)
+    case expand(ProjectGroup, hidden: Int)
+    case collapse(ProjectGroup)
+    case empty(ProjectGroup)
+    case session(Session, leadingAgent: Bool, timed: Bool)
+
+    var id: String {
+        switch self {
+        case let .band(section, _, _): "band:" + section.id
+        case .more: "more"
+        case let .project(group, _): "project:" + group.project.id
+        case let .expand(group, _): "expand:" + group.project.id
+        case let .collapse(group): "collapse:" + group.project.id
+        case let .empty(group): "empty:" + group.project.id
+        case let .session(session, _, _): session.id
+        }
+    }
+}

@@ -1,0 +1,6 @@
+{
+  "DISCUSSION_SELECTION_TOO_LARGE": { "zh": "选中内容过长，请缩小范围", "en": "The selection is too long; choose a smaller passage" },
+  "DISCUSSION_SOURCE_UNAVAILABLE": { "zh": "无法定位原文，请重新选择片段", "en": "The source could not be located; select the passage again" },
+  "DISCUSSION_CONTEXT_UNAVAILABLE": { "zh": "侧边聊天的上下文快照已不可用", "en": "The side chat context snapshot is unavailable" },
+  "DISCUSSION_PROVIDER_UNAVAILABLE": { "zh": "当前会话的模型提供方暂不支持侧边聊天", "en": "This conversation's model provider is unavailable for side chats" }
+}

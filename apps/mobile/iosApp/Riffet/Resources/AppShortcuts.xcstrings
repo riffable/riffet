@@ -1,0 +1,27 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "使用 ${applicationName} 准备任务" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Prepare a task with ${applicationName}"
+            ]
+          }
+        },
+        "zh-Hans" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "使用 ${applicationName} 准备任务"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

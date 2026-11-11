@@ -1,0 +1,260 @@
+import { resolve } from 'node:path';
+import { mkdirSync, realpathSync } from 'node:fs';
+import { validatePackage, watchPlugin, type PluginBuildResult } from '../../../packages/plugin-api/src/tooling.js';
+import { claimStateDirectory } from './compat.js';
+import { PluginStore } from './plugins/store.js';
+import type { PluginDescriptor } from '../../../packages/contracts/src/index.js';
+import { localServerUrl, type PairingDaemon } from './cli-pairing.js';
+import { AppError } from './errors.js';
+import { PackageStore } from './plugins-host/packages.js';
+import { developmentDirectories, readPackage } from './plugins/development.js';
+import { PluginLogs } from './plugins/logs.js';
+import { PLUGIN_ID } from '../../../packages/contracts/src/plugins.js';
+import type { PluginLogEntry } from '../../../packages/contracts/src/plugin-management.js';
+
+// `riffet plugin ...`: installing and managing plugin packages from a terminal. A running server does
+// the work (so the new version starts or is undone in the process that serves it); without one, the
+// files and records are changed directly and take effect at the next start.
+
+export interface PluginCliContext {
+  stateDir: string;
+  /** The running server, if there is one. */
+  daemon?: PairingDaemon;
+  token(): string;
+}
+
+/** A local developer explicitly trusts this directory; package code is never imported offline. */
+export async function linkDevelopmentPlugin(context: PluginCliContext, directory: string): Promise<{ id: string; online: boolean }> {
+  const path = realpathSync(resolve(directory));
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('POST', '/api/integrations/development', { path });
+    if (reply.status !== 200) fail(reply);
+    return { id: (reply.body as unknown as PluginDescriptor).id, online: true };
+  }
+  const { manifest } = await validatePackage(path);
+  const id = String(manifest.id);
+  if ((await import('./plugins/registry.js')).isBuiltinPlugin(id)) throw new AppError('PLUGIN_ID_TAKEN', `${id} is a built-in plugin`, 409);
+  mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
+  const release = claimStateDirectory(context.stateDir);
+  try {
+    if (new PackageStore(context.stateDir).record(id)) throw new AppError('PLUGIN_ID_TAKEN', `${id} is installed; remove its installed versions before linking development code`, 409);
+    const store = new PluginStore(context.stateDir);
+    const linked = store.developmentPackages();
+    if ((linked[id] && linked[id] !== path) || Object.entries(linked).some(([otherId, root]) => otherId !== id && root === path)) throw new AppError('PLUGIN_ID_TAKEN', 'A different development package is already linked; unlink it first', 409);
+    if (linked[id] !== path) store.setDevelopmentPackage(id, path);
+  } finally { release(); }
+  return { id, online: false };
+}
+
+export async function unlinkDevelopmentPlugin(context: PluginCliContext, id: string): Promise<string[]> {
+  if (!PLUGIN_ID.test(id) || id.length > 64) throw new Error('Invalid plugin id.');
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('DELETE', `/api/integrations/development/${encodeURIComponent(id)}`);
+    if (reply.status !== 200) fail(reply);
+  } else {
+    mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
+    const release = claimStateDirectory(context.stateDir);
+    try { new PluginStore(context.stateDir).setDevelopmentPackage(id, null); } finally { release(); }
+  }
+  return [`Unlinked ${id}. Its settings and data were kept.`];
+}
+
+/** Re-probe the daemon after each build so stopping/starting Riffet needs no watcher restart. */
+export async function developPlugin(context: () => Promise<PluginCliContext>, directory: string, report: (message: string) => void, options: { entries?: string[] } = {}) {
+  let first = true;
+  return watchPlugin(directory, {
+    entries: options.entries,
+    onBuild: async (built: PluginBuildResult) => {
+      const current = await context();
+      if (!first && new PluginStore(current.stateDir).developmentPackages()[built.manifest.id] !== built.directory) throw new Error('The development link was removed; stop this watcher before linking again.');
+      const linked = first ? await linkDevelopmentPlugin(current, built.directory) : { id: built.manifest.id, online: Boolean(current.daemon) };
+      if (!first && current.daemon) await inspectPlugin(current, built.manifest.id, 'reload');
+      report(`${linked.id}: rebuilt ${built.directory}${linked.online ? ' and reloaded in Riffet' : '; linked for the next Riffet start'}.`);
+      if (first) report('Development links persist until `riffet plugin unlink <id>`; their code runs with Riffet\'s permissions.');
+      first = false;
+    },
+    onError: error => report(`Plugin development failed: ${error instanceof Error ? error.message : String(error)}`),
+  });
+}
+
+interface Reply { status: number; body: { error?: { code?: string; message?: string; details?: unknown } } & Record<string, unknown> }
+
+async function connect(daemon: PairingDaemon, token: string): Promise<(method: string, path: string, body?: unknown) => Promise<Reply>> {
+  const base = localServerUrl(daemon);
+  const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }), signal: AbortSignal.timeout(5000) });
+  if (!login.ok) throw new Error(`Could not authenticate with the running server (HTTP ${login.status}); check --state-dir.`);
+  const { csrfToken } = await login.json() as { csrfToken?: unknown };
+  const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).find(value => value?.startsWith('cw_session='));
+  if (typeof csrfToken !== 'string' || !cookie) throw new Error('The running server did not return an authentication session.');
+  return async (method, path, body) => {
+    const response = await fetch(`${base}${path}`, {
+      method, headers: { cookie, 'x-csrf-token': csrfToken, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(120_000),
+    });
+    return { status: response.status, body: await response.json().catch(() => ({})) as Reply['body'] };
+  };
+}
+
+const fail = (reply: Reply): never => { throw new Error(reply.body.error?.message ?? `The server answered HTTP ${reply.status}.`); };
+
+function parseGrant(value: string | undefined): string[] | undefined {
+  return value === undefined ? undefined : value.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+/**
+ * Installs the package at `path` (a directory, or a .tgz). It asks for capabilities; `grant` or `yes` must
+ * accept exactly those, otherwise nothing is installed and the list is printed.
+ */
+export async function installPlugin(context: PluginCliContext, path: string, options: { grant?: string; yes?: boolean; trusted?: boolean }): Promise<string[]> {
+  const source = resolve(path);
+  const given = parseGrant(options.grant);
+  if (context.daemon) {
+    const call = await connect(context.daemon, context.token());
+    let reply = await call('POST', '/api/integrations/install', { path: source, grant: given ?? [], trusted: options.trusted === true });
+    const details = reply.body.error?.details as { id?: string; version?: string; capabilities?: string[] } | undefined;
+    if (reply.status === 409 && reply.body.error?.code === 'PLUGIN_GRANT_REQUIRED' && details?.capabilities) {
+      if (!options.yes) return [`${details.id} ${details.version} asks for: ${details.capabilities.join(', ')}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'].map(String);
+      reply = await call('POST', '/api/integrations/install', { path: source, grant: details.capabilities, trusted: options.trusted === true });
+    }
+    if (reply.status !== 200) fail(reply);
+    const installed = reply.body as unknown as PluginDescriptor;
+    return [`Installed ${installed.id} ${installed.version ?? ''} (${installed.enabled ? 'running' : installed.status?.message ?? 'off'}).`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
+  }
+  const store = new PackageStore(context.stateDir);
+  const staged = await store.stage({ path: source }, { trusted: options.trusted === true });
+  // The server refuses a built-in id when it installs; without one running, the same refusal is made here (`stage` has refused the reserved `riffet.` namespace).
+  if ((await import('./plugins/registry.js')).isBuiltinPlugin(String(staged.manifest.id))) {
+    await store.discard(staged);
+    throw new AppError('PLUGIN_ID_TAKEN', `${String(staged.manifest.id)} is a built-in plugin; an installed package cannot take its id`, 409);
+  }
+  if (new PluginStore(context.stateDir).developmentPackages()[String(staged.manifest.id)]) {
+    await store.discard(staged);
+    throw new AppError('PLUGIN_ID_TAKEN', `${String(staged.manifest.id)} is linked for development; unlink it before installing`, 409);
+  }
+  const grant = options.yes ? staged.capabilities : [...new Set(given ?? [])].sort();
+  if (grant.length !== staged.capabilities.length || grant.some((item, index) => item !== staged.capabilities[index])) {
+    await store.discard(staged);
+    return [`${staged.manifest.id} ${staged.manifest.version} asks for: ${staged.capabilities.join(', ') || 'nothing'}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'];
+  }
+  const id = String(staged.manifest.id);
+  const existing = store.record(id);
+  const { status } = await store.commit(staged, `path:${source}`, true);
+  return [status === 'present' ? `${id} ${staged.manifest.version} is already installed.` : `Installed ${id} ${staged.manifest.version}${existing ? ' and selected it' : ''}; it takes effect when Riffet starts.`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
+}
+
+export async function listPlugins(context: PluginCliContext): Promise<string[]> {
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('GET', '/api/integrations');
+    if (reply.status !== 200) fail(reply);
+    return ((reply.body.integrations ?? []) as PluginDescriptor[]).filter(item => item.source === 'installed').flatMap(item => [
+      `${item.id}  ${item.enabled ? 'on' : 'off'}  ${item.status?.message ?? ''}`.trimEnd(),
+      ...(item.installed?.versions ?? []).map(version => `  ${version.selected ? '*' : ' '} ${version.version}  ${version.trusted ? 'trusted' : 'isolated'}  [${version.capabilities.join(', ')}]  ${version.source}`),
+    ]);
+  }
+  return new PackageStore(context.stateDir).records().flatMap(record => [
+    record.id,
+    ...record.versions.map(version => `  ${version.version === record.selected ? '*' : ' '} ${version.version}  ${version.trusted ? 'trusted' : 'isolated'}  [${version.capabilities.join(', ')}]  ${version.source}`),
+  ]);
+}
+
+export async function selectPlugin(context: PluginCliContext, id: string, version: string): Promise<string[]> {
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('POST', `/api/integrations/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/select`, {});
+    if (reply.status !== 200) fail(reply);
+    return [`${id} now uses ${version}.`];
+  }
+  new PackageStore(context.stateDir).select(id, version);
+  return [`${id} will use ${version} when Riffet starts.`];
+}
+
+export async function uninstallPlugin(context: PluginCliContext, id: string, version?: string, target: { source?: 'installed' | 'development'; path?: string } = {}): Promise<string[]> {
+  if (version !== undefined && !version) throw new Error('version must not be empty.');
+  if (target.path !== undefined && !target.path) throw new Error('path must not be empty.');
+  if (target.source !== undefined && target.source !== 'installed' && target.source !== 'development') throw new Error('source must be installed or development.');
+  if (target.path !== undefined && target.source !== 'development') throw new Error('--path requires --source development.');
+  if (version !== undefined && (target.source === 'development' || target.path !== undefined)) throw new Error('A development package has no installed versions.');
+  if (context.daemon) {
+    const query = new URLSearchParams({ ...(target.source ? { source: target.source } : {}), ...(target.path ? { path: resolve(target.path) } : {}) });
+    const reply = await (await connect(context.daemon, context.token()))('DELETE', `/api/integrations/${encodeURIComponent(id)}${version ? `/versions/${encodeURIComponent(version)}` : query.size ? '?' + query.toString() : ''}`);
+    if (reply.status !== 200) fail(reply);
+    return [`Removed ${id}${version ? ` ${version}` : ''}. Its settings and data were kept.`];
+  }
+  mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
+  const release = claimStateDirectory(context.stateDir);
+  try {
+    const store = new PackageStore(context.stateDir);
+    const record = store.record(id);
+    const settings = new PluginStore(context.stateDir);
+    const linked = settings.developmentPackages();
+    const roots = new Set<string>();
+    for (const directory of [...(linked[id] ? [linked[id]!] : []), ...developmentDirectories()]) {
+      const read = await readPackage(directory);
+      const owner = linked[id] === directory ? id : 'reason' in read ? read.id : read.manifest.id;
+      if (owner !== id) continue;
+      let root: string;
+      try { root = realpathSync(directory); } catch { root = resolve(directory); }
+      if (!settings.excludedDevelopmentDirectories().includes(root)) roots.add(root);
+    }
+    if (!version && !target.source && (roots.size > 1 || roots.size > 0 && record)) throw new AppError('PLUGIN_TARGET_AMBIGUOUS', 'Several plugin sources have this id; use --source and --path to select one', 409);
+    const source = version ? 'installed' : target.source ?? (roots.size ? 'development' : 'installed');
+    if (source === 'development') {
+      const root = target.path === undefined ? roots.size === 1 ? [...roots][0] : undefined : resolve(target.path);
+      if (!root || !roots.has(root)) throw new AppError('INTEGRATION_NOT_FOUND', 'Choose a known development package directory', 404);
+      settings.removeDevelopmentPackage(id, root);
+    } else {
+      if (version && record?.selected === version && record.versions.length > 1) throw new Error('Select another version before removing this one.');
+      store.forget(id, version);
+      for (const entry of record?.versions ?? []) if (!version || version === entry.version) await store.retire(id, entry.version, () => false);
+    }
+  } finally { release(); }
+  return [`Removed ${id}${version ? ` ${version}` : ''}. Its settings and data were kept.`];
+}
+
+export async function deletePluginData(context: PluginCliContext, id: string): Promise<string[]> {
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('DELETE', `/api/integrations/${encodeURIComponent(id)}/data`);
+    if (reply.status !== 200) fail(reply);
+  } else await new PackageStore(context.stateDir).deleteData(id);
+  return [`Deleted the data of ${id}.`];
+}
+
+/** Recovery also works with the daemon stopped, without importing any plugin code. */
+export async function recoverPlugins(context: PluginCliContext, mode: string): Promise<string[]> {
+  if (mode !== 'on' && mode !== 'off') throw new Error('Recovery must be on or off.');
+  const enabled = mode === 'on';
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('POST', '/api/integrations/recovery', { enabled });
+    if (reply.status !== 200) fail(reply);
+  } else {
+    mkdirSync(context.stateDir, { recursive: true });
+    const release = claimStateDirectory(context.stateDir);
+    try { new PluginStore(context.stateDir).setRecovery(enabled); } finally { release(); }
+  }
+  return [enabled ? 'External plugins are paused. Original enablement policies are retained.' : 'Original plugin enablement policies restored.'];
+}
+
+export async function inspectPlugin(context: PluginCliContext, id: string, action: 'reload' | 'diagnostics'): Promise<string[]> {
+  if (!context.daemon) throw new Error('Riffet is stopped. Start the server before running plugin diagnostics or reload.');
+  const reply = await (await connect(context.daemon, context.token()))('POST', '/api/integrations/' + encodeURIComponent(id) + '/' + action);
+  if (reply.status !== 200) fail(reply);
+  return [JSON.stringify(reply.body, null, 2)];
+}
+
+/** Read-only even while the service is stopped; no package code is imported. */
+export async function readPluginLogs(context: PluginCliContext, id: string, options: { limit?: number } = {}): Promise<string[]> {
+  if (!PLUGIN_ID.test(id) || id.length > 64) throw new Error('Invalid plugin id.');
+  const limit = options.limit ?? 100;
+  if (!Number.isInteger(limit) || limit < 1 || limit > 256) throw new Error('limit must be between 1 and 256.');
+  let logs: PluginLogEntry[];
+  if (context.daemon) {
+    const reply = await (await connect(context.daemon, context.token()))('GET', `/api/integrations/${encodeURIComponent(id)}/logs`);
+    if (reply.status !== 200) fail(reply);
+    logs = reply.body.logs as PluginLogEntry[];
+  } else {
+    const store = new PluginStore(context.stateDir);
+    logs = new PluginLogs(context.stateDir, pluginId => {
+      try { const item = store.item(pluginId); return [...Object.values(item.settings), ...Object.values(item.secrets)]; } catch { return []; }
+    }).read(id);
+  }
+  return logs.slice(-limit).map(entry => `${entry.at} ${entry.level} ${entry.pluginId}@${entry.version ?? 'unversioned'} #${entry.generation} ${entry.phase}: ${entry.message}`);
+}

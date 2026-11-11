@@ -1,0 +1,87 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#. placeholder {0}: snapshot.scope.turnCount
+#: src/share/main.tsx
+msgid "{0} 轮"
+msgstr "{0, plural, one {# turn} other {# turns}}"
+
+#: src/share/main.tsx
+msgid "主题"
+msgstr "Theme"
+
+#: src/share/main.tsx
+msgid "会话数据不可用"
+msgstr "Session data unavailable"
+
+#: src/share/main.tsx
+msgid "会话数据地址无效"
+msgstr "Invalid session data URL"
+
+#: src/share/main.tsx
+msgid "会话数据版本不兼容"
+msgstr "Incompatible session data version"
+
+#. placeholder {0}: formatDateTime(snapshot.capturedAt)
+#: src/share/main.tsx
+msgid "内容截至 {0}"
+msgstr "Content as of {0}"
+
+#: src/share/main.tsx
+msgid "最近"
+msgstr "Recent"
+
+#: src/share/main.tsx
+msgid "原主题"
+msgstr "Original theme"
+
+#: src/share/main.tsx
+msgctxt "share-image-name"
+msgid "图片"
+msgstr "Image"
+
+#: src/share/main.tsx
+msgid "外观"
+msgstr "Appearance"
+
+#: src/share/main.tsx
+msgid "已选"
+msgstr "Selected"
+
+#: src/share/main.tsx
+msgid "打印资源加载超时，请重新加载预览"
+msgstr "Print resources timed out. Reload the preview."
+
+#: src/share/main.tsx
+msgid "无法加载预览"
+msgstr "Couldn't load preview"
+
+#: src/share/main.tsx
+msgid "明暗"
+msgstr "Color mode"
+
+#: src/share/main.tsx
+msgid "浅色"
+msgstr "Light"
+
+#: src/share/main.tsx
+msgid "深色"
+msgstr "Dark"
+
+#: src/share/main.tsx
+msgid "跟随系统"
+msgstr "System"
+
+#: src/share/main.tsx
+msgid "这个会话没有消息。"
+msgstr "This session has no messages."
+
+#: src/share/main.tsx
+msgid "部分内容未包含"
+msgstr "Some content not included"

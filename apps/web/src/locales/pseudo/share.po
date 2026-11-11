@@ -1,0 +1,87 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: snapshot.scope.turnCount
+#: src/share/main.tsx
+msgid "{0} 轮"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "主题"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "会话数据不可用"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "会话数据地址无效"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "会话数据版本不兼容"
+msgstr ""
+
+#. placeholder {0}: formatDateTime(snapshot.capturedAt)
+#: src/share/main.tsx
+msgid "内容截至 {0}"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "最近"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "原主题"
+msgstr ""
+
+#: src/share/main.tsx
+msgctxt "share-image-name"
+msgid "图片"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "外观"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "已选"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "打印资源加载超时，请重新加载预览"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "无法加载预览"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "明暗"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "浅色"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "深色"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "跟随系统"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "这个会话没有消息。"
+msgstr ""
+
+#: src/share/main.tsx
+msgid "部分内容未包含"
+msgstr ""

@@ -1,0 +1,294 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: formatDateTime(share.expiresAt)
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "{0} 到期"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "{count} 轮"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "{days} 天"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 准备失败"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 导出失败"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 预览"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "主题"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "全选"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "全部"
+msgstr ""
+
+#. placeholder {0}: formatDateTime(draft.capturedAt)
+#. placeholder {0}: formatDateTime(share.capturedAt)
+#: src/app/shares/ShareDialog.tsx
+msgid "内容截至 {0}"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "最近几轮"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享会话"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "分享操作失败"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享有效期"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享范围"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享轮数"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享预览"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "创建链接"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "刷新"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "发布中…"
+msgstr ""
+
+#: src/app/shares/SharesSection.tsx
+msgid "发布到"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "取消分享"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "取消分享？"
+msgstr ""
+
+#: src/app/shares/SharesSection.tsx
+msgid "在会话菜单中创建分享。"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "在打印窗口选择“保存为 PDF”，并关闭“页眉和页脚”。"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "复制链接"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出为 PDF"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出范围"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出轮数"
+msgstr ""
+
+#. placeholder {0}: selectedTurnIds.length
+#: src/app/shares/ShareDialog.tsx
+msgid "已选 {0} 轮"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "手动选择"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "打印预览尚未就绪，请重试"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "打开系统打印窗口，选择“保存为 PDF”"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "操作结果待核对"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无文字提问"
+msgstr ""
+
+#: src/app/shares/SharesSection.tsx
+msgid "无法保存"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法加载预览"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法读取会话列表"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法读取分享状态"
+msgstr ""
+
+#: src/app/shares/SharesSection.tsx
+msgid "无法读取分享记录"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "明暗"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "显示分享者"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "更新分享"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "更新链接"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "有效期"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "核对状态"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在准备 PDF…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在准备预览…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在加载预览…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "正在发布…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "正在取消分享…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在完成预览…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在整理附件…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在检查登录…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取会话…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取会话列表…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取分享状态…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "没有可分享的会话记录"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "没有可导出的会话记录"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "浅色"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "深色"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "清空"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "生成中…"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "生成预览"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "跟随系统"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "返回"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/shares/ShareDialog.tsx
+msgid "链接将失效。"
+msgstr ""

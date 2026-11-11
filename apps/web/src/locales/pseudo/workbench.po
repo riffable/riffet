@@ -1,0 +1,1961 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: label(backendId)
+#. placeholder {0}: props.backend.label
+#: src/app/ProjectHome.tsx
+#: src/app/Sidebar.tsx
+msgid "{0} 不可用"
+msgstr ""
+
+#. placeholder {0}: git.changes
+#: src/app/SessionInfo.tsx
+msgid "{0} 个文件"
+msgstr ""
+
+#. placeholder {0}: props.backend.label
+#: src/app/Sidebar.tsx
+msgid "{0} 未登录"
+msgstr ""
+
+#. placeholder {0}: label(failure.backendId)
+#: src/app/ImportSessionDialog.tsx
+msgid "{0} 读取失败"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "{ago}前"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgid "{schedules, plural, other {# 个定时计划继续运行。}}"
+msgstr ""
+
+#. placeholder {0}: item.title
+#: src/app/state/listsStore.ts
+msgid "「{0}」{body}"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "Agent 与模型"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "Agent 扩展"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "CLI 与终端工具"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+#: src/app/WorkbenchPanels.tsx
+msgid "Shell 终端"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "上一个标签"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "上一条消息尚未确认，请先检查状态"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "上下文用量"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "上下文长度"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "上移"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "下一个标签"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "下移"
+msgstr ""
+
+#. placeholder {0}: artifact.name
+#: src/plugins/TasksView.tsx
+msgid "下载 {0}"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "不可用"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "不存在"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "个人资料"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "主目录"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "主题"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "今天"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "从终端导入…"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "以服务器进程的权限运行"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-feature"
+msgid "任务"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgctxt "workbench-session-noun"
+msgid "会话"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "会话 ID"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/tabs/keys.ts
+msgid "会话信息"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "会话信息与操作"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "会话操作"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "会话标签"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "使用"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "使用中"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "使用此目录"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "使用访问令牌登录"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "使用配对码登录"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "侧边聊天"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/use-project-actions.ts
+#: src/app/use-session-actions.ts
+#: src/app/WorkbenchHeader.tsx
+msgid "保存"
+msgstr ""
+
+#: src/app/WorkbenchHeader.tsx
+msgid "保存为项目"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "保留原启用策略，可随时恢复"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "信任此插件"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "停止当前运行"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "允许插件使用 Riffet 的文件、网络和进程权限"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/Sidebar.tsx
+msgid "全部"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "全部会话"
+msgstr ""
+
+#: src/app/tabs/TabBar.tsx
+msgid "全部标签"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/tabs/TabBar.tsx
+#: src/app/tabs/TabStyleSetting.tsx
+#: src/app/use-terminal-actions.ts
+msgid "关闭"
+msgstr ""
+
+#: src/app/tabs/TabBar.tsx
+msgid "关闭{title}"
+msgstr ""
+
+#. placeholder {0}: terminal.title
+#: src/app/use-terminal-actions.ts
+msgid "关闭「{0}」？"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "关闭侧边栏"
+msgstr ""
+
+#: src/app/tabs/TabBar.tsx
+msgid "关闭其他标签"
+msgstr ""
+
+#: src/app/tabs/TabBar.tsx
+msgid "关闭右侧标签"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "关闭标签"
+msgstr ""
+
+#: src/app/tabs/TabBar.tsx
+msgid "关闭标签后仍在后台运行"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "其余 {hidden} 个"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "内容"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "内置"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "内置插件不可卸载"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "最后一个标签"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+#: src/app/QuickChatHistory.tsx
+#: src/app/SessionSearchDialog.tsx
+msgid "最近会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "最近活动"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "最近的任务"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgid "凭据保存在运行 Riffet 服务器的电脑上"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "出错"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-feature"
+msgid "分享"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "分支"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "切换到第 1–8 个标签"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "切换浅色 / 深色"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "切换视图"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "创建"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgctxt "workbench-created-at"
+msgid "创建"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgctxt "settings-delete-action"
+msgid "删除"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgctxt "workbench-delete-action"
+msgid "删除"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgid "删除…"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "删除「{title}」的数据？"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgid "删除会话？"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "删除后无法恢复"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "删除数据"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+#: src/main.tsx
+msgid "刷新"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "功能"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+msgid "加入标签栏"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "卸载"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "卸载插件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "卸载插件？"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "原会话已不存在，只能查看收藏里保存的内容"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "原文已找不到，已打开所在会话"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "发布者"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "发送失败"
+msgstr ""
+
+#: src/app/PluginCommandForm.tsx
+#: src/app/plugins/PluginGrantDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/TaskConfirmDialog.tsx
+#: src/plugins/TasksView.tsx
+msgid "取消"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgctxt "common-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+#: src/app/DirectoryPicker.tsx
+msgctxt "workbench-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+#: src/app/FolderFavorites.tsx
+msgid "取消收藏"
+msgstr ""
+
+#. placeholder {0}: entry.name
+#: src/app/DirectoryPicker.tsx
+msgid "取消收藏 {0}"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "取消收藏此目录"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+msgid "取消置顶"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+#: src/plugins/hostViews.ts
+msgid "变更"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/WorkbenchPanels.tsx
+msgid "变更与文件"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "各自在独立 Worktree"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "名称"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "含非交互"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可打开专用配置"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用策略"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgctxt "resume-command"
+msgid "命令"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+msgctxt "workbench-command-label"
+msgid "命令"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "命令已复制，但 Riffet 中的会话进程未停止"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+msgid "命令面板"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "固定侧边栏"
+msgstr ""
+
+#. placeholder {0}: project.name
+#: src/app/Sidebar.tsx
+msgid "在“{0}”中新建会话"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "在内容中搜索「{needle}」"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "在此目录新建会话"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgid "在浏览器中打开授权页"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "在终端中"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "在终端恢复"
+msgstr ""
+
+#: src/app/WorkbenchHeader.tsx
+msgid "在终端恢复…"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "在运行服务器的 Mac 或电脑上执行"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "复制{label}"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "复制会话 ID"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "复制命令"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "复制地址"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "外部插件已暂停"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+#: src/app/use-session-actions.ts
+msgid "多个标签用逗号分隔"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "失败"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+msgid "安装"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "安装 {id}"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "安装到当前连接的服务器"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "安装和启停影响连接这台服务器的所有客户端"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "定时任务"
+msgstr ""
+
+#: src/plugins/hostViews.ts
+msgctxt "session-view"
+msgid "对话"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "导入范围"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "展开"
+msgstr ""
+
+#. placeholder {0}: row.lines.length
+#: src/plugins/TasksView.tsx
+msgid "展开 {0} 行"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "展开侧栏"
+msgstr ""
+
+#: src/app/ExpandSidebarButton.tsx
+msgid "展开侧边栏"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "展开其余 {hiddenCount} 个会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "工作区导航"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "工作台"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "已中断"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "已停用"
+msgstr ""
+
+#. placeholder {0}: target.worktree?.branch ?? target.name
+#: src/app/use-project-actions.ts
+msgid "已切换到 {0}"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "已取消"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "已启用"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "已复制地址"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "已安装"
+msgstr ""
+
+#: src/app/state/listsStore.ts
+#: src/app/tabs/TabBar.tsx
+msgctxt "workbench-item-status-completed"
+msgid "已完成"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "已归档"
+msgstr ""
+
+#. placeholder {0}: target.title
+#: src/app/use-session-actions.ts
+msgid "已归档「{0}」"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "已收藏"
+msgstr ""
+
+#: src/main.tsx
+msgid "已更新，刷新后继续"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "已设置"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgid "已过期"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "并行尝试"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "开发包"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "开启"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "异常"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgid "归档会话"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "归档当前会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "归档项目"
+msgstr ""
+
+#. placeholder {0}: currentSession.title
+#: src/app/SessionSearchDialog.tsx
+msgid "当前会话 · {0}"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/UnavailableView.tsx
+msgid "当前客户端版本不兼容"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "当前项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-session-pending"
+msgid "待确认"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "快速对话"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgctxt "workbench-restore-session"
+msgid "恢复会话"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "恢复到输入框"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "恢复原启用策略"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "恢复当前会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "恢复项目"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "成功"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgid "所有设备都会移除，无法恢复。项目文件和 CLI 历史保留。"
+msgstr ""
+
+#: src/app/state/catalogStore.ts
+msgid "所选后端不可用"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开 Agent 扩展"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/Workbench.tsx
+msgid "打开侧栏"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/MobileSidebar.tsx
+msgid "打开侧边栏"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开变更面板"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开定时任务"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开收藏夹"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开文件面板"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开统计"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开设置"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "扩展管理"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "扫描配对二维码"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "折叠"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "按时间平铺"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "按标签筛选"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "按标签页顺序"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "按需加载"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "按项目分组"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "排列方式"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "排序"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "描述任务…"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "提供模型源"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "插件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "插件 ID"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "插件已不可用，当前内容会保留到关闭"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+#: src/app/SessionSearchDialog.tsx
+msgid "搜索中…"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+msgid "搜索会话"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "搜索会话内容"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "搜索会话标题"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "搜索内容"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+msgid "搜索命令、会话与项目"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+msgid "搜索命令、会话与项目…"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "搜索字段"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "搜索插件"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "搜索目录"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "搜索终端会话"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "搜索结果"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+#: src/app/use-session-actions.ts
+msgid "撤销"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "撤销失败"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "操作失败"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgctxt "settings-action-failed"
+msgid "操作失败"
+msgstr ""
+
+#: src/app/tabs/tabsStore.ts
+#: src/app/use-project-actions.ts
+#: src/app/use-session-actions.ts
+msgctxt "workbench-action-failed"
+msgid "操作失败"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "收藏"
+msgstr ""
+
+#. placeholder {0}: entry.name
+#: src/app/DirectoryPicker.tsx
+msgid "收藏 {0}"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "收藏夹"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "收藏此目录"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "收藏的目录"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "收起侧板"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "收起侧栏"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "收起侧边栏"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "收起历史会话"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "收起变更面板"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "收起文件面板"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "数据统计"
+msgstr ""
+
+#: src/plugins/hostViews.ts
+msgctxt "panels-files-tab"
+msgid "文件"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgctxt "workbench-files-panel"
+msgid "文件"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+#: src/app/tabs/TabBar.tsx
+msgid "新会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-sidebar-new-action"
+msgid "新会话"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "新建 Worktree"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "新建任务"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "新建会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-sidebar-new-action"
+msgid "新建会话"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "新项目"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "无法使用该目录开始会话"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法保存待发送消息，请检查浏览器存储空间"
+msgstr ""
+
+#: src/app/WorkbenchHeader.tsx
+msgid "无法保存项目"
+msgstr ""
+
+#: src/app/state/marksStore.ts
+msgid "无法修改收藏"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgctxt "workbench-stop-failed"
+msgid "无法停止"
+msgstr ""
+
+#: src/app/use-terminal-actions.ts
+msgid "无法关闭终端"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "无法切换版本"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgctxt "workbench-worktree-create-failed"
+msgid "无法创建 Worktree"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法创建会话"
+msgstr ""
+
+#: src/app/state/marksStore.ts
+msgid "无法删除收藏"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "无法删除数据"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法刷新会话列表"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+#: src/app/use-session-actions.ts
+msgid "无法刷新项目列表"
+msgstr ""
+
+#: src/app/state/catalogStore.ts
+msgid "无法加载 Agent 列表"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "无法加载工作台"
+msgstr ""
+
+#: src/app/state/catalogStore.ts
+msgid "无法加载模型列表"
+msgstr ""
+
+#: src/app/plugins/PluginVersionsDialog.tsx
+msgid "无法卸载"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "无法取消收藏"
+msgstr ""
+
+#: src/app/use-terminal-actions.ts
+msgid "无法启动终端"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgctxt "workbench-open-in-editor-failed"
+msgid "无法在编辑器中打开"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法定位这条收藏"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "无法导入会话"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "无法打开系统目录选择器"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "无法打开该 Worktree"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "无法打开这个目录"
+msgstr ""
+
+#: src/app/state/marksStore.ts
+msgid "无法收藏"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "无法收藏该目录"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法检查状态，请稍后重试"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "无法添加项目"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "无法登录"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgid "无法确认授权状态"
+msgstr ""
+
+#: src/app/state/navStore.ts
+msgid "无法离开扩展管理页面"
+msgstr ""
+
+#: src/app/state/gitStatusStore.ts
+msgid "无法读取 Git 状态"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "无法读取恢复命令"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "无法读取插件"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "无法读取终端会话"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法读取附件"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "无法调整收藏顺序"
+msgstr ""
+
+#: src/app/App.tsx
+#: src/app/use-workbench-bootstrap.ts
+msgid "无法连接 Riffet 服务器"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "无法连接服务器"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "无法重命名收藏"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "无法重新打开终端"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/LogRecords.tsx
+#: src/plugins/TasksView.tsx
+msgid "日志"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "明暗"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "昨天"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "显示名称"
+msgstr ""
+
+#: src/app/QuickChatHistory.tsx
+#: src/app/Sidebar.tsx
+msgid "显示已归档"
+msgstr ""
+
+#: src/plugins/LogRecords.tsx
+msgid "显示的记录 / 全部记录"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "显示终端"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "显示选项"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "显示隐藏文件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/LogRecords.tsx
+msgid "暂停"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "暂停所有外部插件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "暂停所有外部插件？"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "暂无会话"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+#: src/app/use-session-actions.ts
+msgid "暂时无法确认是否已发送"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "暂时无法确认是否已发送，请先检查状态"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/plugins/TasksView.tsx
+msgid "更多"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/plugins/PluginsPage.tsx
+msgid "更多操作"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "更早"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "服务与分享"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "服务器版本不兼容"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/ProjectHome.tsx
+#: src/app/Sidebar.tsx
+msgid "未关联项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "本机"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/SessionInfo.tsx
+msgid "权限"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "来源"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "查看访问令牌"
+msgstr ""
+
+#: src/app/tabs/TabStyleSetting.tsx
+msgid "标签样式"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "标题"
+msgstr ""
+
+#: src/app/tabs/TabStyleSetting.tsx
+msgid "标题栏"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "检查状态"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "模型"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "模型与 Agent"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-feature"
+msgid "模型源"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "模型选择已保留，目录恢复前暂不能发送。"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "正在停止"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "正在取消"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "正在同步"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "此配置在当前客户端不可用"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "没有匹配的插件"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+#: src/app/ImportSessionDialog.tsx
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "没有匹配的结果"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "没有可导入的会话"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "没有可配置项"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "没有插件"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "没有独立功能入口"
+msgstr ""
+
+#: src/plugins/LogRecords.tsx
+msgid "没有符合筛选的记录"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "浅色"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "浏览…"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "深色"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "添加"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "添加第一个项目"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+#: src/app/ProjectHome.tsx
+#: src/app/Sidebar.tsx
+msgid "添加项目"
+msgstr ""
+
+#: src/plugins/LogRecords.tsx
+msgid "清空"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/ModelField.tsx
+msgid "清除"
+msgstr ""
+
+#: src/plugins/LogRecords.tsx
+msgid "清除筛选"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-clear-filter"
+msgid "清除筛选"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "源目录、设置和数据会保留"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "版本"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-version-label"
+msgid "版本"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "状态"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "状态未知"
+msgstr ""
+
+#: src/app/tabs/TabStyleSetting.tsx
+msgid "独立一行"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "留空则显示目录名"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "留空时使用目录名"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "留空自动生成"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "登录 Riffet"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "登录失败"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "登录已失效，请重新登录"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "登录状态保存在当前浏览器。配对后可在 Riffet 的设备管理中撤销访问。"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+#: src/app/SessionInfo.tsx
+msgid "目录"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "目录位于运行 Riffet 服务器的电脑上。"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "目录路径"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "直接添加为项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "离线 · 显示 {age} 前保存的列表"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "离线 · 显示上次保存的列表"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "离线 · 显示刚刚保存的列表"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "移出标签栏"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "移除收藏"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "空目录"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgctxt "session-info-idle"
+msgid "空闲"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "立即停用或切换版本？"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "立即处理"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "等待任务结束"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+msgid "等待处理"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+msgid "等待授权…"
+msgstr ""
+
+#: src/app/Header.tsx
+msgctxt "workbench-awaiting-confirmation"
+msgid "等待确认"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "筛选"
+msgstr ""
+
+#: src/plugins/LogRecords.tsx
+msgid "筛选日志"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "管理"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "管理插件"
+msgstr ""
+
+#. placeholder {0}: favoriteName(favorite)
+#: src/app/FolderFavorites.tsx
+msgid "管理收藏 {0}"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "终端"
+msgstr ""
+
+#: src/plugins/hostViews.ts
+msgctxt "session-view"
+msgid "终端"
+msgstr ""
+
+#: src/app/ResumeInTerminalDialog.tsx
+msgid "终端不会带上 Riffet 中配置的模型接口和密钥。"
+msgstr ""
+
+#: src/app/use-terminal-actions.ts
+msgid "终端中的进程会被结束。"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "终端会话"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "统计"
+msgstr ""
+
+#: src/app/App.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/plugins/LogRecords.tsx
+msgid "继续"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "继续终端会话"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+msgid "编辑标签"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "置顶"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+msgid "置顶会话"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "聚焦输入框"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "自动"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "自动压缩阈值"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "自动换行"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "草稿无法保存到浏览器，刷新后会丢失"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "获取配对码"
+msgstr ""
+
+#. placeholder {0}: project.name
+#: src/app/ProjectHome.tsx
+msgid "要在 {0} 做什么？"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/WorkbenchOverlays.tsx
+msgid "设置"
+msgstr ""
+
+#. placeholder {0}: [backendNotice.label, backendNotice.title].filter(Boolean).join(' · ')
+#: src/app/Sidebar.tsx
+msgid "设置 · {0}"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "设置：{label}"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "设置和数据会保留"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "访问令牌"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "访问网络"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "诊断"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "诊断"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "请在服务器所在设备上安装此插件"
+msgstr ""
+
+#: src/app/use-workbench-bootstrap.ts
+msgid "请稍后重试"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "请重新选择文件"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "读取会话内容"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "读取项目文件"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "调整侧栏宽度"
+msgstr ""
+
+#: src/app/WorkbenchPanels.tsx
+msgid "调整面板宽度"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "警告"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "跟随系统"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "输入消息…"
+msgstr ""
+
+#: src/app/PluginCommandForm.tsx
+#: src/plugins/DeclarativeView.tsx
+#: src/plugins/TaskConfirmDialog.tsx
+#: src/plugins/TasksView.tsx
+msgid "运行"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+#: src/plugins/TasksView.tsx
+msgid "运行中"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "运行中的任务会继续，插件功能立即撤下"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/state/listsStore.ts
+#: src/app/tabs/TabBar.tsx
+msgid "运行失败"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "运行诊断"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "运行项目命令（每条新命令先确认）"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "近 30 天"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "近 7 天"
+msgstr ""
+
+#: src/app/ImportSessionDialog.tsx
+msgid "返回"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
+msgid "还没有会话"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "还没有项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-session-status-active"
+msgid "进行中"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-remote-host"
+msgid "远端"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "连接中"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "退出登录失败"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "选择外观"
+msgstr ""
+
+#: src/app/SessionSearchDialog.tsx
+msgid "选择搜索会话"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "选择新会话的目录"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgctxt "workbench-choose-model-action"
+msgid "选择模型"
+msgstr ""
+
+#: src/app/DirectoryPicker.tsx
+msgid "选择目录"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "选择运行服务器的电脑上的代码目录，所选 Agent 会在其中读写文件、执行命令。"
+msgstr ""
+
+#: src/app/AddProjectDialog.tsx
+msgid "选择项目目录"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-configuration"
+msgid "通用"
+msgstr ""
+
+#: src/app/App.tsx
+msgid "配对码"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "配置"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "配置"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/Sidebar.tsx
+#: src/app/tabs/TabBar.tsx
+msgid "重命名"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "重命名…"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/use-session-actions.ts
+msgid "重命名会话"
+msgstr ""
+
+#: src/app/FolderFavorites.tsx
+msgid "重命名收藏"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "重命名项目"
+msgstr ""
+
+#: src/app/tabs/keys.ts
+msgid "重新打开关闭的标签"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/ProjectHome.tsx
+msgid "重新检测"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "重新读取"
+msgstr ""
+
+#: src/app/plugins/PluginFlowDialog.tsx
+#: src/app/Workbench.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "重试发送"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "重载插件"
+msgstr ""
+
+#: src/plugins/TasksView.tsx
+msgid "错误"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "附件"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "隐藏终端"
+msgstr ""
+
+#: src/app/state/listsStore.ts
+msgid "需要你确认"
+msgstr ""
+
+#: src/app/CommandPalette.tsx
+#: src/app/Sidebar.tsx
+msgid "项目"
+msgstr ""
+
+#: src/app/MobileSidebar.tsx
+msgid "项目与会话"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "项目已归档"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "项目操作"
+msgstr ""
+
+#: src/app/use-project-actions.ts
+msgid "项目标签"
+msgstr ""
+
+#: src/plugins/TaskConfirmDialog.tsx
+msgid "首次运行这条命令"
+msgstr ""

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The default palette's dark `bg`; see values/colors.xml. -->
+    <color name="riffet_window_background">#FF141416</color>
+</resources>

@@ -1,0 +1,1244 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riffet · 编排能力交互原型（讨论用）</title>
+<style>
+/* Palette copied from apps/web/src/styles/index.css (Riffet theme, light + dark). */
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --bg-sidebar: #f7f8fa; --bg-subtle: #f5f6f8; --bg-muted: #eef0f3; --bg-elevated: #ffffff; --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055); --bg-active: rgb(35 45 70 / 0.09); --bg-bubble: #eef3fd;
+  --fg: #121417; --fg-2: #50555d; --fg-3: #60666e; --fg-4: #adb2ba;
+  --line: rgb(15 23 42 / 0.08); --line-soft: rgb(15 23 42 / 0.055); --line-strong: rgb(15 23 42 / 0.13);
+  --primary: #15171a; --primary-hover: #34373d; --primary-fg: #ffffff;
+  --accent: #3867f0; --accent-hover: #2d59dc; --accent-soft: rgb(56 103 240 / 0.1); --accent-fg: #ffffff;
+  --success: #1f9d55; --success-soft: rgb(31 157 85 / 0.1); --warning: #c77f06; --warning-soft: rgb(245 158 11 / 0.13);
+  --danger: #e0454b; --danger-soft: rgb(224 69 75 / 0.08);
+  --diff-add: #e6f4e7; --diff-add-gutter: #edf7ed; --diff-add-marker: #01a241;
+  --diff-del: #fce6e2; --diff-del-gutter: #fdece9; --diff-del-marker: #ba2723;
+  --toast: #25272b;
+  --agent-cursor: #3d4451; --agent-codex: #10a37f; --agent-claude: #d97757; --agent-dsh: #4d6bfe; --agent-droid: #8566c1; --agent-traex: #c45c7c;
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --canvas: var(--bg-sidebar);
+  --font-sans: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
+}
+.dark {
+  color-scheme: dark;
+  --bg: #141416; --bg-sidebar: #1a1a1d; --bg-subtle: #1d1d20; --bg-muted: #27272b; --bg-elevated: #1f1f22; --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06); --bg-active: rgb(255 255 255 / 0.1); --bg-bubble: #27282c;
+  --fg: #eceef1; --fg-2: #b6bac1; --fg-3: #9da2aa; --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075); --line-soft: rgb(255 255 255 / 0.05); --line-strong: rgb(255 255 255 / 0.12);
+  --primary: #eceef1; --primary-hover: #d3d6db; --primary-fg: #141416;
+  --accent: #5b8cff; --accent-hover: #4a7cf5; --accent-soft: rgb(91 140 255 / 0.15); --accent-fg: #141416;
+  --success: #3fb96f; --success-soft: rgb(63 185 111 / 0.14); --warning: #e5a13a; --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c; --danger-soft: rgb(240 103 108 / 0.13);
+  --diff-add: #1f3124; --diff-add-gutter: #132016; --diff-add-marker: #41c977;
+  --diff-del: #3c1f1b; --diff-del-gutter: #28130e; --diff-del-marker: #fa423e;
+  --toast: #34363b;
+  --agent-cursor: #c9ced6; --agent-codex: #2fc79b; --agent-claude: #e8916f; --agent-dsh: #7590ff; --agent-droid: #b497df; --agent-traex: #da91ad;
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--fg); font: 14px/22px var(--font-sans); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: 0; padding: 0; }
+.mono { font-family: var(--font-mono); font-size: 12px; }
+.muted { color: var(--fg-3); } .faint { color: var(--fg-4); } .xs { font-size: 12px; line-height: 18px; } .xxs { font-size: 11px; line-height: 16px; }
+.add { color: var(--diff-add-marker); } .del { color: var(--diff-del-marker); }
+.row { display: flex; align-items: center; gap: 8px; } .col { display: flex; flex-direction: column; gap: 8px; }
+.grow { flex: 1; min-width: 0; } .trunc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp { margin-left: auto; }
+svg.i { width: 16px; height: 16px; flex-shrink: 0; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 13px; height: 13px; }
+
+/* Demo chrome */
+.demobar { height: 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; border-bottom: 1px dashed var(--line-strong); background: var(--bg-subtle); }
+.demobar .tag { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--warning-soft); color: var(--warning); font-weight: 600; }
+.seg { display: inline-flex; padding: 2px; border-radius: 9px; background: var(--bg-muted); gap: 2px; }
+.seg button { height: 26px; padding: 0 10px; border-radius: 7px; font-size: 13px; color: var(--fg-3); white-space: nowrap; }
+.seg button.on { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgb(0 0 0 / .08), 0 0 0 .5px var(--line-strong); font-weight: 500; }
+.seg.xs button { height: 22px; padding: 0 8px; font-size: 12px; }
+
+/* Shell */
+.shell { display: flex; height: calc(100vh - 44px); }
+.sidebar { width: 256px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0; }
+.sb-head { height: 52px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 16px; font-weight: 600; font-size: 15px; }
+.brand { width: 20px; height: 20px; border-radius: 6px; background: var(--fg); color: var(--bg); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.navrow { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 14px; color: var(--fg); width: 100%; text-align: left; }
+.navrow:hover { background: var(--bg-hover); } .navrow.on { background: var(--bg-active); }
+.search { margin: 2px 8px 0; height: 32px; border-radius: 8px; background: var(--bg-hover); display: flex; align-items: center; gap: 8px; padding: 0 8px; color: var(--fg-4); font-size: 13px; }
+.sb-scroll { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.sb-sec { display: flex; align-items: center; height: 28px; margin-top: 12px; padding: 0 8px; font-size: 12px; font-weight: 500; color: var(--fg-3); }
+.proj { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px; font-size: 13px; color: var(--fg-2); font-weight: 500; }
+.sess { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px 0 10px; border-radius: 8px; font-size: 13.5px; width: 100%; text-align: left; }
+.sess:hover { background: var(--bg-hover); } .sess.on { background: var(--bg-active); }
+.sess.child { padding-left: 26px; }
+.dot { width: 7px; height: 7px; border-radius: 99px; background: var(--fg-4); flex-shrink: 0; }
+.spin { width: 12px; height: 12px; border-radius: 99px; border: 1.8px solid var(--accent-soft); border-top-color: var(--accent); animation: sp 0.8s linear infinite; flex-shrink: 0; }
+@keyframes sp { to { transform: rotate(360deg); } }
+.panel { flex: 1; min-width: 0; display: flex; margin: 8px 8px 8px 0; border-radius: 12px; background: var(--bg); box-shadow: 0 0 0 1px var(--line); overflow: hidden; position: relative; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
+.aside { width: 400px; flex-shrink: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.aside.wide { width: 620px; }
+.hdr { height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 8px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line-soft); }
+.iconbtn { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 7px; color: var(--fg-3); position: relative; }
+.iconbtn:hover, .iconbtn.on { background: var(--bg-hover); color: var(--fg); }
+.timeline { flex: 1; overflow-y: auto; padding: 20px 0 24px; }
+.tl-inner { max-width: 760px; margin: 0 auto; padding: 0 28px; display: flex; flex-direction: column; gap: 16px; }
+.turn { position: relative; display: flex; flex-direction: column; gap: 10px; }
+.user { display: flex; justify-content: flex-end; }
+.bubble { max-width: min(82%, 560px); white-space: pre-wrap; word-break: break-word; border-radius: 22px; background: var(--bg-bubble); padding: 10px 16px; font-size: 15px; }
+.asst { font-size: 15px; line-height: 25px; color: var(--fg); }
+.asst p { margin: 0 0 6px; }
+.tool { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--fg-3); }
+.meta { display: flex; justify-content: flex-end; gap: 8px; font-size: 11px; color: var(--fg-3); padding: 0 4px; align-items: center; }
+.composer-wrap { padding: 0 24px 16px; flex-shrink: 0; }
+.composer { max-width: 760px; margin: 0 auto; border-radius: 16px; box-shadow: var(--shadow-composer); background: var(--bg-elevated); padding: 10px 10px 8px; position: relative; }
+.composer textarea { width: 100%; border: 0; outline: 0; resize: none; background: transparent; min-height: 48px; padding: 2px 6px; font-size: 15px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 99px; font-size: 13px; color: var(--fg-2); font-weight: 500; white-space: nowrap; }
+.pill:hover, .pill.on { background: var(--bg-hover); color: var(--fg); }
+.pill.accent { background: var(--accent-soft); color: var(--accent); }
+.sendbtn { width: 30px; height: 30px; border-radius: 99px; background: var(--primary); color: var(--primary-fg); display: grid; place-items: center; }
+.agentdot { width: 8px; height: 8px; border-radius: 99px; display: inline-block; flex-shrink: 0; }
+.chip { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 99px; background: var(--bg-muted); font-size: 12px; color: var(--fg-2); white-space: nowrap; }
+.chip.ok { background: var(--success-soft); color: var(--success); } .chip.warn { background: var(--warning-soft); color: var(--warning); }
+.chip.bad { background: var(--danger-soft); color: var(--danger); } .chip.acc { background: var(--accent-soft); color: var(--accent); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 500; background: var(--bg-muted); color: var(--fg); white-space: nowrap; }
+.btn:hover { background: var(--bg-active); }
+.btn.pri { background: var(--primary); color: var(--primary-fg); } .btn.pri:hover { background: var(--primary-hover); }
+.btn.acc { background: var(--accent); color: var(--accent-fg); }
+.btn.ghost { background: transparent; color: var(--fg-2); } .btn.ghost:hover { background: var(--bg-hover); color: var(--fg); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.sm { height: 26px; padding: 0 9px; font-size: 12px; border-radius: 7px; }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+.banner { display: flex; align-items: center; gap: 8px; margin: 10px 16px 0; padding: 8px 12px; border-radius: 10px; background: var(--accent-soft); color: var(--fg-2); font-size: 13px; }
+.banner.muted { background: var(--bg-subtle); }
+.link { color: var(--accent); cursor: pointer; } .link:hover { text-decoration: underline; }
+
+/* Aside */
+.utabs { display: flex; gap: 16px; padding: 0 16px; height: 44px; align-items: flex-end; border-bottom: 1px solid var(--line-soft); flex-shrink: 0; }
+.utabs button { height: 36px; font-size: 13.5px; color: var(--fg-3); border-bottom: 2px solid transparent; }
+.utabs button.on { color: var(--fg); border-color: var(--fg); font-weight: 500; }
+.asc { flex: 1; min-height: 0; overflow-y: auto; }
+.sec-title { font-size: 11px; font-weight: 500; color: var(--fg-4); padding: 0 8px; margin: 12px 0 6px; display: flex; align-items: center; }
+.frow { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 8px; font-size: 13.5px; cursor: pointer; }
+.frow:hover { background: var(--bg-hover); } .frow.on { background: var(--bg-active); }
+.letter { width: 12px; text-align: center; font: 600 12px var(--font-mono); }
+.card { border-radius: 12px; box-shadow: 0 0 0 1px var(--line); background: var(--bg-elevated); padding: 12px; }
+.tray { flex-shrink: 0; border-top: 1px solid var(--line); background: var(--bg-subtle); padding: 10px 12px; }
+.tray-item { display: flex; gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--bg); box-shadow: 0 0 0 1px var(--line-soft); }
+
+/* Diff */
+.diff { font: 12px/20px var(--font-mono); }
+.dl { display: grid; grid-template-columns: 22px 38px 38px 14px 1fr; position: relative; user-select: none; }
+.dl .g { color: var(--fg-4); text-align: right; padding-right: 6px; }
+.dl .c { white-space: pre; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.dl.a { background: var(--diff-add); } .dl.a .g { background: var(--diff-add-gutter); } .dl.a .m { color: var(--diff-add-marker); }
+.dl.d { background: var(--diff-del); } .dl.d .g { background: var(--diff-del-gutter); } .dl.d .m { color: var(--diff-del-marker); }
+.dl.h { background: var(--accent-soft); color: var(--fg-3); }
+.dl .plus { width: 18px; height: 18px; margin: 1px 2px; border-radius: 5px; background: var(--accent); color: #fff; display: grid; place-items: center; opacity: 0; font: 600 13px/1 var(--font-sans); }
+.dl:hover .plus, .dl.sel .plus { opacity: 1; }
+.dl.sel { box-shadow: inset 3px 0 0 var(--accent); filter: saturate(1.4); }
+.dl.sel::after { content: ""; position: absolute; inset: 0; background: var(--accent-soft); pointer-events: none; }
+.dl.cm { box-shadow: inset 3px 0 0 var(--warning); }
+.cbox { margin: 4px 8px 8px 60px; font-family: var(--font-sans); font-size: 13px; padding: 10px; border-radius: 10px; background: var(--bg-elevated); box-shadow: var(--shadow-pop); }
+.cnote { margin: 2px 8px 6px 60px; font-family: var(--font-sans); font-size: 12.5px; line-height: 19px; padding: 6px 10px; border-radius: 8px; background: var(--warning-soft); }
+textarea.inp, input.inp, select.inp { width: 100%; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--bg); padding: 6px 9px; outline: none; font-size: 13px; }
+textarea.inp { resize: vertical; min-height: 64px; line-height: 20px; }
+.inp:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+label.fld { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--fg-3); }
+label.chk { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; cursor: pointer; }
+label.chk input { margin-top: 4px; accent-color: var(--accent); }
+
+/* Overlay */
+.scrim { position: fixed; inset: 0; background: rgb(10 12 16 / .32); display: grid; place-items: center; z-index: 50; animation: fi .12s ease-out; }
+@keyframes fi { from { opacity: 0; } }
+.dialog { width: min(560px, 94vw); max-height: 88vh; overflow-y: auto; background: var(--bg-popover); border-radius: 16px; box-shadow: var(--shadow-pop); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.dialog.lg { width: min(860px, 96vw); }
+.dialog h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.dialog .foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+pre.preview { margin: 0; white-space: pre-wrap; font: 12px/19px var(--font-mono); background: var(--bg-subtle); border-radius: 10px; padding: 12px; max-height: 320px; overflow: auto; box-shadow: inset 0 0 0 1px var(--line-soft); }
+.warnbox { display: flex; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--warning-soft); color: var(--fg); font-size: 13px; border: 1px solid color-mix(in srgb, var(--warning) 40%, transparent); }
+.warnbox b { color: var(--warning); }
+.infobox { display: flex; gap: 10px; padding: 9px 12px; border-radius: 10px; background: var(--bg-subtle); font-size: 12.5px; color: var(--fg-2); }
+.pop { position: absolute; z-index: 30; background: var(--bg-popover); border-radius: 12px; box-shadow: var(--shadow-pop); padding: 6px; min-width: 220px; }
+.mi { display: flex; align-items: center; gap: 8px; width: 100%; height: 32px; padding: 0 10px; border-radius: 8px; font-size: 13.5px; text-align: left; }
+.mi:hover { background: var(--bg-hover); }
+.mi.dis { color: var(--fg-4); pointer-events: none; }
+.toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--toast); color: #fff; padding: 8px 14px; border-radius: 10px; font-size: 13px; z-index: 80; box-shadow: var(--shadow-pop); animation: fi .15s; }
+.note { position: fixed; right: 20px; bottom: 20px; width: 330px; z-index: 40; background: #fffbea; color: #3b3110; border-radius: 12px; box-shadow: 0 0 0 1px rgb(199 127 6 / .35), 0 12px 32px -12px rgb(0 0 0 / .3); font-size: 12.5px; line-height: 19px; }
+.dark .note { background: #2b2614; color: #f1e6c4; }
+.note header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; font-weight: 600; border-bottom: 1px dashed rgb(199 127 6 / .35); cursor: pointer; }
+.note ol { margin: 0; padding: 8px 12px 10px 30px; max-height: 300px; overflow: auto; }
+.note li { margin-bottom: 4px; }
+.note.min ol { display: none; }
+
+/* Checkpoint markers */
+.cp-mark { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--fg-4); height: 22px; }
+.cp-mark::before, .cp-mark::after { content: ""; height: 1px; background: var(--line); flex: 1; }
+.cp-mark .acts { display: none; gap: 4px; }
+.turn:hover .cp-mark .acts { display: flex; }
+.turn:hover .cp-mark { color: var(--fg-3); }
+.cp-mark.always .acts { display: flex; }
+.rail { position: absolute; left: -22px; top: 6px; width: 12px; height: 12px; border-radius: 99px; border: 2px solid var(--fg-4); background: var(--bg); cursor: pointer; }
+.rail:hover, .rail.on { border-color: var(--accent); background: var(--accent-soft); }
+.tl-inner.railed { position: relative; }
+.tl-inner.railed::before { content: ""; position: absolute; left: 11px; top: 0; bottom: 0; border-left: 1px dashed var(--line-strong); }
+.cp-item { display: flex; gap: 10px; padding: 8px; border-radius: 8px; }
+.cp-item:hover { background: var(--bg-hover); }
+.cp-ico { width: 20px; height: 20px; border-radius: 99px; display: grid; place-items: center; flex-shrink: 0; font-size: 10px; font-weight: 600; }
+
+/* Attempts */
+.cmp { flex: 1; overflow: auto; padding: 16px 20px 24px; }
+.cmp-grid { display: grid; gap: 12px; }
+.att { border-radius: 12px; box-shadow: 0 0 0 1px var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; background: var(--bg-elevated); min-width: 0; }
+.att.win { box-shadow: 0 0 0 2px var(--success); }
+.att .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 12px; font-size: 12px; color: var(--fg-3); }
+.att .stats b { color: var(--fg); font-weight: 500; font-variant-numeric: tabular-nums; }
+.excerpt { font-size: 13px; color: var(--fg-2); background: var(--bg-subtle); border-radius: 8px; padding: 8px 10px; line-height: 20px; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.bar { height: 4px; border-radius: 9px; background: var(--bg-muted); overflow: hidden; } .bar i { display: block; height: 100%; background: var(--accent); transition: width .4s; }
+table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.t th { text-align: left; font-weight: 500; color: var(--fg-3); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.t td { padding: 9px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+.tgt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+.tgt:hover { background: var(--bg-hover); }
+.tgt.on { background: var(--accent-soft); }
+
+/* Tasks page */
+.page { flex: 1; overflow-y: auto; padding: 20px 28px 40px; }
+.page h2 { margin: 0; font-size: 18px; font-weight: 600; }
+.tpl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.tpl { display: flex; flex-direction: column; gap: 8px; }
+.tpl .prompt { font-size: 13px; color: var(--fg-2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-height: 60px; }
+.switch { width: 32px; height: 18px; border-radius: 99px; background: var(--bg-active); position: relative; flex-shrink: 0; transition: background .15s; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 99px; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .2); transition: left .15s; }
+.switch.on { background: var(--accent); } .switch.on::after { left: 16px; }
+.palette { width: min(620px, 94vw); background: var(--bg-popover); border-radius: 14px; box-shadow: var(--shadow-pop); overflow: hidden; align-self: start; margin-top: 12vh; }
+.palette input { width: 100%; border: 0; outline: 0; padding: 14px 16px; font-size: 15px; background: transparent; border-bottom: 1px solid var(--line); }
+</style>
+</head>
+<body>
+<div class="demobar" id="demobar"></div>
+<div class="shell">
+  <nav class="sidebar" id="sidebar"></nav>
+  <div class="panel" id="panel"><section class="main" id="main"></section><aside class="aside" id="aside"></aside></div>
+</div>
+<div id="note"></div>
+<div id="overlay"></div>
+<div id="toast"></div>
+<script>
+/* ============ 基础工具 ============ */
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const P = {
+  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="7" r="2"/><path d="M6 7v10M18 9c0 5-6 4-12 8"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>', check: '<path d="M5 12l5 5 9-10"/>',
+  down: '<path d="M6 9l6 6 6-6"/>', right: '<path d="M9 6l6 6-6 6"/>', left: '<path d="M15 6l-6 6 6 6"/>', arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  pr: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="18" r="2"/><path d="M6 8v8M18 16V9a3 3 0 0 0-3-3h-4M13 3l-2 3 2 3"/>',
+  merge: '<circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 8v8M6 8c0 4 4 4 10 4"/>',
+  rewind: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>', fork: '<circle cx="6" cy="5" r="2"/><circle cx="18" cy="5" r="2"/><circle cx="12" cy="19" r="2"/><path d="M6 7v2a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 12v5"/>',
+  layers: '<path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 13l9 5 9-5"/>', more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+  moon: '<path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/>', play: '<path d="M7 5l12 7-12 7V5z"/>', clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  file: '<path d="M14 3H6v18h12V7l-4-4z"/><path d="M14 3v4h4"/>', alert: '<path d="M12 3l10 18H2L12 3z"/><path d="M12 10v4M12 17.5v.5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/>', msg: '<path d="M4 5h16v11H9l-5 4V5z"/><path d="M12 8v5M9.5 10.5h5"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>', term: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M12 15h5"/>',
+  up: '<path d="M12 19V5M6 11l6-6 6 6"/>', spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M6 18l2.5-2.5M15.5 8.5L18 6"/>',
+  handoff: '<path d="M4 12h12M12 6l6 6-6 6"/><path d="M20 4v16"/>', save: '<path d="M5 4h11l3 3v13H5V4z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',
+  tpl: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  folder: '<path d="M3 6h6l2 2h10v11H3V6z"/>', edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/>', trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  dot: '<circle cx="12" cy="12" r="4" fill="currentColor"/>', upload: '<path d="M12 16V4M6 10l6-6 6 6M4 20h16"/>',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24">${P[n] || ''}</svg>`;
+const B = {
+  claude: { name: 'Claude Code', short: 'Claude', color: 'var(--agent-claude)', models: ['claude-sonnet-4.5', 'claude-opus-4.1', 'claude-haiku-4.5'] },
+  codex: { name: 'Codex', short: 'Codex', color: 'var(--agent-codex)', models: ['gpt-5-codex', 'gpt-5', 'gpt-5-mini'] },
+  cursor: { name: 'Cursor', short: 'Cursor', color: 'var(--agent-cursor)', models: ['auto', 'composer-1', 'sonnet-4.5'] },
+  dsh: { name: 'DeepSeek Harness', short: 'DSH', color: 'var(--agent-dsh)', models: ['deepseek-v3.2', 'deepseek-r1'] },
+  droid: { name: 'Factory Droid', short: 'Droid', color: 'var(--agent-droid)', models: ['droid-core', 'gpt-5'] },
+  traex: { name: 'TRAE CLI', short: 'TRAE', color: 'var(--agent-traex)', models: ['trae-max', 'trae-pro'] },
+};
+const adot = (b) => `<span class="agentdot" style="background:${B[b].color}"></span>`;
+const bchip = (b, m) => `<span class="chip">${adot(b)}${B[b].short}${m ? ` · <span class="mono" style="font-size:11px">${esc(m)}</span>` : ''}</span>`;
+const NOW = new Date(2026, 9, 16, 17, 40);
+const WD = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+const pad = (n) => String(n).padStart(2, '0');
+function fmtWhen(d) {
+  const day = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate())) / 864e5);
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  if (day === 0) return `今天 ${hm}`; if (day === 1) return `明天 ${hm}`; if (day === -1) return `昨天 ${hm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${WD[d.getDay()]} ${hm}`;
+}
+let toastTimer;
+function toast(msg) { $('toast').innerHTML = `<div class="toast">${msg}</div>`; clearTimeout(toastTimer); toastTimer = setTimeout(() => ($('toast').innerHTML = ''), 2600); }
+function dialog(html, cls = '') { $('overlay').innerHTML = `<div class="scrim" data-act="scrim"><div class="dialog ${cls}" role="dialog">${html}</div></div>`; const f = $('overlay').querySelector('textarea, input[type=text]'); if (f) f.focus(); }
+function closeDialog() { $('overlay').innerHTML = ''; }
+const val = (id) => { const el = $(id); return el ? (el.type === 'checkbox' ? el.checked : el.value) : undefined; };
+const radio = (name) => (document.querySelector(`input[name="${name}"]:checked`) || {}).value;
+
+/* ============ Cron ============ */
+function cronField(f, v, min) {
+  return f.split(',').some((part) => {
+    let [range, step] = part.split('/'); step = step ? +step : 1;
+    let lo, hi;
+    if (range === '*') { lo = min; hi = 99; } else if (range.includes('-')) [lo, hi] = range.split('-').map(Number); else { lo = +range; hi = step > 1 ? 99 : lo; }
+    return v >= lo && v <= hi && (v - lo) % step === 0;
+  });
+}
+function cronValid(expr) { const f = expr.trim().split(/\s+/); return f.length === 5 && f.every((x) => /^[\d*,\-/]+$/.test(x)); }
+function nextRuns(expr, n = 3, from = NOW) {
+  if (!cronValid(expr)) return [];
+  const [mi, ho, dom, mon, dow] = expr.trim().split(/\s+/); const out = []; const d = new Date(from); d.setSeconds(0, 0); d.setMinutes(d.getMinutes() + 1);
+  for (let i = 0; i < 60 * 24 * 40 && out.length < n; i++, d.setMinutes(d.getMinutes() + 1))
+    if (cronField(mi, d.getMinutes(), 0) && cronField(ho, d.getHours(), 0) && cronField(dom, d.getDate(), 1) && cronField(mon, d.getMonth() + 1, 1) && cronField(dow, d.getDay(), 0)) out.push(new Date(d));
+  return out;
+}
+function cronHuman(expr) {
+  if (!cronValid(expr)) return '无效的 cron 表达式';
+  const [mi, ho, dom, mon, dow] = expr.trim().split(/\s+/); const num = (x) => /^\d+$/.test(x);
+  const t = num(mi) && num(ho) ? `${pad(ho)}:${pad(mi)}` : '';
+  if (num(mi) && ho === '*' && dom === '*' && mon === '*' && dow === '*') return `每小时第 ${mi} 分`;
+  if (num(mi) && /^\*\/\d+$/.test(ho) && dom === '*' && dow === '*') return `每 ${ho.slice(2)} 小时（第 ${mi} 分）`;
+  if (t && dom === '*' && mon === '*') {
+    if (dow === '*') return `每天 ${t}`;
+    if (dow === '1-5') return `每个工作日 ${t}`;
+    if (dow === '0,6' || dow === '6,0') return `每个周末 ${t}`;
+    if (/^[\d,]+$/.test(dow)) return `每${dow.split(',').map((x) => WD[+x % 7]).join('、')} ${t}`;
+  }
+  if (t && num(dom) && mon === '*' && dow === '*') return `每月 ${dom} 日 ${t}`;
+  return `自定义：${expr}`;
+}
+
+/* ============ 数据 ============ */
+const PROJECTS = [
+  { id: 'billing', name: 'billing-service', path: '~/code/billing-service', worktree: false },
+  { id: 'billing-wt', name: 'billing-service · invoice-csv', path: '~/.riffet/worktrees/billing-service/invoice-csv', worktree: true },
+  { id: 'web', name: 'web-console', path: '~/code/web-console', worktree: false },
+];
+function parseDiff(text) {
+  const rows = []; let o = 0, n = 0;
+  text.replace(/^\n+|\n+$/g, '').split('\n').forEach((raw) => {
+    if (raw.startsWith('@@')) { const m = raw.match(/-(\d+)(?:,\d+)? \+(\d+)/); o = +m[1]; n = +m[2]; rows.push({ k: 'h', c: raw }); return; }
+    const k = raw[0] === '+' ? 'a' : raw[0] === '-' ? 'd' : 'n'; const c = raw.slice(1);
+    rows.push({ k, c, o: k === 'a' ? '' : o, n: k === 'd' ? '' : n });
+    if (k !== 'a') o++; if (k !== 'd') n++;
+  });
+  return rows;
+}
+let FILES = [];
+function initFiles() {
+  FILES = [
+    { path: 'src/invoices/export.ts', letter: 'M', src: 'diff-export' },
+    { path: 'src/invoices/csv.ts', letter: 'A', src: 'diff-csv' },
+    { path: 'src/lib/money.ts', letter: 'M', src: 'diff-money' },
+    { path: 'test/invoices/export.test.ts', letter: 'M', src: 'diff-test' },
+  ].map((f) => { const rows = parseDiff($(f.src).textContent); return { ...f, rows, add: rows.filter((r) => r.k === 'a').length, del: rows.filter((r) => r.k === 'd').length }; });
+}
+
+const S = {
+  scene: 'review', v: { review: 'A', checkpoint: 'A', attempts: 'A', handoff: 'A', tasks: 'A' }, noteMin: false, menu: false,
+  // 审阅
+  asideTab: 'changes', openFile: null, sel: null, anchor: null, comments: [], reviewTurns: [], ahead: 3, behind: 0, pushed: false, pr: null, merged: null,
+  // 检查点
+  gitTab: 'checkpoints', cpFilter: 'all', railPop: null, rewoundAt: null, forks: [], viewFork: null,
+  manualCps: [{ id: 'm1', title: '迁移调用方之前手动存档', time: '14:31', files: 9, manual: true, after: 2 }],
+  // 并行尝试
+  par: { on: true, targets: [{ b: 'claude', m: 'claude-sonnet-4.5' }, { b: 'codex', m: 'gpt-5-codex' }, { b: 'dsh', m: 'deepseek-v3.2' }] }, parMenu: false,
+  group: null, cmpFile: null, adopted: null, draft: '给 /api/invoices 列表接口加上基于游标的分页（cursor + limit），同时兼容现有的 page/pageSize 参数，并补上测试。',
+  // 交接
+  handed: null, viewHand: 'orig', hStep: 1, hTurn: 'latest',
+  // 任务
+  tasksTab: 'templates', palette: false, taskRuns: [],
+  templates: [
+    { id: 't1', name: '每日依赖安全巡检', prompt: '运行 pnpm audit 并检查 lockfile 中的高危依赖，按影响面排序给出升级建议；不要直接修改 package.json。', b: 'codex', m: 'gpt-5-codex', wt: false, mode: 'readonly' },
+    { id: 't2', name: '修复失败的单测', prompt: '运行 pnpm test，定位失败的用例并修复实现（不要改测试断言），修复后再次运行确认全部通过。', b: 'claude', m: 'claude-sonnet-4.5', wt: true, mode: 'edits' },
+    { id: 't3', name: '整理 CHANGELOG', prompt: '根据上一个 tag 以来的 commit 整理 CHANGELOG.md 的 Unreleased 段落，按 feat / fix / chore 分组，使用中文。', b: 'dsh', m: 'deepseek-v3.2', wt: true, mode: 'full' },
+    { id: 't4', name: '审阅当前分支', prompt: '对比 main 审阅当前分支的改动，指出潜在 bug、边界情况和缺失的测试，只输出意见，不修改文件。', b: 'cursor', m: 'auto', wt: false, mode: 'readonly' },
+  ],
+  schedules: [
+    { id: 's1', name: '工作日依赖巡检', tpl: 't1', project: 'billing', cron: '0 9 * * 1-5', on: true, mode: 'readonly', skip: true, last: { st: 'ok', when: new Date(2026, 9, 16, 9, 0), title: '依赖巡检 · 10月16日', dur: '3分12秒' } },
+    { id: 's2', name: '周五整理 CHANGELOG', tpl: 't3', project: 'web', cron: '0 18 * * 5', on: true, mode: 'default', skip: true, last: { st: 'stalled', when: new Date(2026, 9, 9, 18, 0), title: '整理 CHANGELOG · 10月9日', dur: '等待审批 2 小时后停止' } },
+    { id: 's3', name: '夜间修复失败单测', tpl: 't2', project: 'billing', cron: '30 2 * * *', on: false, mode: 'edits', skip: true, last: { st: 'skipped', when: new Date(2026, 9, 14, 2, 30), title: '修复失败的单测 · 10月13日', dur: '上一次仍在运行，已跳过' } },
+  ],
+};
+const MODES = { default: { label: '默认（每次询问）', approvals: true }, edits: { label: '自动接受编辑', approvals: true, partial: true }, full: { label: '完全访问', approvals: false }, readonly: { label: '只读', approvals: false } };
+
+const SCENES = [
+  { id: 'review', label: '1 审阅 · 回传 · 发布', ab: ['A 发布卡片在「变更」顶部', 'B 独立「发布」页'] },
+  { id: 'checkpoint', label: '2 检查点 · 回退 · 分叉', ab: ['A 悬停分隔线', 'B 左侧时间轴'] },
+  { id: 'attempts', label: '3 并行尝试', ab: ['A 卡片列', 'B 对比表格'] },
+  { id: 'handoff', label: '4 跨后端交接', ab: ['A 单页对话框', 'B 两步向导'] },
+  { id: 'tasks', label: '5 模板 · 定时任务', ab: ['A 卡片', 'B 表格'] },
+];
+const NOTES = {
+  review: ['行评论锚定新行号还是 hunk 内容？Agent 再次改动后，旧评论是重新定位还是标记为「已过期」？', '「发回给 Agent」是直接发送，还是填入输入框让用户再改？Agent 正在运行时：排队还是作为引导（steer）插入？', '审阅意见是否持久化（刷新/换设备仍在）？绑定会话还是绑定分支？', '发布区放「变更」顶部（A）还是独立「发布」页（B）？PR / CI 状态是否也要上浮到会话标题栏？', '创建 PR 走 gh CLI 还是平台 API？Codebase / GitLab 等非 GitHub 远端如何降级？', 'CI 失败时「让 Agent 修复」带哪些日志？日志过长如何截断？', '合并回 main 冲突时：中止、交给 Agent 解决，还是打开终端？'],
+  checkpoint: ['每回合自动检查点的存储成本：大文件 / 二进制如何排除？保留多少个、多久？', '回退只回退文件，还是同时截断对话？原生 CLI 历史无法删除时，「已回退」的回合怎么呈现？', '检查点之后在 Agent 之外手动改过的文件：覆盖、跳过还是阻止回退？', '分叉「之前 / 之后」的语义是否直观？分叉到另一后端时是否复用交接上下文的生成逻辑？', '入口用悬停分隔线（A）还是左侧时间轴圆点（B）？触屏没有 hover 时怎么办？', '回合检查点与手动检查点放同一列表（带筛选），还是分组？'],
+  attempts: ['同一后端不同模型能否重复选择？上限 4 个是否合适（资源、费用、并发配额）？', '每个尝试强制独立 worktree：node_modules 等依赖如何复用？是否需要项目级「准备脚本」？', '对比以卡片列（A）还是表格（B）为主？文件级对比是否需要并排 diff？', '「采用此方案」后其他尝试：归档、删除 worktree，还是保留分支 N 天？', '尝试组在侧栏是可展开的组，还是 N 个独立会话加标记？', '是否支持「让另一个 Agent 评审并推荐」？token / 费用如何汇总展示？'],
+  handoff: ['交接上下文的长度预算：保留首条任务 + 最近 K 回合，K 如何决定？要不要先让模型总结？', '同目录交接时原会话若仍在运行，是否要求先停止？如何避免两个 Agent 同时写同一工作区？', '预览是否可编辑？编辑后的内容是否存进新会话的元数据，方便追溯？', '「交接」与「从这里分叉 + 换后端」是否合并成一个入口？', '来源横幅能否折叠？交接链（A → B → C）如何展示？', '工具调用、附件图片、计划 / 待办是否一起交接？'],
+  tasks: ['模板是否支持变量（{{branch}}、{{date}}）和按项目覆盖？全局模板 vs 项目模板？', '入口放侧栏「任务」页、命令面板，还是两者都要？列表用卡片（A）还是表格（B）？', '定时任务由 Riffet 服务端触发：电脑睡眠 / 服务未运行时错过的任务是否补跑？', '需要审批的权限模式：直接禁止保存，还是只警告？等待审批超时后停止还是挂起并通知？', '结果通知方式：桌面通知、移动端推送，还是仅侧栏红点？', 'cron 时区按本机还是可选？是否值得支持自然语言输入（「每个工作日早上 9 点」）？'],
+};
+
+/* ============ 会话数据 ============ */
+const CSV_TURNS = [
+  { user: '给发票列表加一个「导出 CSV」功能：支持按日期范围和状态筛选，金额保留两位小数，中文表头，导出文件名带日期。', time: '15:02', tools: ['读取 src/invoices/service.ts', '读取 src/lib/money.ts', '搜索 "listInvoices"（6 处）'], asst: '我先梳理了现有的发票查询逻辑。计划分三步：<br>1. 新增 <code>src/invoices/csv.ts</code>，负责字段转义与行拼接；<br>2. 在 <code>export.ts</code> 中增加 <code>exportInvoicesCsv()</code>，复用 <code>listInvoices</code> 的筛选；<br>3. 在 <code>money.ts</code> 中补一个 <code>formatCents()</code>。' },
+  { user: '可以，开始实现。注意 CSV 里的逗号和换行要正确转义。', time: '15:09', tools: ['编辑 src/invoices/csv.ts', '编辑 src/invoices/export.ts', '编辑 src/lib/money.ts'], asst: 'CSV 生成已完成：字段中含 <code>"</code>、<code>,</code> 或换行时会整体包上双引号，内部引号加倍。文件名形如 <code>发票_2026-10-01_2026-10-16.csv</code>，并加了 UTF-8 BOM，方便 Excel 直接打开。' },
+  { user: '补上测试，并跑一下全部单测。', time: '15:21', tools: ['编辑 test/invoices/export.test.ts', '运行 pnpm test --filter invoices'], asst: '新增 5 个用例，覆盖转义、空结果、日期范围与状态筛选。<code>pnpm test --filter invoices</code>：<b>23 passed</b>，耗时 4.1s。' },
+];
+const CP_TURNS = [
+  { user: '把 src/lib/money.ts 里的金额计算从浮点数改成整数分（cents），先只改工具函数。', time: '14:08', tools: ['编辑 src/lib/money.ts'], asst: '已把 <code>add / multiply / formatMoney</code> 改为以整数分计算，新增 <code>toCents()</code> / <code>fromCents()</code>。', files: [['M', 'src/lib/money.ts', 28, 14]] },
+  { user: '迁移所有调用 formatMoney 的地方。', time: '14:22', tools: ['搜索 "formatMoney"（11 处）', '编辑 4 个文件'], asst: '已迁移 11 处调用，涉及服务层、导出、API 路由和前端行组件。', files: [['M', 'src/invoices/service.ts', 19, 12], ['M', 'src/invoices/export.ts', 6, 6], ['M', 'src/api/routes/invoices.ts', 9, 4], ['M', 'web/components/InvoiceRow.tsx', 3, 3]] },
+  { user: '数据库里的 amount 字段也改成整数，写一个迁移。', time: '14:40', tools: ['编辑 db/schema.ts', '新建 migrations/0042_amount_cents.sql'], asst: '新增迁移 <code>0042_amount_cents.sql</code>：新增 <code>amount_cents</code> 列、回填、删除旧列。', files: [['A', 'migrations/0042_amount_cents.sql', 24, 0], ['M', 'db/schema.ts', 4, 2]] },
+  { user: '迁移脚本在空表上报错了，修一下。', time: '14:57', tools: ['运行 pnpm db:migrate --dry-run', '编辑 migrations/0042_amount_cents.sql'], asst: '原因是 <code>UPDATE ... FROM</code> 在空表时返回 0 行后，后续 <code>NOT NULL</code> 约束检查顺序有误。已调整为先加默认值再回填，空表与非空表均验证通过。', files: [['M', 'migrations/0042_amount_cents.sql', 5, 3]] },
+];
+
+/* ============ 渲染：外框 ============ */
+function render() { renderBar(); renderSidebar(); renderMain(); renderAside(); renderNote(); }
+function renderBar() {
+  const sc = SCENES.find((x) => x.id === S.scene);
+  $('demobar').innerHTML = `
+    <span class="tag">原型 · 仅供讨论</span>
+    <span class="xs muted">场景</span>
+    <div class="seg">${SCENES.map((x) => `<button class="${x.id === S.scene ? 'on' : ''}" data-act="scene" data-arg="${x.id}">${x.label}</button>`).join('')}</div>
+    <span class="sp xs muted">方案</span>
+    <div class="seg xs">${['A', 'B'].map((k, i) => `<button class="${S.v[S.scene] === k ? 'on' : ''}" data-act="variant" data-arg="${k}" title="${esc(sc.ab[i])}">${esc(sc.ab[i])}</button>`).join('')}</div>
+    <button class="iconbtn" data-act="theme" title="切换浅色 / 深色">${ic(document.documentElement.classList.contains('dark') ? 'sun' : 'moon')}</button>
+    <button class="btn sm ghost" data-act="reset" title="重置所有演示状态">重置</button>`;
+}
+function sessRow(o) {
+  const ind = o.running ? '<span class="spin"></span>' : o.fail ? '<span class="dot" style="background:var(--danger)"></span>' : o.ok ? '<span class="dot" style="background:var(--success)"></span>' : o.icon ? ic(o.icon, 's') : '<span class="dot" style="opacity:.5"></span>';
+  return `<button class="sess ${o.child ? 'child' : ''} ${o.on ? 'on' : ''}" ${o.act ? `data-act="${o.act}" data-arg="${o.arg || ''}"` : ''}><span style="width:14px;display:grid;place-items:center">${ind}</span><span class="grow trunc">${esc(o.title)}</span>${o.badge || ''}<span class="xxs faint">${o.meta || ''}</span></button>`;
+}
+function renderSidebar() {
+  const sc = S.scene; let sessions = '';
+  const billing = [];
+  if (sc === 'attempts') {
+    if (S.group) {
+      const g = S.group;
+      billing.push(`<button class="sess ${!S.viewAttempt ? 'on' : ''}" data-act="view-attempt" data-arg="">${ic('layers', 's')}<span class="grow trunc">尝试组 · ${esc(g.title)}</span><span class="chip" style="height:18px;font-size:11px">${g.attempts.filter((a) => a.status === 'done').length}/${g.attempts.length}</span></button>`);
+      g.attempts.forEach((a, i) => billing.push(sessRow({ child: true, title: `尝试 ${i + 1} · ${B[a.b].short}`, running: a.status === 'running', fail: a.status === 'failed', ok: a.status === 'done', on: S.viewAttempt === String(i), act: 'view-attempt', arg: String(i), badge: S.adopted === i ? '<span class="chip ok" style="height:18px;font-size:11px">已采用</span>' : '', meta: a.status === 'running' ? '' : a.dur })));
+    }
+    billing.push(sessRow({ title: '新会话', on: !S.group, meta: '' }));
+  }
+  const cpTitle = '金额计算改为整数分';
+  billing.push(sessRow({ title: cpTitle, on: sc === 'checkpoint' && !S.viewFork, meta: '14:57', act: sc === 'checkpoint' ? 'view-fork' : '', arg: '' }));
+  if (sc === 'checkpoint') S.forks.forEach((f, i) => billing.push(sessRow({ child: true, icon: 'fork', title: f.title, on: S.viewFork === String(i), act: 'view-fork', arg: String(i), meta: B[f.b].short })));
+  billing.push(sessRow({ title: '升级 zod 到 v4', meta: '昨天' }));
+  const wt = [];
+  wt.push(sessRow({ title: '导出发票 CSV', on: (sc === 'review') || (sc === 'handoff' && S.viewHand === 'orig'), act: sc === 'handoff' ? 'view-hand' : '', arg: 'orig', meta: S.handed && sc === 'handoff' ? '已交接' : '15:21', badge: S.handed && sc === 'handoff' ? '' : '' }));
+  if (sc === 'handoff' && S.handed) wt.push(sessRow({ child: true, icon: 'handoff', title: `导出发票 CSV（${B[S.handed.b].short}）`, on: S.viewHand === 'new', act: 'view-hand', arg: 'new', running: S.handed.running, meta: B[S.handed.b].short }));
+  const runs = S.taskRuns.map((r) => sessRow({ title: r.title, running: r.running, ok: !r.running, meta: r.running ? '' : '刚刚', icon: 'cal' }));
+  sessions = `
+    <div class="proj">${ic('folder', 's')}billing-service</div>${billing.join('')}${sc === 'tasks' ? runs.join('') : ''}
+    <div class="proj">${ic('branch', 's')}billing-service · invoice-csv <span class="chip" style="height:18px;font-size:10.5px">worktree</span></div>${wt.join('')}
+    <div class="proj">${ic('folder', 's')}web-console</div>${sessRow({ title: '整理 CHANGELOG · 10月9日', icon: 'cal', meta: '7天' })}${sessRow({ title: '暗色模式下表格边框', meta: '3天' })}`;
+  $('sidebar').innerHTML = `
+    <div class="sb-head"><span class="brand">W</span>Riffet<span class="sp"></span><button class="iconbtn">${ic('panel')}</button></div>
+    <div style="padding:0 8px 6px;gap:2px" class="col">
+      <button class="navrow" data-act="scene" data-arg="attempts">${ic('msg')}新建会话</button>
+      <button class="navrow ${sc === 'tasks' ? 'on' : ''}" data-act="scene" data-arg="tasks">${ic('cal')}任务<span class="sp xxs faint">${S.schedules.filter((s) => s.on).length} 个定时</span></button>
+    </div>
+    <div class="search" data-act="palette">${ic('search', 's')}搜索<span class="sp xxs">⌘K</span></div>
+    <div class="sb-scroll"><div class="sb-sec">项目</div>${sessions}</div>`;
+}
+function header(title, b, m, project, extra = '') {
+  return `<div class="hdr">
+    <span class="muted trunc" style="max-width:220px">${esc(project)}</span><span class="faint">/</span>
+    <span class="trunc" style="font-weight:500">${esc(title)}</span>${bchip(b, m)}${extra}
+    <span class="sp"></span>
+    <button class="iconbtn">${ic('term')}</button>
+    <button class="iconbtn on">${ic('panel')}</button>
+    <button class="iconbtn ${S.menu ? 'on' : ''}" data-act="menu">${ic('more')}</button>
+    ${S.menu ? sessionMenu() : ''}
+  </div>`;
+}
+function sessionMenu() {
+  return `<div class="pop" style="right:10px;top:42px;width:230px">
+    <button class="mi">${ic('edit')}重命名</button>
+    <button class="mi">${ic('tpl')}编辑标签</button>
+    <button class="mi" data-act="fork-latest">${ic('fork')}从最新回合分叉…</button>
+    <button class="mi" data-act="handoff-open">${ic('handoff')}交接给其他后端…</button>
+    <button class="mi" data-act="save-tpl">${ic('save')}存为任务模板…</button>
+    <div style="height:1px;background:var(--line);margin:4px 0"></div>
+    <button class="mi">${ic('trash')}归档</button></div>`;
+}
+function composer(opts = {}) {
+  const b = opts.b || 'claude', m = opts.m || B[b].models[0];
+  const par = S.scene === 'attempts' && S.par.on && !S.group;
+  return `<div class="composer-wrap" ${opts.hero ? 'style="padding-top:0"' : ''}><div class="composer">
+    ${S.parMenu && S.scene === 'attempts' ? parMenu() : ''}
+    <textarea id="composer" rows="${opts.rows || 2}" placeholder="${opts.placeholder || '描述任务，@ 引用文件，/ 使用命令'}" data-live="draft" ${opts.disabled ? 'disabled' : ''}>${esc(opts.value || '')}</textarea>
+    <div class="row" style="gap:2px">
+      ${par ? `<span class="pill accent" data-act="par-menu">${ic('layers', 's')}并行 ${S.par.targets.length} 个尝试${ic('down', 's')}</span>
+        <span class="row xs muted" style="gap:4px;margin-left:4px">${S.par.targets.map((t) => adot(t.b)).join('')}</span>`
+      : `<span class="pill">${adot(b)}${B[b].short}${ic('down', 's')}</span><span class="pill mono" style="font-size:12px">${esc(m)}${ic('down', 's')}</span><span class="pill">自动接受编辑${ic('down', 's')}</span>
+        ${S.scene === 'attempts' ? `<span class="pill" data-act="par-menu">${ic('layers', 's')}并行尝试</span>` : ''}`}
+      <span class="sp"></span><span class="xxs faint" style="margin-right:6px">${opts.hint || ''}</span>
+      <button class="sendbtn" data-act="${opts.send || 'send'}" title="发送">${ic('up')}</button>
+    </div></div></div>`;
+}
+function turnHtml(t, i, o = {}) {
+  const tools = (t.tools || []).map((x) => `<div class="tool">${ic('check', 's')}${esc(x)}</div>`).join('');
+  return `<div class="turn" data-turn="${i}" style="${o.dim ? 'opacity:.42' : ''}">
+    ${o.before || ''}
+    <div class="user"><div class="bubble">${esc(t.user)}</div></div>
+    ${t.time ? `<div class="meta">${o.meta || ''}${t.time}</div>` : ''}
+    ${t.asst || tools ? `<div class="asst"><div class="col" style="gap:2px;margin-bottom:8px">${tools}</div>${t.asst ? `<p>${t.asst}</p>` : ''}</div>` : ''}
+    ${o.after || ''}
+  </div>`;
+}
+function renderMain() {
+  const sc = S.scene;
+  if (sc === 'review') return renderReviewMain();
+  if (sc === 'checkpoint') return renderCpMain();
+  if (sc === 'attempts') return renderAttemptsMain();
+  if (sc === 'handoff') return renderHandoffMain();
+  if (sc === 'tasks') return renderTasksMain();
+}
+function renderAside() {
+  const a = $('aside'); const sc = S.scene;
+  a.style.display = (sc === 'tasks' || (sc === 'attempts' && !S.viewAttempt)) ? 'none' : '';
+  a.classList.toggle('wide', sc === 'review' && S.openFile != null);
+  if (sc === 'review') return renderReviewAside();
+  if (sc === 'checkpoint') return renderCpAside();
+  if (sc === 'attempts') return renderSimpleChanges(S.group && S.viewAttempt ? S.group.attempts[+S.viewAttempt] : null);
+  if (sc === 'handoff') return renderSimpleChanges(null);
+}
+function renderSimpleChanges(att) {
+  const files = att ? att.files : FILES.map((f) => [f.letter, f.path, f.add, f.del]);
+  const branch = att ? att.branch : 'riffet/invoice-csv';
+  $('aside').innerHTML = `<div class="utabs"><button class="on">变更</button><button>文件</button></div>
+    <div class="asc" style="padding:8px">
+      <div class="row xs muted" style="padding:4px 8px 8px">${ic('branch', 's')}<span class="mono trunc">${esc(branch)}</span><span class="sp">${files.length} 个文件</span></div>
+      ${files.map(([l, p, ad, de]) => `<div class="frow"><span class="trunc">${esc(p.split('/').pop())}</span><span class="grow trunc xs muted">${esc(p.split('/').slice(0, -1).join('/'))}</span><span class="xxs add">+${ad}</span><span class="xxs del">−${de}</span><span class="letter" style="color:${l === 'A' ? 'var(--success)' : 'var(--warning)'}">${l}</span></div>`).join('')}
+    </div>`;
+}
+function renderNote() {
+  const sc = SCENES.find((x) => x.id === S.scene);
+  $('note').innerHTML = `<div class="note ${S.noteMin ? 'min' : ''}"><header data-act="note">${ic('alert', 's')}设计说明 · ${esc(sc.label.slice(2))}<span class="sp xxs" style="font-weight:400;opacity:.7">${S.noteMin ? '展开' : '收起'}</span></header>
+    <ol>${NOTES[S.scene].map((x) => `<li>${esc(x)}</li>`).join('')}</ol></div>`;
+}
+
+/* ============ 场景 1：审阅 → 回传 → 发布 ============ */
+function renderReviewMain() {
+  const turns = CSV_TURNS.map((t, i) => turnHtml(t, i)).join('') + S.reviewTurns.map((t, i) => turnHtml(t, 100 + i)).join('');
+  $('main').innerHTML = header('导出发票 CSV', 'claude', 'claude-sonnet-4.5', 'billing-service · invoice-csv', S.pr ? prPill() : '') +
+    `<div class="timeline" id="tl"><div class="tl-inner">${turns}</div></div>` + composer({ b: 'claude', m: 'claude-sonnet-4.5' });
+  const tl = $('tl'); tl.scrollTop = tl.scrollHeight;
+}
+function ciSummary(pr) {
+  const c = pr.checks, ok = c.filter((x) => x.st === 'pass').length, run = c.filter((x) => x.st === 'pending').length, bad = c.filter((x) => x.st === 'fail').length;
+  const cls = bad ? 'bad' : run ? 'warn' : 'ok';
+  return `<span class="chip ${cls}">CI ${ok}/${c.length} 通过${run ? ` · ${run} 运行中` : ''}${bad ? ` · ${bad} 失败` : ''}</span>`;
+}
+const prPill = () => `<span class="chip acc" data-act="aside-tab" data-arg="${S.v.review === 'B' ? 'ship' : 'changes'}" style="cursor:pointer">${ic('pr', 's')}#${S.pr.num}</span>${ciSummary(S.pr)}`;
+function ciIcon(st) {
+  if (st === 'pass') return `<span style="color:var(--success)">${ic('check', 's')}</span>`;
+  if (st === 'fail') return `<span style="color:var(--danger)">${ic('x', 's')}</span>`;
+  return '<span class="spin" style="width:11px;height:11px;margin:1px"></span>';
+}
+function publishCard() {
+  const p = S.pr, merged = S.merged;
+  const up = S.pushed ? `<span class="xs muted">origin/riffet/invoice-csv</span><span class="chip ok">已同步</span>` : `<span class="xs muted">origin/riffet/invoice-csv</span><span class="chip">↑${S.ahead} ↓${S.behind}</span>`;
+  let prBlock = '';
+  if (p) {
+    prBlock = `<div class="card" style="padding:10px;margin-top:10px;box-shadow:0 0 0 1px var(--line-strong)">
+      <div class="row"><span style="color:var(--success)">${ic('pr')}</span><span class="grow trunc" style="font-weight:500">#${p.num} ${esc(p.title)}</span></div>
+      <div class="row" style="flex-wrap:wrap;gap:6px;margin:8px 0">
+        <span class="chip ${p.draft ? '' : 'ok'}">${p.draft ? '草稿' : '开放'}</span>
+        <span class="chip ${p.review === '已批准' ? 'ok' : p.review === '需要修改' ? 'bad' : 'warn'}">${p.review}</span>
+        ${ciSummary(p)}<span class="sp xxs muted mono">${esc(p.head)} → ${esc(p.base)}</span></div>
+      <div class="col" style="gap:2px">${p.checks.map((c) => `<div class="row xs" style="height:24px">${ciIcon(c.st)}<span class="grow trunc">${esc(c.name)}</span><span class="faint">${c.st === 'pending' ? '运行中…' : c.dur}</span></div>`).join('')}</div>
+      <div class="row" style="margin-top:10px;gap:6px"><button class="btn sm ghost" data-act="pr-open">${ic('link', 's')}在浏览器打开</button>
+        ${p.checks.some((c) => c.st === 'fail') ? `<button class="btn sm" data-act="ci-fix">${ic('spark', 's')}让 Agent 修复 CI</button>` : ''}
+        <button class="btn sm ghost sp" data-act="pr-refresh">刷新</button></div>
+    </div>`;
+  }
+  return `<div class="card" style="margin:8px">
+    <div class="row" style="margin-bottom:8px"><b style="font-size:13px">发布</b><span class="chip" style="height:18px;font-size:11px">worktree</span><span class="sp"></span></div>
+    <div class="row xs" style="margin-bottom:4px">${ic('branch', 's')}<span class="mono" style="font-size:12px">riffet/invoice-csv</span></div>
+    <div class="row" style="margin-bottom:10px">${up}</div>
+    ${merged ? `<div class="infobox">${ic('check', 's')}已${merged.mode === 'squash' ? 'squash ' : ''}合并到 main（${merged.sha}）。worktree 可在「Worktree」页清理。</div>` : `
+    <div class="row" style="gap:6px;flex-wrap:wrap">
+      <button class="btn sm" data-act="push" ${S.pushed ? 'disabled' : ''}>${ic('upload', 's')}推送</button>
+      <button class="btn sm pri" data-act="pr-dialog" ${p ? 'disabled' : ''}>${ic('pr', 's')}创建 PR</button>
+      <button class="btn sm" data-act="merge-dialog">${ic('merge', 's')}合并回 main</button>
+    </div>`}
+    ${prBlock}
+  </div>`;
+}
+function renderReviewAside() {
+  const v = S.v.review; if (v === 'A' && S.asideTab === 'ship') S.asideTab = 'changes';
+  const tabs = [['changes', '变更'], ...(v === 'B' ? [['ship', `发布${S.pr ? ' · #' + S.pr.num : ''}`]] : []), ['files', '文件']];
+  let body = '';
+  if (S.asideTab === 'ship') body = `<div class="asc">${publishCard()}<div class="xs muted" style="padding:0 16px">方案 B：发布独立成页，「变更」专注审阅。</div></div>`;
+  else if (S.asideTab === 'files') body = `<div class="asc" style="padding:24px"><span class="muted xs">（文件树，与现有实现一致）</span></div>`;
+  else if (S.openFile != null) body = diffView();
+  else body = `<div class="asc">${v === 'A' ? publishCard() : ''}
+    <div class="row xs muted" style="padding:6px 16px">${ic('branch', 's')}<span class="mono">riffet/invoice-csv</span><span class="sp">${FILES.length} 个文件 <span class="add">+${FILES.reduce((s, f) => s + f.add, 0)}</span> <span class="del">−${FILES.reduce((s, f) => s + f.del, 0)}</span></span></div>
+    <div style="padding:0 8px">${FILES.map((f, i) => { const n = S.comments.filter((c) => c.file === f.path).length; return `<div class="frow" data-act="open-file" data-arg="${i}"><span class="trunc">${esc(f.path.split('/').pop())}</span><span class="grow trunc xs muted">${esc(f.path.split('/').slice(0, -1).join('/'))}</span>${n ? `<span class="chip warn" style="height:18px;font-size:11px">${n} 条意见</span>` : ''}<span class="xxs add">+${f.add}</span><span class="xxs del">−${f.del}</span><span class="letter" style="color:${f.letter === 'A' ? 'var(--success)' : 'var(--warning)'}">${f.letter}</span></div>`; }).join('')}</div>
+    <div class="xs faint" style="padding:12px 16px">点击文件查看 diff；悬停行号旁的 <b>+</b> 添加审阅意见，Shift+点击选择行范围。</div>
+    <div style="padding:0 12px 12px"><textarea class="inp" placeholder="提交说明（⌘↵ 提交）" style="min-height:56px"></textarea><div class="row" style="margin-top:8px"><button class="btn sm pri">提交</button><button class="btn sm ghost">全部暂存</button></div></div>
+  </div>`;
+  $('aside').innerHTML = `<div class="utabs">${tabs.map(([k, l]) => `<button class="${S.asideTab === k ? 'on' : ''}" data-act="aside-tab" data-arg="${k}">${l}</button>`).join('')}</div>${body}${S.asideTab !== 'ship' ? tray() : ''}`;
+}
+function lineNo(r) { return r.n !== '' ? r.n : r.o; }
+function diffView() {
+  const f = FILES[S.openFile]; const sel = S.sel && S.sel.file === f.path ? S.sel : null;
+  const cm = S.comments.filter((c) => c.file === f.path);
+  const rows = f.rows.map((r, i) => {
+    if (r.k === 'h') return `<div class="dl h"><span></span><span class="g"></span><span class="g"></span><span></span><span class="c">${esc(r.c)}</span></div>`;
+    const inSel = sel && i >= sel.from && i <= sel.to;
+    const inCm = cm.some((c) => i >= c.from && i <= c.to);
+    let html = `<div class="dl ${r.k === 'n' ? '' : r.k} ${inSel ? 'sel' : ''} ${inCm ? 'cm' : ''}"><button class="plus" data-act="line" data-arg="${i}" title="添加审阅意见（Shift+点击选择范围）">+</button><span class="g">${r.o}</span><span class="g">${r.n}</span><span class="m">${r.k === 'a' ? '+' : r.k === 'd' ? '-' : ''}</span><span class="c">${esc(r.c)}</span></div>`;
+    cm.filter((c) => c.to === i).forEach((c) => { html += `<div class="cnote"><div class="row xxs muted" style="margin-bottom:2px">${esc(rangeLabel(c))}<span class="sp link" data-act="del-comment" data-arg="${c.id}">删除</span></div>${esc(c.text)}</div>`; });
+    if (sel && sel.to === i) html += `<div class="cbox"><div class="xxs muted" style="margin-bottom:6px">${esc(rangeLabel(sel))} · 已选 ${sel.to - sel.from + 1} 行（Shift+点击其他行可调整范围）</div>
+      <textarea class="inp" id="cmt" placeholder="写下审阅意见…（⌘↵ 添加）" style="min-height:56px"></textarea>
+      <div class="row" style="margin-top:8px;justify-content:flex-end"><button class="btn sm ghost" data-act="cancel-comment">取消</button><button class="btn sm pri" data-act="add-comment">添加到审阅意见</button></div></div>`;
+    return html;
+  }).join('');
+  return `<div class="row" style="padding:8px 12px;border-bottom:1px solid var(--line-soft)"><button class="iconbtn" data-act="close-file">${ic('left')}</button><span class="mono trunc grow">${esc(f.path)}</span><span class="xs add">+${f.add}</span><span class="xs del">−${f.del}</span>
+    <button class="iconbtn" data-act="open-file" data-arg="${(S.openFile + FILES.length - 1) % FILES.length}" title="上一个文件">${ic('left', 's')}</button><button class="iconbtn" data-act="open-file" data-arg="${(S.openFile + 1) % FILES.length}" title="下一个文件">${ic('right', 's')}</button></div>
+    <div class="asc diff" style="padding:6px 0">${rows}</div>`;
+}
+function rangeLabel(c) {
+  const f = FILES.find((x) => x.path === c.file); const a = lineNo(f.rows[c.from]), b = lineNo(f.rows[c.to]);
+  return `${c.file}:${a === b ? a : `${a}-${b}`}`;
+}
+function excerpt(c) {
+  const f = FILES.find((x) => x.path === c.file); const lines = f.rows.slice(c.from, c.to + 1).filter((r) => r.k !== 'h');
+  const shown = lines.slice(0, 4).map((r) => `   > ${r.k === 'a' ? '+' : r.k === 'd' ? '-' : ' '}${r.c}`);
+  if (lines.length > 4) shown.push(`   > …（另 ${lines.length - 4} 行）`);
+  return shown.join('\n');
+}
+function reviewPrompt() { return '请根据以下代码审阅意见修改：\n\n' + S.comments.map((c, i) => `${i + 1}. ${rangeLabel(c)}\n${excerpt(c)}\n   意见：${c.text}`).join('\n\n'); }
+function tray() {
+  if (!S.comments.length) return '';
+  return `<div class="tray"><div class="row" style="margin-bottom:8px"><b style="font-size:13px">待发送审阅意见 (${S.comments.length})</b><span class="sp"></span><button class="btn sm ghost" data-act="clear-comments">清空</button><button class="btn sm acc" data-act="send-review">${ic('arrow', 's')}发回给 Agent</button></div>
+    <div class="col" style="gap:4px;max-height:140px;overflow:auto">${S.comments.map((c) => `<div class="tray-item"><span class="mono grow trunc" style="max-width:46%;color:var(--fg-3)" data-act="jump-comment" data-arg="${c.id}">${esc(rangeLabel(c))}</span><span class="grow trunc">${esc(c.text)}</span><span class="link xxs" data-act="del-comment" data-arg="${c.id}">删除</span></div>`).join('')}</div></div>`;
+}
+function startCi() {
+  const tick = () => {
+    if (!S.pr) return; const pend = S.pr.checks.filter((c) => c.st === 'pending');
+    if (!pend.length) return; const c = pend[0]; c.st = c.name.includes('e2e') ? 'fail' : 'pass'; c.dur = c.name.includes('e2e') ? '2分41秒' : '58秒';
+    if (S.scene === 'review') { renderMain(); renderAside(); }
+    setTimeout(tick, 2200);
+  };
+  setTimeout(tick, 2600);
+}
+
+/* ============ 场景 2：检查点 · 回退 · 分叉 ============ */
+function cpActions(i) {
+  return `<span class="acts"><button class="btn sm ghost" data-act="rewind" data-arg="${i}">${ic('rewind', 's')}回退代码到此回合之前</button><button class="btn sm ghost" data-act="fork" data-arg="${i}">${ic('fork', 's')}从这里分叉</button></span>`;
+}
+function renderCpMain() {
+  if (S.viewFork) {
+    const f = S.forks[+S.viewFork];
+    const kept = f.when === 'after' ? CP_TURNS.slice(0, f.turn + 1) : CP_TURNS.slice(0, f.turn);
+    $('main').innerHTML = header(f.title, f.b, f.m, f.wt ? `billing-service · ${f.branch}` : 'billing-service') +
+      `<div class="banner">${ic('fork', 's')}<span>从「金额计算改为整数分」第 ${f.turn + 1} 回合${f.when === 'after' ? '之后' : '之前'}分叉${f.wt ? `，位于新 worktree <span class="mono">${esc(f.branch)}</span>` : ''}</span><span class="sp link" data-act="view-fork" data-arg="">返回原会话 →</span></div>
+      <div class="timeline"><div class="tl-inner">
+        <div class="infobox">${ic('layers', 's')}<span>已继承 ${kept.length} 个回合的上下文${f.b !== 'claude' ? `（跨后端：以交接摘要形式注入 ${B[f.b].short}）` : '（同后端：原生 fork / resume）'}，代码已恢复到对应检查点。</span></div>
+        ${kept.map((t, i) => turnHtml(t, i, { dim: true })).join('')}
+        ${f.extra ? turnHtml({ user: f.extra, time: '刚刚', asst: '<span class="row muted"><span class="spin"></span>正在思考…</span>' }, 99) : ''}
+      </div></div>` + composer({ b: f.b, m: f.m });
+    return;
+  }
+  const railed = S.v.checkpoint === 'B';
+  const turns = CP_TURNS.map((t, i) => {
+    const rewound = S.rewoundAt !== null && i >= S.rewoundAt;
+    const marker = railed ? '' : `<div class="cp-mark">${ic('save', 's')}回合 ${i + 1} 检查点 · ${t.time} · ${t.files.length} 个文件 ${cpActions(i)}</div>`;
+    const rail = railed ? `<span class="rail ${S.railPop === i ? 'on' : ''}" data-act="rail" data-arg="${i}" title="回合 ${i + 1} 检查点"></span>${S.railPop === i ? `<div class="pop" style="left:-10px;top:24px"><div class="xs muted" style="padding:4px 10px">回合 ${i + 1} 之前 · ${t.time}</div><button class="mi" data-act="rewind" data-arg="${i}">${ic('rewind', 's')}回退代码到此回合之前</button><button class="mi" data-act="fork" data-arg="${i}">${ic('fork', 's')}从这里分叉…</button><button class="mi" data-act="git-cp">${ic('save', 's')}在检查点列表中查看</button></div>` : ''}` : '';
+    return turnHtml(t, i, { dim: rewound, before: rail + marker, meta: rewound ? '<span class="chip warn" style="height:18px;font-size:11px">代码已回退</span>' : '' });
+  }).join('');
+  const rb = S.rewoundAt !== null ? `<div class="banner muted">${ic('rewind', 's')}<span>代码已回退到第 ${S.rewoundAt + 1} 回合之前。之后的对话保留为灰色，继续发送会以当前文件为准。</span><span class="sp link" data-act="undo-rewind">撤销回退</span></div>` : '';
+  $('main').innerHTML = header('金额计算改为整数分', 'claude', 'claude-sonnet-4.5', 'billing-service') + rb +
+    `<div class="timeline"><div class="tl-inner ${railed ? 'railed' : ''}" style="${railed ? 'padding-left:28px' : ''}">${turns}</div></div>` + composer({});
+}
+function cpList() {
+  const auto = CP_TURNS.map((t, i) => ({ id: 'a' + i, title: `回合 ${i + 1}：${t.user.slice(0, 22)}…`, time: t.time, files: t.files.length, turn: i, manual: false }));
+  const extra = S.rewoundAt !== null ? [{ id: 'bk', title: `回退前自动备份`, time: '17:40', files: 7, manual: false, backup: true }] : [];
+  let all = [...auto, ...S.manualCps.map((m) => ({ ...m })), ...extra].sort((a, b) => (a.time < b.time ? 1 : -1));
+  if (S.cpFilter === 'auto') all = all.filter((x) => !x.manual); if (S.cpFilter === 'manual') all = all.filter((x) => x.manual);
+  return all;
+}
+function renderCpAside() {
+  const tab = S.gitTab;
+  let body = '';
+  if (tab === 'checkpoints') {
+    body = `<div style="padding:8px 12px" class="row"><input class="inp" id="cpname" type="text" placeholder="检查点名称（可选）"><button class="btn" data-act="save-cp">${ic('save', 's')}保存</button></div>
+      <div class="row" style="padding:0 12px 6px"><div class="seg xs">${[['all', '全部'], ['auto', '回合'], ['manual', '手动']].map(([k, l]) => `<button class="${S.cpFilter === k ? 'on' : ''}" data-act="cp-filter" data-arg="${k}">${l}</button>`).join('')}</div><span class="sp xxs faint">回合检查点保留 30 天</span></div>
+      <div class="asc" style="padding:0 8px 12px">${cpList().map((c) => `<div class="cp-item">
+        <span class="cp-ico" style="background:${c.manual ? 'var(--accent-soft)' : c.backup ? 'var(--warning-soft)' : 'var(--bg-muted)'};color:${c.manual ? 'var(--accent)' : c.backup ? 'var(--warning)' : 'var(--fg-3)'}">${c.manual ? ic('save', 's') : c.backup ? ic('rewind', 's') : c.turn + 1}</span>
+        <div class="grow"><div class="trunc" style="font-size:13.5px;font-weight:500">${esc(c.title)}</div><div class="xxs muted">${c.manual ? '手动' : c.backup ? '自动备份' : '回合 · 自动'} · ${c.time} · ${c.files} 个文件</div></div>
+        <button class="btn sm ghost" data-act="${c.turn !== undefined ? 'rewind' : 'restore-cp'}" data-arg="${c.turn !== undefined ? c.turn : ''}">${ic('rewind', 's')}恢复</button></div>`).join('')}</div>`;
+  } else body = `<div class="asc" style="padding:16px"><span class="xs muted">${tab === 'changes' ? '（改动列表，与现有实现一致）' : '（Worktree 列表，与现有实现一致）'}</span></div>`;
+  $('aside').innerHTML = `<div class="utabs"><button class="on">变更</button><button>文件</button></div>
+    <div class="row" style="padding:8px 12px"><div class="seg xs">${[['changes', '改动'], ['checkpoints', '检查点'], ['worktrees', 'Worktree']].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="git-tab" data-arg="${k}">${l}</button>`).join('')}</div></div>${body}`;
+}
+function rewindDialog(i) {
+  const later = CP_TURNS.slice(i); const m = new Map();
+  later.forEach((t) => t.files.forEach(([l, p, a, d]) => { const x = m.get(p) || { l, a: 0, d: 0 }; x.a += a; x.d += d; if (l === 'A') x.l = 'A'; m.set(p, x); }));
+  dialog(`<h3>回退代码到第 ${i + 1} 回合之前？</h3>
+    <div class="xs muted">将撤销第 ${i + 1}–${CP_TURNS.length} 回合中 Agent 对以下 ${m.size} 个文件的修改：</div>
+    <div class="card" style="padding:6px">${[...m].map(([p, x]) => `<div class="frow" style="cursor:default"><span class="letter" style="color:${x.l === 'A' ? 'var(--danger)' : 'var(--warning)'}">${x.l === 'A' ? 'D' : 'M'}</span><span class="mono grow trunc">${esc(p)}</span><span class="xxs muted">${x.l === 'A' ? '将删除' : `恢复 ${x.a + x.d} 行`}</span></div>`).join('')}</div>
+    <div class="infobox">${ic('save', 's')}<span>回退前会先自动保存一个「回退前自动备份」检查点，可随时撤销。服务端会核对文件指纹，若文件在此期间被手动修改，会列出冲突并让你选择。</span></div>
+    <label class="chk"><input type="checkbox" id="rw-chat"><span>同时把之后的回合标记为「已回退」（对话不会被删除，原生 CLI 历史保持不变）</span></label>
+    <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn danger" data-act="do-rewind" data-arg="${i}">${ic('rewind', 's')}回退</button></div>`);
+  $('rw-chat').checked = true;
+}
+function forkDialog(i) {
+  const backs = Object.keys(B);
+  dialog(`<h3>从第 ${i + 1} 回合分叉</h3>
+    <div class="card xs" style="padding:8px 10px;color:var(--fg-2)">“${esc(CP_TURNS[i].user)}”</div>
+    <div class="col"><span class="xs muted">分叉点</span>
+      <label class="chk"><input type="radio" name="fk-when" value="before" checked><span><b>此回合之前</b> · 代码与对话都回到发送这条消息之前，可重新提问</span></label>
+      <label class="chk"><input type="radio" name="fk-when" value="after"><span><b>此回合之后</b> · 保留这条消息及 Agent 的回答和改动</span></label></div>
+    <div class="row" style="gap:10px"><label class="fld grow">后端<select class="inp" id="fk-b">${backs.map((b) => `<option value="${b}" ${b === 'claude' ? 'selected' : ''}>${B[b].name}${b === 'claude' ? '（同原会话）' : ''}</option>`).join('')}</select></label>
+      <label class="fld grow">模型<select class="inp" id="fk-m">${B.claude.models.map((m) => `<option>${m}</option>`).join('')}</select></label></div>
+    <div class="xxs muted" id="fk-hint">同后端：使用原生会话分叉，上下文完整保留。</div>
+    <label class="chk"><input type="checkbox" id="fk-wt" checked><span>在新 worktree 中运行 <span class="mono xs muted">riffet/fork-money-${i + 1}</span>（不影响当前工作区）</span></label>
+    <label class="fld">附加指令（可选）<textarea class="inp" id="fk-extra" placeholder="例如：这次不要改数据库结构，只在应用层做换算。"></textarea></label>
+    <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-fork" data-arg="${i}">${ic('fork', 's')}创建分叉</button></div>`);
+  $('fk-b').onchange = () => { const b = val('fk-b'); $('fk-m').innerHTML = B[b].models.map((m) => `<option>${m}</option>`).join(''); $('fk-hint').textContent = b === 'claude' ? '同后端：使用原生会话分叉，上下文完整保留。' : `换后端：${B[b].short} 无法读取 Claude 的原生会话，将生成交接摘要作为首条上下文（同「交接」）。`; };
+}
+
+/* ============ 场景 3：并行尝试 ============ */
+function parMenu() {
+  const rows = [];
+  Object.keys(B).forEach((b) => B[b].models.slice(0, 2).forEach((m) => {
+    const on = S.par.targets.some((t) => t.b === b && t.m === m);
+    rows.push(`<div class="tgt ${on ? 'on' : ''}" data-act="par-toggle" data-arg="${b}|${m}"><input type="checkbox" ${on ? 'checked' : ''} style="pointer-events:none;accent-color:var(--accent)">${adot(b)}<span>${B[b].short}</span><span class="mono xs muted">${m}</span></div>`);
+  }));
+  return `<div class="pop" style="bottom:calc(100% + 8px);left:0;width:360px;padding:10px">
+    <div class="row" style="margin-bottom:6px"><b style="font-size:13px">并行尝试</b><span class="xs muted">选 2–4 个目标</span><span class="sp"></span><span class="switch ${S.par.on ? 'on' : ''}" data-act="par-on"></span></div>
+    <div class="row" style="flex-wrap:wrap;gap:4px;margin-bottom:8px">${S.par.targets.map((t) => `<span class="chip acc">${adot(t.b)}${B[t.b].short} · ${t.m}</span>`).join('') || '<span class="xs faint">未选择</span>'}</div>
+    <div style="max-height:230px;overflow:auto">${rows.join('')}</div>
+    <div class="infobox" style="margin-top:8px">${ic('branch', 's')}<span>每个尝试在独立 worktree 中运行：<span class="mono">riffet/try-xxxx-1…${S.par.targets.length || 'N'}</span>，基于当前 HEAD。</span></div>
+  </div>`;
+}
+function newGroup(prompt) {
+  const id = Math.random().toString(16).slice(2, 6);
+  const plans = [
+    { ok: true, dur: 214, tok: 48200, files: [['M', 'src/api/routes/invoices.ts', 42, 11], ['A', 'src/lib/cursor.ts', 38, 0], ['M', 'test/api/invoices.test.ts', 64, 2]], msg: '实现了基于 base64 编码 (createdAt, id) 的不透明游标；未传 cursor 时回退到 page/pageSize。新增 9 个用例，全部通过。' },
+    { ok: true, dur: 167, tok: 31900, files: [['M', 'src/api/routes/invoices.ts', 27, 8], ['M', 'src/invoices/service.ts', 19, 4], ['M', 'test/api/invoices.test.ts', 41, 0]], msg: '使用 id 作为游标（keyset 分页），在 service 层增加 listAfter()。兼容旧参数，但同时传入 cursor 和 page 时返回 400。测试 6 个通过。' },
+    { ok: false, dur: 302, tok: 57400, files: [['M', 'src/api/routes/invoices.ts', 55, 20], ['M', 'src/invoices/service.ts', 33, 9], ['A', 'src/lib/cursor.ts', 21, 0], ['M', 'db/schema.ts', 6, 1]], msg: '尝试为 (created_at, id) 增加复合索引并修改 schema，但 pnpm test 中 2 个用例失败：迁移未在测试数据库执行。' },
+    { ok: true, dur: 248, tok: 40100, files: [['M', 'src/api/routes/invoices.ts', 36, 10], ['A', 'src/lib/cursor.ts', 30, 0], ['M', 'test/api/invoices.test.ts', 52, 1]], msg: '游标为签名过的 JSON（HMAC），防止客户端伪造。兼容 page/pageSize，并在响应中返回 nextCursor 与 hasMore。' },
+  ];
+  return { id, title: '游标分页', prompt, attempts: S.par.targets.map((t, i) => ({ ...t, ...plans[i % plans.length], status: 'running', progress: 0, elapsed: 0, branch: `riffet/try-${id}-${i + 1}`, dur: '' })) };
+}
+function tickGroup() {
+  const g = S.group; if (!g) return; let running = false;
+  g.attempts.forEach((a) => {
+    if (a.status !== 'running') return;
+    a.elapsed += 18; a.progress = Math.min(1, a.elapsed / a.dur);
+    if (a.progress >= 1) { a.status = a.ok ? 'done' : 'failed'; a.dur = `${Math.floor(a.elapsed / 60)}分${a.elapsed % 60}秒`; } else running = true;
+  });
+  if (S.scene === 'attempts') { renderSidebar(); if (!S.viewAttempt) renderMain(); }
+  if (running) setTimeout(tickGroup, 450);
+}
+const fmtTok = (n) => (n / 1000).toFixed(1) + 'k';
+function attStatus(a) {
+  if (a.status === 'running') return `<span class="chip acc"><span class="spin" style="width:10px;height:10px"></span>运行中</span>`;
+  return a.status === 'done' ? '<span class="chip ok">完成</span>' : '<span class="chip bad">失败</span>';
+}
+function attStats(a) {
+  const add = a.files.reduce((s, f) => s + f[2], 0), del = a.files.reduce((s, f) => s + f[3], 0); const run = a.status === 'running';
+  const t = run ? a.elapsed : a.elapsed;
+  return { time: `${Math.floor(t / 60)}:${pad(t % 60)}`, tok: run ? fmtTok(a.tok * a.progress) : fmtTok(a.tok), files: run ? Math.ceil(a.files.length * a.progress) : a.files.length, add: run ? Math.round(add * a.progress) : add, del: run ? Math.round(del * a.progress) : del };
+}
+function attActions(a, i) {
+  if (S.adopted !== null) return S.adopted === i ? '<span class="chip ok">已采用 · 已合并到 main</span>' : '<span class="chip">已归档</span>';
+  return `<button class="btn sm pri" data-act="adopt" data-arg="${i}" ${a.status !== 'done' ? 'disabled' : ''}>采用此方案</button><button class="btn sm ghost" data-act="view-attempt" data-arg="${i}">在此基础上继续</button>`;
+}
+function renderAttemptsMain() {
+  const g = S.group;
+  if (!g) {
+    $('main').innerHTML = header('新会话', 'claude', 'claude-sonnet-4.5', 'billing-service') +
+      `<div class="timeline" style="display:flex;align-items:center"><div class="tl-inner" style="width:100%"><div style="text-align:center;font-size:22px;font-weight:600;margin-bottom:6px">今天要做什么？</div><div class="xs muted" style="text-align:center">打开「并行尝试」，让多个后端 / 模型同时在各自的 worktree 中解决同一个任务，再挑最好的一个。</div></div></div>` +
+      composer({ value: S.draft, rows: 3, send: 'send-par', hint: S.par.on ? `将创建 ${S.par.targets.length} 个会话 · ${S.par.targets.length} 个 worktree` : '' });
+    return;
+  }
+  if (S.viewAttempt) {
+    const i = +S.viewAttempt, a = g.attempts[i];
+    $('main').innerHTML = header(`尝试 ${i + 1} · ${g.title}`, a.b, a.m, `billing-service · ${a.branch}`) +
+      `<div class="banner">${ic('layers', 's')}<span>尝试组「${esc(g.title)}」中的第 ${i + 1} 个（共 ${g.attempts.length} 个）</span><span class="sp link" data-act="view-attempt" data-arg="">返回对比 →</span></div>
+       <div class="timeline"><div class="tl-inner">${turnHtml({ user: g.prompt, time: '17:41', tools: a.files.map((f) => `编辑 ${f[1]}`), asst: a.status === 'running' ? '<span class="row muted"><span class="spin"></span>运行中…</span>' : esc(a.msg) }, 0)}</div></div>` + composer({ b: a.b, m: a.m, placeholder: '在此方案基础上继续…' });
+    return;
+  }
+  const done = g.attempts.filter((a) => a.status !== 'running').length;
+  const files = [...new Set(g.attempts.flatMap((a) => a.files.map((f) => f[1])))];
+  if (!S.cmpFile || !files.includes(S.cmpFile)) S.cmpFile = files[0];
+  let body;
+  if (S.v.attempts === 'A') {
+    body = `<div class="cmp-grid" style="grid-template-columns:repeat(${g.attempts.length}, minmax(220px, 1fr))">${g.attempts.map((a, i) => { const s = attStats(a); return `<div class="att ${S.adopted === i ? 'win' : ''}">
+      <div class="row"><b>尝试 ${i + 1}</b>${attStatus(a)}</div>
+      <div>${bchip(a.b, a.m)}</div>
+      <div class="mono xxs muted trunc">${a.branch}</div>
+      ${a.status === 'running' ? `<div class="bar"><i style="width:${Math.round(a.progress * 100)}%"></i></div>` : ''}
+      <div class="stats"><span>耗时 <b>${s.time}</b></span><span>Token <b>${s.tok}</b></span><span>文件 <b>${s.files}</b></span><span><b class="add">+${s.add}</b> <b class="del">−${s.del}</b></span></div>
+      <div class="excerpt">${a.status === 'running' ? '<span class="faint">等待回复…</span>' : esc(a.msg)}</div>
+      <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:auto">${attActions(a, i)}</div></div>`; }).join('')}</div>`;
+  } else {
+    body = `<div class="card" style="padding:4px 8px"><table class="t"><thead><tr><th>尝试</th><th>后端 / 模型</th><th>状态</th><th>耗时</th><th>Token</th><th>文件</th><th>行</th><th>最后回复</th><th></th></tr></thead><tbody>
+      ${g.attempts.map((a, i) => { const s = attStats(a); return `<tr style="${S.adopted === i ? 'background:var(--success-soft)' : ''}"><td><b>#${i + 1}</b></td><td>${bchip(a.b, a.m)}</td><td>${attStatus(a)}</td><td class="mono">${s.time}</td><td class="mono">${s.tok}</td><td>${s.files}</td><td class="mono"><span class="add">+${s.add}</span> <span class="del">−${s.del}</span></td><td style="max-width:260px" class="xs muted">${a.status === 'running' ? '…' : esc(a.msg)}</td><td><div class="col" style="gap:4px">${attActions(a, i)}</div></td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  }
+  const fileCmp = `<div class="row" style="margin:20px 0 8px"><b style="font-size:13px">文件级对比</b><select class="inp" style="width:auto;margin-left:8px" data-change="cmp-file">${files.map((f) => `<option ${f === S.cmpFile ? 'selected' : ''}>${f}</option>`).join('')}</select></div>
+    <div class="cmp-grid" style="grid-template-columns:repeat(${g.attempts.length}, minmax(220px, 1fr))">${g.attempts.map((a, i) => { const f = a.files.find((x) => x[1] === S.cmpFile); return `<div class="card diff" style="padding:6px 0;font-size:11.5px"><div class="xs" style="font-family:var(--font-sans);padding:0 10px 6px;color:var(--fg-3)">#${i + 1} ${B[a.b].short}${f ? ` · <span class="add">+${f[2]}</span> <span class="del">−${f[3]}</span>` : ''}</div>${f ? fakeHunk(a, f) : '<div class="xs faint" style="padding:12px;font-family:var(--font-sans)">未修改此文件</div>'}</div>`; }).join('')}</div>`;
+  $('main').innerHTML = header(`尝试组 · ${g.title}`, g.attempts[0].b, '', 'billing-service', `<span class="chip">${done}/${g.attempts.length} 已结束</span>`) +
+    `<div class="cmp"><div class="card xs" style="padding:8px 12px;margin-bottom:12px;color:var(--fg-2)"><b>任务：</b>${esc(g.prompt)}</div>${body}${fileCmp}</div>`;
+}
+function fakeHunk(a, f) {
+  const sample = {
+    claude: ['+import { decodeCursor, encodeCursor } from "../../lib/cursor";', '+const cursor = q.cursor ? decodeCursor(q.cursor) : undefined;', '+const rows = await listInvoices({ ...filters, after: cursor, limit });', '+return { items: rows, nextCursor: encodeCursor(rows.at(-1)) };'],
+    codex: ['+if (q.cursor && q.page) throw badRequest("cursor 与 page 不能同时使用");', '+const rows = q.cursor', '+  ? await service.listAfter(Number(q.cursor), limit)', '+  : await service.list({ page, pageSize });'],
+    dsh: ['+// TODO: 需要复合索引 (created_at, id)', '+const rows = await db.select().from(invoices)', '+  .where(gt(tuple(invoices.createdAt, invoices.id), tuple(c.t, c.id)))', '-  .offset((page - 1) * pageSize)'],
+  }[a.b] || ['+const token = signCursor({ t: last.createdAt, id: last.id });', '+return { items, nextCursor: token, hasMore };'];
+  return sample.map((l) => `<div class="dl ${l[0] === '+' ? 'a' : l[0] === '-' ? 'd' : ''}" style="grid-template-columns:14px 1fr"><span class="m" style="padding-left:4px">${l[0]}</span><span class="c">${esc(l.slice(1))}</span></div>`).join('');
+}
+function adoptDialog(i) {
+  const a = S.group.attempts[i];
+  dialog(`<h3>采用尝试 ${i + 1}（${B[a.b].short}）</h3>
+    <div class="xs muted">把 <span class="mono">${a.branch}</span> 的改动合并到 <span class="mono">main</span>。</div>
+    <div class="col"><label class="chk"><input type="radio" name="ad-mode" value="squash" checked><span><b>Squash 合并</b> · 生成一个提交</span></label>
+    <label class="chk"><input type="radio" name="ad-mode" value="merge"><span><b>Merge</b> · 保留尝试分支上的提交历史</span></label></div>
+    <label class="fld">提交说明<input class="inp" type="text" id="ad-msg" value="feat(api): /api/invoices 支持游标分页"></label>
+    <label class="chk"><input type="checkbox" id="ad-arch" checked><span>归档其他 ${S.group.attempts.length - 1} 个尝试，并删除它们的 worktree（分支保留 7 天）</span></label>
+    <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-adopt" data-arg="${i}">${ic('merge', 's')}合并并采用</button></div>`);
+}
+
+/* ============ 场景 4：跨后端交接 ============ */
+function handoffContext(o) {
+  const upto = o.turn === 'latest' ? CSV_TURNS.length - 1 : +o.turn;
+  const turns = CSV_TURNS.slice(0, upto + 1);
+  const strip = (h) => h.replace(/<br>/g, ' ').replace(/<[^>]+>/g, '');
+  const lines = [
+    `# 交接说明`, `你正在接手一个由 Claude Code 开始的会话「导出发票 CSV」。工作目录：${o.wt ? '~/.riffet/worktrees/billing-service/invoice-csv-handoff（新 worktree，基于当前改动）' : '~/.riffet/worktrees/billing-service/invoice-csv'}`, '',
+    `## 最初的任务（原文保留）`, turns[0].user, '',
+  ];
+  if (turns.length > 2) lines.push(`## 较早的对话`, `（已省略 ${turns.length - 2} 个回合，约 ${(turns.length - 2) * 3.4}k tokens；要点：${strip(turns[1].asst).slice(0, 60)}…）`, '');
+  lines.push(`## 最近的回合`);
+  turns.slice(Math.max(1, turns.length - 1)).forEach((t) => lines.push(`用户：${t.user}`, `助手：${strip(t.asst)}`));
+  if (turns.length === 1) lines.push(`助手：${strip(turns[0].asst)}`);
+  lines.push('', `## 当前代码改动（相对 main，未提交）`, ...FILES.map((f) => `- ${f.letter} ${f.path}  +${f.add} −${f.del}`), '', `## 下一步`, o.extra || '（无附加指令）请先阅读上述改动，确认理解后再继续。');
+  return lines.join('\n');
+}
+function renderHandoffMain() {
+  const h = S.handed;
+  if (h && S.viewHand === 'new') {
+    $('main').innerHTML = header(`导出发票 CSV（${B[h.b].short}）`, h.b, h.m, h.wt ? 'billing-service · invoice-csv-handoff' : 'billing-service · invoice-csv') +
+      `<div class="banner">${ic('handoff', 's')}<span>从「<span class="link" data-act="view-hand" data-arg="orig">导出发票 CSV</span>」(Claude Code) 交接而来 · ${h.turn === 'latest' ? '最新回合' : `第 ${+h.turn + 1} 回合`}</span><span class="sp link" data-act="show-ctx">查看交接上下文</span></div>
+      <div class="timeline"><div class="tl-inner">
+        <div class="turn"><div class="user"><div class="bubble" style="max-width:82%"><div class="row xs muted" style="margin-bottom:4px">${ic('layers', 's')}交接上下文 · ${h.ctx.length} 字符<span class="sp link" data-act="show-ctx">展开</span></div>${esc(h.ctx.split('\n').slice(0, 6).join('\n'))}\n…</div></div>
+        <div class="meta">刚刚</div>
+        <div class="asst">${h.running ? '<span class="row muted"><span class="spin"></span>正在阅读交接上下文和 4 个改动文件…</span>' : `<div class="col" style="gap:2px;margin-bottom:8px"><div class="tool">${ic('check', 's')}读取 src/invoices/export.ts</div><div class="tool">${ic('check', 's')}读取 src/invoices/csv.ts</div><div class="tool">${ic('check', 's')}运行 pnpm test --filter invoices</div></div><p>已了解当前进度：CSV 导出与测试均已完成（23 passed）。${h.extra ? '接下来按你的附加指令继续。' : '请告诉我下一步。'}</p>`}</div></div>
+      </div></div>` + composer({ b: h.b, m: h.m });
+    return;
+  }
+  const banner = h ? `<div class="banner muted">${ic('handoff', 's')}<span>已交接到 ${B[h.b].short} →</span><span class="link" data-act="view-hand" data-arg="new">打开新会话</span><span class="sp xs muted">原会话保持只读，可继续查看</span></div>` : '';
+  $('main').innerHTML = header('导出发票 CSV', 'claude', 'claude-sonnet-4.5', 'billing-service · invoice-csv', h ? `<span class="chip">已交接 → ${B[h.b].short}</span>` : '') + banner +
+    `<div class="timeline"><div class="tl-inner">${CSV_TURNS.map((t, i) => turnHtml(t, i)).join('')}
+      ${!h ? `<div class="infobox">${ic('handoff', 's')}<span>Claude 用量快到上限了？点右上角 <b>⋯</b> →「交接给其他后端…」，或输入 <span class="mono">/handoff</span>。</span></div>` : ''}</div></div>` + composer({ disabled: !!h, placeholder: h ? '会话已交接，请在新会话中继续' : undefined });
+}
+function handoffDialog() {
+  const v = S.v.handoff; const st = { b: 'codex', m: 'gpt-5-codex', turn: 'latest', wt: false, extra: '' };
+  const form = `
+    <div class="row" style="gap:10px"><label class="fld grow">目标后端<select class="inp" id="ho-b">${Object.keys(B).filter((b) => b !== 'claude').map((b) => `<option value="${b}">${B[b].name}</option>`).join('')}</select></label>
+      <label class="fld grow">配置<select class="inp" id="ho-p"><option>默认</option><option>公司网关</option></select></label>
+      <label class="fld grow">模型<select class="inp" id="ho-m">${B.codex.models.map((m) => `<option>${m}</option>`).join('')}</select></label></div>
+    <div class="row" style="gap:10px"><label class="fld grow">从哪个回合<select class="inp" id="ho-turn"><option value="latest">最新回合（第 3 回合）</option>${CSV_TURNS.map((t, i) => `<option value="${i}">第 ${i + 1} 回合 · ${esc(t.user.slice(0, 16))}…</option>`).join('')}</select></label>
+      <label class="fld grow">工作目录<select class="inp" id="ho-wt"><option value="same">同一目录（原会话将停止）</option><option value="wt">新 worktree（复制当前改动）</option></select></label></div>
+    <label class="fld">附加指令（可选）<textarea class="inp" id="ho-extra" placeholder="例如：接下来给导出加上按客户分组的汇总行。"></textarea></label>`;
+  const preview = `<div class="row xs muted">交接上下文预览<span class="sp" id="ho-len"></span></div><pre class="preview" id="ho-prev"></pre>
+    <div class="infobox">${ic('alert', 's')}<span>首条任务原文保留，较早回合被省略为摘要，附带当前 git 改动摘要。工具输出、图片附件不会交接。</span></div>`;
+  const update = () => { st.b = val('ho-b') || st.b; st.m = val('ho-m') || st.m; st.turn = val('ho-turn') || st.turn; st.wt = (val('ho-wt') || (st.wt ? 'wt' : 'same')) === 'wt'; st.extra = val('ho-extra') ?? st.extra; const p = $('ho-prev'); if (p) { const c = handoffContext(st); p.textContent = c; $('ho-len').textContent = `${c.length} 字符 · 约 ${Math.round(c.length / 2.2 / 100) / 10}k tokens`; } };
+  const bind = () => {
+    const b = $('ho-b'); if (b) { b.value = st.b; b.onchange = () => { $('ho-m').innerHTML = B[b.value].models.map((m) => `<option>${m}</option>`).join(''); update(); }; }
+    ['ho-m', 'ho-turn', 'ho-wt', 'ho-extra'].forEach((id) => { const el = $(id); if (el) { if (id === 'ho-turn') el.value = st.turn; if (id === 'ho-wt') el.value = st.wt ? 'wt' : 'same'; if (id === 'ho-extra') el.value = st.extra; el.oninput = el.onchange = update; } });
+    update();
+  };
+  window.__ho = st;
+  if (v === 'A') {
+    dialog(`<h3>交接给其他后端</h3><div class="xs muted">在另一个后端中新建会话，并带上这段对话的上下文。原会话不会被删除。</div>${form}${preview}
+      <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-handoff">${ic('handoff', 's')}交接</button></div>`, 'lg');
+    bind();
+  } else {
+    const step = (n) => {
+      if (n === 1) { dialog(`<div class="row"><h3>交接给其他后端</h3><span class="sp xs muted">第 1 步 / 共 2 步 · 目标</span></div>${form}<div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" id="ho-next">下一步：预览上下文 ${ic('right', 's')}</button></div>`); bind(); $('ho-next').onclick = () => { update(); step(2); }; }
+      else { dialog(`<div class="row"><h3>确认交接上下文</h3><span class="sp xs muted">第 2 步 / 共 2 步 · 预览</span></div><div class="row">${bchip('claude')}${ic('arrow', 's')}${bchip(st.b, st.m)}<span class="chip">${st.wt ? '新 worktree' : '同一目录'}</span></div>${preview}<div class="foot"><button class="btn ghost" id="ho-back">${ic('left', 's')}上一步</button><button class="btn pri" data-act="do-handoff">${ic('handoff', 's')}交接</button></div>`, 'lg'); update(); $('ho-back').onclick = () => step(1); }
+    };
+    step(1);
+  }
+}
+
+/* ============ 场景 5：任务模板与定时任务 ============ */
+const projName = (id) => PROJECTS.find((p) => p.id === id).name;
+const modeChip = (m) => `<span class="chip ${MODES[m].approvals ? 'warn' : ''}">${MODES[m].label}</span>`;
+function lastRun(s) {
+  if (!s.last) return '<span class="faint">尚未运行</span>';
+  const st = { ok: '<span class="chip ok">成功</span>', fail: '<span class="chip bad">失败</span>', stalled: '<span class="chip warn">等待审批超时</span>', skipped: '<span class="chip">已跳过</span>', running: '<span class="chip acc"><span class="spin" style="width:10px;height:10px"></span>运行中</span>' }[s.last.st];
+  return `${st} <span class="xs muted">${fmtWhen(s.last.when)}</span>${s.last.st !== 'skipped' ? ` · <span class="link xs" data-act="toast" data-arg="打开会话「${esc(s.last.title)}」">${esc(s.last.title)}</span>` : ''}<div class="xxs faint">${esc(s.last.dur)}</div>`;
+}
+function renderTasksMain() {
+  const v = S.v.tasks, tab = S.tasksTab;
+  let body = '';
+  if (tab === 'templates') {
+    body = v === 'A' ? `<div class="tpl-grid">${S.templates.map((t) => `<div class="card tpl">
+        <div class="row"><b class="grow trunc">${esc(t.name)}</b><button class="iconbtn" data-act="tpl-edit" data-arg="${t.id}">${ic('edit', 's')}</button></div>
+        <div class="prompt">${esc(t.prompt)}</div>
+        <div class="row" style="flex-wrap:wrap;gap:4px">${bchip(t.b, t.m)}<span class="chip">${t.wt ? ic('branch', 's') + '新 worktree' : '当前目录'}</span>${modeChip(t.mode)}</div>
+        <div class="row" style="gap:6px"><button class="btn sm pri" data-act="tpl-run" data-arg="${t.id}">${ic('play', 's')}运行</button><button class="btn sm ghost" data-act="sch-new" data-arg="${t.id}">${ic('clock', 's')}定时</button></div></div>`).join('')}
+        <button class="card tpl" data-act="tpl-edit" data-arg="" style="align-items:center;justify-content:center;color:var(--fg-3);border:1px dashed var(--line-strong);box-shadow:none;min-height:170px">${ic('plus')}新建模板</button></div>`
+      : `<div class="card" style="padding:4px 8px"><table class="t"><thead><tr><th>名称</th><th>提示词</th><th>后端 / 模型</th><th>运行位置</th><th>权限</th><th></th></tr></thead><tbody>${S.templates.map((t) => `<tr><td><b>${esc(t.name)}</b></td><td class="xs muted" style="max-width:320px">${esc(t.prompt)}</td><td>${bchip(t.b, t.m)}</td><td class="xs">${t.wt ? '新 worktree' : '当前目录'}</td><td>${modeChip(t.mode)}</td><td style="white-space:nowrap"><button class="btn sm pri" data-act="tpl-run" data-arg="${t.id}">运行</button> <button class="btn sm ghost" data-act="tpl-edit" data-arg="${t.id}">编辑</button></td></tr>`).join('')}</tbody></table></div>`;
+  } else {
+    const rows = S.schedules.map((s) => { const nx = nextRuns(s.cron, 1)[0]; const t = S.templates.find((x) => x.id === s.tpl); return { s, t, nx }; });
+    body = v === 'A' ? `<div class="col" style="gap:10px">${rows.map(({ s, t, nx }) => `<div class="card row" style="gap:14px;align-items:flex-start;${s.on ? '' : 'opacity:.6'}">
+        <span class="switch ${s.on ? 'on' : ''}" data-act="sch-toggle" data-arg="${s.id}" style="margin-top:3px"></span>
+        <div class="grow col" style="gap:4px"><div class="row"><b>${esc(s.name)}</b>${bchip(t.b, t.m)}<span class="chip">${ic('folder', 's')}${esc(projName(s.project))}</span>${MODES[s.mode].approvals ? `<span class="chip warn" title="无人值守时会卡在审批">${ic('alert', 's')}需要审批</span>` : ''}</div>
+          <div class="row xs"><span style="font-weight:500">${cronHuman(s.cron)}</span><span class="mono faint">${s.cron}</span><span class="muted">· 下次 ${s.on && nx ? fmtWhen(nx) : '—'}</span>${s.skip ? '<span class="faint">· 上次未结束则跳过</span>' : ''}</div>
+          <div class="row xs" style="gap:6px">上次：${lastRun(s)}</div></div>
+        <div class="row" style="gap:4px"><button class="btn sm" data-act="sch-run" data-arg="${s.id}">${ic('play', 's')}立即运行</button><button class="iconbtn" data-act="sch-edit" data-arg="${s.id}">${ic('edit', 's')}</button></div></div>`).join('')}</div>`
+      : `<div class="card" style="padding:4px 8px"><table class="t"><thead><tr><th></th><th>名称</th><th>计划</th><th>下次运行</th><th>上次运行</th><th>模板 / 项目</th><th></th></tr></thead><tbody>${rows.map(({ s, t, nx }) => `<tr style="${s.on ? '' : 'opacity:.6'}"><td><span class="switch ${s.on ? 'on' : ''}" data-act="sch-toggle" data-arg="${s.id}"></span></td><td><b>${esc(s.name)}</b>${MODES[s.mode].approvals ? `<div><span class="chip warn" style="margin-top:4px">${ic('alert', 's')}需要审批</span></div>` : ''}</td><td>${cronHuman(s.cron)}<div class="mono xxs faint">${s.cron}</div></td><td class="xs">${s.on && nx ? fmtWhen(nx) : '—'}</td><td>${lastRun(s)}</td><td class="xs">${esc(t.name)}<div class="faint">${esc(projName(s.project))}</div></td><td style="white-space:nowrap"><button class="btn sm" data-act="sch-run" data-arg="${s.id}">运行</button> <button class="btn sm ghost" data-act="sch-edit" data-arg="${s.id}">编辑</button></td></tr>`).join('')}</tbody></table></div>`;
+  }
+  $('main').innerHTML = `<div class="hdr"><b>任务</b><span class="sp"></span><button class="btn sm ghost" data-act="palette">${ic('search', 's')}命令面板 ⌘K</button></div>
+    <div class="page"><div class="row" style="margin-bottom:16px"><div class="seg">${[['templates', `模板 ${S.templates.length}`], ['schedules', `定时任务 ${S.schedules.length}`]].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="tasks-tab" data-arg="${k}">${l}</button>`).join('')}</div><span class="sp"></span>
+    <button class="btn pri" data-act="${tab === 'templates' ? 'tpl-edit' : 'sch-new'}" data-arg="">${ic('plus', 's')}${tab === 'templates' ? '新建模板' : '新建定时任务'}</button></div>${body}
+    <div class="xs faint" style="margin-top:16px">定时任务由本机 Riffet 服务触发；服务未运行时错过的任务不会补跑（待讨论）。</div></div>`;
+}
+
+function tplDialog(id) {
+  const t = S.templates.find((x) => x.id === id) || { id: '', name: '', prompt: '', b: 'claude', m: 'claude-sonnet-4.5', wt: true, mode: 'edits' };
+  dialog(`<h3>${t.id ? '编辑模板' : '新建任务模板'}</h3>
+    <label class="fld">名称<input class="inp" type="text" id="tp-name" value="${esc(t.name)}" placeholder="例如：修复失败的单测"></label>
+    <label class="fld">提示词<textarea class="inp" id="tp-prompt" style="min-height:110px" placeholder="描述要 Agent 完成的任务…">${esc(t.prompt)}</textarea></label>
+    <div class="xxs faint">可用变量：<span class="mono">{{project}}</span> <span class="mono">{{branch}}</span> <span class="mono">{{date}}</span>（待讨论）</div>
+    <div class="row" style="gap:10px"><label class="fld grow">后端<select class="inp" id="tp-b">${Object.keys(B).map((b) => `<option value="${b}" ${b === t.b ? 'selected' : ''}>${B[b].name}</option>`).join('')}</select></label>
+      <label class="fld grow">模型<select class="inp" id="tp-m">${B[t.b].models.map((m) => `<option ${m === t.m ? 'selected' : ''}>${m}</option>`).join('')}</select></label>
+      <label class="fld grow">权限模式<select class="inp" id="tp-mode">${Object.entries(MODES).map(([k, x]) => `<option value="${k}" ${k === t.mode ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label></div>
+    <label class="chk"><input type="checkbox" id="tp-wt" ${t.wt ? 'checked' : ''}><span>在新 worktree 中运行（分支 <span class="mono xs">riffet/task-…</span>）</span></label>
+    <div class="foot">${t.id ? `<button class="btn ghost" data-act="tpl-del" data-arg="${t.id}" style="margin-right:auto;color:var(--danger)">删除</button>` : ''}<button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="tpl-save" data-arg="${t.id}">保存</button></div>`);
+  $('tp-b').onchange = () => { $('tp-m').innerHTML = B[val('tp-b')].models.map((m) => `<option>${m}</option>`).join(''); };
+}
+function runDialog(id) {
+  const t = S.templates.find((x) => x.id === id);
+  dialog(`<h3>运行「${esc(t.name)}」</h3><div class="xs muted">选择项目</div>
+    <div class="col" style="gap:4px">${PROJECTS.map((p, i) => `<label class="tgt ${i === 0 ? 'on' : ''}"><input type="radio" name="rn-p" value="${p.id}" ${i === 0 ? 'checked' : ''} style="accent-color:var(--accent)">${ic(p.worktree ? 'branch' : 'folder', 's')}<span class="grow"><div>${esc(p.name)}</div><div class="mono xxs muted">${esc(p.path)}</div></span></label>`).join('')}</div>
+    <div class="row">${bchip(t.b, t.m)}${modeChip(t.mode)}<span class="chip">${t.wt ? '新 worktree' : '当前目录'}</span></div>
+    <label class="fld">本次附加说明（可选）<textarea class="inp" id="rn-extra" style="min-height:48px"></textarea></label>
+    <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-run" data-arg="${t.id}">${ic('play', 's')}运行</button></div>`);
+}
+function schDialog(sid, tplId) {
+  const s = S.schedules.find((x) => x.id === sid) || { id: '', name: '', tpl: tplId || S.templates[0].id, project: 'billing', cron: '0 9 * * 1-5', on: true, mode: (S.templates.find((x) => x.id === (tplId || S.templates[0].id)) || {}).mode || 'readonly', skip: true };
+  const presets = [['hourly', '每小时', '0 * * * *'], ['daily', '每天', '0 9 * * *'], ['weekday', '工作日', '0 9 * * 1-5'], ['custom', '自定义 cron', '']];
+  const cur = presets.find((p) => p[2] === s.cron) ? presets.find((p) => p[2] === s.cron)[0] : 'custom';
+  dialog(`<h3>${s.id ? '编辑定时任务' : '新建定时任务'}</h3>
+    <div class="row" style="gap:10px"><label class="fld grow">名称<input class="inp" type="text" id="sc-name" value="${esc(s.name)}" placeholder="例如：工作日依赖巡检"></label>
+      <label class="fld grow">模板<select class="inp" id="sc-tpl">${S.templates.map((t) => `<option value="${t.id}" ${t.id === s.tpl ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
+      <label class="fld grow">项目<select class="inp" id="sc-proj">${PROJECTS.map((p) => `<option value="${p.id}" ${p.id === s.project ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label></div>
+    <div class="col" style="gap:6px"><span class="xs muted">频率</span><div class="seg" id="sc-pre">${presets.map(([k, l]) => `<button type="button" data-pre="${k}" class="${k === cur ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="row" style="gap:10px"><label class="fld" id="sc-time-wrap" style="width:120px">时间<input class="inp" type="time" id="sc-time" value="09:00"></label>
+      <label class="fld grow">cron 表达式<input class="inp mono" type="text" id="sc-cron" value="${esc(s.cron)}"></label></div>
+      <div class="xs" id="sc-human"></div></div>
+    <label class="fld">权限模式<select class="inp" id="sc-mode">${Object.entries(MODES).map(([k, x]) => `<option value="${k}" ${k === s.mode ? 'selected' : ''}>${x.label}</option>`).join('')}</select></label>
+    <div id="sc-warn"></div>
+    <label class="chk"><input type="checkbox" id="sc-skip" ${s.skip ? 'checked' : ''}><span>上一次仍在运行时跳过本次</span></label>
+    <label class="chk"><input type="checkbox" id="sc-notify" checked><span>运行结束后通知我（失败或等待审批时总是通知）</span></label>
+    <div class="foot">${s.id ? `<button class="btn ghost" data-act="sch-del" data-arg="${s.id}" style="margin-right:auto;color:var(--danger)">删除</button>` : ''}<button class="btn ghost" data-act="close">取消</button><button class="btn pri" id="sc-save" data-act="sch-save" data-arg="${s.id}">保存</button></div>`);
+  let preset = cur;
+  const fromPreset = () => {
+    const [h, m] = (val('sc-time') || '09:00').split(':').map(Number);
+    const c = { hourly: `${m} * * * *`, daily: `${m} ${h} * * *`, weekday: `${m} ${h} * * 1-5` }[preset];
+    if (c) $('sc-cron').value = c; $('sc-time-wrap').style.display = preset === 'custom' ? 'none' : ''; $('sc-cron').readOnly = preset !== 'custom'; refresh();
+  };
+  const refresh = () => {
+    const c = val('sc-cron'); const ok = cronValid(c); const runs = nextRuns(c, 3);
+    $('sc-human').innerHTML = ok ? `<b>${cronHuman(c)}</b> <span class="muted">· 接下来：${runs.map(fmtWhen).join('、') || '40 天内无匹配'}</span>` : '<span style="color:var(--danger)">cron 表达式无效（需要 5 段：分 时 日 月 周）</span>';
+    const md = MODES[val('sc-mode')];
+    $('sc-warn').innerHTML = md.approvals ? `<div class="warnbox">${ic('alert')}<div><b>无人值守时会卡住</b><div>「${md.label}」在${md.partial ? '执行命令、联网等' : '编辑文件和执行命令'}时需要人工审批。定时运行时没人点「允许」，任务会停在等待状态，${val('sc-skip') ? '并导致后续触发被跳过' : '并持续占用一个会话'}。建议改为「完全访问」（配合新 worktree）或「只读」。</div><div class="row" style="margin-top:6px;gap:6px"><button type="button" class="btn sm" id="sc-fix-full">改为完全访问</button><button type="button" class="btn sm ghost" id="sc-fix-ro">改为只读</button></div></div></div>` : '';
+    const f1 = $('sc-fix-full'), f2 = $('sc-fix-ro'); if (f1) f1.onclick = () => { $('sc-mode').value = 'full'; refresh(); }; if (f2) f2.onclick = () => { $('sc-mode').value = 'readonly'; refresh(); };
+    $('sc-save').toggleAttribute('disabled', !ok);
+  };
+  $('sc-pre').onclick = (e) => { const b = e.target.closest('[data-pre]'); if (!b) return; preset = b.dataset.pre; $('sc-pre').querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); fromPreset(); };
+  $('sc-time').oninput = fromPreset; $('sc-cron').oninput = refresh; $('sc-mode').onchange = refresh; $('sc-skip').onchange = refresh;
+  $('sc-tpl').onchange = () => { const t = S.templates.find((x) => x.id === val('sc-tpl')); $('sc-mode').value = t.mode; refresh(); };
+  if (cur !== 'custom') { const [mm, hh] = s.cron.split(' '); if (/^\d+$/.test(hh)) $('sc-time').value = `${pad(hh)}:${pad(mm)}`; }
+  fromPreset();
+}
+function palette() {
+  const items = [
+    ...S.templates.map((t) => ({ g: '任务模板', l: `运行模板：${t.name}`, act: 'tpl-run', arg: t.id, icon: 'play' })),
+    { g: '任务模板', l: '新建任务模板…', act: 'tpl-edit', arg: '', icon: 'plus' }, { g: '任务模板', l: '新建定时任务…', act: 'sch-new', arg: '', icon: 'clock' },
+    { g: '会话', l: '新建会话', act: 'close', icon: 'msg' }, { g: '会话', l: '交接当前会话给其他后端…', act: 'handoff-open', icon: 'handoff' }, { g: '会话', l: '并行尝试…', act: 'scene', arg: 'attempts', icon: 'layers' },
+  ];
+  $('overlay').innerHTML = `<div class="scrim" data-act="scrim"><div class="palette"><input id="pal-q" placeholder="搜索命令、模板…" autofocus><div id="pal-l" style="max-height:380px;overflow:auto;padding:6px"></div></div></div>`;
+  const draw = () => { const q = val('pal-q').trim(); let last = ''; $('pal-l').innerHTML = items.filter((x) => !q || x.l.includes(q)).map((x) => { const h = x.g !== last ? `<div class="xxs faint" style="padding:6px 10px 2px">${x.g}</div>` : ''; last = x.g; return h + `<button class="mi" data-act="${x.act}" data-arg="${x.arg || ''}">${ic(x.icon, 's')}${esc(x.l)}</button>`; }).join(''); };
+  $('pal-q').oninput = draw; draw(); $('pal-q').focus();
+}
+
+/* ============ 交互分发 ============ */
+const INITIAL = JSON.stringify(S, function (k, v) { return this[k] instanceof Date ? { __d: this[k].getTime() } : v; });
+function resetState() { const fresh = JSON.parse(INITIAL, (k, v) => (v && v.__d ? new Date(v.__d) : v)); Object.keys(S).forEach((k) => delete S[k]); Object.assign(S, fresh); }
+const ACT = {
+  scene: (a) => { S.scene = a; S.menu = false; S.parMenu = false; closeDialog(); render(); },
+  variant: (a) => { S.v[S.scene] = a; render(); },
+  theme: () => { document.documentElement.classList.toggle('dark'); renderBar(); },
+  reset: () => { resetState(); render(); toast('已重置演示状态'); },
+  note: () => { S.noteMin = !S.noteMin; renderNote(); },
+  close: () => closeDialog(),
+  toast: (a) => toast(a),
+  menu: () => { S.menu = !S.menu; renderMain(); },
+  palette: () => palette(),
+  // 审阅
+  'aside-tab': (a) => { S.asideTab = a; S.openFile = null; renderAside(); },
+  'open-file': (a) => { S.openFile = +a; S.sel = null; renderAside(); },
+  'close-file': () => { S.openFile = null; S.sel = null; renderAside(); },
+  line: (a, e) => {
+    const i = +a, f = FILES[S.openFile];
+    if (e.shiftKey && S.sel && S.sel.file === f.path) { S.sel = { file: f.path, from: Math.min(S.anchor, i), to: Math.max(S.anchor, i) }; }
+    else { S.anchor = i; S.sel = { file: f.path, from: i, to: i }; }
+    const keep = $('cmt') ? $('cmt').value : ''; renderAside(); if ($('cmt')) { $('cmt').value = keep; $('cmt').focus(); }
+  },
+  'cancel-comment': () => { S.sel = null; renderAside(); },
+  'add-comment': () => { const t = val('cmt').trim(); if (!t) return toast('请先写下意见'); S.comments.push({ id: 'c' + Date.now(), ...S.sel, text: t }); S.sel = null; renderAside(); },
+  'del-comment': (a) => { S.comments = S.comments.filter((c) => c.id !== a); renderAside(); },
+  'jump-comment': (a) => { const c = S.comments.find((x) => x.id === a); S.openFile = FILES.findIndex((f) => f.path === c.file); renderAside(); },
+  'clear-comments': () => { S.comments = []; renderAside(); },
+  'send-review': () => {
+    dialog(`<h3>发回给 Agent</h3><div class="xs muted">以下内容将作为一条新的用户消息发送给 Claude Code（当前会话空闲，将直接发送；若正在运行则排队到本回合结束后）。</div>
+      <pre class="preview">${esc(reviewPrompt())}</pre>
+      <label class="chk"><input type="checkbox" id="rv-edit"><span>先放进输入框，我再改改</span></label>
+      <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn acc" data-act="do-send-review">${ic('arrow', 's')}发送（${S.comments.length} 条意见）</button></div>`, 'lg');
+  },
+  'do-send-review': () => {
+    const text = reviewPrompt(); const edit = val('rv-edit'); closeDialog();
+    if (edit) { S.comments = []; renderAside(); $('composer').value = text; $('composer').focus(); return; }
+    S.reviewTurns.push({ user: text, time: '17:42', tools: [], asst: '<span class="row muted"><span class="spin"></span>正在根据审阅意见修改…</span>' });
+    const turn = S.reviewTurns[S.reviewTurns.length - 1]; const n = S.comments.length;
+    S.comments = []; S.openFile = null; render(); toast('审阅意见已发送');
+    setTimeout(() => { turn.tools = ['编辑 src/invoices/csv.ts', '编辑 src/invoices/export.ts', '运行 pnpm test --filter invoices']; turn.asst = `已按 ${n} 条意见修改，测试 <b>24 passed</b>。`; if (S.scene === 'review') renderMain(); }, 2600);
+  },
+  push: () => { S.pushed = true; S.ahead = 0; renderAside(); toast('已推送到 origin/riffet/invoice-csv'); },
+  'pr-dialog': () => {
+    dialog(`<h3>创建 Pull Request</h3>
+      <div class="row xs muted">${ic('branch', 's')}<span class="mono">riffet/invoice-csv</span>${ic('arrow', 's')}<select class="inp" id="pr-base" style="width:auto"><option>main</option><option>release/2026.10</option></select>${S.pushed ? '' : '<span class="chip warn">将先推送分支</span>'}</div>
+      <label class="fld">标题<input class="inp" type="text" id="pr-title" value="feat(invoices): 发票列表支持导出 CSV"></label>
+      <label class="fld">描述<textarea class="inp" id="pr-body" style="min-height:130px">## 改动\n- 新增 src/invoices/csv.ts：CSV 字段转义与行拼接\n- 新增 exportInvoicesCsv()，复用 listInvoices 的筛选\n- money.ts 增加 formatCents()\n\n## 测试\n- pnpm test --filter invoices：24 passed</textarea></label>
+      <div class="row"><button class="btn sm ghost">${ic('spark', 's')}让 Agent 生成标题和描述</button><span class="sp"></span><label class="chk"><input type="checkbox" id="pr-draft"><span>创建为草稿</span></label></div>
+      <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-pr">${ic('pr', 's')}创建 PR</button></div>`, 'lg');
+  },
+  'do-pr': () => {
+    S.pushed = true; S.ahead = 0;
+    S.pr = { num: 123, title: val('pr-title'), base: val('pr-base'), head: 'riffet/invoice-csv', draft: val('pr-draft'), review: '等待审阅', checks: [{ name: 'lint', st: 'pass', dur: '41秒' }, { name: 'typecheck', st: 'pending' }, { name: 'unit-test', st: 'pending' }, { name: 'e2e (playwright)', st: 'pending' }] };
+    closeDialog(); render(); toast('已创建 PR #123'); startCi();
+  },
+  'pr-open': () => toast('在浏览器中打开 https://github.com/acme/billing-service/pull/123'),
+  'pr-refresh': () => { if (S.pr && !S.pr.checks.some((c) => c.st === 'pending')) S.pr.review = S.pr.review === '等待审阅' ? '已批准' : S.pr.review; renderMain(); renderAside(); },
+  'ci-fix': () => { S.reviewTurns.push({ user: 'PR #123 的 CI 检查「e2e (playwright)」失败了，请根据日志修复：\n\n> ✘ invoices/export.spec.ts:18 下载的文件名应包含日期\n>   Expected: /发票_\\d{4}-\\d{2}-\\d{2}/\n>   Received: "invoices.csv"', time: '17:45', asst: '<span class="row muted"><span class="spin"></span>正在修复…</span>' }); renderMain(); toast('已把 CI 失败日志发给 Agent'); },
+  'merge-dialog': () => {
+    dialog(`<h3>合并回 main</h3><div class="xs muted">把 worktree 分支 <span class="mono">riffet/invoice-csv</span> 合并到主工作区的 <span class="mono">main</span>（~/code/billing-service）。</div>
+      <div class="col"><label class="chk"><input type="radio" name="mg" value="merge"><span><b>Merge</b> · 保留 3 个提交</span></label><label class="chk"><input type="radio" name="mg" value="squash" checked><span><b>Squash</b> · 合并为 1 个提交</span></label></div>
+      <label class="fld">提交说明<input class="inp" type="text" value="feat(invoices): 发票列表支持导出 CSV"></label>
+      <label class="chk"><input type="checkbox" id="mg-commit" checked><span>先提交未提交的改动（4 个文件）</span></label>
+      <label class="chk"><input type="checkbox" id="mg-clean"><span>合并后删除此 worktree 和分支</span></label>
+      <div class="infobox">${ic('alert', 's')}<span>主工作区当前干净；若存在冲突，将中止合并并保留 worktree。</span></div>
+      <div class="foot"><button class="btn ghost" data-act="close">取消</button><button class="btn pri" data-act="do-merge">${ic('merge', 's')}合并</button></div>`);
+  },
+  'do-merge': () => { S.merged = { mode: radio('mg'), sha: 'a1f9c2e' }; closeDialog(); renderAside(); toast('已合并到 main'); },
+  // 检查点
+  rail: (a) => { S.railPop = S.railPop === +a ? null : +a; renderMain(); },
+  rewind: (a) => { S.railPop = null; if (a === '') return toast('恢复手动检查点（同现有实现）'); rewindDialog(+a); },
+  'restore-cp': () => toast('恢复检查点（同现有实现）'),
+  'do-rewind': (a) => { S.rewoundAt = +a; closeDialog(); render(); toast('已回退，并保存了「回退前自动备份」'); },
+  'undo-rewind': () => { S.rewoundAt = null; render(); toast('已从备份检查点恢复'); },
+  fork: (a) => { S.railPop = null; forkDialog(+a); },
+  'fork-latest': () => { S.menu = false; if (S.scene !== 'checkpoint') { S.scene = 'checkpoint'; render(); } forkDialog(CP_TURNS.length - 1); },
+  'do-fork': (a) => {
+    const i = +a, b = val('fk-b'), m = val('fk-m'), when = radio('fk-when');
+    S.forks.push({ turn: i, when, b, m, wt: val('fk-wt'), branch: `riffet/fork-money-${i + 1}`, extra: val('fk-extra').trim(), title: `分叉 · 回合 ${i + 1}${when === 'after' ? '后' : '前'}` });
+    S.viewFork = String(S.forks.length - 1); closeDialog(); render(); toast('已创建分叉会话');
+  },
+  'view-fork': (a) => { S.viewFork = a || null; render(); },
+  'git-tab': (a) => { S.gitTab = a; renderAside(); },
+  'git-cp': () => { S.railPop = null; S.gitTab = 'checkpoints'; render(); },
+  'cp-filter': (a) => { S.cpFilter = a; renderAside(); },
+  'save-cp': () => { S.manualCps.push({ id: 'm' + Date.now(), title: val('cpname').trim() || '手动检查点', time: '17:4' + S.manualCps.length, files: 7, manual: true }); renderAside(); toast('检查点已保存'); },
+  // 并行尝试
+  'par-menu': () => { S.parMenu = !S.parMenu; const d = val('composer'); if (d !== undefined) S.draft = d; renderMain(); },
+  'par-on': () => { S.par.on = !S.par.on; renderMain(); },
+  'par-toggle': (a) => {
+    const [b, m] = a.split('|'); const i = S.par.targets.findIndex((t) => t.b === b && t.m === m);
+    if (i >= 0) S.par.targets.splice(i, 1); else if (S.par.targets.length >= 4) return toast('最多 4 个并行尝试'); else S.par.targets.push({ b, m });
+    S.par.on = true; S.draft = val('composer'); renderMain();
+  },
+  'send-par': () => {
+    const text = val('composer').trim(); if (!text) return;
+    if (!S.par.on) return toast('（普通发送，演示略）');
+    if (S.par.targets.length < 2) return toast('请至少选择 2 个目标');
+    S.draft = text; S.parMenu = false; S.group = newGroup(text); S.adopted = null; S.viewAttempt = null; render(); tickGroup();
+    toast(`已创建尝试组：${S.group.attempts.length} 个会话，${S.group.attempts.length} 个 worktree`);
+  },
+  'view-attempt': (a) => { S.viewAttempt = a || null; render(); },
+  adopt: (a) => adoptDialog(+a),
+  'do-adopt': (a) => { const mode = radio('ad-mode'); S.adopted = +a; closeDialog(); render(); toast(`已${mode === 'merge' ? '' : ' squash '}合并尝试 ${+a + 1} 到 main，其他尝试已归档`); },
+  // 交接
+  'handoff-open': () => { S.menu = false; closeDialog(); if (S.scene !== 'handoff') { S.scene = 'handoff'; } S.viewHand = 'orig'; render(); if (S.handed) return toast('此会话已交接'); handoffDialog(); },
+  'do-handoff': () => {
+    const st = window.__ho; S.handed = { ...st, ctx: handoffContext(st), running: true }; S.viewHand = 'new'; closeDialog(); render(); toast(`已交接给 ${B[st.b].short}`);
+    setTimeout(() => { S.handed.running = false; if (S.scene === 'handoff') render(); }, 2400);
+  },
+  'view-hand': (a) => { S.viewHand = a; render(); },
+  'show-ctx': () => dialog(`<h3>交接上下文</h3><pre class="preview" style="max-height:60vh">${esc(S.handed.ctx)}</pre><div class="foot"><button class="btn" data-act="close">关闭</button></div>`, 'lg'),
+  'save-tpl': () => { S.menu = false; S.scene = 'tasks'; S.tasksTab = 'templates'; render(); tplDialog(''); $('tp-name').value = '导出发票 CSV'; $('tp-prompt').value = CSV_TURNS[0].user; },
+  // 任务
+  'tasks-tab': (a) => { S.tasksTab = a; renderMain(); },
+  'tpl-edit': (a) => { if (S.scene !== 'tasks') { S.scene = 'tasks'; render(); } tplDialog(a); },
+  'tpl-save': (a) => {
+    const t = { id: a || 't' + Date.now(), name: val('tp-name').trim() || '未命名模板', prompt: val('tp-prompt').trim(), b: val('tp-b'), m: val('tp-m'), wt: val('tp-wt'), mode: val('tp-mode') };
+    const i = S.templates.findIndex((x) => x.id === a); if (i >= 0) S.templates[i] = t; else S.templates.push(t);
+    closeDialog(); render(); toast('模板已保存');
+  },
+  'tpl-del': (a) => { S.templates = S.templates.filter((x) => x.id !== a); closeDialog(); render(); },
+  'tpl-run': (a) => { if (S.scene !== 'tasks') { S.scene = 'tasks'; render(); } runDialog(a); },
+  'do-run': (a) => {
+    const t = S.templates.find((x) => x.id === a); const proj = radio('rn-p'); const r = { title: `${t.name} · 手动`, running: true }; S.taskRuns.unshift(r); closeDialog(); render();
+    toast(`已在 ${projName(proj)} 启动「${t.name}」${t.wt ? '（新 worktree）' : ''}`);
+    setTimeout(() => { r.running = false; renderSidebar(); }, 3000);
+  },
+  'sch-new': (a) => { if (S.scene !== 'tasks') { S.scene = 'tasks'; } S.tasksTab = 'schedules'; render(); schDialog('', a || undefined); },
+  'sch-edit': (a) => schDialog(a),
+  'sch-toggle': (a) => { const s = S.schedules.find((x) => x.id === a); s.on = !s.on; renderMain(); renderSidebar(); },
+  'sch-run': (a) => { const s = S.schedules.find((x) => x.id === a); s.last = { st: 'running', when: NOW, title: `${s.name} · 手动触发`, dur: '刚刚开始' }; renderMain(); setTimeout(() => { s.last = { ...s.last, st: MODES[s.mode].approvals ? 'stalled' : 'ok', dur: MODES[s.mode].approvals ? '停在审批：执行 git push' : '1分48秒' }; if (S.scene === 'tasks') renderMain(); }, 2500); },
+  'sch-save': (a) => {
+    const s = { id: a || 's' + Date.now(), name: val('sc-name').trim() || '未命名定时任务', tpl: val('sc-tpl'), project: val('sc-proj'), cron: val('sc-cron').trim(), mode: val('sc-mode'), skip: val('sc-skip'), on: true };
+    const i = S.schedules.findIndex((x) => x.id === a); if (i >= 0) S.schedules[i] = { ...S.schedules[i], ...s }; else S.schedules.push(s);
+    closeDialog(); render(); toast(`已保存：${cronHuman(s.cron)}`);
+  },
+  'sch-del': (a) => { S.schedules = S.schedules.filter((x) => x.id !== a); closeDialog(); render(); },
+};
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if (S.parMenu && !e.target.closest('.pop') && !(el && el.dataset.act === 'par-menu')) { S.parMenu = false; if (S.scene === 'attempts') { const d = val('composer'); if (d !== undefined) S.draft = d; renderMain(); } }
+  if (S.menu && !e.target.closest('.pop') && !(el && el.dataset.act === 'menu')) { S.menu = false; renderMain(); }
+  if (!el) return;
+  if (el.dataset.act === 'scrim') { if (e.target === el) closeDialog(); return; }
+  if (el.dataset.act === 'palette' && el.closest('.scrim')) return;
+  const fn = ACT[el.dataset.act]; if (!fn) return;
+  if (el.closest('.palette')) closeDialog();
+  fn(el.dataset.arg ?? '', e);
+});
+document.addEventListener('change', (e) => { if (e.target.dataset.change === 'cmp-file') { S.cmpFile = e.target.value; renderMain(); } });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); palette(); }
+  if (e.key === 'Escape') { closeDialog(); S.menu = false; S.parMenu = false; render(); }
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && e.target.id === 'cmt') ACT['add-comment']();
+});
+document.addEventListener('DOMContentLoaded', () => { initFiles(); render(); });
+</script>
+<!-- 演示用 diff 数据 -->
+<script type="text/plain" id="diff-export">
+@@ -1,9 +1,14 @@
+ import { listInvoices, type InvoiceFilter } from './service';
++import { toCsv, type CsvColumn } from './csv';
++import { formatCents } from '../lib/money';
+ import type { Invoice } from './types';
+
+-export async function exportInvoices(filter: InvoiceFilter) {
+-  return listInvoices(filter);
++const columns: CsvColumn<Invoice>[] = [
++  { header: '发票号', value: (row) => row.number },
++  { header: '客户', value: (row) => row.customerName },
++  { header: '金额', value: (row) => formatCents(row.amountCents) },
++  { header: '状态', value: (row) => statusLabel[row.status] },
++];
+@@ -18,6 +23,18 @@ export async function exportInvoices(filter: InvoiceFilter) {
+ export const statusLabel = { draft: '草稿', open: '待支付', paid: '已支付', void: '已作废' };
+
++export async function exportInvoicesCsv(filter: InvoiceFilter) {
++  const rows = await listInvoices({ ...filter, limit: 10_000 });
++  const from = filter.from?.slice(0, 10) ?? 'all';
++  const to = filter.to?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
++  return {
++    filename: `发票_${from}_${to}.csv`,
++    body: '\uFEFF' + toCsv(rows, columns),
++  };
++}
++
+ export function exportFilename(prefix: string) {
+   return `${prefix}-${Date.now()}.json`;
+ }
+</script>
+<script type="text/plain" id="diff-csv">
+@@ -0,0 +1,22 @@
++export interface CsvColumn<T> {
++  header: string;
++  value: (row: T) => string | number | null | undefined;
++}
++
++const NEEDS_QUOTE = /[",\r\n]/;
++
++export function escapeCell(input: unknown): string {
++  if (input === null || input === undefined) return '';
++  const text = String(input);
++  if (!NEEDS_QUOTE.test(text)) return text;
++  return `"${text.replace(/"/g, '""')}"`;
++}
++
++export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
++  const head = columns.map((c) => escapeCell(c.header)).join(',');
++  const body = rows.map((row) =>
++    columns.map((c) => escapeCell(c.value(row))).join(','),
++  );
++  return [head, ...body].join('\r\n');
++}
+</script>
+<script type="text/plain" id="diff-money">
+@@ -12,7 +12,15 @@ export function toCents(amount: number) {
+   return Math.round(amount * 100);
+ }
+
+-export function formatMoney(cents: number) {
+-  return (cents / 100).toString();
++export function formatMoney(cents: number, currency = 'CNY') {
++  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency }).format(cents / 100);
++}
++
++/** 用于导出：固定两位小数，不带货币符号和千分位。 */
++export function formatCents(cents: number) {
++  const sign = cents < 0 ? '-' : '';
++  const abs = Math.abs(cents);
++  return `${sign}${Math.floor(abs / 100)}.${String(abs % 100).padStart(2, '0')}`;
+ }
+</script>
+<script type="text/plain" id="diff-test">
+@@ -40,4 +40,28 @@ describe('exportInvoices', () => {
+   });
+ });
++
++describe('exportInvoicesCsv', () => {
++  it('escapes commas, quotes and newlines', async () => {
++    seed([{ number: 'INV-1', customerName: '北京, "星河" 科技', amountCents: 123456 }]);
++    const { body } = await exportInvoicesCsv({});
++    expect(body).toContain('"北京, ""星河"" 科技"');
++  });
++
++  it('formats amounts with two decimals', async () => {
++    seed([{ number: 'INV-2', customerName: 'A', amountCents: 5 }]);
++    const { body } = await exportInvoicesCsv({});
++    expect(body).toContain(',0.05,');
++  });
++
++  it('puts the date range in the filename', async () => {
++    const { filename } = await exportInvoicesCsv({ from: '2026-10-01', to: '2026-10-16' });
++    expect(filename).toBe('发票_2026-10-01_2026-10-16.csv');
++  });
++});
+</script>
+</body>
+</html>

@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riffet · 并行尝试重设计 Demo</title>
+<style>
+:root{
+  --bg:#fff;--sidebar:#f7f8fa;--subtle:#f5f6f8;--muted:#eef0f3;--elev:#fff;--hover:rgb(35 45 70/.055);--active:rgb(35 45 70/.09);
+  --fg:#121417;--fg2:#50555d;--fg3:#60666e;--fg4:#adb2ba;--line:rgb(15 23 42/.09);--line2:rgb(15 23 42/.15);
+  --accent:#3867f0;--accent-h:#2d59dc;--accent-soft:rgb(56 103 240/.1);--success:#1f9d55;--success-soft:rgb(31 157 85/.1);
+  --danger:#e0454b;--danger-soft:rgb(224 69 75/.08);--warn:#d9930d;--warn-soft:rgb(217 147 13/.12);
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  --r:10px;--shadow:0 12px 40px -12px rgb(15 23 42/.25),0 0 0 1px var(--line2);
+}
+body.dark{--bg:#141416;--sidebar:#1a1a1d;--subtle:#1d1d20;--muted:#27272b;--elev:#1f1f22;--hover:rgb(255 255 255/.06);--active:rgb(255 255 255/.1);--fg:#eceef1;--fg2:#b6bac1;--fg3:#9da2aa;--fg4:#62666e;--line:rgb(255 255 255/.08);--line2:rgb(255 255 255/.14);--accent:#5b8cff;--accent-h:#4a7cf5;--accent-soft:rgb(91 140 255/.15);--success:#3fb96f;--danger:#f0676c;--warn:#e6b34d}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;font-family:var(--sans);background:var(--muted);color:var(--fg);font-size:14px}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}
+input,select,textarea{font:inherit;color:var(--fg)}a{color:var(--accent);text-decoration:none}
+::-webkit-scrollbar{width:9px;height:9px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:9px;border:2px solid transparent;background-clip:padding-box}
+
+/* ---------- demo chrome ---------- */
+.demo-bar{height:48px;display:flex;align-items:center;gap:12px;padding:0 16px;background:var(--elev);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:60}
+.demo-bar b{font-size:13.5px}.demo-bar .tag{font-size:11px;color:var(--accent);background:var(--accent-soft);padding:3px 8px;border-radius:99px;font-weight:600}
+.steps{display:flex;gap:4px;margin-left:10px}.steps span{font-size:12px;color:var(--fg3);padding:5px 10px;border-radius:99px;border:1px solid var(--line)}
+.steps span.on{color:var(--fg);background:var(--muted);border-color:var(--line2);font-weight:600}
+.demo-bar .sp{flex:1}.tbtn{font-size:12.5px;padding:6px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}.tbtn:hover{background:var(--hover)}
+.flow-hint{font-size:12px;color:var(--fg3)}
+
+/* ---------- app frame ---------- */
+.app{display:flex;height:calc(100vh - 48px);background:var(--bg);overflow:hidden}
+.sidebar{width:264px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+.sb-sec{padding:14px 10px 4px}.sb-title{font-size:11px;font-weight:600;color:var(--fg4);letter-spacing:.04em;padding:0 8px 6px;display:flex;justify-content:space-between;align-items:center}
+.sb-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 8px;border-radius:8px;font-size:13px;color:var(--fg2)}
+.sb-item:hover{background:var(--hover)}.sb-item.on{background:var(--active);color:var(--fg);font-weight:550}
+.sb-item .grow{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sb-item.child{padding-left:28px;font-size:12.5px}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}.dot.run{background:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);animation:pulse 1.6s infinite}
+.dot.wait{background:var(--warn)}.dot.done{background:transparent;border:1.6px solid var(--success)}.dot.fail{background:var(--danger)}.dot.idle{background:transparent;border:1.6px solid var(--fg4)}
+@keyframes pulse{50%{box-shadow:0 0 0 5px transparent}}
+.badge{font-size:10.5px;padding:1.5px 6px;border-radius:99px;background:var(--muted);color:var(--fg3);font-weight:600;flex:none}
+.badge.ok{background:var(--success-soft);color:var(--success)}.badge.warn{background:var(--warn-soft);color:var(--warn)}.badge.acc{background:var(--accent-soft);color:var(--accent)}
+.sb-foot{margin-top:auto;padding:10px;border-top:1px solid var(--line);font-size:12px;color:var(--fg3)}
+.main{flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.scroll{flex:1;overflow-y:auto}
+.col{max-width:1060px;margin:0 auto;padding:28px 36px 60px;width:100%}
+.col.wide{max-width:1240px}
+h1{font-size:21px;margin:0 0 4px}h2{font-size:15px;margin:0}h3{font-size:13px;margin:0}
+.muted{color:var(--fg3)}.small{font-size:12px}.xs{font-size:11.5px}.mono{font-family:var(--mono);font-size:12px}
+.add{color:var(--success)}.del{color:var(--danger)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;font-size:13px;font-weight:550;border:1px solid var(--line);background:var(--bg)}
+.btn:hover{background:var(--hover)}.btn.pri{background:var(--accent);color:#fff;border-color:transparent}.btn.pri:hover{background:var(--accent-h)}
+.btn.sm{padding:5px 10px;font-size:12.5px;border-radius:8px}.btn.danger{color:var(--danger)}.btn.ghost{border-color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid var(--line);border-radius:99px;font-size:12.5px;background:var(--bg);cursor:pointer}.chip:hover{background:var(--hover)}
+.chip.on{background:var(--accent-soft);border-color:transparent;color:var(--accent);font-weight:600}
+.card{border:1px solid var(--line);border-radius:14px;background:var(--elev)}
+select.sel{padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--bg);font-size:12.5px;max-width:170px}
+.progress{height:5px;background:var(--muted);border-radius:99px;overflow:hidden}.progress i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .5s}
+
+/* ---------- launch ---------- */
+.hero{max-width:760px;margin:26px auto 0}
+.composer{border:1px solid var(--line2);border-radius:16px;background:var(--elev);box-shadow:0 4px 20px -8px rgb(15 23 42/.12);overflow:hidden}
+.composer textarea{width:100%;border:0;outline:0;resize:vertical;min-height:92px;padding:16px 16px 8px;background:transparent;font-size:14.5px;line-height:1.55}
+.composer .ctx{display:flex;gap:6px;padding:0 12px 8px;flex-wrap:wrap}
+.ctxchip{font-size:11.5px;font-family:var(--mono);background:var(--accent-soft);color:var(--accent);padding:3px 8px;border-radius:6px;display:inline-flex;gap:6px;align-items:center}
+.ctxchip button{color:inherit;opacity:.6;padding:0}
+.composer .bar{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line-soft,var(--line));background:var(--subtle)}
+.par-panel{border-top:1px solid var(--line);padding:14px 16px;background:var(--bg)}
+.par-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.presets{display:flex;gap:6px;margin:10px 0 14px;flex-wrap:wrap}
+.att-row{display:flex;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--elev);flex-wrap:wrap}
+.att-row .idx{width:22px;height:22px;border-radius:7px;background:var(--muted);display:grid;place-items:center;font-size:11.5px;font-weight:700;color:var(--fg2);flex:none}
+.att-row .grow{flex:1}
+.iconbtn{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;color:var(--fg3)}.iconbtn:hover{background:var(--hover);color:var(--fg)}
+.warn-line{display:flex;gap:8px;font-size:12.5px;color:var(--warn);background:var(--warn-soft);padding:9px 12px;border-radius:9px;margin-top:10px;line-height:1.5}
+.err-line{color:var(--danger);background:var(--danger-soft)}
+.field label{font-size:12px;font-weight:600;color:var(--fg2);display:block;margin-bottom:6px}
+.quick-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:760px;margin:22px auto 0}
+.quick{border:1px solid var(--line);border-radius:12px;padding:14px;text-align:left;background:var(--elev)}.quick:hover{background:var(--hover)}.quick b{font-size:13px;display:block;margin-bottom:3px}.quick span{font-size:12px;color:var(--fg3)}
+.quick.sel{border-color:var(--accent);background:var(--accent-soft)}
+
+/* ---------- group ---------- */
+.g-head{display:flex;gap:14px;align-items:flex-start}
+.g-actions{margin-left:auto;display:flex;gap:8px;flex:none}
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:20px 0 18px}
+.tabs button{padding:8px 14px;font-size:13.5px;color:var(--fg3);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button.on{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
+.cmp-grid{display:grid;gap:14px}
+.att-card{padding:16px;display:flex;flex-direction:column;gap:10px;position:relative}
+.att-card.win{border-color:var(--success);box-shadow:0 0 0 1px var(--success)}
+.att-card.rec{border-color:var(--accent)}
+.rec-tag{position:absolute;top:-9px;right:14px;font-size:11px;font-weight:700;background:var(--accent);color:#fff;padding:2px 9px;border-radius:99px}
+.att-top{display:flex;align-items:center;gap:9px}
+.avatar{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex:none}
+.summary{font-size:12.5px;color:var(--fg2);line-height:1.6;background:var(--subtle);border-radius:9px;padding:9px 11px;min-height:62px}
+.kv{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--fg3)}
+.filemini{font-family:var(--mono);font-size:11.5px;color:var(--fg2);display:flex;justify-content:space-between;padding:3px 0;border-top:1px dashed var(--line)}
+.att-foot{display:flex;gap:7px;margin-top:auto;flex-wrap:wrap}
+table.mx{width:100%;border-collapse:collapse;font-size:12.5px}
+table.mx th,table.mx td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+table.mx th{background:var(--subtle);font-weight:600}
+td.cell{font-family:var(--mono);font-size:11.5px;cursor:pointer}td.cell:hover{background:var(--hover)}td.cell.none{color:var(--fg4);cursor:default;font-family:var(--sans)}
+tr.overlap td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+.diff2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.diffpane{border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.diffpane header{padding:9px 12px;background:var(--subtle);border-bottom:1px solid var(--line);display:flex;gap:8px;align-items:center}
+pre.diff{margin:0;padding:10px 0;font-family:var(--mono);font-size:11.8px;line-height:1.65;overflow-x:auto}
+pre.diff .l{padding:0 12px;white-space:pre}
+pre.diff .a{background:var(--success-soft)}pre.diff .d{background:var(--danger-soft)}pre.diff .h{color:var(--fg4)}
+.banner{display:flex;gap:10px;align-items:center;border:1px solid var(--line);background:var(--accent-soft);border-radius:12px;padding:11px 14px;font-size:13px;margin-bottom:16px;flex-wrap:wrap}
+.banner.warnb{background:var(--warn-soft)}.banner.okb{background:var(--success-soft)}
+
+/* ---------- session ---------- */
+.strip{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--elev);flex-wrap:wrap}
+.strip .tabs2{display:flex;gap:2px;background:var(--muted);padding:3px;border-radius:10px}
+.strip .tabs2 button{padding:5px 11px;border-radius:8px;font-size:12.5px;color:var(--fg3);display:flex;gap:7px;align-items:center}
+.strip .tabs2 button.on{background:var(--elev);color:var(--fg);font-weight:600;box-shadow:0 0 0 .5px var(--line2)}
+.msg{max-width:780px;margin:0 auto;padding:14px 24px}
+.bubble{background:var(--muted);border-radius:14px;padding:11px 14px;line-height:1.65;max-width:85%;margin-left:auto}
+.answer{line-height:1.75;color:var(--fg2)}.answer p{margin:8px 0}
+.toolrow{font-family:var(--mono);font-size:12px;color:var(--fg3);border:1px solid var(--line);border-radius:9px;padding:7px 11px;margin:7px 0;display:flex;gap:8px}
+
+/* ---------- modal / toast / notes ---------- */
+.mask{position:fixed;inset:0;background:rgb(10 12 18/.45);display:none;place-items:center;z-index:80;padding:20px}.mask.show{display:grid}
+.modal{width:620px;max-width:100%;max-height:88vh;overflow-y:auto;background:var(--elev);border-radius:16px;box-shadow:var(--shadow);padding:22px}
+.seg{display:flex;background:var(--muted);padding:3px;border-radius:10px;gap:2px}.seg button{flex:1;padding:7px;border-radius:8px;font-size:13px;color:var(--fg3)}.seg button.on{background:var(--elev);color:var(--fg);font-weight:600;box-shadow:0 0 0 .5px var(--line2)}
+.radio{display:flex;gap:10px;border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:8px;cursor:pointer;align-items:flex-start}.radio.on{border-color:var(--accent);background:var(--accent-soft)}
+.check{display:flex;gap:9px;font-size:13px;padding:8px 0;align-items:flex-start;line-height:1.5}
+#toast{position:fixed;bottom:22px;left:50%;transform:translate(-50%,20px);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:11px;font-size:13px;opacity:0;pointer-events:none;transition:.3s;z-index:99;box-shadow:var(--shadow);max-width:80vw}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+.notes{position:fixed;right:18px;bottom:18px;z-index:70;width:340px;max-width:calc(100vw - 36px)}
+.notes .card{padding:14px 16px;box-shadow:var(--shadow)}
+.notes li{font-size:12.5px;color:var(--fg2);line-height:1.6;margin:5px 0}
+.num{display:inline-grid;place-items:center;width:17px;height:17px;border-radius:50%;background:var(--accent);color:#fff;font-size:10.5px;font-weight:700;vertical-align:2px;margin-right:4px}
+.hist-row{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:13px 15px;margin-bottom:9px;background:var(--elev);cursor:pointer;text-align:left;width:100%}.hist-row:hover{background:var(--hover)}
+@media(max-width:900px){.sidebar{display:none}.diff2{grid-template-columns:1fr}.quick-grid{grid-template-columns:1fr}.steps{display:none}}
+</style>
+</head>
+<body>
+<div class="demo-bar">
+  <b>Riffet</b><span class="tag">并行尝试 · 重设计 Demo</span>
+  <div class="steps" id="steps">
+    <span data-step="launch">1 发起</span><span data-step="group">2 对比决策</span><span data-step="session">3 单个尝试</span><span data-step="history">4 历史找回</span>
+  </div>
+  <span class="sp"></span>
+  <span class="flow-hint">建议体验：发起 → 等待模拟跑完（含 1 个失败 / 1 个待审批）→ 对比 → 采纳</span>
+  <button class="tbtn" id="notesBtn">设计注释 / GitHub 参考</button>
+  <button class="tbtn" id="darkBtn">深色</button>
+  <button class="tbtn" id="resetBtn">重置 Demo</button>
+</div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <main class="main"><div class="scroll" id="main"></div></main>
+</div>
+
+<div class="mask" id="mask"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<div class="notes" id="notes" hidden>
+  <div class="card">
+    <div style="display:flex;align-items:center"><h3>设计注释</h3><span style="flex:1"></span><button class="iconbtn" onclick="toggleNotes(false)">✕</button></div>
+    <ol style="padding-left:18px;margin:8px 0">
+      <li><b>尝试组是一等对象</b>：发起后进总览而非第一个会话；组在侧栏可展开，关掉会话也能从历史找回。</li>
+      <li><b>决策而非浏览</b>：卡片给摘要 / 测试 / 耗时 / token / 改动量，并算「推荐」及理由（测试通过 + 改动最小），重叠文件在矩阵里高亮——多人改同一文件是最贵的冲突信号。</li>
+      <li><b>全生命周期</b>：停止全部、失败重试（新尝试替代）、追加尝试、丢弃（归档 + 删 worktree）、采纳后一键清理其余。</li>
+      <li><b>采纳前预检</b>：目标分支干净 / 冲突预演 / 文件清单先给结论，冲突不再等点下合并才发现。</li>
+    </ol>
+    <h3 style="margin-top:12px">GitHub 参考（2026-10 查）</h3>
+    <ul style="padding-left:18px;margin:8px 0">
+      <li><a href="https://github.com/open-mercato/cezar" target="_blank">cezar</a>（743★）：同任务 ×2/×3「Variants」，对比 diff 留最佳——与本功能同构，借鉴其变体并列与用量汇总。</li>
+      <li><a href="https://github.com/BloopAI/vibe-kanban" target="_blank">vibe-kanban</a>（28.4k★）：attempt = worktree + 分支，diff 行内评论回喂 Agent、合并 / PR 收尾；借鉴审阅闭环。</li>
+      <li><a href="https://github.com/johannesjo/parallel-code" target="_blank">parallel-code</a>（1.1k★）：十 Agent 并行、diff 查看与「merge the wins, toss the rest」；借鉴丢弃的低摩擦。</li>
+      <li><a href="https://github.com/stravu/crystal" target="_blank">crystal→Nimbalyst</a>（3.1k★）：多会话并行 worktree 对比 approaches；<a href="https://www.conductor.build/docs/concepts/parallel-agents" target="_blank">Conductor</a>：共享 vs 独立 workspace 的二分，提醒我们把「对比型 / 独立型」讲清楚。</li>
+      <li><a href="https://github.com/smtg-ai/claude-squad" target="_blank">claude-squad</a>（8.6k★）：tmux + worktree 舰队状态总览；借鉴「谁在跑 / 谁等你」的一眼可见。</li>
+    </ul>
+    <p class="xs muted" style="line-height:1.6">Riffet 已有 worktree / 检查点 / 审阅评论 / 发布能力，Demo 只重排「并行尝试」这一段，不引入新实体。体验完请告诉我：对比主视图选卡片还是表格？采纳后默认清理策略？发起页是否保留同 Agent 多模型？</p>
+  </div>
+</div>
+
+<script>
+/* ================= mock data ================= */
+const AGENTS=[
+  {id:'cursor',label:'Cursor',color:'#3867f0',models:['默认','composer-2.5','gpt-5.6-sol']},
+  {id:'claude',label:'Claude Code',color:'#d97757',models:['默认','opus-4.8','sonnet-5']},
+  {id:'codex',label:'Codex',color:'#1f9d55',models:['默认','gpt-5.6-sol','gpt-5.6-terra']},
+  {id:'dsh',label:'DSH',color:'#8839ef',models:['默认','deepseek-v4']},
+];
+const PLANS=[
+  {summary:'接口层加 cursor 参数，列表改键集分页；保留旧 offset 兼容一版。测试全过，改动最克制。',files:[['apps/server/src/routes/sessions.ts',86,14],['apps/server/src/store.ts',42,9],['apps/web/src/lib/api.ts',18,6],['apps/server/src/app.test.ts',55,0]],tests:'12 通过',tok:'84k',dur:'6 分 12 秒',added:201,removed:29},
+  {summary:'新建 Pager 抽象统一三处列表分页，顺带迁移终端列表。范围更大，但后续可复用。',files:[['apps/server/src/pagination.ts',148,0],['apps/server/src/routes/sessions.ts',64,31],['apps/server/src/routes/terminals.ts',38,22],['apps/server/src/store.ts',20,4]],tests:'11 通过 · 1 失败',tok:'121k',dur:'9 分 03 秒',added:270,removed:57},
+  {summary:'只改前端：滚动到底时用最后一条 id 续拉，服务端不动。上线最快，但排序变化时会重复。',files:[['apps/web/src/app/Sidebar.tsx',47,12],['apps/web/src/lib/api.ts',9,3]],tests:'未跑服务端测试',tok:'39k',dur:'3 分 48 秒',added:56,removed:15},
+  {summary:'键集分页 + 游标签名防篡改，接口与前端一起改。比方案一多一层签名校验。',files:[['apps/server/src/routes/sessions.ts',92,18],['apps/server/src/store.ts',44,9],['apps/server/src/cursor.ts',36,0],['apps/web/src/lib/api.ts',18,6]],tests:'12 通过',tok:'97k',dur:'7 分 20 秒',added:190,removed:33},
+];
+let uid=0;
+function mkAttempt(agentId,model){
+  const a=AGENTS.find(x=>x.id===agentId)||AGENTS[0];
+  return {key:++uid,agent:a,model:model||'默认',status:'queued',progress:0,plan:PLANS[uid%PLANS.length],elapsed:0,discarded:false};
+}
+const S={
+  view:'launch', tab:'cards', prompt:'给会话列表加游标分页：滚动到底部自动加载更早的会话，排序变化时不能重复或漏掉；旧的 offset 参数保留一版兼容。',
+  preset:'multi', targets:[{agent:'cursor',model:'默认'},{agent:'claude',model:'默认'},{agent:'codex',model:'默认'}],
+  base:'HEAD（a3f9c21）', group:null, adopted:null, cleanup:'archive-remove', diffFile:'apps/server/src/routes/sessions.ts', diffPair:[0,1], sessionIdx:0, timer:null, notified:false,
+};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3400)}
+function toggleNotes(force){$('#notes').hidden=force!==undefined?!force:!$('#notes').hidden}
+$('#notesBtn').onclick=()=>toggleNotes();
+$('#darkBtn').onclick=()=>{document.body.classList.toggle('dark');$('#darkBtn').textContent=document.body.classList.contains('dark')?'浅色':'深色'};
+$('#resetBtn').onclick=()=>location.reload();
+
+/* ================= sidebar ================= */
+function dot(st){return `<span class="dot ${st==='running'?'run':st==='waiting'?'wait':st==='done'?'done':st==='failed'?'fail':'idle'}"></span>`}
+function renderSidebar(){
+  const g=S.group;
+  const groupRows=g?`
+    <div class="sb-title"><span>并行尝试 · 当前组</span><span class="badge ${g.attempts.every(a=>terminal(a)||a.discarded)?'ok':'acc'}">${g.attempts.filter(a=>a.status==='done').length}/${g.attempts.filter(a=>!a.discarded).length} 完成</span></div>
+    <button class="sb-item ${S.view==='group'?'on':''}" data-nav="group">▦ <span class="grow">尝试组 · 游标分页</span></button>
+    ${g.attempts.map((a,i)=>a.discarded?'':`<button class="sb-item child ${S.view==='session'&&S.sessionIdx===i?'on':''}" data-session="${i}">${dot(a.status)}<span class="grow">尝试 ${i+1} · ${a.agent.label}${a.model!=='默认'?' '+a.model:''}</span>${S.adopted===i?'<span class="badge ok">已采用</span>':''}</button>`).join('')}`:'';
+  $('#sidebar').innerHTML=`
+    <div class="sb-sec"><div class="sb-title">项目</div>
+      <button class="sb-item">▸ billing-service</button>
+      <button class="sb-item ${S.view==='launch'?'on':''}" data-nav="launch"><span class="grow" style="padding-left:16px">＋ 新会话</span></button>
+      <button class="sb-item"><span class="grow" style="padding-left:16px">会话列表游标分页</span><span class="badge">主会话</span></button>
+    </div>
+    <div class="sb-sec">${groupRows||'<div class="sb-title">并行尝试</div><button class="sb-item" data-nav="launch"><span class="grow">暂无尝试组，从新会话发起</span></button>'}</div>
+    <div class="sb-sec"><div class="sb-title">历史尝试组</div>
+      <button class="sb-item ${S.view==='history'?'on':''}" data-nav="history"><span class="grow">全部尝试组（3）</span></button>
+      <button class="sb-item"><span class="grow">文件搜索预览 · 已采用 Codex</span></button>
+      <button class="sb-item"><span class="grow">终端历史回看 · 已放弃</span></button>
+    </div>
+    <div class="sb-foot">每个尝试 = 独立 worktree + 分支<br>原项目在采纳前不受影响</div>`;
+  document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{S.view=b.dataset.nav;render()});
+  document.querySelectorAll('[data-session]').forEach(b=>b.onclick=()=>{S.sessionIdx=+b.dataset.session;S.view='session';render()});
+}
+function terminal(a){return ['done','failed'].includes(a.status)}
+
+/* ================= launch ================= */
+function targetRow(t,i){
+  const ag=AGENTS.find(a=>a.id===t.agent);
+  return `<div class="att-row"><span class="idx">${i+1}</span>
+    <select class="sel" data-t="${i}" data-k="agent">${AGENTS.map(a=>`<option value="${a.id}" ${a.id===t.agent?'selected':''}>${a.label}</option>`).join('')}</select>
+    <select class="sel" data-t="${i}" data-k="model">${ag.models.map(m=>`<option ${m===t.model?'selected':''}>${m}</option>`).join('')}</select>
+    <select class="sel"><option>Agent 模式</option><option>计划模式</option></select>
+    <select class="sel"><option>逐项审批</option><option>自动审阅</option><option>全部允许</option></select>
+    <span class="grow"></span>
+    ${S.targets.length>2?`<button class="iconbtn" data-del="${i}" title="移除">✕</button>`:''}
+  </div>`;
+}
+function dupWarning(){
+  const seen=new Set(),dup=[];
+  S.targets.forEach(t=>{const k=t.agent+'|'+t.model;if(seen.has(k))dup.push(k);seen.add(k)});
+  return dup.length?`<div class="warn-line err-line">⚠ 有两个完全相同的配置（${dup[0].replace('|',' · ')}），结果大概率重复。改一个模型，或删掉一行。</div>`:'';
+}
+function viewLaunch(){
+  return `<div class="col"><div class="hero">
+    <h1 style="text-align:center;font-size:24px;margin-bottom:6px">要在 billing-service 做什么？</h1>
+    <p class="muted small" style="text-align:center;margin:0 0 20px">同一个任务交给几个 Agent，各自在独立 worktree 里完成，再对比采纳。</p>
+    <div class="composer">
+      <textarea id="prompt">${esc(S.prompt)}</textarea>
+      <div class="ctx"><span class="ctxchip">@ apps/server/src/routes/sessions.ts <button>✕</button></span><span class="ctxchip">📎 现状截图.png <button>✕</button></span><span class="muted xs" style="align-self:center">发起页复用正式输入框：附件 / @ 引用 / 草稿都在</span></div>
+      <div class="par-panel">
+        <div class="par-head"><b style="font-size:13.5px">并行尝试</b><span class="badge acc">已选 ${S.targets.length} / 4</span><span class="sp" style="flex:1"></span><span class="xs muted">2–4 个 · 同一 Agent 可用不同模型重复</span></div>
+        <div class="presets">
+          <button class="chip ${S.preset==='multi'?'on':''}" data-preset="multi">各 Agent 一次</button>
+          <button class="chip ${S.preset==='models'?'on':''}" data-preset="models">同 Agent · 比模型</button>
+          <button class="chip ${S.preset==='all'?'on':''}" data-preset="all">全部可用 Agent</button>
+          <button class="chip ${S.preset==='custom'?'on':''}" data-preset="custom">自定义</button>
+        </div>
+        <div id="trows">${S.targets.map(targetRow).join('')}</div>
+        ${S.targets.length<4?`<button class="chip" id="addT">＋ 再加一个尝试</button>`:''}
+        ${dupWarning()}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
+          <div class="field"><label>起点（所有 worktree 从同一次提交切出）</label>
+            <select class="sel" style="width:100%;max-width:none" id="baseSel"><option>HEAD（a3f9c21）</option><option>main</option><option>release/1.4</option></select></div>
+          <div class="field"><label>预计占用</label><div class="small muted" style="padding-top:7px">${S.targets.length} 个 worktree · ${S.targets.length} 个并发会话</div></div>
+        </div>
+        <div class="warn-line">⚠ 项目有 2 个未提交文件，它们<b>不在</b>起点里。若尝试需要它们，先提交或暂存。</div>
+      </div>
+      <div class="bar"><span class="muted xs">⌘↵ 开始</span><span style="flex:1"></span>
+        <button class="btn sm" onclick="toast('已存为普通会话草稿（Demo）')">取消</button>
+        <button class="btn pri" id="startBtn" ${dupWarning()?'disabled':''}>开始 ${S.targets.length} 个尝试 →</button></div>
+    </div>
+    <div class="quick-grid">
+      <button class="quick"><b>继续历史会话</b><span>打开后端会话选择器</span></button>
+      <button class="quick"><b>Shell 终端</b><span>项目目录下的持久终端</span></button>
+      <button class="quick sel"><b>并行尝试</b><span>已在上方展开 · 也可从 ⌘K 发起</span></button>
+    </div>
+    <p class="xs muted" style="text-align:center;margin-top:18px"><span class="num">1</span>新信息架构：尝试组有自己的总览页与历史；发起只是入口，不再「开始就跳进第一个会话把人丢在半路」。</p>
+  </div></div>`;
+}
+function bindLaunch(){
+  $('#prompt').oninput=e=>S.prompt=e.target.value;
+  document.querySelectorAll('[data-preset]').forEach(b=>b.onclick=()=>{
+    S.preset=b.dataset.preset;
+    if(S.preset==='multi')S.targets=[{agent:'cursor',model:'默认'},{agent:'claude',model:'默认'},{agent:'codex',model:'默认'}];
+    if(S.preset==='models')S.targets=[{agent:'claude',model:'opus-4.8'},{agent:'claude',model:'sonnet-5'},{agent:'claude',model:'默认'}];
+    if(S.preset==='all')S.targets=AGENTS.map(a=>({agent:a.id,model:'默认'}));
+    render();
+  });
+  document.querySelectorAll('#trows select[data-t]').forEach(sel=>sel.onchange=()=>{const t=S.targets[+sel.dataset.t];t[sel.dataset.k]=sel.value;if(sel.dataset.k==='agent')t.model='默认';S.preset='custom';render()});
+  document.querySelectorAll('[data-del]').forEach(b=>b.onclick=()=>{S.targets.splice(+b.dataset.del,1);render()});
+  const add=$('#addT'); if(add)add.onclick=()=>{const used=new Set(S.targets.map(t=>t.agent));const next=AGENTS.find(a=>!used.has(a.id))||AGENTS[0];S.targets.push({agent:next.id,model:'默认'});render()};
+  $('#startBtn').onclick=startGroup;
+}
+
+/* ================= simulation ================= */
+function startGroup(){
+  S.group={attempts:S.targets.map(t=>mkAttempt(t.agent,t.model)),created:'刚刚',base:'a3f9c21'};
+  // deterministic drama: idx1 waits for approval, idx2 fails first run
+  S.group.attempts.forEach((a,i)=>{a.status='running';a.failOnce=(i===2);a.waitOnce=(i===1)});
+  S.adopted=null;S.notified=false;S.view='group';S.tab='cards';render();toast(`已创建尝试组：${S.group.attempts.length} 个会话 · ${S.group.attempts.length} 个 worktree`);
+  clearInterval(S.timer);
+  S.timer=setInterval(tick,700);
+}
+function tick(){
+  if(!S.group){clearInterval(S.timer);return}
+  let any=false;
+  S.group.attempts.forEach(a=>{
+    if(a.discarded||a.status!=='running')return; any=true; a.elapsed+=0.7; a.progress=Math.min(100,a.progress+Math.random()*13+4);
+    if(a.waitOnce&&a.progress>45){a.status='waiting';a.waitOnce=false;toast('⏸ Claude Code 的尝试在等你审批（总览页可直接处理）')}
+    else if(a.failOnce&&a.progress>70){a.status='failed';a.failOnce=false;a.error='测试命令退出码 1：app.test.ts 有 1 条失败'}
+    else if(a.progress>=100){a.status='done';a.progress=100}
+  });
+  if(S.group.attempts.every(a=>a.discarded||terminal(a))&&!S.notified){S.notified=true;toast('✓ 全部尝试已结束 —— 回到对比页采纳最合适的一个');}
+  if(!any&&S.group.attempts.every(a=>a.discarded||terminal(a)||a.status==='waiting')){/* keep timer for resume */}
+  renderSidebar(); if(S.view==='group'||S.view==='session')renderMainOnly();
+}
+function fmtDur(a){const s=Math.round(a.elapsed);return a.status==='done'||a.status==='failed'?a.plan.dur:`${Math.floor(s/60)} 分 ${String(s%60).padStart(2,'0')} 秒`}
+
+/* ================= group ================= */
+function recommend(){
+  if(!S.group)return -1;let best=-1,score=-1;
+  S.group.attempts.forEach((a,i)=>{if(a.discarded||a.status!=='done')return;const sc=(a.plan.tests.includes('全过')?2:0)+ (a.plan.tests.includes('通过')?1:0) - a.plan.added/300; if(sc>score){score=sc;best=i}});
+  return best;
+}
+function statusTxt(a){
+  return {running:`运行中 · ${Math.round(a.progress)}%`,waiting:'等待审批',done:'已完成',failed:'失败',queued:'排队中'}[a.status];
+}
+function attCard(a,i){
+  const rec=recommend()===i, win=S.adopted===i;
+  return `<div class="card att-card ${win?'win':rec?'rec':''}">
+    ${win?'<span class="rec-tag" style="background:var(--success)">✓ 已采用</span>':rec?'<span class="rec-tag">推荐</span>':''}
+    <div class="att-top"><span class="avatar" style="background:${a.agent.color}22;color:${a.agent.color}">◆</span>
+      <div style="min-width:0"><b style="font-size:13.5px">尝试 ${i+1} · ${a.agent.label}</b><div class="xs muted">${a.model} · riffet/try-${100+i} · 起点 a3f9c21</div></div>
+      <span style="flex:1"></span>${dot(a.status)}</div>
+    <div><div style="display:flex;justify-content:space-between;font-size:12px"><span class="${a.status==='failed'?'del':''}" style="font-weight:600">${statusTxt(a)}</span><span class="muted">${fmtDur(a)}</span></div>
+    ${a.status==='running'?`<div class="progress" style="margin-top:6px"><i style="width:${a.progress}%"></i></div>`:''}</div>
+    ${a.status==='waiting'?`<div class="warn-line" style="margin:0">需要审批：运行 <span class="mono">pnpm test</span><span style="flex:1"></span><button class="btn sm pri" data-approve="${i}">批准</button><button class="btn sm" data-goto="${i}">去会话看</button></div>`:''}
+    ${a.status==='failed'?`<div class="warn-line err-line" style="margin:0">✕ ${esc(a.error||'执行失败')}</div>`:''}
+    <div class="summary">${a.status==='done'?esc(a.plan.summary):a.status==='failed'?'已产生部分改动，可查看 diff 后决定重试或丢弃。':'正在工作：已读取路由与 store，正在改分页实现…（实时摘要来自该会话最后一条动态）'}</div>
+    <div class="kv"><span>🧪 ${a.plan.tests}</span><span>◈ ${a.plan.tok} tokens</span><span>⏱ ${fmtDur(a)}</span><span><span class="add">+${a.plan.added}</span> <span class="del">−${a.plan.removed}</span> · ${a.plan.files.length} 文件</span></div>
+    <div>${a.plan.files.slice(0,3).map(f=>`<div class="filemini"><span>${f[0].split('/').pop()}</span><span><span class="add">+${f[1]}</span> <span class="del">−${f[2]}</span></span></div>`).join('')}${a.plan.files.length>3?`<div class="xs muted" style="padding-top:4px">还有 ${a.plan.files.length-3} 个文件…</div>`:''}</div>
+    ${rec&&!win?'<div class="xs" style="color:var(--accent)">推荐理由：测试全过，且改动量最小（启发式，非 AI 裁判；最终由你采纳）</div>':''}
+    <div class="att-foot">
+      <button class="btn sm" data-goto="${i}">打开会话</button>
+      ${a.status==='running'?`<button class="btn sm" data-stop="${i}">停止</button>`:''}
+      ${a.status==='failed'?`<button class="btn sm pri" data-retry="${i}">↻ 重试此尝试</button>`:''}
+      ${a.status==='done'&&S.adopted===null?`<button class="btn sm pri" data-adopt="${i}">采用此方案</button>`:''}
+      ${S.adopted===null&&a.status!=='running'?`<button class="btn sm ghost danger" data-discard="${i}">丢弃</button>`:''}
+    </div></div>`;
+}
+function allFiles(){
+  const map=new Map();
+  S.group.attempts.forEach((a,i)=>{if(a.discarded)return;a.plan.files.forEach(f=>{if(!map.has(f[0]))map.set(f[0],{});map.get(f[0])[i]=f})});
+  return [...map.entries()];
+}
+function viewGroup(){
+  const g=S.group, alive=g.attempts.filter(a=>!a.discarded);
+  const done=alive.filter(a=>a.status==='done').length, run=alive.filter(a=>a.status==='running').length, wait=alive.filter(a=>a.status==='waiting').length, fail=alive.filter(a=>a.status==='failed').length;
+  const allDone=alive.every(a=>terminal(a));
+  const union=allFiles(), overlap=union.filter(([,m])=>Object.keys(m).length>1);
+  let body='';
+  if(S.tab==='cards')body=`<div class="cmp-grid" style="grid-template-columns:repeat(${Math.min(alive.length,2)},1fr)">${g.attempts.map((a,i)=>a.discarded?'':attCard(a,i)).join('')}</div>
+    <p class="xs muted" style="margin-top:14px"><span class="num">2</span>卡片只给决策需要的量：状态、摘要、测试、耗时、改动。完整过程回会话里看——总览不复刻时间线。</p>`;
+  if(S.tab==='matrix')body=`<div class="card" style="padding:6px 14px;overflow-x:auto"><table class="mx"><tr><th style="min-width:260px">文件（共 ${union.length}）</th>${alive.map(a=>`<th>尝试 ${g.attempts.indexOf(a)+1} · ${a.agent.label}</th>`).join('')}</tr>
+    ${union.map(([path,m])=>{const ov=Object.keys(m).length>1;return `<tr class="${ov?'overlap':''}"><td class="mono">${path}${ov?' <span class="badge warn">多尝试改动</span>':''}</td>${alive.map(a=>{const f=m[g.attempts.indexOf(a)];return f?`<td class="cell" data-cell="${g.attempts.indexOf(a)}|${path}"><span class="add">+${f[1]}</span> <span class="del">−${f[2]}</span></td>`:'<td class="cell none">未改动</td>'}).join('')}</tr>`}).join('')}
+    </table></div><p class="xs muted" style="margin-top:10px">左侧黄边 = 多个尝试都改了这个文件，采纳时最值得先看。点任意格子跳到并排 Diff。</p>`;
+  if(S.tab==='diff'){
+    const files=union.map(u=>u[0]);
+    body=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px"><span class="small muted" style="align-self:center">对比</span>
+      ${[0,1].map(side=>`<select class="sel" data-pair="${side}">${alive.map(a=>`<option value="${g.attempts.indexOf(a)}" ${S.diffPair[side]===g.attempts.indexOf(a)?'selected':''}>尝试 ${g.attempts.indexOf(a)+1} · ${a.agent.label}</option>`).join('')}</select>`).join('<span class="muted">vs</span>')}
+      <select class="sel" id="diffFile" style="max-width:340px">${files.map(f=>`<option ${f===S.diffFile?'selected':''}>${f}</option>`).join('')}</select></div>
+      <div class="diff2">${S.diffPair.map(pi=>diffPane(g.attempts[pi],pi)).join('')}</div>`;
+  }
+  return `<div class="col wide">
+    <div class="g-head"><div style="min-width:0"><div class="xs muted" style="margin-bottom:4px">并行尝试 · billing-service · 起点 <span class="mono">a3f9c21</span> · ${g.created}</div>
+      <h1 style="font-size:18px;line-height:1.4">${esc(S.prompt.slice(0,64))}${S.prompt.length>64?'…':''}</h1>
+      <div class="small muted" style="margin-top:6px">${done}/${alive.length} 完成${run?` · ${run} 运行中`:''}${wait?` · <span style="color:var(--warn);font-weight:600">${wait} 等待审批</span>`:''}${fail?` · <span class="del">${fail} 失败</span>`:''}</div>
+      <div class="progress" style="margin-top:9px;max-width:420px"><i style="width:${alive.length?done/alive.length*100:0}%"></i></div></div>
+      <div class="g-actions">
+        ${run||wait?`<button class="btn sm" id="stopAll">■ 停止全部</button>`:''}
+        <button class="btn sm" id="addAttempt" ${alive.length>=4?'disabled':''}>＋ 追加尝试</button>
+        <button class="btn sm" data-nav="history">历史</button>
+      </div></div>
+    ${S.adopted!==null?`<div class="banner okb" style="margin-top:18px">✓ 已采用<b>尝试 ${S.adopted+1} · ${g.attempts[S.adopted].agent.label}</b>，已合并进 <span class="mono">main</span>（squash · 1 个提交）。<span style="flex:1"></span><button class="btn sm">在原项目查看改动</button><button class="btn sm">创建 PR</button><button class="btn sm" id="cleanRest">清理其余尝试</button></div>`
+      :allDone?`<div class="banner" style="margin-top:18px">🎉 全部尝试已结束。建议先看<b>文件矩阵</b>里的重叠文件，再采纳推荐方案。<span style="flex:1"></span><button class="btn sm pri" data-adopt="${recommend()}">采用推荐方案</button></div>`:''}
+    <div class="tabs">
+      <button class="${S.tab==='cards'?'on':''}" data-tab="cards">概览卡片</button>
+      <button class="${S.tab==='matrix'?'on':''}" data-tab="matrix">文件矩阵 · ${overlap.length} 处重叠</button>
+      <button class="${S.tab==='diff'?'on':''}" data-tab="diff">并排 Diff</button>
+    </div>${body}</div>`;
+}
+function diffPane(a,i){
+  const f=a.plan.files.find(x=>x[0]===S.diffFile);
+  const name=S.diffFile.split('/').pop();
+  const hunks=f?`<div class="l h">@@ ${name} · 尝试 ${i+1}（${a.agent.label}）@@</div>
+<div class="l">  const limit = pageSize(req)</div>
+<div class="l d">- const rows = list(offset, limit)</div>
+<div class="l a">+ const rows = listAfter(cursorOf(req), limit)</div>
+<div class="l a">+ return { rows, nextCursor: lastId(rows) }</div>
+<div class="l">  reply.send({ rows })</div>`:`<div class="l" style="color:var(--fg4);padding:14px">此尝试未修改这个文件</div>`;
+  return `<div class="diffpane"><header>${dot(a.status)}<b class="small">尝试 ${i+1} · ${a.agent.label}</b><span class="xs muted">${a.model}</span><span style="flex:1"></span>${f?`<span class="mono xs"><span class="add">+${f[1]}</span> <span class="del">−${f[2]}</span></span>`:''}<button class="btn sm ghost" data-goto="${i}">打开会话</button></header><pre class="diff">${hunks}</pre></div>`;
+}
+function bindGroup(){
+  document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{S.tab=b.dataset.tab;render()});
+  document.querySelectorAll('[data-goto]').forEach(b=>b.onclick=()=>{S.sessionIdx=+b.dataset.goto;S.view='session';render()});
+  document.querySelectorAll('[data-approve]').forEach(b=>b.onclick=()=>{const a=S.group.attempts[+b.dataset.approve];a.status='running';toast('已批准，尝试继续运行');render()});
+  document.querySelectorAll('[data-stop]').forEach(b=>b.onclick=()=>{const a=S.group.attempts[+b.dataset.stop];a.status='failed';a.error='已被你停止（部分改动保留在 worktree）';render()});
+  document.querySelectorAll('[data-retry]').forEach(b=>b.onclick=()=>{const old=S.group.attempts[+b.dataset.retry];const n=mkAttempt(old.agent.id==='codex'?'claude':old.agent.id,old.model);n.status='running';n.plan=PLANS[(+b.dataset.retry+1)%PLANS.length];S.group.attempts[+b.dataset.retry]=n;S.notified=false;clearInterval(S.timer);S.timer=setInterval(tick,700);toast('已用同一配置重新尝试，旧的失败记录已替换（worktree 重建）');render()});
+  document.querySelectorAll('[data-discard]').forEach(b=>b.onclick=()=>{S.group.attempts[+b.dataset.discard].discarded=true;toast('已丢弃：会话归档、worktree 删除、分支保留 7 天');render()});
+  document.querySelectorAll('[data-adopt]').forEach(b=>b.onclick=()=>openAdopt(+b.dataset.adopt));
+  document.querySelectorAll('[data-cell]').forEach(c=>c.onclick=()=>{const [i,f]=c.dataset.cell.split('|');S.diffPair=[+i,(+i+1)%S.group.attempts.filter(a=>!a.discarded).length];S.diffFile=f;S.tab='diff';render()});
+  document.querySelectorAll('[data-pair]').forEach(sel=>sel.onchange=()=>{S.diffPair[+sel.dataset.pair]=+sel.value;render()});
+  const df=$('#diffFile'); if(df)df.onchange=()=>{S.diffFile=df.value;render()};
+  const sa=$('#stopAll'); if(sa)sa.onclick=()=>{S.group.attempts.forEach(a=>{if(a.status==='running'||a.status==='waiting'){a.status='failed';a.error='已被你停止（部分改动保留在 worktree）'}});render();toast('已停止全部运行中的尝试')};
+  const ad=$('#addAttempt'); if(ad)ad.onclick=()=>{if(S.group.attempts.filter(a=>!a.discarded).length>=4)return toast('一组最多 4 个尝试');const n=mkAttempt('dsh');n.status='running';S.group.attempts.push(n);S.notified=false;clearInterval(S.timer);S.timer=setInterval(tick,700);toast('已追加一个 DSH 尝试（同一起点、同任务）');render()};
+  const cr=$('#cleanRest'); if(cr)cr.onclick=()=>{S.group.attempts.forEach((a,i)=>{if(i!==S.adopted)a.discarded=true});render();toast('其余尝试已归档，worktree 已删除，分支保留 7 天')};
+  document.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>{S.view=b.dataset.nav;render()});
+}
+
+/* ================= session ================= */
+function viewSession(){
+  const g=S.group,a=g.attempts[S.sessionIdx];
+  const allDone=g.attempts.filter(x=>!x.discarded).every(terminal);
+  return `<div>
+    <div class="strip"><span class="small muted">▦ 并行尝试</span>
+      <button class="chip" data-nav="group">组总览 ${g.attempts.filter(x=>x.status==='done').length}/${g.attempts.filter(x=>!x.discarded).length}</button>
+      <div class="tabs2">${g.attempts.map((x,i)=>x.discarded?'':`<button class="${i===S.sessionIdx?'on':''}" data-session="${i}">${dot(x.status)}尝试 ${i+1} · ${x.agent.label} <span class="mono xs"><span class="add">+${x.plan.added}</span> <span class="del">−${x.plan.removed}</span></span>${S.adopted===i?' ✓':''}</button>`).join('')}</div>
+      <span style="flex:1"></span>
+      ${S.adopted===S.sessionIdx?'<span class="badge ok">✓ 已采用</span>':a.status==='done'&&S.adopted===null?`<button class="btn sm pri" data-adopt="${S.sessionIdx}">采用此方案</button>`:''}
+    </div>
+    ${allDone&&S.adopted===null?`<div style="padding:14px 16px 0"><div class="banner" style="max-width:900px;margin:0 auto">全部尝试已完成，别只看这一个——<b>回组总览对比</b>再采纳。<span style="flex:1"></span><button class="btn sm pri" data-nav="group">查看对比 →</button></div></div>`:''}
+    <div class="msg"><div class="bubble">${esc(S.prompt)}</div>
+      <div style="height:14px"></div><div class="xs muted">尝试 ${S.sessionIdx+1} · ${a.agent.label} ${a.model} · worktree <span class="mono">riffet/try-${100+S.sessionIdx}</span></div>
+      <div class="toolrow">✓ 读取 apps/server/src/routes/sessions.ts、store.ts</div>
+      <div class="toolrow">${a.status==='done'?'✓':'…'} 修改 ${a.plan.files.length} 个文件 · <span class="add">+${a.plan.added}</span> <span class="del">−${a.plan.removed}</span></div>
+      <div class="answer"><p>${esc(a.plan.summary)}</p><p>排序以 <span class="mono">(createdAt, id)</span> 为键集，游标是最后一条的键值，翻页期间新插入的会话不会造成重复。已跑测试：${a.plan.tests}。</p></div>
+      <div class="card" style="padding:12px 14px;max-width:520px"><div class="small muted" style="margin-bottom:6px">输入框（占位示意）</div><div class="muted">在这个尝试里继续追问，只影响它自己的 worktree…</div></div>
+    </div></div>`;
+}
+
+/* ================= history ================= */
+function viewHistory(){
+  const rows=[
+    ...(S.group?[{t:S.prompt.slice(0,40),meta:`${S.group.attempts.length} 个尝试 · billing-service · 刚刚`,st:S.adopted!==null?'<span class="badge ok">已采用</span>':'<span class="badge acc">进行中 / 待采纳</span>',act:true}]:[]),
+    {t:'给文件搜索加内容预览',meta:'3 个尝试 · billing-service · 昨天',st:'<span class="badge ok">已采用 Codex</span>'},
+    {t:'终端历史回看支持搜索',meta:'2 个尝试 · riffet · 3 天前',st:'<span class="badge">已放弃</span>'},
+    {t:'修复长会话滚动掉帧',meta:'4 个尝试 · riffet · 上周',st:'<span class="badge ok">已采用 Claude</span>'},
+  ];
+  return `<div class="col"><h1>并行尝试历史</h1><p class="muted small" style="margin:6px 0 20px">按项目保存全部尝试组。会话被关掉、worktree 被清理后，组与采纳记录仍在这里找回——这是雏形最缺的一块。</p>
+  ${rows.map(r=>`<button class="hist-row" ${r.act?'data-nav="group"':''}><span style="flex:1;min-width:0"><b style="display:block;font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.t)}</b><span class="xs muted">${r.meta}</span></span>${r.st}<span class="muted">›</span></button>`).join('')}
+  <p class="xs muted" style="margin-top:14px"><span class="num">3</span>入口冗余是刻意的：侧栏组、⌘K「并行尝试…」、项目页历史、本页，四处都能回到同一组。</p></div>`;
+}
+
+/* ================= adopt ================= */
+function openAdopt(i){
+  const a=S.group.attempts[i];
+  $('#modal').innerHTML=`
+    <h2 style="font-size:16px">采用 尝试 ${i+1} · ${a.agent.label} 的方案</h2>
+    <p class="small muted" style="line-height:1.6;margin:7px 0 14px">把 <span class="mono">riffet/try-${100+i}</span> 合并进 <span class="mono">main</span>，其他尝试保留不动（除非你在下方选择清理）。</p>
+    <div class="card" style="padding:12px 14px;margin-bottom:14px">
+      <b class="small">合并预检</b>
+      <div class="check"><span class="add">✓</span><span>目标分支 <span class="mono">main</span> 工作区干净</span></div>
+      <div class="check"><span class="add">✓</span><span>冲突预演：与 main 无冲突（已用 merge-tree 干跑，不动工作区）</span></div>
+      <div class="check"><span class="add">✓</span><span>${a.plan.files.length} 个文件 · <span class="add">+${a.plan.added}</span> <span class="del">−${a.plan.removed}</span> · 测试 ${a.plan.tests}</span></div>
+    </div>
+    <div class="field" style="margin-bottom:14px"><label>合并方式</label><div class="seg" id="strat"><button class="on">压缩为一个提交</button><button>保留全部提交</button></div></div>
+    <div class="field" style="margin-bottom:14px"><label>提交说明</label><input value="会话列表游标分页 (${a.agent.label})" style="width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--bg)"></div>
+    <div class="field"><label>采纳后，其余尝试怎么办</label>
+      ${[['keep','保留其余尝试','会话与 worktree 都留着，之后还能改主意'],['archive','归档其余会话','列表清爽，worktree 还在，随时能恢复'],['archive-remove','归档并删除 worktree（推荐）','分支保留 7 天；磁盘与侧栏都干净']].map(([v,t,d],j)=>`<div class="radio ${S.cleanup===v?'on':''}" data-clean="${v}"><span>●</span><span><b class="small">${t}</b><br><span class="xs muted">${d}</span></span></div>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:18px"><button class="btn" onclick="closeModal()">取消</button><button class="btn pri" id="doAdopt">合并并采纳</button></div>`;
+  $('#mask').classList.add('show');
+  document.querySelectorAll('#strat button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#strat button').forEach(x=>x.classList.remove('on'));b.classList.add('on')});
+  document.querySelectorAll('[data-clean]').forEach(r=>r.onclick=()=>{S.cleanup=r.dataset.clean;openAdopt(i)});
+  $('#doAdopt').onclick=()=>{
+    S.adopted=i; closeModal();
+    if(S.cleanup!=='keep')S.group.attempts.forEach((x,j)=>{if(j!==i)x.discarded=S.cleanup==='archive-remove'});
+    S.view='group';render();toast(`✓ 已采纳尝试 ${i+1}，合并进 main${S.cleanup==='archive-remove'?'，其余 worktree 已清理':''}`);
+  };
+}
+function closeModal(){$('#mask').classList.remove('show')}
+$('#mask').onclick=e=>{if(e.target.id==='mask')closeModal()};
+
+/* ================= render ================= */
+function renderMainOnly(){
+  const m=$('#main');
+  m.innerHTML=S.view==='launch'?viewLaunch():S.view==='group'&&S.group?viewGroup():S.view==='session'&&S.group?viewSession():viewHistory();
+  if(S.view==='launch')bindLaunch();
+  if(S.view==='group')bindGroup();
+  document.querySelectorAll('#main [data-nav]').forEach(b=>b.onclick=()=>{S.view=b.dataset.nav;render()});
+  document.querySelectorAll('#main [data-session]').forEach(b=>b.onclick=()=>{S.sessionIdx=+b.dataset.session;S.view='session';render()});
+  document.querySelectorAll('#main [data-adopt]').forEach(b=>b.onclick=()=>openAdopt(+b.dataset.adopt));
+  document.querySelectorAll('#steps span').forEach(s=>s.classList.toggle('on',s.dataset.step===S.view));
+}
+function render(){renderSidebar();renderMainOnly()}
+render();
+</script>
+</body>
+</html>

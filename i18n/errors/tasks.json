@@ -1,0 +1,16 @@
+{
+  "TASK_ACTION_UNAVAILABLE": { "zh": "这个项目没有这项操作", "en": "This project does not offer that action" },
+  "TASK_ARTIFACT_CHANGED": { "zh": "文件在任务结束后被改动，可能已被新的构建覆盖", "en": "The file changed after the task finished, possibly replaced by a newer build" },
+  "TASK_ARTIFACT_MISSING": { "zh": "文件已不存在", "en": "The file is no longer there" },
+  "TASK_ARTIFACT_NOT_FOUND": { "zh": "找不到这个产物", "en": "Artifact not found" },
+  "TASK_BUSY": { "zh": "这个项目已有任务在运行", "en": "Another task is already running in this project" },
+  "TASK_CONFIRM_REQUIRED": { "zh": "这条命令来自已安装的插件，首次运行前需要确认", "en": "This command comes from an installed plugin and needs your confirmation before it first runs" },
+  "TASK_NOT_FOUND": { "zh": "任务已不存在", "en": "This task no longer exists" },
+  "TASK_PARAMS_INVALID": { "zh": "任务参数无效：{message}", "en": "Invalid task parameters: {message}" },
+  "TASK_PLAN_INVALID": { "zh": "插件给出的执行计划无效：{message}", "en": "The plugin returned an invalid plan: {message}" },
+  "TASK_PROVIDER_FAILED": { "zh": "插件出错：{message}", "en": "The plugin failed: {message}" },
+  "TASK_PROVIDER_STOPPING": { "zh": "插件正在等待运行中的任务结束后关闭，暂不接受新任务", "en": "The plugin is turning off once its running tasks end and accepts no new tasks" },
+  "TASK_PROVIDER_UNAVAILABLE": { "zh": "提供这项任务的插件已关闭", "en": "The plugin that provides this task is off" },
+  "TASK_REQUEST_CONFLICT": { "zh": "这个请求编号已用于另一项任务", "en": "This request id was already used for a different task" },
+  "TASKS_UNSUPPORTED": { "zh": "此系统不支持项目任务", "en": "Project tasks are not supported on this system" }
+}

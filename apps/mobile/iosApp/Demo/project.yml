@@ -1,0 +1,31 @@
+name: RiffetDemo
+options:
+  bundleIdPrefix: io.github.riffetai
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: zh-Hans
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    MARKETING_VERSION: "0.2.0"
+    CURRENT_PROJECT_VERSION: 2
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_CFBundleDisplayName: Riffet 2
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: NO
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+targets:
+  RiffetDemo:
+    type: application
+    platform: iOS
+    sources: [RiffetDemo]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.iphone.demo.v2
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  RiffetDemo:
+    build:
+      targets:
+        RiffetDemo: all

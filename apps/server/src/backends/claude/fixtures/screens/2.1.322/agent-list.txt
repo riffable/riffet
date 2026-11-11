@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Baked for 4s · done 3:57 PM
+
+❯ Use the Agent tool to launch the "sleeper" subagent (subagent_type sleeper, run_in_background
+  true) with the prompt "go". As soon as it is launched, end your turn by replying only LAUNCHED.
+  Do not wait for it and do not use any other tool.
+
+⏺ sleeper(Launch sleeper subagent)
+  ⎿  Backgrounded agent (↓ to manage · ctrl+o to expand)
+
+⏺ LAUNCHED
+
+✻ Waiting for 1 background agent to finish
+
+
+
+
+
+
+
+  tmux detected · scroll with PgUp/PgDn · or add 'set -g mouse on' to ~/.tmux.conf for wheel scro…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  ⏵⏵ bypass permissions on (shift+tab to cycle)
+
+  ⏺ main
+  ◯ sleeper  Launch sleeper subagent                                              5s · ↓ 28 tokens

@@ -1,0 +1,395 @@
+<!--__INLINE_VISUALIZATION_FRAGMENT__-->
+<script id="riffet-visualization-tooltips">
+(() => {
+  const placements = new Set(["top", "right", "bottom", "left"]);
+  // A random suffix keeps the runtime id from colliding with an id the artifact itself defines.
+  const tooltipId = `riffet-visualization-tooltip-${Math.random().toString(36).slice(2, 8)}`;
+  const gap = 6;
+  let tooltip = null;
+  let current = null;
+  let pending = null;
+  let timer = 0;
+  let pinned = false;
+  let pointerType = "";
+
+  const nodeElement = (node) => node instanceof Element;
+  const triggerFrom = (event) => {
+    for (const node of event.composedPath()) {
+      if (nodeElement(node) && node.hasAttribute("data-tooltip")) return node;
+    }
+    return null;
+  };
+  const contentOf = (trigger) => (trigger.getAttribute("data-tooltip") || "").trim();
+  const placementOf = (trigger) => {
+    const value = trigger.getAttribute("data-tooltip-placement");
+    return placements.has(value) ? value : "top";
+  };
+  const describedBy = (trigger, add) => {
+    const ids = new Set(
+      (trigger.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean),
+    );
+    if (add) ids.add(tooltipId);
+    else ids.delete(tooltipId);
+    if (ids.size === 0) trigger.removeAttribute("aria-describedby");
+    else trigger.setAttribute("aria-describedby", [...ids].join(" "));
+  };
+  const cancelPending = () => {
+    if (timer !== 0) window.clearTimeout(timer);
+    timer = 0;
+    pending = null;
+  };
+  const close = (releasePin = true) => {
+    cancelPending();
+    if (releasePin) pinned = false;
+    if (current !== null) {
+      describedBy(current, false);
+      current = null;
+    }
+    if (tooltip !== null) {
+      tooltip.remove();
+      tooltip = null;
+    }
+  };
+  const place = () => {
+    if (current === null || tooltip === null) return;
+    if (!current.isConnected) {
+      close(false);
+      return;
+    }
+    const anchor = current.getBoundingClientRect();
+    const box = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    let placement = placementOf(current);
+    const room = {
+      top: anchor.top - box.height - gap >= gap,
+      bottom: anchor.bottom + box.height + gap <= viewportHeight - gap,
+      left: anchor.left - box.width - gap >= gap,
+      right: anchor.right + box.width + gap <= viewportWidth - gap,
+    };
+    if (!room[placement]) {
+      const opposite = { top: "bottom", bottom: "top", left: "right", right: "left" }[placement];
+      if (room[opposite]) placement = opposite;
+    }
+    let left = 0;
+    let top = 0;
+    if (placement === "top" || placement === "bottom") {
+      left = anchor.left + anchor.width / 2 - box.width / 2;
+      top = placement === "top" ? anchor.top - box.height - gap : anchor.bottom + gap;
+    } else {
+      left = placement === "left" ? anchor.left - box.width - gap : anchor.right + gap;
+      top = anchor.top + anchor.height / 2 - box.height / 2;
+    }
+    const maxLeft = Math.max(gap, viewportWidth - box.width - gap);
+    const maxTop = Math.max(gap, viewportHeight - box.height - gap);
+    tooltip.style.left = `${Math.round(Math.min(Math.max(gap, left), maxLeft))}px`;
+    tooltip.style.top = `${Math.round(Math.min(Math.max(gap, top), maxTop))}px`;
+    tooltip.dataset.placement = placement;
+  };
+  const open = (trigger) => {
+    const content = contentOf(trigger);
+    if (content === "" || !trigger.isConnected) return;
+    cancelPending();
+    if (current === trigger && tooltip !== null) return;
+    close(false);
+    const element = document.createElement("div");
+    element.id = tooltipId;
+    element.className = "tooltip";
+    element.setAttribute("role", "tooltip");
+    element.textContent = content;
+    element.style.visibility = "hidden";
+    document.body.appendChild(element);
+    tooltip = element;
+    current = trigger;
+    describedBy(trigger, true);
+    place();
+    element.style.visibility = "visible";
+  };
+  const schedule = (trigger, delay) => {
+    cancelPending();
+    pending = trigger;
+    timer = window.setTimeout(() => {
+      timer = 0;
+      pending = null;
+      open(trigger);
+    }, delay);
+  };
+
+  const onPointerOver = (event) => {
+    if (event.pointerType === "touch") return;
+    const trigger = triggerFrom(event);
+    if (trigger === null || trigger === current || trigger === pending) return;
+    if (event.relatedTarget instanceof Node && trigger.contains(event.relatedTarget)) return;
+    schedule(trigger, current === null ? 350 : 0);
+  };
+  const onPointerOut = (event) => {
+    const trigger = triggerFrom(event);
+    if (trigger === null) return;
+    if (event.relatedTarget instanceof Node && trigger.contains(event.relatedTarget)) return;
+    if (pending === trigger) cancelPending();
+    if (current === trigger && !pinned) close();
+  };
+  const onPointerDown = (event) => {
+    pointerType = event.pointerType;
+    if (pinned) {
+      const trigger = triggerFrom(event);
+      if (trigger === null || trigger !== current) close();
+    }
+  };
+  const onClick = (event) => {
+    if (pointerType !== "touch" || event.detail === 0) return;
+    pointerType = "";
+    const trigger = triggerFrom(event);
+    if (trigger === null) return;
+    if (pinned && current === trigger) {
+      close();
+      return;
+    }
+    open(trigger);
+    pinned = current === trigger;
+  };
+  const onFocusIn = (event) => {
+    const trigger = triggerFrom(event);
+    if (trigger !== null && trigger.matches(":focus-visible")) open(trigger);
+  };
+  const onFocusOut = (event) => {
+    const trigger = triggerFrom(event);
+    if (trigger === null || current !== trigger || pinned) return;
+    if (event.relatedTarget instanceof Node && trigger.contains(event.relatedTarget)) return;
+    close();
+  };
+  const onKeyDown = (event) => {
+    if (event.key === "Escape" && current !== null) {
+      event.preventDefault();
+      close();
+    }
+  };
+  const onViewportChange = () => place();
+  const destroy = () => {
+    close(false);
+    pointerType = "";
+    document.removeEventListener("pointerover", onPointerOver);
+    document.removeEventListener("pointerout", onPointerOut);
+    document.removeEventListener("pointerdown", onPointerDown, true);
+    document.removeEventListener("click", onClick);
+    document.removeEventListener("focusin", onFocusIn);
+    document.removeEventListener("focusout", onFocusOut);
+    document.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("resize", onViewportChange);
+    window.removeEventListener("scroll", onViewportChange, true);
+  };
+
+  document.addEventListener("pointerover", onPointerOver);
+  document.addEventListener("pointerout", onPointerOut);
+  document.addEventListener("pointerdown", onPointerDown, true);
+  document.addEventListener("click", onClick);
+  document.addEventListener("focusin", onFocusIn);
+  document.addEventListener("focusout", onFocusOut);
+  document.addEventListener("keydown", onKeyDown);
+  window.addEventListener("resize", onViewportChange);
+  window.addEventListener("scroll", onViewportChange, true);
+  window.addEventListener("pagehide", destroy, { once: true });
+})();
+</script>
+<script id="riffet-visualization-tabs">
+(() => {
+  const listSelector = '.nav[role="tablist"]';
+  const tabSelector = '[role="tab"]';
+  const disabled = ':disabled,[aria-disabled="true"]';
+
+  const activate = (tab) => {
+    const list = tab.closest(listSelector);
+    if (list === null) return;
+    const panelId = tab.getAttribute("aria-controls");
+    for (const candidate of list.querySelectorAll(tabSelector)) {
+      const selected = candidate === tab;
+      candidate.classList.toggle("active", selected);
+      candidate.setAttribute("aria-selected", String(selected));
+      const id = candidate.getAttribute("aria-controls");
+      const panel = id === null ? null : document.getElementById(id);
+      if (panel !== null) {
+        panel.hidden = id !== panelId;
+        if (selected && candidate.id) panel.setAttribute("aria-labelledby", candidate.id);
+      }
+    }
+  };
+  const tabsIn = (tab) => Array.from(tab.closest(listSelector)?.querySelectorAll(tabSelector) ?? []).filter((candidate) => !candidate.matches(disabled));
+
+  const onActivate = (event) => {
+    if (event.defaultPrevented || !(event.target instanceof Element)) return;
+    const tab = event.target.closest(`${listSelector} ${tabSelector}`);
+    if (tab === null || tab.matches(disabled)) return;
+    if (event.type === "click") {
+      activate(tab);
+      return;
+    }
+    const tabList = tabsIn(tab);
+    const index = tabList.indexOf(tab);
+    if (index < 0) return;
+    let next;
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % tabList.length;
+    else if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index + tabList.length - 1) % tabList.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = tabList.length - 1;
+    else if (event.key === "Enter" || event.key === " ") next = index;
+    else return;
+    event.preventDefault();
+    tabList[next].focus();
+    activate(tabList[next]);
+  };
+
+  for (const list of document.querySelectorAll(listSelector)) {
+    const selected =
+      list.querySelector(`${tabSelector}[aria-selected="true"]`) ??
+      list.querySelector(`${tabSelector}.active`) ??
+      list.querySelector(tabSelector);
+    if (selected !== null) activate(selected);
+  }
+  document.addEventListener("click", onActivate);
+  document.addEventListener("keydown", onActivate);
+  window.addEventListener("pagehide", () => {
+    document.removeEventListener("click", onActivate);
+    document.removeEventListener("keydown", onActivate);
+  }, { once: true });
+})();
+</script>
+<script id="riffet-visualization-carousel">
+(() => {
+  const previousIcon =
+    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const nextIcon =
+    '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const caretIcon =
+    '<svg class="viz-carousel-caret" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  for (const root of document.querySelectorAll(".viz-carousel")) {
+    if (root.dataset.vizCarouselReady === "true") continue;
+    const panels = Array.from(root.querySelectorAll(":scope > [data-variant]"));
+    if (panels.length === 0) continue;
+    root.dataset.vizCarouselReady = "true";
+    root.setAttribute("role", "group");
+
+    const names = panels.map((panel) => (panel.dataset.variant || "").trim());
+    panels.forEach((panel, index) => {
+      panel.hidden = index !== 0;
+      panel.setAttribute("role", "group");
+      if (!panel.hasAttribute("aria-label") && names[index] !== "") {
+        panel.setAttribute("aria-label", names[index]);
+      }
+    });
+    root.dataset.activeVariant = names[0];
+
+    if (panels.length === 1) continue;
+
+    const controls = document.createElement("div");
+    controls.className = "viz-carousel-controls";
+    controls.innerHTML = [
+      '<button type="button" class="viz-carousel-previous cursor-interaction">',
+      previousIcon,
+      "</button>",
+      '<details class="viz-carousel-picker">',
+      '<summary class="cursor-interaction">',
+      '<span class="viz-carousel-count tabular-nums"></span>',
+      '<span class="viz-carousel-name"></span>',
+      caretIcon,
+      "</summary>",
+      '<div class="viz-carousel-options"></div>',
+      "</details>",
+      '<button type="button" class="viz-carousel-next cursor-interaction">',
+      nextIcon,
+      "</button>",
+    ].join("");
+
+    const previous = controls.querySelector(".viz-carousel-previous");
+    const next = controls.querySelector(".viz-carousel-next");
+    const picker = controls.querySelector(".viz-carousel-picker");
+    const summary = controls.querySelector("summary");
+    const count = controls.querySelector(".viz-carousel-count");
+    const name = controls.querySelector(".viz-carousel-name");
+    const options = controls.querySelector(".viz-carousel-options");
+    const status = document.createElement("span");
+    status.className = "sr-only";
+    status.setAttribute("role", "status");
+    status.setAttribute("aria-live", "polite");
+    status.setAttribute("aria-atomic", "true");
+
+    previous.setAttribute("aria-label", root.dataset.previousLabel || "Previous variant");
+    next.setAttribute("aria-label", root.dataset.nextLabel || "Next variant");
+
+    const choices = panels.map((panel, index) => {
+      const choice = document.createElement("button");
+      choice.type = "button";
+      choice.className = "cursor-interaction";
+      choice.textContent = names[index] !== "" ? names[index] : String(index + 1);
+      choice.setAttribute("aria-current", "false");
+      choice.addEventListener("click", () => {
+        select(index);
+        summary.focus();
+      });
+      options.appendChild(choice);
+      return choice;
+    });
+
+    let active = 0;
+    const select = (index, announce = true) => {
+      const value = ((index % panels.length) + panels.length) % panels.length;
+      const changed = value !== active;
+      active = value;
+      panels.forEach((panel, position) => {
+        panel.hidden = position !== active;
+      });
+      choices.forEach((choice, position) => {
+        choice.setAttribute("aria-current", String(position === active));
+      });
+      root.dataset.activeVariant = names[active];
+      count.textContent = `${active + 1} / ${panels.length}`;
+      name.textContent = names[active] !== "" ? names[active] : String(active + 1);
+      picker.open = false;
+      if (changed && announce) status.textContent = `${count.textContent}: ${name.textContent}`;
+    };
+
+    previous.addEventListener("click", () => select(active - 1));
+    next.addEventListener("click", () => select(active + 1));
+    picker.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        if (picker.open) {
+          event.preventDefault();
+          picker.open = false;
+          summary.focus();
+        }
+        return;
+      }
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const currentIndex = choices.indexOf(document.activeElement);
+      let nextIndex;
+      if (event.key === "ArrowDown") {
+        nextIndex = currentIndex < 0 ? active : (currentIndex + 1) % choices.length;
+      } else if (event.key === "ArrowUp") {
+        nextIndex = currentIndex < 0 ? active : (currentIndex + choices.length - 1) % choices.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = choices.length - 1;
+      } else {
+        return;
+      }
+      event.preventDefault();
+      picker.open = true;
+      choices[nextIndex].focus();
+    });
+    picker.addEventListener("focusout", (event) => {
+      if (!picker.contains(event.relatedTarget)) picker.open = false;
+    });
+    const dismiss = (event) => {
+      if (picker.open && !picker.contains(event.target)) picker.open = false;
+    };
+    document.addEventListener("pointerdown", dismiss);
+    window.addEventListener("pagehide", () => {
+      document.removeEventListener("pointerdown", dismiss);
+    }, { once: true });
+
+    root.append(controls, status);
+    select(0, false);
+  }
+})();
+</script>

@@ -1,0 +1,1039 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: formatBytes(preview.size)
+#: src/app/panels/FilesPanel.tsx
+msgid "{0} · 无法在这里预览"
+msgstr ""
+
+#. placeholder {0}: checkpoint.files
+#. placeholder {0}: status.entries.length
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgid "{0} 个文件"
+msgstr ""
+
+#. placeholder {0}: checkpoint.files
+#. placeholder {1}: checkpoint.excluded.length
+#: src/app/panels/GitPanel.tsx
+msgid "{0} 个文件 · 已排除 {1}"
+msgstr ""
+
+#. placeholder {0}: result.into
+#: src/app/panels/PublishSection.tsx
+msgid "{0} 已包含这个分支的全部提交"
+msgstr ""
+
+#. placeholder {0}: reviews.length
+#: src/app/panels/GitPanel.tsx
+msgid "{0} 条审阅意见"
+msgstr ""
+
+#. placeholder {0}: favorite.path
+#: src/app/panels/FilesPanel.tsx
+msgid "{0}（不存在）"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "{failedCount} 失败"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "{running} 运行中"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "{target} 有未提交的改动，先在原项目里提交或暂存它们"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "⌘ 点击"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "Ctrl 点击"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "Git 视图"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "HTML 预览"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "Worktree"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Worktree 已创建"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "Worktree 里还有未提交的改动，会先用这条说明提交。"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "上下文视图"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "下载"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "下载为 ZIP"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "下载整个项目（ZIP）"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "下载文件夹"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "下载此文件夹（ZIP）"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "不存在"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "不是 Git 仓库"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "与当前工作区相同"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/GitPanel.tsx
+msgid "二进制文件"
+msgstr ""
+
+#. placeholder {0}: branch.branch
+#: src/app/panels/PublishSection.tsx
+msgid "从 {0} 发起。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "仓库默认分支"
+msgstr ""
+
+#. placeholder {0}: branch.branch
+#: src/app/panels/PublishSection.tsx
+msgid "会先把 {0} 推送到远端。"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "作为一条消息发给当前会话"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "保存"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "保留全部提交"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "修改"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "全屏"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "全部取消"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "全部暂存"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+#: src/app/panels/FilesPanel.tsx
+msgid "关闭"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "关闭面板"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "其他"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "内容"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "内容过大，预览已截断"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "最近查看"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "写下要 Agent 修改的地方（⌘↵ 添加）"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "分支会保留；这个目录对应的项目会被归档。"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "分离 HEAD"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgctxt "panels-create-action"
+msgid "创建"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "创建 PR"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "创建 Pull Request"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "创建 Worktree"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgctxt "panels-change-deleted"
+msgid "删除"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "删除这条意见"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "刷新"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "刷新 PR 状态"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "加载中…"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTree.tsx
+msgid "加载更多"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "压缩"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "压缩为一个提交"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "原目录"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "原目录已包含这些改动"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "原项目"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "原项目的当前分支"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "发布分支"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "发给 Agent"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgctxt "panels-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "取消收藏"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "取消收藏此文件夹"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "取消暂存"
+msgstr ""
+
+#. placeholder {0}: conflicts.length - 8
+#: src/app/panels/PublishSection.tsx
+msgid "另 {0} 个文件"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "可以让 Agent 在 Worktree 里先合入 {target} 并解决冲突，再回来合并。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "可选"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并到 {mergeTarget}"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并到 {target}"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并后移除 Worktree"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并失败"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "合并方式"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "图片无法加载"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "在 Finder 中显示"
+msgstr ""
+
+#: src/app/panels/QuickOpen.tsx
+msgid "在文件内容中搜索「{needle}」"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "在新标签页打开"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "在编辑器中打开"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "基于（可选）"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "填写标题后可编辑"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "复制"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "复制文件内容"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "复制相对路径"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "复制绝对路径"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "复制路径"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "安装 GitHub CLI（gh）后可创建 PR、查看 CI"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "定位当前文件"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "审阅意见"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "尚未推送到远端"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "工作区改动"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "工作区是干净的"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已关闭"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已创建 PR"
+msgstr ""
+
+#. placeholder {0}: result.pullRequest.number
+#: src/app/panels/PublishSection.tsx
+msgid "已创建 PR #{0}"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已合并"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已合并到原目录"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已同步"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "已复制"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "已复制文件内容"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "已复制相对路径"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "已复制绝对路径"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "已复制路径"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "已恢复到检查点"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已批准"
+msgstr ""
+
+#. placeholder {0}: result.commits
+#. placeholder {1}: result.into
+#: src/app/panels/PublishSection.tsx
+msgid "已把 {0} 个提交{squashLabel}合并到 {1}"
+msgstr ""
+
+#. placeholder {0}: reviews.length
+#: src/app/panels/GitPanel.tsx
+msgid "已把 {0} 条审阅意见发给 Agent"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已推送到 {pushedTo}"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "已提交"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "已暂存"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "已清空审阅意见"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "已让 Agent 修复 CI"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "引用到对话"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "引用整个文件"
+msgstr ""
+
+#: src/app/panels/CodeView.tsx
+#: src/app/panels/FilesPanel.tsx
+msgid "引用这一行"
+msgstr ""
+
+#: src/app/panels/QuickOpen.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "当前"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "待审阅"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "恢复"
+msgstr ""
+
+#. placeholder {0}: checkpoint.title
+#: src/app/panels/GitPanel.tsx
+msgid "恢复到「{0}」？"
+msgstr ""
+
+#. placeholder {0}: pr.number
+#: src/app/panels/PublishSection.tsx
+msgid "打开 #{0}"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "打开一个会话后可发送"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "打开一个会话后可用"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "把 <0>{branch}</0> 合并进原项目。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "把失败的检查发给当前会话"
+msgstr ""
+
+#. placeholder {0}: shortcutLabel('P')
+#: src/app/panels/FilesPanel.tsx
+msgid "按 {0} 搜索文件"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "按文件名查找"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "推送"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "推送到…"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "推送失败"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "描述"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgctxt "panels-commit-action"
+msgid "提交"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "提交 {stagedCount} 个文件"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgid "提交说明"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "提交说明（⌘↵ 提交）"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "搜索 Worktree"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "搜索失败"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "搜索文件"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "搜索文件内容"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "搜索方式"
+msgstr ""
+
+#: src/app/panels/QuickOpen.tsx
+msgid "搜索结果"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "撤销"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "收藏文件夹"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "收藏此文件夹"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "收藏的文件夹"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "收起创建"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "改动"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "整个文件"
+msgstr ""
+
+#: src/app/panels/FileTree.tsx
+msgid "文件"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "文件不存在"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "文件可能已更改，或超过图片预览大小上限。"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "文件名"
+msgstr ""
+
+#: src/app/panels/CodeView.tsx
+msgid "文件过大，仅显示前一部分"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "文件预览"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "新分支名"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "新增"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "无改动"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "无法创建 PR"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgctxt "panels-worktree-create-failed"
+msgid "无法创建 Worktree"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法创建提交"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法创建检查点"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTree.tsx
+msgid "无法加载更多"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法发送审阅意见"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "无法发送给 Agent"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法取消暂存"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "无法在 Finder 中显示"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgctxt "panels-open-in-editor-failed"
+msgid "无法在编辑器中打开"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "无法打开文件"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法暂存改动"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法暂存文件"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "无法移除 Worktree"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "无法读取 PR 状态"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "无法读取 Worktree"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "无法读取完整的文件内容"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法读取差异"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法读取检查点"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "无法读取检查点内容"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/FileTree.tsx
+msgid "无法读取目录"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "无法跳转到定义"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "显示源码"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "暂存"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "更多操作"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "更多视图"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "有冲突"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "有冲突，已放弃合并"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "有审阅意见"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "有未提交改动时 Git 会拒绝移除。"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "服务器会再次核对下列文件指纹（SHA-256 前 12 位），若文件在此期间被修改，恢复会被拒绝。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "未提交的改动"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "查找用法"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "查找用法失败"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "标题"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "标题留空时用提交记录自动填写。"
+msgstr ""
+
+#. placeholder {0}: pr?.checks.items.length ?? 0
+#: src/app/panels/PublishSection.tsx
+msgid "检查 {passed}/{0} 通过"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "检查点"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "检查点名称（可选）"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "检查点已保存"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "检查点恢复被拒绝"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "没有 Worktree"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "没有匹配的 Worktree"
+msgstr ""
+
+#. placeholder {0}: at.word
+#: src/app/panels/FilesPanel.tsx
+msgid "没有找到 {0} 的定义"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+#: src/app/panels/QuickOpen.tsx
+msgid "没有找到匹配项"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "没有找到用法"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "没有文件差异"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "没有显示的视图"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "没有远端仓库"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "添加意见"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "清空"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgctxt "panels-render-preview-toggle"
+msgid "渲染预览"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "目标分支"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "视图设置"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "移除"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "移除 Worktree"
+msgstr ""
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "移除 Worktree？"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "空目录"
+msgstr ""
+
+#. placeholder {0}: comment.line
+#: src/app/panels/GitPanel.tsx
+msgid "第 {0} 行"
+msgstr ""
+
+#. placeholder {0}: comment.line
+#. placeholder {1}: comment.endLine
+#: src/app/panels/GitPanel.tsx
+msgid "第 {0}–{1} 行"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "自动填写"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "草稿"
+msgstr ""
+
+#. placeholder {0}: branch.behind
+#: src/app/panels/PublishSection.tsx
+msgid "落后 {0}"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "行号上可写审阅意见，Shift 选择多行；意见在改动列表下方统一发送。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "让 Agent 修复"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "调整文件树宽度"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "跳转到定义"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回上级目录"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回搜索结果"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "返回文件列表"
+msgstr ""
+
+#: src/app/panels/GitPanel.tsx
+msgid "还没有检查点"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "进行中"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgctxt "panels-remote-default"
+msgid "远端"
+msgstr ""
+
+#. placeholder {0}: branch.behind
+#: src/app/panels/PublishSection.tsx
+msgid "远端有 {0} 个新提交，推送前先在终端里同步。"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "远端有本地没有的提交，先在终端里 pull 或 rebase，再推送"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "退出全屏"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "选择远端"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "遇到冲突会整体放弃，不会在原项目里留下半合并的文件。"
+msgstr ""
+
+#: src/app/panels/FilesPanel.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/panels/PublishSection.tsx
+msgid "需要修改"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "项目上下文"
+msgstr ""
+
+#. placeholder {0}: branch.ahead
+#: src/app/panels/PublishSection.tsx
+msgid "领先 {0}"
+msgstr ""

@@ -1,0 +1,294 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#. placeholder {0}: formatDateTime(share.expiresAt)
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "{0} 到期"
+msgstr "Expires {0}"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "{count} 轮"
+msgstr "{count, plural, one {# turn} other {# turns}}"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "{days} 天"
+msgstr "{days, plural, one {# day} other {# days}}"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 准备失败"
+msgstr "PDF preparation failed"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 导出失败"
+msgstr "PDF export failed"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "PDF 预览"
+msgstr "PDF preview"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "主题"
+msgstr "Theme"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "全选"
+msgstr "Select all"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "全部"
+msgstr "All"
+
+#. placeholder {0}: formatDateTime(draft.capturedAt)
+#. placeholder {0}: formatDateTime(share.capturedAt)
+#: src/app/shares/ShareDialog.tsx
+msgid "内容截至 {0}"
+msgstr "Content as of {0}"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "最近几轮"
+msgstr "Recent turns"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享会话"
+msgstr "Share session"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "分享操作失败"
+msgstr "Share action failed"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享有效期"
+msgstr "Share expiry"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享范围"
+msgstr "Share scope"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享轮数"
+msgstr "Number of turns"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "分享预览"
+msgstr "Share preview"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "创建链接"
+msgstr "Create link"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "刷新"
+msgstr "Refresh"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "发布中…"
+msgstr "Publishing…"
+
+#: src/app/shares/SharesSection.tsx
+msgid "发布到"
+msgstr "Publish to"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "取消分享"
+msgstr "Cancel share"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "取消分享？"
+msgstr "Cancel share?"
+
+#: src/app/shares/SharesSection.tsx
+msgid "在会话菜单中创建分享。"
+msgstr "Create a share from the session menu."
+
+#: src/app/shares/ShareDialog.tsx
+msgid "在打印窗口选择“保存为 PDF”，并关闭“页眉和页脚”。"
+msgstr "In the print dialog, choose “Save as PDF” and turn off “Headers and footers”."
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "复制链接"
+msgstr "Copy link"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出为 PDF"
+msgstr "Export as PDF"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出范围"
+msgstr "Export range"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "导出轮数"
+msgstr "Turns to export"
+
+#. placeholder {0}: selectedTurnIds.length
+#: src/app/shares/ShareDialog.tsx
+msgid "已选 {0} 轮"
+msgstr "{0, plural, one {# turn selected} other {# turns selected}}"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "手动选择"
+msgstr "Manual selection"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "打印预览尚未就绪，请重试"
+msgstr "Print preview is not ready. Please try again."
+
+#: src/app/shares/ShareDialog.tsx
+msgid "打开系统打印窗口，选择“保存为 PDF”"
+msgstr "Open the print dialog and choose “Save as PDF”"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "操作结果待核对"
+msgstr "Result unconfirmed"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无文字提问"
+msgstr "No text prompt"
+
+#: src/app/shares/SharesSection.tsx
+msgid "无法保存"
+msgstr "Couldn't save"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法加载预览"
+msgstr "Couldn't load preview"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法读取会话列表"
+msgstr "Couldn't load turns"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "无法读取分享状态"
+msgstr "Couldn't read share status"
+
+#: src/app/shares/SharesSection.tsx
+msgid "无法读取分享记录"
+msgstr "Couldn't load shares"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "明暗"
+msgstr "Color mode"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "显示分享者"
+msgstr "Show sharer"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "更新分享"
+msgstr "Update share"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "更新链接"
+msgstr "Update link"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "有效期"
+msgstr "Expiry"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "核对状态"
+msgstr "Check status"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在准备 PDF…"
+msgstr "Preparing PDF…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在准备预览…"
+msgstr "Preparing preview…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在加载预览…"
+msgstr "Loading preview…"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "正在发布…"
+msgstr "Publishing…"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "正在取消分享…"
+msgstr "Cancelling share…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在完成预览…"
+msgstr "Finishing preview…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在整理附件…"
+msgstr "Preparing attachments…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在检查登录…"
+msgstr "Checking sign-in…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取会话…"
+msgstr "Reading session…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取会话列表…"
+msgstr "Loading turns…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "正在读取分享状态…"
+msgstr "Reading share status…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "没有可分享的会话记录"
+msgstr "No session history to share"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "没有可导出的会话记录"
+msgstr "No session history to export"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "浅色"
+msgstr "Light"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "深色"
+msgstr "Dark"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "清空"
+msgstr "Clear"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "生成中…"
+msgstr "Generating…"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "生成预览"
+msgstr "Generate preview"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "跟随系统"
+msgstr "System"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "返回"
+msgstr "Back"
+
+#: src/app/shares/ShareDialog.tsx
+#: src/app/shares/SharesSection.tsx
+msgid "重试"
+msgstr "Retry"
+
+#: src/app/shares/ShareDialog.tsx
+msgid "链接将失效。"
+msgstr "The link will stop working."

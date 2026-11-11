@@ -1,0 +1,938 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 15:01+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.ARCHIVED_SESSION"
+msgstr "This conversation is archived"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.AUXILIARY_MODEL_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_ALREADY_RUNNING"
+msgstr "The CLI is already running"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_BUSY"
+msgstr "The CLI is still busy; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.CLI_INPUT_REJECTED"
+msgstr "The CLI rejected the {method} write"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_INTERACTION_REQUIRED"
+msgstr "Finish the current selection first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_INTERRUPT_TIMEOUT"
+msgstr "Could not confirm that the turn stopped; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_NEEDS_ATTENTION"
+msgstr "The CLI needs you to handle something in the terminal"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_ARGS_INVALID"
+msgstr "Invalid command arguments: {message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_FAILED"
+msgstr "The command failed: {message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.COMMAND_ID_CONFLICT"
+msgstr "This request was already used for another message"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_NOT_FOUND"
+msgstr "Unknown command"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_REQUEST_CONFLICT"
+msgstr "This request id was already used for a different command"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_UNAVAILABLE"
+msgstr "This command is not available right now"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_CONFLICT"
+msgstr "{subject, select, skill {The skill has changed; reload it and try again} manifestExists {The other skill manifest already exists; no file was overwritten} other {The configuration has changed; reload it before editing}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_NOT_DIRECTORY"
+msgstr "A parent of the skill settings file is not a directory."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_NOT_FILE"
+msgstr "The configuration file is not a regular file."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_SYMLINK_UNSUPPORTED"
+msgstr "The configuration file path contains a symbolic link and cannot be read or written safely."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.CONFIGURATION_CHANGING"
+msgstr "{action, select, steer {The model is switching; add your follow-up after it finishes} other {The model is switching; send after it finishes}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
+msgstr "The side chat context snapshot is unavailable"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_PROVIDER_UNAVAILABLE"
+msgstr "This conversation's model provider is unavailable for side chats"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_SELECTION_TOO_LARGE"
+msgstr "The selection is too long; choose a smaller passage"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_SOURCE_UNAVAILABLE"
+msgstr "The source could not be located; select the passage again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DISPATCH_STOPPED"
+msgstr "The server is restarting; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DSH_HISTORY_UNAVAILABLE"
+msgstr "This DSH installation lacks the official session store reader"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DSH_PROFILE_BUSY"
+msgstr "Conversations are still running or waiting for input on this DSH profile; apply the new connection settings after they finish."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_BUSY"
+msgstr "Another management action is running on this configuration"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_UNSUPPORTED"
+msgstr "{subject, select, agent {This agent does not support this native action} resource {This resource does not support this native action} reason {{reason}} unverified {The native management command's options could not be verified} skill {This skill does not support this action} skillSettings {This agent has no native skill settings adapter.} other {This CLI does not declare this action}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_NATIVE_EDITOR_REQUIRED"
+msgstr "Credentials in this file cannot be edited here; use an external editor."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_NOT_FOUND"
+msgstr "{subject, select, skill {The skill is not in the current configuration} other {The extension does not exist}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_PROFILE_UNSUPPORTED"
+msgstr "Droid does not support a custom configuration directory; clear this setting before managing extensions."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_READ_ONLY"
+msgstr "{subject, select, reason {{reason}} managed {Manage this extension through its plugin or managed configuration} plugin {Manage this skill through its plugin} action {This skill does not support this action} skill {This skill is read-only} other {This extension document is read-only}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.EXTENSION_RUNTIME_REQUIRED"
+msgstr "Open a conversation that uses this MCP server before authorizing."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_SCOPE_MISMATCH"
+msgstr "{subject, select, skill {The scope does not match where the skill comes from} other {The scope does not match where the extension comes from}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_SCOPE_UNSUPPORTED"
+msgstr "{subject, select, skill {A project-level skill action needs a valid project.} skillSettings {No native settings were found for the chosen scope.} dsh {DSH plugins belong to a backend profile and cannot be installed per project.} other {This CLI has no project-level option, and the action will not fall back to user level.}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.EXTERNAL_SESSION_DIRECTORY_MISSING"
+msgstr "The directory this conversation ran in no longer exists"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.EXTERNAL_SESSION_NOT_FOUND"
+msgstr "This conversation is no longer stored on this machine"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.FEATURE_REQUIRED"
+msgstr "Update the client and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/git.json
+msgid "error.GH_OPERATION_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/git.json
+msgid "error.GIT_OPERATION_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INTERACTION_BUSY"
+msgstr "Too many interaction requests; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INTERACTION_REQUEST_REUSED"
+msgstr "This request was already used for a different answer; sync and submit again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_HASH"
+msgstr "Read the skill's current content before managing it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_SCOPE"
+msgstr "Choose a project for a project-level action"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_TARGET"
+msgstr "{subject, select, mcp {Choose an MCP server from the current runtime} create {Choose where to create it} dsh {Use a DSH npm bundle name, optionally with a fixed version} other {Use the plugin's native identifier, such as name@marketplace; paths, commands and options are not accepted.}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION"
+msgstr "{reason, select, request {The interaction request is invalid; refresh and try again} selection {The selected options are invalid; choose again} otherText {The other answer must be one line of at most 2000 characters} other {The interaction request is invalid; refresh and try again}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION_ACTION"
+msgstr "The current interaction does not support this action"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION_ANSWER"
+msgstr "The answer is invalid; choose again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.INVALID_MARK_NOTE"
+msgstr "The note exceeds 4 KiB"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_NATIVE_MODEL"
+msgstr "{reason, select, model {The native CLI does not offer the model \"{model}\"; choose another} fast {The native CLI does not support Fast for this model; turn Fast off and try again} context {The TRAE CLI does not support context mode \"{context}\"; choose Standard or Max} other {That model is not available; choose another}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_PROJECT_PROMOTION"
+msgstr "Only an unassociated task can be saved as a project"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_PROMPT"
+msgstr "Enter a message"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_QUERY_SCOPE"
+msgstr "The query scope is invalid; select the project again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_RUNTIME_CONTROL"
+msgstr "This action can't run"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.INVALID_SESSION_REFERENCES"
+msgstr "Choose at most five different conversations"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_ALIAS"
+msgstr "The share address is invalid"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_APPEARANCE"
+msgstr "Choose a valid share appearance"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_DRAFT"
+msgstr "The share preview is invalid"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_EXPIRY"
+msgstr "The share expiry is invalid"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_SELECTION"
+msgstr "Choose a valid share range"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_SKILL_SETTINGS"
+msgstr "Not every native setting could be read safely; no configuration was changed."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_SYNC_GENERATION"
+msgstr "Invalid sync request; refresh"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_SYNC_LANE"
+msgstr "Invalid sync request; refresh"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_TASK_WORKSPACE_ROOT"
+msgstr "Choose a writable directory for task files"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_TIMELINE_POSITION"
+msgstr "Invalid sync request; refresh"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.INVALID_VISUALIZATION"
+msgstr "{subject, select, file {A visualization preview must be an HTML file} text {A visualization preview must be an HTML text} other {A visualization preview must be HTML}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_ASSET_TOO_LARGE"
+msgstr "The image exceeds 10 MiB"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_ASSETS_UNAVAILABLE"
+msgstr "The server cannot keep images"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_NOT_FOUND"
+msgstr "This saved reply no longer exists"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.MODEL_CATALOG_UNAVAILABLE"
+msgstr "The model list is unavailable right now; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_CONFIG_CHANGED"
+msgstr "The conversation settings changed; submit again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_DELIVERY_UNCERTAIN"
+msgstr "The previous message is still unconfirmed; check its status first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERACTION_STALE"
+msgstr "The CLI prompt changed; sync and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERACTION_UNCONFIRMED"
+msgstr "The CLI did not confirm the selection change; sync the status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERRUPT_IN_PROGRESS"
+msgstr "The current turn is stopping; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERRUPT_SUBMISSION_FAILED"
+msgstr "The turn stopped, but the follow-up did not complete; try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_MODEL_PROBE_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_QUERY_DIRECTORY_UNAVAILABLE"
+msgstr "The model query directory is unavailable; check the server cache location"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_QUEUE_CHANGED"
+msgstr "The queued messages changed; review them again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_BUSY"
+msgstr "This message is being checked; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_REQUIRED"
+msgstr "Update the app to check this message before continuing"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_UNSAFE"
+msgstr "Sending cannot safely continue yet; check the message status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RUN_NOT_QUEUED"
+msgstr "This message is no longer queued; refresh and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_SESSION_BUSY"
+msgstr "This conversation is starting; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_SESSION_HELD_EXTERNALLY"
+msgstr "This conversation is running in a terminal outside Riffet; exit it there first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_SESSION_NOT_STARTED"
+msgstr "This conversation has not started yet; send a message first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.NATIVE_STATUS_UNAVAILABLE"
+msgstr "The conversation status is unavailable for now"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_CONFLICT"
+msgstr "This stop request does not match the original task; refresh its status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_TARGET_CHANGED"
+msgstr "The original task changed; no other task was stopped"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_TARGET_REQUIRED"
+msgstr "Update the app to stop this task safely"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_UNCONFIRMED"
+msgstr "The stop has not been confirmed; check the task status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_CONFIG_CONFLICT"
+msgstr "Plugin configuration changed; reload it before saving"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_TASKS_RUNNING"
+msgstr "Wait for running tasks before reloading this plugin"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_BUSY"
+msgstr "Too many previews are queued; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_FAILED"
+msgstr "This file could not be parsed; download the original file to view it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_TIMEOUT"
+msgstr "The file took too long to parse; download the original file to view it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_TOO_LARGE"
+msgstr "The file exceeds the {limit} preview limit; download the original instead"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.PROJECT_PROMOTION_CONFLICT"
+msgstr "This task was already saved as a project under another name"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUN_ALREADY_DISPATCHED"
+msgstr "The message may already be running; use Stop instead"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_CANCELLED"
+msgstr "The message was cancelled"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_NOT_FOUND"
+msgstr "The message does not exist"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_NOT_QUEUED"
+msgstr "This message has left the queue; refresh and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUNTIME_CONTROL_CHANGED"
+msgstr "The state changed; try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUNTIME_CONTROL_UNAVAILABLE"
+msgstr "This can't run right now; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_BUSY"
+msgstr "Wait for the current turn to finish"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETE_BLOCKED"
+msgstr "{reason, select, share {A share operation is in progress; delete after it finishes} other {Stop or finish this conversation’s tasks before deleting it}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETE_SCOPE_CHANGED"
+msgstr "The conversation changed; confirm again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETED"
+msgstr "This conversation was deleted"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETING"
+msgstr "This conversation is being deleted"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_IN_TERMINAL"
+msgstr "This conversation is open in a terminal"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_TIMEOUT"
+msgstr "Reading the session timed out; retry the original request"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_TOO_LARGE"
+msgstr "The session history is too large; remove this reference to send"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_UNAVAILABLE"
+msgstr "This session reference is unavailable"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCES_UNSUPPORTED"
+msgstr "This client or agent does not support session references"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ACCOUNT_CHANGED"
+msgstr "{reason, select, switch {Switch to the publishing account {username}} changed {The account changed; generate the preview again} other {Switch to the publishing account {username}}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ALIAS_EXISTS"
+msgstr "The share address already exists; check the publish status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSET_NOT_FOUND"
+msgstr "The resource does not exist"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSETS_UNAVAILABLE"
+msgstr "The share page has not been built"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSETS_UNSAFE"
+msgstr "Share assets cannot contain symbolic links"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_BUSY"
+msgstr "A share operation is already running"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_MISSING"
+msgstr "Install the command-line tool needed to publish first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_PROTOCOL"
+msgstr "The platform returned invalid data; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_TIMEOUT"
+msgstr "The platform response was not confirmed; check the status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLOSED"
+msgstr "The server is shutting down"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DIRECTORY_UNSAFE"
+msgstr "The share directory must be empty"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_EXPIRED"
+msgstr "The share preview has expired; generate it again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_MISMATCH"
+msgstr "{reason, select, session {The share preview belongs to another conversation} record {The original share preview does not match the publish record} other {The original share preview does not match the publish record}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_NOT_FOUND"
+msgstr "The share preview has expired; generate it again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_CHANGED"
+msgstr "The conversation history changed; generate the preview again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_NOT_FOUND"
+msgstr "The conversation history file does not exist"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_SCOPE_MISMATCH"
+msgstr "The conversation history belongs to another conversation"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_TOO_LARGE"
+msgstr "The conversation history is too large; share less"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_UNAVAILABLE"
+msgstr "The conversation history could not be read; try again shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_LIST_INCOMPLETE"
+msgstr "The platform share list could not be fully checked"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_LOGIN_REQUIRED"
+msgstr "Sign in to the publishing account first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_NOT_FOUND"
+msgstr "The share does not exist"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_NOT_VERIFIED"
+msgstr "The page was submitted but its content has not been verified; check the status later"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PERMISSION_DENIED"
+msgstr "This account cannot share"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PLATFORM_UNAVAILABLE"
+msgstr "The platform operation did not complete; check the network and verify the status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PUBLISHER_CHANGED"
+msgstr "The publishing target changed; generate the preview again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PUBLISHER_UNAVAILABLE"
+msgstr "The plugin that published this share is not enabled"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_REMOVE_UNCONFIRMED"
+msgstr "{reason, select, publish {The previous publish result is unconfirmed; reconcile it before removing} remote {The platform still lists this share; check the status later} other {The platform still lists this share; check the status later}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_RETRY_UNAVAILABLE"
+msgstr "The original share preview is unavailable; check the platform status"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_SELECTION_CHANGED"
+msgstr "The selected turns are no longer available; select them again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_SELECTION_INVALID"
+msgstr "{reason, select, count {The number of shared turns is invalid} changed {The selected messages changed; select them again} session {The selected messages do not belong to this conversation} other {The selected messages are invalid; select them again}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_THEME_CHANGED"
+msgstr "The theme changed; generate the preview again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_TOO_LARGE"
+msgstr "The share exceeds 50 MB"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_UNAVAILABLE"
+msgstr "{reason, select, missing_cli {Install the command-line tool needed to publish first} unsupported_cli {Update the command-line tool needed to publish} login_required {Sign in to the publishing account first} permission_denied {This account cannot share} no_publisher {No share publisher is enabled} other {Sharing is unavailable}}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_UNCONFIRMED"
+msgstr "Reconcile the previous share operation first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_METADATA_UNSUPPORTED"
+msgstr "The skill metadata could not be read safely."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_SETTING_OVERRIDDEN"
+msgstr "A higher-priority project setting overrides this choice; change it there. No configuration was changed."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_STILL_DISABLED"
+msgstr "disabledSkills in another scope, or enabled: false in SKILL.md, still disables this skill; re-enable it there. No configuration was changed."
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_ACTION_UNSUPPORTED"
+msgstr "This action does not apply to a follow-up message"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_CONFIG_UNSUPPORTED"
+msgstr "A follow-up message uses the current task settings"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_REJECTED"
+msgstr "The follow-up message was not sent; check it and try again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.STEER_TARGET_CHANGED"
+msgstr "The current task changed; the follow-up message was not sent"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_UNSUPPORTED"
+msgstr "This agent does not support follow-up messages during a task"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.SYNC_GENERATION_CHANGED"
+msgstr "The conversation was rebuilt; reload it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ACTION_UNAVAILABLE"
+msgstr "This project does not offer that action"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_CHANGED"
+msgstr "The file changed after the task finished, possibly replaced by a newer build"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_MISSING"
+msgstr "The file is no longer there"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_NOT_FOUND"
+msgstr "Artifact not found"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_BUSY"
+msgstr "Another task is already running in this project"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_CONFIRM_REQUIRED"
+msgstr "This command comes from an installed plugin and needs your confirmation before it first runs"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_NOT_FOUND"
+msgstr "This task no longer exists"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PARAMS_INVALID"
+msgstr "Invalid task parameters: {message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PLAN_INVALID"
+msgstr "The plugin returned an invalid plan: {message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_FAILED"
+msgstr "The plugin failed: {message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_STOPPING"
+msgstr "The plugin is turning off once its running tasks end and accepts no new tasks"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_UNAVAILABLE"
+msgstr "The plugin that provides this task is off"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_REQUEST_CONFLICT"
+msgstr "This request id was already used for a different task"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_CONFLICT"
+msgstr "The task directory does not match its creation record; check the original directory before retrying"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_SAVE_REQUIRED"
+msgstr "Save this task as a project first"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_UNAVAILABLE"
+msgstr "The task directory is unavailable; restore its original location and retry"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASKS_UNSUPPORTED"
+msgstr "Project tasks are not supported on this system"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_NOT_RUNNING"
+msgstr "The CLI is not running"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_REBOUND"
+msgstr "The conversation moved to another terminal; send the message again"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TERMINAL_RESUME_UNSUPPORTED"
+msgstr "This agent cannot be resumed in a terminal"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TERMINAL_STILL_RUNNING"
+msgstr "The process in the terminal is still running"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TITLE_MODEL_FAILED"
+msgstr "{message}"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.TRANSCRIPT_READ_FAILED"
+msgstr "Could not read the conversation; retrying shortly"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.UNSTABLE_MARK_ANCHOR"
+msgstr "The reply is still being written; save it once it finishes"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.UNSUPPORTED_OTHER_DESELECT"
+msgstr "The CLI cannot deselect a selected Other option; keep or change it, or skip the question"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.UNSUPPORTED_PREVIEW"
+msgstr "Download this format to view it"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.VISUALIZATION_TOO_LARGE"
+msgstr "The preview exceeds {limit}; open the source instead"

@@ -1,0 +1,77 @@
+import { THEME_ROLES } from '@contracts';
+import { BRIDGE_INIT, BRIDGE_PORT, BRIDGE_READY, BRIDGE_VERSION, type BridgeTheme } from '@riffet/plugin-web';
+
+/*
+ * The page an isolated view runs in. The host builds it (the Mac host does the same in
+ * apps/macos/Riffet/Features/Inspector/PluginPageDocument.swift, so keep the two in step) and the view's
+ * own script is the only script in it. The frame is sandboxed with `allow-scripts` alone, so the page
+ * has an opaque origin: no cookies, no storage, no way into the app. The policy below is what limits
+ * what the page can load and where it can send data.
+ *
+ * The page asks for its channel itself, in `CHANNEL_SCRIPT`, before any of the view's code exists, and
+ * keeps the answer where the bridge client (`connect()` in packages/plugin-web) takes it from. The
+ * view therefore never sends the request: the first one the host sees is the page's own, and a page
+ * the view navigates to later has nothing it could ask for.
+ */
+
+/** The Content-Security-Policy of the page: nothing loads from anywhere, and the network is closed unless the package holds `network`. */
+export function pluginPolicy(network: boolean): string {
+  return [
+    "default-src 'none'", "script-src 'unsafe-inline' blob:", "style-src 'unsafe-inline'", 'img-src data: blob:', 'font-src data:',
+    `connect-src ${network ? 'https:' : "'none'"}`, "base-uri 'none'", "form-action 'none'",
+  ].join('; ');
+}
+
+/**
+ * The first script of the page: listens for the host's answer, then asks. The listener is installed
+ * before the request is sent, and only the embedding window's answer counts.
+ */
+export const CHANNEL_SCRIPT = `(function(w){var p=new Promise(function(r){w.addEventListener("message",function f(e){var d=e.data;if(e.source===w.parent&&d&&d.type==="${BRIDGE_INIT}"&&d.version===${BRIDGE_VERSION}&&e.ports&&e.ports[0]){w.removeEventListener("message",f);r(e.ports[0])}})});Object.defineProperty(w,"${BRIDGE_PORT}",{value:p});w.parent.postMessage({type:"${BRIDGE_READY}",version:${BRIDGE_VERSION}},"*")})(window)`;
+
+/** A colour value that is safe to write into a style rule: the palette's own forms, nothing that could close the rule or the element. */
+const SAFE_VALUE = /^[#(),.%\w\s/+-]{1,80}$/;
+
+/** The colour roles of the palette in effect on the app's document element. */
+export function readTheme(root: HTMLElement = document.documentElement): BridgeTheme {
+  const style = getComputedStyle(root);
+  const vars: Record<string, string> = {};
+  for (const role of THEME_ROLES) {
+    const value = style.getPropertyValue(`--${role}`).trim();
+    if (SAFE_VALUE.test(value)) vars[`--${role}`] = value;
+  }
+  return { scheme: root.classList.contains('dark') ? 'dark' : 'light', vars };
+}
+
+/** Text that can sit inside a double-quoted attribute. */
+const attribute = (value: string) => value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+
+/**
+ * A string literal for the page's script. JSON is a valid JavaScript string, and `<` is written as an
+ * escape so no `</script>` or `<!--` in the view's code can end or confuse the element that holds it.
+ */
+const literal = (value: string) => JSON.stringify(value).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+
+export interface BootstrapOptions {
+  /** The view's script: one self-contained classic script. */
+  code: string;
+  network: boolean;
+  theme: BridgeTheme;
+  /** The app's language, for the page's `lang`. */
+  locale: string;
+}
+
+export function bootstrapDocument({ code, network, theme, locale }: BootstrapOptions): string {
+  const vars = Object.entries(theme.vars).filter(([name, value]) => /^--[a-z0-9-]+$/.test(name) && SAFE_VALUE.test(value)).map(([name, value]) => `${name}:${value}`).join(';');
+  return [
+    '<!doctype html>',
+    `<html lang="${attribute(locale)}"><head><meta charset="utf-8">`,
+    `<meta http-equiv="Content-Security-Policy" content="${attribute(pluginPolicy(network))}">`,
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<style>:root{color-scheme:${theme.scheme};${vars}}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--fg);font:13px/1.5 system-ui,-apple-system,sans-serif}</style>`,
+    `<script>${CHANNEL_SCRIPT}</script>`,
+    '</head><body><div id="root"></div>',
+    // The view's script runs as a classic script created here, so it needs no `src` and the policy needs no origin.
+    `<script>(function(){var s=document.createElement("script");s.textContent=${literal(code)};document.head.appendChild(s)})()</script>`,
+    '</body></html>',
+  ].join('');
+}

@@ -1,0 +1,7 @@
+{
+  "INVALID_MARK_NOTE": { "zh": "备注超过 4 KiB", "en": "The note exceeds 4 KiB" },
+  "MARK_ASSET_TOO_LARGE": { "zh": "图片超过 10 MiB", "en": "The image exceeds 10 MiB" },
+  "MARK_ASSETS_UNAVAILABLE": { "zh": "服务器无法保存图片", "en": "The server cannot keep images" },
+  "MARK_NOT_FOUND": { "zh": "收藏已不存在", "en": "This saved reply no longer exists" },
+  "UNSTABLE_MARK_ANCHOR": { "zh": "回复还在生成，结束后再收藏", "en": "The reply is still being written; save it once it finishes" }
+}

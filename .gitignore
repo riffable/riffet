@@ -1,0 +1,65 @@
+node_modules/
+.pnpm-store/
+dist/
+# `pnpm pack:npm` stages the npm package here.
+/build/
+.riffet/
+coverage/
+*.tsbuildinfo
+.DS_Store
+test-results/
+
+# Gradle / Kotlin Multiplatform (apps/mobile). Release and personal signing keys stay ignored.
+# A downloaded Gradle distribution is ~1 GB: bootstrap it outside the checkout, never inside it.
+apps/mobile/**/build/
+apps/mobile/.gradle/
+apps/mobile/.bootstrap/
+apps/mobile/local.properties
+.kotlin/
+*.jks
+*.keystore
+# Shared development signer; intentionally versioned for compatible debug APKs across machines.
+!/apps/mobile/androidApp/signing/debug.keystore
+*.hprof
+
+# Xcode (apps/mobile/iosApp, P4)
+apps/mobile/iosApp/Pods/
+**/xcuserdata/
+
+# Local toolchain staged for verification: a Gradle distribution and an Android SDK.
+# Never commit either; `sdk.dir`/`ANDROID_HOME` should point here only on a machine that lacks them.
+.toolchain/
+
+# Built APKs kept for sideloading. A binary this size does not belong in git history.
+artifacts/
+*.apk
+
+# Editor/IDE state and scratch analysis. `git status` used to offer these for commit: the IDE
+# directory is machine-specific Gradle/Android Studio state and `.audit/` holds multi-megabyte
+# scratch dumps, so neither belongs in the repository.
+apps/mobile/.idea/
+.audit/
+
+# Scratch directory. Probe scripts and local telemetry dumps land here while debugging; they are
+# machine-specific and sometimes carry an account address, so `git status` must stop offering them.
+tmp/
+.scratch/
+
+# Local logs (e.g. `riffet-restart --log log/...`, stray tool output). Never part of the source.
+log/
+
+# macOS app (docs/MACOS.md): XcodeGen output and build products
+apps/macos/Riffet.xcodeproj/
+apps/macos/build/
+apps/macos/.swiftpm/
+
+# Secrets and local agent state: credentials, signing material, and per-machine tool directories.
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.pem
+*.mobileprovision
+.claude/
+.arc/

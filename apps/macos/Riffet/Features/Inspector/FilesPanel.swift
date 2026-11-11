@@ -1,0 +1,748 @@
+import SwiftUI
+import WebKit
+import RiffetKit
+
+/// The project's files: a paged directory list, search by name or content, and a preview that
+/// cites a file or a line into the next message (`ContextPanel.tsx`).
+struct FilesPanel: View {
+    let workbench: Workbench
+    let project: Project
+    @Environment(\.palette) private var palette
+    @Environment(\.inspectorPanelVisible) private var panelVisible
+    @State private var path = ""
+    @State private var entries: [FileEntry] = []
+    @State private var hasMore = false
+    @State private var loading = false
+    @State private var searching = false
+    @State private var searchOpen = false
+    @State private var searchMode = SearchMode.name
+    @State private var query = ""
+    @State private var found: [FileEntry]?
+    @State private var hits: [SearchHit]?
+    @State private var preview: (path: String, line: Int?, token: Int)?
+    @State private var error: String?
+    @State private var notice: String?
+    /// The project's favorite folders, relative to its root; replaced with the project.
+    @State private var favorites = FolderFavoritesModel()
+
+    enum SearchMode: String { case name, content }
+
+    private static let page = 100
+
+    var body: some View {
+        ZStack {
+            // The list stays under an open file, so going back keeps its folder and scroll position.
+            listPage.keptAlive(hidden: preview != nil)
+            if let preview {
+                FilePreviewPage(workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, openFolder: browse) { self.preview = nil }
+                    .id("\(project.id)|\(preview.path)")
+            }
+        }
+        // Pages switch without a slide: every frame of one re-laid out the whole window.
+        .task(id: project.id) {
+            path = ""
+            preview = nil
+            found = nil
+            hits = nil
+            // A request made together with switching conversations arrives before this reset.
+            if let target = workbench.previewTarget, Date.now.timeIntervalSince(target.at) < 3 { consume(target) }
+            if favorites.projectId != project.id { favorites = FolderFavoritesModel(projectId: project.id) }
+            await load()
+            await favorites.load(workbench.host.api)
+        }
+        .onChange(of: path) { _, _ in Task { await load() } }
+        // Back on this tab, the folder is read again behind what it showed.
+        .onChange(of: panelVisible) { _, visible in if visible { Task { await load() } } }
+        .onAppear { consume(workbench.previewTarget) }
+        .onChange(of: workbench.previewTarget) { _, target in consume(target) }
+    }
+
+    private func consume(_ target: PreviewTarget?) {
+        guard let target else { return }
+        open(target.path, line: target.line)
+    }
+
+    private func open(_ file: String, line: Int? = nil) {
+        preview = (file, line, (preview?.token ?? 0) + 1)
+    }
+
+    /// A mentioned path that turned out to be a folder: list it instead of previewing it.
+    private func browse(_ folder: String) {
+        let root = project.cwd.hasSuffix("/") ? String(project.cwd.dropLast()) : project.cwd
+        var relative = folder.hasSuffix("/") ? String(folder.dropLast()) : folder
+        if relative == root { relative = "" } else if relative.hasPrefix(root + "/") { relative = String(relative.dropFirst(root.count + 1)) }
+        if relative.hasPrefix("./") { relative = String(relative.dropFirst(2)) }
+        searchOpen = false
+        preview = nil
+        path = relative
+    }
+
+    // MARK: List
+
+    private var listPage: some View {
+        VStack(spacing: 0) {
+            if project.isTaskWorkspace {
+                HStack(spacing: Space.sm) {
+                    Text(project.cwd).font(RiffetFont.codeSmall).lineLimit(1).truncationMode(.head).textSelection(.enabled)
+                    Spacer(minLength: 0)
+                    CopyButton(text: project.cwd, help: String(localized: "复制路径"))
+                    if workbench.local {
+                        Button { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: project.cwd)]) } label: { Image(icon: "folder") }
+                            .buttonStyle(IconButtonStyle()).help("在 Finder 中显示")
+                    }
+                }
+                .padding(.horizontal, Space.sm)
+                .padding(.top, Space.sm)
+            }
+            HStack(spacing: Space.xxs) {
+                if searchOpen { searchField } else { breadcrumb }
+                Button { withAnimation(.snappy(duration: 0.18)) { searchOpen.toggle() } } label: { Image(icon: searchOpen ? "list.bullet" : "magnifyingglass").font(.riffet(size: S(12))) }
+                    .buttonStyle(IconButtonStyle(active: searchOpen))
+                    .help(searchOpen ? "返回文件列表" : "搜索文件")
+                if !searchOpen, !path.isEmpty {
+                    let starred = favorites.favorite(at: path) != nil
+                    Button { Task { await favorites.toggle(path) } } label: {
+                        Image(icon: starred ? "star.fill" : "star").font(.riffet(size: S(12))).foregroundStyle(starred ? palette.warning : palette.fg3)
+                    }
+                    .buttonStyle(IconButtonStyle())
+                    .help(starred ? "取消收藏此文件夹" : "收藏此文件夹")
+                }
+                if !searchOpen {
+                    Button { Task { notice = await ProjectDownloads.saveFolder(projectId: project.id, path: path, projectName: project.name) } } label: {
+                        Image(icon: "arrow.down.circle").font(.riffet(size: S(12)))
+                    }
+                    .buttonStyle(IconButtonStyle())
+                    .help(path.isEmpty ? "下载整个项目（ZIP）" : "下载此文件夹（ZIP）")
+                    Button { Task { await load() } } label: { Image(icon: "arrow.clockwise").font(.riffet(size: S(12))) }
+                        .buttonStyle(IconButtonStyle())
+                        .help("刷新")
+                }
+            }
+            .padding(.trailing, Space.sm)
+            .frame(height: InspectorMetrics.headerHeight)
+            if searchOpen {
+                SegmentedTrack(selection: $searchMode, fontSize: 12) {
+                    Text("文件名").tag(SearchMode.name)
+                    Text("内容").tag(SearchMode.content)
+                }
+                .accessibilityLabel("搜索方式")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, Space.md)
+                .padding(.bottom, Space.sm)
+                .onChange(of: searchMode) { _, _ in found = nil; hits = nil; Task { await search() } }
+            }
+            if let notice {
+                Text(notice).font(.riffet(size: S(12))).foregroundStyle(palette.danger).padding(.horizontal, Space.md).padding(.bottom, 4)
+            }
+            if !searchOpen {
+                // The project's favorite folders, a jump away from wherever the list is.
+                FolderFavoriteStrip(model: favorites, currentPath: path) { path = $0.path }
+                    .padding(.horizontal, Space.md)
+                    .padding(.bottom, favorites.favorites.isEmpty ? 0 : Space.sm)
+            }
+            PanelRule()
+            if searchOpen { searchResults } else { directoryList }
+        }
+    }
+
+    private var searchField: some View {
+        HStack(spacing: Space.sm) {
+            Image(icon: "magnifyingglass").font(.riffet(size: S(12))).foregroundStyle(palette.fg4)
+            TextField(searchMode == .name ? "按文件名查找" : "搜索文件内容", text: $query)
+                .textFieldStyle(.plain)
+                .font(.riffet(size: S(13)))
+                .onSubmit { Task { await search() } }
+            if searching { Spinner(size: .mini) }
+            if !query.isEmpty {
+                Button { query = ""; found = nil; hits = nil } label: { Image(icon: "xmark.circle.fill").font(.riffet(size: S(11))) }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(palette.fg4)
+            }
+        }
+        .padding(.horizontal, Space.sm + 2)
+        .frame(height: 28)
+        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.lineSoft))
+        .padding(.leading, Space.md)
+    }
+
+    private var directoryList: some View {
+        Group {
+            if let error {
+                ContentUnavailableView("读不到目录", icon: "exclamationmark.triangle", description: Text(error))
+            } else if loading, entries.isEmpty {
+                Spinner(size: .regular).frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(entries, id: \.name) { entry in
+                            let full = [path, entry.name].filter { !$0.isEmpty }.joined(separator: "/")
+                            FileListRow(entry: entry, path: full, showsDirectory: false, starred: entry.kind == .directory && favorites.favorite(at: full) != nil, onReference: entry.kind == .file ? { workbench.addReference(path: full) } : nil) {
+                                if entry.kind == .directory { path = full } else { open(full) }
+                            }
+                            .contextMenu { menu(full, kind: entry.kind) }
+                        }
+                        if hasMore {
+                            Button("加载更多") { Task { await loadMore() } }.buttonStyle(ChipButtonStyle()).padding(.vertical, Space.sm)
+                        }
+                        if entries.isEmpty {
+                            Text("空目录").font(.riffet(size: S(12))).foregroundStyle(palette.fg4).padding(.top, Space.xl)
+                        }
+                    }
+                    .padding(Space.xs + 2)
+                }
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var searchResults: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                if searchMode == .name {
+                    ForEach(found ?? [], id: \.path) { entry in
+                        FileListRow(entry: entry, path: entry.path, showsDirectory: true, onReference: entry.kind == .file ? { workbench.addReference(path: entry.path) } : nil) {
+                            if entry.kind == .directory { searchOpen = false; path = entry.path } else { open(entry.path) }
+                        }
+                        .contextMenu { menu(entry.path, kind: entry.kind) }
+                    }
+                    if found?.isEmpty == true { empty(String(localized: "没有找到匹配的文件")) }
+                } else {
+                    ForEach(Array((hits ?? []).enumerated()), id: \.offset) { _, hit in
+                        SearchHitResult(hit: hit, onOpen: { open(hit.path, line: Int(hit.line)) }, onReference: { workbench.addReference(path: hit.path, line: Int(hit.line)) }, onEditor: workbench.local ? { FileOpener.open(path: hit.path, line: Int(hit.line), projectId: project.id, workbench: workbench) } : nil)
+                    }
+                    if hits?.isEmpty == true { empty(String(localized: "没有找到匹配的内容")) }
+                }
+                if found == nil, hits == nil, !searching {
+                    empty(searchMode == .name ? String(localized: "输入文件名后按回车") : String(localized: "输入要搜索的文字后按回车"))
+                }
+            }
+            .padding(Space.xs + 2)
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    private func empty(_ text: String) -> some View {
+        Text(text).font(.riffet(size: S(12))).foregroundStyle(palette.fg4).frame(maxWidth: .infinity).padding(.top, Space.xl)
+    }
+
+    /// Where the list is, as segments that each go back up to that folder.
+    private var breadcrumb: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    Button { path = "" } label: {
+                        Label(project.name, icon: "folder").font(.riffet(size: S(12), weight: path.isEmpty ? .semibold : .regular))
+                    }
+                    .buttonStyle(ChipButtonStyle(active: path.isEmpty))
+                    let parts = path.split(separator: "/").map(String.init)
+                    ForEach(parts.indices, id: \.self) { index in
+                        Image(icon: "chevron.right").font(.riffet(size: S(8), weight: .bold)).foregroundStyle(palette.fg4)
+                        Button(parts[index]) { path = parts[0...index].joined(separator: "/") }
+                            .buttonStyle(ChipButtonStyle(active: index == parts.count - 1))
+                            .id(index)
+                    }
+                }
+                .padding(.horizontal, Space.sm)
+            }
+            .onChange(of: path) { _, _ in proxy.scrollTo(path.split(separator: "/").count - 1, anchor: .trailing) }
+        }
+    }
+
+    @ViewBuilder
+    private func menu(_ file: String, kind: FileEntryKind) -> some View {
+        if kind == .file {
+            Button("引用到对话") { workbench.addReference(path: file) }
+            Button("下载") { Task { notice = await ProjectDownloads.saveFile(projectId: project.id, path: file) } }
+        } else {
+            Button(favorites.favorite(at: file) == nil ? "收藏文件夹" : "取消收藏") { Task { await favorites.toggle(file) } }
+            Button("下载为 ZIP") { Task { notice = await ProjectDownloads.saveFolder(projectId: project.id, path: file, projectName: project.name) } }
+        }
+        if workbench.local {
+            Divider()
+            Button("在编辑器中打开") { FileOpener.open(path: file, line: nil, projectId: project.id, workbench: workbench) }
+            Button("在 Finder 中显示") {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: (project.cwd as NSString).appendingPathComponent(file))])
+            }
+        }
+        Divider()
+        Button("复制路径") { copyToPasteboard(file) }
+        Button("复制绝对路径") { copyToPasteboard((project.cwd as NSString).appendingPathComponent(file)) }
+    }
+
+    // MARK: Loading
+
+    private func sorted(_ list: [FileEntry]) -> [FileEntry] {
+        list.sorted { a, b in
+            if (a.kind == .directory) != (b.kind == .directory) { return a.kind == .directory }
+            return a.name.localizedStandardCompare(b.name) == .orderedAscending
+        }
+    }
+
+    /// Shows the folder as it was last read, if it was, while it is read again.
+    private func load() async {
+        let requested = (project.id, path)
+        let key = FileListing.key(project.id, path)
+        if let cached = FileListing.cache.object(forKey: key) { show(cached.entries, hasMore: cached.hasMore) }
+        loading = true
+        defer { if requested == (project.id, path) { loading = false } }
+        do {
+            let listed = try await workbench.host.api?.files(projectId: project.id, path: path, limit: KotlinInt(int: Int32(Self.page)), offset: KotlinInt(int: 0)) ?? []
+            guard requested == (project.id, path) else { return }
+            show(sorted(listed), hasMore: listed.count == Self.page)
+            FileListing.cache.setObject(FileListing(entries: entries, hasMore: hasMore), forKey: key)
+        } catch {
+            guard requested == (project.id, path) else { return }
+            entries = []
+            self.error = error.riffetMessage
+        }
+    }
+
+    private func loadMore() async {
+        let requested = (project.id, path)
+        do {
+            let next = try await workbench.host.api?.files(projectId: project.id, path: path, limit: KotlinInt(int: Int32(Self.page)), offset: KotlinInt(int: Int32(entries.count))) ?? []
+            guard requested == (project.id, path) else { return }
+            let names = Set(entries.map(\.name))
+            entries += next.filter { !names.contains($0.name) }
+            hasMore = next.count == Self.page
+            FileListing.cache.setObject(FileListing(entries: entries, hasMore: hasMore), forKey: FileListing.key(project.id, path))
+        } catch {
+            notice = String(localized: "无法加载更多：\(error.riffetMessage)")
+        }
+    }
+
+    /// Changes only what differs, so a reading that matches the screen redraws nothing.
+    private func show(_ list: [FileEntry], hasMore more: Bool) {
+        if entries != list { entries = list }
+        if hasMore != more { hasMore = more }
+        if error != nil { error = nil }
+    }
+
+    private func search() async {
+        let text = query.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty, let api = workbench.host.api else { return }
+        let mode = searchMode
+        searching = true
+        defer { searching = false }
+        do {
+            if mode == .name {
+                let result = try await api.find(projectId: project.id, query: text)
+                guard mode == searchMode, text == query.trimmingCharacters(in: .whitespaces) else { return }
+                found = result
+            } else {
+                let result = try await api.search(projectId: project.id, query: text)
+                guard mode == searchMode, text == query.trimmingCharacters(in: .whitespaces) else { return }
+                hits = result
+            }
+            notice = nil
+        } catch {
+            notice = String(localized: "搜索失败：\(error.riffetMessage)")
+        }
+    }
+}
+
+/// A folder's listing as last read, by project and path, so a reopened panel or a folder visited
+/// again shows at once.
+private final class FileListing {
+    let entries: [FileEntry]
+    let hasMore: Bool
+
+    init(entries: [FileEntry], hasMore: Bool) {
+        self.entries = entries
+        self.hasMore = hasMore
+    }
+
+    static func key(_ projectId: String, _ path: String) -> NSString { "\(projectId)\u{1}\(path)" as NSString }
+
+    nonisolated(unsafe) static let cache: NSCache<NSString, FileListing> = {
+        let cache = NSCache<NSString, FileListing>()
+        cache.countLimit = 64
+        return cache
+    }()
+}
+
+/// A file or folder row; files offer "cite" on hover where the size was.
+struct FileListRow: View {
+    let entry: FileEntry
+    let path: String
+    let showsDirectory: Bool
+    /// A folder among the project's favorites carries a star after its name.
+    var starred = false
+    var onReference: (() -> Void)?
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.sm + 2) {
+                Image(icon: entry.kind == .directory ? "folder.fill" : FileSymbols.symbol(entry.name))
+                    .font(.riffet(size: S(13)))
+                    .foregroundStyle(entry.kind == .directory ? palette.accent.opacity(0.85) : palette.fg3)
+                    .frame(width: 18)
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(entry.name).font(.riffet(size: S(13))).foregroundStyle(entry.name.hasPrefix(".") ? palette.fg3 : palette.fg).lineLimit(1)
+                        if starred { Image(icon: "star.fill").font(.riffet(size: S(9))).foregroundStyle(palette.warning) }
+                    }
+                    if showsDirectory {
+                        let directory = (path as NSString).deletingLastPathComponent
+                        Text(directory.isEmpty ? "/" : directory).font(.riffet(size: S(11), design: .monospaced)).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
+                    }
+                }
+                Spacer(minLength: Space.sm)
+                if entry.kind == .file {
+                    if hovering, let onReference {
+                        Button(action: onReference) { Image(icon: "plus").font(.riffet(size: S(11), weight: .semibold)) }
+                            .buttonStyle(IconButtonStyle(size: 20))
+                            .help("引用到对话")
+                    } else if let size = entry.size?.int64Value {
+                        Text(ByteCountFormatter.string(fromByteCount: size, countStyle: .file))
+                            .font(.riffet(size: S(11)).monospacedDigit())
+                            .foregroundStyle(palette.fg4)
+                    }
+                } else {
+                    Image(icon: "chevron.right").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                }
+            }
+            .padding(.horizontal, Space.sm)
+            .padding(.vertical, showsDirectory ? 5 : 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(minHeight: 30)
+        }
+        .buttonStyle(HoverRowStyle())
+        .onHover { hovering = $0 }
+    }
+}
+
+private struct SearchHitResult: View {
+    let hit: SearchHit
+    let onOpen: () -> Void
+    let onReference: () -> Void
+    let onEditor: (() -> Void)?
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: onOpen) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: Space.xs) {
+                    Text("\(hit.path):\(hit.line)").font(.riffet(size: S(11), design: .monospaced)).foregroundStyle(hovering ? palette.accent : palette.fg3).lineLimit(1).truncationMode(.head)
+                    Spacer(minLength: Space.sm)
+                    if hovering {
+                        Button(action: onReference) { Image(icon: "plus").font(.riffet(size: S(10), weight: .semibold)) }
+                            .buttonStyle(IconButtonStyle(size: 20)).help("引用到对话")
+                        if let onEditor {
+                            Button(action: onEditor) { Image(icon: "arrow.up.forward.app").font(.riffet(size: S(10))) }
+                                .buttonStyle(IconButtonStyle(size: 20)).help("在编辑器中打开")
+                        }
+                    }
+                }
+                Text(hit.text.trimmingCharacters(in: .whitespaces)).font(.riffet(size: S(12), design: .monospaced)).foregroundStyle(palette.fg2).lineLimit(2)
+            }
+            .padding(.horizontal, Space.sm)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(HoverRowStyle())
+        .onHover { hovering = $0 }
+    }
+}
+
+enum FileSymbols {
+    static func symbol(_ name: String) -> String {
+        switch (name as NSString).pathExtension.lowercased() {
+        case "swift", "kt", "kts", "ts", "tsx", "js", "jsx", "mjs", "py", "go", "rs", "java", "c", "h", "cpp", "m", "rb", "sh", "zsh":
+            "chevron.left.forwardslash.chevron.right"
+        case "md", "txt", "rtf": "doc.text"
+        case "json", "yml", "yaml", "toml", "plist", "xml", "lock": "curlybraces"
+        case "png", "jpg", "jpeg", "gif", "webp", "svg", "heic", "icns": "photo"
+        case "html", "htm": "globe"
+        case "pdf": "doc.richtext"
+        case "zip", "tar", "gz", "xz", "dmg": "archivebox"
+        default: "doc"
+        }
+    }
+}
+
+/// A file filling the panel: highlighted source with clickable line numbers, an HTML page rendered
+/// in its own sandbox, or an image; its actions in the header.
+struct FilePreviewPage: View {
+    let workbench: Workbench
+    let project: Project
+    let path: String
+    var target: (Int, Int)?
+    var openFolder: ((String) -> Void)?
+    let back: () -> Void
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var preview: FilePreview?
+    @State private var error: String?
+    @State private var htmlRendered = true
+    @State private var notice: String?
+    @State private var reload = 0
+
+    private var canRender: Bool { preview?.render != nil || isHTML }
+
+    /// The files opened most recently.
+    nonisolated(unsafe) private static let recent: NSCache<NSString, FilePreview> = {
+        let cache = NSCache<NSString, FilePreview>()
+        cache.countLimit = 12
+        return cache
+    }()
+
+    private var isHTML: Bool { ["html", "htm"].contains((path as NSString).pathExtension.lowercased()) }
+
+    private func moreEntries() -> [NativeMenuEntry] {
+        var entries: [NativeMenuEntry] = []
+        if workbench.local {
+            entries.append(.item(String(localized: "在 Finder 中显示")) {
+                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path.hasPrefix("/") ? path : (project.cwd as NSString).appendingPathComponent(path))])
+            })
+        }
+        if preview?.binary == false { entries.append(.item(String(localized: "复制文件内容")) { Task { await copyContent() } }) }
+        entries.append(.separator)
+        entries.append(.item(String(localized: "复制路径")) { copyToPasteboard(path) })
+        if !path.hasPrefix("/") { entries.append(.item(String(localized: "复制绝对路径")) { copyToPasteboard((project.cwd as NSString).appendingPathComponent(path)) }) }
+        entries.append(.separator)
+        entries.append(.item(String(localized: "刷新")) { reload += 1 })
+        return entries
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            DetailHeader(title: (path as NSString).lastPathComponent, subtitle: (path as NSString).deletingLastPathComponent, back: back) {
+                if canRender, preview?.binary == false {
+                    Button { htmlRendered.toggle() } label: { Image(icon: htmlRendered ? "chevron.left.forwardslash.chevron.right" : "eye").font(.riffet(size: S(12))) }
+                        .buttonStyle(IconButtonStyle())
+                        .help(htmlRendered ? "显示源码" : "渲染预览")
+                }
+                Button { workbench.addReference(path: path) } label: { Image(icon: "plus").font(.riffet(size: S(12))) }
+                    .buttonStyle(IconButtonStyle())
+                    .help("引用整个文件")
+                Button { Task { notice = await ProjectDownloads.saveFile(projectId: project.id, path: path) } } label: { Image(icon: "arrow.down.circle").font(.riffet(size: S(12))) }
+                    .buttonStyle(IconButtonStyle())
+                    .help("下载")
+                if workbench.local {
+                    Button { FileOpener.open(path: path, line: target?.0, projectId: project.id, workbench: workbench) } label: { Image(icon: "arrow.up.forward.app").font(.riffet(size: S(12))) }
+                        .buttonStyle(IconButtonStyle())
+                        .help("在编辑器中打开")
+                }
+                NativeMenuButton(entries: moreEntries) {
+                    Image(icon: "ellipsis").font(.riffet(size: S(12)))
+                }
+                .buttonStyle(IconButtonStyle())
+            }
+            PanelRule()
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
+            if let notice {
+                Text(notice).font(.riffet(size: S(12))).foregroundStyle(palette.danger).padding(6)
+            }
+            if let preview, preview.truncated, !preview.binary, preview.image == nil, !(canRender && htmlRendered) {
+                PanelRule()
+                HStack {
+                    Spacer()
+                    Text("文件过大，仅显示前一部分").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
+                }
+                .padding(.horizontal, Space.md)
+                .frame(height: 28)
+            }
+        }
+        .onChange(of: target?.1) { _, _ in if target != nil { htmlRendered = false } }
+        .task(id: "\(path)|\(reload)") {
+            htmlRendered = target == nil
+            // A file opened lately shows at once and is read again behind it; 刷新 always waits for the read.
+            let key = "\(project.id)\u{1}\(path)" as NSString
+            if reload == 0, preview == nil, let cached = Self.recent.object(forKey: key) { preview = cached }
+            do {
+                let next = try await workbench.host.api?.preview(projectId: project.id, path: path)
+                if let next {
+                    Self.recent.setObject(next, forKey: key)
+                    if preview?.hash != next.hash || preview?.path != next.path || preview?.truncated != next.truncated { preview = next }
+                } else if preview != nil {
+                    preview = nil
+                }
+                error = nil
+            } catch {
+                Self.recent.removeObject(forKey: key)
+                if error.riffetCode == "NOT_A_FILE", let openFolder { openFolder(path); return }
+                let blocked = error.riffetCode == "PATH_OUTSIDE_PROJECT" || error.riffetCode == "INVALID_PATH"
+                self.error = blocked ? String(localized: "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。") : error.riffetMessage
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let error {
+            ContentUnavailableView("无法预览", icon: "exclamationmark.triangle", description: Text(error))
+        } else if let preview {
+            if preview.image != nil {
+                ScrollView {
+                    TimelineImageView(source: .projectFile(projectId: project.id, path: preview.path), label: preview.path, maxHeight: 2000, projectId: project.id)
+                        .padding(Space.md)
+                }
+            } else if canRender, htmlRendered,
+                      let raw = ProjectDownloads.rawURL(projectId: project.id, path: preview.path),
+                      let url = FilePreviewTheme(palette: palette, dark: colorScheme == .dark).url(raw) {
+                RenderedFilePreview(url: url, rawURL: raw, name: (preview.path as NSString).lastPathComponent)
+                    .id("\(preview.path)|\(preview.hash)")
+            } else if preview.binary, let url = ProjectDownloads.rawURL(projectId: project.id, path: preview.path) {
+                SystemFilePreview(url: url, name: (preview.path as NSString).lastPathComponent)
+            } else {
+                CodeTextView(
+                    text: preview.content, language: CodeHighlighter.language(forPath: preview.path), palette: palette,
+                    fontSize: S(12), target: target.map { (line: $0.0, token: $0.1) }
+                ) { line, text in
+                    workbench.addReference(path: preview.path, line: line)
+                    _ = text
+                }
+            }
+        } else {
+            ProgressView()
+        }
+    }
+
+    private func copyContent() async {
+        guard let preview else { return }
+        if !preview.truncated { copyToPasteboard(preview.content); return }
+        do {
+            copyToPasteboard(try await ProjectDownloads.text(projectId: project.id, path: path))
+        } catch {
+            notice = error.riffetMessage
+        }
+    }
+}
+
+/// An HTML file rendered as its own document: no shared storage, cookies or app bridge, so a
+/// generated page's scripts cannot reach the workbench (the server also sends a sandbox CSP).
+/// `samePage` is used by interactive visualizations to keep links and script navigation in the
+/// document that was explicitly opened by the user.
+struct SandboxedPage: NSViewRepresentable {
+    let request: URLRequest
+    var navigation: Navigation = .allow
+    var onLoadingChange: ((Bool) -> Void)? = nil
+    var onFailure: ((String) -> Void)? = nil
+    var onUnsupportedContent: (() -> Void)? = nil
+
+    enum Navigation: Equatable {
+        case allow
+        case samePage
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.websiteDataStore = .nonPersistent()
+        let view = WKWebView(frame: .zero, configuration: configuration)
+        _ = context.coordinator.configure(request: request, navigation: navigation, onLoadingChange: onLoadingChange, onFailure: onFailure, onUnsupportedContent: onUnsupportedContent)
+        view.navigationDelegate = context.coordinator
+        view.load(request)
+        return view
+    }
+
+    func updateNSView(_ view: WKWebView, context: Context) {
+        if context.coordinator.configure(request: request, navigation: navigation, onLoadingChange: onLoadingChange, onFailure: onFailure, onUnsupportedContent: onUnsupportedContent) {
+            view.load(request)
+        }
+    }
+
+    final class Coordinator: NSObject, WKNavigationDelegate {
+        private var initialURL: URL?
+        private var navigation: Navigation = .allow
+        private var initialRequestAllowed = false
+        private var onLoadingChange: ((Bool) -> Void)?
+        private var onFailure: ((String) -> Void)?
+        private var onUnsupportedContent: (() -> Void)?
+
+        @discardableResult
+        func configure(request: URLRequest, navigation: Navigation, onLoadingChange: ((Bool) -> Void)?, onFailure: ((String) -> Void)?, onUnsupportedContent: (() -> Void)? = nil) -> Bool {
+            let requestChanged = initialURL != request.url
+            if requestChanged {
+                initialURL = request.url
+                initialRequestAllowed = false
+            }
+            self.navigation = navigation
+            self.onLoadingChange = onLoadingChange
+            self.onFailure = onFailure
+            self.onUnsupportedContent = onUnsupportedContent
+            return requestChanged
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard navigation == .samePage else { decisionHandler(.allow); return }
+            if action.targetFrame?.isMainFrame == false,
+               let target = action.request.url,
+               ["about:blank", "about:srcdoc"].contains(target.absoluteString) {
+                decisionHandler(.allow)
+                return
+            }
+            guard action.targetFrame?.isMainFrame == true, let target = action.request.url, let initialURL else {
+                decisionHandler(.cancel)
+                return
+            }
+            if !initialRequestAllowed, Self.samePage(target, initialURL) {
+                initialRequestAllowed = true
+                decisionHandler(.allow)
+            } else {
+                decisionHandler(Self.samePage(target, initialURL) ? .allow : .cancel)
+            }
+        }
+
+        func webView(_ webView: WKWebView, decidePolicyFor response: WKNavigationResponse, decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+            if navigation == .samePage, response.isForMainFrame,
+               let http = response.response as? HTTPURLResponse, http.statusCode >= 400 {
+                onLoadingChange?(false)
+                onFailure?(String(localized: "预览加载失败（HTTP \(http.statusCode)）"))
+                decisionHandler(.cancel)
+                return
+            }
+            if response.isForMainFrame, let onUnsupportedContent,
+               !["text/html", "application/xhtml+xml"].contains(response.response.mimeType ?? "") {
+                onUnsupportedContent()
+                decisionHandler(.cancel)
+                return
+            }
+            decisionHandler(.allow)
+        }
+
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            onLoadingChange?(true)
+        }
+
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            onLoadingChange?(false)
+        }
+
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            fail(error)
+        }
+
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            fail(error)
+        }
+
+        func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration, for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
+            // Never create a second web view, even for a link with target="_blank".
+            nil
+        }
+
+        private func fail(_ error: Error) {
+            if (error as NSError).code == NSURLErrorCancelled { return }
+            onLoadingChange?(false)
+            onFailure?(error.localizedDescription)
+        }
+
+        private static func samePage(_ lhs: URL, _ rhs: URL) -> Bool {
+            func withoutFragment(_ url: URL) -> URL? {
+                guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return nil }
+                components.fragment = nil
+                return components.url
+            }
+            return withoutFragment(lhs) == withoutFragment(rhs)
+        }
+    }
+}

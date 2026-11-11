@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+⚠ Model "synthetic-model-001" isn't recognized · context assumed to be 200k tokens · update Claude
+  Code, or see the docs
+
+❯ Do not use tools. Reply with only the word READY.
+
+⏺ READY
+
+✻ Crunched for 5s · done 7:38 PM
+
+❯ First write two plain sentences announcing that you are about to ask the user a question, and
+  then, in that same reply, call the AskUserQuestion tool exactly once (a reply without the tool
+  call is wrong) with one single-select question (header "Letter", question "Which letter do you
+  pick?", exactly two options labelled "Alpha" and "Beta" with short descriptions). Do not call any
+  other tool. After the answer arrives, reply with only PICKED_B: followed by the chosen answer.
+
+  Thought for 3s
+
+⏺ I'm about to ask you which letter you'd like to pick. This is a single quick question with two
+  options, Alpha and Beta.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+ ☐ Letter
+
+Which letter do you pick?
+
+❯ 1. Alpha
+     Choose the first option
+  2. Beta
+     Choose the second option
+  3. Type something.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  4. Chat about this
+
+Enter to select · ↑/↓ to navigate · Esc to cancel

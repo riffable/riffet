@@ -1,0 +1,24 @@
+{
+  "migrated": [
+    "Riffet/App/AppLanguage.swift",
+    "Riffet/App/Preferences.swift",
+    "Riffet/Features/Settings/AppearanceSettings.swift",
+    "Riffet/Features/Settings/SettingsComponents.swift",
+    "Riffet/Features/Settings/SettingsView.swift",
+    "Riffet/Theme/BrandMark.swift",
+    "Riffet/Theme/Theme.swift",
+    "Riffet/Theme/ThemeLibrary.swift"
+  ],
+  "literals": {
+    "Riffet/App/AppDelegate.swift": 7,
+    "Riffet/App/AppModel.swift": 7,
+    "Riffet/App/TerminalDock.swift": 1,
+    "Riffet/App/Workbench.swift": 12,
+    "Riffet/App/WorkbenchSidebar.swift": 2,
+    "Riffet/Bridge/Secrets.swift": 2,
+    "Riffet/Features/Settings/NotificationSettings.swift": 3,
+    "Riffet/Services/SystemIntegration.swift": 1,
+    "RiffetShare/ShareViewController.swift": 7,
+    "RiffetWidgets/SessionsWidget.swift": 4
+  }
+}

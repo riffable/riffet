@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Shared timeline actions -->
+    <string name="timeline_cancel">取消</string>
+    <string name="timeline_retry">重试</string>
+    <string name="timeline_close">关闭</string>
+    <string name="timeline_download">下载</string>
+    <string name="timeline_copy">复制</string>
+    <string name="timeline_copy_path">复制路径</string>
+    <string name="timeline_copy_code">复制代码</string>
+    <string name="timeline_download_file">下载文件</string>
+    <string name="timeline_more_actions">更多操作</string>
+    <string name="timeline_quote">引用</string>
+    <string name="timeline_restore_unsent">恢复未发送内容</string>
+    <string name="timeline_preview">预览</string>
+    <string name="timeline_source">源码</string>
+    <string name="timeline_image">图片</string>
+    <string name="timeline_unknown_type">未知类型</string>
+    <string name="timeline_stop">停止</string>
+    <string name="timeline_collapse">收起</string>
+    <string name="timeline_more">更多</string>
+
+    <!-- Activity rows -->
+    <string name="timeline_activity_loading_full">正在读取全文…</string>
+    <string name="timeline_activity_load_failed_retry">读取失败 · 重试</string>
+    <string name="timeline_activity_view_full">查看全文</string>
+    <string name="timeline_stop_background_task_title">停止后台任务？</string>
+
+    <!-- Diffs -->
+    <string name="timeline_changed_files">文件变更</string>
+    <string name="timeline_new_file">新文件</string>
+
+    <!-- Attachments and markdown media -->
+    <string name="timeline_attachment">附件</string>
+    <string name="timeline_interactive_preview">交互预览 · %1$s</string>
+    <string name="timeline_open_interactive_preview">打开交互预览</string>
+    <string name="timeline_image_load_failed">图片加载失败</string>
+    <string name="timeline_attachment_unavailable">附件不可用</string>
+    <string name="timeline_preview_failed">无法预览</string>
+    <string name="timeline_preview_status_failed">无法预览（%1$d）</string>
+    <string name="timeline_preview_not_html">预览内容不是 HTML</string>
+    <string name="timeline_not_connected">未连接服务</string>
+
+    <!-- Messages -->
+    <string name="timeline_copy_message">复制消息</string>
+    <string name="timeline_steer">补充消息</string>
+    <string name="timeline_thinking">思考中…</string>
+
+    <!-- Plans, notifications and statuses -->
+    <string name="timeline_todo">待办</string>
+    <string name="timeline_task_number">任务 %1$d</string>
+    <string name="timeline_task_id">任务 %1$s</string>
+    <string name="timeline_cli_status">CLI 状态：%1$s</string>
+    <string name="timeline_status_failed">失败</string>
+
+    <!-- Tool calls -->
+    <string name="timeline_job_status_incomplete">未完成</string>
+    <string name="timeline_output_pending">还没有输出…</string>
+    <string name="timeline_no_output">没有输出</string>
+    <string name="timeline_matched">匹配 %1$s</string>
+    <string name="timeline_output_truncated">输出过大，只显示末尾</string>
+    <string name="timeline_view_full_log">查看完整日志</string>
+    <string name="timeline_file_count">%1$d 个文件</string>
+    <string name="timeline_image_with_caption">图片 · %1$s</string>
+    <string name="timeline_no_more_details">没有更多详情</string>
+    <string name="timeline_options">选项：%1$s</string>
+    <string name="timeline_list_separator">、</string>
+    <string name="timeline_skipped">已跳过</string>
+    <string name="timeline_terminal_output">终端输出 · %1$s</string>
+
+    <!-- Tool runs -->
+    <string name="timeline_tool_run_read">读取文件</string>
+    <string name="timeline_tool_run_search">搜索内容</string>
+    <string name="timeline_tool_run_execute">运行命令</string>
+    <string name="timeline_tool_run_edit">修改文件</string>
+    <string name="timeline_tool_run_delete">删除文件</string>
+    <string name="timeline_tool_run_move">移动文件</string>
+    <string name="timeline_tool_run_fetch">访问网页</string>
+    <string name="timeline_tool_run_agent">委派任务</string>
+    <string name="timeline_tool_run_think">思考</string>
+    <string name="timeline_tool_run_switch_mode">切换模式</string>
+    <string name="timeline_tool_run_question">询问用户</string>
+    <string name="timeline_tool_run_plan">更新计划</string>
+    <string name="timeline_tool_run_other">调用工具</string>
+    <string name="timeline_tool_run_pair">%1$s、%2$s</string>
+    <string name="timeline_tool_run_more">%1$s等</string>
+
+    <!-- Turn process header -->
+    <string name="timeline_process_working">处理中 · %1$s</string>
+    <string name="timeline_process_processed_elapsed">已处理 · %1$s</string>
+    <string name="timeline_process_processed">已处理</string>
+    <string name="timeline_copy_answer">复制回答</string>
+
+    <!-- Interaction cards -->
+    <string name="timeline_interaction_draft_stale">题目已更新，旧草稿未提交。</string>
+    <string name="timeline_interaction_result_uncertain">暂时无法确认回答是否已提交</string>
+    <string name="timeline_interaction_changed">题目已变化，请同步后继续。</string>
+    <string name="timeline_interaction_result_unknown">暂时无法确认回答是否已提交</string>
+    <string name="timeline_interaction_submit_failed">无法提交交互</string>
+    <string name="timeline_interaction_sync_unconfirmed">暂时无法确认回答是否已提交</string>
+    <string name="timeline_interaction_sync_failed">无法检查回答状态</string>
+    <string name="timeline_interaction_need_answer">需要回答</string>
+    <string name="timeline_interaction_need_choice">需要选择</string>
+    <string name="timeline_interaction_answer_placeholder">输入回答</string>
+    <string name="timeline_interaction_other_placeholder">其他…</string>
+    <string name="timeline_interaction_other_locked">其他回答暂不能清空。</string>
+    <string name="timeline_interaction_previous">上一题</string>
+    <string name="timeline_interaction_submit">提交</string>
+    <string name="timeline_interaction_next">下一题</string>
+    <string name="timeline_interaction_skip">跳过</string>
+    <string name="timeline_interaction_submitting">提交中…</string>
+    <string name="timeline_interaction_syncing">检查中…</string>
+    <string name="timeline_interaction_sync">检查状态</string>
+    <string name="timeline_interaction_disconnected">连接断开，重连后再提交</string>
+    <string name="timeline_interaction_terminal_required">需要你在终端中操作</string>
+    <string name="timeline_interaction_answer_in_terminal">在终端中回答</string>
+    <string name="timeline_interaction_terminal_fallback">这个交互无法在手机上可靠呈现。请在 Mac 上打开该会话的终端作答，然后回到这里同步。</string>
+
+    <!-- Terminal page -->
+    <string name="timeline_terminal_connecting">连接中</string>
+    <string name="timeline_terminal_reconnecting">重连中</string>
+    <string name="timeline_terminal_exited">已退出，退出码 %1$d</string>
+    <string name="timeline_terminal_token_expired">令牌已失效</string>
+    <string name="timeline_terminal_other_controller">其他设备正在控制</string>
+    <string name="timeline_terminal_read_only">输入会接管终端</string>
+    <string name="timeline_terminal_take_over">接管</string>
+    <string name="timeline_terminal_interrupt_process">中断进程</string>
+    <string name="timeline_terminal_back_to_live">回到实时</string>
+    <string name="timeline_terminal_connecting_message">正在连接终端…</string>
+    <string name="timeline_terminal_paste">粘贴</string>
+    <string name="timeline_terminal_line_input_off">关闭整行输入</string>
+    <string name="timeline_terminal_line_input_on">整行输入</string>
+    <string name="timeline_terminal_release_control">释放控制权</string>
+    <string name="timeline_terminal_insert">插入</string>
+    <string name="timeline_terminal_send">发送</string>
+
+    <!-- Terminal render benchmark -->
+    <string name="timeline_bench_measuring">测量中…</string>
+    <string name="timeline_bench_title">终端渲染测试</string>
+    <string name="timeline_bench_mode_idle">静止</string>
+    <string name="timeline_bench_mode_agent">agent 输出</string>
+    <string name="timeline_bench_mode_redraw">整屏重绘</string>
+    <string name="timeline_bench_mode_flood">高速滚动</string>
+    <string name="timeline_bench_draw_summary">%1$d×%2$d 绘制 p50 %3$s / p95 %4$s ms</string>
+    <string name="timeline_bench_frame_summary">帧间隔 p50 %1$s / p95 %2$s ms · 解析 %3$s MB/s</string>
+    <string name="timeline_mark_reply">收藏回复</string>
+    <string name="timeline_unmark_reply">取消收藏</string>
+    <string name="terminal_paste_unknown">粘贴结果未知，请检查终端后再操作</string>
+    <string name="timeline_diagnostics">诊断信息</string>
+</resources>

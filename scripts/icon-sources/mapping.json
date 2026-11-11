@@ -1,0 +1,326 @@
+{
+  "Archive": [
+    "archive",
+    "archive"
+  ],
+  "ArchiveRestore": [
+    "archive-off",
+    "unarchive"
+  ],
+  "ArrowDown": [
+    "arrow-down",
+    "arrow_downward"
+  ],
+  "ArrowLeft": [
+    "arrow-left",
+    "arrow_back"
+  ],
+  "ArrowRightLeft": [
+    "arrows-exchange",
+    "swap_horiz"
+  ],
+  "Bell": [
+    "bell",
+    "notifications"
+  ],
+  "Bookmark": [
+    "bookmark",
+    "bookmark"
+  ],
+  "Bot": [
+    "robot",
+    "smart_toy"
+  ],
+  "Brain": [
+    "brain",
+    "neurology"
+  ],
+  "Branch": [
+    "git-branch",
+    "fork_right"
+  ],
+  "Bug": [
+    "bug",
+    "bug_report"
+  ],
+  "Chart": [
+    "chart-bar",
+    "bar_chart"
+  ],
+  "Check": [
+    "check",
+    "check"
+  ],
+  "ChevronDown": [
+    "chevron-down",
+    "keyboard_arrow_down"
+  ],
+  "ChevronLeft": [
+    "chevron-left",
+    "keyboard_arrow_left"
+  ],
+  "ChevronRight": [
+    "chevron-right",
+    "keyboard_arrow_right"
+  ],
+  "Circle": [
+    "circle",
+    "radio_button_unchecked"
+  ],
+  "CircleAlert": [
+    "alert-circle",
+    "error"
+  ],
+  "CircleCheck": [
+    "circle-check",
+    "check_circle"
+  ],
+  "CircleDashed": [
+    "circle-dashed",
+    "progress_activity"
+  ],
+  "Clock": [
+    "clock",
+    "schedule"
+  ],
+  "Close": [
+    "x",
+    "close"
+  ],
+  "Copy": [
+    "copy",
+    "content_copy"
+  ],
+  "Dices": [
+    "dice-5",
+    "casino"
+  ],
+  "Download": [
+    "download",
+    "download"
+  ],
+  "Ellipsis": [
+    "dots",
+    "more_horiz"
+  ],
+  "Error": [
+    "circle-x",
+    "cancel"
+  ],
+  "ExternalLink": [
+    "external-link",
+    "open_in_new"
+  ],
+  "Eye": [
+    "eye",
+    "visibility"
+  ],
+  "FilePenLine": [
+    "file-pencil",
+    "edit_document"
+  ],
+  "FileText": [
+    "file-text",
+    "description"
+  ],
+  "Filter": [
+    "filter",
+    "filter_alt"
+  ],
+  "Folder": [
+    "folder",
+    "folder"
+  ],
+  "FolderOpen": [
+    "folder-open",
+    "folder_open"
+  ],
+  "FolderPlus": [
+    "folder-plus",
+    "create_new_folder"
+  ],
+  "Globe": [
+    "world",
+    "language"
+  ],
+  "House": [
+    "home",
+    "home"
+  ],
+  "Image": [
+    "photo",
+    "image"
+  ],
+  "Info": [
+    "info-circle",
+    "info"
+  ],
+  "Layers": [
+    "layers-intersect",
+    "layers"
+  ],
+  "Link": [
+    "link",
+    "link"
+  ],
+  "ListTodo": [
+    "list-check",
+    "checklist"
+  ],
+  "Menu": [
+    "menu-2",
+    "menu"
+  ],
+  "Message": [
+    "message",
+    "chat_bubble"
+  ],
+  "MessageQuestion": [
+    "message-question",
+    "contact_support"
+  ],
+  "MessageSquarePlus": [
+    "message-plus",
+    "add_comment"
+  ],
+  "MessageSquarePlusFilled": [
+    "message-plus",
+    "add_comment"
+  ],
+  "Monitor": [
+    "device-desktop",
+    "desktop_windows"
+  ],
+  "Moon": [
+    "moon",
+    "dark_mode"
+  ],
+  "OctagonX": [
+    "square-x",
+    "dangerous"
+  ],
+  "Palette": [
+    "palette",
+    "palette"
+  ],
+  "Pencil": [
+    "pencil",
+    "edit"
+  ],
+  "Pin": [
+    "pin",
+    "push_pin"
+  ],
+  "PinOff": [
+    "pinned-off",
+    "keep_off"
+  ],
+  "Plus": [
+    "plus",
+    "add"
+  ],
+  "Pointer": [
+    "pointer",
+    "touch_app"
+  ],
+  "Puzzle": [
+    "puzzle",
+    "extension"
+  ],
+  "Refresh": [
+    "refresh",
+    "refresh"
+  ],
+  "Repeat": [
+    "repeat",
+    "repeat"
+  ],
+  "Reply": [
+    "arrow-back-up",
+    "reply"
+  ],
+  "Search": [
+    "search",
+    "search"
+  ],
+  "Send": [
+    "send",
+    "send"
+  ],
+  "Settings": [
+    "settings",
+    "settings"
+  ],
+  "SettingsFilled": [
+    "settings",
+    "settings"
+  ],
+  "Shield": [
+    "shield",
+    "shield"
+  ],
+  "ShieldHalf": [
+    "shield-half",
+    "security"
+  ],
+  "Sliders": [
+    "adjustments-horizontal",
+    "tune"
+  ],
+  "SquareTerminal": [
+    "terminal-2",
+    "terminal"
+  ],
+  "Star": [
+    "star",
+    "star"
+  ],
+  "StarFilled": [
+    "star",
+    "star"
+  ],
+  "Steer": [
+    "arrow-forward-up",
+    "turn_right"
+  ],
+  "Stop": [
+    "player-stop",
+    "stop"
+  ],
+  "Sun": [
+    "sun",
+    "light_mode"
+  ],
+  "Tag": [
+    "tag",
+    "sell"
+  ],
+  "Target": [
+    "target",
+    "my_location"
+  ],
+  "Terminal": [
+    "terminal",
+    "terminal"
+  ],
+  "Trash": [
+    "trash",
+    "delete"
+  ],
+  "User": [
+    "user",
+    "person"
+  ],
+  "Warning": [
+    "alert-triangle",
+    "warning"
+  ],
+  "Wrench": [
+    "tool",
+    "build"
+  ],
+  "Zap": [
+    "bolt",
+    "bolt"
+  ]
+}

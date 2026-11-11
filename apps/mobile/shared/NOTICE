@@ -1,0 +1,73 @@
+The glyph path data in src/commonMain/kotlin/riffet/ui/icons/LucideIcons.generated.kt is
+Lucide's, taken from the lucide-react package (version recorded in that file's header):
+
+    https://lucide.dev
+    https://github.com/lucide-icons/lucide
+
+Lucide is licensed under the ISC License:
+
+    Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022 as part of Feather (MIT).
+    All other copyright (c) for Lucide are held by Lucide Contributors 2022.
+
+    Permission to use, copy, modify, and/or distribute this software for any purpose with or
+    without fee is hereby granted, provided that the above copyright notice and this permission
+    notice appear in all copies.
+
+    THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH REGARD TO THIS
+    SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL
+    THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
+    DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF
+    CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE
+    OR PERFORMANCE OF THIS SOFTWARE.
+
+Changes from the SVG assets: the elements of each glyph are folded into one path (circles, rects
+and polylines become arcs and lines) and embedded in Compose ImageVectors by
+scripts/gen-mobile-icons.ts. The Menu and Brand drawings are Riffet's own and do not come from
+Lucide.
+
+Phosphor Icons (https://github.com/phosphor-icons/react), 2.1.10
+Copyright (c) 2020 Phosphor Icons. MIT License; full terms in icon-licenses/phosphor.txt.
+
+Tabler Icons (https://github.com/tabler/tabler-icons), 3.35.0
+Copyright (c) 2020-2025 Paweł Kuna. MIT License; full terms in icon-licenses/tabler.txt.
+The selected message-plus uses a heavier stroke; other paths retain upstream geometry.
+
+Material Symbols (https://github.com/google/material-design-icons)
+Revision 10ecc14790612ca8fd164e3f4ffe9c16fc50d5b7. Apache License 2.0;
+full terms in icon-licenses/material.txt. Outlined, regular weight, 24px optical size,
+with Fill variants for selected states. Paths are translated to a zero-origin viewport.
+
+Fluent System Icons (https://github.com/microsoft/fluentui-system-icons), @fluentui/svg-icons 1.1.345
+Copyright (c) Microsoft Corporation. MIT; full terms in icon-licenses/fluent.txt.
+Regular icons with Filled variants for selected states.
+
+Octicons (https://github.com/primer/octicons), @primer/octicons 19.42.0
+Copyright (c) 2026 GitHub Inc. MIT; full terms in icon-licenses/octicons.txt.
+24px assets where available; otherwise upstream 16px assets retain their viewport.
+
+Material Design Icons (https://github.com/Templarian/MaterialDesign), @mdi/svg 7.4.47
+Pictogrammers Free License; icons use Apache-2.0 or their respective upstream license.
+Full terms in icon-licenses/mdi.txt. Outline variants are used when available.
+
+Remix Icon (https://github.com/Remix-Design/RemixIcon), remixicon 4.6.0
+Apache License 2.0; full terms in icon-licenses/remix.txt.
+This historical version is pinned to its Apache-2.0 license; do not update to the
+2026 custom-license releases without reviewing standalone icon-pack distribution.
+
+Miuix (https://github.com/compose-miuix-ui/miuix), 0.9.4
+Copyright compose-miuix-ui contributors. Apache License 2.0.
+The application maps its own semantic palette to the Miuix theme.
+
+Haze (https://github.com/chrisbanes/haze), core / blur / glass 2.0.1
+Copyright 2023-2026 Christopher Banes and the Haze project contributors.
+Apache License 2.0; full terms in composeResources/files/licenses/haze.txt.
+Source-backed surface materials; all rendering APIs stay inside the shared material adapter.
+
+WOFF2 Android decoder (https://github.com/khoben/woff2-android), 0.0.3
+Apache License 2.0 wrapper; Google WOFF2 and Brotli are MIT licensed.
+Full terms in composeResources/files/licenses/woff2.txt.
+Used only on Android to decode content-addressed appearance fonts.
+
+AndroidX WindowManager, 1.5.1 (https://developer.android.com/jetpack/androidx/releases/window)
+Copyright The Android Open Source Project. Apache License 2.0.
+Reports physical window features; shared layouts remain application-owned.

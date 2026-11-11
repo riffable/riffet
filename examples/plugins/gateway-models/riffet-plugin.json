@@ -1,0 +1,49 @@
+{
+  "id": "example.gateway-models",
+  "vendor": "Example",
+  "name": "Gateway models",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "title": {
+    "zh-Hans": "网关模型",
+    "en": "Gateway models"
+  },
+  "description": {
+    "zh-Hans": "把兼容 OpenAI 接口的网关作为 Codex 的模型源。",
+    "en": "An OpenAI-compatible gateway as a model source for Codex."
+  },
+  "hostApi": {
+    "server": "^1"
+  },
+  "capabilities": [
+    "models.provide",
+    "network"
+  ],
+  "settings": [
+    {
+      "key": "baseUrl",
+      "label": "Gateway address",
+      "kind": "text"
+    },
+    {
+      "key": "apiKey",
+      "label": "Secret key",
+      "kind": "secret"
+    }
+  ],
+  "entries": {
+    "server": "server/index.mjs"
+  },
+  "contributes": {
+    "modelSources": [
+      {
+        "id": "example.gateway-models.gateway",
+        "title": {
+          "en": "Example gateway",
+          "zh-Hans": "示例网关"
+        }
+      }
+    ]
+  }
+}

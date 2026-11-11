@@ -1,0 +1,90 @@
+[?1049h[?1h=[H[2J[?12l[?25h[?1000l[?1002l[?1003l[?1006l[?1005l(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[?2004l[1;1H[1;24r[>c[>q[24;33HP=1s\[?25l[H// section 0: 中文注释与 emoji 🙂[K
+export function step1(value: number): string { return `${value * 1}`; }[K
+export function step2(value: number): string { return `${value * 2}`; }[K
+export function step3(value: number): string { return `${value * 3}`; }[K
+export function step4(value: number): string { return `${value * 4}`; }[K
+export function step5(value: number): string { return `${value * 5}`; }[K
+export function step6(value: number): string { return `${value * 6}`; }[K
+export function step7(value: number): string { return `${value * 7}`; }[K
+export function step8(value: number): string { return `${value * 8}`; }[K
+export function step9(value: number): string { return `${value * 9}`; }[K
+// section 1: 中文注释与 emoji 🙂[K
+export function step11(value: number): string { return `${value * 11}`; }[K
+export function step12(value: number): string { return `${value * 12}`; }[K
+export function step13(value: number): string { return `${value * 13}`; }[K
+export function step14(value: number): string { return `${value * 14}`; }[K
+export function step15(value: number): string { return `${value * 15}`; }[K
+export function step16(value: number): string { return `${value * 16}`; }[K
+export function step17(value: number): string { return `${value * 17}`; }[K
+export function step18(value: number): string { return `${value * 18}`; }[K
+export function step19(value: number): string { return `${value * 19}`; }[K
+// section 2: 中文注释与 emoji 🙂[K
+export function step21(value: number): string { return `${value * 21}`; }[K
+export function step22(value: number): string { return `${value * 22}`; }[K[7m
+/tmp/wk-fixture-sjfv2W/sample.ts(B[m[K[?12l[?25hP=2s\(B[m[?12l[?25h[?1006l[?1000l[?1002l[?1003l[?2004l[1;1H[1;24r[24;33HP=1s\[?25l[H// section 0: 中文注释与 emoji 🙂[K
+export function step1(value: number): string { return `${value * 1}`; }[K
+export function step2(value: number): string { return `${value * 2}`; }[K
+export function step3(value: number): string { return `${value * 3}`; }[K
+export function step4(value: number): string { return `${value * 4}`; }[K
+export function step5(value: number): string { return `${value * 5}`; }[K
+export function step6(value: number): string { return `${value * 6}`; }[K
+export function step7(value: number): string { return `${value * 7}`; }[K
+export function step8(value: number): string { return `${value * 8}`; }[K
+export function step9(value: number): string { return `${value * 9}`; }[K
+// section 1: 中文注释与 emoji 🙂[K
+export function step11(value: number): string { return `${value * 11}`; }[K
+export function step12(value: number): string { return `${value * 12}`; }[K
+export function step13(value: number): string { return `${value * 13}`; }[K
+export function step14(value: number): string { return `${value * 14}`; }[K
+export function step15(value: number): string { return `${value * 15}`; }[K
+export function step16(value: number): string { return `${value * 16}`; }[K
+export function step17(value: number): string { return `${value * 17}`; }[K
+export function step18(value: number): string { return `${value * 18}`; }[K
+export function step19(value: number): string { return `${value * 19}`; }[K
+// section 2: 中文注释与 emoji 🙂[K
+export function step21(value: number): string { return `${value * 21}`; }[K
+export function step22(value: number): string { return `${value * 22}`; }[K[7m
+/tmp/wk-fixture-sjfv2W/sample.ts(B[m[K[?12l[?25hP=2s\P=1s\[KP=2s\P=1s\[7S[7Aexport function step23(value: number): string { return `${value * 23}`; }
+export function step24(value: number): string { return `${value * 24}`; }[K
+export function step25(value: number): string { return `${value * 25}`; }[K
+export function step26(value: number): string { return `${value * 26}`; }[K
+export function step27(value: number): string { return `${value * 27}`; }[K
+export function step28(value: number): string { return `${value * 28}`; }[K
+export function step29(value: number): string { return `${value * 29}`; }[K
+// section 3: [K中文注释与 emoji 🙂
+export function step31(value: number): string { return `${value * 31}`; }[KP=2s\P=1s\[5S[4Aexport function step32(value: number): string { return `${value * 32}`; }[K
+export function step33(value: number): string { return `${value * 33}`; }[K
+export function step34(value: number): string { return `${value * 34}`; }[K
+export function step35(value: number): string { return `${value * 35}`; }[K
+export function step36(value: number): string { return [KP=2s\P=1s\[4S[20;56H`${value * 36}`; }
+export function step37(value: number): string { return `${value * 37}`; }[K
+export function step38(value: number): string { return `${value * 38}`; }[K
+export function step39(value: number): string { return `${value * 39}`; }[K
+// section 4: [K中文注释与 emoji 🙂[6S[5Aexport function step41(value: number): string { return `${value * 41}`; }[K
+export function step42(value: number): string { return `${value * 42}`; }[K
+export function step43(value: number): string { return `${value * 43}`; }[K
+export function step44(value: number): string { return `${value * 44}`; }[K
+export function step45(value: number): string { return `${value * 45}`; }[K
+:[KP=2s\P=1s\[KP=2s\P=1s\[4S[4Aexport function step46(value: number): string { return `${value * 46}`; }
+export function step47(value: number): string { return `${value * 47}`; }[K
+export function step48(value: number): string { return `${value * 48}`; }[K
+export function step49(value: number): string { return `${value * 49}`; }[K
+// section 5: [K中文注释与 emoji 🙂[9S[8Aexport function step51(value: number): string { return `${value * 51}`; }[K
+export function step52(value: number): string { return `${value * 52}`; }[K
+export function step53(value: number): string { return `${value * 53}`; }[K
+export function step54(value: number): string { return `${value * 54}`; }[K
+export function step55(value: number): string { return `${value * 55}`; }[K
+export function step56(value: number): string { return `${value * 56}`; }[K
+export function step57(value: number): string { return `${value * 57}`; }[K
+export function step58(value: number): string { return `${value * 58}`; }[K
+export function step59(value: number): string { return [KP=2s\P=1s\
+[23;56H`${value * 59}`; }
+// section 6: [K中文注释与 emoji 🙂[9S[8Aexport function step61(value: number): string { return `${value * 61}`; }[K
+export function step62(value: number): string { return `${value * 62}`; }[K
+export function step63(value: number): string { return `${value * 63}`; }[K
+export function step64(value: number): string { return `${value * 64}`; }[K
+export function step65(value: number): string { return `${value * 65}`; }[K
+export function step66(value: number): string { return `${value * 66}`; }[K
+export function step67(value: number): string { return `${value * 67}`; }[K
+export function step68(value: number): string { return `${value * 68}`; }[K
+:[KP=2s\P=1s\[KP=2s\P=1s\[HMexport function step45(value: number): string { return `${value * 45}`; }[24;1H[K[HMexport function step44(value: number): string { return `${value * 44}`; }[24;1H[KP=2s\P=1s\[HMexport function step43(value: number): string { return `${value * 43}`; }[24;1H:[KP=2s\

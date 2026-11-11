@@ -1,0 +1,938 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 15:01+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.ARCHIVED_SESSION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.AUXILIARY_MODEL_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_ALREADY_RUNNING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.CLI_INPUT_REJECTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_INTERACTION_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_INTERRUPT_TIMEOUT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.CLI_NEEDS_ATTENTION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_ARGS_INVALID"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.COMMAND_ID_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_REQUEST_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.COMMAND_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_NOT_DIRECTORY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_NOT_FILE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.CONFIG_SYMLINK_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.CONFIGURATION_CHANGING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_CONTEXT_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_PROVIDER_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_SELECTION_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/discussions.json
+msgid "error.DISCUSSION_SOURCE_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DISPATCH_STOPPED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DSH_HISTORY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.DSH_PROFILE_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_ACTION_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_NATIVE_EDITOR_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_PROFILE_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_READ_ONLY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.EXTENSION_RUNTIME_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_SCOPE_MISMATCH"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.EXTENSION_SCOPE_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.EXTERNAL_SESSION_DIRECTORY_MISSING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.EXTERNAL_SESSION_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.FEATURE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/git.json
+msgid "error.GH_OPERATION_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/git.json
+msgid "error.GIT_OPERATION_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INTERACTION_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INTERACTION_REQUEST_REUSED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_HASH"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_SCOPE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_EXTENSION_TARGET"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION_ACTION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_INTERACTION_ANSWER"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.INVALID_MARK_NOTE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_NATIVE_MODEL"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_PROJECT_PROMOTION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_PROMPT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_QUERY_SCOPE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.INVALID_RUNTIME_CONTROL"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.INVALID_SESSION_REFERENCES"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_ALIAS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_APPEARANCE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_DRAFT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_EXPIRY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.INVALID_SHARE_SELECTION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.INVALID_SKILL_SETTINGS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_SYNC_GENERATION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_SYNC_LANE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.INVALID_TASK_WORKSPACE_ROOT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.INVALID_TIMELINE_POSITION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.INVALID_VISUALIZATION"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_ASSET_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_ASSETS_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.MARK_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.MODEL_CATALOG_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_CONFIG_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_DELIVERY_UNCERTAIN"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERACTION_STALE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERACTION_UNCONFIRMED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERRUPT_IN_PROGRESS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_INTERRUPT_SUBMISSION_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_MODEL_PROBE_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_QUERY_DIRECTORY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_QUEUE_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RECOVERY_UNSAFE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_RUN_NOT_QUEUED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_SESSION_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_SESSION_HELD_EXTERNALLY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.NATIVE_SESSION_NOT_STARTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.NATIVE_STATUS_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_TARGET_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_TARGET_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.NATIVE_STOP_UNCONFIRMED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_CONFIG_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_TASKS_RUNNING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_TIMEOUT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.PREVIEW_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.PROJECT_PROMOTION_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUN_ALREADY_DISPATCHED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_CANCELLED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.RUN_NOT_QUEUED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUNTIME_CONTROL_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.RUNTIME_CONTROL_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETE_BLOCKED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETE_SCOPE_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_DELETING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.SESSION_IN_TERMINAL"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_TIMEOUT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCE_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/session-references.json
+msgid "error.SESSION_REFERENCES_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ACCOUNT_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ALIAS_EXISTS"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSET_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSETS_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_ASSETS_UNSAFE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_MISSING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_PROTOCOL"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLI_TIMEOUT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_CLOSED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DIRECTORY_UNSAFE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_EXPIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_MISMATCH"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_DRAFT_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_SCOPE_MISMATCH"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_HISTORY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_LIST_INCOMPLETE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_LOGIN_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_NOT_VERIFIED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PERMISSION_DENIED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PLATFORM_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PUBLISHER_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_PUBLISHER_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_REMOVE_UNCONFIRMED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_RETRY_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_SELECTION_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.SHARE_SELECTION_INVALID"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_THEME_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_TOO_LARGE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/shares.json
+msgid "error.SHARE_UNCONFIRMED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_METADATA_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_SETTING_OVERRIDDEN"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/extensions.json
+msgid "error.SKILL_STILL_DISABLED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_ACTION_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_CONFIG_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_REJECTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.STEER_TARGET_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.STEER_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.SYNC_GENERATION_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ACTION_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_CHANGED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_MISSING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_ARTIFACT_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_BUSY"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_CONFIRM_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_NOT_FOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PARAMS_INVALID"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PLAN_INVALID"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_STOPPING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_PROVIDER_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASK_REQUEST_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_CONFLICT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_SAVE_REQUIRED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TASK_WORKSPACE_UNAVAILABLE"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/tasks.json
+msgid "error.TASKS_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_NOT_RUNNING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/terminal.json
+msgid "error.TERMINAL_REBOUND"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TERMINAL_RESUME_UNSUPPORTED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TERMINAL_STILL_RUNNING"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sessions.json
+msgid "error.TITLE_MODEL_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/sync.json
+msgid "error.TRANSCRIPT_READ_FAILED"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/marks.json
+msgid "error.UNSTABLE_MARK_ANCHOR"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/native.json
+msgid "error.UNSUPPORTED_OTHER_DESELECT"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.UNSUPPORTED_PREVIEW"
+msgstr ""
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/previews.json
+msgid "error.VISUALIZATION_TOO_LARGE"
+msgstr ""

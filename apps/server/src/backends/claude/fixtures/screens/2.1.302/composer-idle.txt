@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+⚠ Model "synthetic-model-001" isn't recognized · context assumed to be 200k tokens · update Claude
+  Code, or see the docs
+
+❯ Do not use tools. Reply with only the word S1_OK. (S1_NEEDLE_ALPHA)
+
+  Thought for 3s
+
+⏺ S1_OK
+
+✻ Crunched for 5s · done 7:33 PM
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                                 ◉ xhigh · /effort
+────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 13% · /tmp/wo…
+  ⏵⏵ bypass permissions on (shift+tab to cycle) · ← for agents

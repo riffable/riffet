@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Riffet mark</title>
+<!-- The mark, wordmark and lockup across sizes, themes and the shipped icon files. Paths are those in scripts/gen-brand.ts. -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; color: #15171a; background: #efede8; }
+  main { width: 1120px; margin: 0 auto; padding: 40px; display: grid; gap: 16px; }
+  h1 { font-size: 20px; margin: 0 0 8px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .panel { border-radius: 14px; padding: 24px; display: flex; align-items: flex-end; gap: 20px; }
+  .light { background: #f4f2ee; color: #15171a; --a: #3867f0; }
+  .dark { background: #15171a; color: #f4f2ee; --a: #5b8cff; }
+  .mono { --a: currentColor; }
+  .wide { justify-content: center; align-items: center; padding: 40px 24px; }
+  .icons { background: linear-gradient(135deg, #9db4d9, #c9b8d8); }
+  svg, img { display: block; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Riffet</h1>
+  <div class="row"><div class="panel light" data-sizes></div><div class="panel dark" data-sizes></div></div>
+  <div class="row"><div class="panel light mono" data-sizes></div><div class="panel dark mono" data-sizes></div></div>
+  <div class="row">
+    <div class="panel light wide"><img src="lockup.svg" height="64" alt="lockup" /></div>
+    <div class="panel dark wide"><img src="lockup-dark.svg" height="64" alt="lockup" /></div>
+  </div>
+  <div class="row">
+    <div class="panel light wide"><img src="wordmark.svg" height="40" alt="wordmark" /></div>
+    <div class="panel dark wide"><img src="wordmark-dark.svg" height="40" alt="wordmark" /></div>
+  </div>
+  <div class="panel icons">
+    <img src="../../apps/macos/Riffet/Resources/Assets.xcassets/AppIcon.appiconset/icon_512@2x.png" width="160" alt="macOS" />
+    <img src="../../apps/mobile/iosApp/Riffet/Resources/Assets.xcassets/AppIcon.appiconset/icon.png" width="96" style="border-radius: 22px" alt="iOS" />
+    <img src="../../apps/web/public/icons/maskable-512.png" width="80" style="border-radius: 50%" alt="Android / PWA maskable" />
+    <img src="../../apps/web/public/icons/icon-192.png" width="64" alt="PWA" />
+    <img src="../../apps/web/public/favicon.svg" width="32" alt="favicon" />
+    <img src="../../apps/web/public/favicon.svg" width="16" alt="favicon" />
+  </div>
+  <div class="panel icons" data-variants></div>
+</main>
+<script>
+  const BODY = 'M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z';
+  const MANE = 'M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z';
+  const EYE = 'M11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z';
+  const mark = (size) => `<svg width="${size}" height="${size}" viewBox="0.6 -0.2 24 24" stroke-linejoin="round">
+    <path d="${MANE}" fill="var(--a)" stroke="var(--a)" stroke-width=".6"/>
+    <path d="${BODY}${EYE}" fill="currentColor" fill-rule="evenodd"/><path d="${BODY}" fill="none" stroke="currentColor"/></svg>`;
+  for (const panel of document.querySelectorAll('[data-sizes]')) {
+    panel.innerHTML = [16, 20, 24, 32, 48, 96].map(mark).join('');
+  }
+  // The app-icon accents a device can pick in Settings (scripts/gen-brand.ts VARIANTS).
+  document.querySelector('[data-variants]').innerHTML = ['green', 'orange', 'purple', 'pink', 'graphite']
+    .map((id) => `<img src="../../apps/macos/Riffet/Resources/Assets.xcassets/AppIcon-${id}.imageset/icon.png" width="112" alt="${id}" />`).join('');
+</script>
+</body>
+</html>

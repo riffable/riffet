@@ -1,0 +1,40 @@
+
+  ⎿  Monitor started · task bemrn3glb · timeout 900s
+
+⏺ Monitor event: tick1 · ticker
+
+⏺ LAUNCHED
+
+✻ Cogitated for 18s · done 4:10 PM · 1 shell, 1 monitor still running
+
+⏺ Background command "quick job" failed with exit code 3
+
+⏺ Quick job finished with exit code 3 (expected — the command exits 3 after printing QUICK_OUT). The
+  long job and ticker monitor are still running.
+
+✻ Sautéed for 5s · done 4:11 PM · 1 shell, 1 monitor still running
+
+⏺ Monitor event: tick2 · ticker
+
+⏺ Ticker: tick2 received.
+
+✻ Baked for 6s · done 4:11 PM · 1 shell, 1 monitor still running
+
+⏺ Monitor event: tick3 · ticker
+
+⏺ Ticker: tick3 received — the three ticks are done; the monitor is now idle until its 15-minute
+  expiry unless re-armed.
+
+✻ Baked for 1s · done 4:11 PM · 1 shell, 1 monitor still running
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Shell details
+
+  Status:   running
+  Runtime:  20s
+  Command:p 600   running
+    ⏺ ticker      running
+
+      Earlier in this session (0)
+
+  ↑/↓ to select · Enter to view · x to stop · Esc to close

@@ -1,0 +1,3073 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Both the workbench and the standalone share build render these same components.
+ * The share entry has a different Vite root, so it must still scan the shared sources. */
+@source "../";
+/* Plugin web views (docs/PLUGIN_ARCHITECTURE.md) live outside the app and use the same utilities. */
+@source "../../../../plugins";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Match MOBILE_LAYOUT_QUERY: landscape phones retain the compact controls and single column. */
+@custom-variant md {
+  @media (min-width: 768px) {
+    @media (min-height: 501px), (pointer: fine), (pointer: none) {
+      @slot;
+    }
+  }
+}
+@custom-variant max-md {
+  @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+    @slot;
+  }
+}
+
+/*
+ * Hover capability, which is what actually decides whether a row's affordance can live in a
+ * `:hover` state. `max-md` is about width and says nothing about the pointer, so a control that
+ * only appears on hover disappears entirely on a touch screen unless it is gated on these.
+ */
+@custom-variant can-hover (@media (hover: hover));
+@custom-variant no-hover (@media (hover: none));
+
+:root,
+[data-theme="riffet"]:not(.dark) {
+  color-scheme: light;
+  --bg: #ffffff;
+  --bg-sidebar: #f7f8fa;
+  --bg-subtle: #f5f6f8;
+  --bg-muted: #eef0f3;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(35 45 70 / 0.055);
+  --bg-active: rgb(35 45 70 / 0.09);
+  --bg-bubble: #eef3fd;
+  --fg: #2a2c2e;
+  --fg-2: #50555d;
+  --fg-3: #60666e;
+  --fg-4: #adb2ba;
+  --line: rgb(15 23 42 / 0.08);
+  --line-soft: rgb(15 23 42 / 0.055);
+  --line-strong: rgb(15 23 42 / 0.13);
+  --primary: #15171a;
+  --primary-hover: #34373d;
+  --primary-fg: #ffffff;
+  --accent: #3867f0;
+  --accent-hover: #2d59dc;
+  --accent-soft: rgb(56 103 240 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #1f9d55;
+  --success-soft: rgb(31 157 85 / 0.1);
+  --warning: #c77f06;
+  --warning-soft: rgb(245 158 11 / 0.13);
+  --danger: #e0454b;
+  --danger-soft: rgb(224 69 75 / 0.08);
+  --danger-fg: #131315;
+  --diff-add: #e6f4e7;
+  --diff-add-gutter: #edf7ed;
+  --diff-add-marker: #01a241;
+  --diff-add-strong: rgb(1 162 65 / 0.2);
+  --diff-del: #fce6e2;
+  --diff-del-gutter: #fdece9;
+  --diff-del-marker: #ba2723;
+  --diff-del-strong: rgb(186 39 35 / 0.16);
+  --toast: #25272b;
+  --toast-success: #4ade80;
+  --toast-danger: #ff8a8e;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a37f;
+  --agent-claude: #d97757;
+  --agent-dsh: #4d6bfe;
+  /* Theme chart palette: accent-led categories, tuned separately for light and dark. */
+  --chart-1: #3867f0;
+  --chart-2: #15968f;
+  --chart-3: #ba733c;
+  --chart-4: #8566c1;
+  --chart-5: #c45c7c;
+  --chart-6: #528951;
+  --chart-7: #aa8f35;
+  --chart-8: #718096;
+  --shadow-xs: 0 1px 1.5px rgb(15 23 42 / 0.04);
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
+  --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
+  --shadow-focus: 0 2px 14px -6px rgb(15 23 42 / 0.1);
+}
+
+.dark,
+[data-theme="riffet"].dark {
+  color-scheme: dark;
+  --bg: #141416;
+  --bg-sidebar: #1a1a1d;
+  --bg-subtle: #1d1d20;
+  --bg-muted: #27272b;
+  --bg-elevated: #1f1f22;
+  --bg-popover: #252528;
+  --bg-hover: rgb(255 255 255 / 0.06);
+  --bg-active: rgb(255 255 255 / 0.1);
+  --bg-bubble: #27282c;
+  --fg: #d2d4d7;
+  --fg-2: #b6bac1;
+  --fg-3: #9da2aa;
+  --fg-4: #62666e;
+  --line: rgb(255 255 255 / 0.075);
+  --line-soft: rgb(255 255 255 / 0.05);
+  --line-strong: rgb(255 255 255 / 0.12);
+  --primary: #eceef1;
+  --primary-hover: #d3d6db;
+  --primary-fg: #141416;
+  --accent: #5b8cff;
+  --accent-hover: #4a7cf5;
+  --accent-soft: rgb(91 140 255 / 0.15);
+  --accent-fg: #141416;
+  --success: #3fb96f;
+  --success-soft: rgb(63 185 111 / 0.14);
+  --warning: #e5a13a;
+  --warning-soft: rgb(229 161 58 / 0.15);
+  --danger: #f0676c;
+  --danger-soft: rgb(240 103 108 / 0.13);
+  --danger-fg: #141416;
+  --diff-add: #1f3124;
+  --diff-add-gutter: #132016;
+  --diff-add-marker: #41c977;
+  --diff-add-strong: rgb(65 201 119 / 0.24);
+  --diff-del: #3c1f1b;
+  --diff-del-gutter: #28130e;
+  --diff-del-marker: #fa423e;
+  --diff-del-strong: rgb(250 66 62 / 0.24);
+  --toast: #34363b;
+  --toast-success: #4ade80;
+  --toast-danger: #ff8a8e;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #5b8cff;
+  --chart-2: #54bdb1;
+  --chart-3: #d9a066;
+  --chart-4: #b497df;
+  --chart-5: #da91ad;
+  --chart-6: #92b77b;
+  --chart-7: #c6b36b;
+  --chart-8: #9ba7bc;
+  --shadow-xs: 0 1px 1.5px rgb(0 0 0 / 0.2);
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.18);
+  --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
+  --shadow-focus: 0 0 #0000;
+}
+
+/*
+ * -------------------------------------------------------------------------------------------
+ * Themes.
+ *
+ * `:root` and `.dark` are the default theme (Riffet) and keep the selectors they always had.
+ * Every other theme is an attribute pair:
+ *
+ *     [data-theme="<id>"]:not(.dark)   that theme, light
+ *     [data-theme="<id>"].dark         that theme, dark
+ *
+ * `.dark` still means "dark mode" and nothing else, which is why not one `dark:` utility in the
+ * app had to change: `lib/theme.ts` keeps toggling that class and writes the palette separately,
+ * so "follow the system" keeps working with any palette and the two choices never write each other.
+ *
+ * The two attribute selectors carry equal specificity (0,2,0) and both outrank a bare `.dark`
+ * (0,1,0), so a themed page in dark mode resolves the theme's dark half rather than falling back
+ * to Riffet's.
+ *
+ * `--shadow-*` is deliberately absent below: it is a property of the mode, not of the palette, and
+ * `.dark` still matches on a themed page, so shadows follow the mode without being restated.
+ *
+ * Every block must define all 53 colour roles. `scripts/gen-mobile-theme.ts` refuses to generate a
+ * half-defined theme (Compose has one constructor per theme, so a missing role would otherwise
+ * surface as a Kotlin error), and the same generator rejects role sets that drift from
+ * contracts' `THEME_ROLES`. Palette values come from each project's published palette;
+ * the translucent separators, `-soft` fills and diff washes are derived from the page and the
+ * foreground by the same rules the default theme follows.
+ *
+ * A borrowed palette is adjusted only where it would otherwise fail contrast — Solarized's light
+ * accent, success and warning are darkened to clear AA, and its dark accent is lifted — and the
+ * upstream credit is carried in `apps/web/src/lib/themes.ts` so it travels with the picker.
+ * -------------------------------------------------------------------------------------------
+ */
+
+[data-theme="solarized"]:not(.dark) {
+  --bg: #fdf6e3;
+  --bg-sidebar: #f7f0dd;
+  --bg-subtle: #f4edda;
+  --bg-muted: #eee8d5;
+  --bg-elevated: #fffbf0;
+  --bg-popover: #fffbf0;
+  --bg-hover: rgb(88 110 117 / 0.055);
+  --bg-active: rgb(88 110 117 / 0.09);
+  --bg-bubble: #e9f0ee;
+  --fg: #586e75;
+  --fg-2: #60747c;
+  --fg-3: #667475;
+  --fg-4: #93a1a1;
+  --line: rgb(88 110 117 / 0.08);
+  --line-soft: rgb(88 110 117 / 0.055);
+  --line-strong: rgb(88 110 117 / 0.13);
+  --primary: #586e75;
+  --primary-hover: #728487;
+  --primary-fg: #fdf6e3;
+  --accent: #2076b3;
+  --accent-hover: #217ab9;
+  --accent-soft: rgb(38 139 210 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #859800;
+  --success-soft: rgb(133 153 0 / 0.1);
+  --warning: #b48800;
+  --warning-soft: rgb(181 137 0 / 0.13);
+  --danger: #dc322f;
+  --danger-soft: rgb(220 50 47 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #f1edcc;
+  --diff-add-gutter: #f6f0d5;
+  --diff-add-marker: #859900;
+  --diff-add-strong: rgb(133 153 0 / 0.2);
+  --diff-del: #fae2d1;
+  --diff-del-gutter: #fbead8;
+  --diff-del-marker: #dc322f;
+  --diff-del-strong: rgb(220 50 47 / 0.2);
+  --toast: #65797e;
+  --toast-success: #cfd79a;
+  --toast-danger: #f5c6c6;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a17e;
+  --agent-claude: #d47555;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #2076b3;
+  --chart-2: #279b92;
+  --chart-3: #ae8300;
+  --chart-4: #d33682;
+  --chart-5: #7f9300;
+  --chart-6: #cb4b16;
+  --chart-7: #6c71c4;
+  --chart-8: #657b83;
+}
+[data-theme="solarized"].dark {
+  --bg: #002b36;
+  --bg-sidebar: #00252e;
+  --bg-subtle: #04303c;
+  --bg-muted: #073642;
+  --bg-elevated: #073642;
+  --bg-popover: #0a3c49;
+  --bg-hover: rgb(147 161 161 / 0.06);
+  --bg-active: rgb(147 161 161 / 0.1);
+  --bg-bubble: #073642;
+  --fg: #93a1a1;
+  --fg-2: #839496;
+  --fg-3: #7d9096;
+  --fg-4: #586e75;
+  --line: rgb(147 161 161 / 0.075);
+  --line-soft: rgb(147 161 161 / 0.05);
+  --line-strong: rgb(147 161 161 / 0.12);
+  --primary: #93a1a1;
+  --primary-hover: #7b8e90;
+  --primary-fg: #002b36;
+  --accent: #3694d5;
+  --accent-hover: #4099d7;
+  --accent-soft: rgb(38 139 210 / 0.15);
+  --accent-fg: #002b36;
+  --success: #859900;
+  --success-soft: rgb(133 153 0 / 0.14);
+  --warning: #b58900;
+  --warning-soft: rgb(181 137 0 / 0.15);
+  --danger: #dc322f;
+  --danger-soft: rgb(220 50 47 / 0.13);
+  --danger-fg: #ffffff;
+  --diff-add: #133a2e;
+  --diff-add-gutter: #0b3432;
+  --diff-add-marker: #859900;
+  --diff-add-strong: rgb(133 153 0 / 0.24);
+  --diff-del: #1f2c35;
+  --diff-del-gutter: #122c35;
+  --diff-del-marker: #dc322f;
+  --diff-del-strong: rgb(220 50 47 / 0.24);
+  --toast: #163d46;
+  --toast-success: #859900;
+  --toast-danger: #e14e4b;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #3694d5;
+  --chart-2: #45aaa0;
+  --chart-3: #c5a34d;
+  --chart-4: #c581aa;
+  --chart-5: #98a65d;
+  --chart-6: #d38461;
+  --chart-7: #9294d3;
+  --chart-8: #839496;
+}
+[data-theme="catppuccin"]:not(.dark) {
+  --bg: #eff1f5;
+  --bg-sidebar: #e6e9ef;
+  --bg-subtle: #e9ecf2;
+  --bg-muted: #dce0e8;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(76 79 105 / 0.055);
+  --bg-active: rgb(76 79 105 / 0.09);
+  --bg-bubble: #e6e9ef;
+  --fg: #4c4f69;
+  --fg-2: #5c5f77;
+  --fg-3: #6a6d82;
+  --fg-4: #8c8fa1;
+  --line: rgb(76 79 105 / 0.08);
+  --line-soft: rgb(76 79 105 / 0.055);
+  --line-strong: rgb(76 79 105 / 0.13);
+  --primary: #4c4f69;
+  --primary-hover: #66697f;
+  --primary-fg: #eff1f5;
+  --accent: #8839ef;
+  --accent-hover: #7832d2;
+  --accent-soft: rgb(136 57 239 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #3f9e2b;
+  --success-soft: rgb(64 160 43 / 0.1);
+  --warning: #c27b19;
+  --warning-soft: rgb(223 142 29 / 0.13);
+  --danger: #d20f39;
+  --danger-soft: rgb(210 15 57 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #dee9e1;
+  --diff-add-gutter: #e5ece9;
+  --diff-add-marker: #40a02b;
+  --diff-add-strong: rgb(64 160 43 / 0.2);
+  --diff-del: #ecdae2;
+  --diff-del-gutter: #ede3ea;
+  --diff-del-marker: #d20f39;
+  --diff-del-strong: rgb(210 15 57 / 0.2);
+  --toast: #595c74;
+  --toast-success: #a6e3a1;
+  --toast-danger: #f493ae;
+  --agent-cursor: #3d4451;
+  --agent-codex: #0f9d7b;
+  --agent-claude: #cf7253;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #8839ef;
+  --chart-2: #179299;
+  --chart-3: #be7724;
+  --chart-4: #1e66f5;
+  --chart-5: #608b43;
+  --chart-6: #c96098;
+  --chart-7: #a08430;
+  --chart-8: #7c7f93;
+}
+[data-theme="catppuccin"].dark {
+  --bg: #1e1e2e;
+  --bg-sidebar: #181825;
+  --bg-subtle: #232334;
+  --bg-muted: #313244;
+  --bg-elevated: #313244;
+  --bg-popover: #363649;
+  --bg-hover: rgb(205 214 244 / 0.06);
+  --bg-active: rgb(205 214 244 / 0.1);
+  --bg-bubble: #2a2a3c;
+  --fg: #cdd6f4;
+  --fg-2: #bac2de;
+  --fg-3: #a6adc8;
+  --fg-4: #7f849c;
+  --line: rgb(205 214 244 / 0.075);
+  --line-soft: rgb(205 214 244 / 0.05);
+  --line-strong: rgb(205 214 244 / 0.12);
+  --primary: #cdd6f4;
+  --primary-hover: #b1b9d4;
+  --primary-fg: #1e1e2e;
+  --accent: #cba6f7;
+  --accent-hover: #d1b1f8;
+  --accent-soft: rgb(203 166 247 / 0.15);
+  --accent-fg: #1e1e2e;
+  --success: #a6e3a1;
+  --success-soft: rgb(166 227 161 / 0.14);
+  --warning: #f9e2af;
+  --warning-soft: rgb(249 226 175 / 0.15);
+  --danger: #f38ba8;
+  --danger-soft: rgb(243 139 168 / 0.13);
+  --danger-fg: #1e1e2e;
+  --diff-add: #313a3e;
+  --diff-add-gutter: #292e37;
+  --diff-add-marker: #a6e3a1;
+  --diff-add-strong: rgb(166 227 161 / 0.24);
+  --diff-del: #3c2d3f;
+  --diff-del-gutter: #2f2738;
+  --diff-del-marker: #f38ba8;
+  --diff-del-strong: rgb(243 139 168 / 0.24);
+  --toast: #383a4c;
+  --toast-success: #a6e3a1;
+  --toast-danger: #f38ba8;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #cba6f7;
+  --chart-2: #94e2d5;
+  --chart-3: #fab387;
+  --chart-4: #74a2e3;
+  --chart-5: #a6e3a1;
+  --chart-6: #f5c2e7;
+  --chart-7: #f9e2af;
+  --chart-8: #9399b2;
+}
+[data-theme="rose-pine"]:not(.dark) {
+  --bg: #faf4ed;
+  --bg-sidebar: #f4ece4;
+  --bg-subtle: #f6eee7;
+  --bg-muted: #f2e9e1;
+  --bg-elevated: #fffaf3;
+  --bg-popover: #fffaf3;
+  --bg-hover: rgb(70 66 97 / 0.055);
+  --bg-active: rgb(70 66 97 / 0.09);
+  --bg-bubble: #f4ece4;
+  --fg: #464261;
+  --fg-2: #6c6984;
+  --fg-3: #726e7c;
+  --fg-4: #b3aec0;
+  --line: rgb(70 66 97 / 0.08);
+  --line-soft: rgb(70 66 97 / 0.055);
+  --line-strong: rgb(70 66 97 / 0.13);
+  --primary: #464261;
+  --primary-hover: #635e77;
+  --primary-fg: #faf4ed;
+  --accent: #7b6991;
+  --accent-hover: #7f6b95;
+  --accent-soft: rgb(144 122 169 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #286983;
+  --success-soft: rgb(40 105 131 / 0.1);
+  --warning: #bf802b;
+  --warning-soft: rgb(234 157 52 / 0.13);
+  --danger: #b4637a;
+  --danger-soft: rgb(180 99 122 / 0.08);
+  --danger-fg: #111019;
+  --diff-add: #e5e6e2;
+  --diff-add-gutter: #edece7;
+  --diff-add-marker: #286983;
+  --diff-add-strong: rgb(40 105 131 / 0.2);
+  --diff-del: #f3e6e2;
+  --diff-del-gutter: #f6ebe6;
+  --diff-del-marker: #b4637a;
+  --diff-del-strong: rgb(180 99 122 / 0.2);
+  --toast: #54506c;
+  --toast-success: #7fa9b9;
+  --toast-danger: #ed819f;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a07d;
+  --agent-claude: #d37455;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #7b6991;
+  --chart-2: #56949f;
+  --chart-3: #b47d4f;
+  --chart-4: #286983;
+  --chart-5: #b4637a;
+  --chart-6: #79885f;
+  --chart-7: #c77774;
+  --chart-8: #797593;
+}
+[data-theme="rose-pine"].dark {
+  --bg: #191724;
+  --bg-sidebar: #14121f;
+  --bg-subtle: #1d1b29;
+  --bg-muted: #1f1d2e;
+  --bg-elevated: #1f1d2e;
+  --bg-popover: #26233a;
+  --bg-hover: rgb(224 222 244 / 0.06);
+  --bg-active: rgb(224 222 244 / 0.1);
+  --bg-bubble: #232030;
+  --fg: #e0def4;
+  --fg-2: #908caa;
+  --fg-3: #817e96;
+  --fg-4: #55516a;
+  --line: rgb(224 222 244 / 0.075);
+  --line-soft: rgb(224 222 244 / 0.05);
+  --line-strong: rgb(224 222 244 / 0.12);
+  --primary: #e0def4;
+  --primary-hover: #c0bed3;
+  --primary-fg: #191724;
+  --accent: #c4a7e7;
+  --accent-hover: #cbb2ea;
+  --accent-soft: rgb(196 167 231 / 0.15);
+  --accent-fg: #191724;
+  --success: #31748f;
+  --success-soft: rgb(49 116 143 / 0.14);
+  --warning: #f6c177;
+  --warning-soft: rgb(246 193 119 / 0.15);
+  --danger: #eb6f92;
+  --danger-soft: rgb(235 111 146 / 0.13);
+  --danger-fg: #191724;
+  --diff-add: #1c2433;
+  --diff-add-gutter: #1b1e2d;
+  --diff-add-marker: #31748f;
+  --diff-add-strong: rgb(49 116 143 / 0.24);
+  --diff-del: #362333;
+  --diff-del-gutter: #2a1e2d;
+  --diff-del-marker: #eb6f92;
+  --diff-del-strong: rgb(235 111 146 / 0.24);
+  --toast: #373543;
+  --toast-success: #4c879e;
+  --toast-danger: #eb6f92;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #c4a7e7;
+  --chart-2: #9ccfd8;
+  --chart-3: #f6c177;
+  --chart-4: #7ca6be;
+  --chart-5: #ebbcba;
+  --chart-6: #9fb49b;
+  --chart-7: #ce8fa2;
+  --chart-8: #908caa;
+}
+[data-theme="everforest"]:not(.dark) {
+  --bg: #fffbef;
+  --bg-sidebar: #f2efdf;
+  --bg-subtle: #f8f5e4;
+  --bg-muted: #edeada;
+  --bg-elevated: #fffdf6;
+  --bg-popover: #fffdf6;
+  --bg-hover: rgb(92 106 114 / 0.055);
+  --bg-active: rgb(92 106 114 / 0.09);
+  --bg-bubble: #f2efdf;
+  --fg: #5c6a72;
+  --fg-2: #64717a;
+  --fg-3: #6b776a;
+  --fg-4: #a6b0a0;
+  --line: rgb(92 106 114 / 0.08);
+  --line-soft: rgb(92 106 114 / 0.055);
+  --line-strong: rgb(92 106 114 / 0.13);
+  --primary: #5c6a72;
+  --primary-hover: #768186;
+  --primary-fg: #fffbef;
+  --accent: #307ba4;
+  --accent-hover: #3382ad;
+  --accent-soft: rgb(58 148 197 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #889b01;
+  --success-soft: rgb(141 161 1 / 0.1);
+  --warning: #be8800;
+  --warning-soft: rgb(223 160 0 / 0.13);
+  --danger: #f85552;
+  --danger-soft: rgb(248 85 82 / 0.08);
+  --danger-fg: #22292d;
+  --diff-add: #f4f2d7;
+  --diff-add-gutter: #f8f6e1;
+  --diff-add-marker: #8da101;
+  --diff-add-strong: rgb(141 161 1 / 0.2);
+  --diff-del: #feeadf;
+  --diff-del-gutter: #fff1e6;
+  --diff-del-marker: #f85552;
+  --diff-del-strong: rgb(248 85 82 / 0.2);
+  --toast: #69767c;
+  --toast-success: #c4d5ab;
+  --toast-danger: #f3c4c4;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a37f;
+  --agent-claude: #d97757;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #307ba4;
+  --chart-2: #319e74;
+  --chart-3: #b38734;
+  --chart-4: #977da4;
+  --chart-5: #7f9347;
+  --chart-6: #c4795c;
+  --chart-7: #b87999;
+  --chart-8: #829181;
+}
+[data-theme="everforest"].dark {
+  --bg: #272e33;
+  --bg-sidebar: #1e2326;
+  --bg-subtle: #2e383c;
+  --bg-muted: #374145;
+  --bg-elevated: #2e383c;
+  --bg-popover: #374145;
+  --bg-hover: rgb(211 198 170 / 0.06);
+  --bg-active: rgb(211 198 170 / 0.1);
+  --bg-bubble: #2e383c;
+  --fg: #d3c6aa;
+  --fg-2: #b8b3a0;
+  --fg-3: #9da9a0;
+  --fg-4: #859289;
+  --line: rgb(211 198 170 / 0.075);
+  --line-soft: rgb(211 198 170 / 0.05);
+  --line-strong: rgb(211 198 170 / 0.12);
+  --primary: #d3c6aa;
+  --primary-hover: #b7ae97;
+  --primary-fg: #272e33;
+  --accent: #7fbbb3;
+  --accent-hover: #8ec3bc;
+  --accent-soft: rgb(127 187 179 / 0.15);
+  --accent-fg: #272e33;
+  --success: #a7c080;
+  --success-soft: rgb(167 192 128 / 0.14);
+  --warning: #dbbc7f;
+  --warning-soft: rgb(219 188 127 / 0.15);
+  --danger: #e67e80;
+  --danger-soft: rgb(230 126 128 / 0.13);
+  --danger-fg: #272e33;
+  --diff-add: #39423e;
+  --diff-add-gutter: #313a39;
+  --diff-add-marker: #a7c080;
+  --diff-add-strong: rgb(167 192 128 / 0.24);
+  --diff-del: #42393e;
+  --diff-del-gutter: #363439;
+  --diff-del-marker: #e67e80;
+  --diff-del-strong: rgb(230 126 128 / 0.24);
+  --toast: #414545;
+  --toast-success: #a7c080;
+  --toast-danger: #e67e80;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #7fbbb3;
+  --chart-2: #e08b70;
+  --chart-3: #dbbc7f;
+  --chart-4: #b59bd0;
+  --chart-5: #83c092;
+  --chart-6: #e69875;
+  --chart-7: #d699b6;
+  --chart-8: #859289;
+}
+[data-theme="kiln"]:not(.dark) {
+  --bg: #faf9f5;
+  --bg-sidebar: #f5f4ed;
+  --bg-subtle: #f5f4ed;
+  --bg-muted: #f0eee6;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(20 20 19 / 0.055);
+  --bg-active: rgb(20 20 19 / 0.09);
+  --bg-bubble: #f0eee6;
+  --fg: #2b2b2a;
+  --fg-2: #3d3d3a;
+  --fg-3: #73726c;
+  --fg-4: #b6b5b0;
+  --line: rgb(20 20 19 / 0.08);
+  --line-soft: rgb(20 20 19 / 0.055);
+  --line-strong: rgb(20 20 19 / 0.13);
+  --primary: #141413;
+  --primary-hover: #393937;
+  --primary-fg: #faf9f5;
+  --accent: #ab5e45;
+  --accent-hover: #bf694d;
+  --accent-soft: rgb(217 119 87 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #2c7a39;
+  --success-soft: rgb(44 122 57 / 0.1);
+  --warning: #966c1e;
+  --warning-soft: rgb(150 108 30 / 0.13);
+  --danger: #8a2424;
+  --danger-soft: rgb(138 36 36 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e5ece2;
+  --diff-add-gutter: #eef1ea;
+  --diff-add-marker: #2c7a39;
+  --diff-add-strong: rgb(44 122 57 / 0.2);
+  --diff-del: #efe4e0;
+  --diff-del-gutter: #f3ece8;
+  --diff-del-marker: #8a2424;
+  --diff-del-strong: rgb(138 36 36 / 0.2);
+  --toast: #262625;
+  --toast-success: #4eba65;
+  --toast-danger: #e86b6b;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a37f;
+  --agent-claude: #d77656;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #ab5e45;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #5487ad;
+  --chart-6: #83935d;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="kiln"].dark {
+  --bg: #141413;
+  --bg-sidebar: #0f0f0e;
+  --bg-subtle: #1f1e1d;
+  --bg-muted: #1f1e1d;
+  --bg-elevated: #1f1e1d;
+  --bg-popover: #262624;
+  --bg-hover: rgb(250 249 245 / 0.06);
+  --bg-active: rgb(250 249 245 / 0.1);
+  --bg-bubble: #1f1e1d;
+  --fg: #dededa;
+  --fg-2: #c2c0b6;
+  --fg-3: #9c9a92;
+  --fg-4: #5f5e58;
+  --line: rgb(250 249 245 / 0.075);
+  --line-soft: rgb(250 249 245 / 0.05);
+  --line-strong: rgb(250 249 245 / 0.12);
+  --primary: #faf9f5;
+  --primary-hover: #d5d4d1;
+  --primary-fg: #141413;
+  --accent: #d97757;
+  --accent-hover: #de876b;
+  --accent-soft: rgb(217 119 87 / 0.15);
+  --accent-fg: #141413;
+  --success: #4eba65;
+  --success-soft: rgb(78 186 101 / 0.14);
+  --warning: #ffc107;
+  --warning-soft: rgb(255 193 7 / 0.15);
+  --danger: #e86b6b;
+  --danger-soft: rgb(232 107 107 / 0.13);
+  --danger-fg: #141413;
+  --diff-add: #1c2b1e;
+  --diff-add-gutter: #19211a;
+  --diff-add-marker: #4eba65;
+  --diff-add-strong: rgb(78 186 101 / 0.24);
+  --diff-del: #32201f;
+  --diff-del-gutter: #251b1a;
+  --diff-del-marker: #e86b6b;
+  --diff-del-strong: rgb(232 107 107 / 0.24);
+  --toast: #373635;
+  --toast-success: #4eba65;
+  --toast-danger: #e86b6b;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #d97757;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #8bb3d2;
+  --chart-6: #aabc92;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+[data-theme="ink"]:not(.dark) {
+  --bg: #f9f9f7;
+  --bg-sidebar: #f3f3f0;
+  --bg-subtle: #f3f3f0;
+  --bg-muted: #ecece8;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(21 22 23 / 0.055);
+  --bg-active: rgb(21 22 23 / 0.09);
+  --bg-bubble: #ecece8;
+  --fg: #2c2d2d;
+  --fg-2: #3b3d40;
+  --fg-3: #6e7075;
+  --fg-4: #b3b5b8;
+  --line: rgb(21 22 23 / 0.08);
+  --line-soft: rgb(21 22 23 / 0.055);
+  --line-strong: rgb(21 22 23 / 0.13);
+  --primary: #151617;
+  --primary-hover: #393a3b;
+  --primary-fg: #f9f9f7;
+  --accent: #2f5d8a;
+  --accent-hover: #487098;
+  --accent-soft: rgb(47 93 138 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #2d7a46;
+  --success-soft: rgb(45 122 70 / 0.1);
+  --warning: #8f6a1f;
+  --warning-soft: rgb(143 106 31 / 0.13);
+  --danger: #9b2c2c;
+  --danger-soft: rgb(155 44 44 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e5ece5;
+  --diff-add-gutter: #edf1ec;
+  --diff-add-marker: #2d7a46;
+  --diff-add-strong: rgb(45 122 70 / 0.2);
+  --diff-del: #f0e5e3;
+  --diff-del-gutter: #f3edeb;
+  --diff-del-marker: #9b2c2c;
+  --diff-del-strong: rgb(155 44 44 / 0.2);
+  --toast: #262729;
+  --toast-success: #5bb878;
+  --toast-danger: #e5706b;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a37f;
+  --agent-claude: #d77656;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #2f5d8a;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #b0674c;
+  --chart-6: #83935d;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="ink"].dark {
+  --bg: #141516;
+  --bg-sidebar: #0f1011;
+  --bg-subtle: #1e1f21;
+  --bg-muted: #1e1f21;
+  --bg-elevated: #1e1f21;
+  --bg-popover: #262729;
+  --bg-hover: rgb(247 247 245 / 0.06);
+  --bg-active: rgb(247 247 245 / 0.1);
+  --bg-bubble: #1e1f21;
+  --fg: #dcdcda;
+  --fg-2: #c0c1c3;
+  --fg-3: #9a9b9e;
+  --fg-4: #5e5f62;
+  --line: rgb(247 247 245 / 0.075);
+  --line-soft: rgb(247 247 245 / 0.05);
+  --line-strong: rgb(247 247 245 / 0.12);
+  --primary: #f7f7f5;
+  --primary-hover: #d3d3d1;
+  --primary-fg: #141516;
+  --accent: #7aa6d6;
+  --accent-hover: #85add9;
+  --accent-soft: rgb(122 166 214 / 0.15);
+  --accent-fg: #141516;
+  --success: #5bb878;
+  --success-soft: rgb(91 184 120 / 0.14);
+  --warning: #e0b04a;
+  --warning-soft: rgb(224 176 74 / 0.15);
+  --danger: #e5706b;
+  --danger-soft: rgb(229 112 107 / 0.13);
+  --danger-fg: #141516;
+  --diff-add: #1e2c24;
+  --diff-add-gutter: #1a221e;
+  --diff-add-marker: #5bb878;
+  --diff-add-strong: rgb(91 184 120 / 0.24);
+  --diff-del: #312222;
+  --diff-del-gutter: #251c1d;
+  --diff-del-marker: #e5706b;
+  --diff-del-strong: rgb(229 112 107 / 0.24);
+  --toast: #373839;
+  --toast-success: #5bb878;
+  --toast-danger: #e5706b;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #7aa6d6;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #d9967a;
+  --chart-6: #aabc92;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+[data-theme="sepia"]:not(.dark) {
+  --bg: #f6f2e9;
+  --bg-sidebar: #efeadf;
+  --bg-subtle: #efeadf;
+  --bg-muted: #e8e2d5;
+  --bg-elevated: #fffdf8;
+  --bg-popover: #fffdf8;
+  --bg-hover: rgb(28 25 21 / 0.055);
+  --bg-active: rgb(28 25 21 / 0.09);
+  --bg-bubble: #e8e2d5;
+  --fg: #322f2a;
+  --fg-2: #463f37;
+  --fg-3: #746c60;
+  --fg-4: #bab3a7;
+  --line: rgb(28 25 21 / 0.08);
+  --line-soft: rgb(28 25 21 / 0.055);
+  --line-strong: rgb(28 25 21 / 0.13);
+  --primary: #1c1915;
+  --primary-hover: #3f3c37;
+  --primary-fg: #f6f2e9;
+  --accent: #8f3b2e;
+  --accent-hover: #9c5347;
+  --accent-soft: rgb(143 59 46 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #4f7334;
+  --success-soft: rgb(79 115 52 / 0.1);
+  --warning: #85621f;
+  --warning-soft: rgb(133 98 31 / 0.13);
+  --danger: #a3271f;
+  --danger-soft: rgb(163 39 31 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e5e5d7;
+  --diff-add-gutter: #eceade;
+  --diff-add-marker: #4f7334;
+  --diff-add-strong: rgb(79 115 52 / 0.2);
+  --diff-del: #eeded5;
+  --diff-del-gutter: #f1e6dd;
+  --diff-del-marker: #a3271f;
+  --diff-del-strong: rgb(163 39 31 / 0.2);
+  --toast: #2c2722;
+  --toast-success: #8fb86a;
+  --toast-danger: #ec6f63;
+  --agent-cursor: #3d4451;
+  --agent-codex: #109e7b;
+  --agent-claude: #d17254;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #8f3b2e;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #5487ad;
+  --chart-6: #83935d;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="sepia"].dark {
+  --bg: #1a1714;
+  --bg-sidebar: #14120f;
+  --bg-subtle: #24201b;
+  --bg-muted: #24201b;
+  --bg-elevated: #24201b;
+  --bg-popover: #2c2722;
+  --bg-hover: rgb(243 237 226 / 0.06);
+  --bg-active: rgb(243 237 226 / 0.1);
+  --bg-bubble: #24201b;
+  --fg: #d9d3c9;
+  --fg-2: #c9bfb0;
+  --fg-3: #a0968a;
+  --fg-4: #645c52;
+  --line: rgb(243 237 226 / 0.075);
+  --line-soft: rgb(243 237 226 / 0.05);
+  --line-strong: rgb(243 237 226 / 0.12);
+  --primary: #f3ede2;
+  --primary-hover: #d0cbc1;
+  --primary-fg: #1a1714;
+  --accent: #d4806c;
+  --accent-hover: #d78a78;
+  --accent-soft: rgb(212 128 108 / 0.15);
+  --accent-fg: #1a1714;
+  --success: #8fb86a;
+  --success-soft: rgb(143 184 106 / 0.14);
+  --warning: #e3b55a;
+  --warning-soft: rgb(227 181 90 / 0.15);
+  --danger: #ec6f63;
+  --danger-soft: rgb(236 111 99 / 0.13);
+  --danger-fg: #1a1714;
+  --diff-add: #2a2e20;
+  --diff-add-gutter: #23241b;
+  --diff-add-marker: #8fb86a;
+  --diff-add-strong: rgb(143 184 106 / 0.24);
+  --diff-del: #37231f;
+  --diff-del-gutter: #2b1e1a;
+  --diff-del-marker: #ec6f63;
+  --diff-del-strong: rgb(236 111 99 / 0.24);
+  --toast: #3c3731;
+  --toast-success: #8fb86a;
+  --toast-danger: #ec6f63;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #d4806c;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #8bb3d2;
+  --chart-6: #aabc92;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+[data-theme="moss"]:not(.dark) {
+  --bg: #f8f8f4;
+  --bg-sidebar: #f1f2ec;
+  --bg-subtle: #f1f2ec;
+  --bg-muted: #e9ebe3;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(20 22 20 / 0.055);
+  --bg-active: rgb(20 22 20 / 0.09);
+  --bg-bubble: #e9ebe3;
+  --fg: #2b2d2a;
+  --fg-2: #3a3e39;
+  --fg-3: #6c7169;
+  --fg-4: #b2b6ae;
+  --line: rgb(20 22 20 / 0.08);
+  --line-soft: rgb(20 22 20 / 0.055);
+  --line-strong: rgb(20 22 20 / 0.13);
+  --primary: #141614;
+  --primary-hover: #383a38;
+  --primary-fg: #f8f8f4;
+  --accent: #5d7240;
+  --accent-hover: #708357;
+  --accent-soft: rgb(93 114 64 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #1f7a68;
+  --success-soft: rgb(31 122 104 / 0.1);
+  --warning: #94691c;
+  --warning-soft: rgb(148 105 28 / 0.13);
+  --danger: #963030;
+  --danger-soft: rgb(150 48 48 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e2ebe6;
+  --diff-add-gutter: #ebf0ec;
+  --diff-add-marker: #1f7a68;
+  --diff-add-strong: rgb(31 122 104 / 0.2);
+  --diff-del: #eee4e0;
+  --diff-del-gutter: #f2ece8;
+  --diff-del-marker: #963030;
+  --diff-del-strong: rgb(150 48 48 / 0.2);
+  --toast: #262a26;
+  --toast-success: #4fbfa6;
+  --toast-danger: #e8736e;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a37f;
+  --agent-claude: #d67556;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #5d7240;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #5487ad;
+  --chart-6: #b0674c;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="moss"].dark {
+  --bg: #141614;
+  --bg-sidebar: #0f110f;
+  --bg-subtle: #1e211e;
+  --bg-muted: #1e211e;
+  --bg-elevated: #1e211e;
+  --bg-popover: #262a26;
+  --bg-hover: rgb(244 246 241 / 0.06);
+  --bg-active: rgb(244 246 241 / 0.1);
+  --bg-bubble: #1e211e;
+  --fg: #d9dbd6;
+  --fg-2: #bfc4bb;
+  --fg-3: #989e95;
+  --fg-4: #5c615a;
+  --line: rgb(244 246 241 / 0.075);
+  --line-soft: rgb(244 246 241 / 0.05);
+  --line-strong: rgb(244 246 241 / 0.12);
+  --primary: #f4f6f1;
+  --primary-hover: #d0d2ce;
+  --primary-fg: #141614;
+  --accent: #a3b87a;
+  --accent-hover: #aabe85;
+  --accent-soft: rgb(163 184 122 / 0.15);
+  --accent-fg: #141614;
+  --success: #4fbfa6;
+  --success-soft: rgb(79 191 166 / 0.14);
+  --warning: #e2b250;
+  --warning-soft: rgb(226 178 80 / 0.15);
+  --danger: #e8736e;
+  --danger-soft: rgb(232 115 110 / 0.13);
+  --danger-fg: #141614;
+  --diff-add: #1c2e28;
+  --diff-add-gutter: #192420;
+  --diff-add-marker: #4fbfa6;
+  --diff-add-strong: rgb(79 191 166 / 0.24);
+  --diff-del: #322321;
+  --diff-del-gutter: #251d1b;
+  --diff-del-marker: #e8736e;
+  --diff-del-strong: rgb(232 115 110 / 0.24);
+  --toast: #363a36;
+  --toast-success: #4fbfa6;
+  --toast-danger: #e8736e;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #a3b87a;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #8bb3d2;
+  --chart-6: #d9967a;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+[data-theme="slate"]:not(.dark) {
+  --bg: #f6f7f8;
+  --bg-sidebar: #eff1f3;
+  --bg-subtle: #eff1f3;
+  --bg-muted: #e7eaed;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(18 20 23 / 0.055);
+  --bg-active: rgb(18 20 23 / 0.09);
+  --bg-bubble: #e7eaed;
+  --fg: #292b2e;
+  --fg-2: #383c42;
+  --fg-3: #696f77;
+  --fg-4: #afb4ba;
+  --line: rgb(18 20 23 / 0.08);
+  --line-soft: rgb(18 20 23 / 0.055);
+  --line-strong: rgb(18 20 23 / 0.13);
+  --primary: #121417;
+  --primary-hover: #36383b;
+  --primary-fg: #f6f7f8;
+  --accent: #4a6a85;
+  --accent-hover: #607c94;
+  --accent-soft: rgb(74 106 133 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #2b7651;
+  --success-soft: rgb(43 118 81 / 0.1);
+  --warning: #8e6b1f;
+  --warning-soft: rgb(142 107 31 / 0.13);
+  --danger: #9a3232;
+  --danger-soft: rgb(154 50 50 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e2eae7;
+  --diff-add-gutter: #eaefee;
+  --diff-add-marker: #2b7651;
+  --diff-add-strong: rgb(43 118 81 / 0.2);
+  --diff-del: #ede3e4;
+  --diff-del-gutter: #f0ebec;
+  --diff-del-marker: #9a3232;
+  --diff-del-strong: rgb(154 50 50 / 0.2);
+  --toast: #24282d;
+  --toast-success: #5bbd86;
+  --toast-danger: #e9706f;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a27f;
+  --agent-claude: #d57556;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #4a6a85;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #b0674c;
+  --chart-6: #83935d;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="slate"].dark {
+  --bg: #131518;
+  --bg-sidebar: #0e1013;
+  --bg-subtle: #1c1f23;
+  --bg-muted: #1c1f23;
+  --bg-elevated: #1c1f23;
+  --bg-popover: #24282d;
+  --bg-hover: rgb(242 244 246 / 0.06);
+  --bg-active: rgb(242 244 246 / 0.1);
+  --bg-bubble: #1c1f23;
+  --fg: #d7d9db;
+  --fg-2: #bcc1c7;
+  --fg-3: #979ca3;
+  --fg-4: #5b6066;
+  --line: rgb(242 244 246 / 0.075);
+  --line-soft: rgb(242 244 246 / 0.05);
+  --line-strong: rgb(242 244 246 / 0.12);
+  --primary: #f2f4f6;
+  --primary-hover: #ced0d2;
+  --primary-fg: #131518;
+  --accent: #8fb0cc;
+  --accent-hover: #98b6d0;
+  --accent-soft: rgb(143 176 204 / 0.15);
+  --accent-fg: #131518;
+  --success: #5bbd86;
+  --success-soft: rgb(91 189 134 / 0.14);
+  --warning: #e0b04a;
+  --warning-soft: rgb(224 176 74 / 0.15);
+  --danger: #e9706f;
+  --danger-soft: rgb(233 112 111 / 0.13);
+  --danger-fg: #131518;
+  --diff-add: #1d2d27;
+  --diff-add-gutter: #192221;
+  --diff-add-marker: #5bbd86;
+  --diff-add-strong: rgb(91 189 134 / 0.24);
+  --diff-del: #312224;
+  --diff-del-gutter: #241c1f;
+  --diff-del-marker: #e9706f;
+  --diff-del-strong: rgb(233 112 111 / 0.24);
+  --toast: #34383d;
+  --toast-success: #5bbd86;
+  --toast-danger: #e9706f;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #8fb0cc;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #d9967a;
+  --chart-6: #aabc92;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+[data-theme="pencil"]:not(.dark) {
+  --bg: #f7f7f6;
+  --bg-sidebar: #f0f0ef;
+  --bg-subtle: #f0f0ef;
+  --bg-muted: #e8e8e6;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(17 17 17 / 0.055);
+  --bg-active: rgb(17 17 17 / 0.09);
+  --bg-bubble: #e8e8e6;
+  --fg: #282828;
+  --fg-2: #3a3a3a;
+  --fg-3: #6f6f6f;
+  --fg-4: #b4b4b4;
+  --line: rgb(17 17 17 / 0.08);
+  --line-soft: rgb(17 17 17 / 0.055);
+  --line-strong: rgb(17 17 17 / 0.13);
+  --primary: #111111;
+  --primary-hover: #363636;
+  --primary-fg: #f7f7f6;
+  --accent: #2a2a2a;
+  --accent-hover: #444444;
+  --accent-soft: rgb(17 17 17 / 0.07);
+  --accent-fg: #ffffff;
+  --success: #2f7a44;
+  --success-soft: rgb(47 122 68 / 0.1);
+  --warning: #8c6a22;
+  --warning-soft: rgb(140 106 34 / 0.13);
+  --danger: #a12f2f;
+  --danger-soft: rgb(161 47 47 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e3ebe4;
+  --diff-add-gutter: #ebf0eb;
+  --diff-add-marker: #2f7a44;
+  --diff-add-strong: rgb(47 122 68 / 0.2);
+  --diff-del: #eee3e2;
+  --diff-del-gutter: #f2ebea;
+  --diff-del-marker: #a12f2f;
+  --diff-del-strong: rgb(161 47 47 / 0.2);
+  --toast: #272727;
+  --toast-success: #5bb878;
+  --toast-danger: #e8706c;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a27f;
+  --agent-claude: #d57556;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #5487ad;
+  --chart-2: #558e86;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #83935d;
+  --chart-6: #b57891;
+  --chart-7: #7f858c;
+  --chart-8: #b0674c;
+}
+[data-theme="pencil"].dark {
+  --bg: #141414;
+  --bg-sidebar: #0f0f0f;
+  --bg-subtle: #1f1f1f;
+  --bg-muted: #1f1f1f;
+  --bg-elevated: #1f1f1f;
+  --bg-popover: #272727;
+  --bg-hover: rgb(245 245 245 / 0.06);
+  --bg-active: rgb(245 245 245 / 0.1);
+  --bg-bubble: #1f1f1f;
+  --fg: #dadada;
+  --fg-2: #c2c2c2;
+  --fg-3: #9b9b9b;
+  --fg-4: #5f5f5f;
+  --line: rgb(245 245 245 / 0.075);
+  --line-soft: rgb(245 245 245 / 0.05);
+  --line-strong: rgb(245 245 245 / 0.12);
+  --primary: #f5f5f5;
+  --primary-hover: #d1d1d1;
+  --primary-fg: #141414;
+  --accent: #e8e8e8;
+  --accent-hover: #eaeaea;
+  --accent-soft: rgb(245 245 245 / 0.1);
+  --accent-fg: #141414;
+  --success: #5bb878;
+  --success-soft: rgb(91 184 120 / 0.14);
+  --warning: #e0b04a;
+  --warning-soft: rgb(224 176 74 / 0.15);
+  --danger: #e8706c;
+  --danger-soft: rgb(232 112 108 / 0.13);
+  --danger-fg: #141414;
+  --diff-add: #1e2b22;
+  --diff-add-gutter: #1a211c;
+  --diff-add-marker: #5bb878;
+  --diff-add-strong: rgb(91 184 120 / 0.24);
+  --diff-del: #322120;
+  --diff-del-gutter: #251b1b;
+  --diff-del-marker: #e8706c;
+  --diff-del-strong: rgb(232 112 108 / 0.24);
+  --toast: #373737;
+  --toast-success: #5bb878;
+  --toast-danger: #e8706c;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #8bb3d2;
+  --chart-2: #83b5a8;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #aabc92;
+  --chart-6: #d3a2b7;
+  --chart-7: #9ea5af;
+  --chart-8: #d9967a;
+}
+[data-theme="celadon"]:not(.dark) {
+  --bg: #f6f8f6;
+  --bg-sidebar: #eff2f0;
+  --bg-subtle: #eff2f0;
+  --bg-muted: #e7ebe8;
+  --bg-elevated: #ffffff;
+  --bg-popover: #ffffff;
+  --bg-hover: rgb(18 22 20 / 0.055);
+  --bg-active: rgb(18 22 20 / 0.09);
+  --bg-bubble: #e7ebe8;
+  --fg: #292d2b;
+  --fg-2: #383e3b;
+  --fg-3: #69716c;
+  --fg-4: #afb6b2;
+  --line: rgb(18 22 20 / 0.08);
+  --line-soft: rgb(18 22 20 / 0.055);
+  --line-strong: rgb(18 22 20 / 0.13);
+  --primary: #121614;
+  --primary-hover: #363a38;
+  --primary-fg: #f6f8f6;
+  --accent: #2c6e68;
+  --accent-hover: #457f7a;
+  --accent-soft: rgb(44 110 104 / 0.1);
+  --accent-fg: #ffffff;
+  --success: #3b7a35;
+  --success-soft: rgb(59 122 53 / 0.1);
+  --warning: #8f6a1f;
+  --warning-soft: rgb(143 106 31 / 0.13);
+  --danger: #9b2f2f;
+  --danger-soft: rgb(155 47 47 / 0.08);
+  --danger-fg: #ffffff;
+  --diff-add: #e3ebe3;
+  --diff-add-gutter: #ebf0ea;
+  --diff-add-marker: #3b7a35;
+  --diff-add-strong: rgb(59 122 53 / 0.2);
+  --diff-del: #ede4e2;
+  --diff-del-gutter: #f1ecea;
+  --diff-del-marker: #9b2f2f;
+  --diff-del-strong: rgb(155 47 47 / 0.2);
+  --toast: #252928;
+  --toast-success: #8fc27a;
+  --toast-danger: #e8716e;
+  --agent-cursor: #3d4451;
+  --agent-codex: #10a27f;
+  --agent-claude: #d67556;
+  --agent-dsh: #4d6bfe;
+  --chart-1: #2c6e68;
+  --chart-2: #b0674c;
+  --chart-3: #7d74a1;
+  --chart-4: #a18435;
+  --chart-5: #5487ad;
+  --chart-6: #83935d;
+  --chart-7: #b57891;
+  --chart-8: #7f858c;
+}
+[data-theme="celadon"].dark {
+  --bg: #131615;
+  --bg-sidebar: #0e1110;
+  --bg-subtle: #1d201f;
+  --bg-muted: #1d201f;
+  --bg-elevated: #1d201f;
+  --bg-popover: #252928;
+  --bg-hover: rgb(242 245 243 / 0.06);
+  --bg-active: rgb(242 245 243 / 0.1);
+  --bg-bubble: #1d201f;
+  --fg: #d7dad8;
+  --fg-2: #bcc3bf;
+  --fg-3: #969d99;
+  --fg-4: #5a615d;
+  --line: rgb(242 245 243 / 0.075);
+  --line-soft: rgb(242 245 243 / 0.05);
+  --line-strong: rgb(242 245 243 / 0.12);
+  --primary: #f2f5f3;
+  --primary-hover: #ced1cf;
+  --primary-fg: #131615;
+  --accent: #6fbcb3;
+  --accent-hover: #7bc1b9;
+  --accent-soft: rgb(111 188 179 / 0.15);
+  --accent-fg: #131615;
+  --success: #8fc27a;
+  --success-soft: rgb(143 194 122 / 0.14);
+  --warning: #e0b04a;
+  --warning-soft: rgb(224 176 74 / 0.15);
+  --danger: #e8716e;
+  --danger-soft: rgb(232 113 110 / 0.13);
+  --danger-fg: #131615;
+  --diff-add: #242e23;
+  --diff-add-gutter: #1d241d;
+  --diff-add-marker: #8fc27a;
+  --diff-add-strong: rgb(143 194 122 / 0.24);
+  --diff-del: #312321;
+  --diff-del-gutter: #241d1c;
+  --diff-del-marker: #e8716e;
+  --diff-del-strong: rgb(232 113 110 / 0.24);
+  --toast: #353938;
+  --toast-success: #8fc27a;
+  --toast-danger: #e8716e;
+  --agent-cursor: #c9ced6;
+  --agent-codex: #2fc79b;
+  --agent-claude: #e8916f;
+  --agent-dsh: #7590ff;
+  --chart-1: #6fbcb3;
+  --chart-2: #d9967a;
+  --chart-3: #b3a3d0;
+  --chart-4: #d6b67b;
+  --chart-5: #8bb3d2;
+  --chart-6: #aabc92;
+  --chart-7: #d3a2b7;
+  --chart-8: #9ea5af;
+}
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
+
+  --text-*: initial;
+  --text-2xs: 11px;
+  --text-2xs--line-height: 16px;
+  --text-xs: 12px;
+  --text-xs--line-height: 18px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-lg: 16px;
+  --text-lg--line-height: 24px;
+  --text-xl: 18px;
+  --text-xl--line-height: 26px;
+  --text-2xl: 22px;
+  --text-2xl--line-height: 30px;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-2xl: 16px;
+  --radius-3xl: 20px;
+
+  --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-sidebar: var(--bg-sidebar);
+  --color-subtle: var(--bg-subtle);
+  --color-muted: var(--bg-muted);
+  --color-elevated: var(--bg-elevated);
+  --color-popover: var(--bg-popover);
+  --color-hover: var(--bg-hover);
+  --color-active: var(--bg-active);
+  --color-bubble: var(--bg-bubble);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-fg: var(--primary-fg);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-fg: var(--accent-fg);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: var(--danger-fg);
+  --color-toast: var(--toast);
+  --color-toast-success: var(--toast-success);
+  --color-toast-danger: var(--toast-danger);
+  --color-focus: var(--focus-ring);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-soft: var(--shadow-soft);
+  --shadow-pop: var(--shadow-pop);
+  --shadow-focus: var(--shadow-focus);
+  --color-canvas: var(--canvas);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-composer: var(--shadow-composer);
+  --shadow-composer-focus: var(--shadow-composer-focus);
+  --shadow-peek: var(--shadow-peek);
+}
+
+/*
+ * Motion tokens: one source of truth for how long a control takes and how it eases, so a component
+ * reads a shared decision instead of repeating a literal. Kept out of `@theme` on purpose — the
+ * mobile theme generator parses those namespaces into Kotlin — and consumed through arbitrary
+ * values such as `duration-[var(--duration-base)]`. `--ease-out-soft` in `@theme` is the existing
+ * structural curve and stays untouched.
+ *
+ * Entering motion decelerates, leaving motion accelerates and runs about 30% shorter than the
+ * matching enter (`--duration-exit-*`), and a change of state in place uses the standard curve.
+ * `--enter-scale` is the one zoom every popover, menu, dialog and tooltip starts from.
+ */
+:root {
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
+  --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
+  --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+  --duration-medium: 250ms;
+  --duration-slow: 300ms;
+  --duration-exit-fast: 100ms;
+  --duration-exit-base: 140ms;
+  --enter-scale: 0.97;
+}
+
+/*
+ * Stacking order, lowest first. Consumed as `z-(--z-dialog)`; components use the token rather than a
+ * literal `z-[N]`. The scrim sits under its dialog, and the fullscreen composer under
+ * every dialog, so an image preview opened from it still lands on top.
+ */
+:root {
+  --z-rail: 10;
+  --z-panel: 20;
+  --z-dock: 30;
+  --z-fullscreen: 60;
+  --z-drop: 65;
+  --z-scrim: 69;
+  --z-dialog: 70;
+  --z-menu: 75;
+  --z-tooltip: 80;
+  --z-toast: 90;
+  --focus-ring: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+/*
+ * The web shell: the sidebar sits on a canvas and the work sits on a panel inset into it. The canvas is
+ * each palette's own sidebar tone, and the panel is set off from it by its own tone alone — the edge it
+ * shares with the sidebar never had a line, so the other three do not either; the changes panel beside it neither.
+ * `html:root` is not the `:root` block the theme generator reads, so the native apps never see these.
+ */
+html:root {
+  --canvas: var(--bg-sidebar);
+  --shadow-lift: 0 0 0 1px var(--line-strong);
+  --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
+  --shadow-composer-focus: 0 0 0 0.5px rgb(24 24 26 / 0.12), 0 2px 4px rgb(24 24 26 / 0.04), 0 12px 32px -12px rgb(24 24 26 / 0.18);
+  --shadow-peek: 0 0 0 1px var(--line), 0 18px 48px -16px rgb(24 24 26 / 0.28);
+}
+html.dark {
+  --shadow-composer: 0 0 0 0.5px rgb(255 255 255 / 0.08), 0 10px 28px -12px rgb(0 0 0 / 0.7);
+  --shadow-composer-focus: 0 0 0 0.5px rgb(255 255 255 / 0.13), 0 12px 32px -12px rgb(0 0 0 / 0.75);
+  --shadow-peek: 0 0 0 1px var(--line), 0 18px 48px -12px rgb(0 0 0 / 0.7);
+}
+
+/*
+ * The bundled faces are for the desktop layout only (the same breakpoint as the `md` variant); a phone
+ * keeps its system fonts. Inter's single-storey `a` and round quotes; a monospace face keeps its own glyphs.
+ */
+@media (min-width: 768px) {
+  @media (min-height: 501px), (pointer: fine), (pointer: none) {
+    html:root {
+      --font-sans: "Inter Variable", "Inter Fallback", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Segoe UI", sans-serif;
+      --font-mono: "JetBrains Mono Variable", "JetBrains Mono Fallback", "SF Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
+    }
+    body {
+      font-feature-settings: "cv11", "ss03";
+      text-autospace: normal;
+    }
+    code,
+    kbd,
+    pre,
+    samp,
+    .font-mono {
+      font-feature-settings: normal;
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  /* Icons keep one drawn stroke at every size (see `icons-base.tsx`): the width is in screen
+     pixels, so a small glyph is not a thinner one. */
+  .lucide * {
+    vector-effect: non-scaling-stroke;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 22px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  /* A pane edge being dragged (`ResizeHandle`): the cursor holds wherever the pointer passes, and
+     the drag does not select the text it crosses. */
+  html[data-resizing] {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  html[data-resizing='x'] * {
+    cursor: col-resize !important;
+  }
+  html[data-resizing='y'] * {
+    cursor: row-resize !important;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+  }
+  /* A bare modifier press (⇧⌘ for a screenshot, ⌘ before choosing a menu) must not paint a ring on
+     the element the pointer focused. `lib/focus-ring` sets this mark and clears it on real keyboard
+     navigation, so Tab/Enter/typing still show their rings. Unlayered on purpose: it has to win over
+     the utilities' own `focus-visible:ring-*` declarations. */
+  [data-pointer-focus]:focus-visible {
+    outline: none;
+    --tw-ring-shadow: 0 0 #0000;
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background: var(--line-strong) padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--fg-4) padding-box;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility hairline {
+  box-shadow: 0 0 0 0.5px var(--line-strong);
+}
+
+/*
+ * "De-bordered" region separation. A 1px inset hairline reads lighter than a
+ * real border and costs no layout box, so chrome edges can be replaced by
+ * whitespace plus a soft seam. Prefer these over border-t/b/l/r for structural
+ * separators; keep real borders for boxes that need a clipped outline.
+ */
+@utility edge-t {
+  box-shadow: inset 0 1px 0 var(--line-soft);
+}
+@utility edge-b {
+  box-shadow: inset 0 -1px 0 var(--line-soft);
+}
+@utility edge-l {
+  box-shadow: inset 1px 0 0 var(--line-soft);
+}
+@utility edge-r {
+  box-shadow: inset -1px 0 0 var(--line-soft);
+}
+
+/* Assistant reading surface. */
+.md {
+  color: var(--fg);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0 0 calc(14px * var(--text-scale));
+}
+/* PingFang's semibold reads black at these sizes; hierarchy comes from size and colour. */
+.md h1,
+.md h2,
+.md h3,
+.md h4,
+.md h5,
+.md h6 {
+  margin: 22px 0 8px;
+  color: var(--fg);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.md h1 {
+  font-size: var(--text-h1);
+  line-height: var(--leading-h1);
+}
+.md h2 {
+  font-size: var(--text-h2);
+  line-height: var(--leading-h2);
+}
+.md h3 {
+  font-size: var(--text-h3);
+  line-height: var(--leading-h3);
+}
+.md h4,
+.md h5,
+.md h6 {
+  font-size: var(--text-md);
+  line-height: var(--leading-h4);
+}
+.md strong {
+  font-weight: 500;
+}
+.md a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.md a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.md ul,
+.md ol {
+  margin: 0 0 calc(14px * var(--text-scale));
+  padding-left: 22px;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 3px 0;
+  padding-left: 2px;
+}
+.md li::marker {
+  color: var(--fg-3);
+}
+.md li > p {
+  margin: 0;
+}
+/* A second block inside one item sits closer than the block gap but clear of the item above
+ * (the Mac scale's listBlockGap), so it reads as belonging to this item. */
+.md li > p + p {
+  margin-top: 10px;
+}
+.md li > ul,
+.md li > ol {
+  margin: 3px 0 0;
+}
+.md blockquote {
+  margin: 0 0 calc(14px * var(--text-scale));
+  padding: 0 0 0 14px;
+  border-left: 2px solid var(--line-strong);
+  color: var(--fg-2);
+}
+.md blockquote[data-alert] { border-left-color: var(--accent); }
+.md blockquote[data-alert] > strong { color: var(--accent); }
+.md blockquote[data-alert="warning"] { border-left-color: var(--warning); }
+.md blockquote[data-alert="warning"] > strong { color: var(--warning); }
+.md blockquote[data-alert="caution"] { border-left-color: var(--danger); }
+.md blockquote[data-alert="caution"] > strong { color: var(--danger); }
+.md hr {
+  margin: 20px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+.md :not(pre) > code {
+  padding: 1.5px 5px;
+  border-radius: 5px;
+  background: var(--bg-subtle);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+/*
+ * Inline code that names a real file is a button, not a span: the dashed underline is the only
+ * affordance, so the row reads as prose until it is hovered.
+ */
+.md .md-file-mention {
+  cursor: pointer;
+}
+.md a.md-file-mention,
+.md a.md-file-mention:hover {
+  color: inherit;
+  text-decoration: none;
+}
+.md .md-file-mention > code {
+  border-bottom: 1px dashed var(--line-strong);
+}
+.md .md-file-mention:hover > code,
+.md .md-file-mention:focus-visible > code {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.md .md-file-mention:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+  border-radius: 5px;
+}
+.md table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  margin: 0 0 14px;
+  overflow-x: auto;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+.md table {
+  overflow-wrap: normal;
+}
+/* `.md`'s `overflow-wrap: anywhere` lets a cell's minimum width collapse to one character, which
+ * squeezed a short first column to 「诊/断」. Cells break between words; code inside them not at all. */
+.md th,
+.md td {
+  overflow-wrap: break-word;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.md td code,
+.md th code {
+  overflow-wrap: normal;
+  word-break: keep-all;
+}
+.md th:first-child,
+.md td:first-child {
+  min-width: 4em;
+}
+.md th {
+  background: var(--bg-subtle);
+  color: var(--fg-2);
+  font-weight: 600;
+}
+.md tr:last-child td {
+  border-bottom: 0;
+}
+/*
+ * A wide table keeps its natural width and scrolls horizontally. The scrollbar is revealed on
+ * hover or focus rather than always occupying a row: at rest a table in the middle of a paragraph
+ * should not look like a control. `tabIndex` on the element (see `Markdown.tsx`) is what keeps the
+ * hidden overflow reachable from the keyboard.
+ */
+.md table:not(:hover):not(:focus-visible) {
+  scrollbar-width: none;
+}
+.md table:not(:hover):not(:focus-visible)::-webkit-scrollbar {
+  display: none;
+}
+.md table:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+.md th + th,
+.md td + td {
+  border-left: 1px solid var(--line);
+}
+/*
+ * Footnotes: `remark-gfm` emits the section, this is its only styling. The heading is the
+ * screen-reader label the reference points at with `aria-describedby`, so it is visually hidden
+ * rather than removed.
+ */
+.md [data-footnotes] {
+  margin-top: 18px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--fg-2);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+.md [data-footnotes] h2 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+.md [data-footnotes] ol {
+  margin: 0;
+  padding-left: 18px;
+}
+.md [data-footnotes] li + li {
+  margin-top: 6px;
+}
+.md [data-footnotes] li::marker {
+  color: var(--fg-4);
+}
+.md sup a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.md [data-footnote-backref] {
+  margin-left: 2px;
+  color: var(--fg-3);
+  text-decoration: none;
+}
+.md img {
+  max-width: 100%;
+  border-radius: 10px;
+}
+/*
+ * KaTeX (math). The stylesheet itself comes with the library; these three rules are the app's own
+ * fit — a long display formula scrolls sideways in the column instead of widening it, and the type
+ * follows the answer's scale rather than KaTeX's default 1.21em, which reads oversized next to the
+ * transcript's 14px.
+ */
+.md .katex {
+  font-size: 1.05em;
+}
+.md .katex-display {
+  margin: 12px 0;
+  padding: 2px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.md .katex-display > .katex {
+  font-size: 1.15em;
+}
+.md .katex-error {
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+}
+.md input[type="checkbox"] {
+  margin-right: 6px;
+  accent-color: var(--accent);
+}
+/*
+ * Reasoning. Deliberately the same type scale and paragraph rhythm as `.md`: only the
+ * colour sets it apart from the answer, so a long turn never reads as a jumble of two
+ * font sizes. `--fg-2` stays comfortably readable while clearly lighter than `--fg`.
+ */
+.md-muted {
+  color: var(--fg-2);
+  font-size: var(--text-md);
+  line-height: var(--leading-md);
+}
+.md-muted p {
+  margin-bottom: calc(14px * var(--text-scale));
+}
+/*
+ * An opened reasoning row stays the row that previews it: the same 13/20 type and muted colour
+ * as the collapsed title, so expanding it does not read as a different kind of content.
+ */
+.md-thought {
+  color: var(--fg-3);
+  font-size: var(--text-sm);
+  line-height: var(--text-sm--line-height);
+}
+.md-thought p {
+  margin-bottom: 8px;
+}
+
+/* xterm */
+.xterm {
+  height: 100%;
+  padding: 0;
+}
+/* Every glyph sits on the cell grid. Spacing the body adds between Han and Latin, or trims from
+   CJK punctuation, is invisible to per-character measurement and drifts the rest of the row. */
+.xterm {
+  text-autospace: no-autospace;
+  text-spacing-trim: space-all;
+}
+.xterm .xterm-viewport {
+  background-color: transparent !important;
+  scrollbar-width: thin;
+}
+.xterm .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+/* CodeMirror (config editor and diff viewer) */
+.cm-host .cm-editor {
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+.cm-host .cm-editor.cm-focused {
+  outline: none;
+}
+.cm-host .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 20px;
+}
+.cm-host .cm-gutters {
+  border-right: 1px solid var(--line);
+  background: var(--bg-subtle);
+  color: var(--fg-4);
+}
+.cm-host .cm-activeLineGutter,
+.cm-host .cm-activeLine {
+  background: var(--bg-hover);
+}
+.cm-host .cm-cursor {
+  border-left-color: var(--accent);
+}
+.cm-host .cm-selectionBackground,
+.cm-host .cm-focused .cm-selectionBackground {
+  background: color-mix(in srgb, var(--accent) 20%, transparent) !important;
+}
+.cm-host .cm-changedLine,
+.cm-host .cm-insertedLine {
+  background: var(--diff-add) !important;
+}
+.cm-host .cm-changedText,
+.cm-host .cm-insertedText {
+  background: var(--diff-add-strong) !important;
+  text-decoration: none;
+}
+.cm-host .cm-deletedChunk,
+.cm-host .cm-deletedLine {
+  background: var(--diff-del) !important;
+}
+.cm-host .cm-deletedText {
+  background: var(--diff-del-strong) !important;
+  text-decoration: none;
+}
+/* Review remarks: line numbers become the handle, so they read as clickable only where they are. */
+.cm-review .cm-lineNumbers .cm-gutterElement {
+  cursor: pointer;
+}
+.cm-review .cm-lineNumbers .cm-gutterElement:hover {
+  color: var(--accent);
+}
+.cm-host .cm-review-commented {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.cm-host .cm-review-selected {
+  background: var(--accent-soft) !important;
+}
+.cm-host .cm-collapsedLines {
+  background: var(--bg-subtle);
+  color: var(--fg-3);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 150% 0;
+  }
+  to {
+    background-position: -50% 0;
+  }
+}
+.text-shimmer {
+  background: linear-gradient(90deg, var(--fg-3) 0%, var(--fg-3) 40%, var(--fg) 50%, var(--fg-3) 60%, var(--fg-3) 100%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 2.2s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* The conversation canvas. Edges are drawn with `pathLength="100"`, so one dash pattern fits every
+   length: an edge draws itself in once. */
+@keyframes canvas-draw {
+  from {
+    stroke-dashoffset: 100;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.canvas-draw {
+  stroke-dasharray: 100;
+  animation: canvas-draw 0.7s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+@keyframes canvas-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+.canvas-enter {
+  animation: canvas-enter 0.38s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+@keyframes canvas-fade {
+  from {
+    opacity: 0;
+  }
+}
+.canvas-fade {
+  animation: canvas-fade 0.32s ease-out both;
+}
+@keyframes canvas-pop {
+  from {
+    opacity: 0;
+    translate: 0 4px;
+  }
+}
+.canvas-pop {
+  animation: canvas-pop 0.18s cubic-bezier(0.33, 1, 0.68, 1) both;
+}
+/* A card at work: a soft band of the accent sweeping along its top edge. */
+@keyframes canvas-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.canvas-shimmer {
+  background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--accent) 70%, transparent) 50%, transparent 100%);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: canvas-shimmer 1.8s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-draw,
+  .canvas-enter,
+  .canvas-fade,
+  .canvas-pop,
+  .canvas-shimmer {
+    animation: none;
+  }
+}
+
+/* The living brand mark (`LiveBrandMark`): six loops, one per `data-style`. Every part turns about
+   its own pivot, so the keyframes use the default origin. Only the mane, eye and ear move apart
+   from the head; the head's outline never changes shape. */
+.brand-live [data-part="speed"] { display: none; }
+.brand-live mask circle { fill: #000; }
+
+@keyframes brand-gust { 0%, 55%, 100% { transform: rotate(0); } 18% { transform: rotate(11deg); } 36% { transform: rotate(-3deg); } }
+.brand-live[data-style="mane"] [data-part="tooth"] { animation: brand-gust 1.8s cubic-bezier(.3, .7, .3, 1) infinite; }
+
+@keyframes brand-blink { 0%, 44%, 50%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.08); } }
+@keyframes brand-flick { 0%, 66%, 78%, 100% { transform: rotate(0); } 69%, 75% { transform: rotate(-13deg); } 72% { transform: rotate(-2deg); } }
+@keyframes brand-breathe { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(1.6deg); } }
+@keyframes brand-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(3deg); } }
+.brand-live[data-style="mood"] [data-part="eye"] { animation: brand-blink 5s infinite; }
+.brand-live[data-style="mood"] [data-part="ear"] { animation: brand-flick 5s ease-out infinite; }
+.brand-live[data-style="mood"] [data-part="whole"] { animation: brand-breathe 5s ease-in-out infinite; }
+.brand-live[data-style="mood"] [data-part="tooth"] { animation: brand-sway 5s ease-in-out infinite; }
+
+/* Three notes and a chord, held on low-frame steps. */
+@keyframes brand-note-1 { 0%, 12.5% { transform: scale(1.34) rotate(7deg); } 25%, 75% { transform: none; } 75.1%, 80% { transform: scale(1.34) rotate(7deg); } 95%, 100% { transform: none; } }
+@keyframes brand-note-2 { 0%, 25% { transform: none; } 25.1%, 37.5% { transform: scale(1.34) rotate(7deg); } 50%, 75% { transform: none; } 75.1%, 80% { transform: scale(1.34) rotate(7deg); } 95%, 100% { transform: none; } }
+@keyframes brand-note-3 { 0%, 50% { transform: none; } 50.1%, 62.5% { transform: scale(1.34) rotate(7deg); } 75% { transform: none; } 75.1%, 80% { transform: scale(1.34) rotate(7deg); } 95%, 100% { transform: none; } }
+@keyframes brand-nod { 0%, 25%, 50%, 75%, 100% { transform: rotate(2.4deg); } 12%, 37%, 62%, 90% { transform: rotate(0); } }
+.brand-live[data-style="beat"] [data-part="tooth"] { animation: brand-note-1 2s steps(12, end) infinite; }
+.brand-live[data-style="beat"] g:nth-of-type(2) > [data-part="tooth"] { animation-name: brand-note-2; }
+.brand-live[data-style="beat"] g:nth-of-type(3) > [data-part="tooth"] { animation-name: brand-note-3; }
+.brand-live[data-style="beat"] [data-part="whole"] { animation: brand-nod 2s steps(16, end) infinite; }
+
+/* The outline in one stroke, filled, then the mane tooth by tooth and the eye. */
+@keyframes brand-draw { 0% { stroke-dashoffset: 1; fill-opacity: 0; } 34% { stroke-dashoffset: 0; fill-opacity: 0; } 44%, 92% { stroke-dashoffset: 0; fill-opacity: 1; opacity: 1; } 100% { stroke-dashoffset: 0; fill-opacity: 1; opacity: 0; } }
+@keyframes brand-pop-1 { 0%, 44% { transform: scale(0); } 52% { transform: scale(1.15); } 56%, 92% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes brand-pop-2 { 0%, 50% { transform: scale(0); } 58% { transform: scale(1.15); } 62%, 92% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes brand-pop-3 { 0%, 56% { transform: scale(0); } 64% { transform: scale(1.15); } 68%, 92% { transform: scale(1); opacity: 1; } 100% { transform: scale(1); opacity: 0; } }
+@keyframes brand-open { 0%, 68% { transform: scale(0); } 74% { transform: scale(1.2); } 78%, 100% { transform: scale(1); } }
+.brand-live[data-style="draw"] [data-part="head"] { stroke-dasharray: 1.02 1; animation: brand-draw 4.2s ease-in-out infinite; }
+.brand-live[data-style="draw"] [data-part="ear"] { display: none; }
+.brand-live[data-style="draw"] [data-part="tooth"] { animation: brand-pop-1 4.2s ease-out infinite; }
+.brand-live[data-style="draw"] g:nth-of-type(2) > [data-part="tooth"] { animation-name: brand-pop-2; }
+.brand-live[data-style="draw"] g:nth-of-type(3) > [data-part="tooth"] { animation-name: brand-pop-3; }
+.brand-live[data-style="draw"] [data-part="eye"] { animation: brand-open 4.2s ease-out infinite; }
+
+@keyframes brand-gallop { 0%, 100% { transform: translate(0, 0) rotate(-5deg); } 50% { transform: translate(.3px, -.9px) rotate(-8deg); } }
+@keyframes brand-stream { 0%, 100% { transform: rotate(14deg) scale(1.18, 1); } 50% { transform: rotate(22deg) scale(1.3, 1); } }
+@keyframes brand-dash { 0% { transform: translateX(9px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateX(-7px); opacity: 0; } }
+.brand-live[data-style="run"] [data-part="whole"] { animation: brand-gallop .46s ease-in-out infinite; }
+.brand-live[data-style="run"] [data-part="tooth"] { animation: brand-stream .23s ease-in-out infinite; }
+.brand-live[data-style="run"] [data-part="speed"] { display: block; animation: brand-dash .7s linear infinite; }
+.brand-live[data-style="run"] [data-part="speed"]:nth-child(2) { animation-delay: -.25s; }
+.brand-live[data-style="run"] [data-part="speed"]:nth-child(3) { animation-delay: -.5s; }
+
+/* The eye wanders until the pointer moves (`data-tracking`), then follows it. */
+@keyframes brand-look { 0%, 20% { transform: translate(0, 0); } 26%, 52% { transform: translate(.55px, .5px); } 58%, 80% { transform: translate(.55px, -.25px); } 86%, 100% { transform: translate(0, 0); } }
+@keyframes brand-alert { 0%, 56%, 82%, 100% { transform: rotate(0); } 60%, 78% { transform: rotate(15deg); } }
+@keyframes brand-perk { 0%, 56%, 82%, 100% { transform: rotate(0); } 60%, 78% { transform: rotate(9deg); } }
+.brand-live[data-style="gaze"]:not([data-tracking]) [data-part="eye"] { animation: brand-look 5s cubic-bezier(.4, 0, .2, 1) infinite; }
+.brand-live[data-style="gaze"] [data-part="tooth"] { animation: brand-alert 5s cubic-bezier(.3, 1.5, .5, 1) infinite; }
+.brand-live[data-style="gaze"] [data-part="ear"] { animation: brand-perk 5s cubic-bezier(.3, 1.5, .5, 1) infinite; }
+
+/* The second and third teeth trail the first. */
+.brand-live[data-style="mane"] g:nth-of-type(2) > [data-part="tooth"] { animation-delay: .13s; }
+.brand-live[data-style="mane"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: .26s; }
+.brand-live[data-style="mood"] g:nth-of-type(2) > [data-part="tooth"] { animation-delay: -.4s; }
+.brand-live[data-style="mood"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: -.8s; }
+.brand-live[data-style="run"] g:nth-of-type(2) > [data-part="tooth"] { animation-delay: -.08s; }
+.brand-live[data-style="run"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: -.16s; }
+@media (prefers-reduced-motion: reduce) {
+  .brand-live [data-part] { animation: none !important; }
+  .brand-live[data-style="draw"] [data-part="head"] { stroke-dasharray: none; }
+  .brand-live[data-style="run"] [data-part="speed"] { display: none; }
+}
+
+/* Keep animation timing separate from callers' width/colour transition utilities. Both surfaces
+   and scrims retain their exit frame until Radix Presence removes them. */
+.ui-dialog-overlay,
+.ui-dialog-content,
+.ui-floating-content {
+  animation-duration: var(--duration-fast);
+}
+.ui-dialog-overlay[data-state="closed"],
+.ui-dialog-content[data-state="closed"] {
+  animation-duration: var(--duration-exit-fast);
+}
+.ui-floating-content {
+  /* Small menus need a visible reverse path too, rather than losing most motion to a short fade. */
+  animation-timing-function: var(--ease-standard);
+}
+
+@keyframes mobile-sidebar-enter {
+  from { translate: var(--sidebar-enter-from, -100%) 0; }
+  to { translate: 0 0; }
+}
+@keyframes mobile-sidebar-exit {
+  from { translate: var(--sidebar-exit-from, 0px) 0; }
+  to { translate: -100% 0; }
+}
+@keyframes mobile-sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+@keyframes mobile-sheet-exit {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .workbench-viewport {
+    position: fixed;
+    top: var(--app-top, 0px);
+    left: 0;
+    right: 0;
+    height: var(--app-height, 100dvh);
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .mobile-dialog-fullscreen,
+  .mobile-navigation-dialog,
+  .mobile-dialog-sheet {
+    /* Reset the Tailwind offsets as well as the individual translate property. The CSS
+       optimizer can fold literal `translate: none` into transform, leaving utilities active. */
+    --tw-translate-x: 0px;
+    --tw-translate-y: 0px;
+    transform: none;
+    translate: var(--tw-translate-x) var(--tw-translate-y);
+  }
+  .mobile-dialog-fullscreen,
+  .mobile-dialog-sheet {
+    /* A transform reset alone cannot override the animated transform from zoom-in/out. */
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+  }
+  .mobile-dialog-fullscreen,
+  .mobile-navigation-dialog {
+    top: var(--app-top, 0px);
+    left: 0;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: none;
+    height: var(--app-height, 100dvh);
+    max-height: var(--app-height, 100dvh);
+    border-radius: 0;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+  .mobile-navigation-dialog {
+    width: min(360px, 90vw);
+    translate: var(--sidebar-offset, 0px) 0;
+    animation: mobile-sidebar-enter var(--duration-base) var(--ease-standard) both;
+  }
+  .mobile-navigation-dialog[data-sidebar-swipe] {
+    animation: none;
+    transition: translate var(--duration-base) var(--ease-decelerate);
+  }
+  .mobile-navigation-dialog[data-sidebar-swipe="dragging"] {
+    transition: none;
+  }
+  .mobile-navigation-dialog[data-state="closed"] {
+    /* Keep translation in the animation on both paths. Switching from a forwards-filled
+       entrance to a transition suppresses that transition and jumps straight off screen. */
+    animation: mobile-sidebar-exit var(--duration-base) var(--ease-standard) both;
+    transition: none;
+  }
+  .mobile-navigation-overlay,
+  .mobile-navigation-overlay[data-state="closed"],
+  .mobile-dialog-sheet-overlay,
+  .mobile-dialog-sheet-overlay[data-state="closed"] {
+    animation-duration: var(--duration-base);
+  }
+  .mobile-dialog-sheet {
+    animation: mobile-sheet-enter var(--duration-base) var(--ease-standard) both;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: max(0px, calc(100dvh - var(--app-height, 100dvh) - var(--app-top, 0px)));
+    width: 100%;
+    max-width: none;
+    max-height: calc(var(--app-height, 100dvh) - 12px);
+    border-radius: 18px 18px 0 0;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    overflow: hidden;
+  }
+  .mobile-dialog-sheet[data-state="closed"] {
+    animation: mobile-sheet-exit var(--duration-base) var(--ease-standard) both;
+  }
+  .ui-dialog-close {
+    top: max(8px, env(safe-area-inset-top, 0px));
+    right: max(8px, env(safe-area-inset-right, 0px));
+  }
+  .ui-popover-content,
+  .ui-dropdown-content {
+    /* Radix measures the space on the chosen side, including the visual viewport. */
+    max-height: min(var(--radix-popper-available-height), calc(var(--app-height, 100dvh) - 16px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .mobile-sidebar button,
+  .mobile-sidebar [role="button"],
+  .mobile-sidebar input,
+  .mobile-sidebar [data-touch-row] {
+    min-height: 44px;
+  }
+  .mobile-sidebar button {
+    min-width: 44px;
+  }
+  .mobile-sidebar [role="button"] {
+    min-height: 48px;
+  }
+  .mobile-sidebar [data-touch-bar] {
+    min-height: 56px;
+  }
+  .mobile-sidebar > [data-touch-bar]:first-child {
+    min-height: 48px;
+  }
+  .mobile-sidebar [data-primary-nav] > button {
+    min-height: 40px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea {
+    /* Deliberately not scaled: iOS zooms the page when a focused field is under 16px. */
+    font-size: 16px !important;
+  }
+  html:root {
+    --text-md: calc(15px * var(--text-scale));
+  }
+}
+
+/*
+ * A finger-sized target wherever the pointer is a finger, the same test the `no-hover:` variant
+ * applies to the hand-built controls, so a Button and the control beside it never disagree. Width
+ * says nothing about the pointer: a narrow desktop window keeps its mouse-sized controls.
+ */
+@media (hover: none) {
+  .ui-button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+@media (max-height: 500px) and (pointer: coarse) {
+  .workbench-header {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  /*
+   * A fade is state perceptibility, not decoration: Apple's reduced-motion guidance replaces
+   * zoom/push with a cross-dissolve rather than making every change instantaneous, so pure opacity
+   * and colour keep a short linear transition. The whitelisted `transition-property` is also what
+   * strips `transform` / `translate` / `scale` from a shorthand that carried them next to opacity or
+   * colour — with the property gone they never animate — and anything outside the list changes
+   * instantly instead of inheriting the 100ms.
+   */
+  *,
+  *::before,
+  *::after {
+    transition-property: opacity, background-color, color, border-color, fill, stroke !important;
+    transition-duration: 100ms !important;
+    transition-timing-function: linear !important;
+  }
+
+  /* Keep a brief fade for shared layers while removing spatial movement. Leave animation-name
+     alone for floating surfaces: Radix temporarily sets it to none until placement is measured. */
+  .ui-dialog-overlay,
+  .ui-dialog-content,
+  .ui-floating-content {
+    --tw-enter-scale: 1;
+    --tw-exit-scale: 1;
+    --tw-enter-translate-x: 0px;
+    --tw-enter-translate-y: 0px;
+    --tw-exit-translate-x: 0px;
+    --tw-exit-translate-y: 0px;
+    animation-duration: 100ms !important;
+    animation-timing-function: linear;
+  }
+  .mobile-navigation-dialog,
+  .mobile-dialog-sheet {
+    animation-name: enter;
+  }
+  .mobile-navigation-dialog[data-sidebar-swipe] {
+    animation-name: none;
+  }
+  .mobile-navigation-dialog[data-state="closed"] {
+    animation-name: exit;
+    translate: var(--sidebar-offset, 0px) 0;
+  }
+  .mobile-dialog-sheet[data-state="closed"] {
+    animation-name: exit;
+  }
+
+  /* A looping highlight keeps drawing the eye even when it never moves. */
+  .text-shimmer {
+    animation: none !important;
+    background: none;
+    color: var(--fg-3);
+  }
+
+  /* Still says "working", without rotation: a slow fade outranks the blanket rules above. */
+  .ui-spinner {
+    animation: spinner-breathe 2.4s ease-in-out infinite !important;
+  }
+}
+
+@keyframes spinner-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/*
+ * The code palette: the colours an Android Studio (IntelliJ Light / Dark) user reads code in, each
+ * mixed a little toward the theme's text so it sits on every theme's paper. The code view's Shiki
+ * tokens and the chat's Prism tokens both draw from it.
+ */
+:root {
+  --code-fg: var(--fg);
+  --code-keyword: color-mix(in oklab, #0033b3 88%, var(--fg));
+  --code-string: color-mix(in oklab, #067d17 88%, var(--fg));
+  --code-number: color-mix(in oklab, #1750eb 88%, var(--fg));
+  --code-comment: color-mix(in oklab, #8c8c8c 80%, var(--fg-3));
+  --code-annotation: color-mix(in oklab, #9e880d 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #0037a6 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #00627a 88%, var(--fg));
+  --code-type: var(--fg);
+  --code-namespace: var(--fg);
+  --code-property: color-mix(in oklab, #871094 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #871094 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #0033b3 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #174ad4 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #0033b3 88%, var(--fg));
+  --code-link: var(--accent);
+}
+.dark {
+  --code-keyword: color-mix(in oklab, #cf8e6d 90%, var(--fg));
+  --code-string: color-mix(in oklab, #6aab73 90%, var(--fg));
+  --code-number: color-mix(in oklab, #2aacb8 90%, var(--fg));
+  --code-comment: color-mix(in oklab, #7a7e85 85%, var(--fg-3));
+  --code-annotation: color-mix(in oklab, #b3ae60 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #cf8e6d 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #56a8f5 90%, var(--fg));
+  --code-property: color-mix(in oklab, #c77dbb 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #c77dbb 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #d5b778 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #bababa 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #cf8e6d 90%, var(--fg));
+}
+
+.token.comment,
+.token.prolog,
+.token.doctype,
+.token.cdata {
+  color: var(--code-comment);
+  font-style: italic;
+}
+.token.punctuation,
+.token.operator,
+.token.entity,
+.token.url,
+.token.variable {
+  color: var(--code-fg);
+}
+.token.namespace {
+  opacity: 0.8;
+}
+.token.tag,
+.token.selector {
+  color: var(--code-tag);
+}
+.token.attr-name,
+.token.property {
+  color: var(--code-attribute);
+}
+.token.annotation,
+.token.decorator {
+  color: var(--code-annotation);
+}
+.token.boolean,
+.token.constant,
+.token.keyword,
+.token.atrule,
+.token.important,
+.token.builtin {
+  color: var(--code-keyword);
+}
+.token.number {
+  color: var(--code-number);
+}
+.token.string,
+.token.char,
+.token.attr-value,
+.token.regex,
+.token.inserted {
+  color: var(--code-string);
+}
+.token.deleted {
+  color: var(--danger);
+}
+.token.function,
+.token.title {
+  color: var(--code-declaration);
+}
+.token.class-name,
+.token.symbol {
+  color: var(--code-type);
+}
+.token.bold {
+  font-weight: 600;
+}
+.token.italic {
+  font-style: italic;
+}
+
+/*
+ * Reading comfort (设置 → 外观与交互). Kept out of `@theme` on purpose: `scripts/gen-mobile-theme.ts`
+ * parses those tokens straight into Kotlin `sp` values, and the generated theme must stay plain px.
+ * These rules are unlayered, so they win over Tailwind's theme layer; every token keeps its designed
+ * size until the store writes a scale (标准 is 1).
+ *
+ * Text scales globally — the transcript, menus and dialogs together — because a reader who needs
+ * larger text needs it everywhere, not only in the conversation.
+ */
+:root {
+  --text-scale: 1;
+  --text-2xs: calc(11px * var(--text-scale));
+  --text-2xs--line-height: calc(16px * var(--text-scale));
+  --text-xs: calc(12px * var(--text-scale));
+  --text-xs--line-height: calc(18px * var(--text-scale));
+  --text-sm: calc(13px * var(--text-scale));
+  --text-sm--line-height: calc(20px * var(--text-scale));
+  --text-base: calc(14px * var(--text-scale));
+  --text-base--line-height: calc(22px * var(--text-scale));
+  --text-lg: calc(16px * var(--text-scale));
+  --text-lg--line-height: calc(24px * var(--text-scale));
+  --text-xl: calc(18px * var(--text-scale));
+  --text-xl--line-height: calc(26px * var(--text-scale));
+  --text-2xl: calc(22px * var(--text-scale));
+  --text-2xl--line-height: calc(30px * var(--text-scale));
+  /* The answer surface (`.md`, `.md-muted`): a looser leading than `--text-base` for long prose. */
+  --text-md: calc(14px * var(--text-scale));
+  --leading-md: 1.8;
+  --text-h1: calc(20px * var(--text-scale));
+  --leading-h1: calc(27px * var(--text-scale));
+  --text-h2: calc(17px * var(--text-scale));
+  --leading-h2: calc(25px * var(--text-scale));
+  --text-h3: calc(15px * var(--text-scale));
+  --leading-h3: calc(23px * var(--text-scale));
+  --leading-h4: calc(23px * var(--text-scale));
+  --text-code: calc(12.5px * var(--text-scale));
+  --leading-code: calc(20px * var(--text-scale));
+}
+
+/*
+ * 会话间距: the transcript's row gaps only. Touch targets keep their designed minimum, and the gap
+ * between consecutive tool rows stays zero on touch, where there is no hover to separate them.
+ */
+:root {
+  --timeline-gap-turn: 40px;
+  --timeline-gap-answer: 24px;
+  --timeline-gap-block: 16px;
+  --timeline-gap-tight: 4px;
+}
+html[data-density='compact'] {
+  --timeline-gap-turn: 30px;
+  --timeline-gap-answer: 18px;
+  --timeline-gap-block: 12px;
+  --timeline-gap-tight: 3px;
+}
+html[data-density='relaxed'] {
+  --timeline-gap-turn: 50px;
+  --timeline-gap-answer: 30px;
+  --timeline-gap-block: 20px;
+  --timeline-gap-tight: 5px;
+}
+@media (hover: none) {
+  :root,
+  html[data-density] {
+    --timeline-gap-tight: 0px;
+  }
+}
+.timeline-gap-turn {
+  margin-top: var(--timeline-gap-turn);
+}
+.timeline-gap-answer {
+  margin-top: var(--timeline-gap-answer);
+}
+.timeline-gap-block {
+  margin-top: var(--timeline-gap-block);
+}
+.timeline-gap-tool {
+  margin-top: calc(var(--timeline-gap-block) / 2);
+}
+.timeline-gap-tight {
+  margin-top: var(--timeline-gap-tight);
+}
+
+/*
+ * 内容宽度: the cap every session column shares, written by `lib/content-width.ts` when the
+ * transcript's side handle is dragged. It lives on the root element because the transcript, the
+ * composer and the terminal drawer are three separate subtrees that must not disagree about the
+ * column they are centered in. The stored value is a cap only: each column is still `w-full`, so a
+ * narrow window keeps winning.
+ */
+:root {
+  --content-width: 920px;
+}
+
+/*
+ * Above the phone layout the columns also yield 56px of gutter (`COLUMN_GUTTER_TOTAL`, which the
+ * drag's ceiling shares), so the width handle stays reachable even when the stored preference is
+ * wider than this window: a cap that could fill the window would take the grab strip with it.
+ */
+@media (min-width: 768px) {
+  [data-content-column] {
+    max-width: min(var(--content-width), calc(100% - 56px));
+  }
+}
+
+/*
+ * The drag strip itself is invisible; the glow is a 2px bar following the captured pointer's Y
+ * (published during a drag as --width-handle-y, centered by default) rather than a full-height
+ * rule. At rest it borrows the scrollbar's tint so a secondary affordance stays quiet in both
+ * themes; hover and drag lift it to the scrollbar's hover colour.
+ */
+.content-width-handle {
+  --width-handle-color: var(--line-strong);
+}
+.content-width-handle::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 3px;
+  width: 2px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    transparent calc(var(--width-handle-y, 50%) - 36px),
+    var(--width-handle-color) calc(var(--width-handle-y, 50%) - 8px),
+    var(--width-handle-color) calc(var(--width-handle-y, 50%) + 8px),
+    transparent calc(var(--width-handle-y, 50%) + 36px)
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+.content-width-handle:hover,
+.content-width-handle[data-dragging] {
+  --width-handle-color: var(--fg-4);
+}
+.content-width-handle:hover::after,
+.content-width-handle[data-dragging]::after,
+.content-width-handle:focus-visible::after {
+  opacity: 1;
+}
+.content-width-handle:focus-visible {
+  --width-handle-color: var(--accent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .content-width-handle::after {
+    transition: none;
+  }
+}
+
+/*
+ * The row a conversation search pointed at, rung for a moment so the reader can find it. Drawn with
+ * an outline so it never changes the row's box and shifts the text underneath it.
+ */
+.timeline-focus-hit {
+  border-radius: 10px;
+  outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  outline-offset: 3px;
+}
+
+/*
+ * 收藏 highlights (docs/MARKS.md), painted with the CSS Custom Highlight API so the answer's DOM is
+ * never touched. Translucent washes rather than theme roles: they sit on text in every theme, and
+ * the theme blocks are a fixed set of roles the mobile generator reads.
+ */
+::highlight(mark-yellow) { background-color: rgb(250 204 21 / 0.36); }
+::highlight(mark-green) { background-color: rgb(34 197 94 / 0.26); }
+::highlight(mark-blue) { background-color: rgb(59 130 246 / 0.26); }
+::highlight(mark-red) { background-color: rgb(239 68 68 / 0.24); }
+/* The words a 收藏 jump lands on, flashed over their own colour for a moment. */
+::highlight(mark-focus) { background-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+.mark-swatch-yellow { background-color: rgb(234 179 8); }
+.mark-swatch-green { background-color: rgb(34 197 94); }
+.mark-swatch-blue { background-color: rgb(59 130 246); }
+.mark-swatch-red { background-color: rgb(239 68 68); }
+.mark-quote-yellow { background-color: rgb(250 204 21 / 0.3); }
+.mark-quote-green { background-color: rgb(34 197 94 / 0.22); }
+.mark-quote-blue { background-color: rgb(59 130 246 / 0.22); }
+.mark-quote-red { background-color: rgb(239 68 68 / 0.2); }
+/* A saved answer on the 收藏 page: the transcript's Markdown one step smaller, headings brought down to body size. */
+.md.mark-preview {
+  font-size: var(--text-sm);
+  line-height: 1.7;
+  color: var(--fg-2);
+}
+.md.mark-preview p { margin-bottom: 8px; }
+.md.mark-preview h1,
+.md.mark-preview h2,
+.md.mark-preview h3,
+.md.mark-preview h4,
+.md.mark-preview h5,
+.md.mark-preview h6 {
+  margin: 14px 0 4px;
+  font-size: var(--text-base);
+  line-height: 1.6;
+}
+.md.mark-preview pre { max-height: 9rem; overflow: hidden; }
+.md.mark-preview :is(h1, h2, h3, h4, h5, h6, p, ul, ol, pre, blockquote):first-child { margin-top: 0; }
+/* The preview is not interactive: a code block keeps its language label but not its buttons. */
+.md.mark-preview button { display: none; }
+.mark-fade { mask-image: linear-gradient(to bottom, #000 calc(100% - 4rem), transparent); }
+
+/*
+ * 导出图片 (docs/MARKS.md §6.1): a saved reply typeset as a card, shared with the Mac app measure for
+ * measure. A palette restates the theme tokens the Markdown styles read, so an answer renders in the
+ * card's colours rather than the app's; 跟随主题 keeps the app's own.
+ */
+.share-card {
+  --share-sans: "Inter Variable", "Inter", "Inter Fallback", -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+  --share-serif: ui-serif, "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", STSong, Georgia, serif;
+  --share-body: var(--share-sans);
+  --share-accent: var(--fg-3);
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "JetBrains Mono Fallback", "SF Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
+  width: 480px;
+  padding: 20px;
+  background: var(--share-canvas);
+  color: var(--fg);
+  font-family: var(--share-sans);
+  text-align: left;
+  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+}
+.share-card.share-wide { width: 720px; padding: 28px; }
+.share-card.share-serif { --share-body: var(--share-serif); }
+.share-card.share-paper {
+  --share-canvas: #efece6; --share-sheet: #fbfaf7;
+  --fg: #1c1b19; --fg-2: #4a4740; --fg-3: #6f6b64; --fg-4: #a29d94;
+  --line: rgb(28 27 25 / 0.08); --line-strong: rgb(28 27 25 / 0.16); --bg-subtle: #f2efe9; --bg-muted: #f2efe9;
+  --share-shadow: 0 0 0 1px rgb(28 27 25 / 0.06), 0 1px 2px rgb(28 27 25 / 0.04), 0 18px 40px -20px rgb(60 45 20 / 0.22);
+  --share-k: #9a4d8c; --share-s: #4f7f3a; --share-n: #b5622c; --share-f: #2f5d9e;
+  color-scheme: light;
+}
+.share-card.share-ink {
+  --share-canvas: #0e0e0f; --share-sheet: #18181a;
+  --fg: #eceae6; --fg-2: #c9c6c0; --fg-3: #a09d97; --fg-4: #6e6b66;
+  --line: rgb(255 255 255 / 0.07); --line-strong: rgb(255 255 255 / 0.14); --bg-subtle: #212123; --bg-muted: #212123;
+  --share-shadow: 0 0 0 1px rgb(255 255 255 / 0.06), 0 24px 56px -24px rgb(0 0 0 / 0.7);
+  --share-k: #d49bd0; --share-s: #a8c98a; --share-n: #e3a578; --share-f: #8fb4e8;
+  color-scheme: dark;
+}
+.share-card.share-theme {
+  --share-canvas: var(--bg-muted); --share-sheet: var(--bg-elevated);
+  --share-shadow: 0 0 0 1px var(--line), 0 1px 2px rgb(0 0 0 / 0.04), 0 18px 40px -20px rgb(0 0 0 / 0.2);
+}
+/* A highlight's colour is only an accent: the quotation mark and the note's rule. */
+.share-card[data-mark="yellow"] { --share-accent: #c9951a; }
+.share-card[data-mark="green"] { --share-accent: #3c9a5f; }
+.share-card[data-mark="blue"] { --share-accent: #3a74d0; }
+.share-card[data-mark="red"] { --share-accent: #cc4f46; }
+.share-card.share-ink[data-mark="yellow"] { --share-accent: #e2b341; }
+.share-card.share-ink[data-mark="green"] { --share-accent: #6cc08a; }
+.share-card.share-ink[data-mark="blue"] { --share-accent: #78a6ee; }
+.share-card.share-ink[data-mark="red"] { --share-accent: #ec7c73; }
+
+/*
+ * The export copies computed styles as they stand, so an image still behind its placeholder or easing
+ * out of it would go out blank or part-way: on the card it renders as it did before placeholders.
+ */
+.share-card [data-image-placeholder] { display: none; }
+.share-card [data-image-thumb] { opacity: 1 !important; transition: none !important; }
+.share-card [data-image-thumb][data-pending] { width: auto !important; height: auto !important; }
+
+.share-sheet { padding: 40px 36px 26px; border-radius: 16px; background: var(--share-sheet); box-shadow: var(--share-shadow); }
+.share-wide .share-sheet { padding: 48px 48px 26px; }
+/* Space between Han and Latin, squeezed CJK punctuation hung past the line end, no orphans. */
+.share-text {
+  font-family: var(--share-body);
+  text-autospace: normal;
+  text-spacing-trim: normal;
+  hanging-punctuation: allow-end;
+  line-break: strict;
+  overflow-wrap: break-word;
+  text-wrap: pretty;
+}
+.share-label { margin-bottom: 7px; color: var(--fg-4); font-family: var(--share-sans); font-size: 11px; font-weight: 600; letter-spacing: 0.12em; }
+.share-ask { margin-bottom: 26px; }
+.share-ask p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--fg-3); font-size: 14px; line-height: 1.75; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.share-ask::after { content: ""; display: block; width: 20px; height: 1px; margin-top: 22px; background: var(--line-strong); }
+.share-qmark { height: 34px; margin: -4px 0 14px -3px; color: var(--share-accent); font-family: Georgia, "Times New Roman", serif; font-size: 68px; line-height: 1; opacity: 0.85; user-select: none; }
+.share-quote { margin: 0; color: var(--fg); font-weight: 400; letter-spacing: 0.01em; white-space: pre-line; }
+.share-serif .share-quote { letter-spacing: 0.02em; }
+.share-quote-l { font-size: 26px; line-height: 1.62; text-wrap: balance; }
+.share-quote-m { font-size: 21px; line-height: 1.72; }
+.share-quote-s { font-size: 18px; line-height: 1.8; }
+.share-more { margin-top: 0.4em; color: var(--fg-4); font-size: 15px; letter-spacing: 0.2em; }
+.share-note { margin-top: 30px; padding-left: 14px; border-left: 2px solid var(--share-accent); }
+.share-note p { margin: 0; color: var(--fg-2); font-size: 14px; line-height: 1.75; white-space: pre-wrap; }
+.share-foot { display: flex; align-items: flex-end; gap: 20px; margin-top: 34px; padding-top: 16px; border-top: 1px solid var(--line); font-family: var(--share-sans); }
+.share-foot-bare { justify-content: flex-end; }
+.share-meta { flex: 1; min-width: 0; }
+.share-title { overflow: hidden; color: var(--fg-2); font-size: 13px; font-weight: 550; text-overflow: ellipsis; white-space: nowrap; }
+.share-sub { margin-top: 3px; overflow: hidden; color: var(--fg-4); font-size: 12px; font-variant-numeric: tabular-nums; text-overflow: ellipsis; white-space: nowrap; }
+.share-sub i { padding: 0 0.45em; font-style: normal; opacity: 0.7; }
+.share-foot svg { flex: none; width: auto; height: 12px; margin-bottom: 3px; color: var(--fg-4); }
+
+/* The answer, typeset for reading on a phone rather than in the transcript's column. */
+.md.share-md { color: var(--fg); font-size: 16px; line-height: 1.8; letter-spacing: 0.01em; }
+.md.share-md p { margin: 0 0 0.95em; }
+.md.share-md :is(h1, h2, h3, h4, h5, h6) { color: var(--fg); font-family: var(--share-sans); font-weight: 600; letter-spacing: 0; line-height: 1.45; }
+.share-serif .md.share-md :is(h1, h2, h3, h4, h5, h6) { font-family: var(--share-serif); font-weight: 700; }
+.md.share-md h1 { margin: 1.4em 0 0.6em; font-size: 22px; }
+.md.share-md h2 { margin: 1.5em 0 0.55em; font-size: 19px; }
+.md.share-md :is(h3, h4, h5, h6) { margin: 1.4em 0 0.45em; font-size: 16.5px; }
+.md.share-md > :first-child { margin-top: 0; }
+.md.share-md > :last-child { margin-bottom: 0; }
+.md.share-md em { color: var(--fg-2); font-style: normal; text-emphasis: filled dot; text-emphasis-position: under right; }
+.md.share-md a { color: var(--fg); text-decoration: underline; text-decoration-color: var(--line-strong); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.md.share-md :is(ul, ol) { margin: 0 0 0.95em; padding-left: 1.35em; }
+.md.share-md li { margin: 0.28em 0; padding-left: 0.15em; }
+.md.share-md li::marker { color: var(--fg-4); }
+.md.share-md ol > li::marker { font-family: var(--share-sans); font-size: 0.92em; font-variant-numeric: tabular-nums; }
+.md.share-md :not(pre) > code { padding: 0.14em 0.4em; border-radius: 5px; background: var(--bg-subtle); color: var(--fg-2); font-size: 0.84em; letter-spacing: 0; }
+.md.share-md .md-file-mention > code { border-bottom: 0; }
+.md.share-md .md-code { margin: 0 0 1em; border-radius: 10px; background: var(--bg-subtle); }
+.md.share-md .md-code-head { display: none; }
+.md.share-md .md-code pre { overflow: visible; padding: 14px 16px; color: var(--fg-2); font-size: 13px; line-height: 1.65; letter-spacing: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.share-wide .md.share-md .md-code pre { padding: 16px 20px; }
+.md.share-md table { display: table; width: 100%; margin: 0 0 1.1em; overflow: visible; border: 0; border-collapse: collapse; border-radius: 0; font-family: var(--share-sans); font-size: 14px; line-height: 1.6; }
+.md.share-md th { padding: 0 16px 8px 0; border-bottom: 1px solid var(--line-strong); background: none; color: var(--fg-2); font-weight: 600; }
+.md.share-md td { padding: 9px 16px 9px 0; border-bottom: 1px solid var(--line); color: var(--fg); font-variant-numeric: tabular-nums; }
+.md.share-md tr:last-child td { border-bottom: 0; }
+.md.share-md :is(th + th, td + td) { border-left: 0; }
+.md.share-md :is(th, td):last-child { padding-right: 0; }
+.md.share-md blockquote { margin: 0 0 1em; padding-left: 16px; border-left: 2px solid var(--line-strong); color: var(--fg-3); }
+.md.share-md hr { height: auto; margin: 1.7em 0; border: 0; text-align: center; }
+.md.share-md hr::before { content: "·  ·  ·"; color: var(--fg-4); font-size: 14px; letter-spacing: 0.3em; white-space: pre; }
+.share-card:is(.share-paper, .share-ink) :is(.token.keyword, .token.atrule, .token.title) { color: var(--share-k); }
+.share-card:is(.share-paper, .share-ink) :is(.token.string, .token.char, .token.attr-value, .token.inserted) { color: var(--share-s); }
+.share-card:is(.share-paper, .share-ink) :is(.token.boolean, .token.number, .token.constant, .token.important, .token.regex, .token.property, .token.tag, .token.selector, .token.attr-name, .token.builtin, .token.symbol, .token.deleted) { color: var(--share-n); }
+.share-card:is(.share-paper, .share-ink) :is(.token.function, .token.class-name) { color: var(--share-f); }
+.share-card:is(.share-paper, .share-ink) :is(.token.comment, .token.prolog, .token.doctype, .token.cdata) { color: var(--fg-4); }
+.share-card:is(.share-paper, .share-ink) .token.punctuation { color: var(--fg-3); }
+/*
+ * View Transitions for navigation inside the settings dialog (docs/WEB.md §3.3). The rules are inert
+ * unless `runSettingsTransition` puts `data-settings-transition` on the root for the duration of one
+ * navigation, which is why they can live here rather than being injected at runtime.
+ *
+ * The dialog frame is identical on both sides of a navigation, so the root layer swaps instantly and
+ * only the named list/panel layers carry the motion. A sibling section change is not a spatial move,
+ * so it cross-dissolves; only the mobile list ↔ section change is directional.
+ */
+@keyframes riffet-settings-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes riffet-settings-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes riffet-settings-push-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes riffet-settings-push-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: .4; transform: translateX(-30%); }
+}
+@keyframes riffet-settings-pop-in {
+  from { opacity: .4; transform: translateX(-30%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes riffet-settings-pop-out {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 1; transform: translateX(100%); }
+}
+/* Clicks during a section change go to the live dialog instead of the snapshot over it. */
+html[data-settings-transition]::view-transition {
+  pointer-events: none;
+}
+html[data-settings-transition]::view-transition-old(root),
+html[data-settings-transition]::view-transition-new(root) {
+  animation: none;
+}
+html[data-settings-transition='fade']::view-transition-old(settings-panel) {
+  animation: riffet-settings-fade-out var(--duration-fast) var(--ease-standard) both;
+}
+html[data-settings-transition='fade']::view-transition-new(settings-panel) {
+  animation: riffet-settings-fade-in var(--duration-fast) var(--ease-standard) both;
+}
+/* Reduced motion keeps a level change but cross-dissolves it, so the list needs fade rules too. */
+html[data-settings-transition='fade']::view-transition-old(settings-list) {
+  animation: riffet-settings-fade-out var(--duration-fast) var(--ease-standard) both;
+}
+html[data-settings-transition='fade']::view-transition-new(settings-list) {
+  animation: riffet-settings-fade-in var(--duration-fast) var(--ease-standard) both;
+}
+html[data-settings-transition='push']::view-transition-old(settings-list) {
+  animation: riffet-settings-push-out var(--duration-slow) var(--ease-sheet) both;
+}
+html[data-settings-transition='push']::view-transition-new(settings-panel) {
+  animation: riffet-settings-push-in var(--duration-slow) var(--ease-sheet) both;
+}
+html[data-settings-transition='pop']::view-transition-old(settings-panel) {
+  animation: riffet-settings-pop-out var(--duration-medium) var(--ease-sheet) both;
+}
+html[data-settings-transition='pop']::view-transition-new(settings-list) {
+  animation: riffet-settings-pop-in var(--duration-medium) var(--ease-sheet) both;
+}
+
+/* Stats charts. The skeleton is a sheen, not a spinner; reduced motion keeps a static block. */
+.stats-chart:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+.stats-skel {
+  background: linear-gradient(100deg, var(--bg-muted) 30%, var(--bg-subtle) 50%, var(--bg-muted) 70%);
+  background-size: 200% 100%;
+  animation: stats-skel 1.4s ease-in-out infinite;
+}
+@keyframes stats-skel {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stats-skel { animation: none; }
+}
+
+/* Derive selection from the palette without changing its shared colour-role contract. */
+.session-tab-current {
+  --tab-current-bg: var(--bg-elevated);
+  background-color: var(--tab-current-bg);
+}
+.dark .session-tab-current {
+  --tab-current-bg: color-mix(in srgb, var(--bg), var(--fg) 12%);
+}
+
+/* Keep the strip's original outline and concave feet, joining the panel at its own colour. */
+.tab-strip-current {
+  --tab-current-bg: var(--bg);
+  background: linear-gradient(to bottom, var(--tab-current-bg) 45%, var(--bg) calc(100% - 10px));
+}
+.tab-strip-current::before,
+.tab-strip-current > .tab-flare {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+}
+.tab-strip-current::before {
+  left: -10px;
+  background: radial-gradient(circle at 0 0, transparent 10px, var(--bg) 10.5px);
+}
+.tab-strip-current > .tab-flare {
+  right: -10px;
+  background: radial-gradient(circle at 100% 0, transparent 10px, var(--bg) 10.5px);
+}
+
+/* Only temporary tabs carry an edge, following the original curves with dashes. */
+.tab-dash {
+  position: absolute;
+  inset: 0 0 10px;
+  pointer-events: none;
+  border: 1px dashed var(--fg-4);
+  border-bottom-width: 0;
+  border-radius: 10px 10px 0 0;
+}
+.tab-dash::before,
+.tab-dash::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  width: 10px;
+  height: 10px;
+  border: 0 dashed var(--fg-4);
+  border-style: inherit;
+}
+.tab-dash::before {
+  left: -10px;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  border-bottom-right-radius: 10px;
+}
+.tab-dash::after {
+  right: -10px;
+  border-left-width: 1px;
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 10px;
+}

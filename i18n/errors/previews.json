@@ -1,0 +1,30 @@
+{
+  "PREVIEW_BUSY": {
+    "zh": "预览任务较多，请稍后重试",
+    "en": "Too many previews are queued; try again shortly"
+  },
+  "PREVIEW_FAILED": {
+    "zh": "无法解析此文件，可下载原文件查看",
+    "en": "This file could not be parsed; download the original file to view it"
+  },
+  "PREVIEW_TIMEOUT": {
+    "zh": "文件解析超时，可下载原文件查看",
+    "en": "The file took too long to parse; download the original file to view it"
+  },
+  "UNSUPPORTED_PREVIEW": {
+    "zh": "此格式可下载后查看",
+    "en": "Download this format to view it"
+  },
+  "PREVIEW_TOO_LARGE": {
+    "zh": "文件超过 {limit} 预览上限，可下载原文件查看",
+    "en": "The file exceeds the {limit} preview limit; download the original instead"
+  },
+  "VISUALIZATION_TOO_LARGE": {
+    "zh": "交互预览超过 {limit}，请打开源码查看",
+    "en": "The preview exceeds {limit}; open the source instead"
+  },
+  "INVALID_VISUALIZATION": {
+    "zh": "{subject, select, file {交互预览必须是 HTML 文件} text {交互预览必须是 HTML 文本} other {交互预览必须是 HTML}}",
+    "en": "{subject, select, file {A visualization preview must be an HTML file} text {A visualization preview must be an HTML text} other {A visualization preview must be HTML}}"
+  }
+}

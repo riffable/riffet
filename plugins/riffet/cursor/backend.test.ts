@@ -1,0 +1,89 @@
+import { describe, expect, it, vi } from 'vitest';
+import type { AgentContext, AgentSessionView } from '@riffet/plugin-api';
+import { CursorBackend } from './backend.js';
+import { cursorPort } from './host-port.js';
+import type { NativeService } from './native/service.js';
+import type { WatchMessage } from './native/watch.js';
+import { FakeHost } from './testing/fake-host.js';
+
+const session: AgentSessionView = {
+  id: 'session-1', projectId: 'project-1', title: 'Conversation', state: 'idle', model: 'gpt-5', mode: 'agent', approval: 'allowlist', terminalId: 'terminal-1',
+};
+const project = { id: 'project-1', name: 'Project', cwd: '/srv/home/alice/project' };
+const context: AgentContext = { session, project, profile: { id: 'default', name: 'Cursor CLI', config: {} } };
+
+/** The backend builds its runtime from the first launch profile; a test hands it one already built. */
+function harness(configure: NativeService['configure'] = async (current, patch) => ({ ...current, ...patch })) {
+  const nativeConfigure = vi.fn(configure);
+  const host = new FakeHost({ sessions: [session], projects: [project] });
+  const order: string[] = [];
+  const read = host.view.session;
+  host.view.session = id => { order.push(`read:${id}`); return read(id); };
+  const lock = host.withSessionLock.bind(host);
+  host.withSessionLock = async (sessionId, operation) => {
+    order.push(`lock:${sessionId}`);
+    try { return await lock(sessionId, operation); } finally { order.push('release'); }
+  };
+  const backend = new CursorBackend({ stateDir: '' });
+  Object.assign(backend, { built: { native: { configure: nativeConfigure }, port: cursorPort(host), runtime: {}, profile: {} } });
+  return { backend, host, order, nativeConfigure };
+}
+
+describe('CursorBackend.configure', () => {
+  it('holds the session lock across the switch, like the other backends do', async () => {
+    const { backend, host, order, nativeConfigure } = harness();
+    const result = await backend.configure(host, context, { approval: 'unrestricted' });
+    // The lock has to cover reading the row, the restart decision and the record write together.
+    expect(order).toEqual(['lock:session-1', 'read:session-1', 'release']);
+    expect(nativeConfigure).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ approval: 'unrestricted', terminalId: 'terminal-1' });
+  });
+
+  it('re-reads the session inside the lock and lets a refusal propagate', async () => {
+    const refused = Object.assign(new Error('Cursor 正在处理这一轮'), { code: 'CLI_BUSY' });
+    const { backend, host, order, nativeConfigure } = harness(async () => { throw refused; });
+    await expect(backend.configure(host, context, { approval: 'unrestricted' })).rejects.toBe(refused);
+    expect(order).toEqual(['lock:session-1', 'read:session-1', 'release']);
+    // A backend that swallowed the refusal would leave the caller believing the switch happened.
+    expect(nativeConfigure).toHaveBeenCalledWith(session, { approval: 'unrestricted' });
+  });
+});
+
+describe('CursorBackend.transcriptSource', () => {
+  it('wakes the journal reader when the CLI rewrites the step it has not committed yet', () => {
+    let listen: ((message: WatchMessage) => void) | undefined;
+    const host = new FakeHost({ sessions: [session], projects: [project] });
+    const backend = new CursorBackend({ stateDir: '' });
+    const native = { subscribe: (_sessionId: string, listener: (message: WatchMessage) => void) => { listen = listener; return () => {}; } };
+    Object.assign(backend, { built: { native, port: cursorPort(host), runtime: {}, profile: { configDir: '/tmp/cursor' } } });
+    const wake = vi.fn();
+    const stop = backend.transcriptSource(host, context).watch!({} as never, wake);
+    // The in-flight step lives only in the store until it commits; without this wake the
+    // conversation stays empty for as long as the CLI holds it (a long tool call, say).
+    listen!({ type: 'draft' });
+    expect(wake).toHaveBeenCalledTimes(1);
+    // Control news reaches the client on its own; it must not read the transcript again.
+    listen!({ type: 'status', status: { phase: 'busy' } });
+    expect(wake).toHaveBeenCalledTimes(1);
+    stop();
+  });
+});
+
+describe('CursorBackend.start', () => {
+  it('builds the runtime once, as soon as it is registered, and builds no other after it was closed', async () => {
+    const host = new FakeHost({ sessions: [session], projects: [project] });
+    const backend = new CursorBackend({ stateDir: '' });
+    const built = () => (backend as unknown as { built?: unknown }).built;
+    expect(built()).toBeUndefined();
+    backend.start(host, context.profile);
+    const runtime = built();
+    expect(runtime).toBeDefined();
+    backend.start(host, context.profile);
+    expect(built()).toBe(runtime);
+    // A call that outlives the activation must not leave a second sweep and hook server behind.
+    const closed = new CursorBackend({ stateDir: '' });
+    await closed.close();
+    expect(() => closed.start(host, context.profile)).toThrow(expect.objectContaining({ code: 'AGENT_BACKEND_CLOSED' }));
+    await backend.close();
+  });
+});

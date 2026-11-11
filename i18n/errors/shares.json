@@ -1,0 +1,48 @@
+{
+  "INVALID_SHARE_APPEARANCE": { "zh": "请选择有效的分享外观", "en": "Choose a valid share appearance" },
+  "SHARE_THEME_CHANGED": { "zh": "主题已变更，请重新生成预览", "en": "The theme changed; generate the preview again" },
+  "INVALID_SHARE_ALIAS": { "zh": "分享地址无效", "en": "The share address is invalid" },
+  "INVALID_SHARE_DRAFT": { "zh": "分享预览无效", "en": "The share preview is invalid" },
+  "INVALID_SHARE_EXPIRY": { "zh": "分享有效期无效", "en": "The share expiry is invalid" },
+  "INVALID_SHARE_SELECTION": { "zh": "请选择有效的分享范围", "en": "Choose a valid share range" },
+  "SHARE_ACCOUNT_CHANGED": {
+    "zh": "{reason, select, switch {请切换到发布账号 {username}} changed {账号已切换，请重新生成预览} other {请切换到发布账号 {username}}}",
+    "en": "{reason, select, switch {Switch to the publishing account {username}} changed {The account changed; generate the preview again} other {Switch to the publishing account {username}}}"
+  },
+  "SHARE_ALIAS_EXISTS": { "zh": "分享地址已存在，请核对发布状态", "en": "The share address already exists; check the publish status" },
+  "SHARE_ASSET_NOT_FOUND": { "zh": "资源不存在", "en": "The resource does not exist" },
+  "SHARE_ASSETS_UNAVAILABLE": { "zh": "分享页面尚未构建", "en": "The share page has not been built" },
+  "SHARE_ASSETS_UNSAFE": { "zh": "分享资源不能包含符号链接", "en": "Share assets cannot contain symbolic links" },
+  "SHARE_BUSY": { "zh": "分享操作正在进行", "en": "A share operation is already running" },
+  "SHARE_CLI_MISSING": { "zh": "请先安装发布所需的命令行工具", "en": "Install the command-line tool needed to publish first" },
+  "SHARE_CLI_PROTOCOL": { "zh": "平台返回的数据无效，请稍后重试", "en": "The platform returned invalid data; try again shortly" },
+  "SHARE_CLI_TIMEOUT": { "zh": "平台响应未确认，请核对状态", "en": "The platform response was not confirmed; check the status" },
+  "SHARE_CLOSED": { "zh": "服务器正在关闭", "en": "The server is shutting down" },
+  "SHARE_DIRECTORY_UNSAFE": { "zh": "分享目录必须为空", "en": "The share directory must be empty" },
+  "SHARE_DRAFT_EXPIRED": { "zh": "分享预览已失效，请重新生成", "en": "The share preview has expired; generate it again" },
+  "SHARE_DRAFT_MISMATCH": {
+    "zh": "{reason, select, session {分享预览不属于当前会话} record {原分享预览与发布记录不符} other {原分享预览与发布记录不符}}",
+    "en": "{reason, select, session {The share preview belongs to another conversation} record {The original share preview does not match the publish record} other {The original share preview does not match the publish record}}"
+  },
+  "SHARE_DRAFT_NOT_FOUND": { "zh": "分享预览已失效，请重新生成", "en": "The share preview has expired; generate it again" },
+  "SHARE_LIST_INCOMPLETE": { "zh": "无法完整核对平台分享列表", "en": "The platform share list could not be fully checked" },
+  "SHARE_LOGIN_REQUIRED": { "zh": "请先登录发布账号", "en": "Sign in to the publishing account first" },
+  "SHARE_NOT_FOUND": { "zh": "分享不存在", "en": "The share does not exist" },
+  "SHARE_NOT_VERIFIED": { "zh": "页面已提交，内容尚未核对，请稍后核对状态", "en": "The page was submitted but its content has not been verified; check the status later" },
+  "SHARE_PERMISSION_DENIED": { "zh": "当前账号没有分享权限", "en": "This account cannot share" },
+  "SHARE_PLATFORM_UNAVAILABLE": { "zh": "无法完成平台操作，请检查网络后核对状态", "en": "The platform operation did not complete; check the network and verify the status" },
+  "SHARE_PUBLISHER_CHANGED": { "zh": "发布目标已变化，请重新生成预览", "en": "The publishing target changed; generate the preview again" },
+  "SHARE_PUBLISHER_UNAVAILABLE": { "zh": "发布此分享的插件未启用", "en": "The plugin that published this share is not enabled" },
+  "SHARE_REMOVE_UNCONFIRMED": {
+    "zh": "{reason, select, publish {此前发布结果未确认，暂不能确认取消，请稍后核对状态} remote {平台仍显示此分享，请稍后核对状态} other {平台仍显示此分享，请稍后核对状态}}",
+    "en": "{reason, select, publish {The previous publish result is unconfirmed; reconcile it before removing} remote {The platform still lists this share; check the status later} other {The platform still lists this share; check the status later}}"
+  },
+  "SHARE_RETRY_UNAVAILABLE": { "zh": "原分享预览不可用，请核对平台状态", "en": "The original share preview is unavailable; check the platform status" },
+  "SHARE_SELECTION_CHANGED": { "zh": "所选轮次已不可用，请重新选择", "en": "The selected turns are no longer available; select them again" },
+  "SHARE_TOO_LARGE": { "zh": "分享内容超过 50 MB", "en": "The share exceeds 50 MB" },
+  "SHARE_UNCONFIRMED": { "zh": "请先核对上一次分享操作的状态", "en": "Reconcile the previous share operation first" },
+  "SHARE_UNAVAILABLE": {
+    "zh": "{reason, select, missing_cli {请先安装发布所需的命令行工具} unsupported_cli {请更新发布所需的命令行工具} login_required {请先登录发布账号} permission_denied {当前账号没有分享权限} no_publisher {未启用分享发布插件} other {分享暂不可用}}",
+    "en": "{reason, select, missing_cli {Install the command-line tool needed to publish first} unsupported_cli {Update the command-line tool needed to publish} login_required {Sign in to the publishing account first} permission_denied {This account cannot share} no_publisher {No share publisher is enabled} other {Sharing is unavailable}}"
+  }
+}

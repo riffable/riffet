@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Copy shown by the Android host layer itself: attachments, APK installation, saved-download
+  deletion and the build-info fallback. Feature UI lives in commonMain's composeResources.
+-->
+<resources>
+    <!-- Attachment picker -->
+    <string name="host_attachment_batch_limit">一条消息最多 %1$d 个附件，这一批没有添加</string>
+    <string name="host_attachment_read_failed">无法读取附件，这一批没有添加</string>
+    <string name="host_attachment_too_large">「%1$s」超过 24 MiB，这一批没有添加</string>
+    <string name="host_attachment_unreadable">无法读取「%1$s」，这一批没有添加</string>
+    <string name="host_quick_chat_attachments_not_sent">附件未发送</string>
+
+    <!-- InstallDownloadActivity -->
+    <string name="host_install_bad_package">无法读取安装包，请重新下载</string>
+    <string name="host_install_missing_package">安装包已不存在，请重新下载</string>
+    <string name="host_install_open_failed">无法打开安装包，请检查文件或系统安装设置</string>
+    <string name="host_install_permission_denied">未允许 Riffet 安装应用，可再次点击安装包重试</string>
+    <string name="host_install_launch_failed">无法启动系统安装器，请检查系统安装设置</string>
+    <string name="host_install_clip_label">安装包</string>
+
+    <!-- Saved-download storage and deletion -->
+    <string name="host_download_create_failed">无法在下载目录创建文件</string>
+    <string name="host_download_write_failed">无法写入下载目录</string>
+    <string name="host_download_dir_unavailable">下载目录不可用</string>
+    <string name="host_download_invalid_name">无效文件名</string>
+    <string name="host_download_delete_pick_original">请选择下载目录中的原文件</string>
+    <string name="host_download_delete_not_allowed">系统不允许删除所选文件，请选择下载目录中的原文件</string>
+    <string name="host_download_metadata_failed">无法读取所选文件，请重新选择</string>
+    <string name="host_download_mismatch_name">所选文件与下载记录不符，请选择“%1$s”</string>
+    <string name="host_download_mismatch_original">所选文件与下载记录不符，请选择原下载文件</string>
+    <string name="host_download_picker_busy">请先完成当前的文件选择</string>
+    <string name="host_download_picker_background">请回到应用后重试删除文件</string>
+    <string name="host_download_picker_unavailable">无法打开系统文件选择器，请重试</string>
+    <string name="host_download_picker_prompt">请选择“%1$s”，授权后将删除该文件</string>
+    <string name="host_download_delete_cancelled">已取消删除文件</string>
+
+    <!-- Build info -->
+    <string name="host_version_unknown">未知</string>
+
+    <!-- Notifications and the keep-alive service -->
+    <string name="host_notification_channel_attention">需要你确认</string>
+    <string name="host_notification_channel_attention_desc">Agent 停下来等你审批或回答问题</string>
+    <string name="host_notification_channel_turns">回合结束</string>
+    <string name="host_notification_channel_turns_desc">会话完成、失败或被中断</string>
+    <string name="host_notification_channel_sync">运行状态</string>
+    <string name="host_notification_channel_sync_desc">会话运行时显示进度，并保持与 Riffet 服务器的连接</string>
+    <string name="host_notification_turn_finished">已完成</string>
+    <string name="host_notification_turn_failed">运行失败</string>
+    <string name="host_notification_turn_interrupted">已中断</string>
+    <string name="host_notification_waiting_body">Agent 正在等你确认</string>
+    <string name="host_notification_attention_title">%1$s · 需要你确认</string>
+    <string name="host_notification_attention_public">有会话需要你确认</string>
+    <string name="host_notification_reply_hint">回复 Agent…</string>
+    <string name="host_notification_reply">回复</string>
+    <string name="host_notification_expired">通知已过期，请在应用中处理</string>
+    <string name="host_notification_unpaired">Riffet 尚未配对，打开应用处理</string>
+    <string name="host_notification_other_server">请先切回此通知所属的服务器</string>
+    <string name="host_notification_timeout">服务器没有及时回应，点开会话核对</string>
+    <string name="host_notification_unconfirmed">未能确认 CLI 收到了回答，点开会话核对</string>
+    <string name="host_notification_submitted">已提交</string>
+    <string name="host_notification_verify_in_app">已开启操作前验证，请在应用中处理</string>
+    <string name="host_notification_submit_failed">提交失败：%1$s。点开会话处理</string>
+    <string name="host_notification_sent">已发送：%1$s</string>
+    <string name="host_notification_send_incomplete">发送未完成：%1$s。点开会话核对，不会自动重发。</string>
+    <string name="host_network_error">网络错误</string>
+
+    <!-- Keep-alive status text -->
+    <string name="host_live_others">· 另有 %1$d 个会话</string>
+    <string name="host_live_waiting">等待你确认</string>
+    <string name="host_live_running">运行中</string>
+    <string name="host_live_reconnecting">正在重新连接…</string>
+    <string name="host_live_disconnected">连接已断开，回到应用重试</string>
+    <string name="host_live_connected">已连接 · 后台保持接收</string>
+
+    <!-- Agent messages and device calls that need a tap -->
+    <string name="host_notification_channel_agent">Agent 通知</string>
+    <string name="host_notification_channel_agent_desc">Agent 主动发来的提醒</string>
+    <string name="host_device_request_clipboard">Agent 请求读取剪贴板</string>
+    <string name="host_device_request_photo">Agent 请求拍照</string>
+    <string name="host_device_request_pick_photo">Agent 请求选一张照片</string>
+    <string name="host_device_request_open_url">Agent 请求打开链接</string>
+    <string name="host_device_request_alarm">Agent 请求设置闹钟</string>
+    <string name="host_device_a11y_description">让你在 Riffet 里允许的 Agent 读取并操作这台手机的屏幕。只在「允许 Agent 调用这台设备」开着时工作；发送、删除、提交要你在手机上确认，付款始终由你完成。</string>
+    <string name="host_device_confirm_send">Agent 要发送</string>
+    <string name="host_device_confirm_delete">Agent 要删除</string>
+    <string name="host_device_confirm_submit">Agent 要提交</string>
+    <string name="host_device_confirm_order">Agent 要下单</string>
+    <string name="host_device_grant_send">允许 Agent 稍后发送</string>
+    <string name="host_device_grant_delete">允许 Agent 稍后删除</string>
+    <string name="host_device_grant_submit">允许 Agent 稍后提交</string>
+    <string name="host_device_grant_valid">%1$d 分钟内有效，用一次</string>
+    <string name="host_device_confirm_allow">允许</string>
+    <string name="host_device_confirm_deny">拒绝</string>
+    <string name="host_device_control_channel">手机操控</string>
+    <string name="host_device_control_running">Agent 正在操作手机</string>
+    <string name="host_device_control_stop">停止</string>
+    <string name="host_device_handoff_title">需要你亲自付款</string>
+    <string name="host_device_locked_title">Agent 需要使用手机，请先解锁</string>
+</resources>

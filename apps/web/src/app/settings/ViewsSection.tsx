@@ -1,0 +1,117 @@
+import { Trans, useLingui } from '@lingui/react/macro';
+import { IconArrowDown, IconArrowUp } from '@/components/icons';
+import { Button } from '@/components/ui/button';
+import { Segmented, Switch } from '@/components/ui/controls';
+import { Tip } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import type { ViewEntry } from '@/plugins/catalog';
+import { setChapterNavigation, setRailMark, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type RailMark, type SessionSide, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
+import { SettingsGroup as Group, SettingsRow as Row, SettingsThumbChoice, ThumbSidebar, thumbFrame } from './SettingsLayout';
+
+/** Settings list the views of a conversation, whichever one is open. */
+const SETTINGS_FACTS = { hasProject: true, hasSession: true, capabilities: new Set<string>() };
+
+/** One prompt's mark on the rail, as the miniature and the style switch draw it. */
+function Mark({ mark, active, className }: { mark: RailMark; active?: boolean; className?: string }) {
+  return mark === 'dot'
+    ? <i className={cn('rounded-full bg-current', active ? 'size-[4px]' : 'size-[3px]', className)} />
+    : <i className={cn('h-[2px] rounded-full bg-current', active ? 'w-[9px]' : 'w-[5px]', className)} />;
+}
+
+/** A miniature of a wide session: the reading column, and the overview column or the rail beside it. */
+function Thumb({ side, mark, selected }: { side: SessionSide; mark: RailMark; selected: boolean }) {
+  return (
+    <span className={thumbFrame(selected)}>
+      <ThumbSidebar />
+      <span className="relative flex flex-1 gap-[5px] rounded-md bg-bg p-[5px]">
+        <span className="flex flex-1 flex-col items-center gap-1 pt-0.5">
+          {['70%', '52%', '64%', '40%'].map((width, row) => <i key={row} className="h-[3px] rounded-sm bg-active" style={{ width }} />)}
+        </span>
+        {side === 'overview'
+          ? (
+            <span className="flex w-[28%] flex-col gap-[3px] pt-0.5">
+              {[0, 1, 2].map((row) => <i key={row} className={cn('h-[3px] rounded-sm', row === 2 ? 'bg-fg-4' : 'bg-active')} />)}
+              <i className="mt-1 h-[3px] w-3/4 rounded-sm bg-active" />
+            </span>
+          )
+          : (
+            <span className="absolute top-1/2 right-[3px] flex -translate-y-1/2 flex-col items-end gap-[3px]">
+              {[0, 1, 2, 3, 4].map((row) => (
+                <span key={row} className={cn('flex justify-center', mark === 'dot' && 'w-[4px]', row === 3 ? 'text-fg-4' : 'text-active')}>
+                  <Mark mark={mark} active={row === 3} />
+                </span>
+              ))}
+            </span>
+          )}
+      </span>
+    </span>
+  );
+}
+
+/** The views of one list with their order and visibility controls; 对话 cannot be turned off. */
+function ViewRows({ list, views, hidden }: { list: ViewList; views: readonly ViewEntry[]; hidden: readonly string[] }) {
+  const { t } = useLingui();
+  const move = (index: number, delta: -1 | 1) => {
+    const next = views.map((view) => view.id);
+    [next[index], next[index + delta]] = [next[index + delta]!, next[index]!];
+    setViewOrder(next, list);
+  };
+  return views.map(({ id: view, title: name }, index) => {
+    const up = t`上移${name}`;
+    const down = t`下移${name}`;
+    return (
+      <Row key={view} title={name}>
+        <div className="flex items-center gap-1">
+          <Tip label={up}><Button size="icon-xs" variant="quiet" aria-label={up} disabled={index === 0} onClick={() => move(index, -1)}><IconArrowUp /></Button></Tip>
+          <Tip label={down}><Button size="icon-xs" variant="quiet" aria-label={down} disabled={index === views.length - 1} onClick={() => move(index, 1)}><IconArrowDown /></Button></Tip>
+          <Switch className="ml-2" aria-label={name} checked={!hidden.includes(view)} disabled={list === 'session' && view === 'chat'} onCheckedChange={(visible) => setViewVisible(view, visible, list)} />
+        </div>
+      </Row>
+    );
+  });
+}
+
+/** 视图: what a wide session shows on its right, how its rail marks prompts, and the switch between the views the catalog offers (对话, 终端, 画布...). */
+export function ViewsSection() {
+  const { t } = useLingui();
+  const side = useViewPrefs((state) => state.side);
+  const mark = useViewPrefs((state) => state.mark);
+  const placement = useViewPrefs((state) => state.placement);
+  const chapterNavigation = useViewPrefs((state) => state.chapterNavigation);
+  const hidden = useViewPrefs((state) => state.hidden);
+  const sidebarHidden = useViewPrefs((state) => state.sidebarHidden);
+  const offered = useSessionViews(SETTINGS_FACTS);
+  const sidebar = useSidebarOrder();
+  return <div className="flex flex-col gap-6">
+    <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
+    <Group title={t`会话右侧`}>
+      <SettingsThumbChoice<SessionSide>
+        label={t`会话右侧`}
+        value={side}
+        onChange={setSessionSide}
+        options={[{ value: 'overview', label: t`会话概览` }, { value: 'rail', label: t`仅导航条` }]}
+        thumb={(value, selected) => <Thumb side={value} mark={mark} selected={selected} />}
+      />
+      <Row title={t`导航条样式`}>
+        <Segmented<RailMark> size="xs" value={mark} onChange={setRailMark} ariaLabel={t`导航条样式`} options={[
+          { value: 'line', label: t`线`, icon: <Mark mark="line" className="w-2.5" /> },
+          { value: 'dot', label: t`圆点`, icon: <Mark mark="dot" className="size-1.5" /> },
+        ]} />
+      </Row>
+    </Group>
+    <Group>
+      <Row title={t`章节导航`}>
+        <Switch aria-label={t`章节导航`} checked={chapterNavigation} onCheckedChange={setChapterNavigation} />
+      </Row>
+      <Row title={t`视图切换`}>
+        <Segmented<ViewSwitchPlacement> size="xs" value={placement} onChange={setViewPlacement} ariaLabel={t`视图切换`} options={[{ value: 'dots', label: t`底部圆点` }, { value: 'header', label: t`标题栏图标` }]} />
+      </Row>
+    </Group>
+    <Group title={t`显示的视图`}>
+      <ViewRows list="session" views={offered} hidden={hidden} />
+    </Group>
+    <Group title={t`侧板视图`}>
+      <ViewRows list="sidebar" views={sidebar} hidden={sidebarHidden} />
+    </Group>
+  </div>;
+}

@@ -1,0 +1,508 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: active.date
+#. placeholder {0}: day.date
+#. placeholder {1}: formatCount(active.runs)
+#. placeholder {1}: formatCount(day.runs)
+#. placeholder {2}: formatTokens(active.totalTokens)
+#. placeholder {2}: formatTokens(day.totalTokens)
+#: src/app/stats/Heatmaps.tsx
+msgid "{0} · {1} 轮 · {2}"
+msgstr ""
+
+#. placeholder {0}: active.label
+#. placeholder {1}: format(activeSample.p50)
+#. placeholder {2}: format(activeSample.p90)
+#. placeholder {3}: format(activeSample.p99)
+#. placeholder {4}: activeSample.samples
+#: src/app/stats/LatencyChart.tsx
+msgid "{0} · p50 {1} · p90 {2} · p99 {3} · {4} 个样本"
+msgstr ""
+
+#. placeholder {0}: t(WEEKDAY_NAMES[row])
+#. placeholder {1}: formatCount(grid[row]?.[col] ?? 0)
+#: src/app/stats/Heatmaps.tsx
+msgid "{0} {col}:00 · {1} 轮"
+msgstr ""
+
+#. placeholder {0}: formatExactTimestamp(row.createdAt)
+#: src/app/stats/RunsTable.tsx
+msgid "{0} {sessionTitle}"
+msgstr ""
+
+#. placeholder {0}: row.label
+#. placeholder {1}: format(sample.p50)
+#. placeholder {2}: format(sample.p90)
+#. placeholder {3}: format(sample.p99)
+#: src/app/stats/LatencyChart.tsx
+msgid "{0}，p50 {1}，p90 {2}，p99 {3}"
+msgstr ""
+
+#. placeholder {0}: message.text
+#: src/app/stats/StatsPage.tsx
+msgid "{0}，仍显示上次的数据。"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "{label}：{selected}"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "{size} 条"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "{weekdayName} {hour} 点，{value} 轮"
+msgstr ""
+
+#. placeholder {0}: formatCount(value)
+#: src/app/stats/Heatmaps.tsx
+msgid "{weekdayName} {hour}:00 · {0} 轮"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "0 轮"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "1 年"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "30 天"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "7 天"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "90 天"
+msgstr ""
+
+#: src/app/stats/DonutChart.tsx
+msgid "Agent 占比"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "一周中每个小时的轮次。方向键移动。"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgctxt "stats-pagination-previous"
+msgid "上一页"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgctxt "stats-pagination-next"
+msgid "下一页"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgctxt "stats-status-interrupted"
+msgid "中断"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "今天"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgctxt "stats-session-column"
+msgid "会话"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "全部"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgctxt "stats-status-cancelled"
+msgid "取消"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "另有 {unmeasured} 个模型未测量"
+msgstr ""
+
+#: src/app/stats/DonutChart.tsx
+msgid "各 Agent 占比。方向键切换扇区。"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "各 Agent 的结束状态"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "合计"
+msgstr ""
+
+#: src/app/stats/chart-shared.tsx
+#: src/app/stats/FilterBar.tsx
+msgid "含估算"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "失败"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "失败调用"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgctxt "stats-status-completed"
+msgid "完成"
+msgstr ""
+
+#: src/app/stats/KpiCards.tsx
+msgid "对比 {compareLabel}"
+msgstr ""
+
+#: src/app/stats/chart-shared.tsx
+msgid "对比上一等长周期"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "导出"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "导出 CSV"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "导出 JSON"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+msgid "导出失败"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "导出数据"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "工具"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "工具分布"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "延迟与速度"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "延迟指标"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "延迟还在加载"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "开始日期"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "当前页明细"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "总 token"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "悬停或选中日期查看用量"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+msgid "打开侧边栏"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "拆分"
+msgstr ""
+
+#: src/app/stats/chart-shared.tsx
+msgid "持平"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "指标"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "按模型的分位数"
+msgstr ""
+
+#: src/app/stats/RankChart.tsx
+msgctxt "stats-sort-control"
+msgid "排序"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "整轮耗时"
+msgstr ""
+
+#: src/app/stats/use-stats-data.ts
+msgid "无法加载明细"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+#: src/app/stats/use-stats-data.ts
+msgid "无法加载统计"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "日期"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "时间"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "时间范围"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "时间范围：{rangeLabel}"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "明细"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "明细分页"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "明细暂时无法读取"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "暂无选项"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+msgid "更新中"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "未命名会话"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "本页暂无记录，可以返回上一页"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+#: src/app/stats/FilterBar.tsx
+#: src/app/stats/RunsTable.tsx
+msgid "模型"
+msgstr ""
+
+#: src/app/stats/RankChart.tsx
+msgid "模型排行"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "正在读取…"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "正在读取轮次"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "每日活跃"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "每日活跃，左右方向键查看日期"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "每页 {pageSize} 条"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "没有时段分布"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "活跃时段"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgctxt "stats-state-column"
+msgid "状态"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "用量趋势。方向键移动十字线，在底部条带上拖动可缩小时间范围。"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "第 {firstRow}–{lastRow} 轮"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "第 {page} 页"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgctxt "stats-filters-label"
+msgid "筛选"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "筛选，{activeFilterCount} 项已启用"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "结束日期"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "结束状态"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+msgid "统计"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "缓存读"
+msgstr ""
+
+#. placeholder {0}: dateInputValue(state.from)
+#. placeholder {1}: dateInputValue(state.to)
+#: src/app/stats/FilterBar.tsx
+msgid "编辑自定义日期：{0} 至 {1}"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "耗时"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "自定义"
+msgstr ""
+
+#: src/app/stats/FilterBar.tsx
+msgid "自定义日期范围"
+msgstr ""
+
+#: src/app/stats/chart-shared.tsx
+msgid "该数据源不提供"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "读取失败"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "趋势"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+#: src/app/stats/DonutChart.tsx
+#: src/app/stats/RankChart.tsx
+msgid "轮次"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "输入"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "输出"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+#: src/app/stats/RankChart.tsx
+msgid "输出速度"
+msgstr ""
+
+#: src/app/stats/DonutChart.tsx
+msgid "还没有可分配的用量"
+msgstr ""
+
+#: src/app/stats/StatsPage.tsx
+msgid "还没有可统计的会话。缺失的指标显示为「—」，不是 0。"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "还没有工具调用"
+msgstr ""
+
+#: src/app/stats/SplitBars.tsx
+msgid "还没有已结束的轮次"
+msgstr ""
+
+#: src/app/stats/RankChart.tsx
+msgid "还没有模型数据"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+msgid "这个范围里没有轮次"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "这些模型没有这项测量"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+msgid "这些模型没有这项测量。缺失不按 0 计入。"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+msgid "这段时间没有可绘制的用量"
+msgstr ""
+
+#: src/app/stats/Heatmaps.tsx
+msgid "这段时间没有每日记录"
+msgstr ""
+
+#. placeholder {0}: windows.length
+#: src/app/stats/LatencyChart.tsx
+msgid "速度窗口 {0} 种"
+msgstr ""
+
+#. placeholder {0}: windows.join(' · ')
+#: src/app/stats/LatencyChart.tsx
+msgid "速度窗口：{0}"
+msgstr ""
+
+#: src/app/stats/chart-shared.tsx
+msgid "部分数字由文本长度估算，不是提供商上报"
+msgstr ""
+
+#: src/app/stats/RunsTable.tsx
+#: src/app/stats/StatsPage.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/stats/AreaChart.tsx
+#: src/app/stats/FilterBar.tsx
+#: src/app/stats/RunsTable.tsx
+msgid "项目"
+msgstr ""
+
+#: src/app/stats/LatencyChart.tsx
+#: src/app/stats/RunsTable.tsx
+msgid "首字延迟"
+msgstr ""

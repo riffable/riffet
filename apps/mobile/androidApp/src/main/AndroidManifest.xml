@@ -1,0 +1,480 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- The phone is only a remote control: it talks to the Riffet server on the Mac. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- User-selected APK downloads are handed to the system installer. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
+    <!--
+      Android 13+ (API 33) requires an explicit runtime grant for notifications. P3 posts local
+      reminders while a foreground service holds the SSE connection; this permission must be
+      requested in the UI, not assumed.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Android 16: lets the running-turn notification be promoted to a status-bar chip. -->
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
+
+    <!--
+      P3 keeps the SSE connection alive in a foreground service so a tool call that needs approval
+      still reaches the user with the screen off. Android 14+ requires both the generic
+      FOREGROUND_SERVICE permission and the typed one that matches the service declaration.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- `dataSync` below Android 14, where `specialUse` does not exist; see RiffetSyncService. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <!--
+      设置 › 通知与后台 asks for the battery-optimisation exemption with the system dialog; the
+      keep-alive connection is the app's notification channel (docs/MOBILE.md「通知」).
+    -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <!-- 确认操作前验证本人: BiometricPrompt, with the screen lock as fallback. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!--
+      允许 Agent 调用这台设备 (docs/DEVICES.md §3): each is asked for at runtime from 设置 › 能力与设备,
+      and a capability is only reported to the server once its permission is granted. Location also
+      types the keep-alive service, so a call can read a fix while the app is in the background.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- `alarm`: AlarmClock.ACTION_SET_ALARM. -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Leases wake the device a minute before a scheduled call; inexact without this grant. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!--
+      Never shown as a prompt: only `adb shell pm grant` (or the Mac's 通过电脑开启) can give it. With it
+      the app turns its own accessibility service on and restarts it, instead of sending the owner
+      to the system page (docs/DEVICES.md §4).
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <!-- Re-arms leases after a reboot and brings the connection back while the switch is on. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!--
+      The pairing screen's optional QR scanner. Declaring it is not enough: a declared-but-ungranted
+      camera opens a black preview that looks like a bug, so `shared/.../QrScanner.android.kt` asks
+      for it at runtime the moment the scanner is opened and falls back to the typed form on a
+      refusal. Typing a code never needs the camera.
+    -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!--
+      Paired, not required: a device with no camera can still pair by typing, so the camera must not
+      gate installation on Play. (`PackageManager.FEATURE_CAMERA_ANY` is what the scanner checks to
+      decide whether to offer the affordance at all.)
+    -->
+    <uses-feature
+        android:name="android.hardware.camera.any"
+        android:required="false" />
+
+    <!--
+      The makers' own background and auto-start pages (shared/.../ui/platform/Platform.android.kt).
+      Package visibility hides them otherwise, and each is opened only if it resolves and is exported.
+    -->
+    <queries>
+        <package android:name="com.oplus.battery" />
+        <package android:name="com.coloros.safecenter" />
+        <package android:name="com.oppo.safe" />
+        <package android:name="com.miui.powerkeeper" />
+        <package android:name="com.miui.securitycenter" />
+        <package android:name="com.vivo.abe" />
+        <package android:name="com.iqoo.powersaving" />
+        <package android:name="com.vivo.permissionmanager" />
+        <package android:name="com.iqoo.secure" />
+        <package android:name="com.huawei.systemmanager" />
+        <package android:name="com.hihonor.systemmanager" />
+        <!-- Whether a clock and a camera app exist decides the `alarm` and camera capabilities. -->
+        <intent>
+            <action android:name="android.intent.action.SET_ALARM" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <!-- device_launch_app / device_list_apps open and name launcher apps. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
+    <application
+        android:name=".RiffetApplication"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:enableOnBackInvokedCallback="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.Riffet"
+        android:localeConfig="@xml/locale_config">
+
+        <!--
+          allowBackup is false on purpose, and the backup and data-extraction rules exclude the
+          device preferences file as well: on Android 12+ allowBackup does not stop a device-to-device
+          transfer. The token in that file is sealed with a Keystore key (see
+          shared/Platform.android.kt) that never leaves this device, so a copy would be useless
+          anyway, but the credential has no business travelling at all.
+        -->
+
+        <!--
+          The launcher entries are the aliases below, so the activity itself has no MAIN/LAUNCHER
+          filter. Choosing an app icon in Settings enables one alias and disables the rest
+          (`shared/.../AppEnvironment.android.kt`).
+        -->
+        <activity
+            android:name=".RiffetActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
+            android:windowSoftInputMode="adjustResize"
+            android:exported="true">
+            <!--
+              The iPhone's URL scheme: riffet://session?id=<id> (or /<id>) and riffet://new?prompt=<text>.
+              Notification PendingIntents carry riffet://notification/… only to stay distinct; they are
+              explicit, so this filter does not see them, and that host is not listed.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="riffet" />
+                <data android:host="session" />
+                <data android:host="new" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          The single entry for text selection, sharing, the launcher shortcut and the Quick Settings
+          tile. It is exported because PROCESS_TEXT and SEND come from other apps, and translucent
+          so the sheet can sit over whatever app the reader was in; it never appears in recents.
+        -->
+        <activity
+            android:name=".QuickChatActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/quick_chat"
+            android:launchMode="singleTop"
+            android:theme="@style/Theme.Riffet.QuickChat"
+            android:windowSoftInputMode="adjustResize">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <!-- Text, or any files: they become attachments under the composer's own limits. -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          The default alias keeps the activity's old name, so home-screen pins and
+          `adb shell am start -n io.github.riffetai.android/riffet.android.MainActivity` still resolve.
+        -->
+        <activity-alias
+            android:name=".MainActivity"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconGreen"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_green"
+            android:roundIcon="@mipmap/ic_launcher_green">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconOrange"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_orange"
+            android:roundIcon="@mipmap/ic_launcher_orange">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconPurple"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_purple"
+            android:roundIcon="@mipmap/ic_launcher_purple">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconPink"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_pink"
+            android:roundIcon="@mipmap/ic_launcher_pink">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconGraphite"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_graphite"
+            android:roundIcon="@mipmap/ic_launcher_graphite">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconMagenta"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_magenta"
+            android:roundIcon="@mipmap/ic_launcher_magenta">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconRed"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_red"
+            android:roundIcon="@mipmap/ic_launcher_red">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconYellow"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_yellow"
+            android:roundIcon="@mipmap/ic_launcher_yellow">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconLime"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_lime"
+            android:roundIcon="@mipmap/ic_launcher_lime">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconCyan"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_cyan"
+            android:roundIcon="@mipmap/ic_launcher_cyan">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity-alias
+            android:name=".AppIconWhite"
+            android:targetActivity=".RiffetActivity"
+            android:enabled="false"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher_white"
+            android:roundIcon="@mipmap/ic_launcher_white">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Each launcher icon can be the enabled one, so each carries the shortcut list. -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+        </activity-alias>
+
+        <activity
+            android:name="riffet.shared.InstallDownloadActivity"
+            android:exported="false" />
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.downloads"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/download_paths" />
+        </provider>
+
+        <!--
+          Keeps the process alive while a session stream is open, so backgrounding the app does not
+          cost a reconnect. `specialUse` on Android 14+, which has no daily limit (`dataSync` stops
+          after six hours on Android 15+); `dataSync` before it. The app is sideloaded, so the
+          subtype is for the record, not a store review.
+        -->
+        <service
+            android:name=".RiffetSyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync|specialUse|location">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Holds the connection to the user's own Riffet server so approvals and turn results arrive as local notifications, and, when the owner allows it, so the owner's agents can reach this device; no push service is used." />
+        </service>
+
+        <!--
+          One device call that needs a window: a clipboard read, the camera or photo picker, or
+          starting another app. Transparent and in its own task, over whatever the owner was using.
+        -->
+        <activity
+            android:name=".DeviceActionActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|locale|layoutDirection"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Riffet.QuickChat" />
+        <!--
+          T1 screen control (docs/DEVICES.md §3「协议（R3，T1）」): reads and drives the main display
+          only for calls the owner allowed on this device; see ScreenActionGate.
+        -->
+        <service
+            android:name=".RiffetAccessibilityService"
+            android:exported="false"
+            android:label="@string/app_name"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
+        </service>
+        <!-- Lease alarms, dismissed device requests and 停止; only this app's PendingIntents reach it. -->
+        <receiver
+            android:name=".DeviceReceiver"
+            android:exported="false" />
+        <!-- System broadcasts only; the receiver ignores any other action. -->
+        <receiver
+            android:name=".DeviceBootReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <!-- A notification's dialog buttons and reply field; only this app's PendingIntents reach it. -->
+        <receiver
+            android:name=".RiffetNotificationReceiver"
+            android:exported="false" />
+
+        <!-- 快速对话 in the Quick Settings panel; it opens the same entry as the shortcut. -->
+        <service
+            android:name=".QuickChatTileService"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:label="@string/quick_chat"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
+    </application>
+
+</manifest>

@@ -1,0 +1,157 @@
+{
+  "id": "example.declarative-tools",
+  "vendor": "Example",
+  "name": "Declarative tools",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "activation": [
+    "view",
+    "command"
+  ],
+  "hostApi": {
+    "server": "^1",
+    "web": "^1"
+  },
+  "entries": {
+    "server": "server/index.mjs"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "id": "example.declarative-tools/echo",
+        "title": {
+          "zh-Hans": "Echo",
+          "en": "Echo"
+        },
+        "scope": "project",
+        "params": [
+          {
+            "key": "text",
+            "label": {
+              "zh-Hans": "Text",
+              "en": "Text"
+            },
+            "kind": "text",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "views": [
+      {
+        "locations": [
+          "sidebar"
+        ],
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "id": "example.declarative-tools/list",
+        "title": {
+          "zh-Hans": "List",
+          "en": "List"
+        },
+        "requires": [
+          "renderer.list"
+        ],
+        "renderer": {
+          "kind": "list",
+          "items": [
+            {
+              "id": "hello",
+              "title": {
+                "zh-Hans": "Hello",
+                "en": "Hello"
+              },
+              "command": "example.declarative-tools/echo",
+              "args": {
+                "text": "Hello"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "locations": [
+          "sidebar"
+        ],
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "id": "example.declarative-tools/form",
+        "title": {
+          "zh-Hans": "Form",
+          "en": "Form"
+        },
+        "requires": [
+          "renderer.form"
+        ],
+        "renderer": {
+          "kind": "form",
+          "command": "example.declarative-tools/echo",
+          "fields": [
+            {
+              "key": "text",
+              "label": {
+                "zh-Hans": "Text",
+                "en": "Text"
+              },
+              "kind": "text",
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "locations": [
+          "sidebar"
+        ],
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "id": "example.declarative-tools/detail",
+        "title": {
+          "zh-Hans": "Detail",
+          "en": "Detail"
+        },
+        "requires": [
+          "renderer.detail"
+        ],
+        "renderer": {
+          "kind": "detail",
+          "fields": [
+            {
+              "label": {
+                "zh-Hans": "Runtime",
+                "en": "Runtime"
+              },
+              "value": {
+                "zh-Hans": "Riffet",
+                "en": "Riffet"
+              }
+            }
+          ],
+          "actions": [
+            {
+              "id": "echo",
+              "title": {
+                "zh-Hans": "Hello",
+                "en": "Hello"
+              },
+              "command": "example.declarative-tools/echo",
+              "args": {
+                "text": "Hello"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,2383 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: en\n"
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/toolView.ts
+msgid "、"
+msgstr ", "
+
+#. placeholder {0}: references.length
+#. placeholder {0}: visibleReferences.length
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "{0} 个引用"
+msgstr "{0} references"
+
+#. placeholder {0}: diff.commits
+#: src/app/session/Attempts.tsx
+msgid "{0} 个提交"
+msgstr "{0, plural, one {# commit} other {# commits}}"
+
+#. placeholder {0}: diff.files.length
+#. placeholder {0}: outputs.length
+#. placeholder {0}: stats.files
+#: src/app/session/Attempts.tsx
+#: src/app/session/SessionAside.tsx
+#: src/app/session/Timeline.tsx
+msgid "{0} 个文件"
+msgstr "{0, plural, one {# file} other {# files}}"
+
+#. placeholder {0}: attachments.length
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "{0} 个附件"
+msgstr "{0, plural, one {# attachment} other {# attachments}}"
+
+#. placeholder {0}: formatRemaining(remaining)
+#: src/app/session/NativeInteractionCard.tsx
+msgid "{0} 后自动拒绝"
+msgstr "Auto-deny in {0}"
+
+#. placeholder {0}: runs.length
+#: src/app/session/ComposerDock.tsx
+msgid "{0} 条排队消息"
+msgstr "{0, plural, one {# queued message} other {# queued messages}}"
+
+#. placeholder {0}: metrics.steps
+#: src/app/session/speed.ts
+msgid "{0} 次模型响应"
+msgstr "{0} model responses"
+
+#. placeholder {0}: formatTime(expiresAt)
+#: src/app/session/NativeInteractionCard.tsx
+msgid "{0} 自动拒绝"
+msgstr "Auto-deny at {0}"
+
+#. placeholder {0}: label(source)
+#: src/app/session/SessionHandoff.tsx
+msgid "{0} 还在运行，先停止当前任务再交接。"
+msgstr "{0} is still running. Stop the current task before handing it off."
+
+#: src/app/session/SessionWorkActions.tsx
+msgid "{active} 运行"
+msgstr "{active} running"
+
+#: src/app/session/ZoomPanImage.tsx
+msgid "{alt}，可缩放"
+msgstr "{alt}, zoomable"
+
+#: src/app/session/SessionAside.tsx
+msgid "{background} 进行中"
+msgstr "{background} active"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "{count} 项"
+msgstr "{count} on"
+
+#: src/app/session/SessionWorkActions.tsx
+msgid "{done} 完成"
+msgstr "{done} done"
+
+#: src/app/session/MermaidDiagram.tsx
+msgid "{language} 图表"
+msgstr "{language} diagram"
+
+#: src/app/session/ContentFence.tsx
+msgid "{language} 预览"
+msgstr "{language} preview"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "{name} · 附件不可用"
+msgstr "{name} · Attachment unavailable"
+
+#: src/app/session/Attempts.tsx
+msgid "{overlaps} 个文件与其他尝试重叠"
+msgstr "{overlaps, plural, one {# file overlaps} other {# files overlap}} with other attempts"
+
+#: src/app/session/TranscriptView.tsx
+msgid "{pendingConfirmationCount} 项待确认"
+msgstr "{pendingConfirmationCount, plural, one {# item needs} other {# items need}} confirmation"
+
+#: src/app/session/SessionWorkActions.tsx
+msgid "{running} 运行 · {done} 完成"
+msgstr "{running} running · {done} done"
+
+#: src/app/session/SessionAside.tsx
+msgid "{running} 进行中"
+msgstr "{running} active"
+
+#: src/app/session/lineDiff.ts
+msgid "{skipped} 行未改动"
+msgstr "{skipped} unchanged lines"
+
+#: src/app/session/toolView.ts
+msgid "{summary}等"
+msgstr "{summary}, and more"
+
+#: src/app/session/Markdown.tsx
+msgid "{title} · 预览不可用"
+msgstr "{title} · Preview unavailable"
+
+#: src/app/session/useSessionSync.ts
+msgid "「{title}」已完成"
+msgstr "“{title}” is done"
+
+#: src/app/session/useSessionSync.ts
+msgid "「{title}」需要你在终端里操作"
+msgstr "“{title}” needs you in the terminal"
+
+#: src/app/session/useSessionSync.ts
+msgid "「{title}」需要你在网页中选择"
+msgstr "“{title}” needs your choice on the web page"
+
+#: src/app/session/speed.ts
+msgid "1 次模型响应"
+msgstr "1 model response"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "1 选择"
+msgstr "1 to select"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "1–{shortcutCount} 选择"
+msgstr "1–{shortcutCount} to select"
+
+#: src/app/session/Timeline.tsx
+msgid "Agent 附加的图片"
+msgstr "Images attached by the agent"
+
+#: src/app/session/useSessionSync.ts
+msgid "CLI 仍显示同一个待处理交互，请先同步当前状态。"
+msgstr "The CLI still shows the same pending interaction. Sync the current state first."
+
+#: src/app/session/useSessionSync.ts
+msgid "CLI 已响应，但当前交互已变化。请同步状态或查看终端，不要重复提交。"
+msgstr "The CLI responded, but the current interaction has changed. Sync the status or check the terminal; do not submit again."
+
+#. placeholder {0}: item.sourceStatus
+#: src/app/session/Timeline.tsx
+msgid "CLI 状态：{0}"
+msgstr "CLI status: {0}"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "Esc 拒绝"
+msgstr "Esc to deny"
+
+#: src/app/session/ModelPicker.tsx
+msgid "MAX 模式"
+msgstr "MAX mode"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "MCP"
+msgstr "MCP"
+
+#: src/app/session/Composer.tsx
+msgid "MCP 与动态工具"
+msgstr "MCP and dynamic tools"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ToolsPicker.tsx
+msgid "Skills"
+msgstr "Skills"
+
+#: src/app/session/TranscriptView.tsx
+msgid "上一个"
+msgstr "Previous"
+
+#: src/app/session/SubagentSession.tsx
+msgid "上一级子 Agent"
+msgstr "Parent subagent"
+
+#: src/app/session/SessionReferences.tsx
+msgid "上一页"
+msgstr "Previous page"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "上一题"
+msgstr "Previous question"
+
+#: src/app/session/Activities.tsx
+msgid "上下文压缩"
+msgstr "Context compaction"
+
+#: src/app/session/Activities.tsx
+msgid "上下文压缩失败"
+msgstr "Context compaction failed"
+
+#: src/app/session/Activities.tsx
+msgid "上下文压缩已中止"
+msgstr "Context compaction stopped"
+
+#: src/app/session/Activities.tsx
+msgid "上下文已压缩"
+msgstr "Context compacted"
+
+#: src/app/session/Composer.tsx
+msgid "上下文用量"
+msgstr "Context usage"
+
+#: src/app/session/Composer.tsx
+msgid "上下文长度"
+msgstr "Context length"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "上传中"
+msgstr "Uploading"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "上传失败"
+msgstr "Upload failed"
+
+#: src/app/session/ComposerDock.tsx
+msgid "上次记录 · "
+msgstr "Last recorded · "
+
+#: src/app/session/TranscriptView.tsx
+msgid "下一个"
+msgstr "Next"
+
+#: src/app/session/SessionReferences.tsx
+msgid "下一页"
+msgstr "Next page"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "下一题"
+msgstr "Next question"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "下载"
+msgstr "Download"
+
+#: src/app/session/ImageViewer.tsx
+msgid "下载图片"
+msgstr "Download image"
+
+#: src/app/session/Timeline.tsx
+msgid "下载文件"
+msgstr "Download file"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "不碰项目当前的工作区"
+msgstr "Your project's current workspace is left untouched"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "不选择项目"
+msgstr "No project"
+
+#: src/app/session/Attempts.tsx
+msgid "丢弃"
+msgstr "Discard"
+
+#: src/app/session/Timeline.tsx
+msgid "中间部分已省略 · 展开全部"
+msgstr "Middle omitted · Show all"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "主会话模型"
+msgstr "Main conversation model"
+
+#: src/app/session/Markdown.tsx
+#: src/app/session/VisualizationPreview.tsx
+msgid "交互预览"
+msgstr "Interactive preview"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "交互预览：{name}"
+msgstr "Interactive preview: {name}"
+
+#. placeholder {0}: reference.path
+#: src/app/session/VisualizationPreview.tsx
+msgid "交互预览不可用：{0}"
+msgstr "Interactive preview unavailable: {0}"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "交接"
+msgstr "Hand off"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "交接会话"
+msgstr "Hand off conversation"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "交接摘要"
+msgstr "Handoff summary"
+
+#: src/app/session/SessionAside.tsx
+msgid "产出"
+msgstr "Outputs"
+
+#: src/app/session/SessionReferences.tsx
+msgid "仅保存提问和回答文字，不含工具记录和附件内容"
+msgstr "Only question and answer text is saved; tool records and attachment contents are excluded"
+
+#: src/app/session/SessionReferences.tsx
+msgid "仅含部分历史"
+msgstr "Partial history"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "仍无法确认当前状态"
+msgstr "Still unable to confirm the current status"
+
+#: src/app/session/speed.ts
+msgid "从发起请求到回答结束（含首字延迟）"
+msgstr "From sending the request to the end of the answer (includes first-token latency)"
+
+#: src/app/session/Timeline.tsx
+msgid "从此处另开会话"
+msgstr "Start another conversation from here"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "任务"
+msgstr "Task"
+
+#. placeholder {0}: index + 1
+#: src/app/session/Timeline.tsx
+msgid "任务 {0}"
+msgstr "Task {0}"
+
+#. placeholder {0}: item.taskId
+#: src/app/session/Timeline.tsx
+msgid "任务 ID：{0}"
+msgstr "Task ID: {0}"
+
+#: src/app/session/nativeRunCommands.ts
+#: src/app/session/Timeline.tsx
+msgid "任务失败"
+msgstr "Task failed"
+
+#: src/app/session/Composer.tsx
+msgid "会话"
+msgstr "Sessions"
+
+#: src/app/session/pickers.ts
+msgid "会话已归档，先恢复再修改"
+msgstr "Session archived; restore it before making changes"
+
+#: src/app/session/useSessionSync.ts
+msgid "会话已经切换，已忽略旧会话的交互结果。"
+msgstr "The conversation changed, so the previous conversation’s interaction result was ignored."
+
+#: src/app/session/Activities.tsx
+msgid "会话报告 {count} 个后台任务，部分任务详情尚未加载。"
+msgstr "The session reports {count, plural, one {# background task} other {# background tasks}}; some task details haven't loaded yet."
+
+#: src/app/session/SessionReferences.tsx
+msgid "会话暂时无法读取，请重试"
+msgstr "Unable to read this session. Try again."
+
+#: src/app/session/SessionAside.tsx
+msgid "会话概览"
+msgstr "Session overview"
+
+#: src/app/session/ViewDots.tsx
+msgid "会话视图"
+msgstr "Session views"
+
+#: src/app/session/TranscriptView.tsx
+msgid "会话记录"
+msgstr "Transcript"
+
+#: src/app/session/speed.ts
+msgid "估算 token 数"
+msgstr "Estimated token count"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "你的回答"
+msgstr "Your answer"
+
+#: src/app/session/Composer.tsx
+msgid "你的消息"
+msgstr "Your messages"
+
+#: src/app/session/MarkLayer.tsx
+#: src/app/session/SideDiscussion.tsx
+msgid "侧边聊天"
+msgstr "Side chat"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "保存"
+msgstr "Save"
+
+#: src/app/session/Attempts.tsx
+msgid "保留"
+msgstr "Keep"
+
+#: src/app/session/toolView.ts
+msgid "修改文件"
+msgstr "Edit files"
+
+#: src/app/session/Activities.tsx
+#: src/app/session/Attempts.tsx
+#: src/app/session/Composer.tsx
+msgid "停止"
+msgstr "Stop"
+
+#: src/app/session/Activities.tsx
+msgid "停止中"
+msgstr "Stopping"
+
+#: src/app/session/Activities.tsx
+msgid "停止任务"
+msgstr "Stop task"
+
+#: src/app/session/Activities.tsx
+#: src/app/session/Attempts.tsx
+msgid "停止全部"
+msgstr "Stop all"
+
+#: src/app/session/Activities.tsx
+msgid "停止全部后台任务？"
+msgstr "Stop all background tasks?"
+
+#: src/app/session/Composer.tsx
+msgid "停止后台任务"
+msgstr "Stop background tasks"
+
+#. placeholder {0}: error instanceof HttpError || error instanceof Error ? error.message : t`请求未完成`
+#: src/app/session/Activities.tsx
+msgid "停止失败：{0}"
+msgstr "Couldn't stop: {0}"
+
+#: src/app/session/ComposerDock.tsx
+#: src/app/session/Timeline.tsx
+msgid "停止并发送"
+msgstr "Stop and send"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "先停止当前任务再交接"
+msgstr "Stop the current task before handing it off"
+
+#: src/app/session/Composer.tsx
+msgid "先出方案，确认后再动手"
+msgstr "Plan first, then act after you confirm"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "先确认现状和未完成的部分，然后继续完成它"
+msgstr "First check the current state and what's unfinished, then continue the work"
+
+#: src/app/session/Composer.tsx
+msgid "全屏编辑"
+msgstr "Edit in fullscreen"
+
+#: src/app/session/Activities.tsx
+msgid "全文加载失败"
+msgstr "Couldn't load the full text"
+
+#: src/app/session/Attempts.tsx
+msgid "全部结束"
+msgstr "All finished"
+
+#: src/app/session/ImageViewer.tsx
+msgid "关闭"
+msgstr "Close"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "关闭侧边聊天"
+msgstr "Close side chat"
+
+#: src/app/session/TranscriptView.tsx
+msgid "关闭查找"
+msgstr "Close find"
+
+#: src/app/session/Composer.tsx
+msgid "其他"
+msgstr "Other"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "其他…"
+msgstr "Other…"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "其他回答"
+msgstr "Other answer"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "其他回答暂不能清空。"
+msgstr "Other answers can't be cleared yet."
+
+#: src/app/session/Attempts.tsx
+msgid "其余尝试"
+msgstr "Other attempts"
+
+#. placeholder {0}: compactTokens(breakdownTotal)
+#: src/app/session/Composer.tsx
+msgid "内容估算 · ~{0}"
+msgstr "Estimated from content · ~{0}"
+
+#: src/app/session/ContentWidthHandle.tsx
+msgid "内容宽度"
+msgstr "Content width"
+
+#: src/app/session/Attempts.tsx
+msgid "再加一个"
+msgstr "Add another"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "再等 10 分钟"
+msgstr "Wait 10 more minutes"
+
+#: src/app/session/composerAttachmentIntake.ts
+msgid "最多 {limit} 个附件"
+msgstr "Up to {limit, plural, one {# attachment} other {# attachments}}"
+
+#: src/app/session/composerAttachmentIntake.ts
+msgid "最多 {limit} 个附件，当前这条已有 {existing} 个"
+msgstr "Up to {limit} attachments; this message already has {existing}"
+
+#: src/app/session/Composer.tsx
+msgid "最多引用 5 个会话"
+msgstr "Reference up to 5 sessions"
+
+#. placeholder {0}: content.slice(answer + divider.length)
+#. placeholder {0}: excerpt.slice(answerPrefix.length)
+#: src/app/session/SessionReferences.tsx
+msgid "最近回复节选：{0}"
+msgstr "Recent answer excerpt: {0}"
+
+#: src/app/session/toolView.ts
+msgid "切换模式"
+msgstr "Switch modes"
+
+#: src/app/session/MarkLayer.tsx
+msgctxt "session-delete-action"
+msgid "删除"
+msgstr "Delete"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "删除…"
+msgstr "Delete…"
+
+#: src/app/session/toolView.ts
+msgid "删除文件"
+msgstr "Delete files"
+
+#: src/app/session/Composer.tsx
+msgid "加入队列"
+msgstr "Add to queue"
+
+#: src/app/session/ModelPicker.tsx
+msgid "加载中…"
+msgstr "Loading…"
+
+#: src/app/session/SessionReferences.tsx
+msgid "助手"
+msgstr "Assistant"
+
+#. placeholder {0}: job.matched
+#: src/app/session/Timeline.tsx
+msgid "匹配 {0}"
+msgstr "Matched {0}"
+
+#. placeholder {0}: formatBytes(MAX_ATTACHMENT_BYTES)
+#. placeholder {1}: file.name
+#: src/app/session/composerAttachmentIntake.ts
+msgid "单个附件最大 {0}：{1} 超了"
+msgstr "Max attachment size is {0}: {1} is too large"
+
+#. placeholder {0}: compactCount(preTokens)
+#: src/app/session/Activities.tsx
+msgid "压缩前 {0}"
+msgstr "{0} before compaction"
+
+#. placeholder {0}: compactCount(postTokens)
+#: src/app/session/Activities.tsx
+msgid "压缩后 {0}"
+msgstr "{0} after compaction"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "原排队消息可能已经执行，不能恢复为新消息"
+msgstr "The original queued message may have run, so it can't be restored as a new message."
+
+#: src/app/session/SessionReferences.tsx
+msgid "原文副本随本会话保存"
+msgstr "The original text copy is saved with this session"
+
+#: src/app/session/ContentWidthHandle.tsx
+msgid "双击恢复默认宽度"
+msgstr "Double-click to reset the width"
+
+#: src/app/session/Composer.tsx
+msgid "发送"
+msgstr "Send"
+
+#: src/app/session/Timeline.tsx
+msgid "发送中"
+msgstr "Sending"
+
+#: src/app/session/Timeline.tsx
+msgid "发送失败"
+msgstr "Send failed"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "发送失败，可恢复内容后重试"
+msgstr "Send failed. Restore the content and try again."
+
+#: src/app/session/nativeRunCommands.ts
+msgid "发送记录缺失，无法重试"
+msgstr "The send record is missing, so it can't be retried."
+
+#: src/app/session/Composer.tsx
+msgid "发送设置"
+msgstr "Send settings"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "取消"
+msgstr "Cancel"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/SessionHandoff.tsx
+msgctxt "session-cancel-action"
+msgid "取消"
+msgstr "Cancel"
+
+#: src/app/session/Timeline.tsx
+msgid "取消排队"
+msgstr "Cancel queued"
+
+#: src/app/session/marks.tsx
+msgid "取消收藏"
+msgstr "Remove from favorites"
+
+#: src/app/session/Markdown.tsx
+msgid "取消自动换行"
+msgstr "Disable word wrap"
+
+#: src/app/session/Timeline.tsx
+msgid "取消补充"
+msgstr "Cancel follow-up"
+
+#: src/app/session/ComposerDock.tsx
+msgid "受阻"
+msgstr "Blocked"
+
+#: src/app/session/marks.tsx
+msgid "只能收藏位图图片"
+msgstr "Only bitmap images can be favorited"
+
+#: src/app/session/Composer.tsx
+msgid "只读问答，不修改文件"
+msgstr "Read-only Q&A; doesn't modify files"
+
+#: src/app/session/Attempts.tsx
+msgid "各 Agent 一次"
+msgstr "One per agent"
+
+#: src/app/session/Attempts.tsx
+msgid "各尝试从同一次提交切出独立 Worktree。"
+msgstr "Each attempt cuts its own Worktree from the same commit."
+
+#: src/app/session/Attempts.tsx
+msgid "各尝试从目录当前的内容切出独立 Worktree。"
+msgstr "Each attempt gets its own worktree, cut from the directory as it is now."
+
+#: src/app/session/Attempts.tsx
+msgid "同 Agent 比模型"
+msgstr "Same agent, compare models"
+
+#: src/app/session/SubagentSession.tsx
+msgid "同步中"
+msgstr "Syncing"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "名称"
+msgstr "Name"
+
+#: src/app/session/SessionAside.tsx
+msgid "后台"
+msgstr "Background"
+
+#: src/app/session/Activities.tsx
+msgid "后台 Agent"
+msgstr "Background agent"
+
+#: src/app/session/SessionAside.tsx
+#: src/app/session/SessionWorkActions.tsx
+#: src/app/session/Timeline.tsx
+msgid "后台任务"
+msgstr "Background task"
+
+#: src/app/session/Activities.tsx
+msgid "后台命令"
+msgstr "Background command"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "后续任务"
+msgstr "Next task"
+
+#: src/app/session/TranscriptView.tsx
+msgid "向前翻了 {SEEK_PAGES} 页仍未找到这条消息"
+msgstr "Looked back {SEEK_PAGES} pages without finding this message"
+
+#: src/app/session/Composer.tsx
+msgctxt "session-commands-label"
+msgid "命令"
+msgstr "Commands"
+
+#: src/app/session/Composer.tsx
+msgid "命令与 Skills"
+msgstr "Commands and Skills"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "回到原文"
+msgstr "Go to source"
+
+#: src/app/session/TranscriptView.tsx
+msgid "回到底部"
+msgstr "Back to bottom"
+
+#: src/app/session/Composer.tsx
+msgid "回复"
+msgstr "Replies"
+
+#: src/app/session/Composer.tsx
+msgid "回复输出"
+msgstr "Response output"
+
+#: src/app/session/Timeline.tsx
+msgid "回答操作"
+msgstr "Answer actions"
+
+#: src/app/session/Timeline.tsx
+msgid "回退代码到本轮开始前"
+msgstr "Revert code to before this turn"
+
+#: src/app/session/image-upload.ts
+#: src/app/session/Markdown.tsx
+msgctxt "session-image-name"
+msgid "图片"
+msgstr "Image"
+
+#: src/app/session/Timeline.tsx
+msgid "图片 · {label}"
+msgstr "Image · {label}"
+
+#: src/app/session/Markdown.tsx
+#: src/app/session/Timeline.tsx
+msgid "图片不可用"
+msgstr "Image unavailable"
+
+#: src/app/session/printRendering.tsx
+msgid "图片无法加载 · {name}"
+msgstr "Image failed to load · {name}"
+
+#. placeholder {0}: attachment.name
+#. placeholder {0}: metadata.name
+#: src/app/session/ComposerAttachments.tsx
+#: src/app/session/MessageAttachments.tsx
+msgid "图片无法加载，重试：{0}"
+msgstr "Image failed to load. Retry: {0}"
+
+#. placeholder {0}: attachment.name
+#: src/app/session/ComposerAttachments.tsx
+msgid "图片无法加载：{0}"
+msgstr "Image failed to load: {0}"
+
+#. placeholder {0}: label ? ` · ${label}` : ''
+#: src/app/session/ImageViewer.tsx
+msgid "图片无法加载{0}"
+msgstr "Image failed to load{0}"
+
+#. placeholder {0}: parts.join(' · ')
+#: src/app/session/Timeline.tsx
+msgid "图片未在此展示 · {0}"
+msgstr "Image not shown here · {0}"
+
+#: src/app/session/marks.tsx
+msgid "图片超过 10 MB，无法收藏"
+msgstr "Images over 10 MB can't be favorited"
+
+#: src/app/session/MermaidDiagram.tsx
+msgid "图表无法渲染，已保留源码"
+msgstr "Diagram could not be rendered; source retained"
+
+#: src/app/session/TranscriptView.tsx
+msgid "在会话中查找"
+msgstr "Find in session"
+
+#: src/app/session/Timeline.tsx
+msgid "在右侧预览 {path}"
+msgstr "Preview {path} in the right panel"
+
+#. placeholder {0}: target.line ? `:${target.line}` : ''
+#: src/app/session/Markdown.tsx
+msgid "在右侧预览 {path}{0}"
+msgstr "Preview {path}{0} in the right panel"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "在哪个目录新建？"
+msgstr "Where should the new session start?"
+
+#: src/app/session/TerminalHoldBar.tsx
+msgid "在终端中"
+msgstr "In terminal"
+
+#: src/app/session/Timeline.tsx
+msgid "在编辑器中打开"
+msgstr "Open in editor"
+
+#: src/app/session/TurnProcess.tsx
+msgid "处理中"
+msgstr "Working"
+
+#: src/app/session/MarkLayer.tsx
+msgid "备注"
+msgstr "Note"
+
+#: src/app/session/Markdown.tsx
+#: src/app/session/MarkLayer.tsx
+#: src/app/session/Timeline.tsx
+msgid "复制"
+msgstr "Copy"
+
+#: src/app/session/Markdown.tsx
+msgid "复制代码"
+msgstr "Copy code"
+
+#: src/app/session/Timeline.tsx
+msgid "复制回答"
+msgstr "Copy answer"
+
+#: src/app/session/Timeline.tsx
+msgid "复制消息"
+msgstr "Copy message"
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/VisualizationPreview.tsx
+msgid "复制路径"
+msgstr "Copy path"
+
+#: src/app/session/Activities.tsx
+#: src/app/session/Attempts.tsx
+#: src/app/session/SubagentSession.tsx
+msgid "失败"
+msgstr "Failed"
+
+#: src/app/session/toolView.ts
+msgid "委派任务"
+msgstr "Delegate tasks"
+
+#: src/app/session/SessionAside.tsx
+#: src/app/session/SessionWorkActions.tsx
+#: src/app/session/subagents.ts
+#: src/app/session/SubagentSession.tsx
+#: src/app/session/Timeline.tsx
+msgid "子 Agent"
+msgstr "Subagent"
+
+#: src/app/session/Composer.tsx
+msgid "子 Agent 定义"
+msgstr "Subagent definitions"
+
+#: src/app/session/SubagentSession.tsx
+msgid "子 Agent 正在启动…"
+msgstr "Subagent is starting…"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "存为任务模板"
+msgstr "Save as task template"
+
+#: src/app/session/ZoomPanImage.tsx
+msgid "实际大小"
+msgstr "Actual size"
+
+#: src/app/session/speed.ts
+msgid "实际生成时间，不含工具执行和等待"
+msgstr "Actual generation time, excluding tool execution and waiting"
+
+#: src/app/session/Attempts.tsx
+msgid "对比"
+msgstr "Compare"
+
+#: src/app/session/Composer.tsx
+msgid "对话"
+msgstr "Conversation"
+
+#: src/app/session/Timeline.tsx
+msgid "导出为图片"
+msgstr "Export as image"
+
+#: src/app/session/MarkLayer.tsx
+msgid "导出图片"
+msgstr "Export image"
+
+#: src/app/session/Composer.tsx
+msgid "将作为普通消息原样发送"
+msgstr "Will be sent as-is as a regular message"
+
+#: src/app/session/Activities.tsx
+msgid "将停止全部后台任务：这个会话不能单独停止其中一个。"
+msgstr "This will stop all background tasks: this session can't stop just one."
+
+#: src/app/session/Composer.tsx
+msgid "将调用"
+msgstr "Will call"
+
+#: src/app/session/Attempts.tsx
+msgid "尝试"
+msgstr "Attempts"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "展开"
+msgstr "Expand"
+
+#: src/app/session/Activities.tsx
+msgid "工作流"
+msgstr "Workflow"
+
+#: src/app/session/Composer.tsx
+msgid "工具定义"
+msgstr "Tool definitions"
+
+#: src/app/session/Composer.tsx
+msgid "工具结果"
+msgstr "Tool results"
+
+#: src/app/session/toolView.ts
+msgid "工具调用"
+msgstr "Tool call"
+
+#: src/app/session/Timeline.tsx
+msgid "工具返回了一张图片，未在此展示"
+msgstr "The tool returned an image that isn't shown here"
+
+#: src/app/session/Timeline.tsx
+msgid "工具返回的图片"
+msgstr "Image returned by the tool"
+
+#. placeholder {0}: data.attempts.length - attempts.length
+#: src/app/session/Attempts.tsx
+msgid "已丢弃 {0} 个"
+msgstr "{0} discarded"
+
+#: src/app/session/Attempts.tsx
+msgid "已中断"
+msgstr "Interrupted"
+
+#. placeholder {0}: label(target.backendId)
+#: src/app/session/SessionHandoff.tsx
+msgid "已交接给 {0}"
+msgstr "Handed off to {0}"
+
+#. placeholder {0}: name.trim()
+#: src/app/session/SessionHandoff.tsx
+msgid "已保存模板「{0}」"
+msgstr "Saved template “{0}”"
+
+#: src/app/session/Timeline.tsx
+msgid "已停止"
+msgstr "Stopped"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "已关 {n}"
+msgstr "{n} off"
+
+#: src/app/session/Composer.tsx
+msgid "已压缩的对话"
+msgstr "Compacted conversation"
+
+#: src/app/session/ComposerDock.tsx
+#: src/app/session/Timeline.tsx
+msgid "已取消"
+msgstr "Cancelled"
+
+#: src/app/session/marks.tsx
+msgid "已取消收藏"
+msgstr "Removed from favorites"
+
+#: src/app/session/Attempts.tsx
+msgid "已合并到原项目"
+msgstr "Merged into the original project"
+
+#: src/app/session/TurnProcess.tsx
+msgid "已处理"
+msgstr "Processed"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "已复制文件路径"
+msgstr "File path copied"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/ComposerDock.tsx
+msgctxt "session-status-finished"
+msgid "已完成"
+msgstr "Completed"
+
+#. placeholder {0}: settled.length
+#: src/app/session/SessionAside.tsx
+msgid "已完成 {0} 项"
+msgstr "{0} completed"
+
+#: src/app/session/Attempts.tsx
+msgid "已完成里改动最小"
+msgstr "Smallest change among completed attempts"
+
+#: src/app/session/Composer.tsx
+msgid "已归档"
+msgstr "Archived"
+
+#: src/app/session/marks.tsx
+#: src/app/session/TurnRail.tsx
+msgid "已收藏"
+msgstr "Favorited"
+
+#: src/app/session/marks.tsx
+msgid "已收藏回复"
+msgstr "Answer favorited"
+
+#: src/app/session/marks.tsx
+msgid "已收藏图片"
+msgstr "Image favorited"
+
+#: src/app/session/ComposerDock.tsx
+msgid "已暂停"
+msgstr "Paused"
+
+#: src/app/session/ComposerDock.tsx
+msgid "已更新"
+msgstr "Updated"
+
+#: src/app/session/SubagentSession.tsx
+msgid "已结束"
+msgstr "Finished"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "已超时，自动拒绝"
+msgstr "Timed out; denied automatically"
+
+#: src/app/session/Timeline.tsx
+msgid "已跳过"
+msgstr "Skipped"
+
+#: src/app/session/ModelPicker.tsx
+msgid "已达用量上限 · "
+msgstr "Usage limit reached · "
+
+#: src/app/session/Attempts.tsx
+msgid "已采用"
+msgstr "Adopted"
+
+#: src/app/session/Timeline.tsx
+msgid "带回主会话"
+msgstr "Bring back to main chat"
+
+#: src/app/session/Attempts.tsx
+msgid "并行尝试"
+msgstr "Parallel attempts"
+
+#: src/app/session/Attempts.tsx
+msgid "并行尝试暂不接受会话引用"
+msgstr "Parallel attempts do not accept session references yet"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "延长"
+msgstr "Extend"
+
+#: src/app/session/Attempts.tsx
+msgid "开始"
+msgstr "Start"
+
+#: src/app/session/Composer.tsx
+msgid "引用"
+msgstr "References"
+
+#. placeholder {0}: formatDateTime(selected.capturedAt)
+#: src/app/session/SessionReferences.tsx
+msgid "引用于 {0}"
+msgstr "Referenced at {0}"
+
+#: src/app/session/Composer.tsx
+msgid "引用会话"
+msgstr "Reference session"
+
+#: src/app/session/Composer.tsx
+msgid "引用文件"
+msgstr "Reference files"
+
+#: src/app/session/SessionReferences.tsx
+msgid "引用时本轮尚未结束"
+msgstr "This turn was unfinished when referenced"
+
+#: src/app/session/Attempts.tsx
+msgid "归档"
+msgstr "Archive"
+
+#: src/app/session/Attempts.tsx
+msgid "归档并删除 Worktree"
+msgstr "Archive and delete Worktree"
+
+#: src/app/session/Composer.tsx
+msgid "当前 Agent 无法读取会话引用"
+msgstr "This agent cannot read session references"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "当前任务尚未同步，请检查会话后重试"
+msgstr "The current task hasn't synced yet. Check the session and try again."
+
+#: src/app/session/nativeRunCommands.ts
+msgid "当前任务已结束或尚未同步，请检查会话后重试"
+msgstr "The current task has ended or isn't synced yet. Check the session and try again."
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "当前会话未关联项目，无法预览"
+msgstr "This session isn't linked to a project, so it can't be previewed"
+
+#: src/app/session/ComposerDock.tsx
+#: src/app/session/Timeline.tsx
+msgid "待办"
+msgstr "To do"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/ComposerDock.tsx
+msgid "待处理"
+msgstr "Pending"
+
+#: src/app/session/Timeline.tsx
+#: src/app/session/toolView.ts
+msgid "思考"
+msgstr "Think"
+
+#: src/app/session/ModelPicker.tsx
+msgid "思考程度"
+msgstr "Thinking level"
+
+#: src/app/session/Composer.tsx
+msgid "思考输出"
+msgstr "Reasoning output"
+
+#: src/app/session/Timeline.tsx
+msgid "恢复到输入框"
+msgstr "Restore to composer"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "恢复大小"
+msgstr "Restore size"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "手机"
+msgstr "Phones"
+
+#: src/app/session/Attempts.tsx
+msgid "打开"
+msgstr "Open"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "打开交互预览：{name}"
+msgstr "Open interactive preview: {name}"
+
+#: src/app/session/SessionReferences.tsx
+msgid "打开原会话"
+msgstr "Open original session"
+
+#: src/app/session/Timeline.tsx
+msgid "打开终端"
+msgstr "Open terminal"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ToolsPicker.tsx
+msgid "技能与工具"
+msgstr "Skills & tools"
+
+#. placeholder {0}: adopting.attempt.branch
+#: src/app/session/Attempts.tsx
+msgid "把 <0>{0}</0> 合并进原项目。"
+msgstr "Merge <0>{0}</0> into the original project."
+
+#: src/app/session/Composer.tsx
+msgid "指令"
+msgstr "Instructions"
+
+#: src/app/session/speed.ts
+msgid "按记录时间估算（含首字延迟，只计不调用工具的回答）"
+msgstr "Estimated from record timestamps (includes time to first token; only answers without tool calls)"
+
+#: src/app/session/Timeline.tsx
+msgid "排队中"
+msgstr "Queued"
+
+#: src/app/session/Composer.tsx
+msgid "排队发送"
+msgstr "Queue to send"
+
+#: src/app/session/ComposerDock.tsx
+msgid "排队消息"
+msgstr "Queued messages"
+
+#. placeholder {0}: device.name
+#: src/app/session/ToolsPicker.tsx
+msgid "控制 {0}"
+msgstr "Control {0}"
+
+#: src/app/session/Attempts.tsx
+msgid "推荐"
+msgstr "Recommended"
+
+#: src/app/session/Attempts.tsx
+msgid "描述要完成的任务"
+msgstr "Describe the task to complete"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgctxt "session-submit-action"
+msgid "提交"
+msgstr "Submit"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "提交中…"
+msgstr "Submitting…"
+
+#: src/app/session/ModelPicker.tsx
+msgid "提供商"
+msgstr "Provider"
+
+#. placeholder {0}: content.slice(0, answer)
+#: src/app/session/SessionReferences.tsx
+msgid "提问节选：{0}"
+msgstr "Request excerpt: {0}"
+
+#: src/app/session/SessionReferences.tsx
+msgid "提问节选：{content}"
+msgstr "Request excerpt: {content}"
+
+#: src/app/session/Composer.tsx
+msgid "搜索中…"
+msgstr "Searching…"
+
+#: src/app/session/toolView.ts
+msgid "搜索内容"
+msgstr "Search"
+
+#: src/app/session/ModelPicker.tsx
+msgid "搜索模型"
+msgstr "Search models"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "摘要模型不可用，已改用对话记录：{reason}"
+msgstr "Summary model unavailable; built from the conversation instead: {reason}"
+
+#: src/app/session/TerminalHoldBar.tsx
+msgid "收回"
+msgstr "Take back"
+
+#: src/app/session/marks.tsx
+msgid "收藏回复"
+msgstr "Favorite answer"
+
+#: src/app/session/marks.tsx
+msgid "收藏图片"
+msgstr "Favorite image"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "收藏的目录"
+msgstr "Favorite folders"
+
+#: src/app/session/SessionAside.tsx
+#: src/app/session/SideDiscussion.tsx
+msgid "收起"
+msgstr "Collapse"
+
+#: src/app/session/ZoomPanImage.tsx
+msgid "放大"
+msgstr "Zoom in"
+
+#. placeholder {0}: shortcutLabel('')
+#: src/app/session/ZoomPanImage.tsx
+msgid "放大 · {0}滚轮"
+msgstr "Zoom in · {0}scroll"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "放大聊天"
+msgstr "Expand chat"
+
+#: src/app/session/Composer.tsx
+msgid "文件"
+msgstr "Files"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/image-upload.ts
+msgctxt "session-file-noun"
+msgid "文件"
+msgstr "File"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "文件内容无法作为 HTML 读取"
+msgstr "File contents can't be read as HTML"
+
+#: src/app/session/Timeline.tsx
+msgid "文件变更"
+msgstr "File changes"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "文件超过 1 MB，无法载入交互预览"
+msgstr "Files over 1 MB can't be loaded as an interactive preview"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "文件较大，以下源码内容已截断。"
+msgstr "The file is large; the source below is truncated."
+
+#: src/app/session/SessionAside.tsx
+msgid "新建"
+msgstr "New"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "新建 Worktree"
+msgstr "New Worktree"
+
+#: src/app/session/Timeline.tsx
+msgid "新文件"
+msgstr "New file"
+
+#: src/app/session/Attempts.tsx
+msgid "无改动"
+msgstr "No changes"
+
+#: src/app/session/Attempts.tsx
+msgid "无法丢弃"
+msgstr "Couldn't discard the attempt"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "无法交接会话"
+msgstr "Couldn't hand off the session"
+
+#: src/app/session/nativeRunCommands.ts
+#: src/app/session/SideDiscussion.tsx
+msgid "无法保存待发送消息，请检查浏览器存储空间"
+msgstr "Couldn't save the outgoing message. Check the browser's storage space."
+
+#: src/app/session/SessionHandoff.tsx
+msgid "无法保存模板"
+msgstr "Couldn't save the template"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/nativeRunCommands.ts
+msgctxt "session-stop-failed"
+msgid "无法停止"
+msgstr "Couldn't stop"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法停止并发送，排队消息已保留"
+msgstr "Couldn't stop and send. The queued messages were kept."
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "无法加载交互预览，请重试"
+msgstr "Couldn't load the interactive preview. Try again."
+
+#: src/app/session/TranscriptView.tsx
+msgid "无法加载更早的历史，未能定位到这条消息"
+msgstr "Couldn't load earlier history, so this message couldn't be located"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "无法发起侧边聊天"
+msgstr "Could not start side chat"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法发送按键"
+msgstr "Couldn't send keys"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法取回排队消息，请检查状态后重试"
+msgstr "Couldn't retrieve the queued messages. Check the status and try again."
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法取消排队消息"
+msgstr "Couldn't cancel the queued message"
+
+#: src/app/session/TranscriptView.tsx
+msgid "无法同步最新会话记录。"
+msgstr "Couldn't sync the latest transcript."
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "无法同步当前交互"
+msgstr "Couldn't sync the current interaction"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "无法延长等待时间"
+msgstr "Couldn't extend the wait"
+
+#: src/app/session/Attempts.tsx
+msgid "无法开始并行尝试"
+msgstr "Couldn't start parallel attempts"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法恢复内容，消息已保留"
+msgstr "Couldn't restore the content. The message was kept."
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "无法提交交互"
+msgstr "Couldn't submit the interaction"
+
+#: src/app/session/TerminalHoldBar.tsx
+msgid "无法收回"
+msgstr "Could not take back"
+
+#: src/app/session/marks.tsx
+msgid "无法收藏图片"
+msgstr "Couldn't favorite the image"
+
+#: src/app/session/nativeRunCommands.ts
+#: src/app/session/SideDiscussion.tsx
+msgid "无法检查状态，请稍后重试"
+msgstr "Couldn't check the status. Try again later."
+
+#: src/app/session/SessionHandoff.tsx
+msgid "无法生成交接摘要"
+msgstr "Couldn't generate the handoff summary"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "无法继续对话，请重新检查状态"
+msgstr "Couldn't continue the conversation. Check the status again."
+
+#: src/app/session/image-upload.ts
+msgid "无法读取 {label}"
+msgstr "Couldn't read {label}"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "无法读取交互预览文件"
+msgstr "Couldn't read the interactive preview file"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "无法读取技能与工具"
+msgstr "Couldn't read skills and tools"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "无法读取设备"
+msgstr "Couldn't load devices"
+
+#: src/app/session/Attempts.tsx
+msgid "无法读取这个尝试的改动"
+msgstr "Couldn't read this attempt's changes"
+
+#: src/app/session/Composer.tsx
+msgid "无法读取附件"
+msgstr "Couldn't read the attachment"
+
+#: src/app/session/Attempts.tsx
+msgid "无法追加"
+msgstr "Couldn't add the attempt"
+
+#: src/app/session/Attempts.tsx
+msgid "无法重试"
+msgstr "Couldn't retry the attempt"
+
+#: src/app/session/TranscriptView.tsx
+msgid "显示全部"
+msgstr "Show all"
+
+#: src/app/session/Markdown.tsx
+msgid "显示源码"
+msgstr "Show source"
+
+#: src/app/session/TranscriptView.tsx
+msgid "暂时无法定位这条消息"
+msgstr "Can't locate this message right now"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "暂时无法确认回答是否已提交"
+msgstr "Can't confirm whether the answer was submitted yet"
+
+#: src/app/session/SideDiscussion.tsx
+#: src/app/session/Timeline.tsx
+msgid "暂时无法确认是否已发送"
+msgstr "Can't confirm whether it was sent yet"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "暂时无法确认是否已发送，请先检查状态"
+msgstr "Can't confirm whether it was sent yet. Check the status first."
+
+#: src/app/session/Timeline.tsx
+msgid "暂时无法获取任务状态"
+msgstr "Task status is temporarily unavailable"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "暂时无法补充当前任务，输入已保留"
+msgstr "Couldn't add to the current task. Your input was kept."
+
+#: src/app/session/ComposerDock.tsx
+#: src/app/session/Timeline.tsx
+msgid "更多"
+msgstr "More"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "更多操作"
+msgstr "More actions"
+
+#: src/app/session/toolView.ts
+msgid "更新计划"
+msgstr "Update plan"
+
+#: src/app/session/Attempts.tsx
+msgid "有未提交改动时保留其项目。"
+msgstr "Its project is kept if there are uncommitted changes."
+
+#: src/app/session/Attempts.tsx
+msgid "有重复配置"
+msgstr "Duplicate configuration"
+
+#: src/app/session/useSessionSync.ts
+msgid "服务器版本过旧"
+msgstr "The server is out of date"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "服务器版本过旧，请更新后重试"
+msgstr "Update the server before trying again"
+
+#: src/app/session/Activities.tsx
+#: src/app/session/Attempts.tsx
+msgid "未完成"
+msgstr "Unfinished"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "未开启"
+msgstr "Off"
+
+#: src/app/session/Attempts.tsx
+msgid "未提交改动不在起点内。"
+msgstr "Uncommitted changes aren't part of the base."
+
+#: src/app/session/Composer.tsx
+msgid "未缓存输入"
+msgstr "Uncached input"
+
+#: src/app/session/TurnRail.tsx
+msgid "本会话"
+msgstr "This session"
+
+#: src/app/session/marks.tsx
+msgid "本会话收藏"
+msgstr "Favorites in this session"
+
+#. placeholder {0}: speedDescription(metrics)
+#: src/app/session/Timeline.tsx
+msgid "本轮 · {0}"
+msgstr "This turn · {0}"
+
+#: src/app/session/TranscriptView.tsx
+msgid "本轮已结束"
+msgstr "This turn has finished"
+
+#: src/app/session/Composer.tsx
+msgid "权限"
+msgstr "Permissions"
+
+#: src/app/session/ApprovalPicker.tsx
+msgid "权限模式"
+msgstr "Permission mode"
+
+#. placeholder {0}: current.label
+#: src/app/session/ApprovalPicker.tsx
+msgid "权限模式：{0}"
+msgstr "Permission mode: {0}"
+
+#: src/app/session/TranscriptView.tsx
+msgid "查看"
+msgstr "View"
+
+#: src/app/session/Activities.tsx
+msgid "查看全文"
+msgstr "View full text"
+
+#: src/app/session/Timeline.tsx
+msgid "查看子 Agent 对话"
+msgstr "View subagent conversation"
+
+#: src/app/session/Timeline.tsx
+msgid "查看完整日志"
+msgstr "View full log"
+
+#: src/app/session/SessionReferences.tsx
+msgid "查看引用时的记录"
+msgstr "View captured messages"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "查看源码"
+msgstr "View source"
+
+#: src/app/session/Timeline.tsx
+msgid "查看详情"
+msgstr "View details"
+
+#: src/app/session/NativeInteractionCard.tsx
+#: src/app/session/SideDiscussion.tsx
+#: src/app/session/Timeline.tsx
+msgid "检查状态"
+msgstr "Check status"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ModelPicker.tsx
+msgid "模型"
+msgstr "Model"
+
+#: src/app/session/Composer.tsx
+msgid "模型与参数"
+msgstr "Model and parameters"
+
+#: src/app/session/ModelPicker.tsx
+msgid "模型列表加载失败：{catalogError}"
+msgstr "Failed to load the model list: {catalogError}"
+
+#: src/app/session/pickers.ts
+msgid "模型列表还没准备好，稍后再试"
+msgstr "The model list is not ready; try again shortly"
+
+#: src/app/session/speed.ts
+msgid "模型响应时间（含首字延迟）"
+msgstr "Model response time (includes first-token latency)"
+
+#. placeholder {0}: sample.windowSeconds
+#: src/app/session/speed.ts
+msgid "模型输出速度 · 最近 {0} 秒内{tokens} ÷ {window}"
+msgstr "Model output speed · {tokens} in the last {0} seconds ÷ {window}"
+
+#: src/app/session/Composer.tsx
+msgid "模式"
+msgstr "Mode"
+
+#: src/app/session/Composer.tsx
+msgid "正在停止"
+msgstr "Stopping"
+
+#: src/app/session/pickers.ts
+msgid "正在切换上一项设置…"
+msgstr "Still applying the previous setting…"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "正在创建 Worktree…"
+msgstr "Creating Worktree…"
+
+#: src/app/session/Activities.tsx
+msgid "正在加载全文…"
+msgstr "Loading full text…"
+
+#: src/app/session/Activities.tsx
+msgid "正在压缩上下文"
+msgstr "Compacting context"
+
+#: src/app/session/Timeline.tsx
+msgid "正在处理"
+msgstr "Working"
+
+#: src/app/session/TranscriptView.tsx
+msgid "正在定位…"
+msgstr "Locating…"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "正在检查"
+msgstr "Checking"
+
+#: src/app/session/SubagentSession.tsx
+msgid "正在补充子 Agent 历史…"
+msgstr "Loading more subagent history…"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "正在读取 HTML 文件…"
+msgstr "Reading HTML file…"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "正在载入预览…"
+msgstr "Loading preview…"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "每次在新的 Worktree 中运行"
+msgstr "Run in a new Worktree each time"
+
+#: src/app/session/Composer.tsx
+msgid "没有匹配的会话"
+msgstr "No matching sessions"
+
+#: src/app/session/Composer.tsx
+msgid "没有匹配的会话或文件"
+msgstr "No matching sessions or files"
+
+#: src/app/session/Composer.tsx
+msgid "没有匹配的文件"
+msgstr "No matching files"
+
+#: src/app/session/ModelPicker.tsx
+msgid "没有匹配的模型"
+msgstr "No matching models"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ModelPicker.tsx
+msgid "没有可用模型"
+msgstr "No models available"
+
+#: src/app/session/TranscriptView.tsx
+msgid "没有在会话中找到这条消息，它可能已被删除或改写"
+msgstr "This message wasn't found in the session; it may have been deleted or rewritten"
+
+#: src/app/session/SubagentSession.tsx
+msgid "没有读到这个子 Agent 的执行记录。"
+msgstr "Couldn't read this subagent's transcript."
+
+#: src/app/session/Timeline.tsx
+msgid "没有输出"
+msgstr "No output"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "沿用这个会话的 Agent、模型与权限。"
+msgstr "Use this session's agent, model and permissions."
+
+#: src/app/session/nativeRunCommands.ts
+msgid "消息可能已执行，无法恢复为新消息"
+msgstr "The message may have run, so it can't be restored as a new message."
+
+#: src/app/session/TurnRail.tsx
+msgid "消息导航"
+msgstr "Message navigation"
+
+#: src/app/session/Composer.tsx
+msgid "添加为附件"
+msgstr "Add as attachment"
+
+#: src/app/session/Composer.tsx
+msgid "添加图片或文件"
+msgstr "Add image or file"
+
+#: src/app/session/MarkLayer.tsx
+msgid "添加备注…"
+msgstr "Add note…"
+
+#: src/app/session/Composer.tsx
+msgid "添加附件"
+msgstr "Add attachment"
+
+#: src/app/session/Markdown.tsx
+msgctxt "session-render-preview-toggle"
+msgid "渲染预览"
+msgstr "Render preview"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "生成"
+msgstr "Generate"
+
+#: src/app/session/SessionReferences.tsx
+msgid "用户"
+msgstr "User"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "由 {profileName} · {model} 生成"
+msgstr "Generated by {profileName} · {model}"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "由对话记录拼成"
+msgstr "Built from the conversation"
+
+#: src/app/session/Activities.tsx
+msgid "监控"
+msgstr "Monitor"
+
+#: src/app/session/ComposerDock.tsx
+msgid "目标"
+msgstr "Goal"
+
+#. placeholder {0}: formatNumber(clip.hiddenLines)
+#. placeholder {0}: formatNumber(hiddenLines)
+#: src/app/session/Timeline.tsx
+msgid "省略 {0} 行 · 展开全部"
+msgstr "{0} lines omitted · Show all"
+
+#: src/app/session/ToolsPicker.tsx
+msgid "离线"
+msgstr "Offline"
+
+#: src/app/session/ComposerDock.tsx
+msgid "移出队列"
+msgstr "Remove from queue"
+
+#: src/app/session/toolView.ts
+msgid "移动文件"
+msgstr "Move files"
+
+#: src/app/session/ComposerDock.tsx
+msgid "移回输入框编辑"
+msgstr "Move back to the composer to edit"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "移除"
+msgstr "Remove"
+
+#. placeholder {0}: attachment.name
+#. placeholder {0}: upload.name
+#: src/app/session/ComposerAttachments.tsx
+msgid "移除 {0}"
+msgstr "Remove {0}"
+
+#: src/app/session/ComposerAttachments.tsx
+msgid "移除 {name}"
+msgstr "Remove {name}"
+
+#. placeholder {0}: item.name
+#: src/app/session/Composer.tsx
+msgid "移除 /{0}"
+msgstr "Remove /{0}"
+
+#: src/app/session/ComposerAttachments.tsx
+msgid "移除会话引用"
+msgstr "Remove session reference"
+
+#: src/app/session/ComposerDock.tsx
+msgid "等待上一条消息确认"
+msgstr "Waiting for the previous message to be confirmed"
+
+#: src/app/session/Attempts.tsx
+msgid "等待处理"
+msgstr "Waiting"
+
+#: src/app/session/SubagentSession.tsx
+msgctxt "terminal-awaiting-confirmation"
+msgid "等待确认"
+msgstr "Waiting for confirmation"
+
+#: src/app/session/Attempts.tsx
+msgid "等这个尝试完成后再采用"
+msgstr "Wait for this attempt to finish before adopting"
+
+#: src/app/session/speed.ts
+msgid "精确 token 数"
+msgstr "Exact token count"
+
+#: src/app/session/Composer.tsx
+msgid "系统提示词"
+msgstr "System prompt"
+
+#: src/app/session/marks.tsx
+msgid "红色"
+msgstr "Red"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "终端"
+msgstr "Terminal"
+
+#: src/app/session/Activities.tsx
+msgid "终端任务"
+msgstr "Terminal task"
+
+#. placeholder {0}: String(item.terminalId ?? '')
+#: src/app/session/Timeline.tsx
+msgid "终端输出 · {0}"
+msgstr "Terminal output · {0}"
+
+#: src/app/session/TerminalHoldBar.tsx
+msgid "结束"
+msgstr "End"
+
+#: src/app/session/TerminalHoldBar.tsx
+msgid "结束终端中的进程？"
+msgstr "End the process in the terminal?"
+
+#: src/app/session/ComposerDock.tsx
+msgid "继续中"
+msgstr "Resumed"
+
+#. placeholder {0}: recovery.queuedRunIds.length
+#: src/app/session/Timeline.tsx
+msgid "继续发送 {0} 条消息"
+msgstr "Continue sending {0} messages"
+
+#: src/app/session/Timeline.tsx
+msgid "继续对话"
+msgstr "Continue conversation"
+
+#: src/app/session/marks.tsx
+msgid "绿色"
+msgstr "Green"
+
+#: src/app/session/Composer.tsx
+msgid "缓存写入"
+msgstr "Cache writes"
+
+#: src/app/session/Composer.tsx
+msgid "缓存读取"
+msgstr "Cache reads"
+
+#: src/app/session/Composer.tsx
+msgid "缓存输入"
+msgstr "Cached input"
+
+#: src/app/session/ComposerDock.tsx
+msgid "编辑"
+msgstr "Edit"
+
+#: src/app/session/Composer.tsx
+msgid "编辑消息"
+msgstr "Edit message"
+
+#: src/app/session/ZoomPanImage.tsx
+msgid "缩小"
+msgstr "Zoom out"
+
+#. placeholder {0}: shortcutLabel('')
+#: src/app/session/ZoomPanImage.tsx
+msgid "缩小 · {0}滚轮"
+msgstr "Zoom out · {0}scroll"
+
+#: src/app/session/Composer.tsx
+msgid "自主读写文件、执行命令"
+msgstr "Reads and writes files and runs commands on its own"
+
+#: src/app/session/Composer.tsx
+msgid "自动压缩阈值"
+msgstr "Automatic compaction threshold"
+
+#. placeholder {0}: compactTokens(usage.size)
+#: src/app/session/Composer.tsx
+msgid "自动压缩阈值：{0} tokens；按最近一次模型响应计量"
+msgstr "Automatic compaction threshold: {0} tokens; measured from the latest model response"
+
+#: src/app/session/Markdown.tsx
+msgid "自动换行"
+msgstr "Word wrap"
+
+#: src/app/session/ApprovalPicker.tsx
+msgid "自定义"
+msgstr "Custom"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/nativeRunCommands.ts
+#: src/app/session/SideDiscussion.tsx
+msgid "草稿无法保存到浏览器，刷新后会丢失"
+msgstr "The draft can't be saved in the browser and will be lost on refresh"
+
+#: src/app/session/marks.tsx
+msgid "蓝色"
+msgstr "Blue"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerDock.tsx
+msgid "补充到当前任务"
+msgstr "Add to current task"
+
+#: src/app/session/nativeRunCommands.ts
+msgid "补充未发送，可恢复内容后重试"
+msgstr "The follow-up wasn't sent. Restore the content and try again."
+
+#: src/app/session/nativeRunCommands.ts
+msgid "补充未发送，输入已保留"
+msgstr "The follow-up wasn't sent. Your input was kept."
+
+#: src/app/session/Timeline.tsx
+msgid "补充消息"
+msgstr "Follow-up message"
+
+#: src/app/session/speed.ts
+msgid "观测到的模型响应时间（含首字延迟）"
+msgstr "Observed model response time (includes first-token latency)"
+
+#: src/app/session/Composer.tsx
+msgid "规则"
+msgstr "Rules"
+
+#: src/app/session/SessionAside.tsx
+msgid "计划"
+msgstr "Plan"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "让 Agent 做什么"
+msgstr "What should the agent do?"
+
+#: src/app/session/toolView.ts
+msgid "访问网页"
+msgstr "Browse the web"
+
+#: src/app/session/Timeline.tsx
+msgid "诊断信息"
+msgstr "Diagnostics"
+
+#: src/app/session/toolView.ts
+msgid "询问用户"
+msgstr "Ask the user"
+
+#: src/app/session/FailureDetails.tsx
+msgid "详情"
+msgstr "Details"
+
+#: src/app/session/Activities.tsx
+msgid "请求未完成"
+msgstr "Request didn't complete"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/ComposerAttachments.tsx
+msgid "请重新选择文件"
+msgstr "Select the file again"
+
+#: src/app/session/marks.tsx
+msgid "读取图片失败"
+msgstr "Couldn't read the image"
+
+#: src/app/session/toolView.ts
+msgid "读取文件"
+msgstr "Read files"
+
+#: src/app/session/toolView.ts
+msgid "调用工具"
+msgstr "Use tools"
+
+#. placeholder {0}: status.loadPercent
+#: src/app/session/ModelPicker.tsx
+msgid "负载 {0}%"
+msgstr "Load {0}%"
+
+#. placeholder {0}: usage.cost.currency
+#. placeholder {1}: usage.cost.amount.toFixed(2)
+#: src/app/session/Composer.tsx
+msgid "费用 {0} {1}"
+msgstr "Cost {0} {1}"
+
+#: src/app/session/Attempts.tsx
+msgid "起点"
+msgstr "Base"
+
+#: src/app/session/ModelPicker.tsx
+msgid "跟随默认设置"
+msgstr "Use default settings"
+
+#. placeholder {0}: index + 1
+#: src/app/session/TurnRail.tsx
+msgid "跳到第 {0} 条消息"
+msgstr "Jump to message {0}"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "跳过"
+msgstr "Skip"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "跳过这组问题"
+msgstr "Skip these questions"
+
+#: src/app/session/Composer.tsx
+msgid "输入"
+msgstr "Input"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "输入回答"
+msgstr "Enter an answer"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/SideDiscussion.tsx
+msgid "输入消息"
+msgstr "Enter a message"
+
+#: src/app/session/Composer.tsx
+msgid "输入消息…"
+msgstr "Type a message…"
+
+#: src/app/session/Composer.tsx
+msgid "输出"
+msgstr "Output"
+
+#: src/app/session/speed.ts
+msgid "输出 token 数"
+msgstr "Output token count"
+
+#: src/app/session/Timeline.tsx
+msgid "输出过大，只显示末尾"
+msgstr "Output is too large; showing the end only"
+
+#: src/app/session/speed.ts
+msgid "输出速度 · {tokens} · {window} · 合计 {steps}"
+msgstr "Output speed · {tokens} · {window} · {steps} total"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/SubagentSession.tsx
+msgid "运行中"
+msgstr "Running"
+
+#: src/app/session/toolView.ts
+msgctxt "tool-action"
+msgid "运行命令"
+msgstr "Run commands"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
+msgstr "At run time, <0>{dateToken}</0> is replaced with today's date and <1>{projectToken}</1> with the project name."
+
+#. placeholder {0}: sample.windowSeconds
+#. placeholder {1}: sample.windowSeconds
+#: src/app/session/speed.ts
+msgid "近期输出速度 · 最近 {0} 秒{tokens} ÷ {1} 秒 · 包含工具执行和等待时间"
+msgstr "Recent output speed · {tokens} over the last {0} seconds ÷ {1} seconds · includes tool execution and waiting"
+
+#: src/app/session/Composer.tsx
+msgid "返回"
+msgstr "Back"
+
+#: src/app/session/SubagentSession.tsx
+msgid "返回上一级子 Agent"
+msgstr "Back to parent subagent"
+
+#: src/app/session/SubagentSession.tsx
+msgid "返回主会话"
+msgstr "Back to main session"
+
+#: src/app/session/VisualizationPreview.tsx
+msgid "返回预览"
+msgstr "Back to preview"
+
+#. placeholder {0}: diff.files.length - 5
+#: src/app/session/Attempts.tsx
+msgid "还有 {0} 个"
+msgstr "{0} more"
+
+#. placeholder {0}: outputs.length - OUTPUT_LIMIT
+#: src/app/session/SessionAside.tsx
+msgid "还有 {0} 个文件"
+msgstr "{0, plural, one {# more file} other {# more files}}"
+
+#: src/app/session/SessionAside.tsx
+msgid "还有 {hidden} 个已结束"
+msgstr "{hidden} more finished"
+
+#: src/app/session/SessionAside.tsx
+msgid "还有 {hiddenOpen} 项"
+msgstr "{hiddenOpen, plural, one {# more item} other {# more items}}"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "还没有目录"
+msgstr "No folders yet"
+
+#: src/app/session/Timeline.tsx
+msgid "还没有输出…"
+msgstr "No output yet…"
+
+#: src/app/session/SubagentSession.tsx
+msgid "这个子 Agent 没有记录。"
+msgstr "No transcript for this subagent."
+
+#: src/app/session/Attempts.tsx
+msgid "这个项目还没有提交，无法从同一起点切出 Worktree"
+msgstr "This project has no commits, so Worktrees can't be cut from the same base"
+
+#: src/app/session/TranscriptView.tsx
+msgid "这段历史的前置上下文不完整，部分工具结果可能需要加载更早记录后才能完整显示。"
+msgstr "The preceding context for this history is incomplete; some tool results may need earlier records loaded to display fully."
+
+#: src/app/session/ComposerDock.tsx
+msgctxt "session-status-in-progress"
+msgid "进行中"
+msgstr "In progress"
+
+#: src/app/session/useSessionSync.ts
+msgid "连接已断开，请等待同步后再提交"
+msgstr "Disconnected. Wait for sync before submitting"
+
+#: src/app/session/Attempts.tsx
+msgid "追加"
+msgstr "Add"
+
+#: src/app/session/ComposerFullscreen.tsx
+msgid "退出全屏"
+msgstr "Exit fullscreen"
+
+#: src/app/session/Composer.tsx
+msgid "退出全屏编辑"
+msgstr "Exit fullscreen editing"
+
+#. placeholder {0}: item.jobResult.exitCode
+#: src/app/session/Timeline.tsx
+msgid "退出码 {0}"
+msgstr "Exit code {0}"
+
+#: src/app/session/ZoomPanImage.tsx
+msgid "适应窗口"
+msgstr "Fit to window"
+
+#: src/app/session/SideDiscussion.tsx
+msgid "选中回答中的文字开始聊天"
+msgstr "Select text in an answer to start a chat"
+
+#: src/app/session/MarkLayer.tsx
+msgid "选中文字操作"
+msgstr "Selected text actions"
+
+#: src/app/session/BackendPicker.tsx
+msgid "选择 Agent"
+msgstr "Choose agent"
+
+#: src/app/session/DirectoryMenu.tsx
+msgid "选择其他目录…"
+msgstr "Choose another folder…"
+
+#: src/app/session/ModelPicker.tsx
+msgctxt "session-model-picker-label"
+msgid "选择模型"
+msgstr "Choose a model"
+
+#. placeholder {0}: options.join(listSeparator)
+#: src/app/session/Timeline.tsx
+msgid "选项：{0}"
+msgstr "Options: {0}"
+
+#: src/app/session/speed.ts
+msgid "部分估算的 token 数"
+msgstr "Partially estimated token count"
+
+#: src/app/session/ProfilePicker.tsx
+msgctxt "session-profile-select"
+msgid "配置"
+msgstr "Profile"
+
+#: src/app/session/Attempts.tsx
+msgid "采用"
+msgstr "Adopt"
+
+#. placeholder {0}: labelOf(adopting.attempt)
+#: src/app/session/Attempts.tsx
+msgid "采用 {0} 的方案"
+msgstr "Adopt the changes from {0}"
+
+#: src/app/session/Attempts.tsx
+msgid "采用推荐"
+msgstr "Adopt recommended"
+
+#: src/app/session/Attempts.tsx
+msgid "采用此方案"
+msgstr "Adopt this attempt"
+
+#: src/app/session/Attempts.tsx
+msgid "重叠"
+msgstr "Overlap"
+
+#: src/app/session/TranscriptView.tsx
+msgid "重新加载"
+msgstr "Reload"
+
+#: src/app/session/ModelPicker.tsx
+msgid "重新加载模型列表"
+msgstr "Reload model list"
+
+#: src/app/session/SessionHandoff.tsx
+msgid "重新生成"
+msgstr "Regenerate"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "重新读取附件"
+msgstr "Reload attachment"
+
+#: src/app/session/Activities.tsx
+#: src/app/session/Attempts.tsx
+#: src/app/session/ModelPicker.tsx
+#: src/app/session/NativeInteractionCard.tsx
+#: src/app/session/SideDiscussion.tsx
+#: src/app/session/ToolsPicker.tsx
+#: src/app/session/VisualizationPreview.tsx
+msgid "重试"
+msgstr "Retry"
+
+#. placeholder {0}: upload.name
+#: src/app/session/ComposerAttachments.tsx
+msgid "重试上传 {0}"
+msgstr "Retry uploading {0}"
+
+#: src/app/session/SideDiscussion.tsx
+#: src/app/session/Timeline.tsx
+msgid "重试发送"
+msgstr "Retry sending"
+
+#: src/app/session/TranscriptView.tsx
+msgid "重试同步"
+msgstr "Retry sync"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "重连后提交"
+msgstr "Submit after reconnecting"
+
+#: src/app/session/MessageAttachments.tsx
+#: src/app/session/TranscriptView.tsx
+#: src/app/session/useSessionSync.ts
+msgid "附件"
+msgstr "Attachment"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "附件不可用"
+msgstr "Attachment unavailable"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "需要回答"
+msgstr "Answer needed"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "需要批准计划"
+msgstr "Plan approval needed"
+
+#: src/app/session/TranscriptView.tsx
+msgid "需要确认"
+msgstr "Confirmation needed"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "需要选择"
+msgstr "Choice needed"
+
+#: src/app/session/ChapterNavigation.tsx
+msgid "章节导航"
+msgstr "Chapter navigation"
+
+#: src/app/session/Composer.tsx
+msgctxt "mention-projects"
+msgid "项目"
+msgstr "Projects"
+
+#: src/app/session/Timeline.tsx
+msgid "项目目录之外，只读预览 {path}"
+msgstr "Outside the project folder; read-only preview of {path}"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "预览：{name}"
+msgstr "Preview: {name}"
+
+#: src/app/session/ImageViewer.tsx
+#: src/app/session/MermaidDiagram.tsx
+msgid "预览图片"
+msgstr "Preview image"
+
+#. placeholder {0}: attachment.name
+#: src/app/session/ComposerAttachments.tsx
+msgid "预览图片：{0}"
+msgstr "Preview image: {0}"
+
+#: src/app/session/MessageAttachments.tsx
+msgid "预览图片：{name}"
+msgstr "Preview image: {name}"
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "题目已更新，旧草稿未提交。"
+msgstr "The question was updated; the old draft wasn't submitted."
+
+#: src/app/session/NativeInteractionCard.tsx
+msgid "题目已更新，请检查状态"
+msgstr "The question was updated. Check the status."
+
+#: src/app/session/speed.ts
+msgid "首字到末字的生成时间"
+msgstr "Generation time from first token to last token"
+
+#: src/app/session/MarkLayer.tsx
+msgctxt "session-highlight-action"
+msgid "高亮"
+msgstr "Highlight"
+
+#: src/app/session/marks.tsx
+msgid "黄色"
+msgstr "Yellow"
+
+#: src/app/session/Attempts.tsx
+#: src/app/session/ModelPicker.tsx
+#: src/app/session/ToolsPicker.tsx
+msgid "默认"
+msgstr "Default"
+
+#: src/app/session/Composer.tsx
+#: src/app/session/LaunchTargetBar.tsx
+#: src/app/session/ModelPicker.tsx
+msgid "默认模型"
+msgstr "Default model"
+
+#: src/app/session/ProfilePicker.tsx
+msgid "默认配置"
+msgstr "Default profile"

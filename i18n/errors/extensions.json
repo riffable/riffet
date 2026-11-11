@@ -1,0 +1,43 @@
+{
+  "CONFIG_CONFLICT": {
+    "zh": "{subject, select, skill {Skill 已被修改，请刷新后重试} manifestExists {另一份 Skill 清单已存在，未覆盖任何文件} other {配置已被修改，请重新载入后再编辑}}",
+    "en": "{subject, select, skill {The skill has changed; reload it and try again} manifestExists {The other skill manifest already exists; no file was overwritten} other {The configuration has changed; reload it before editing}}"
+  },
+  "CONFIG_NOT_DIRECTORY": { "zh": "Skill 设置的父路径不是目录。", "en": "A parent of the skill settings file is not a directory." },
+  "CONFIG_NOT_FILE": { "zh": "配置文件不是普通文件。", "en": "The configuration file is not a regular file." },
+  "CONFIG_SYMLINK_UNSUPPORTED": { "zh": "配置文件路径包含符号链接，不能安全读写。", "en": "The configuration file path contains a symbolic link and cannot be read or written safely." },
+  "EXTENSION_ACTION_BUSY": { "zh": "此配置已有管理操作正在执行", "en": "Another management action is running on this configuration" },
+  "EXTENSION_ACTION_FAILED": { "zh": "{message}", "en": "{message}" },
+  "EXTENSION_ACTION_UNSUPPORTED": {
+    "zh": "{subject, select, agent {该 Agent 不支持此原生操作} resource {该资源不支持此原生操作} reason {{reason}} unverified {无法验证原生管理命令参数} skill {此 Skill 不支持该操作} skillSettings {当前 Agent 没有此原生 Skill 设置适配。} other {此 CLI 未声明该操作}}",
+    "en": "{subject, select, agent {This agent does not support this native action} resource {This resource does not support this native action} reason {{reason}} unverified {The native management command's options could not be verified} skill {This skill does not support this action} skillSettings {This agent has no native skill settings adapter.} other {This CLI does not declare this action}}"
+  },
+  "EXTENSION_NATIVE_EDITOR_REQUIRED": { "zh": "此文件的凭据格式无法在此编辑，请使用外部编辑器。", "en": "Credentials in this file cannot be edited here; use an external editor." },
+  "EXTENSION_NOT_FOUND": {
+    "zh": "{subject, select, skill {Skill 不在当前配置中} other {扩展不存在}}",
+    "en": "{subject, select, skill {The skill is not in the current configuration} other {The extension does not exist}}"
+  },
+  "EXTENSION_PROFILE_UNSUPPORTED": { "zh": "Droid 不支持自定义配置目录，请清除此设置后再管理扩展。", "en": "Droid does not support a custom configuration directory; clear this setting before managing extensions." },
+  "EXTENSION_READ_ONLY": {
+    "zh": "{subject, select, reason {{reason}} managed {请通过所属插件或受管配置管理此扩展} plugin {请通过所属插件管理此 Skill} action {此 Skill 不支持该操作} skill {此 Skill 为只读} other {此扩展文件为只读}}",
+    "en": "{subject, select, reason {{reason}} managed {Manage this extension through its plugin or managed configuration} plugin {Manage this skill through its plugin} action {This skill does not support this action} skill {This skill is read-only} other {This extension document is read-only}}"
+  },
+  "EXTENSION_SCOPE_MISMATCH": {
+    "zh": "{subject, select, skill {操作范围与 Skill 来源不一致} other {操作范围与扩展来源不一致}}",
+    "en": "{subject, select, skill {The scope does not match where the skill comes from} other {The scope does not match where the extension comes from}}"
+  },
+  "EXTENSION_SCOPE_UNSUPPORTED": {
+    "zh": "{subject, select, skill {请先选择项目，再管理项目的 Skill。} skillSettings {未找到所选范围的 Skill 设置。} dsh {DSH 插件随连接配置安装，不能按项目安装。} other {当前 CLI 不支持按项目管理扩展。}}",
+    "en": "{subject, select, skill {A project-level skill action needs a valid project.} skillSettings {No native settings were found for the chosen scope.} dsh {DSH plugins belong to a backend profile and cannot be installed per project.} other {This CLI has no project-level option, and the action will not fall back to user level.}}"
+  },
+  "INVALID_EXTENSION_HASH": { "zh": "请先读取 Skill 当前内容后再操作", "en": "Read the skill's current content before managing it" },
+  "INVALID_EXTENSION_SCOPE": { "zh": "项目级操作需要选择项目", "en": "Choose a project for a project-level action" },
+  "INVALID_EXTENSION_TARGET": {
+    "zh": "{subject, select, mcp {请从当前运行时选择 MCP 服务器} create {请选择创建位置} dsh {使用 DSH npm bundle 名称，可带固定版本} other {使用插件原生标识，例如 name@marketplace；不能传入路径、命令或选项。}}",
+    "en": "{subject, select, mcp {Choose an MCP server from the current runtime} create {Choose where to create it} dsh {Use a DSH npm bundle name, optionally with a fixed version} other {Use the plugin's native identifier, such as name@marketplace; paths, commands and options are not accepted.}}"
+  },
+  "INVALID_SKILL_SETTINGS": { "zh": "无法安全读取全部原生设置；未修改任何配置。", "en": "Not every native setting could be read safely; no configuration was changed." },
+  "SKILL_METADATA_UNSUPPORTED": { "zh": "无法安全读取 Skill 元数据。", "en": "The skill metadata could not be read safely." },
+  "SKILL_SETTING_OVERRIDDEN": { "zh": "更高优先级的项目设置覆盖了此选择，请在对应设置中修改；未修改配置。", "en": "A higher-priority project setting overrides this choice; change it there. No configuration was changed." },
+  "SKILL_STILL_DISABLED": { "zh": "其他作用域的 disabledSkills 或 SKILL.md 的 enabled: false 仍在禁用此技能，请在来源处恢复；未修改配置。", "en": "disabledSkills in another scope, or enabled: false in SKILL.md, still disables this skill; re-enable it there. No configuration was changed." }
+}

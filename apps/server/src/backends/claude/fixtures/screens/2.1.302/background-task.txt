@@ -1,0 +1,40 @@
+  Bash with run_in_background true, command "sleep 600", description "long job"; (3) Monitor with
+  command "for i in 1 2 3; do echo tick$i; sleep 5; done; sleep 600", description "ticker",
+  timeout_ms 900000, persistent false. Afterwards reply with only LAUNCHED.
+
+  Thought for 4s, ran 2 shell commands
+
+⏺ Monitor(ticker)
+  ⎿  Monitor started · task b9gwiw7ky · timeout 900s
+
+⏺ Monitor event: tick1 · ticker
+
+⏺ Background command "quick job" failed with exit code 3
+
+⏺ LAUNCHED
+
+✻ Sautéed for 30s · done 7:54 PM · 1 shell, 1 monitor still running
+
+⏺ Monitor event: tick2 · ticker
+
+⏺ Monitor event: tick3 · ticker
+
+  Thought for 3s
+
+⏺ Tick events 2 and 3 received (monitor b9gwiw7ky); the quick job already exited with code 3 as
+  scripted. The monitor and long job are still running — I'll report when it expires or the 600s
+  sleep exits.
+
+✻ Baked for 14s · done 7:54 PM · 1 shell, 1 monitor still running
+
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Shell details
+
+  Status:   running
+  Runtime:  33s
+  Command:  sleep 600
+
+  Output:
+  Loading output…
+
+  ← to go back · Esc/Enter/Space to close · x to stop

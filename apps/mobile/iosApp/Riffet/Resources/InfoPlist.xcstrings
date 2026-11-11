@@ -1,0 +1,39 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "NSCameraUsageDescription" : {
+      "comment" : "扫描 Mac 上的配对二维码以连接 Riffet。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the pairing QR code on the Mac to connect Riffet."
+          }
+        }
+      }
+    },
+    "NSFaceIDUsageDescription" : {
+      "comment" : "在你选择启用时，验证本人后提交操作确认。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When you choose to enable it, verify your identity before submitting action confirmations."
+          }
+        }
+      }
+    },
+    "NSLocalNetworkUsageDescription" : {
+      "comment" : "发现并连接同一网络中的 Riffet 服务。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find and connect to Riffet services on the same network."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

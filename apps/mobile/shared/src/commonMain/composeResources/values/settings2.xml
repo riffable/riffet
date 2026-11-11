@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Settings home: section labels and groups -->
+    <string name="settings_extra_section_appearance">外观与显示</string>
+    <string name="settings_extra_section_notifications">通知与后台</string>
+    <string name="settings_extra_section_interaction">交互与输入</string>
+    <string name="settings_extra_section_connection">连接与配对</string>
+    <string name="settings_extra_section_backends">Agent 与模型</string>
+    <string name="settings_extra_section_extensions">Agent 扩展</string>
+    <string name="settings_extra_section_files">文件与编辑器</string>
+    <string name="settings_extra_section_service">服务状态</string>
+    <string name="settings_extra_section_diagnostics">诊断与日志</string>
+    <string name="settings_extra_section_about">关于 Riffet</string>
+    <string name="settings_extra_group_preferences">使用偏好</string>
+    <string name="settings_extra_group_environment">工作环境</string>
+    <string name="settings_extra_group_support">支持</string>
+
+    <!-- Appearance: enum labels kept out of the shared model -->
+    <string name="settings_text_size_small">小</string>
+    <string name="settings_text_size_default">标准</string>
+    <string name="settings_text_size_large">大</string>
+    <string name="settings_text_size_larger">特大</string>
+    <string name="settings_spacing_compact">紧凑</string>
+    <string name="settings_spacing_default">标准</string>
+    <string name="settings_spacing_relaxed">宽松</string>
+    <string name="settings_app_icon_blue">蓝色</string>
+    <string name="settings_app_icon_purple">紫色</string>
+    <string name="settings_app_icon_magenta">品红</string>
+    <string name="settings_app_icon_pink">粉色</string>
+    <string name="settings_app_icon_red">红色</string>
+    <string name="settings_app_icon_orange">橙色</string>
+    <string name="settings_app_icon_yellow">黄色</string>
+    <string name="settings_app_icon_lime">青柠</string>
+    <string name="settings_app_icon_green">绿色</string>
+    <string name="settings_app_icon_cyan">青色</string>
+    <string name="settings_app_icon_graphite">石墨</string>
+    <string name="settings_app_icon_white">白色</string>
+    <string name="settings_theme_summary_riffet">默认外观：冷中性灰阶配蓝色强调。</string>
+    <string name="settings_theme_summary_solarized">奶油纸底与墨绿黑，为长时间阅读设计。</string>
+    <string name="settings_theme_summary_catppuccin">柔和的低对比紫调，适合暗光环境。</string>
+    <string name="settings_theme_summary_rose_pine">暖紫玫瑰调，低饱和的纸感配色。</string>
+    <string name="settings_theme_summary_kiln">暖象牙底与黏土橙。</string>
+    <string name="settings_theme_summary_everforest">低饱和绿色系，暖而沉稳。</string>
+    <string name="settings_theme_summary_ink">中性纸底与墨水蓝。</string>
+    <string name="settings_theme_summary_sepia">旧书纸底与牛血红。</string>
+    <string name="settings_theme_summary_moss">微绿灰纸底与橄榄苔绿。</string>
+    <string name="settings_theme_summary_slate">微冷纸底与石板蓝。</string>
+    <string name="settings_theme_summary_pencil">纯中性灰阶，不用彩色强调。</string>
+    <string name="settings_theme_summary_celadon">青瓷纸底与深青。</string>
+
+    <!-- Idle reclaim presets -->
+    <string name="settings_extra_idle_off">关闭</string>
+    <string name="settings_extra_idle_hours">%1$d 小时</string>
+    <string name="settings_extra_idle_minutes">%1$d 分钟</string>
+
+    <!-- Service uptime -->
+    <string name="settings_extra_duration_days_hours">%1$d 天 %2$d 小时</string>
+    <string name="settings_extra_duration_hours_minutes">%1$d 小时 %2$d 分</string>
+    <string name="settings_extra_duration_minutes">%1$d 分</string>
+    <string name="settings_extra_duration_seconds">%1$d 秒</string>
+
+    <!-- Backend profiles: endpoint placeholders and hints -->
+    <string name="settings_extra_endpoint_placeholder_droid">使用 Droid 自己的登录</string>
+    <string name="settings_extra_endpoint_placeholder_traex">使用 TRAE CLI 自己的登录</string>
+    <string name="settings_extra_endpoint_placeholder_cursor">使用 Cursor 默认服务</string>
+    <string name="settings_extra_endpoint_hint_claude">需兼容 Anthropic Messages API，地址不要带 /v1</string>
+    <string name="settings_extra_endpoint_hint_codex">需兼容 OpenAI Responses API，地址要带 /v1</string>
+    <string name="settings_extra_endpoint_hint_dsh">需兼容 DeepSeek 接口</string>
+    <string name="settings_extra_endpoint_hint_droid">Droid 只使用 Factory 登录，服务地址不生效</string>
+    <string name="settings_extra_endpoint_hint_traex">TRAE CLI 只使用自己的登录，服务地址不生效</string>
+    <string name="settings_extra_input_type_text">文本</string>
+    <string name="settings_extra_input_type_image">图片</string>
+
+    <!-- Extensions -->
+    <string name="settings_extra_ext_action_failed">操作失败，请重试。</string>
+    <string name="settings_extra_ext_saved_refresh_failed">已保存；目录刷新失败，请稍后刷新。</string>
+    <string name="settings_extra_ext_template_skill">---\nname: my-skill\ndescription: 描述适用场景\n---\n\n</string>
+    <string name="settings_extra_ext_template_instructions"># 操作说明\n\n</string>
+    <string name="settings_extra_ext_kind_skill">技能</string>
+    <string name="settings_extra_ext_kind_plugin">插件</string>
+    <string name="settings_extra_ext_kind_rule">规则</string>
+    <string name="settings_extra_ext_kind_command">命令</string>
+    <string name="settings_extra_ext_kind_config">配置文件</string>
+    <string name="settings_extra_ext_scope_user">用户级</string>
+    <string name="settings_extra_ext_scope_project">项目级</string>
+    <string name="settings_extra_ext_scope_managed">受管</string>
+    <string name="settings_extra_ext_scope_builtin">内置</string>
+    <string name="settings_extra_ext_action_enable">启用</string>
+    <string name="settings_extra_ext_action_disable">停用</string>
+    <string name="settings_extra_ext_action_uninstall">卸载</string>
+    <string name="settings_extra_ext_action_update">更新</string>
+    <string name="settings_extra_ext_action_login">认证</string>
+    <string name="settings_extra_ext_runtime_loaded">已连接</string>
+    <string name="settings_extra_ext_runtime_error">连接异常</string>
+    <string name="settings_extra_ext_runtime_pending">等待加载</string>
+    <string name="settings_extra_ext_runtime_unknown">未确认</string>
+    <string name="settings_extra_ext_confirm_title">%1$s %2$s？</string>
+    <string name="settings_extra_ext_confirm_skill_note">此设置也会影响其他使用该技能的项目。</string>
+    <string name="settings_extra_ext_install_confirm">安装 %1$s（%2$s）？</string>
+
+    <!-- Pairing errors -->
+    <string name="settings_extra_pair_invalid_code_title">配对码不正确或已过期</string>
+    <string name="settings_extra_pair_invalid_code_body">配对码 5 分钟内有效且只能使用一次。请在 Mac 上重新运行 riffet status 生成新码后重试。</string>
+    <string name="settings_extra_pair_device_revoked_title">设备已被撤销</string>
+    <string name="settings_extra_pair_device_revoked_body">这台设备在 Mac 上已被移除。请重新配对；若反复出现，请在 Mac 上检查设备列表后重启服务端。</string>
+    <string name="settings_extra_pair_unreachable_title">连接不上服务器</string>
+    <string name="settings_extra_pair_unreachable_body">无法连接到 %1$s。请确认手机与 Mac 在同一网络、服务端已启动（riffet start --host 0.0.0.0），以及地址与端口正确。</string>
+    <string name="settings_extra_pair_not_riffet_title">这个地址不是 Riffet 服务端</string>
+    <string name="settings_extra_pair_not_riffet_body">该地址有响应，但返回的不是 Riffet 的接口。请检查地址与端口是否指向 Mac 上运行的 Riffet。</string>
+    <string name="settings_extra_pair_failed_title">配对失败</string>
+    <string name="settings_extra_pair_upgrade_title">升级应用</string>
+    <string name="settings_extra_pair_upgrade_body_prefix">这个二维码由更新版本的 Riffet 生成</string>
+    <string name="settings_extra_pair_upgrade_version">（协议版本 %1$d）</string>
+    <string name="settings_extra_pair_upgrade_body_suffix">，当前应用无法识别。请升级应用后重试，或直接手输配对码。</string>
+    <string name="settings_extra_pair_scanned_invalid_title">二维码不是有效的配对信息</string>
+    <string name="settings_extra_pair_scanned_invalid_body">%1$s 已退回手输，请确认二维码来自 Mac 上的 riffet status。</string>
+    <string name="settings_extra_pair_scanned_unreadable">二维码内容无法解析。</string>
+    <string name="settings_extra_pair_server_status">服务器返回 %1$d</string>
+    <string name="settings_extra_section_quick_chat">快速对话</string>
+    <string name="settings_quick_chat">快速对话</string>
+    <string name="settings_quick_chat_default_model">默认模型</string>
+    <string name="settings_quick_chat_none">不设置</string>
+    <string name="settings_quick_chat_archive">自动归档</string>
+    <string name="settings_quick_chat_days">%1$d 天</string>
+    <string name="settings_quick_chat_never">永不</string>
+    <string name="settings_quick_chat_hint">置顶或有收藏的对话不会归档</string>
+    <string name="settings_quick_chat_models_failed">无法读取可用模型</string>
+    <string name="settings_quick_chat_open_mode">打开方式</string>
+    <string name="settings_quick_chat_open_sheet">浮层</string>
+    <string name="settings_quick_chat_open_page">完整页面</string>
+    <string name="settings_quick_chat_presets">预设</string>
+    <string name="settings_quick_chat_edit">编辑</string>
+    <string name="settings_quick_chat_add">添加</string>
+    <string name="settings_quick_chat_new_preset">新建预设</string>
+    <string name="settings_quick_chat_edit_preset">编辑预设</string>
+    <string name="settings_quick_chat_preset_name">名称</string>
+    <string name="settings_quick_chat_preset_prompt">提示词</string>
+    <string name="settings_quick_chat_delete">删除</string>
+    <string name="settings_quick_chat_delete_title">删除预设？</string>
+    <string name="settings_quick_chat_restore_defaults">恢复默认预设</string>
+    <string name="settings_quick_chat_restore">恢复</string>
+    <string name="settings_quick_chat_restore_title">恢复默认预设？</string>
+    <string name="settings_quick_chat_presets_limit">最多 12 个预设，名称 20 字以内</string>
+
+    <!-- Keep-alive (通知与后台) -->
+    <string name="settings_keepalive_battery">忽略电池优化</string>
+    <string name="settings_keepalive_allow">允许</string>
+    <string name="settings_keepalive_background">允许后台运行</string>
+    <string name="settings_keepalive_hint_oppo">耗电管理 › 允许后台行为</string>
+    <string name="settings_keepalive_hint_xiaomi">省电策略 › 无限制</string>
+    <string name="settings_keepalive_hint_vivo">允许后台高耗电</string>
+    <string name="settings_keepalive_hint_huawei">应用启动管理 › 关闭自动管理，允许后台活动</string>
+    <string name="settings_keepalive_hint_default">电池 › 不受限制</string>
+    <string name="settings_keepalive_autostart">自启动</string>
+    <string name="settings_keepalive_cutoff">离开 App 后连接曾中断，可检查以上设置。</string>
+    <string name="settings_keepalive_cutoff_summary">后台连接曾中断</string>
+
+    <!-- 确认操作前验证本人 -->
+    <string name="settings_verify_group">身份验证</string>
+    <string name="settings_verify_approvals">确认操作前验证本人</string>
+    <string name="settings_verify_approvals_desc">通知中的审批改为打开 App 处理</string>
+    <string name="settings_verify_unavailable">需要先设置锁屏</string>
+    <string name="settings_verify_enable_reason">开启操作确认前的身份验证</string>
+    <string name="settings_verify_enable_failed">没有完成身份验证，设置未开启</string>
+    <string name="approval_verify_reason">确认 Agent 的操作</string>
+    <string name="approval_verify_failed">设备验证未完成，操作尚未提交。</string>
+    <string name="approval_verify_changed">会话或请求已变化，操作尚未提交。请同步当前请求。</string>
+
+    <!-- 能力与设备 (docs/DEVICES.md) -->
+    <string name="settings_extra_section_devices">能力与设备</string>
+    <string name="settings_device_group">这台设备</string>
+    <string name="settings_device_allow">允许 Agent 操作这台设备</string>
+    <string name="settings_device_allow_desc">仅保存在这台设备，开启期间保持常驻连接</string>
+    <string name="settings_device_capabilities">能力</string>
+    <string name="settings_device_cap_notify">通知</string>
+    <string name="settings_device_cap_clipboard">剪贴板</string>
+    <string name="settings_device_cap_location">位置</string>
+    <string name="settings_device_cap_photo">拍照与相册</string>
+    <string name="settings_device_cap_open_url">打开链接</string>
+    <string name="settings_device_cap_alarm">闹钟</string>
+    <string name="settings_device_available">可用</string>
+    <string name="settings_device_unavailable">不可用</string>
+    <string name="settings_device_exact_alarm">准时唤醒</string>
+    <string name="settings_device_exact_alarm_off">未允许时，预约的调用可能晚到</string>
+    <string name="settings_device_background_note">在后台时，读取剪贴板、拍照、打开链接和设置闹钟要点按通知</string>
+    <string name="settings_device_accessibility">无障碍</string>
+    <string name="settings_device_a11y_running">运行中</string>
+    <string name="settings_device_a11y_stalled">已开启，但没有在运行</string>
+    <string name="settings_device_a11y_restart">重新启动</string>
+    <string name="settings_device_a11y_enable">开启</string>
+    <string name="settings_device_a11y_sheet">开启无障碍</string>
+    <string name="settings_device_a11y_computer">通过电脑开启</string>
+    <string name="settings_device_a11y_unauthorized">在手机上允许 USB 调试后可用</string>
+    <string name="settings_device_a11y_restricted">允许受限制的设置</string>
+    <string name="settings_device_a11y_reinstall">找不到这一项时，用系统文件管理器重新安装一次</string>
+    <string name="settings_device_a11y_open">在无障碍里打开 Riffet</string>
+    <string name="settings_device_a11y_go">前往</string>
+    <string name="settings_device_a11y_oppo_monitor">在开发者选项里关闭「权限监控」后重试</string>
+    <string name="settings_device_a11y_xiaomi_secure">在开发者选项里开启「USB 调试（安全设置）」后重试</string>
+    <string name="settings_device_apps">App</string>
+    <string name="settings_device_app_allow">允许</string>
+    <string name="settings_device_app_ask">询问</string>
+    <string name="settings_device_app_block">禁止</string>
+    <string name="settings_device_apps_note">付款始终由你完成；询问时，发送、删除、提交要在手机上确认</string>
+</resources>

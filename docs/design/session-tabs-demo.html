@@ -1,0 +1,891 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riffet · 会话标签页</title>
+<style>
+/* Kiln light, the values apps/web/src/styles/index.css ships for [data-theme="kiln"]. */
+:root{
+  --bg:#faf9f5;--canvas:#f5f4ed;--muted:#f0eee6;--subtle:#f5f4ed;--elevated:#fff;--bubble:#f0eee6;
+  --hover:rgb(20 20 19/.055);--active:rgb(20 20 19/.09);
+  --fg:#2b2b2a;--fg2:#3d3d3a;--fg3:#73726c;--fg4:#b6b5b0;
+  --line:rgb(20 20 19/.08);--line-strong:rgb(20 20 19/.13);
+  --accent:#ab5e45;--accent-soft:rgb(217 119 87/.1);--success:#2c7a39;--warning:#966c1e;--warning-soft:rgb(150 108 30/.13);--danger:#8a2424;
+  --claude:#d77656;--codex:#10a37f;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+  --shadow-peek:0 0 0 1px var(--line),0 18px 48px -16px rgb(24 24 26/.28);
+  --shadow-composer:0 0 0 .5px rgb(24 24 26/.08),0 2px 4px rgb(24 24 26/.03),0 10px 28px -12px rgb(24 24 26/.14);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:13px/20px var(--sans);color:var(--fg);background:var(--canvas);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:default}
+svg{display:block;flex:none}
+[hidden]{display:none!important}
+
+/* ---------- shell ---------- */
+.app{display:flex;height:100vh}
+.sidebar{width:256px;flex:none;display:flex;flex-direction:column;padding:10px 8px 8px}
+.collapsed .sidebar{display:none}
+.work{flex:1;min-width:0;display:flex;flex-direction:column;padding:8px 8px 8px 0}
+.collapsed .work{padding-left:8px}
+.strip:not([hidden]) + .split{margin-top:-8px}
+.split{flex:1;min-height:0;display:flex;gap:8px}
+main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--bg);border-radius:12px;overflow:hidden;position:relative}
+.side{width:380px;flex:none;background:var(--bg);border-radius:12px;display:flex;flex-direction:column;animation:side-in .24s var(--ease) both}
+@keyframes side-in{from{opacity:0;transform:translateX(12px)}}
+
+.brand{display:flex;align-items:center;gap:8px;height:36px;padding:0 8px;font-weight:600;font-size:14px}
+.brand .sp{flex:1}
+.list{flex:1;min-height:0;overflow:auto;margin:0 -8px;padding:0 8px}
+.row{display:flex;align-items:center;gap:8px;height:32px;padding:0 8px;border-radius:8px;color:var(--fg2);white-space:nowrap}
+.row:hover{background:var(--hover)}
+.row.on{background:var(--active);color:var(--fg)}
+.row .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.row .time{font-size:12px;color:var(--fg4);font-variant-numeric:tabular-nums}
+.row .lead{width:14px;display:grid;place-items:center;flex:none}
+.row.moved{animation:moved .6s var(--ease)}
+@keyframes moved{from{background:var(--accent-soft)}}
+.section{display:flex;align-items:center;height:28px;margin-top:12px;padding:0 8px;font-size:11px;font-weight:500;color:var(--fg4)}
+.section .sp{flex:1}
+.section .icon-btn{width:24px;height:24px;opacity:0;transition:opacity .12s}
+.section:hover .icon-btn,.section .icon-btn.open{opacity:1}
+.group{margin-top:8px;padding:0 8px 2px;font-size:12px;color:var(--fg3)}
+.icon-btn{width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--fg3);flex:none;position:relative}
+.icon-btn:hover{background:var(--hover);color:var(--fg)}
+.icon-btn.on,.icon-btn.open{background:var(--active);color:var(--fg)}
+.icon-btn svg{width:16px;height:16px}
+.icon-btn .badge-dot{position:absolute;top:5px;right:5px;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg)}
+.strip .icon-btn .badge-dot{box-shadow:0 0 0 2px var(--canvas)}
+.foot{margin-top:4px}
+
+/* ---------- chrome: one tab bar, mounted in the header (标题栏) or above the panel (独立一行) ---------- */
+.hdr{height:52px;flex:none;display:flex;align-items:center;gap:4px;padding:0 12px}
+.collapsed .hdr,.collapsed .strip{padding-left:8px}
+.strip{height:44px;flex:none;display:flex;align-items:center;gap:4px;padding:0 8px 0 12px}
+.tabbar{flex:1;min-width:0;display:flex;align-items:center;gap:2px;align-self:stretch}
+.zone{min-width:0;display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;padding:2px 0}
+.zone::-webkit-scrollbar{display:none}
+.zone.pins{flex:0 0 auto;max-width:45%}
+.zone.scroll{flex:0 1 auto}
+.zone.ov-r{mask-image:linear-gradient(90deg,#000 calc(100% - 28px),transparent)}
+.zone.ov-l{mask-image:linear-gradient(90deg,transparent,#000 28px)}
+.zone.ov-l.ov-r{mask-image:linear-gradient(90deg,transparent,#000 28px,#000 calc(100% - 28px),transparent)}
+.zone-sep{width:1px;height:16px;background:var(--line-strong);margin:0 6px;flex:none;align-self:center}
+.tabbar > .icon-btn{align-self:center}
+
+.tab{position:relative;container-type:inline-size;flex:0 1 208px;min-width:136px;height:28px;display:flex;align-items:center;gap:6px;padding:0 4px 0 8px;border-radius:8px;color:var(--fg3);white-space:nowrap;user-select:none;transition:background-color .12s,color .12s}
+.tab:hover{background:var(--hover);color:var(--fg2)}
+.tab.on{background:var(--active);color:var(--fg);font-weight:500;flex-shrink:0}
+/* Pinned tabs are permanent: shorter, no close button, never squeezed. */
+.tab.pinned{flex:0 0 auto;min-width:0;max-width:168px;padding-right:8px;container-type:normal}
+.tab.pinned .end:empty{display:none}
+/* A preview tab is the one the next sidebar click replaces: outlined, not filled. */
+.tab.preview .title{font-weight:400}
+.tab.preview.on{background:transparent;box-shadow:inset 0 0 0 1px var(--line-strong)}
+.tab.preview:not(.on) .title{color:var(--fg4)}
+.tab.dragging{opacity:.35}
+.tab .lead{width:14px;height:14px;display:grid;place-items:center;flex:none}
+.tab .proj{flex:none;max-width:60px;overflow:hidden;text-overflow:ellipsis;color:var(--fg4);font-weight:400}
+@container (max-width:180px){.tab .proj{display:none}}
+.tab .title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+.tab .end{width:20px;height:20px;flex:none;display:grid;place-items:center}
+.tab .x{display:none;width:20px;height:20px;place-items:center;border-radius:6px;color:var(--fg3)}
+.tab .x:hover{background:var(--active);color:var(--fg)}
+.tab .x svg{width:12px;height:12px}
+.tab:not(.pinned):hover .x,.tab:not(.pinned).on .x{display:grid}
+.tab:not(.pinned):hover .dot,.tab:not(.pinned).on .dot{display:none}
+.tab.enter{animation:tab-in .22s var(--ease) both}
+@keyframes tab-in{from{opacity:0;transform:translateY(3px)}}
+
+/* 独立一行: the current tab is cut from the panel's own sheet. */
+.strip .zone{align-items:flex-end;padding:0;overflow-y:hidden}
+.strip .tab{isolation:isolate;height:36px;border-radius:10px 10px 0 0;padding-left:12px}
+.strip .tab.pinned{padding-right:12px}
+.strip .tab:not(.on):hover{background:transparent}
+.strip .tab:not(.on):hover::after{content:"";position:absolute;inset:4px 2px 6px;border-radius:8px;background:var(--hover);z-index:-1}
+.strip .tab.on{background:var(--bg);box-shadow:none;z-index:1}
+.strip .tab.on::before,.strip .tab.on .flare{content:"";position:absolute;bottom:0;width:10px;height:10px}
+.strip .tab.on::before{left:-10px;background:radial-gradient(circle at 0 0,transparent 10px,var(--bg) 10.5px)}
+.strip .tab.on .flare{right:-10px;background:radial-gradient(circle at 100% 0,transparent 10px,var(--bg) 10.5px)}
+.strip .tab.preview.on .title{color:var(--fg3)}
+.strip .zone.pins,.strip .zone.scroll{padding:0 10px;margin:0 -10px}
+
+/* 关闭: the classic title row. */
+.classic{flex:1;min-width:0;display:flex;align-items:center;gap:6px;padding-left:4px}
+.classic .p{color:var(--fg3);max-width:192px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.classic .s{color:var(--fg4)}
+.classic .t{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+
+.actions{display:flex;align-items:center;gap:2px;flex:none}
+
+.dot{width:7px;height:7px;border-radius:50%;display:block;flex:none}
+.dot.unread{background:var(--accent)}
+.dot.warn{background:var(--warning);box-shadow:0 0 0 3px var(--warning-soft);animation:pulse 1.6s ease-in-out infinite}
+.dot.danger{background:var(--danger)}
+@keyframes pulse{50%{box-shadow:0 0 0 1px var(--warning-soft)}}
+.spin{width:12px;height:12px;border-radius:50%;border:1.5px solid var(--accent-soft);border-top-color:var(--accent);animation:spin .8s linear infinite;flex:none}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ---------- content ---------- */
+.body{flex:1;min-height:0;overflow:auto}
+.col{max-width:680px;margin:0 auto;padding:20px 28px 160px}
+.u{display:flex;justify-content:flex-end;margin:18px 0}
+.u > div{max-width:80%;background:var(--bubble);padding:8px 14px;border-radius:16px;font-size:14px;line-height:22px}
+.a{font-size:14px;line-height:24px;color:var(--fg2);margin:14px 0}
+.a b{color:var(--fg);font-weight:600}
+.a code{font:12.5px var(--mono);background:var(--muted);padding:1px 5px;border-radius:5px}
+.working{display:flex;align-items:center;gap:8px;color:var(--fg3);font-size:13px;margin:12px 0}
+.approve{margin:16px 0;border-radius:12px;box-shadow:0 0 0 1px var(--line-strong);padding:12px 14px;display:flex;align-items:center;gap:12px;background:var(--elevated)}
+.approve .cmd{flex:1;font:12.5px var(--mono);color:var(--fg)}
+.btn{height:28px;padding:0 12px;border-radius:8px;font-size:13px}
+.btn.q{color:var(--fg2)}.btn.q:hover{background:var(--hover)}
+.btn.p{background:#141413;color:#faf9f5}.btn.p:hover{background:#393937}
+.fail{margin:14px 0;color:var(--danger);font-size:13px;display:flex;gap:8px;align-items:center}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:0 28px 18px;pointer-events:none}
+.composer{pointer-events:auto;max-width:680px;margin:0 auto;background:var(--elevated);border-radius:18px;box-shadow:var(--shadow-composer);padding:12px 12px 8px 16px}
+.composer textarea{width:100%;border:0;outline:0;resize:none;font:14px/22px var(--sans);color:var(--fg);background:none;height:44px}
+.composer textarea::placeholder{color:var(--fg4)}
+.composer .bar{display:flex;align-items:center;gap:6px;color:var(--fg3);font-size:12px}
+.composer .bar .sp{flex:1}
+.send{width:28px;height:28px;border-radius:50%;background:#141413;color:#faf9f5;display:grid;place-items:center}
+.send svg{width:14px;height:14px}
+.home{height:100%;display:grid;place-items:center;padding-bottom:12vh}
+.home .composer{width:min(640px,calc(100vw - 360px));max-width:none}
+.home .where{display:flex;justify-content:center;gap:6px;margin-bottom:14px;color:var(--fg3)}
+.pill{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 7px;border-radius:999px;background:var(--muted);font-size:12px;color:var(--fg2)}
+.pill svg{width:12px;height:12px}
+.switching .col,.switching .home{animation:fade .16s ease-out both}
+@keyframes fade{from{opacity:0}}
+.side .sh{height:52px;display:flex;align-items:center;gap:8px;padding:0 10px 0 16px;font-weight:500}
+.side .sh .sp{flex:1}
+.side .f{display:flex;align-items:center;gap:8px;height:30px;padding:0 16px;font:12.5px var(--mono);color:var(--fg2)}
+.side .f .n{margin-left:auto;font-family:var(--sans);font-size:12px}
+.plus{color:var(--success)}.minus{color:var(--danger)}
+
+/* ---------- popovers ---------- */
+.pop{position:fixed;z-index:22;background:var(--elevated);border-radius:12px;box-shadow:var(--shadow-peek);padding:6px;min-width:200px;animation:pop-in .14s var(--ease) both}
+@keyframes pop-in{from{opacity:0;transform:translateY(-3px)}}
+.mi{display:flex;align-items:center;gap:8px;height:30px;padding:0 8px;border-radius:7px;white-space:nowrap;color:var(--fg)}
+.mi:hover{background:var(--hover)}
+.mi > svg{width:16px;height:16px;color:var(--fg3)}
+.mi .k{margin-left:auto;padding-left:16px;color:var(--fg4);font-size:12px}
+.mi .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.mi .p{color:var(--fg4);font-size:12px}
+.mi.check::after{content:"✓";margin-left:auto;padding-left:16px;color:var(--fg)}
+.pop hr{border:0;height:1px;background:var(--line);margin:5px 4px}
+.pop .lbl{padding:6px 8px 2px;font-size:11px;font-weight:500;color:var(--fg4)}
+.card{position:fixed;z-index:19;width:272px;background:var(--elevated);border-radius:12px;box-shadow:var(--shadow-peek);padding:12px 14px;animation:pop-in .14s var(--ease) both;pointer-events:none}
+.card .h{font-weight:600;color:var(--fg);margin-bottom:8px;line-height:19px}
+.card .r{display:flex;gap:10px;font-size:12px;line-height:20px;color:var(--fg2)}
+.card .r span:first-child{width:28px;flex:none;color:var(--fg3)}
+.card .r .m{font-family:var(--mono);font-size:11.5px}
+.card .note{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:12px;color:var(--fg3)}
+
+/* 会话信息: the desktop popover and the phone sheet render this same content. */
+.info{position:fixed;z-index:21;width:360px;max-height:calc(100vh - 80px);overflow:auto;background:var(--elevated);border-radius:14px;box-shadow:var(--shadow-peek);animation:pop-in .16s var(--ease) both}
+.info .head{padding:14px 16px 12px}
+.info .title{font-size:14px;font-weight:600;line-height:20px;color:var(--fg)}
+.info .meta{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:12px;color:var(--fg3);flex-wrap:wrap}
+.info .meta .m{font-family:var(--mono);font-size:11.5px}
+.info .meta .sep{color:var(--fg4)}
+.info .copy{display:inline-flex;align-items:center;gap:4px;border-radius:6px;padding:0 4px;margin:0 -4px}
+.info .copy:hover{background:var(--hover);color:var(--fg)}
+.info .copy svg{width:12px;height:12px}
+.tiles{display:flex;gap:6px;padding:0 10px 10px}
+.tile{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:3px;padding:9px 6px 8px;border-radius:12px;background:var(--subtle);color:var(--fg2);transition:background-color .12s}
+.tile:hover{background:var(--muted)}
+.tile.on{background:var(--accent-soft);color:var(--accent)}
+.tile svg{width:18px;height:18px}
+.tile .l{font-size:12px;font-weight:500}
+.tile .h{font-size:11px;line-height:14px;color:var(--fg3);font-variant-numeric:tabular-nums;white-space:nowrap}
+.isec{border-top:1px solid var(--line);padding:6px}
+.isec .ih{display:flex;align-items:center;height:28px;padding:0 10px;font-size:12px;color:var(--fg3)}
+.isec .ih .sp{flex:1}
+.isec .ih .c{font-variant-numeric:tabular-nums;color:var(--fg4)}
+.ir{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border-radius:8px;color:var(--fg)}
+.ir:hover{background:var(--hover)}
+.ir > svg{width:15px;height:15px;color:var(--fg3)}
+.ir .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ir .t.m{font:12px var(--mono);color:var(--fg2)}
+.ir .r{font-size:12px;color:var(--fg4);font-variant-numeric:tabular-nums;white-space:nowrap}
+.ir .stop{display:none;width:22px;height:22px;place-items:center;border-radius:6px;color:var(--fg3)}
+.ir .stop:hover{background:var(--active);color:var(--danger)}
+.ir:hover .stop{display:grid}.ir:hover .stop + .r{display:none}
+.ir.more{color:var(--fg3)}
+.ir .done{width:15px;height:15px;color:var(--fg4)}
+.ir > .spin{margin:0 1.5px}
+.avatars{display:flex;align-items:center;padding-right:3px}
+.avatars > svg{margin-right:-3px;border-radius:50%;box-shadow:0 0 0 2px var(--elevated);background:var(--elevated)}
+
+/* ---------- settings ---------- */
+.scrim{position:fixed;inset:0;z-index:40;background:rgb(20 20 19/.18);display:grid;place-items:center;animation:fade .14s both}
+.dialog{width:600px;background:var(--elevated);border-radius:16px;box-shadow:var(--shadow-peek);padding:20px 24px 24px}
+.dialog h2{margin:0 0 18px;font-size:15px;font-weight:600}
+.setting .name{font-weight:500;margin-bottom:10px}
+.opts{display:flex;gap:12px}
+.opt{flex:1;display:flex;flex-direction:column;gap:8px;align-items:center;font-size:12px;color:var(--fg2)}
+.thumb{width:100%;aspect-ratio:16/10;border-radius:10px;background:var(--canvas);box-shadow:0 0 0 1px var(--line-strong);padding:6px;display:flex;gap:5px;transition:box-shadow .12s}
+.opt[aria-pressed=true] .thumb{box-shadow:0 0 0 2px var(--accent)}
+.opt[aria-pressed=true]{color:var(--fg);font-weight:500}
+.thumb .sb{width:26%;display:flex;flex-direction:column;gap:3px;padding-top:4px}
+.thumb .sb i{height:3px;border-radius:2px;background:var(--fg4);opacity:.5}
+.thumb .mc{flex:1;display:flex;flex-direction:column}
+.thumb .pn{flex:1;background:var(--bg);border-radius:6px;padding:5px;display:flex;flex-direction:column;gap:4px}
+.thumb .tb{display:flex;gap:3px;height:7px}
+.thumb .tb i{width:20px;border-radius:3px;background:var(--active)}
+.thumb .tb i:first-child{background:var(--fg4)}
+.thumb .ln{height:3px;border-radius:2px;background:var(--active);width:70%}
+.thumb .ln.s{width:45%}
+.thumb .st{display:flex;gap:2px;height:8px;align-items:flex-end;padding-left:3px}
+.thumb .st i{width:22px;height:8px;border-radius:3px 3px 0 0;background:var(--bg)}
+.thumb .st i:not(:first-child){height:4px;margin-bottom:2px;border-radius:2px;background:var(--active)}
+.hint{margin-top:12px;font-size:12px;color:var(--fg3)}
+
+/* ---------- demo controls (not product UI) ---------- */
+.ctl{position:fixed;right:16px;bottom:16px;z-index:18;display:flex;flex-direction:column;gap:8px;padding:10px;border-radius:14px;background:rgb(38 38 37/.92);color:#eceae3;font-size:12px;box-shadow:0 12px 32px -10px rgb(0 0 0/.4);backdrop-filter:blur(10px)}
+.ctl .line{display:flex;align-items:center;gap:6px}
+.ctl .seg{display:inline-flex;padding:2px;border-radius:8px;background:rgb(255 255 255/.08)}
+.ctl .seg button,.ctl .b{padding:4px 10px;border-radius:6px;color:#bdbab1}
+.ctl .seg button[aria-pressed=true]{background:rgb(255 255 255/.16);color:#fff}
+.ctl .b{background:rgb(255 255 255/.08)}.ctl .b:hover{background:rgb(255 255 255/.14);color:#fff}
+.ctl kbd{font:11px var(--mono);padding:1px 5px;border-radius:4px;background:rgb(255 255 255/.1);color:#eceae3}
+.ctl .keys{color:#9c998f;line-height:20px}
+.ctl .hide{position:absolute;top:6px;right:8px;color:#9c998f}
+.ctl.min > :not(.hide){display:none}.ctl.min{padding:14px 18px}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="work" id="work">
+    <div class="strip" id="strip" hidden></div>
+    <div class="split">
+      <main id="main">
+        <header class="hdr" id="hdr"></header>
+        <div class="body" id="body"></div>
+        <div class="dock" id="dock"></div>
+      </main>
+      <aside class="side" id="side" hidden></aside>
+    </div>
+  </div>
+</div>
+
+<div class="ctl" id="ctl">
+  <button class="hide" id="ctlHide">—</button>
+  <div class="line"><div class="seg" data-k="mode"><button data-v="off">关闭</button><button data-v="inline" aria-pressed="true">标题栏</button><button data-v="strip">独立一行</button></div><button class="b" data-settings>设置页</button></div>
+  <div class="line"><div class="seg" data-k="scene"><button data-v="daily" aria-pressed="true">日常</button><button data-v="many">很多标签</button></div>
+    <button class="b" id="toggleSidebar">侧栏</button><button class="b" id="finish">后台完成一个</button></div>
+  <div class="keys">
+    侧栏单击 = 预览 · <kbd>⌘</kbd>单击 / 双击标签 = 保留 · 中键关闭 · 右键菜单<br>
+    拖动排序（置顶区与普通区各自排序）· 滚轮 / 触控板横向滑动<br>
+    <kbd>⌥1–8</kbd> 第 N 个 · <kbd>⌥9</kbd> 最后 · <kbd>⌥[</kbd> <kbd>⌥]</kbd> 前后 · <kbd>⌥W</kbd> 关闭 · <kbd>⌥⇧T</kbd> 重开 · <kbd>⌥T</kbd> 新会话 · <kbd>⌥I</kbd> 会话信息
+  </div>
+</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const svg = (d, extra = '') => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" ${extra}>${d}</svg>`;
+
+const ICON = {
+  claude: '<svg width="14" height="14" viewBox="0 0 16 16" fill="var(--claude)"><path d="M8 1.2l.9 4.6 3.9-2.6-2.6 3.9 4.6.9-4.6.9 2.6 3.9-3.9-2.6L8 14.8l-.9-4.6-3.9 2.6 2.6-3.9L1.2 8l4.6-.9-2.6-3.9 3.9 2.6z"/></svg>',
+  codex: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--codex)" stroke-width="1.6"><path d="M8 1.8 13.4 5v6L8 14.2 2.6 11V5z"/><circle cx="8" cy="8" r="1.8" fill="var(--codex)" stroke="none"/></svg>',
+  x: '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="m3 3 6 6M9 3 3 9"/></svg>',
+  branch: svg('<circle cx="5" cy="4" r="1.6"/><circle cx="5" cy="12" r="1.6"/><circle cx="11" cy="6" r="1.6"/><path d="M5 5.6v4.8M11 7.6c0 2-2 2.4-6 3"/>'),
+  edit: svg('<path d="M10.5 2.5l3 3-7.5 7.5H3v-3z"/>', 'width="16" height="16"'),
+  search: svg('<circle cx="7" cy="7" r="4.2"/><path d="m10.2 10.2 3.3 3.3"/>', 'width="16" height="16"'),
+  settings: svg('<circle cx="8" cy="8" r="2"/><path d="M8 1.8v1.6M8 12.6v1.6M1.8 8h1.6M12.6 8h1.6M3.6 3.6l1.1 1.1M11.3 11.3l1.1 1.1M3.6 12.4l1.1-1.1M11.3 4.7l1.1-1.1"/>', 'width="16" height="16"'),
+  panelL: svg('<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M6 3v10"/>'),
+  panelR: svg('<rect x="2" y="3" width="12" height="10" rx="2"/><path d="M10 3v10"/>'),
+  info: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="3"/><path d="M5.5 6h5M5.5 8.5h5M5.5 11h2.5"/>'),
+  more: '<svg viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.2"/><circle cx="8" cy="8" r="1.2"/><circle cx="12.5" cy="8" r="1.2"/></svg>',
+  plus: svg('<path d="M8 3.5v9M3.5 8h9"/>', 'stroke-width="1.5"'),
+  chev: svg('<path d="m4.5 6.5 3.5 3.5 3.5-3.5"/>', 'stroke-width="1.5"'),
+  eye: svg('<path d="M1.8 8s2.3-4.2 6.2-4.2S14.2 8 14.2 8 11.9 12.2 8 12.2 1.8 8 1.8 8z"/><circle cx="8" cy="8" r="1.8"/>'),
+  pin: svg('<path d="M9.5 2.5l4 4-2 .8-2.3 2.3-.4 2.9-5.3-5.3 2.9-.4 2.3-2.3z"/><path d="m5 11-2.5 2.5"/>'),
+  diff: svg('<rect x="2.5" y="2.5" width="11" height="11" rx="2.5"/><path d="M8 5v4M6 7h4M6 11h4"/>'),
+  folder: svg('<path d="M2.5 4.5a1 1 0 0 1 1-1h3l1.5 1.5h4.5a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z"/>'),
+  term: svg('<rect x="2" y="3" width="12" height="10" rx="2"/><path d="m5 6.5 2 1.5-2 1.5M8.5 10H11"/>'),
+  chat: svg('<path d="M3 4.5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2V9a2 2 0 0 1-2 2H7l-3 2.5V11a2 2 0 0 1-1-1.7z"/>'),
+  check: svg('<circle cx="8" cy="8" r="5.5"/><path d="m5.8 8.2 1.6 1.5 2.9-3.2"/>', 'class="done"'),
+  square: '<svg width="10" height="10" viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7" rx="1.5" fill="currentColor"/></svg>',
+  mark: svg('<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z"/>'),
+  tag: svg('<path d="M2.5 3.5v4l6 6 5-5-6-6h-4a1 1 0 0 0-1 1z"/><circle cx="5.5" cy="5.5" r=".8" fill="currentColor"/>'),
+  share: svg('<path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M12 9.5V12a1.5 1.5 0 0 1-1.5 1.5h-6A1.5 1.5 0 0 1 3 12V6a1.5 1.5 0 0 1 1.5-1.5H7"/>'),
+  handoff: svg('<path d="M2.5 5.5h9l-2.5-2.5M13.5 10.5h-9l2.5 2.5"/>'),
+  template: svg('<path d="M4.5 2.5h7v11L8 11l-3.5 2.5z"/><path d="M8 5v3M6.5 6.5h3"/>'),
+  archive: svg('<rect x="2" y="3" width="12" height="3" rx="1"/><path d="M3 6v6a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 12V6M6.5 8.5h3"/>'),
+  send: svg('<path d="M8 13V3.5M4 7.2 8 3.2l4 4"/>', 'stroke-width="1.8"'),
+  logo: '<svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#c4553a" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M2 4l3.2 10L9 6.5l3.8 7.5L16 4"/></svg>',
+};
+
+const PROJECTS = {
+  riffet: { name: 'riffet', path: '~/workspace/riffet', branch: 'main' },
+  android: { name: 'riffet-android', path: '~/workspace/riffet-android', branch: 'feat/home-tabs', worktree: true },
+  quick: { name: '快速对话' },
+};
+const S = (id, t, p, a, m, st, ago, extra = {}) => ({ id, t, p, a, m, st, ago, ...extra });
+const SUB_NAMES = ['explorer · 读取 Sidebar 排序', 'worker · 设置项接线', 'explorer · 快捷键冲突排查', 'worker · i18n 文案', 'explorer · 契约字段', 'worker · Android 模型'];
+const SESSIONS = [
+  S('s1', '重构 riffet Android app', 'riffet', 'claude', 'claude-opus-5-5', 'running', '刚刚', {
+    pinnedAt: 1, changes: { f: 23, a: 614, d: 90 },
+    discussions: [{ q: '为什么 Activity 要等 React 19.2', ago: '3 分钟', unread: true }, { q: '预览标签的替换规则', ago: '20 分钟' }],
+    subs: [{ n: 'explorer · 定位 navStore 调用链', st: 'running', r: '42 秒' }, { n: 'worker · Header 拆分', st: 'running', r: '1 分钟' },
+      ...Array.from({ length: 12 }, (_, i) => ({ n: SUB_NAMES[i % 6], st: 'done', r: `${i + 2} 分钟前` }))],
+    jobs: [{ c: 'pnpm --filter web dev', st: 'running', r: '12 分钟' }, { c: 'pnpm typecheck', st: 'done', r: '4 分钟前' }],
+    marks: 3,
+  }),
+  S('s2', '修复 native 投递与停止状态', 'riffet', 'codex', 'gpt-5.5-codex', 'idle', '3 分钟', { unread: true, changes: { f: 4, a: 88, d: 31 } }),
+  S('s3', '顶部标签页设计讨论', 'riffet', 'claude', 'claude-opus-5-5', 'waiting', '5 分钟', { changes: { f: 1, a: 412, d: 0 }, discussions: [{ q: '浏览器式标签和浏览器自身标签栏的叠加', ago: '刚刚' }], marks: 1 }),
+  S('s4', 'Composer 控件收紧', 'riffet', 'codex', 'gpt-5.5-codex', 'failed', '12 分钟'),
+  S('s5', 'Home tabs 与手机能力', 'android', 'claude', 'claude-sonnet-5-5', 'idle', '1 小时', { changes: { f: 9, a: 230, d: 41 } }),
+  S('s6', 'Timeline 渲染性能', 'riffet', 'codex', 'gpt-5.5-codex', 'idle', '2 小时'),
+  S('s7', 'MCP 唤醒与设备通道', 'riffet', 'claude', 'claude-opus-5-5', 'running', '刚刚', { subs: [{ n: 'worker · 唤醒重试', st: 'running', r: '18 秒' }, { n: 'explorer · 设备通道协议', st: 'done', r: '3 分钟前' }] }),
+  S('s8', 'i18n 错误文案整理', 'riffet', 'claude', 'claude-sonnet-5-5', 'idle', '昨天'),
+  S('s9', '子 Agent 展示方式', 'riffet', 'codex', 'gpt-5.5-codex', 'idle', '昨天'),
+  S('s10', 'Kiln 深色主题微调', 'riffet', 'claude', 'claude-opus-5-5', 'idle', '2 天'),
+  S('s11', '会话搜索对话框', 'android', 'codex', 'gpt-5.5-codex', 'idle', '3 天'),
+  S('s12', '发布 0.6.1 检查清单', 'riffet', 'claude', 'claude-opus-5-5', 'idle', '4 天', { pinnedAt: 2 }),
+  S('q1', 'zsh 里 glob 不匹配时报错', 'quick', 'claude', 'claude-haiku-5-5', 'idle', '1 小时'),
+];
+const byId = Object.fromEntries(SESSIONS.map((s) => [s.id, s]));
+for (const s of SESSIONS) s.msgs = seed(s);
+function seed(s) {
+  const msgs = [{ u: `${s.t}，先看一下现状再动手。` }, { a: `我先读了相关模块。<b>${esc(s.t)}</b> 牵涉的入口主要在 <code>Workbench.tsx</code> 和 <code>navStore.ts</code>，改动集中在这两处，不需要新增依赖。下面按顺序处理。` }];
+  if (s.st === 'running') msgs.push({ working: true });
+  if (s.st === 'waiting') msgs.push({ approve: 'pnpm --filter web build' });
+  if (s.st === 'failed') msgs.push({ fail: '连接中断：上游返回 502' });
+  return msgs;
+}
+
+/* ---------- state ---------- */
+// Pinned sessions are permanent tabs. Their order starts as the sidebar's (newest pin first); drags adjust it from there.
+let pinOrder = SESSIONS.filter((s) => s.pinnedAt).sort((a, b) => b.pinnedAt - a.pinnedAt).map((s) => s.id);
+const SCENES = {
+  daily: () => ({ tabs: [{ id: 's3' }, { id: 's2' }, { id: 's4' }, { id: 's5', preview: true }], active: 's3' }),
+  many: () => ({ tabs: ['s3', 's2', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11'].map((id) => ({ id })), active: 's9' }),
+};
+let { tabs, active } = SCENES.daily();
+let closed = [];
+let mode = 'inline';
+let sort = 'activity';
+let panel = '';
+let newCount = 0;
+let infoOpen = false;
+let subsExpanded = false;
+
+const isPinned = (id) => pinOrder.includes(id);
+const ordered = () => [...pinOrder, ...tabs.map((t) => t.id)];
+const tabOf = (id) => tabs.find((t) => t.id === id);
+/** Where a new tab goes: after the current one, or first among the unpinned when a pinned tab is current. */
+const insertAt = () => isPinned(active) ? 0 : tabs.findIndex((t) => t.id === active) + 1;
+
+/* ---------- tab model ---------- */
+function activate(id) {
+  if (!isPinned(id) && !tabOf(id)) return;
+  // Clicking the tab already showing keeps its draft: only a real switch re-renders the conversation.
+  if (active !== id) { active = id; byId[id].unread = false; subsExpanded = false; render(true); } else render();
+  scrollToActive();
+}
+/** The sidebar's click: focus an open tab, else replace the preview tab, else open a preview after the current one. */
+function open(id, keepTab = false) {
+  if (mode === 'off') { active = id; byId[id].unread = false; return render(true); }
+  if (isPinned(id)) return activate(id);
+  const existing = tabOf(id);
+  if (existing) { if (keepTab) existing.preview = false; return activate(id); }
+  const preview = tabs.findIndex((t) => t.preview);
+  const tab = { id, preview: !keepTab, fresh: true };
+  if (preview >= 0 && !keepTab) tabs.splice(preview, 1, tab);
+  else tabs.splice(insertAt(), 0, tab);
+  activate(id);
+}
+function keep(id) { const t = tabOf(id); if (t?.preview) { t.preview = false; render(); } }
+function close(id) {
+  if (isPinned(id)) return;
+  const all = ordered();
+  const i = tabs.findIndex((t) => t.id === id);
+  if (i < 0) return;
+  closed.push({ ...tabs[i], index: i });
+  tabs.splice(i, 1);
+  const switched = active === id;
+  if (switched) { const j = all.indexOf(id); active = all[j + 1] ?? all[j - 1] ?? ''; }
+  if (!ordered().length) newTab(); else render(switched);
+}
+function closeOthers(id) { closed.push(...tabs.filter((t) => t.id !== id)); tabs = tabs.filter((t) => t.id === id); activate(id); }
+function closeRight(id) {
+  const i = tabs.findIndex((t) => t.id === id);
+  closed.push(...tabs.slice(i + 1)); tabs = tabs.slice(0, i + 1);
+  const switched = !isPinned(active) && !tabOf(active); if (switched) active = id; render(switched);
+}
+function reopen() {
+  const t = closed.pop(); if (!t) return;
+  if (isPinned(t.id) || tabOf(t.id)) return activate(t.id);
+  tabs.splice(Math.min(t.index ?? tabs.length, tabs.length), 0, { id: t.id, fresh: true });
+  activate(t.id);
+}
+function togglePin(id) {
+  const s = byId[id];
+  if (isPinned(id)) {
+    pinOrder = pinOrder.filter((x) => x !== id); delete s.pinnedAt;
+    tabs.unshift({ id, fresh: true });
+  } else {
+    tabs = tabs.filter((t) => t.id !== id);
+    pinOrder.unshift(id); s.pinnedAt = Date.now();
+  }
+  render(); scrollToActive();
+}
+function newTab() {
+  const id = `n${++newCount}`;
+  const project = byId[active]?.p === 'quick' ? 'riffet' : byId[active]?.p ?? 'riffet';
+  byId[id] = S(id, '新会话', project, 'claude', 'claude-opus-5-5', 'idle', '刚刚', { home: true, msgs: [] });
+  tabs.splice(insertAt(), 0, { id, fresh: true });
+  activate(id);
+  setTimeout(() => $('main textarea')?.focus(), 30);
+}
+function send(text) {
+  const s = byId[active];
+  if (!text.trim()) return;
+  if (s.home) { s.home = false; s.t = text.trim().slice(0, 22); SESSIONS.unshift(s); }
+  s.msgs = s.msgs.filter((m) => !m.working && !m.approve && !m.fail);
+  s.msgs.push({ u: esc(text) }, { working: true });
+  s.st = 'running'; s.ago = '刚刚';
+  for (const ta of document.querySelectorAll('main textarea')) ta.value = '';
+  keep(s.id); render();
+  setTimeout(() => finish(s.id), 5000);
+}
+function finish(id) {
+  const s = byId[id];
+  if (!s || s.st !== 'running') return;
+  s.st = 'idle';
+  s.msgs = s.msgs.filter((m) => !m.working);
+  s.msgs.push({ a: '已完成。类型检查与构建通过。' });
+  for (const sub of s.subs ?? []) if (sub.st === 'running') { sub.st = 'done'; sub.r = '刚刚'; }
+  if (id !== active) s.unread = true;
+  render();
+}
+
+/* ---------- render ---------- */
+function primaryProject() {
+  const count = {};
+  for (const id of ordered()) count[byId[id].p] = (count[byId[id].p] ?? 0) + 1;
+  return Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0];
+}
+function lead(s) { return s.st === 'running' ? '<span class="spin" role="status" aria-label="运行中"></span>' : ICON[s.a]; }
+function statusDot(s) { return s.st === 'waiting' ? 'warn' : s.st === 'failed' ? 'danger' : s.unread ? 'unread' : ''; }
+function tabHTML(id, preview, pinned) {
+  const s = byId[id];
+  const on = id === active;
+  const dot = statusDot(s);
+  const proj = s.p !== primaryProject() ? `<span class="proj">${esc(PROJECTS[s.p].name)}</span>` : '';
+  const end = pinned ? (dot ? `<i class="dot ${dot}"></i>` : '') : `${dot ? `<i class="dot ${dot}"></i>` : ''}<button class="x" aria-label="关闭标签">${ICON.x}</button>`;
+  return `<div class="tab${on ? ' on' : ''}${preview ? ' preview' : ''}${pinned ? ' pinned' : ''}" data-id="${id}" role="tab" aria-selected="${on}" draggable="true">`
+    + `<span class="lead">${lead(s)}</span>${pinned ? '' : proj}<span class="title">${esc(s.t)}</span><span class="end">${end}</span><span class="flare"></span></div>`;
+}
+function hasBackgroundWork(s) { return (s.subs ?? []).some((x) => x.st === 'running') || (s.jobs ?? []).some((x) => x.st === 'running') || (s.discussions ?? []).some((x) => x.unread); }
+function actionsHTML(s) {
+  return `${s.home ? '' : `<button class="icon-btn${infoOpen ? ' open' : ''}" id="infoBtn" aria-label="会话信息" title="会话信息">${ICON.info}${hasBackgroundWork(s) ? '<i class="badge-dot"></i>' : ''}</button>`}`
+    + `<button class="icon-btn${panel ? ' on' : ''}" data-panel-toggle aria-label="变更与文件" title="变更与文件">${ICON.panelR}</button>`
+    + `<button class="icon-btn" id="moreBtn" aria-label="更多操作" title="更多操作">${ICON.more}</button>`;
+}
+const expandBtn = `<button class="icon-btn" data-expand title="展开侧边栏">${ICON.panelL}</button>`;
+/** The tab bar's skeleton outlives renders, so its scroll position does. */
+function mountChrome() {
+  const bar = `<div class="tabbar" id="tabbar"><div class="zone pins" id="pins" data-zone="pins" role="tablist"></div><i class="zone-sep" id="zsep"></i><div class="zone scroll" id="scroll" data-zone="tabs" role="tablist"></div>`
+    + `<button class="icon-btn" data-new title="新会话">${ICON.plus}</button><button class="icon-btn" id="all" hidden title="全部标签">${ICON.chev}</button></div>`;
+  const lead = $('#app').classList.contains('collapsed') ? expandBtn : '';
+  const acts = '<div class="actions" id="acts"></div>';
+  $('#strip').hidden = mode !== 'strip';
+  $('#hdr').hidden = mode === 'strip';
+  $('#strip').innerHTML = mode === 'strip' ? `${lead}${bar}${acts}` : '';
+  $('#hdr').innerHTML = mode === 'inline' ? `${lead}${bar}${acts}` : mode === 'off' ? `${lead}<div class="classic" id="classic"></div>${acts}` : '';
+  for (const zone of document.querySelectorAll('.zone')) {
+    zone.addEventListener('scroll', () => updateOverflow(zone));
+    // A mouse wheel scrolls the row sideways; a trackpad's horizontal swipe already does.
+    zone.addEventListener('wheel', (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX) || zone.scrollWidth <= zone.clientWidth) return;
+      e.preventDefault(); zone.scrollLeft += e.deltaY;
+    }, { passive: false });
+  }
+}
+function sidebarHTML() {
+  // 按标签页顺序 reorders only pinned rows: an unpinned row moving whenever a tab opened would jump under the cursor.
+  const pinRank = (s) => sort === 'tabs' ? pinOrder.indexOf(s.id) : -s.pinnedAt;
+  const rows = (p) => {
+    const list = SESSIONS.filter((s) => s.p === p && !s.home);
+    const pinned = list.filter((s) => s.pinnedAt).sort((a, b) => pinRank(a) - pinRank(b));
+    return [...pinned, ...list.filter((s) => !s.pinnedAt)].map((s) => {
+      const ld = s.st === 'running' ? '<span class="spin"></span>' : statusDot(s) ? `<i class="dot ${statusDot(s)}"></i>` : '';
+      return `<div class="row${s.id === active ? ' on' : ''}" data-open="${s.id}"><span class="lead">${ld}</span><span class="t">${esc(s.t)}</span><span class="time">${s.pinnedAt ? '置顶' : s.ago}</span></div>`;
+    }).join('');
+  };
+  return `<div class="brand">${ICON.logo}<span>Riffet</span><span class="sp"></span><button class="icon-btn" data-collapse title="收起侧边栏">${ICON.panelL}</button></div>
+    <div class="row" data-new>${ICON.edit}<span class="t">新会话</span></div>
+    <div class="row">${ICON.search}<span class="t">搜索</span><span class="time">⌘K</span></div>
+    <div class="list"><div class="section"><span>项目</span><span class="sp"></span><button class="icon-btn" id="viewBtn" aria-label="显示选项">${ICON.eye}</button></div>
+    <div class="group">riffet</div>${rows('riffet')}
+    <div class="group">riffet-android</div>${rows('android')}
+    <div class="group">快速对话</div>${rows('quick')}</div>
+    <div class="row foot" data-settings>${ICON.settings}<span class="t">设置</span></div>`;
+}
+function bodyHTML(s) {
+  if (s.home) {
+    const p = PROJECTS[s.p];
+    return `<div class="home"><div><div class="where"><span class="pill">${esc(p.name)}</span>${p.branch ? `<span class="pill">${ICON.branch}${esc(p.branch)}</span>` : ''}</div>${composerHTML('home')}</div></div>`;
+  }
+  return `<div class="col">${s.msgs.map((m) => {
+    if (m.u) return `<div class="u"><div>${m.u}</div></div>`;
+    if (m.a) return `<p class="a">${m.a}</p>`;
+    if (m.working) return '<div class="working"><span class="spin"></span>正在编辑 navStore.ts</div>';
+    if (m.approve) return `<div class="approve"><span class="cmd">$ ${esc(m.approve)}</span><button class="btn q" data-deny>拒绝</button><button class="btn p" data-allow>允许</button></div>`;
+    if (m.fail) return `<div class="fail"><i class="dot danger"></i>${esc(m.fail)}<button class="btn q" data-retry>重试</button></div>`;
+    return '';
+  }).join('')}</div>`;
+}
+function composerHTML(kind) {
+  const s = byId[active];
+  return `<div class="composer"><textarea rows="2" placeholder="${kind === 'home' ? '描述要做的事' : '继续对话'}"></textarea>
+    <div class="bar">${ICON[s.a]}<span>${esc(s.m)}</span><span class="sp"></span><button class="send" data-send aria-label="发送">${ICON.send}</button></div></div>`;
+}
+const changesHTML = (c) => c ? `<span class="plus">+${c.a}</span> <span class="minus">−${c.d}</span>` : '';
+function sideHTML() {
+  const c = byId[active].changes;
+  const files = ['Header.tsx', 'navStore.ts', 'Sidebar.tsx', 'session-order.ts', 'session.ts'].slice(0, c ? Math.min(5, c.f) : 0);
+  return `<div class="sh">${panel === 'git' ? '变更' : '文件'}<span class="sp"></span><button class="icon-btn" data-panel-close>${ICON.x}</button></div>`
+    + (panel === 'git' ? files.map((f, i) => `<div class="f"><span>${f}</span><span class="n">${changesHTML({ a: 40 + i * 37, d: i * 9 })}</span></div>`).join('')
+      : ['apps', 'docs', 'packages', 'README.md', 'package.json'].map((f) => `<div class="f">${f}</div>`).join(''));
+}
+
+/** The content of 会话信息. On a phone the same content fills the title sheet. */
+function infoHTML(s) {
+  const p = PROJECTS[s.p];
+  const subs = s.subs ?? [];
+  const running = subs.filter((x) => x.st === 'running');
+  const done = subs.filter((x) => x.st !== 'running');
+  const shown = subsExpanded ? subs.length : Math.max(3, running.length);
+  const jobs = s.jobs ?? [];
+  const runningJobs = jobs.filter((j) => j.st === 'running').length;
+  const disc = s.discussions ?? [];
+  const sec = (title, count, rows) => `<div class="isec"><div class="ih"><span>${title}</span><span class="sp"></span><span class="c">${count}</span></div>${rows}</div>`;
+  return `<div class="head"><div class="title">${esc(s.t)}</div>
+      <div class="meta">${ICON[s.a]}<span class="m">${esc(s.m)}</span>${p.path ? `<span class="sep">·</span><span>${esc(p.name)}</span>` : ''}`
+        + (p.branch ? `<span class="sep">·</span><button class="copy" data-copy="${esc(p.branch)}" title="复制分支名">${ICON.branch}<span class="m">${esc(p.branch)}</span></button>` : '') + `</div></div>`
+    + (p.path ? `<div class="tiles">
+      <button class="tile${panel === 'git' ? ' on' : ''}" data-panel="git">${ICON.diff}<span class="l">变更</span><span class="h">${changesHTML(s.changes) || '&nbsp;'}</span></button>
+      <button class="tile${panel === 'files' ? ' on' : ''}" data-panel="files">${ICON.folder}<span class="l">文件</span><span class="h">&nbsp;</span></button>
+      <button class="tile" data-term>${ICON.term}<span class="l">终端</span><span class="h">⌃\`</span></button></div>` : '')
+    + (disc.length ? sec('侧边聊天', disc.length, disc.map((d) => `<div class="ir">${ICON.chat}<span class="t">${esc(d.q)}</span>${d.unread ? '<i class="dot unread"></i>' : `<span class="r">${d.ago}</span>`}</div>`).join('')) : '')
+    + (subs.length ? sec('子 Agent', running.length ? `${running.length} 运行 · ${done.length} 完成` : `${done.length} 完成`,
+      [...running, ...done].slice(0, shown).map((x) => `<div class="ir">${x.st === 'running' ? '<span class="spin"></span>' : ICON.check}<span class="t">${esc(x.n)}</span><span class="r">${x.r}</span></div>`).join('')
+      + (subs.length > shown ? `<div class="ir more" data-more-subs><span class="avatars">${ICON.claude}${ICON.codex}${ICON.claude}</span><span class="t">其余 ${subs.length - shown} 个</span></div>` : '')) : '')
+    + (jobs.length ? sec('后台任务', runningJobs ? `${runningJobs} 运行` : '', jobs.map((j) => `<div class="ir">${j.st === 'running' ? '<span class="spin"></span>' : ICON.check}<span class="t m">${esc(j.c)}</span>${j.st === 'running' ? `<button class="stop" data-stop="${esc(j.c)}" title="停止">${ICON.square}</button>` : ''}<span class="r">${j.r}</span></div>`).join('')) : '')
+    + (s.marks ? `<div class="isec"><div class="ir">${ICON.mark}<span class="t">收藏</span><span class="r">${s.marks}</span></div></div>` : '');
+}
+
+let lastActive = '', lastKey = '';
+function render(switched = false) {
+  const s = byId[active];
+  const pins = $('#pins'), scroll = $('#scroll');
+  if (pins) {
+    pins.innerHTML = pinOrder.map((id) => tabHTML(id, false, true)).join('');
+    scroll.innerHTML = tabs.map((t) => tabHTML(t.id, t.preview, false)).join('');
+    for (const t of tabs) if (t.fresh) { scroll.querySelector(`[data-id="${t.id}"]`)?.classList.add('enter'); delete t.fresh; }
+    pins.hidden = !pinOrder.length;
+    $('#zsep').hidden = !pinOrder.length || !tabs.length;
+  }
+  if ($('#classic')) {
+    const p = PROJECTS[s.p];
+    $('#classic').innerHTML = `${p.path ? `<span class="p">${esc(p.name)}</span><span class="s">/</span>` : ''}<span class="t">${esc(s.t)}</span>${lead(s)}${statusDot(s) ? `<i class="dot ${statusDot(s)}"></i>` : ''}`;
+  }
+  $('#acts').innerHTML = actionsHTML(s);
+  $('#sidebar').innerHTML = sidebarHTML();
+  const key = `${active}:${Boolean(s.home)}`;
+  if (switched || lastKey !== key) {
+    $('#body').innerHTML = bodyHTML(s);
+    $('#dock').innerHTML = s.home ? '' : composerHTML();
+    if (lastActive !== active) { $('#main').classList.remove('switching'); void $('#main').offsetWidth; $('#main').classList.add('switching'); }
+  } else if (!s.home) {
+    $('#body').innerHTML = bodyHTML(s);
+  }
+  lastActive = active; lastKey = key;
+  $('#side').hidden = !panel;
+  if (panel) $('#side').innerHTML = sideHTML();
+  if (infoOpen) { if (s.home) closeInfo(); else { $('#info').innerHTML = infoHTML(s); placeInfo(); } }
+  document.title = `${s.t} · Riffet`;
+  for (const zone of document.querySelectorAll('.zone')) updateOverflow(zone);
+}
+function scrollToActive(behavior = 'smooth') { document.querySelector('.tab.on')?.scrollIntoView({ behavior, block: 'nearest', inline: 'nearest' }); }
+function updateOverflow(zone) {
+  const over = zone.scrollWidth > zone.clientWidth + 1;
+  zone.classList.toggle('ov-l', over && zone.scrollLeft > 2);
+  zone.classList.toggle('ov-r', over && zone.scrollLeft + zone.clientWidth < zone.scrollWidth - 2);
+  if (zone.id === 'scroll' && $('#all')) $('#all').hidden = !over;
+}
+addEventListener('resize', () => { for (const zone of document.querySelectorAll('.zone')) updateOverflow(zone); if (infoOpen) placeInfo(); });
+
+/* ---------- popovers ---------- */
+let popEl;
+function closePop() { popEl?.remove(); popEl = undefined; }
+function menu(anchor, items, { align = 'start', at } = {}) {
+  closePop();
+  popEl = document.createElement('div');
+  popEl.className = 'pop';
+  popEl.innerHTML = items.map((it, i) => it === '-' ? '<hr>' : it.heading ? `<div class="lbl">${esc(it.label)}</div>`
+    : `<div class="mi${it.checked ? ' check' : ''}" data-i="${i}">${it.icon ?? ''}${it.html ?? `<span class="t">${esc(it.label)}</span>`}${it.k ? `<span class="k">${it.k}</span>` : ''}</div>`).join('');
+  document.body.append(popEl);
+  const r = at ?? anchor.getBoundingClientRect();
+  const w = popEl.getBoundingClientRect().width;
+  popEl.style.left = `${Math.max(8, Math.min(align === 'end' ? r.right - w : r.left, innerWidth - w - 8))}px`;
+  popEl.style.top = `${r.bottom + 6}px`;
+  popEl.addEventListener('click', (e) => { const i = e.target.closest('.mi')?.dataset.i; if (i != null) { closePop(); items[i].run(); } });
+}
+function openInfo() {
+  if (byId[active].home) return;
+  closePop(); hideCard();
+  infoOpen = true;
+  const el = document.createElement('div');
+  el.className = 'info'; el.id = 'info'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-label', '会话信息');
+  document.body.append(el);
+  render();
+}
+function closeInfo() { infoOpen = false; $('#info')?.remove(); $('#infoBtn')?.classList.remove('open'); }
+function placeInfo() {
+  const acts = $('#acts'); const el = $('#info'); if (!acts || !el) return;
+  const r = acts.getBoundingClientRect();
+  el.style.left = `${Math.max(8, Math.min(r.right - 360, innerWidth - 368))}px`;
+  el.style.top = `${r.bottom + 6}px`;
+}
+addEventListener('pointerdown', (e) => {
+  if (popEl && !popEl.contains(e.target)) closePop();
+  if (infoOpen && !$('#info')?.contains(e.target) && !e.target.closest('#infoBtn')) closeInfo();
+}, true);
+
+let cardEl, cardTimer, hoverId;
+function hideCard() { clearTimeout(cardTimer); cardEl?.remove(); cardEl = undefined; }
+function showCard(tabEl) {
+  const s = byId[tabEl.dataset.id];
+  const p = PROJECTS[s.p];
+  const status = { running: '运行中', waiting: '等待确认', failed: '出错', idle: s.unread ? '已完成，未读' : '空闲' }[s.st];
+  cardEl = document.createElement('div');
+  cardEl.className = 'card';
+  cardEl.innerHTML = `<div class="h">${esc(s.t)}</div>`
+    + (p.path ? `<div class="r"><span>项目</span><span>${esc(p.name)}${p.worktree ? ' · worktree' : ''}</span></div>` : '')
+    + (p.branch ? `<div class="r"><span>分支</span><span class="m">${esc(p.branch)}</span></div>` : '')
+    + `<div class="r"><span>状态</span><span>${status}</span></div>`
+    + (s.st === 'running' && !isPinned(s.id) ? '<div class="note">关闭标签后仍在后台运行</div>' : '');
+  document.body.append(cardEl);
+  const r = tabEl.getBoundingClientRect();
+  cardEl.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 280))}px`;
+  cardEl.style.top = `${r.bottom + 6}px`;
+}
+
+function moreMenu(anchor) {
+  menu(anchor, [
+    { icon: ICON.edit, label: '重命名', run: () => rename(active) },
+    { icon: ICON.tag, label: '编辑标签', run: () => {} },
+    { icon: ICON.pin, label: isPinned(active) ? '取消置顶' : '置顶会话', run: () => togglePin(active) },
+    '-',
+    { icon: ICON.share, label: '分享会话…', run: () => {} },
+    { icon: ICON.handoff, label: '交接会话…', run: () => {} },
+    { icon: ICON.template, label: '存为任务模板…', run: () => {} },
+    '-',
+    { icon: ICON.archive, label: '归档会话', run: () => {} },
+  ], { align: 'end' });
+}
+function rename(id) { const name = prompt('重命名', byId[id].t); if (name?.trim()) { byId[id].t = name.trim(); render(); } }
+function viewMenu(anchor) {
+  menu(anchor, [
+    { heading: true, label: '排列方式' },
+    { label: '按项目分组', checked: true, run: () => {} },
+    { label: '按时间平铺', run: () => {} },
+    '-',
+    { heading: true, label: '排序' },
+    { label: '最近活动', checked: sort === 'activity', run: () => setSort('activity') },
+    ...(mode === 'off' ? [] : [{ label: '按标签页顺序', checked: sort === 'tabs', run: () => setSort('tabs') }]),
+    '-',
+    { label: '显示已归档', run: () => {} },
+  ], { align: 'end' });
+}
+function setSort(value) { sort = value; render(); flashPinnedRows(); }
+function flashPinnedRows() { for (const id of pinOrder) document.querySelector(`.row[data-open="${id}"]`)?.classList.add('moved'); }
+
+function openSettings() {
+  closePop(); closeInfo();
+  const el = document.createElement('div');
+  el.className = 'scrim';
+  const thumb = (kind) => `<div class="thumb"><div class="sb"><i></i><i></i><i></i><i></i></div><div class="mc">`
+    + (kind === 'strip' ? '<div class="st"><i></i><i></i><i></i></div>' : '')
+    + `<div class="pn"${kind === 'strip' ? ' style="border-top-left-radius:0"' : ''}>${kind === 'inline' ? '<div class="tb"><i></i><i></i><i></i></div>' : kind === 'off' ? '<div class="tb"><i style="width:44px"></i></div>' : ''}<div class="ln"></div><div class="ln s"></div></div></div></div>`;
+  const opts = [['off', '关闭'], ['inline', '标题栏'], ['strip', '独立一行']];
+  const draw = () => {
+    el.innerHTML = `<div class="dialog" role="dialog"><h2>外观与显示</h2><div class="setting"><div class="name">会话标签页</div>`
+      + `<div class="opts">${opts.map(([v, l]) => `<button class="opt" data-mode="${v}" aria-pressed="${mode === v}">${thumb(v)}<span>${l}</span></button>`).join('')}</div>`
+      + `<div class="hint">仅保存在这台设备</div></div></div>`;
+  };
+  draw();
+  el.addEventListener('click', (e) => {
+    const opt = e.target.closest('[data-mode]');
+    if (opt) { setMode(opt.dataset.mode); draw(); return; }
+    if (e.target === el) el.remove();
+  });
+  document.body.append(el);
+}
+function setMode(value) {
+  mode = value;
+  if (mode === 'off' && sort === 'tabs') sort = 'activity';
+  for (const b of document.querySelectorAll('.ctl .seg[data-k="mode"] button')) b.setAttribute('aria-pressed', String(b.dataset.v === mode));
+  closeInfo(); mountChrome(); render(true); scrollToActive('instant');
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  const tab = t.closest('.tab');
+  if (tab) {
+    if (t.closest('.x')) { e.stopPropagation(); hideCard(); return close(tab.dataset.id); }
+    // The first click re-renders the row, so a double click is read from the click count, not a dblclick event.
+    if (e.detail === 2) return keep(tab.dataset.id);
+    return activate(tab.dataset.id);
+  }
+  if (t.closest('[data-new]')) return newTab();
+  const row = t.closest('[data-open]');
+  if (row) return open(row.dataset.open, e.metaKey || e.ctrlKey);
+  if (t.closest('[data-collapse]')) return setSidebar(true);
+  if (t.closest('[data-expand]')) return setSidebar(false);
+  if (t.closest('[data-settings]')) return openSettings();
+  if (t.closest('#infoBtn')) return infoOpen ? closeInfo() : openInfo();
+  if (t.closest('#moreBtn')) return moreMenu(t.closest('#moreBtn'));
+  if (t.closest('#viewBtn')) return viewMenu(t.closest('#viewBtn'));
+  if (t.closest('[data-panel-toggle]')) { panel = panel ? '' : 'git'; return render(); }
+  if (t.closest('[data-panel-close]')) { panel = ''; return render(); }
+  const p = t.closest('[data-panel]');
+  if (p) { panel = panel === p.dataset.panel ? '' : p.dataset.panel; closeInfo(); return render(); }
+  if (t.closest('[data-term]')) return closeInfo();
+  if (t.closest('[data-more-subs]')) { subsExpanded = true; return render(); }
+  const stop = t.closest('[data-stop]');
+  if (stop) { const j = byId[active].jobs.find((x) => x.c === stop.dataset.stop); j.st = 'done'; j.r = '已停止'; return render(); }
+  const copy = t.closest('[data-copy]');
+  if (copy) { navigator.clipboard?.writeText(copy.dataset.copy).catch(() => {}); copy.querySelector('.m').textContent = '已复制'; return setTimeout(() => infoOpen && render(), 900); }
+  if (t.closest('[data-send]')) return send($('main textarea').value);
+  if (t.closest('#all')) {
+    return menu(t.closest('#all'), ordered().map((id) => { const s = byId[id]; return { html: `${lead(s)}<span class="t">${esc(s.t)}</span><span class="p">${esc(PROJECTS[s.p].name)}</span>`, run: () => activate(id) }; }), { align: 'end' });
+  }
+  const s = byId[active];
+  if (t.closest('[data-allow]')) { s.msgs = s.msgs.filter((m) => !m.approve); s.msgs.push({ working: true }); s.st = 'running'; render(); setTimeout(() => finish(s.id), 4000); }
+  if (t.closest('[data-deny]')) { s.msgs = s.msgs.filter((m) => !m.approve); s.msgs.push({ a: '好，跳过构建。' }); s.st = 'idle'; render(); }
+  if (t.closest('[data-retry]')) { s.msgs = s.msgs.filter((m) => !m.fail); s.msgs.push({ working: true }); s.st = 'running'; render(); setTimeout(() => finish(s.id), 4000); }
+});
+document.addEventListener('mousedown', (e) => { if (e.button === 1 && e.target.closest('.tab')) e.preventDefault(); });
+document.addEventListener('auxclick', (e) => { const tab = e.target.closest('.tab'); if (tab && e.button === 1) { e.preventDefault(); close(tab.dataset.id); } });
+document.addEventListener('contextmenu', (e) => {
+  const tab = e.target.closest('.tab'); if (!tab) return;
+  e.preventDefault(); hideCard();
+  const id = tab.dataset.id; const pinned = isPinned(id);
+  menu(null, [
+    ...(tabOf(id)?.preview ? [{ label: '保留标签', run: () => keep(id) }] : []),
+    { icon: ICON.pin, label: pinned ? '取消置顶' : '置顶会话', run: () => togglePin(id) },
+    { icon: ICON.edit, label: '重命名', run: () => rename(id) },
+    ...(pinned ? [] : ['-',
+      { label: '关闭', k: '⌥W', run: () => close(id) },
+      { label: '关闭其他标签', run: () => closeOthers(id) },
+      { label: '关闭右侧标签', run: () => closeRight(id) }]),
+  ], { at: { left: e.clientX, right: e.clientX, bottom: e.clientY - 6 } });
+});
+
+// Drag to reorder, inside one zone only: pinned tabs among pinned tabs, the rest among the rest.
+let dragId, dragZone, edgeTimer;
+document.addEventListener('pointerover', (e) => {
+  const tab = e.target.closest('.tab');
+  if (!tab) { if (hoverId) { hoverId = undefined; hideCard(); } return; }
+  if (tab.dataset.id === hoverId || infoOpen || popEl || dragId) return;
+  hideCard();
+  hoverId = tab.dataset.id;
+  cardTimer = setTimeout(() => { const el = document.querySelector(`.tab[data-id="${hoverId}"]`); if (el) showCard(el); }, 600);
+});
+document.addEventListener('pointerdown', (e) => { if (e.target.closest('.tab')) hideCard(); });
+document.addEventListener('dragstart', (e) => {
+  const tab = e.target.closest('.tab'); if (!tab) return;
+  dragId = tab.dataset.id; dragZone = tab.closest('.zone');
+  tab.classList.add('dragging'); hideCard();
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', byId[dragId].t);
+});
+document.addEventListener('dragover', (e) => {
+  if (!dragId) return;
+  const zone = e.target.closest('.zone');
+  clearInterval(edgeTimer);
+  if (zone !== dragZone) { e.dataTransfer.dropEffect = 'none'; return; }
+  e.preventDefault();
+  // Near either end the row scrolls itself, so a tab can travel past what is showing.
+  const r = zone.getBoundingClientRect();
+  const dir = e.clientX < r.left + 32 ? -1 : e.clientX > r.right - 32 ? 1 : 0;
+  if (dir) edgeTimer = setInterval(() => { zone.scrollLeft += dir * 10; }, 16);
+  const over = e.target.closest('.tab'); if (!over || over.dataset.id === dragId) return;
+  const list = zone.dataset.zone === 'pins' ? [...pinOrder] : tabs.map((t) => t.id);
+  const from = list.indexOf(dragId), to = list.indexOf(over.dataset.id);
+  const box = over.getBoundingClientRect(); const after = e.clientX > box.left + box.width / 2;
+  if ((from < to && !after) || (from > to && after)) return;
+  list.splice(to, 0, list.splice(from, 1)[0]);
+  if (zone.dataset.zone === 'pins') pinOrder = list; else tabs = list.map((id) => tabOf(id));
+  // Move the node itself: re-rendering would remove the drag source and cancel the drag.
+  zone.insertBefore(zone.querySelector(`[data-id="${dragId}"]`), after ? over.nextSibling : over);
+});
+document.addEventListener('dragend', () => {
+  clearInterval(edgeTimer);
+  const pinned = dragZone?.dataset.zone === 'pins';
+  dragId = undefined; dragZone = undefined;
+  render();
+  if (pinned && sort === 'tabs') flashPinnedRows();
+});
+
+// Shortcuts: ⌥ on a Mac, Alt elsewhere — ⌘/Ctrl with T, W, Tab and digits belong to the browser.
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { closePop(); closeInfo(); $('.scrim')?.remove(); }
+  if (e.target.matches('textarea') && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(e.target.value); return; }
+  if (!e.altKey || e.metaKey || e.ctrlKey || e.isComposing || mode === 'off') return;
+  const all = ordered();
+  const i = all.indexOf(active);
+  const go = (id) => { e.preventDefault(); if (id) activate(id); };
+  if (/^Digit[1-9]$/.test(e.code)) { const n = Number(e.code.slice(5)); go(n === 9 ? all.at(-1) : all[n - 1]); }
+  else if (e.code === 'BracketRight') go(all[(i + 1) % all.length]);
+  else if (e.code === 'BracketLeft') go(all[(i - 1 + all.length) % all.length]);
+  else if (e.code === 'KeyW' && !e.shiftKey) { e.preventDefault(); close(active); }
+  else if (e.code === 'KeyT' && e.shiftKey) { e.preventDefault(); reopen(); }
+  else if (e.code === 'KeyT') { e.preventDefault(); newTab(); }
+  else if (e.code === 'KeyI') { e.preventDefault(); infoOpen ? closeInfo() : openInfo(); }
+});
+
+function setSidebar(collapsed) { $('#app').classList.toggle('collapsed', collapsed); closeInfo(); mountChrome(); render(); }
+$('#toggleSidebar').onclick = () => setSidebar(!$('#app').classList.contains('collapsed'));
+$('#finish').onclick = () => { const s = SESSIONS.find((x) => x.st === 'running' && x.id !== active); if (s) finish(s.id); };
+$('#ctlHide').onclick = () => $('#ctl').classList.toggle('min');
+for (const seg of document.querySelectorAll('.ctl .seg')) {
+  seg.addEventListener('click', (e) => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (seg.dataset.k === 'mode') return setMode(b.dataset.v);
+    for (const x of seg.children) x.setAttribute('aria-pressed', String(x === b));
+    ({ tabs, active } = SCENES[b.dataset.v]());
+    render(true); scrollToActive('instant');
+  });
+}
+
+// ?mode=strip&scene=many&sidebar=0&active=s1&info=1&settings=1 opens the demo in that state.
+const q = new URLSearchParams(location.search);
+if (q.get('sidebar') === '0') $('#app').classList.add('collapsed');
+mode = ['off', 'inline', 'strip'].includes(q.get('mode')) ? q.get('mode') : 'inline';
+for (const b of document.querySelectorAll('.ctl .seg[data-k="mode"] button')) b.setAttribute('aria-pressed', String(b.dataset.v === mode));
+if (q.get('scene') === 'many') { ({ tabs, active } = SCENES.many()); for (const b of document.querySelectorAll('.ctl .seg[data-k="scene"] button')) b.setAttribute('aria-pressed', String(b.dataset.v === 'many')); }
+if (q.get('active') && byId[q.get('active')]) active = q.get('active');
+if (q.get('sort') === 'tabs') sort = 'tabs';
+mountChrome();
+render(true);
+scrollToActive('instant');
+if (q.get('info') === '1') openInfo();
+if (q.get('settings') === '1') openSettings();
+if (!q.has('static')) setTimeout(() => finish('s7'), 9000);
+</script>
+</body>
+</html>

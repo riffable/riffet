@@ -1,0 +1,55 @@
+Riffet for Android - Third-party notices
+
+Riffet for Android includes the third-party software below. Full license texts are in
+the upstream repositories at the listed addresses. Transitive dependencies not listed
+here are documented in each library's published artifacts.
+
+SwiftTerm and Swift Markdown are used only by the iOS app and are not included in this
+APK.
+
+Kotlin and Compose libraries in RiffetKit
+-----------------------------------------
+
+RiffetKit is Riffet's own Kotlin framework. It links the following third-party libraries.
+
+Library                                            License       Source
+Kotlin standard library                            Apache-2.0    https://github.com/JetBrains/kotlin
+kotlinx.coroutines                                 Apache-2.0    https://github.com/Kotlin/kotlinx.coroutines
+kotlinx.serialization                              Apache-2.0    https://github.com/Kotlin/kotlinx.serialization
+Ktor client (OkHttp engine)                        Apache-2.0    https://github.com/ktorio/ktor
+OkHttp (Ktor engine)                               Apache-2.0    https://github.com/square/okhttp
+kotlinx-io (Ktor dependency)                       Apache-2.0    https://github.com/Kotlin/kotlinx-io
+atomicfu (Ktor dependency)                         Apache-2.0    https://github.com/Kotlin/kotlinx-atomicfu
+Compose Multiplatform (runtime, ui, foundation,    Apache-2.0    https://github.com/JetBrains/compose-multiplatform
+  material3; AndroidX Compose on Android)
+multiplatform-markdown-renderer                    Apache-2.0    https://github.com/mikepenz/multiplatform-markdown-renderer
+JetBrains Markdown parser (markdown-renderer       Apache-2.0    https://github.com/JetBrains/markdown
+  dependency)
+kotlinx-collections-immutable (markdown-renderer   Apache-2.0    https://github.com/Kotlin/kotlinx.collections.immutable
+  dependency)
+Coil 3 (coil-compose, coil-network-ktor3)          Apache-2.0    https://github.com/coil-kt/coil
+Okio (Coil dependency)                             Apache-2.0    https://github.com/square/okio
+
+Android libraries
+-----------------
+
+Library                                            License       Source
+AndroidX activity-compose, core-ktx,               Apache-2.0    https://developer.android.com/jetpack/androidx
+  lifecycle-runtime-ktx
+CameraX (core, camera2, lifecycle, view)           Apache-2.0    https://developer.android.com/jetpack/androidx/releases/camera
+ZXing core                                         Apache-2.0    https://github.com/zxing/zxing
+
+Vendored assets and ported code
+-------------------------------
+
+Component                                          License       Source
+Termux terminal-emulator (VT engine ported to       Apache-2.0    https://github.com/termux/termux-app
+  Kotlin)
+Material Symbols (icon paths)                      Apache-2.0    https://fonts.google.com/icons
+JetBrains Mono (terminal font)                     OFL-1.1       https://github.com/JetBrains/JetBrainsMono
+Lucide (star icon)                                 ISC           https://lucide.dev
+
+The Material Symbols text is in res/raw/license_material_symbols.txt, the JetBrains Mono
+text in res/raw/jetbrains_mono_ofl.txt, notices for the ported terminal engine are in
+res/raw/notice_termux.txt, and Riffet's own Apache-2.0 license and NOTICE are in
+res/raw/license_apache_2_0.txt and res/raw/notice.txt.

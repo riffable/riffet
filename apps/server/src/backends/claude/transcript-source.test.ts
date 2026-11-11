@@ -1,0 +1,446 @@
+import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { afterEach, describe, expect, it } from 'vitest';
+import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
+import { ActivityLedger, activityOfEvent } from '../../journal/activity.js';
+import { projectEvents } from '../../../../../packages/timeline/src/projectEvents.js';
+import { ClaudeActivities } from './activity.js';
+import { JournalLaneWriter, pullLane } from '../../journal/ingest.js';
+import { assertUnchanged, checkSession, rowsOf, runIngestContract, snapshot, visibleLanes, type IngestContractFixture } from '../../journal/ingest-contract.js';
+import { Journal, laneKey } from '../../journal/journal.js';
+import { ClaudeTranscript } from './history.js';
+import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
+
+/** A Claude Code session file as the CLI writes it, with its subagents beside it in `<id>/subagents/`. */
+class SessionFile {
+  private clock = 0;
+  constructor(readonly dir: string, readonly id: string) { writeFileSync(this.path, ''); }
+  get path(): string { return join(this.dir, `${this.id}.jsonl`); }
+  private at(): string { return new Date(Date.UTC(2026, 9, 20) + (this.clock += 1) * 1000).toISOString(); }
+
+  write(...rows: Array<Record<string, unknown>>): this {
+    appendFileSync(this.path, rows.map(row => `${JSON.stringify({ isSidechain: false, sessionId: this.id, timestamp: this.at(), ...row })}\n`).join(''));
+    return this;
+  }
+
+  prompt(id: string, text = `question ${id}`, fields: Record<string, unknown> = {}): this {
+    return this.write({ type: 'user', uuid: `u-${id}`, promptId: `p-${id}`, origin: { kind: 'human' }, message: { role: 'user', content: text }, ...fields });
+  }
+
+  call(id: string, name: string, input: Record<string, unknown>): this {
+    return this.write({ type: 'assistant', uuid: `c-${id}`, message: { id: `m-c-${id}`, role: 'assistant', content: [{ type: 'tool_use', id, name, input }], stop_reason: 'tool_use' } });
+  }
+
+  result(id: string, content: string, toolUseResult: Record<string, unknown> = {}, error = false): this {
+    return this.write({ type: 'user', uuid: `r-${id}`, toolUseResult, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content, ...(error ? { is_error: true } : {}) }] } });
+  }
+
+  answer(id: string): this {
+    return this.write({ type: 'assistant', uuid: `a-${id}`, message: { id: `m-a-${id}`, role: 'assistant', content: [{ type: 'thinking', thinking: 'so' }, { type: 'text', text: `answer ${id}` }], stop_reason: 'end_turn' } });
+  }
+
+  duration(id: string): this { return this.write({ type: 'system', subtype: 'turn_duration', uuid: `d-${id}`, durationMs: 1000 }); }
+
+  /** Claude's own request record: big, and nothing a transcript shows. */
+  request(bytes: number): this { return this.write({ type: 'api-request', id: `req-${this.clock}`, body: 'x'.repeat(bytes) }); }
+
+  turn(id: string, work: (file: this) => void = () => undefined): this {
+    this.prompt(id);
+    work(this);
+    return this.answer(id).duration(id);
+  }
+
+  subagent(toolUseId: string, agentId: string): this {
+    const root = join(this.dir, this.id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    const row = (uuid: string, type: string, message: Record<string, unknown>) => JSON.stringify({ type, uuid, isSidechain: true, agentId, sessionId: this.id, timestamp: this.at(), message });
+    writeFileSync(join(root, `agent-${agentId}.jsonl`), [
+      row(`${agentId}-u`, 'user', { role: 'user', content: 'Look around' }),
+      row(`${agentId}-c`, 'assistant', { id: `${agentId}-m1`, role: 'assistant', content: [{ type: 'tool_use', id: `${agentId}-read`, name: 'Read', input: { file_path: '/repo/a.ts' } }], stop_reason: 'tool_use' }),
+      row(`${agentId}-r`, 'user', { role: 'user', content: [{ type: 'tool_result', tool_use_id: `${agentId}-read`, content: 'file' }] }),
+      row(`${agentId}-a`, 'assistant', { id: `${agentId}-m2`, role: 'assistant', content: [{ type: 'text', text: 'found it' }], stop_reason: 'end_turn' }),
+    ].join('\n') + '\n');
+    writeFileSync(join(root, `agent-${agentId}.meta.json`), JSON.stringify({ toolUseId, agentType: 'Explore', description: 'Explore' }));
+    return this.call(toolUseId, 'Agent', { description: 'Explore', prompt: 'Look around', subagent_type: 'Explore' }).result(toolUseId, 'found it');
+  }
+}
+
+const OUTPUT = '/private/tmp/claude-501/-repo/sess/tasks/bsh1.output';
+const notice = (fields: string) => `<task-notification>\n${fields}\n</task-notification>`;
+const dirs: string[] = [];
+afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
+
+/** What the live view's mapping of the same files shows (`ClaudeTranscript`): each entity once, where it first appears. */
+async function historyOrder(file: SessionFile): Promise<Record<string, string[]>> {
+  const transcript = new ClaudeTranscript({ id: 'wb', nativeSessionId: file.id, updatedAt: '' } as Session, file.id);
+  await transcript.setFile(file.path);
+  const ids = (events: NativeWorkbenchEvent[]) => [...new Set(events.filter(event => event.type !== 'run_completed' && event.type !== 'run_cancelled').map(event => event.nativeId))];
+  return Object.fromEntries([['main', ids(transcript.allEvents())], ...transcript.subagentFrames().map(frame => [`sub:${frame.toolCallId}`, ids(frame.events)])]);
+}
+
+function scenario() {
+  const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-transcript-'));
+  dirs.push(dir);
+  const changes = new ClaudeTranscriptChanges();
+  let main = new SessionFile(dir, '11111111-2222-4333-8444-555555555555');
+  const source = () => new ClaudeTranscriptSource({
+    sessionId: 'wb', nativeSessionId: () => main.id, locate: async id => id === main.id ? main.path : undefined, watch: wake => changes.on('wb', wake),
+  });
+  main
+    .turn('t1', file => file.call('bash1', 'Bash', { command: 'ls', description: 'List files' }).result('bash1', 'a.ts'))
+    .turn('plan', file => file
+      .call('tc1', 'TaskCreate', { subject: 'Read notes' }).result('tc1', 'Task #1 created successfully: Read notes', { task: { id: '1', subject: 'Read notes' } })
+      .call('tu1', 'TaskUpdate', { taskId: '1', status: 'in_progress' }).result('tu1', 'Updated task #1 status', { success: true, taskId: '1', statusChange: { from: 'pending', to: 'in_progress' } }))
+    // A background command keeps running after its turn; its report comes later (`update`).
+    .turn('bg', file => file.call('bsh', 'Bash', { command: 'make test', description: 'run tests', run_in_background: true })
+      .result('bsh', `Command running in background with ID: bsh1. Output is being written to: ${OUTPUT}`, { backgroundTaskId: 'bsh1' }))
+    // `/compact`: one bubble, a compaction that ends at its boundary, the summary and output folded into it.
+    .prompt('compact', '/compact')
+    .write({ type: 'system', subtype: 'compact_boundary', uuid: 'b1', compactMetadata: { trigger: 'manual', preTokens: 36965, postTokens: 1778, durationMs: 6000 } })
+    .write({ type: 'user', uuid: 'sum', promptId: 'p-compact', isCompactSummary: true, isVisibleInTranscriptOnly: true, message: { role: 'user', content: 'This session is being continued from a previous conversation.' } })
+    .write({ type: 'user', uuid: 'cmd', promptId: 'p-cmd', message: { role: 'user', content: '<command-name>/compact</command-name>\n <command-message>compact</command-message>\n <command-args></command-args>' } })
+    .write({ type: 'user', uuid: 'out', promptId: 'p-compact', message: { role: 'user', content: '<local-command-stdout>Compacted (ctrl+o to see full summary)</local-command-stdout>' } })
+    // 2.1.322 writes the boundary and summary before the command, without a preceding bare `/compact`, and dims its output.
+    .write({ type: 'system', subtype: 'compact_boundary', uuid: 'b-late', compactMetadata: { trigger: 'manual' } })
+    .write({ type: 'user', uuid: 'sum-late', isCompactSummary: true, isVisibleInTranscriptOnly: true, message: { role: 'user', content: 'This session is being continued after another compaction.' } })
+    .write({ type: 'user', uuid: 'cmd-late', promptId: 'p-compact-late', message: { role: 'user', content: '<command-name>/compact</command-name>\n <command-message>compact</command-message>\n <command-args></command-args>' } })
+    .write({ type: 'user', uuid: 'out-late', promptId: 'p-compact-late', message: { role: 'user', content: '<local-command-stdout>\u001b[2mCompacted (ctrl+o to see full summary)\u001b[22m\n\u001b[2mPreCompact [\'node\' \'hook-cli.mjs\'] completed successfully\u001b[22m</local-command-stdout>' } })
+    // A local command ends with its output; a Monitor's queued event is one more state of its activity.
+    .write({ type: 'user', uuid: 'cost', promptId: 'p-cost', message: { role: 'user', content: '<command-name>/cost</command-name>\n <command-message>cost</command-message>\n <command-args></command-args>' } })
+    .write({ type: 'user', uuid: 'cost-out', promptId: 'p-cost', message: { role: 'user', content: '<local-command-stdout>Total cost: $0.12</local-command-stdout>' } })
+    .turn('mon', file => file.call('mon', 'Monitor', { command: 'tail -f log', description: 'watch log' }).result('mon', 'ok', { taskId: 'bmon1' })
+      .write({ type: 'queue-operation', operation: 'enqueue', content: notice('<task-id>bmon1</task-id>\n<summary>Monitor event: "watch log"</summary>\n<event>line 1</event>') }))
+    // An older CLI writes no end for a turn: the next prompt ends it.
+    .prompt('old').answer('old')
+    .turn('agent', file => file.subagent('tool-a1', 'agent-1'));
+  // Past one pull, and mostly records no row shows, so the first import serves a tail window meanwhile.
+  for (let index = 0; index < 10; index += 1) {
+    main.request(300 * 1024).turn(`big${index}`, file => file.call(`read${index}`, 'Read', { file_path: `/repo/big${index}` }).result(`read${index}`, 'x'.repeat(450 * 1024)));
+  }
+  // The CLI is in the middle of writing a line.
+  appendFileSync(main.path, '{"type":"assistant","uuid":"a-torn","mess');
+
+  let order: Record<string, string[]> = {};
+  const settle = async () => { order = await historyOrder(main); changes.emit('wb'); };
+  let appended = 0;
+  const fixture: IngestContractFixture = {
+    scratch: true,
+    source,
+    order: () => order,
+    append: async () => {
+      appended += 1;
+      if (appended === 1) appendFileSync(main.path, 'age":{"id":"m-torn","role":"assistant","content":[{"type":"text","text":"late"}],"stop_reason":"end_turn"}}\n');
+      main.turn(`more${appended}`);
+      await settle();
+    },
+    // The background command reports: its activity, read already, gets a new state.
+    update: async () => {
+      main.write({ type: 'user', uuid: 'n-bsh1', promptId: 'p-n', origin: { kind: 'task-notification' }, message: { role: 'user', content: notice(`<task-id>bsh1</task-id>\n<tool-use-id>bsh</tool-use-id>\n<output-file>${OUTPUT}</output-file>\n<status>failed</status>\n<summary>Background command "run tests" failed with exit code 2</summary>`) } })
+        .answer('n').duration('n');
+      await settle();
+    },
+    // Typed into the terminal and stopped there: the CLI's marker ends it.
+    terminalTurn: async () => {
+      main.prompt('typed').call('bash2', 'Bash', { command: 'sleep 100' }).result('bash2', "The user doesn't want to proceed with this tool use.", {}, true)
+        .write({ type: 'user', uuid: 'stop', promptId: 'p-typed', message: { role: 'user', content: [{ type: 'text', text: '[Request interrupted by user for tool use]' }] } });
+      await settle();
+    },
+    subagent: async () => { main.turn('t-sub', file => file.subagent('tool-a2', 'agent-2')); await settle(); },
+    changeIdentity: async () => { main = new SessionFile(dir, '99999999-2222-4333-8444-555555555555').turn('n1'); await settle(); },
+  };
+  return { fixture, settle, file: () => main, source, dir };
+}
+
+async function importAll(source: ClaudeTranscriptSource, journal: Journal): Promise<JournalLaneWriter> {
+  const writer = JournalLaneWriter.open(journal, 'wb');
+  for (let pulls = 0; !(await pullLane(source, writer, new AbortController().signal)).caughtUp; pulls += 1) expect(pulls).toBeLessThan(20);
+  return writer;
+}
+
+describe('Claude transcript source', () => {
+  it('keeps continuation ownership and the native prompt together through old cursor recovery', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-continuation-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('original').call('first', 'Bash', {});
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = await importAll(source(), journal);
+    await source().endTurn(writer, 'cancelled', '2026-10-20T00:00:03.000Z', 'p-original');
+    file.call('continued', 'Bash', {});
+    await importAll(source(), journal);
+    const continued = journal.entity('wb', `claude:${file.id}:c-continued:0`)!.payload as NativeWorkbenchEvent;
+    expect(continued).toMatchObject({ runId: 'claude-turn:c-continued', nativeTurnId: 'claude-turn:c-continued' });
+    expect(source().activeTurn(writer)).toEqual({ turnId: 'claude-turn:c-continued', promptId: 'p-original' });
+
+    // Upgrade an already committed pre-fix cursor, without replaying the native file or its commands.
+    const legacy = JSON.parse(writer.cursor!);
+    delete legacy.s.t.p;
+    delete legacy.s.t.a;
+    writer.commit({ events: [], cursor: JSON.stringify(legacy) });
+    expect(source().activeTurn(writer)).toEqual({ turnId: 'claude-turn:c-continued', promptId: 'p-original' });
+    file.call('later', 'Bash', {});
+    await importAll(source(), journal);
+    expect(journal.entity('wb', `claude:${file.id}:c-later:0`)!.payload).toMatchObject({ runId: continued.runId, nativeTurnId: continued.nativeTurnId });
+    expect(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended')).toHaveLength(1);
+  });
+
+  it.each(['remove', 'dequeue'])('preserves external queue order across restart before associating an identical queued prompt: %s', async operation => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-queue-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('original')
+      .write({ type: 'queue-operation', operation: 'enqueue', content: 'same input' })
+      .write({ type: 'queue-operation', operation: 'enqueue', content: 'same input', tracked: true });
+    const removed: Array<string | undefined> = [];
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path,
+      hooks: { commandForUserMessage: message => message.uuid === 'u-external' ? 'riffet-command' : undefined, queuedInput: (row, position) => {
+        if (row.operation === 'remove') removed.push(position.receipt?.commandId);
+        return row.tracked === true ? [{ sequence: 0, sessionId: 'wb', runId: 'riffet-run', nativeId: 'queue-receipt',
+          createdAt: row.timestamp as string, type: 'native_input_receipt', data: { commandId: 'riffet-command', content: { type: 'text', text: 'same input' } } }] : [];
+      } },
+    });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source(), journal);
+    file.write({ type: 'queue-operation', operation, content: 'same input', reason: 'absorbed_mid_turn' });
+    if (operation === 'dequeue') file.prompt('external', 'same input');
+    await importAll(source(), journal);
+    expect(removed).toEqual(operation === 'remove' ? [undefined] : []);
+    if (operation === 'dequeue') {
+      expect((journal.entity('wb', `claude:${file.id}:u-external:0`)!.payload as NativeWorkbenchEvent).data).not.toHaveProperty('commandId');
+    }
+    file.write({ type: 'queue-operation', operation: 'dequeue' }).prompt('queued', 'same input');
+    await importAll(source(), journal);
+    expect(journal.entity('wb', `claude:${file.id}:u-queued:0`)!.payload).toMatchObject({ data: { commandId: 'riffet-command' } });
+    const before = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(before, snapshot(journal, 'wb'), 'queued prompt after restart');
+  });
+
+  it('consumes a dequeued task notification across restart before associating the next human input', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-notification-queue-'));
+    dirs.push(dir);
+    const notification = notice('<task-id>background</task-id><status>completed</status><summary>Background complete</summary>');
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('original')
+      .write({ type: 'queue-operation', operation: 'enqueue', content: notification }, { type: 'queue-operation', operation: 'dequeue' });
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path,
+      hooks: { queuedInput: row => row.tracked === true ? [{ sequence: 0, sessionId: 'wb', runId: 'riffet-run', nativeId: 'queue-receipt',
+        createdAt: row.timestamp as string, type: 'native_input_receipt', data: { commandId: 'riffet-command', content: { type: 'text', text: 'human input' } } }] : [] } });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source(), journal);
+    file.prompt('notification', notification, { origin: { kind: 'task-notification' } });
+    let writer = await importAll(source(), journal);
+    expect(JSON.parse(writer.cursor!).s.q ?? []).toEqual([]);
+    file.write({ type: 'queue-operation', operation: 'enqueue', content: 'human input', tracked: true }, { type: 'queue-operation', operation: 'dequeue' })
+      .prompt('human', 'human input');
+    writer = await importAll(source(), journal);
+    expect(journal.entity('wb', `claude:${file.id}:u-human:0`)!.payload).toMatchObject({ data: { commandId: 'riffet-command' } });
+    expect((JSON.parse(writer.cursor!).s.q ?? []).filter((input: { consumed?: number }) => !input.consumed)).toEqual([]);
+  });
+
+  it('holds the journal write contract, in the order the live view maps the same files', async () => {
+    const { fixture, settle } = scenario();
+    await settle();
+    const report = await runIngestContract(fixture, { sessionId: 'wb', openLastTurn: true });
+    expect(report.served.map(item => item.scratch)).toEqual([true, false]);
+    expect(Object.keys(report.lanes).sort()).toEqual(['main']);
+  });
+
+  it('ends what a CLI that is gone left open, after what it wrote, and keeps it ended across reads and restarts', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-exit-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555');
+    let exited: string | undefined;
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path, exited: () => exited });
+    file.turn('t1').prompt('t2')
+      .call('bsh', 'Bash', { command: 'make', run_in_background: true }).result('bsh', 'Command running in background with ID: bsh9.', { backgroundTaskId: 'bsh9' })
+      .call('long', 'Bash', { command: 'sleep 100' });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source(), journal);
+    const ended = (turnId: string) => rowsOf(journal, 'wb').find(row => row.kind === 'meta.turn_ended' && row.turnId === turnId);
+    const activity = () => activityOfEvent(journal.entity('wb', 'claude:bsh9')?.payload);
+    expect(ended('p-t2')).toBeUndefined();
+    expect(activity()?.status).toBe('running');
+
+    // The CLI wrote one more row and was found gone: that row is read first, then the turn and the task end as of then (G6).
+    file.result('long', 'interrupted');
+    exited = '2026-10-21T00:00:00.000Z';
+    await importAll(source(), journal);
+    const end = ended('p-t2');
+    expect(end?.payload).toMatchObject({ status: 'interrupted' });
+    expect(end!.seq).toBeGreaterThan(rowsOf(journal, 'wb').find(row => row.nativeId.includes('r-long'))!.seq);
+    expect(activity()).toMatchObject({ status: 'unknown', endedAt: exited });
+    checkSession(journal, 'wb');
+
+    // Read again from the committed cursor, by the same reader or a restarted one: nothing new (G7).
+    const before = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(before, snapshot(journal, 'wb'), 'a read after the exit');
+
+    // Resumed: its rows open a turn of their own, and the abandoned task is not brought back by the mapping's state.
+    exited = undefined;
+    file.turn('t3');
+    const writer = await importAll(source(), journal);
+    expect(ended('p-t3')?.payload).toMatchObject({ status: 'completed' });
+    expect(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended' && row.turnId === 'p-t2')).toHaveLength(1);
+    expect(activity()?.status).toBe('unknown');
+    expect(writer.activities.live()).toEqual([]);
+
+    // The control path's end of a turn the CLI took back without a row: only that prompt's turn.
+    file.prompt('t4');
+    expect(await source().endTurn(writer, 'cancelled', '2026-10-22T00:00:00.000Z', 'p-other')).toBeUndefined();
+    expect(await source().endTurn(writer, 'cancelled', '2026-10-22T00:00:00.000Z', 'p-t4')).toBe('p-t4');
+    expect(ended('p-t4')?.payload).toMatchObject({ status: 'cancelled' });
+    checkSession(journal, 'wb');
+  });
+
+  it('runs a compaction from its PreCompact hook and completes the same one at the boundary 2.1.322 writes later', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-precompact-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').turn('t1');
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = await importAll(source(), journal);
+    const id = 'claude:compaction:hook-1';
+    const compactions = () => rowsOf(journal, 'wb').map(row => activityOfEvent(row.payload)).filter(activity => activity?.kind === 'compaction');
+    await source().compactionHooked(writer, id, 'manual', '2026-10-20T00:00:10.000Z');
+    // Heard twice (a retried delivery): still one compaction.
+    await source().compactionHooked(writer, 'claude:compaction:hook-2', 'manual', '2026-10-20T00:00:11.000Z');
+    expect(compactions().map(activity => [activity!.id, activity!.status])).toEqual([[id, 'running']]);
+
+    // A restarted reader picks the compaction up from the cursor; the boundary, summary and command follow.
+    file.write({ type: 'system', subtype: 'compact_boundary', uuid: 'b', compactMetadata: { trigger: 'manual', preTokens: 900, postTokens: 100 } })
+      .write({ type: 'user', uuid: 'sum', promptId: 'p-c', isCompactSummary: true, isVisibleInTranscriptOnly: true, message: { role: 'user', content: 'This session is being continued.' } })
+      .write({ type: 'user', uuid: 'cmd', promptId: 'p-c', message: { role: 'user', content: '<command-name>/compact</command-name>\n <command-message>compact</command-message>\n <command-args></command-args>' } })
+      .write({ type: 'user', uuid: 'out', promptId: 'p-c', message: { role: 'user', content: '<local-command-stdout>\u001b[2mCompacted (ctrl+o to see full summary)\u001b[22m\n\u001b[2mPreCompact [\'node\' \'hook-cli.mjs\'] completed successfully\u001b[22m</local-command-stdout>' } });
+    await importAll(source(), journal);
+    expect(new Set(compactions().map(activity => activity!.id))).toEqual(new Set([id]));
+    expect(compactions().at(-1)).toMatchObject({ status: 'completed', startedAt: '2026-10-20T00:00:10.000Z', compaction: { trigger: 'manual', preTokens: 900, postTokens: 100 } });
+    checkSession(journal, 'wb');
+  });
+
+  it('settles a finished background subagent and an ended task from the files beside the transcript, once, across restarts', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-settle-'));
+    // Only a file under the CLI's own temporary directory is read as a task's output.
+    const tasks = join(mkdtempSync('/tmp/claude-'), 'proj', 'tasks');
+    dirs.push(dir, dirname(dirname(tasks)));
+    mkdirSync(tasks, { recursive: true });
+    const output = join(tasks, 'bsh1.output');
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555');
+    const blobs: string[] = [];
+    const source = () => new ClaudeTranscriptSource({
+      sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path,
+      hooks: { putBlob: text => { blobs.push(text); return `blob-${blobs.length}`; } },
+    });
+    const root = join(dir, file.id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    const meta = (fields: Record<string, unknown>) => writeFileSync(join(root, 'agent-bg1.meta.json'), JSON.stringify({ toolUseId: 'agent1', agentType: 'Explore', description: 'Dig', requestShape: 'background', model: 'sonnet', ...fields }));
+    meta({});
+    writeFileSync(join(root, 'agent-bg1.jsonl'), `${JSON.stringify({ type: 'user', uuid: 'bg1-u', isSidechain: true, agentId: 'bg1', timestamp: '2026-10-20T00:00:01.000Z', message: { role: 'user', content: 'Dig' } })}\n`);
+    file.prompt('t1')
+      .call('agent1', 'Agent', { description: 'Dig', prompt: 'Dig', subagent_type: 'Explore', run_in_background: true })
+      .result('agent1', 'Async agent launched', { isAsync: true, status: 'async_launched', agentId: 'bg1', description: 'Dig' })
+      .call('bsh', 'Bash', { command: 'make', description: 'build', run_in_background: true })
+      .result('bsh', `Command running in background with ID: bsh1. Output is being written to: ${output}`, { backgroundTaskId: 'bsh1' })
+      .answer('t1').duration('t1');
+    // More ended activities than a cursor remembers: the task that ends after them is still the one written.
+    for (let index = 0; index < 18; index += 1) {
+      file.write({ type: 'user', uuid: `cmd${index}`, promptId: `p-cmd${index}`, message: { role: 'user', content: '<command-name>/cost</command-name>\n <command-message>cost</command-message>\n <command-args></command-args>' } })
+        .write({ type: 'user', uuid: `out${index}`, promptId: `p-cmd${index}`, message: { role: 'user', content: `<local-command-stdout>Total cost: $${index}</local-command-stdout>` } });
+    }
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const live = source();
+    await importAll(live, journal);
+    const state = (id: string) => activityOfEvent(journal.entity('wb', id)?.payload);
+    expect(state('claude:bg1')?.status).toBe('running');
+    expect(journal.entity('wb', 'meta:subagent:agent1')?.payload).toMatchObject({ agentId: 'bg1', title: 'Dig', subagentType: 'Explore', model: 'sonnet' });
+    const childKey = laneKey('wb', 'sub:agent1');
+    const childBefore = journal.head(childKey);
+    meta({ description: 'Dig deeper' });
+    await importAll(live, journal);
+    expect(journal.entity('wb', 'meta:subagent:agent1')?.payload).toMatchObject({ title: 'Dig deeper', subagentType: 'Explore', model: 'sonnet' });
+    expect(journal.head(childKey)).toEqual(childBefore);
+
+    // While the service is down the agent finishes and the command reports; a restarted reader settles both.
+    writeFileSync(output, 'compiling\nall 12 targets built\n');
+    meta({ finished: true });
+    file.write({ type: 'user', uuid: 'n-bsh1', promptId: 'p-n', origin: { kind: 'task-notification' }, message: { role: 'user', content: notice(`<task-id>bsh1</task-id>\n<tool-use-id>bsh</tool-use-id>\n<output-file>${output}</output-file>\n<status>completed</status>\n<summary>Background command "build" completed (exit code 0)</summary>`) } })
+      .answer('n').duration('n');
+    await importAll(source(), journal);
+    expect(state('claude:bg1')).toMatchObject({ status: 'completed', endedAt: expect.any(String) });
+    expect(state('claude:bsh1')).toMatchObject({ status: 'completed', detail: 'compiling\nall 12 targets built', blobRef: 'blob-1' });
+    checkSession(journal, 'wb');
+
+    // The tail is read once: a later change of the file, a restart and a read again write nothing.
+    writeFileSync(output, 'rewritten\n');
+    const before = snapshot(journal, 'wb');
+    const writer = await importAll(source(), journal);
+    assertUnchanged(before, snapshot(journal, 'wb'), 'a restart after the settle');
+    expect(blobs).toHaveLength(1);
+    expect(writer.activities.live()).toEqual([]);
+  });
+
+  // Protocol/recovery guarantee: a reused task id needs a proven new launch, while old reports
+  // and a restored cursor cannot revive a finished execution or terminate its replacement.
+  it('keeps a relaunched background agent separate from replayed terminal states', () => {
+    const stamp = (second: number) => new Date(Date.UTC(2026, 9, 20, 0, 0, second)).toISOString();
+    let mapper = new ClaudeActivities('wb');
+    const launch = (call: string, at: number, run: string) => mapper.launched(
+      { name: 'Agent', input: { description: 'Review' } }, call,
+      { isAsync: true, status: 'async_launched', agentId: 'a1' }, '', stamp(at), run,
+    );
+    const report = (call: string, at: number) => mapper.notified(
+      { taskId: 'a1', toolUseId: call, status: 'failed', sourceStatus: 'failed', title: 'Review' }, stamp(at), 'notice',
+    );
+    const old = [...launch('call-1', 1, 'run-1'), ...report('call-1', 2)];
+    mapper = ClaudeActivities.restore('wb', {}, JSON.parse(JSON.stringify(mapper.state())));
+    expect(launch('call-1', 3, 'run-1')).toEqual([]);
+    const [restarted] = launch('call-2', 4, 'run-2');
+    expect(restarted?.runId).toBe('run-2');
+    const current = mapper.get('claude:a1')!;
+    expect(current).toMatchObject({ status: 'running', toolCallId: 'call-2', startedAt: stamp(4) });
+    expect(current.endedAt).toBeUndefined();
+    expect(current.durationMs).toBeUndefined();
+    expect(report('call-1', 5)).toEqual([]);
+    expect(launch('call-1', 1, 'run-1')).toEqual([]);
+
+    // Both the writer's ledger and the event projection can receive an older terminal state again.
+    const events = [...old, restarted!, old.at(-1)!].map((event, index) => ({ ...event, sequence: index + 1 }));
+    const ledger = new ActivityLedger(() => undefined);
+    for (const event of events) ledger.apply(activityOfEvent(event)!);
+    expect(ledger.get('claude:a1')).toEqual(current);
+    expect(activityOfEvent(projectEvents(events)[0])).toEqual(current);
+    expect(report('call-2', 6)).toHaveLength(1);
+    expect(mapper.get('claude:a1')?.status).toBe('failed');
+  });
+
+  it('ends each turn as Claude recorded it, and starts over when the file is replaced under the same name', async () => {
+    const { fixture, file, source } = scenario();
+    await fixture.append();
+    await fixture.terminalTurn();
+    // A turn whose API call failed for good: the CLI writes the error as an assistant row of its own, then the duration.
+    const failure = 'Please run /login · API Error: 403 model not allowed';
+    file().prompt('failed').write({
+      type: 'assistant', uuid: 'e-failed', isApiErrorMessage: true, error: 'authentication_failed', apiErrorStatus: 403,
+      message: { id: 'm-e-failed', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: failure }], stop_reason: 'stop_sequence' },
+    }).duration('failed');
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = await importAll(source(), journal);
+    checkSession(journal, 'wb', { openLastTurn: true });
+    const ends = Object.fromEntries(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended').map(row => [row.turnId, (row.payload as { status: string }).status]));
+    expect(ends).toMatchObject({ 'p-t1': 'completed', 'p-compact': 'completed', 'p-compact-late': 'completed', 'p-cost': 'completed', 'p-old': 'completed', 'p-typed': 'cancelled', 'p-failed': 'failed' });
+    const failed = rowsOf(journal, 'wb').filter(row => row.turnId === 'p-failed');
+    expect(failed.find(row => row.kind === 'meta.turn_ended')?.payload).toMatchObject({ error: failure });
+    expect(failed.filter(row => JSON.stringify(row.payload).includes(failure))).toHaveLength(1);
+    expect(Object.keys(visibleLanes(journal, 'wb')).sort()).toEqual(['main', 'sub:tool-a1']);
+
+    const generation = writer.generation;
+    writeFileSync(file().path, '');
+    file().turn('rewritten');
+    await importAll(source(), journal);
+    expect(writer.generation).not.toBe(generation);
+    const fresh = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source(), fresh);
+    expect(visibleLanes(journal, 'wb')).toEqual(visibleLanes(fresh, 'wb'));
+  });
+});

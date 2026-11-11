@@ -1,0 +1,852 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: zh-Hans\n"
+
+#. placeholder {0}: checkedEntries.length - targets.length
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{0} 项不支持此操作或无需变更，将跳过。"
+msgstr "{0} 项不支持此操作或无需变更，将跳过。"
+
+#. placeholder {0}: entry.item.name
+#. placeholder {1}: errorMessage(reason, failedLabel)
+#. placeholder {1}: response.output || response.applyEffect || incompleteLabel
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{0}：{1}"
+msgstr "{0}：{1}"
+
+#. placeholder {0}: [...contexts].join('、')
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{0}。"
+msgstr "{0}。"
+
+#. placeholder {0}: targets.length
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{batchLabel} {0} 个扩展？"
+msgstr "{batchLabel} {0} 个扩展？"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{label} {name}？"
+msgstr "{label} {name}？"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{scopeLabel}操作。"
+msgstr "{scopeLabel}操作。"
+
+#. placeholder {0}: failures.length
+#. placeholder {1}: [...effects].join('\n')
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "{successes} 项完成，{0} 项失败。{1}"
+msgstr "{successes} 项完成，{0} 项失败。{1}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "{title} 详情"
+msgstr "{title} 详情"
+
+#. placeholder {0}: item.name
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "{toggleLabel} {0}"
+msgstr "{toggleLabel} {0}"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "MCP 配置"
+msgstr "MCP 配置"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-pagination-previous"
+msgid "上一页"
+msgstr "上一页"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-pagination-next"
+msgid "下一页"
+msgstr "下一页"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "主文件"
+msgstr "主文件"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgctxt "extensions-runtime-session"
+msgid "会话"
+msgstr "会话"
+
+#. placeholder {0}: value.sessionId
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "会话 {0}"
+msgstr "会话 {0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "作用域"
+msgstr "作用域"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "作用域筛选"
+msgstr "作用域筛选"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "使用原生插件标识，例如 name@marketplace"
+msgstr "使用原生插件标识，例如 name@marketplace"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "保存失败，草稿已保留。"
+msgstr "保存失败，草稿已保留。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "保存预览"
+msgstr "保存预览"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "停用"
+msgstr "停用"
+
+#. placeholder {0}: disableCount || ''
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "停用 {0}"
+msgstr "停用 {0}"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "全选本页"
+msgstr "全选本页"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "全部作用域"
+msgstr "全部作用域"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "全部来源"
+msgstr "全部来源"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "全部状态"
+msgstr "全部状态"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "关闭"
+msgstr "关闭"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "关闭操作结果"
+msgstr "关闭操作结果"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "关闭详情"
+msgstr "关闭详情"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "关闭错误提示"
+msgstr "关闭错误提示"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "内容"
+msgstr "内容"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "内置"
+msgstr "内置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "最新内容将作为比较和保存的基准。请在差异预览中检查并合并外部修改。"
+msgstr "最新内容将作为比较和保存的基准。请在差异预览中检查并合并外部修改。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "切换"
+msgstr "切换"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "切换文件"
+msgstr "切换文件"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "切换新建位置？"
+msgstr "切换新建位置？"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "列表操作"
+msgstr "列表操作"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "删除 Skill"
+msgstr "删除 Skill"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "刷新目录"
+msgstr "刷新目录"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "卸载"
+msgstr "卸载"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "原生插件"
+msgstr "原生插件"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "原生标识"
+msgstr "原生标识"
+
+#. placeholder {0}: filter.label
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "取消筛选：{0}"
+msgstr "取消筛选：{0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "取消编辑"
+msgstr "取消编辑"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "取消选择"
+msgstr "取消选择"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "只读"
+msgstr "只读"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "可删除"
+msgstr "可删除"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "名称 A–Z"
+msgstr "名称 A–Z"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "启用"
+msgstr "启用"
+
+#. placeholder {0}: enableCount || ''
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "启用 {0}"
+msgstr "启用 {0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgctxt "extensions-image-name"
+msgid "图片"
+msgstr "图片"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "复制记录"
+msgstr "复制记录"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "安装"
+msgstr "安装"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "安装作用域"
+msgstr "安装作用域"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "安装插件"
+msgstr "安装插件"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-done-action"
+msgid "完成"
+msgstr "完成"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "将整个 Skill 目录从来源位置移出并备份。若此目录由多个 Agent 共用，这些 Agent 都会受到影响。"
+msgstr "将整个 Skill 目录从来源位置移出并备份。若此目录由多个 Agent 共用，这些 Agent 都会受到影响。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "尚未读取目录"
+msgstr "尚未读取目录"
+
+#. placeholder {0}: value.tools.length
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "工具 · {0}"
+msgstr "工具 · {0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+#: src/app/extensions/model.ts
+msgid "已停用"
+msgstr "已停用"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+#: src/app/extensions/model.ts
+msgid "已加载"
+msgstr "已加载"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/model.ts
+msgid "已发现"
+msgstr "已发现"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+#: src/app/extensions/model.ts
+msgid "已启用"
+msgstr "已启用"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "已选 {selectedCount} 项"
+msgstr "已选 {selectedCount} 项"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "异常"
+msgstr "异常"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "当前内容将替换为所选位置的模板。"
+msgstr "当前内容将替换为所选位置的模板。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "当前未保存的修改会被替换。"
+msgstr "当前未保存的修改会被替换。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "当前目录不再包含此扩展，请刷新目录后重试管理操作。"
+msgstr "当前目录不再包含此扩展，请刷新目录后重试管理操作。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "当前配置没有可用的新建位置。"
+msgstr "当前配置没有可用的新建位置。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "当前项目"
+msgstr "当前项目"
+
+#: src/app/extensions/model.ts
+msgid "待加载"
+msgstr "待加载"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "打开侧边栏"
+msgstr "打开侧边栏"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "打开授权页面"
+msgstr "打开授权页面"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "打开设置"
+msgstr "打开设置"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展分页"
+msgstr "扩展分页"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "扩展文件"
+msgstr "扩展文件"
+
+#: src/app/extensions/ExtensionEditor.tsx
+msgid "扩展文件保存预览"
+msgstr "扩展文件保存预览"
+
+#: src/app/extensions/ExtensionEditor.tsx
+msgid "扩展文件内容"
+msgstr "扩展文件内容"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展来源筛选"
+msgstr "扩展来源筛选"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展状态"
+msgstr "扩展状态"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展目录"
+msgstr "扩展目录"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展目录读取失败"
+msgstr "扩展目录读取失败"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展管理"
+msgstr "扩展管理"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扩展类型"
+msgstr "扩展类型"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "扩展详情"
+msgstr "扩展详情"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "扫描记录"
+msgstr "扫描记录"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "批量选择"
+msgstr "批量选择"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "技能开关写入当前 Agent 配置，其他项目也可能受影响。"
+msgstr "技能开关写入当前 Agent 配置，其他项目也可能受影响。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "技能开关可能影响同配置的其他项目。"
+msgstr "技能开关可能影响同配置的其他项目。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-sort-field"
+msgid "排序"
+msgstr "排序"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "排序方式"
+msgstr "排序方式"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "插件名称"
+msgstr "插件名称"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "插件提供"
+msgstr "插件提供"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "搜索扩展"
+msgstr "搜索扩展"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-action-failed"
+msgid "操作失败"
+msgstr "操作失败"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "操作完成"
+msgstr "操作完成"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "操作已返回，但目录刷新失败。"
+msgstr "操作已返回，但目录刷新失败。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "操作未全部完成；可能已部分修改。"
+msgstr "操作未全部完成；可能已部分修改。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "操作未完成"
+msgstr "操作未完成"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "操作结果未确认；可能已部分修改。"
+msgstr "操作结果未确认；可能已部分修改。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "放弃修改"
+msgstr "放弃修改"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "放弃未保存的修改？"
+msgstr "放弃未保存的修改？"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgctxt "extensions-files-tab"
+msgid "文件"
+msgstr "文件"
+
+#. placeholder {0}: detail.files.length
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件 · {0}"
+msgstr "文件 · {0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件内容"
+msgstr "文件内容"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "文件只读"
+msgstr "文件只读"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件已保存，目录刷新失败；请稍后刷新。"
+msgstr "文件已保存，目录刷新失败；请稍后刷新。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件已保存。"
+msgstr "文件已保存。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件已被外部修改，草稿已保留。"
+msgstr "文件已被外部修改，草稿已保留。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件格式"
+msgstr "文件格式"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "文件路径"
+msgstr "文件路径"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "新建"
+msgstr "新建"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "新建位置"
+msgstr "新建位置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "新建扩展"
+msgstr "新建扩展"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "新建文件路径"
+msgstr "新建文件路径"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "无法确认 Skill 主文件版本，请刷新目录后重试。"
+msgstr "无法确认 Skill 主文件版本，请刷新目录后重试。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "无法确认扩展版本，未执行批量操作。"
+msgstr "无法确认扩展版本，未执行批量操作。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "无法读取 Skill 主文件，请刷新目录后重试。"
+msgstr "无法读取 Skill 主文件，请刷新目录后重试。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "无法读取扩展文件"
+msgstr "无法读取扩展文件"
+
+#: src/app/extensions/useExtensionSources.ts
+msgid "无法读取扩展目录"
+msgstr "无法读取扩展目录"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "无法读取扩展详情"
+msgstr "无法读取扩展详情"
+
+#: src/app/extensions/useExtensionSources.ts
+msgid "无法读取管理能力"
+msgstr "无法读取管理能力"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "无法读取运行状态"
+msgstr "无法读取运行状态"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "暂无 {emptyKindLabel}"
+msgstr "暂无 {emptyKindLabel}"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "暂无 Agent 配置"
+msgstr "暂无 Agent 配置"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "暂无诊断记录"
+msgstr "暂无诊断记录"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "更多操作"
+msgstr "更多操作"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "更新"
+msgstr "更新"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "未保存"
+msgstr "未保存"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "未匹配到会话"
+msgstr "未匹配到会话"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "未声明"
+msgstr "未声明"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "未检查"
+msgstr "未检查"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "未确认"
+msgstr "未确认"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "来源"
+msgstr "来源"
+
+#. placeholder {0}: item?.item.sourcePath ?? document.path
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "来源：{0}"
+msgstr "来源：{0}"
+
+#. placeholder {0}: item.name
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "查看 {0}"
+msgstr "查看 {0}"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "查看差异"
+msgstr "查看差异"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "查看文件"
+msgstr "查看文件"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "查看详情"
+msgstr "查看详情"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "检查"
+msgstr "检查"
+
+#. placeholder {0}: formatClock(pickerReport.checkedAt)
+#. placeholder {0}: formatClock(runtime.checkedAt)
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "检查于 {0}"
+msgstr "检查于 {0}"
+
+#. placeholder {0}: runtime.diagnostics.length
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "检查说明 · {0}"
+msgstr "检查说明 · {0}"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "正在读取扩展"
+msgstr "正在读取扩展"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "此扩展未提供可查看的文件。"
+msgstr "此扩展未提供可查看的文件。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "此配置不支持原生插件安装。"
+msgstr "此配置不支持原生插件安装。"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "没有匹配的扩展"
+msgstr "没有匹配的扩展"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "清除"
+msgstr "清除"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "清除搜索"
+msgstr "清除搜索"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgctxt "extensions-clear-filters"
+msgid "清除筛选"
+msgstr "清除筛选"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "源码"
+msgstr "源码"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-status-filter"
+msgid "状态"
+msgstr "状态"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "独立配置"
+msgstr "独立配置"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "现有会话的生效时机由原生 Agent 决定。"
+msgstr "现有会话的生效时机由原生 Agent 决定。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-scope-user"
+msgid "用户级"
+msgstr "用户级"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "用户配置"
+msgstr "用户配置"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "目录中未找到此扩展，请刷新后重试。"
+msgstr "目录中未找到此扩展，请刷新后重试。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "目录刷新失败"
+msgstr "目录刷新失败"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "目录刷新失败，请刷新后核对；未自动重试。"
+msgstr "目录刷新失败，请刷新后核对；未自动重试。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "目录已刷新，请核对后再操作；未自动重试。"
+msgstr "目录已刷新，请核对后再操作；未自动重试。"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "确认保存"
+msgstr "确认保存"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "等待加载"
+msgstr "等待加载"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-filters-label"
+msgid "筛选"
+msgstr "筛选"
+
+#. placeholder {0}: activeFilters.length
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "筛选，{0} 项已启用"
+msgstr "筛选，{0} 项已启用"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "类型与位置"
+msgstr "类型与位置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "继续编辑"
+msgstr "继续编辑"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "编辑"
+msgstr "编辑"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "认证"
+msgstr "认证"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "诊断"
+msgstr "诊断"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "读取最新"
+msgstr "读取最新"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "读取最新文件并保留草稿？"
+msgstr "读取最新文件并保留草稿？"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "路径"
+msgstr "路径"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "运行状态"
+msgstr "运行状态"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "运行状态与 MCP"
+msgstr "运行状态与 MCP"
+
+#. placeholder {0}: item.name
+#. placeholder {1}: label(entry.context.backendId)
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "选择 {0} · {1}"
+msgstr "选择 {0} · {1}"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "选择操作的 Agent 配置"
+msgstr "选择操作的 Agent 配置"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+msgid "选择本页全部扩展"
+msgstr "选择本页全部扩展"
+
+#: src/app/extensions/useExtensionSources.ts
+msgid "部分扩展目录刷新失败"
+msgstr "部分扩展目录刷新失败"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "部分目录刷新失败"
+msgstr "部分目录刷新失败"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-kind-config"
+msgid "配置"
+msgstr "配置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "配置会话"
+msgstr "配置会话"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "配置级报告，尚未匹配到此条目。"
+msgstr "配置级报告，尚未匹配到此条目。"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "配置范围"
+msgstr "配置范围"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "重新读取"
+msgstr "重新读取"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "重新读取文件"
+msgstr "重新读取文件"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "重新读取文件？"
+msgstr "重新读取文件？"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "重新读取详情"
+msgstr "重新读取详情"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "重置"
+msgstr "重置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "重载 MCP"
+msgstr "重载 MCP"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "阅读"
+msgstr "阅读"
+
+#: src/app/extensions/ExtensionsPage.tsx
+#: src/app/extensions/model.ts
+msgid "需处理"
+msgstr "需处理"
+
+#: src/app/extensions/ExtensionCatalog.tsx
+#: src/app/extensions/ExtensionsPage.tsx
+msgctxt "extensions-scope-project"
+msgid "项目级"
+msgstr "项目级"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "项目配置"
+msgstr "项目配置"
+
+#: src/app/extensions/ExtensionInspector.tsx
+msgid "预览保存"
+msgstr "预览保存"
+
+#: src/app/extensions/ExtensionsPage.tsx
+msgid "默认排序"
+msgstr "默认排序"

@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.322
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+
+› From main
+❯ go
+
+⏺ I'll run the sleep command now.
+
+  Ran 1 shell command
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+✽ Concocting… (7s · ↑ 28 tokens)
+  ⎿  Tip: Double-tap esc to rewind the code and/or conversation to a previous point in time
+  tmux focus-events off · add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tra…
+────────────────────────────────────────────────────────────────────────── Launch sleeper subagent ─
+❯ Message @sleeper…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 7% · /tmp/…
+  ↑/↓ to select
+
+  ◯ main
+❯ ⏺ sleeper  Launch sleeper subagent                                              7s · ↓ 28 tokens

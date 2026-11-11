@@ -1,0 +1,186 @@
+/* The browser owns pagination; the document supplies the available paper area and break rules. */
+@page {
+  size: A4;
+  margin: 16mm;
+}
+
+html[data-riffet-print],
+html[data-riffet-print] body,
+html[data-riffet-print] #root {
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.share-print {
+  display: block;
+  width: 100%;
+  max-width: 210mm;
+  height: auto;
+  min-height: 0;
+  margin: 0 auto;
+  padding: 16mm;
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+.share-print .share-session-scroll,
+.share-print .share-session-content {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  overflow: visible;
+  padding: 0;
+}
+
+.share-print .share-session-header {
+  padding: 0 0 6mm;
+  margin-bottom: 6mm;
+  break-inside: avoid;
+}
+
+.share-print .share-session-header h1 {
+  flex-basis: 100%;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 18pt;
+  line-height: 1.35;
+}
+
+.share-print .share-session-content > * + * {
+  margin-top: 7mm;
+}
+
+.share-print .group\/assistant,
+.share-print .group\/user {
+  display: block;
+}
+
+.share-print .group\/user > div:first-child {
+  display: block;
+  width: fit-content;
+  max-width: 82%;
+  margin-left: auto;
+}
+
+.share-print .group\/user [data-slot="message-meta"] {
+  width: 100%;
+  max-width: none;
+  justify-content: flex-end;
+}
+
+.share-print .md,
+.share-print .group\/user .whitespace-pre-wrap {
+  font-size: 11pt;
+  line-height: 1.6;
+}
+
+.share-print p,
+.share-print li {
+  orphans: 3;
+  widows: 3;
+}
+
+.share-print :is(h1, h2, h3, h4, h5, h6) {
+  break-after: avoid;
+  break-inside: avoid;
+}
+
+.share-print .md-code,
+.share-print .md pre,
+.share-print .md .katex-display {
+  max-height: none;
+  overflow: visible;
+}
+
+.share-print .md-code pre,
+.share-print .md-code pre code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.share-print .md-code-head {
+  break-after: avoid;
+}
+
+.share-print .md-code-head button,
+.share-print [data-slot="message-meta"] button,
+.share-print [data-image-placeholder] {
+  display: none;
+}
+
+.share-print .md table {
+  display: table;
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+  overflow: visible;
+  border-collapse: collapse;
+}
+
+.share-print .md :is(th, td),
+.share-print .md :is(th, td) code {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.share-print thead { display: table-header-group; }
+.share-print tr { break-inside: avoid; }
+
+.share-print .share-print-image {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 240mm;
+  margin: 3mm 0;
+  object-fit: contain;
+  break-inside: avoid;
+}
+
+.share-print .share-diagram,
+.share-print .katex-display {
+  break-inside: avoid;
+}
+
+.share-print .katex-display > .katex > .katex-html {
+  width: max-content;
+  margin-inline: auto;
+}
+
+.share-print .share-print-missing {
+  display: block;
+  padding: 2mm;
+  border: 1px solid currentColor;
+  font-size: 9pt;
+}
+
+@media print {
+  html[data-riffet-print],
+  html[data-riffet-print] body,
+  html[data-riffet-print] #root {
+    background: transparent;
+  }
+
+  .share-print {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .share-print *,
+  .share-print *::before,
+  .share-print *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    content-visibility: visible !important;
+  }
+}

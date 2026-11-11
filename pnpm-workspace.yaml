@@ -1,0 +1,6 @@
+allowBuilds:
+  esbuild: true
+  msw: false
+  node-pty: true
+  protobufjs: false
+  tesseract.js: false

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds shrink unused resources; the licence texts are only read by people, never by
+     code, so name them here or they disappear from the APK. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/third_party_notices,@raw/jetbrains_mono_ofl,@raw/license_apache_2_0,@raw/license_material_symbols,@raw/notice,@raw/notice_termux" />

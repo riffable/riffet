@@ -1,0 +1,23 @@
+{
+  "id": "example.graphite-theme",
+  "vendor": "Example",
+  "name": "Graphite",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "title": { "zh-Hans": "石墨", "en": "Graphite" },
+  "description": {
+    "zh-Hans": "中性灰与一种低饱和蓝的配色，明暗各一套。",
+    "en": "Neutral greys with one muted blue, light and dark."
+  },
+  "contributes": {
+    "appearance": {
+      "palettes": [
+        { "id": "example.graphite-theme/graphite", "title": { "zh-Hans": "石墨", "en": "Graphite" }, "asset": "assets/graphite.json" }
+      ],
+      "presets": [
+        { "id": "example.graphite-theme/standard", "title": { "zh-Hans": "石墨", "en": "Graphite" }, "palette": "example.graphite-theme/graphite" }
+      ]
+    }
+  }
+}

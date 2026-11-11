@@ -1,0 +1,5 @@
+{
+  "CLI_INPUT_REJECTED": { "zh": "CLI 拒绝了 {method} 写入", "en": "The CLI rejected the {method} write" },
+  "TERMINAL_NOT_RUNNING": { "zh": "CLI 未在运行", "en": "The CLI is not running" },
+  "TERMINAL_REBOUND": { "zh": "会话已切换到另一个终端，请重新提交消息", "en": "The conversation moved to another terminal; send the message again" }
+}

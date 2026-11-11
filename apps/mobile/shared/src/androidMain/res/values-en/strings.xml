@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Attachment picker -->
+    <string name="host_attachment_batch_limit">You can attach at most %1$d files to one message. This selection was not added.</string>
+    <string name="host_attachment_read_failed">Cannot read these attachments. This selection was not added.</string>
+    <string name="host_attachment_too_large">“%1$s” is over 24 MiB. This selection was not added.</string>
+    <string name="host_attachment_unreadable">Cannot read “%1$s”. This selection was not added.</string>
+    <string name="host_quick_chat_attachments_not_sent">The attachments were not sent.</string>
+
+    <!-- InstallDownloadActivity -->
+    <string name="host_install_bad_package">Cannot read the installer. Download it again.</string>
+    <string name="host_install_missing_package">The installer is no longer available. Download it again.</string>
+    <string name="host_install_open_failed">Cannot open the installer. Check the file and your system install settings.</string>
+    <string name="host_install_permission_denied">Riffet was not allowed to install apps. Tap the installer again to retry.</string>
+    <string name="host_install_launch_failed">Cannot start the system installer. Check your system install settings.</string>
+    <string name="host_install_clip_label">Installer</string>
+
+    <!-- Saved-download storage and deletion -->
+    <string name="host_download_create_failed">Cannot create the file in Downloads.</string>
+    <string name="host_download_write_failed">Cannot write to Downloads.</string>
+    <string name="host_download_dir_unavailable">Downloads is unavailable.</string>
+    <string name="host_download_invalid_name">Invalid file name.</string>
+    <string name="host_download_delete_pick_original">Select the original file in Downloads.</string>
+    <string name="host_download_delete_not_allowed">The system does not allow deleting the selected file. Select the original file in Downloads.</string>
+    <string name="host_download_metadata_failed">Cannot read the selected file. Select it again.</string>
+    <string name="host_download_mismatch_name">The selected file does not match this download. Select “%1$s”.</string>
+    <string name="host_download_mismatch_original">The selected file does not match this download. Select the original download.</string>
+    <string name="host_download_picker_busy">Finish the current file selection first.</string>
+    <string name="host_download_picker_background">Return to the app to delete the file.</string>
+    <string name="host_download_picker_unavailable">Cannot open the system file picker. Try again.</string>
+    <string name="host_download_picker_prompt">Select “%1$s”. It will be deleted once access is granted.</string>
+    <string name="host_download_delete_cancelled">File deletion cancelled.</string>
+
+    <!-- Build info -->
+    <string name="host_version_unknown">Unknown</string>
+
+    <!-- Notifications and the keep-alive service -->
+    <string name="host_notification_channel_attention">Needs your confirmation</string>
+    <string name="host_notification_channel_attention_desc">An agent is waiting for your approval or answer</string>
+    <string name="host_notification_channel_turns">Turn finished</string>
+    <string name="host_notification_channel_turns_desc">A conversation finished, failed, or was interrupted</string>
+    <string name="host_notification_channel_sync">Running status</string>
+    <string name="host_notification_channel_sync_desc">Shows progress during a turn and keeps the connection to the Riffet server</string>
+    <string name="host_notification_turn_finished">Finished</string>
+    <string name="host_notification_turn_failed">Run failed</string>
+    <string name="host_notification_turn_interrupted">Interrupted</string>
+    <string name="host_notification_waiting_body">An agent is waiting for your confirmation</string>
+    <string name="host_notification_attention_title">%1$s · Confirmation needed</string>
+    <string name="host_notification_attention_public">A conversation needs your confirmation</string>
+    <string name="host_notification_reply_hint">Reply to the agent…</string>
+    <string name="host_notification_reply">Reply</string>
+    <string name="host_notification_expired">This notification has expired. Handle it in the app.</string>
+    <string name="host_notification_unpaired">Riffet is not paired yet. Open the app to handle it.</string>
+    <string name="host_notification_other_server">Switch back to the server this notification belongs to first.</string>
+    <string name="host_notification_timeout">The server did not respond in time. Open the conversation to check.</string>
+    <string name="host_notification_unconfirmed">Could not confirm the CLI received the answer. Open the conversation to check.</string>
+    <string name="host_notification_submitted">Submitted</string>
+    <string name="host_notification_verify_in_app">Verification is on. Handle this in the app.</string>
+    <string name="host_notification_submit_failed">Could not submit: %1$s. Open the conversation to handle it.</string>
+    <string name="host_notification_sent">Sent: %1$s</string>
+    <string name="host_notification_send_incomplete">Send did not complete: %1$s. Open the conversation to check; it will not be resent automatically.</string>
+    <string name="host_network_error">Network error</string>
+
+    <!-- Keep-alive status text -->
+    <string name="host_live_others">· %1$d more sessions</string>
+    <string name="host_live_waiting">Waiting for your confirmation</string>
+    <string name="host_live_running">Running</string>
+    <string name="host_live_reconnecting">Reconnecting…</string>
+    <string name="host_live_disconnected">Connection lost. Return to the app to retry.</string>
+    <string name="host_live_connected">Connected · receiving in the background</string>
+
+    <!-- Agent messages and device calls that need a tap -->
+    <string name="host_notification_channel_agent">Agent messages</string>
+    <string name="host_notification_channel_agent_desc">Reminders an agent sends you</string>
+    <string name="host_device_request_clipboard">An agent wants to read the clipboard</string>
+    <string name="host_device_request_photo">An agent wants a photo</string>
+    <string name="host_device_request_pick_photo">An agent wants you to pick a photo</string>
+    <string name="host_device_request_open_url">An agent wants to open a link</string>
+    <string name="host_device_request_alarm">An agent wants to set an alarm</string>
+    <string name="host_device_a11y_description">Lets the agents you allow in Riffet read and operate this phone\'s screen. Works only while "Let agents use this device" is on; sending, deleting and submitting need your confirmation on the phone, and paying is always left to you.</string>
+    <string name="host_device_confirm_send">An agent wants to send</string>
+    <string name="host_device_confirm_delete">An agent wants to delete</string>
+    <string name="host_device_confirm_submit">An agent wants to submit</string>
+    <string name="host_device_confirm_order">An agent wants to place an order</string>
+    <string name="host_device_grant_send">Let an agent send later</string>
+    <string name="host_device_grant_delete">Let an agent delete later</string>
+    <string name="host_device_grant_submit">Let an agent submit later</string>
+    <string name="host_device_grant_valid">Valid for %1$d minutes, once</string>
+    <string name="host_device_confirm_allow">Allow</string>
+    <string name="host_device_confirm_deny">Decline</string>
+    <string name="host_device_control_channel">Phone control</string>
+    <string name="host_device_control_running">An agent is operating the phone</string>
+    <string name="host_device_control_stop">Stop</string>
+    <string name="host_device_handoff_title">Please complete the payment yourself</string>
+    <string name="host_device_locked_title">An agent needs the phone; unlock it first</string>
+</resources>

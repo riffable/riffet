@@ -1,0 +1,40 @@
+
+ ▐▛███▛█   Claude Code v2.1.302
+▝▜██████▀  synthetic-model-001 with xhigh effort · API Usage Billing
+ ▝▝   ▝▝   /…/tmp/project
+
+
+⚠ apiKeyHelper overriding saved Console key · unset it or /logout to clear the saved key
+⚠ Model "synthetic-model-001" isn't recognized · context assumed to be 200k tokens · update Claude
+  Code, or see the docs
+
+❯ go
+
+  Thought for 3s, ran 1 shell command
+
+⏺ I'll wait for the background sleep to complete.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────── Sleep in background ─
+❯ Message @sleeper…
+────────────────────────────────────────────────────────────────────────────────────────────────────
+    synthetic-model-001 · ctx 14% · /tmp/wo…
+  ↑/↓ to select
+
+  ◯ main
+❯ ⏺ sleeper  Sleep in background                                                9s · ↓ 2.9k tokens

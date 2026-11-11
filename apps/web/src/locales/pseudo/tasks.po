@@ -1,0 +1,394 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-10-25 09:07+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#: src/app/tasks/TasksPage.tsx
+msgid " · 同一会话"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "（不可用）"
+msgstr ""
+
+#. placeholder {0}: schedule.name
+#. placeholder {0}: template.name
+#: src/app/tasks/TasksPage.tsx
+msgid "{0} 的操作"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "Agent 能看到之前几次的结果；会话归档后会重新开一段。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "Cron 表达式"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "上一次运行的会话还在进行，这次已跳过"
+msgstr ""
+
+#. placeholder {0}: formatDateTime(schedule.lastRunAt)
+#: src/app/tasks/TasksPage.tsx
+msgid "上次 {0}"
+msgstr ""
+
+#. placeholder {0}: formatDateTime(schedule.nextRunAt)
+#: src/app/tasks/TasksPage.tsx
+msgid "下次 {0}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "不会再运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "不碰项目当前的工作区。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "保存"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "先选择一个项目"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "分 时 日 月 周，本地时间；也可以用 @daily、@hourly"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgctxt "tasks-delete-action"
+msgid "删除"
+msgstr ""
+
+#. placeholder {0}: schedule.name
+#: src/app/tasks/TasksPage.tsx
+msgid "删除定时任务「{0}」？"
+msgstr ""
+
+#. placeholder {0}: template.name
+#: src/app/tasks/TasksPage.tsx
+msgid "删除模板「{0}」？"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "发到同一会话"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgctxt "tasks-cancel-action"
+msgid "取消"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "可在任意项目运行，或按计划自动运行。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "名称"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "启用"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "周末 {time}"
+msgstr ""
+
+#. placeholder {0}: project.name
+#: src/app/tasks/TasksPage.tsx
+msgid "在「{0}」中运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "失败"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "完成时会照常通知。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "定时运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "定时运行…"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "工作日 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "工作日 9:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "已暂停"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "已移除的项目"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "已经运行出的会话会保留。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "已跳过"
+msgstr ""
+
+#. placeholder {0}: next.name
+#: src/app/tasks/TasksPage.tsx
+msgid "已运行「{0}」"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "已错过"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "开新会话"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "打开"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "打开上次的会话"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "打开侧边栏"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "把常做的事存成任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "按本机时间运行；Riffet 需保持开启，重叠运行会跳过，错过超过一小时不补跑。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "新建"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "新建任务模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法保存定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法保存模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法删除定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法删除模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法加载任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法更新定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法识别这个时间表达式"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法运行定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "无法运行模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "时间"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "暂停"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "模板不属于某个项目，运行时才决定在哪里做。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "模板已删除"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周一 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周一 9:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周三 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周二 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周五 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周六 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周四 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周日 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每周日 0:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每天 {time}"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每天 0:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每天 9:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每小时"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每小时第 {minute} 分"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每月 1 日 0:00"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每次在新的 Worktree 中运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每次是一段独立的会话。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "每次运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "比如：晨间依赖检查"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "独立 Worktree"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "立即运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "编辑"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "编辑任务模板"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "编辑定时任务"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "自定义"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "让 Agent 做什么"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "让一个模板按计划自动运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "运行"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "运行失败"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "还有定时任务在用这个模板，先删除它们"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "重试"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "项目"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "默认 Agent"
+msgstr ""
+
+#: src/app/tasks/TasksPage.tsx
+msgid "默认使用模板名"
+msgstr ""

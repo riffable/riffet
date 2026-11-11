@@ -1,0 +1,169 @@
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useLingui } from '@lingui/react/macro';
+import { IconChevronRight, IconSparkles } from '@/components/icons';
+import { Collapse } from '@/components/ui/collapse';
+import { formatDuration } from '@/lib/format-duration';
+import { useNow } from '@/lib/use-now';
+import { cn, formatDateTime } from '@/lib/utils';
+import { ASSEMBLY_MS, useLingering } from './sessionLayout';
+import { useTranscriptResources } from './transcriptResources';
+
+/**
+ * The transcript is still receiving what was written while nobody watched (a conversation opened from
+ * its saved copy, a stream redialed): `catchingUp`. Meanwhile and just after, `quiet`: a block that
+ * changes then does so without animating, because nothing happened; it only was not known yet.
+ */
+export const TranscriptCatchUp = createContext({ catchingUp: false, quiet: false });
+
+interface Props {
+  running: boolean;
+  issueCount: number;
+  /** Stopped work and output preceding steering remain expanded unless folded by hand. */
+  interrupted: boolean;
+  startedAt?: number;
+  endedAt?: number;
+  footerTime?: string;
+  /** The newest transcript row keeps its time and actions visible, matching the Mac client. */
+  footerPinned?: boolean;
+  /** Shown beside `footerTime`, never without it: the answer's actions and the timestamp appear together. */
+  footerActions?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+  /** The reader's remembered choice, including an explicit false. */
+  choice?: boolean;
+  /** The reader opened or folded the block by hand. */
+  onOpenChange?: (open: boolean) => void;
+  /** Opens the block, as for a 收藏 jump to something inside it, which then stays open to read. */
+  reveal?: number;
+  /** The transcript follows its newest row; its scroll position may lag while an answer arrives. */
+  following: RefObject<boolean>;
+  /** The turn runs and ends on this block for now: the footer's place is held, showing this (the working line, or nothing). */
+  progress?: ReactNode;
+}
+
+/**
+ * Pi-desktop style "turn process" disclosure: collapses the thoughts and tool calls
+ * inside one turn into a single header row. Auto-opens while running, folds back when the
+ * turn completes normally, and stays open after interruption, steering or a tool failure.
+ * Mirrors the visual language of a single lightweight row instead of a boxed card.
+ */
+export function TurnProcess({ running, issueCount, interrupted, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, choice, onOpenChange, reveal, following, progress }: Props) {
+  const { t } = useLingui();
+  const resources = useTranscriptResources();
+  const { quiet } = useContext(TranscriptCatchUp);
+  const [open, setOpen] = useState(choice ?? (defaultOpen || running || interrupted || issueCount > 0));
+  /** Explicit reader choices survive completion; automatic expansion never records a choice. */
+  const manuallySet = useRef(choice !== undefined);
+  const previousRunning = useRef(running);
+  const section = useRef<HTMLElement>(null);
+  const contentsId = useId();
+  /**
+   * Contents that have been shown once stay mounted when folded (`Collapse keep`, hidden with
+   * `until-found`): a tool row keeps whether it was expanded, a row coming back does not replay its
+   * entrance, and the browser's find-in-page still reaches the text and unfolds the block. Blocks
+   * never opened are not mounted at all, so a long history costs no more than it did.
+   */
+  const kept = useRef(open);
+  if (open) kept.current = true;
+  /**
+   * Just mounted (a conversation opening, a row scrolling back into the window), the block's state
+   * is still settling as the session's status arrives: a turn found running opens in place rather
+   * than growing in as if it had just started.
+   */
+  const onScreen = useLingering(true, ASSEMBLY_MS);
+
+  const chooseOpen = (next: boolean) => {
+    manuallySet.current = true;
+    setOpen(next);
+    onOpenChange?.(next);
+  };
+
+  useEffect(() => {
+    if (reveal === undefined) return;
+    chooseOpen(true);
+  }, [reveal]);
+
+  useEffect(() => {
+    const fold = () => {
+      if (!following.current && beingRead(section.current)) chooseOpen(true);
+      else setOpen(false);
+    };
+    if (running && !previousRunning.current) {
+      if (!manuallySet.current) setOpen(true);
+    } else if (!running && previousRunning.current) {
+      if (!manuallySet.current && !defaultOpen && !interrupted && issueCount === 0) fold();
+    }
+    // The stop receipt can arrive after the running flag settled. Restore automatically folded
+    // output then too, while preserving an explicit choice to close it.
+    if ((interrupted || issueCount > 0) && !manuallySet.current) setOpen(true);
+    previousRunning.current = running;
+  }, [running, issueCount, interrupted, defaultOpen]);
+
+
+  const now = useNow(running);
+  const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;
+  const durationLabel = formatDuration(elapsedMs);
+  const label = running ? `${t`处理中`} · ${durationLabel}` : elapsedMs >= 1000 ? `${t`已处理`} · ${durationLabel}` : t`已处理`;
+  // A held footer keeps its gap whether or not the working line shows in it, so the line coming and
+  // going moves nothing.
+  const hasFooter = Boolean(footerTime || progress !== undefined);
+
+  return (
+    <section ref={section} data-process-open={open} className={cn('group/process flex min-w-0 flex-col', open && 'is-open')}>
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls={kept.current ? contentsId : undefined}
+        onClick={() => chooseOpen(!open)}
+        className={cn(
+          // The row hugs its content instead of spanning the column: a full-width band under the
+          // answer reads as a stray divider. The pill keeps 8px of padding on both sides, and the
+          // enclosing row is widened by that same 8px (see `TranscriptView`) so the icon inside the
+          // padding still lands on the text column — a `-mx-2` here would be clipped, corners and
+          // all, by the row's `content-visibility` paint containment.
+          'group/tp flex min-h-7 w-fit max-w-full min-w-0 items-center gap-2 self-start rounded-md px-2 text-left text-sm text-fg-3 transition-colors hover:bg-hover hover:text-fg-2 no-hover:min-h-11',
+        )}
+      >
+        <span className="grid size-4 shrink-0 place-items-center [&_svg]:size-[15px]"><IconSparkles className={cn(running && 'text-accent')} /></span>
+        <span className={cn('min-w-0 truncate', running && 'text-shimmer')}>{label}</span>
+        <IconChevronRight className={cn('size-3.5 shrink-0 text-fg-4 opacity-70 transition-transform duration-[var(--duration-base)] ease-out-soft', open && 'rotate-90')} />
+      </button>
+      {/* Opening and folding, the turn's own fold at its end included, animate their height; the
+          transcript's scroll coordinator keeps the end or the reader's place meanwhile. */}
+      <Collapse open={open} keep still={!onScreen || quiet} id={contentsId} onReveal={() => chooseOpen(true)}>
+        {/* No left rail or indent: a turn's contents line up with its own header. Indentation
+            is reserved for genuinely nested detail (a tool row expanding its own payload).
+            `mx-2` cancels the row's own widening, so the contents stay on the text column. The
+            spacing folds away with the region. */}
+        <div className={cn('mx-2 mt-1 flex min-w-0 flex-col pt-0.5', !hasFooter && 'pb-1')}>
+          {children}
+        </div>
+      </Collapse>
+      {hasFooter && (
+        // `ml-0.5` undoes most of the row's 8px widening, so this row hangs 6px outward exactly
+        // like the footer under an answer and the two line up. Keep the normal block gap above
+        // both the working line and the settled footer, so changing between them moves nothing.
+        <div className={cn('timeline-gap-block ml-0.5 flex min-h-6 flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', footerTime && !footerPinned && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/process:opacity-100 can-hover:group-hover/process:pointer-events-auto can-hover:group-focus-within/process:opacity-100 can-hover:group-focus-within/process:pointer-events-auto can-hover:has-[[data-state=open]]:opacity-100 can-hover:has-[[data-state=open]]:pointer-events-auto')}>
+          {footerTime ? <>
+            {footerActions}
+            <time dateTime={footerTime} title={formatDateTime(footerTime)} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(footerTime)}</time>
+          </> : progress && <div className="ml-1.5 min-w-0">{progress}</div>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * The reader has scrolled up from the end of the transcript and [element] is on screen: folding it
+ * now would pull what they are reading out from under them.
+ */
+function beingRead(element: HTMLElement | null): boolean {
+  const scroller = element?.closest<HTMLElement>('[data-transcript-scroll]');
+  if (!element || !scroller) return false;
+  const awayFromEnd = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 48;
+  if (!awayFromEnd) return false;
+  const view = scroller.getBoundingClientRect();
+  const rect = element.getBoundingClientRect();
+  return rect.bottom > view.top && rect.top < view.bottom;
+}

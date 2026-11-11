@@ -1,0 +1,244 @@
+# XcodeGen spec for the macOS app (docs/MACOS.md, "工程与构建"). The generated Riffet.xcodeproj is
+# not committed: run `xcodegen` here, or `./scripts/build.sh`, which does it first.
+name: Riffet
+options:
+  bundleIdPrefix: io.github.riffetai
+  deploymentTarget:
+    macOS: "15.0"
+  createIntermediateGroups: true
+  developmentLanguage: zh-Hans
+settings:
+  base:
+    MARKETING_VERSION: 0.7.0
+    CURRENT_PROJECT_VERSION: 26111201
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: YES
+    # Hardened runtime is what notarization requires, and notarization needs a Developer ID;
+    # release.sh turns it on with one. Under hardened runtime an ad-hoc app cannot load any
+    # library (Sparkle) at all: library validation wants a Team ID, which ad-hoc signing lacks.
+    ENABLE_HARDENED_RUNTIME: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    DEAD_CODE_STRIPPING: YES
+    # Interface language (docs/MACOS.md, 界面语言): the compiler records every string passed to a
+    # localizing API (.stringsdata), and each target's String Catalogs compile into its lproj folders.
+    SWIFT_EMIT_LOC_STRINGS: YES
+    LOCALIZATION_PREFERS_STRING_CATALOGS: YES
+packages:
+  SwiftTerm:
+    url: https://github.com/migueldeicaza/SwiftTerm
+    from: 1.99.0
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.10.0
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 3.1.0
+  Markdown:
+    url: https://github.com/apple/swift-markdown
+    from: 0.9.0
+targets:
+  Riffet:
+    type: application
+    platform: macOS
+    sources:
+      - path: Riffet
+        excludes:
+          - "Resources/LaunchAgents/**"
+          # Copied as a folder so the texts keep Contents/Resources/Licenses/ in the bundle.
+          - "Resources/Licenses/**"
+      - path: Riffet/Resources/Licenses
+        type: folder
+        buildPhase: resources
+      # The drawn interface styles' drafts, opened from the Help menu (InterfaceStyleDrafts.swift).
+      - path: ../../docs/design/interface-styles/pages
+        type: folder
+        buildPhase: resources
+      # Riffet's own Apache-2.0 license and NOTICE, at Contents/Resources/.
+      - path: ../../LICENSE
+        type: file
+        buildPhase: resources
+      - path: ../../NOTICE
+        type: file
+        buildPhase: resources
+      - path: Riffet/Resources/LaunchAgents
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchAgents
+      # The snapshot model the app writes and the widget reads: one file in both targets.
+      - path: RiffetWidgets/Shared
+    entitlements:
+      path: Riffet/Resources/Riffet.entitlements
+    info:
+      path: Riffet/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Riffet
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSApplicationCategoryType: public.app-category.developer-tools
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSHumanReadableCopyright: "Copyright © 2026 The Riffet Authors"
+        NSUserNotificationsUsageDescription: Riffet 在会话完成、失败或等待确认时提醒你。
+        NSAppleEventsUsageDescription: Riffet 用它在你选择的编辑器里打开文件。
+        CFBundleURLTypes:
+          - CFBundleURLName: io.github.riffetai.mac
+            CFBundleURLSchemes: [riffet]
+        NSServices:
+          - NSMenuItem: { default: 发送到 Riffet }
+            NSMessage: sendToRiffet
+            NSPortName: Riffet
+            NSSendTypes: [NSStringPboardType, public.plain-text]
+            NSRequiredContext: {}
+          - NSMenuItem: { default: 在 Riffet 中新建会话 }
+            NSMessage: newSessionInRiffet
+            NSPortName: Riffet
+            NSIconName: NSActionTemplate
+            NSSendFileTypes: [public.item]
+            NSRequiredContext: { NSApplicationIdentifier: com.apple.finder }
+        SUFeedURL: $(RIFFET_APPCAST_URL)
+        SUPublicEDKey: $(RIFFET_SPARKLE_PUBLIC_KEY)
+        SUEnableAutomaticChecks: true
+        RiffetServerAgentLabel: io.github.riffetai.mac.server
+    dependencies:
+      - package: SwiftTerm
+      - package: Sparkle
+      - package: KeyboardShortcuts
+      - package: Markdown
+      # Extensions are signed by their own targets (with their own entitlements) and only copied
+      # into Contents/PlugIns here; the app is sealed last (scripts/sign-frameworks.sh).
+      - target: RiffetWidgets
+        embed: true
+        codeSign: false
+      - target: RiffetShare
+        embed: true
+        codeSign: false
+    preBuildScripts:
+      - name: Record Git build identity
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "$SRCROOT/scripts/prepare-build-info.sh"
+      - name: Build RiffetKit (Kotlin)
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          export JAVA_HOME="${JAVA_HOME:-$(/usr/libexec/java_home)}"
+          # Kotlin/Native debug binaries are unoptimised and several times slower; the Swift side is
+          # what gets debugged, so every configuration links the optimised framework. Linking it
+          # takes 80-100 s after a Kotlin change against about 20 s for a debug one, so
+          # `build.sh dev --fast-kotlin` opts into debug while iterating on Kotlin.
+          export KOTLIN_FRAMEWORK_BUILD_TYPE="${RIFFET_KOTLIN_BUILD_TYPE:-release}"
+          cd "$SRCROOT/../mobile"
+          ./gradlew :client:embedAndSignAppleFrameworkForXcode --console=plain
+      - name: Bundle server payload
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "$SRCROOT/scripts/bundle-server.sh"
+    postBuildScripts:
+      - name: Sign embedded frameworks
+        basedOnDependencyAnalysis: false
+        script: |
+          set -e
+          "$SRCROOT/scripts/sign-frameworks.sh"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac
+        PRODUCT_NAME: Riffet
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        FRAMEWORK_SEARCH_PATHS:
+          - $(inherited)
+          - $(SRCROOT)/../mobile/client/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
+          - $(SRCROOT)/../mobile/client/build/xcode-frameworks/release/$(SDK_NAME)
+        OTHER_LDFLAGS:
+          - $(inherited)
+          - -framework
+          - RiffetKit
+          - -lsqlite3
+        RIFFET_APPCAST_URL: https://github.com/riffetai/riffet/releases/latest/download/appcast.xml
+        RIFFET_SPARKLE_PUBLIC_KEY: ""
+        RIFFET_BUNDLE_SERVER: NO
+      configs:
+        Release:
+          RIFFET_BUNDLE_SERVER: YES
+  # Desktop widget: reads widget-snapshot.json that the app writes (Services/WidgetSnapshot.swift).
+  # Extensions must be sandboxed; the entitlements grant read access to that one folder.
+  RiffetWidgets:
+    type: app-extension
+    platform: macOS
+    sources: [RiffetWidgets]
+    # XcodeGen writes the entitlements file from these properties, so they live here.
+    entitlements:
+      path: RiffetWidgets/RiffetWidgets.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.temporary-exception.files.home-relative-path.read-only:
+          - /Library/Application Support/Riffet/
+    info:
+      path: RiffetWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Riffet 小组件
+        CFBundlePackageType: XPC!
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.widgets
+        SKIP_INSTALL: YES
+  # Share menu entry: turns shared text, links and files into `riffet://new?prompt=…`.
+  RiffetShare:
+    type: app-extension
+    platform: macOS
+    sources: [RiffetShare]
+    entitlements:
+      path: RiffetShare/RiffetShare.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+    info:
+      path: RiffetShare/Info.plist
+      properties:
+        CFBundleDisplayName: Riffet
+        CFBundlePackageType: XPC!
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+              NSExtensionActivationSupportsFileWithMaxCount: 10
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.share
+        SKIP_INSTALL: YES
+  RiffetTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources: [RiffetTests]
+    dependencies:
+      - target: Riffet
+    settings:
+      base:
+        BUNDLE_LOADER: $(TEST_HOST)
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Riffet.app/Contents/MacOS/Riffet
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.tests
+schemes:
+  Riffet:
+    build:
+      targets:
+        Riffet: all
+        RiffetTests: [test]
+    test:
+      targets: [RiffetTests]

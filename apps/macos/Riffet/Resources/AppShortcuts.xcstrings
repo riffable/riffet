@@ -1,0 +1,71 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "${applicationName} 有哪些会话在运行" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Which sessions are running in ${applicationName}"
+            ]
+          }
+        },
+        "zh-Hans" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "${applicationName} 有哪些会话在运行"
+            ]
+          }
+        }
+      }
+    },
+    "用 ${applicationName} 打开会话" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Open a session in ${applicationName}"
+            ]
+          }
+        },
+        "zh-Hans" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "用 ${applicationName} 打开会话"
+            ]
+          }
+        }
+      }
+    },
+    "用 ${applicationName} 新建会话" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringSet" : {
+            "state" : "translated",
+            "values" : [
+              "Create a session in ${applicationName}",
+              "Ask ${applicationName} to start a task"
+            ]
+          }
+        },
+        "zh-Hans" : {
+          "stringSet" : {
+            "state" : "new",
+            "values" : [
+              "用 ${applicationName} 新建会话",
+              "让 ${applicationName} 开始一个任务"
+            ]
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -1,0 +1,22 @@
+<!doctype html><meta charset="utf-8"><title>界面风格</title>
+<!-- The interface styles' drafts (packages/contracts/src/interface-styles.ts). Each style page stacks its
+     frames; ./render.sh writes them to out/ as PNGs, which this page shows side by side. -->
+<style>
+body{margin:0;font:13px -apple-system,"PingFang SC",sans-serif;background:#F4F3F0;color:#2B2B2A}
+header{position:sticky;top:0;z-index:2;display:flex;gap:4px;padding:12px 24px;background:#F4F3F0e8;backdrop-filter:blur(12px);border-bottom:.5px solid #0001}
+header button{font:inherit;border:0;background:none;padding:6px 12px;border-radius:6px;color:#73726C;cursor:pointer}
+header button.on{background:#fff;color:#2B2B2A;box-shadow:0 0 0 .5px #0002}
+.row{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;padding:16px 24px}
+.row h3{margin:0 0 8px;font-size:13px;font-weight:600}.row h3 a{color:#73726C;font-weight:400;margin-left:8px}
+img{width:100%;border-radius:8px;box-shadow:0 0 0 .5px #0002,0 4px 16px #0001;display:block}
+</style>
+<header id="tabs"></header><div id="rows"></div>
+<script>
+const D=[['riffet','Riffet'],['claude','Claude']];
+const F=[['main','工作台'],['outline','大纲'],['home','首页'],['palette','⌘K'],['settings','设置'],['dark','深色'],['spec','设计基础']];
+const tabs=document.getElementById('tabs'),rows=document.getElementById('rows');
+function show(f){tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.f===f));
+rows.innerHTML='<div class="row">'+D.map(([d,n])=>`<div><h3>${n}<a href="pages/${d}/index.html">HTML</a></h3><a href="out/${d}-${f}.png"><img src="out/${d}-${f}.png" onerror="this.closest('div').style.opacity=.25;this.replaceWith('（这一种没有此画面）')"></a></div>`).join('')+'</div>';}
+F.forEach(([f,n])=>{const b=document.createElement('button');b.textContent=n;b.dataset.f=f;b.onclick=()=>show(f);tabs.append(b)});
+show('main');
+</script>

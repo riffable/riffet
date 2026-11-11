@@ -1,0 +1,55 @@
+{
+  "id": "example.session-stats",
+  "vendor": "Example",
+  "name": "Session stats",
+  "apiVersion": 1,
+  "version": "0.1.0",
+  "defaultEnabled": true,
+  "title": {
+    "zh-Hans": "会话统计",
+    "en": "Session stats"
+  },
+  "description": {
+    "zh-Hans": "当前会话的轮次与耗时。",
+    "en": "Turns and durations of the open conversation."
+  },
+  "hostApi": {
+    "web": ">=1"
+  },
+  "entries": {
+    "web": "web/index.js"
+  },
+  "capabilities": [
+    "sessions.read"
+  ],
+  "contributes": {
+    "views": [
+      {
+        "id": "example.session-stats/stats",
+        "title": {
+          "zh-Hans": "统计",
+          "en": "Stats"
+        },
+        "icon": {
+          "sfSymbol": "chart.bar"
+        },
+        "locations": [
+          "sidebar"
+        ],
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-session",
+        "when": {
+          "hasSession": true
+        },
+        "requires": [
+          "bridge.host.info",
+          "bridge.sessions.outline",
+          "bridge.sessions.timeline"
+        ]
+      }
+    ]
+  }
+}
