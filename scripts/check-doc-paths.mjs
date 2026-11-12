@@ -100,8 +100,10 @@ const missing = pending.filter((p) => !exists(p));
 const checkIgnore = (paths) => {
   try { return git(['check-ignore', '--no-index', '--stdin', '-z'], paths.join('\0') + '\0'); } catch (error) { if (error.status === 1) return ''; throw error; }
 };
-const ignored = new Set(missing.length ? checkIgnore(missing.map((p) => p.options[0])).split('\0').filter(Boolean) : []);
-const findings = missing.filter((p) => !ignored.has(p.options[0]));
+// Each path is also asked as a directory: a dir-only pattern (`*.xcodeproj/`) does not match a path that is absent.
+const asDir = (path) => path.replace(/\/?$/, '/');
+const ignored = new Set(missing.length ? checkIgnore(missing.flatMap((p) => [p.options[0], asDir(p.options[0])])).split('\0').filter(Boolean) : []);
+const findings = missing.filter((p) => !ignored.has(p.options[0]) && !ignored.has(asDir(p.options[0])));
 
 for (const f of findings) console.error(`${f.file}:${f.line}  missing ${f.raw}`);
 if (findings.length) {
