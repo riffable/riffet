@@ -74,9 +74,13 @@ data class WorktreeComparisonFile(
 @Serializable
 data class WorktreeComparison(
     val base: String,
+    /** The branch [base] was found on, when the comparison chose it. */
+    val ref: String? = null,
     val head: String? = null,
     val commits: Long = 0,
     val files: List<WorktreeComparisonFile> = emptyList(),
+    /** Set when more files changed than are listed. */
+    val filesTotal: Long? = null,
     val added: Long = 0,
     val removed: Long = 0,
 )

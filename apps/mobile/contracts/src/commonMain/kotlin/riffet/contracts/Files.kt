@@ -63,6 +63,8 @@ data class GitStatus(
     val root: String,
     val added: Long? = null,
     val removed: Long? = null,
+    /** The main line the branch can be compared with (`origin/main`, say); absent on that line itself. */
+    val base: String? = null,
 )
 
 @Serializable
@@ -73,6 +75,8 @@ data class GitDiff(
     val patch: String,
     val binary: Boolean,
     val truncated: Boolean? = null,
+    /** Present when line ranges can be staged, unstaged or discarded; sent back so a stale request is refused. */
+    val version: String? = null,
 )
 
 @Serializable
@@ -86,6 +90,8 @@ data class Checkpoint(
     val createdAt: String,
     val files: Long,
     val excluded: List<String>,
+    /** Holds only the files it lists; taken before a discard, so restoring it undoes the discard. */
+    val partial: Boolean? = null,
 )
 
 @Serializable

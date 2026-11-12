@@ -7,10 +7,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.withContext
+import riffet.shared.gitPatchChunks
+import riffet.contracts.BranchInfo
 import riffet.contracts.Checkpoint
 import riffet.contracts.CheckpointChange
+import riffet.contracts.CheckpointChangeKind
 import riffet.contracts.GitDiff
 import riffet.contracts.GitEntry
+import riffet.contracts.GitLineChange
 import riffet.contracts.GitStatus
 import riffet.contracts.WorktreeInfo
 import riffet.shared.CreateCheckpointRequest
@@ -18,13 +25,22 @@ import riffet.shared.CreateWorktreeRequest
 import riffet.shared.RiffetApi
 import riffet.shared.RiffetHttpException
 import riffet.ui.files.gitStaged
+import riffet.ui.files.gitUnstaged
 import riffet.shared.checkpointChanges
 import riffet.shared.checkpoints
 import riffet.shared.commit
 import riffet.shared.createCheckpoint
 import riffet.shared.createWorktree
+import riffet.shared.gitBranch
+import riffet.shared.gitCompare
 import riffet.shared.gitDiff
+import riffet.shared.gitDiscard
+import riffet.shared.gitLines
+import riffet.shared.gitPull
+import riffet.shared.gitPush
 import riffet.shared.gitStatus
+import riffet.shared.gitStatusStream
+import riffet.shared.sessionCheckpoints
 import riffet.i18n.L10n
 import riffet.shared.removeWorktree
 import riffet.shared.restoreCheckpoint
@@ -32,8 +48,74 @@ import riffet.shared.stage
 import riffet.shared.unstage
 import riffet.shared.worktrees
 
-/** The Git panel's three views; each list is read the first time its view is shown. */
-enum class GitPanelTab { CHANGES, CHECKPOINTS, WORKTREES }
+/** The Git panel's views; each list is read the first time its view is shown. */
+enum class GitPanelTab { CHANGES, HISTORY, CHECKPOINTS, WORKTREES }
+
+/** One row of a rendered patch: a hunk header, a line, or the actions of the changed run that starts below. */
+sealed interface GitPatchRow {
+    data class Hunk(val text: String) : GitPatchRow
+    data class Line(val sign: Char, val text: String) : GitPatchRow
+    data class Actions(val change: GitLineChange) : GitPatchRow
+}
+
+/** The patch's rows; when [editable], each changed run gets its actions in front of it. */
+internal fun patchRows(patch: String, editable: Boolean): List<GitPatchRow> {
+    val chunks = if (editable) gitPatchChunks(patch).associate { it.patchLine to it.change } else emptyMap()
+    val rows = mutableListOf<GitPatchRow>()
+    var inHunk = false
+    // The patch ends with a newline; the empty piece after it is not a line.
+    val lines = patch.split('\n').let { if (it.lastOrNull() == "") it.dropLast(1) else it }
+    lines.forEachIndexed { index, line ->
+        if (line.startsWith("@@")) {
+            inHunk = true
+            rows += GitPatchRow.Hunk(line)
+            return@forEachIndexed
+        }
+        if (!inHunk) return@forEachIndexed
+        chunks[index]?.let { rows += GitPatchRow.Actions(it) }
+        rows += when {
+            line.startsWith("+") -> GitPatchRow.Line('+', line.drop(1))
+            line.startsWith("-") -> GitPatchRow.Line('-', line.drop(1))
+            line.startsWith("\\") -> GitPatchRow.Line('\\', line)
+            else -> GitPatchRow.Line(' ', line.drop(1))
+        }
+    }
+    return rows
+}
+
+/** What the Changes list compares the working tree with. */
+enum class GitScope { UNCOMMITTED, TURN, BRANCH }
+
+/**
+ * A file's diff on show. [entry] is set for the working tree's own list, the only diffs whose lines
+ * can be staged; [base] is `checkpoint:<id>` or the branch's base, [commit] a commit's own change.
+ */
+data class GitDiffTarget(
+    val path: String,
+    val entry: GitEntry? = null,
+    val base: String? = null,
+    val commit: String? = null,
+    val title: String? = null,
+)
+
+/** One row of a This Turn or Branch list; [letter] is the A/M/D/R status. */
+data class GitScopedFile(val path: String, val letter: String, val added: Long?, val removed: Long?)
+
+/** [total] is set when the server listed fewer files than changed. */
+data class GitScopedList(
+    val scope: GitScope,
+    val files: List<GitScopedFile> = emptyList(),
+    val total: Long? = null,
+    val base: String? = null,
+    val ref: String? = null,
+)
+
+/** A discard that can be taken back: [backup] is null when nothing could be saved first. [id] makes each one distinct. */
+data class GitDiscarded(val id: Long, val backup: Checkpoint?)
+
+/** Rows of the Changes list shown before "N more files"; each step shows this many more. */
+const val GIT_ROWS_SHOWN = 300
+const val GIT_ROWS_STEP = 1000
 
 /** Everything the Git panel renders; see [GitPanelController]. */
 data class GitPanelState(
@@ -44,10 +126,12 @@ data class GitPanelState(
     val error: String? = null,
     val notice: String? = null,
     /** The file whose diff is open, or null while the tab list shows. */
-    val diffEntry: GitEntry? = null,
+    val diffTarget: GitDiffTarget? = null,
     /** Whether the open diff is the index's (staged) side. */
     val diffStaged: Boolean = false,
     val diff: GitDiff? = null,
+    /** [diff]'s patch laid out as rows, prepared off the main thread when the diff arrives. */
+    val diffRows: List<GitPatchRow>? = null,
     val diffLoading: Boolean = false,
     val checkpoints: List<Checkpoint>? = null,
     val expandedCheckpoint: String? = null,
@@ -57,7 +141,25 @@ data class GitPanelState(
     val pendingRestoreChanges: List<CheckpointChange> = emptyList(),
     val worktrees: List<WorktreeInfo>? = null,
     val pendingRemove: WorktreeInfo? = null,
-)
+    val changesScope: GitScope = GitScope.UNCOMMITTED,
+    /** The newest checkpoint of the conversation: where its current turn started. */
+    val turn: Checkpoint? = null,
+    val scoped: GitScopedList? = null,
+    val scopedFailed: Boolean = false,
+    val shownRows: Int = GIT_ROWS_SHOWN,
+    val branch: BranchInfo? = null,
+    val discarded: GitDiscarded? = null,
+    /** The file whose discard the server could not back up, awaiting the reader's word. */
+    val confirmDiscard: String? = null,
+) {
+    /** The scope the list actually shows: a scope that no longer applies falls back to the working tree. */
+    val shownScope: GitScope
+        get() = when {
+            changesScope == GitScope.TURN && turn != null -> GitScope.TURN
+            changesScope == GitScope.BRANCH && status?.base != null -> GitScope.BRANCH
+            else -> GitScope.UNCOMMITTED
+        }
+}
 
 /**
  * The Git panel's reads and writes for one project, ported from `apps/web/src/app/panels/GitPanel.tsx`.
@@ -81,6 +183,7 @@ data class GitPanelState(
 class GitPanelController(
     private val api: RiffetApi,
     private val projectId: String,
+    private val sessionId: String?,
     private val scope: CoroutineScope,
     private val writeScope: CoroutineScope,
 ) {
@@ -91,6 +194,12 @@ class GitPanelController(
 
     /** Bumped each time a diff opens over the tab list; a replaced diff keeps its visit. */
     private var diffVisit = 0L
+    private var discards = 0L
+    private var scopedRunning = false
+    private var scopedDirty = false
+    private var scopedForce = false
+    private var branchRunning = false
+    private var branchDirty = false
 
     fun clearMessages() {
         _state.update { it.copy(error = null, notice = null) }
@@ -100,16 +209,74 @@ class GitPanelController(
         _state.update { if (it.notice == message) it.copy(notice = null) else it }
     }
 
+    fun consumeDiscarded(discarded: GitDiscarded) {
+        _state.update { if (it.discarded == discarded) it.copy(discarded = null) else it }
+    }
+
+    /** Puts [status] on show and re-reads whatever else the working tree decides (the turn, a scoped list). */
+    private fun applyStatus(status: GitStatus, force: Boolean = false) {
+        _state.update { it.copy(status = status, statusLoaded = true) }
+        refreshScoped(force)
+    }
+
+    // Reads the status again even while a stream is open: the server answers from what it last saw otherwise.
+    private suspend fun readStatus(): GitStatus = api.gitStatus(projectId, fresh = true)
+
     @Throws(Exception::class)
     suspend fun refreshStatus() {
         try {
-            val status = api.gitStatus(projectId)
-            _state.update { it.copy(status = status) }
+            applyStatus(readStatus(), force = true)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (failure: Throwable) {
             _state.update { it.copy(status = null, error = gitError(failure, L10n.uiText("git.statusReadFailed"))) }
         } finally {
             _state.update { it.copy(statusLoaded = true) }
         }
+        refreshBranch()
+    }
+
+    /** Follows the project's status while the panel is on screen; ends with the flow, which the manual refresh then replaces. */
+    suspend fun watchStatus() {
+        try {
+            api.gitStatusStream(projectId).collect {
+                applyStatus(it)
+                requestBranch()
+            }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+        }
+    }
+
+    // Conflated: a read in flight is never cancelled; one more runs after it when something changed meanwhile.
+    private fun requestBranch() {
+        if (branchRunning) {
+            branchDirty = true
+            return
+        }
+        branchRunning = true
+        scope.launch {
+            try {
+                do {
+                    branchDirty = false
+                    refreshBranch()
+                } while (branchDirty)
+            } finally {
+                branchRunning = false
+            }
+        }
+    }
+
+    private suspend fun refreshBranch() {
+        val branch = try {
+            api.gitBranch(projectId)
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            null
+        }
+        _state.update { it.copy(branch = branch) }
     }
 
     @Throws(Exception::class)
@@ -138,7 +305,7 @@ class GitPanelController(
         when (tab) {
             GitPanelTab.CHECKPOINTS -> if (_state.value.checkpoints == null) refreshCheckpoints()
             GitPanelTab.WORKTREES -> if (_state.value.worktrees == null) refreshWorktrees()
-            GitPanelTab.CHANGES -> Unit
+            GitPanelTab.CHANGES, GitPanelTab.HISTORY -> Unit
         }
     }
 
@@ -147,10 +314,95 @@ class GitPanelController(
         scope.launch {
             clearMessages()
             when (tab) {
-                GitPanelTab.CHANGES -> refreshStatus()
+                GitPanelTab.CHANGES, GitPanelTab.HISTORY -> refreshStatus()
                 GitPanelTab.CHECKPOINTS -> refreshCheckpoints()
                 GitPanelTab.WORKTREES -> refreshWorktrees()
             }
+        }
+    }
+
+    /* ------------------------------------------------------------------------------------------- */
+    /* Scopes                                                                                       */
+    /* ------------------------------------------------------------------------------------------- */
+
+    fun selectScope(next: GitScope) {
+        _state.update { it.copy(changesScope = next, shownRows = GIT_ROWS_SHOWN, scoped = null, scopedFailed = false) }
+        refreshScoped(force = true)
+    }
+
+    fun showMoreRows() {
+        _state.update { it.copy(shownRows = it.shownRows + GIT_ROWS_STEP) }
+    }
+
+    /**
+     * The list of the shown scope follows the tree. Conflated: a read in flight is never cancelled, so
+     * a slow one still finishes under constant edits; one more runs after it when something changed
+     * meanwhile. The conversation's turn (its newest checkpoint) is read again only when it is unknown,
+     * when the turn list is the one on show, or when [force]d.
+     */
+    private fun refreshScoped(force: Boolean = false) {
+        if (force) scopedForce = true
+        if (scopedRunning) {
+            scopedDirty = true
+            return
+        }
+        scopedRunning = true
+        scope.launch {
+            try {
+                do {
+                    scopedDirty = false
+                    val forced = scopedForce
+                    scopedForce = false
+                    readScoped(forced)
+                } while (scopedDirty)
+            } finally {
+                scopedRunning = false
+            }
+        }
+    }
+
+    private suspend fun readScoped(forced: Boolean) {
+        val before = _state.value
+        if (sessionId != null && (forced || before.turn == null || before.changesScope == GitScope.TURN)) {
+            val turn = try {
+                api.sessionCheckpoints(sessionId).firstOrNull()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Throwable) {
+                null
+            }
+            _state.update { it.copy(turn = turn) }
+        }
+        val current = _state.value
+        val shown = current.shownScope
+        if (shown == GitScope.UNCOMMITTED) {
+            _state.update { if (it.scoped == null && !it.scopedFailed) it else it.copy(scoped = null, scopedFailed = false) }
+            return
+        }
+        try {
+            val list = when (shown) {
+                GitScope.TURN -> GitScopedList(
+                    scope = shown,
+                    files = api.checkpointChanges(projectId, current.turn!!.id).map { change ->
+                        GitScopedFile(change.path, change.kind.letter(), null, null)
+                    },
+                    base = "checkpoint:${current.turn.id}",
+                )
+                else -> api.gitCompare(projectId).let { result ->
+                    GitScopedList(
+                        scope = shown,
+                        files = result.files.map { GitScopedFile(it.path, it.status, it.added, it.removed) },
+                        total = result.filesTotal,
+                        base = result.base,
+                        ref = result.ref,
+                    )
+                }
+            }
+            _state.update { it.copy(scoped = list, scopedFailed = false) }
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (failure: Throwable) {
+            _state.update { it.copy(scoped = null, scopedFailed = true, error = gitError(failure, L10n.uiText("git.compareFailed"))) }
         }
     }
 
@@ -159,38 +411,75 @@ class GitPanelController(
     /* ------------------------------------------------------------------------------------------- */
 
     fun openDiff(entry: GitEntry) {
-        scope.launch { loadDiff(entry) }
+        scope.launch { loadDiff(GitDiffTarget(entry.path, entry = entry), gitStaged(entry) && entry.worktree == " ", keep = false) }
+    }
+
+    fun openDiff(file: GitScopedFile) {
+        val list = _state.value.scoped ?: return
+        scope.launch { loadDiff(GitDiffTarget(file.path, base = list.base, title = list.ref), staged = false, keep = false) }
+    }
+
+    /** A file of a commit, read-only. */
+    fun openCommitDiff(hash: String, path: String) {
+        scope.launch { loadDiff(GitDiffTarget(path, commit = hash), staged = false, keep = false) }
+    }
+
+    /** Shows the other side of a file that has both staged and unstaged changes. */
+    fun showDiffSide(staged: Boolean) {
+        val target = _state.value.diffTarget ?: return
+        if (_state.value.diffStaged == staged) return
+        scope.launch { loadDiff(target, staged, keep = false) }
     }
 
     /** The diff page went away (back, swipe); a diff still loading for it is dropped. */
     fun closeDiff() {
-        _state.update { if (it.diffEntry == null) it else it.copy(diffEntry = null) }
+        _state.update { if (it.diffTarget == null) it else it.copy(diffTarget = null) }
     }
 
-    private suspend fun loadDiff(entry: GitEntry) {
-        if (_state.value.diffEntry == null) ++diffVisit
+    // [keep]: a reload of the diff on show keeps what it shows until the new one arrives, so its scroll position stays.
+    private suspend fun loadDiff(target: GitDiffTarget, staged: Boolean, keep: Boolean) {
+        if (_state.value.diffTarget == null) ++diffVisit
         val visit = diffVisit
         val request = ++diffRequest
-        val staged = gitStaged(entry) && entry.worktree == " "
-        _state.update { it.copy(diffEntry = entry, diffStaged = staged, diff = null, diffLoading = true) }
-        fun showing() = request == diffRequest && diffVisit == visit && _state.value.diffEntry?.path == entry.path
+        _state.update { it.copy(diffTarget = target, diffStaged = staged, diff = if (keep) it.diff else null, diffRows = if (keep) it.diffRows else null, diffLoading = true) }
+        fun showing() = request == diffRequest && diffVisit == visit && _state.value.diffTarget?.path == target.path
         try {
-            val result = api.gitDiff(projectId, entry.path, staged)
-            if (showing()) _state.update { it.copy(diff = result) }
+            val result = api.gitDiff(projectId, target.path, staged, base = target.base, commit = target.commit)
+            // Only the working tree's own diff carries a version, and only it can be applied by line.
+            val editable = target.entry != null && target.base == null && target.commit == null &&
+                result.version != null && !result.binary && result.truncated != true
+            val rows = withContext(Dispatchers.Default) { patchRows(result.patch, editable) }
+            if (showing()) _state.update { it.copy(diff = result, diffRows = rows) }
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (failure: Throwable) {
-            if (showing()) _state.update { it.copy(error = gitError(failure, L10n.uiText("git.diffReadFailed")), diffEntry = null) }
+            if (showing()) _state.update { it.copy(error = gitError(failure, L10n.uiText("git.diffReadFailed")), diffTarget = null) }
         } finally {
             if (request == diffRequest) _state.update { it.copy(diffLoading = false) }
         }
     }
 
-    // Re-reads the open diff after a stage/unstage so its header reflects the new index state.
+    // Re-reads the open diff after a write so it reflects the new index and tree; a file with nothing left closes it.
     private suspend fun reloadOpenDiff(refreshed: GitStatus) {
-        val current = _state.value.diffEntry ?: return
-        val updated = refreshed.entries.firstOrNull { it.path == current.path }
-        if (updated != null) loadDiff(updated) else _state.update { it.copy(diffEntry = null, diff = null) }
+        val current = _state.value
+        val target = current.diffTarget ?: return
+        if (target.entry == null) return
+        val updated = refreshed.entries.firstOrNull { it.path == target.path }
+        val side = when {
+            updated == null -> null
+            current.diffStaged && gitStaged(updated) -> true
+            !current.diffStaged && gitUnstaged(updated) -> false
+            gitUnstaged(updated) -> false
+            gitStaged(updated) -> true
+            else -> null
+        }
+        if (updated == null || side == null) {
+            _state.update { it.copy(diffTarget = null, diff = null) }
+            return
+        }
+        loadDiff(target.copy(entry = updated), side, keep = true)
+        val diff = _state.value.diff
+        if (diff != null && !diff.binary && diff.before == diff.after) _state.update { it.copy(diffTarget = null, diff = null) }
     }
 
     fun stage(paths: List<String>) {
@@ -206,14 +495,10 @@ class GitPanelController(
         _state.update { it.copy(busy = true, error = null, notice = null) }
         try {
             api.stage(projectId, paths)
-            val refreshed = api.gitStatus(projectId)
-            val stillUnstaged = refreshed.entries.filter { it.path in paths && !gitStaged(it) }
-            val notice = if (stillUnstaged.isEmpty()) {
-                L10n.uiText("git.staged", paths.size)
-            } else {
-                L10n.uiText("git.stagedRemaining", stillUnstaged.size)
-            }
-            _state.update { it.copy(status = refreshed, statusLoaded = true, notice = notice) }
+            val refreshed = readStatus()
+            val stillUnstaged = refreshed.entries.any { it.path in paths && !gitStaged(it) }
+            applyStatus(refreshed)
+            if (stillUnstaged) _state.update { it.copy(notice = L10n.uiText("git.stagedRemaining")) }
             reloadOpenDiff(refreshed)
         } catch (failure: Throwable) {
             _state.update { it.copy(error = gitError(failure, L10n.uiText("git.stageFailed"))) }
@@ -227,19 +512,101 @@ class GitPanelController(
         _state.update { it.copy(busy = true, error = null, notice = null) }
         try {
             api.unstage(projectId, paths)
-            val refreshed = api.gitStatus(projectId)
-            val stillStaged = refreshed.entries.filter { it.path in paths && gitStaged(it) }
-            val notice = if (stillStaged.isEmpty()) {
-                L10n.uiText("git.unstaged", paths.size)
-            } else {
-                L10n.uiText("git.unstagedRemaining", stillStaged.size)
-            }
-            _state.update { it.copy(status = refreshed, statusLoaded = true, notice = notice) }
+            val refreshed = readStatus()
+            val stillStaged = refreshed.entries.any { it.path in paths && gitStaged(it) }
+            applyStatus(refreshed)
+            if (stillStaged) _state.update { it.copy(notice = L10n.uiText("git.unstagedRemaining")) }
             reloadOpenDiff(refreshed)
         } catch (failure: Throwable) {
             _state.update { it.copy(error = gitError(failure, L10n.uiText("git.unstageFailed"))) }
         } finally {
             _state.update { it.copy(busy = false) }
+        }
+    }
+
+    /* Discard and line-level writes */
+
+    fun discard(path: String) {
+        writeScope.launch { discardPath(path, permanent = false) }
+    }
+
+    /** The reader agreed to discard a file the server could not back up first. */
+    fun confirmPermanentDiscard() {
+        val path = _state.value.confirmDiscard ?: return
+        _state.update { it.copy(confirmDiscard = null) }
+        writeScope.launch { discardPath(path, permanent = true) }
+    }
+
+    fun cancelPermanentDiscard() {
+        _state.update { it.copy(confirmDiscard = null) }
+    }
+
+    private fun showDiscarded(backup: Checkpoint?) {
+        _state.update { it.copy(discarded = GitDiscarded(++discards, backup), notice = null) }
+    }
+
+    private suspend fun discardPath(path: String, permanent: Boolean) {
+        _state.update { it.copy(busy = true, error = null, notice = null) }
+        try {
+            val result = api.gitDiscard(projectId, listOf(path), permanent)
+            showDiscarded(result.backup)
+            applyStatus(result.status)
+            reloadOpenDiff(result.status)
+        } catch (failure: Throwable) {
+            if ((failure as? RiffetHttpException)?.code == "DISCARD_UNRECOVERABLE" && !permanent) {
+                _state.update { it.copy(confirmDiscard = path) }
+            } else {
+                _state.update { it.copy(error = gitError(failure, L10n.uiText("git.discardFailed"))) }
+            }
+        } finally {
+            _state.update { it.copy(busy = false) }
+        }
+    }
+
+    /** Puts back what a discard threw away by restoring the checkpoint saved before it. */
+    fun undoDiscard(backup: Checkpoint) {
+        writeScope.launch {
+            _state.update { it.copy(busy = true, error = null, notice = null) }
+            try {
+                api.restoreCheckpoint(projectId, backup.id, api.checkpointChanges(projectId, backup.id))
+                val refreshed = readStatus()
+                applyStatus(refreshed)
+                _state.update { it.copy(notice = L10n.uiText("git.restored")) }
+                reloadOpenDiff(refreshed)
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = gitError(failure, L10n.uiText("git.undoFailed"))) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    /** Stages, unstages or discards one changed block of the open diff; [action] is `stage`, `unstage` or `discard`. */
+    fun applyChunk(action: String, change: GitLineChange) {
+        val current = _state.value
+        val target = current.diffTarget ?: return
+        val version = current.diff?.version ?: return
+        if (current.busy) return
+        writeScope.launch {
+            _state.update { it.copy(busy = true, error = null, notice = null) }
+            try {
+                val refreshed = try {
+                    val result = api.gitLines(projectId, target.path, action, listOf(change), version)
+                    if (action == "discard") showDiscarded(result.backup)
+                    result.status
+                } catch (failure: Throwable) {
+                    // The agent, or another window, got to the file first: show what is there now instead.
+                    if ((failure as? RiffetHttpException)?.code != "GIT_DIFF_STALE") throw failure
+                    _state.update { it.copy(notice = L10n.uiText("git.diffStale")) }
+                    readStatus()
+                }
+                applyStatus(refreshed)
+                reloadOpenDiff(refreshed)
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = gitError(failure, L10n.uiText("git.lineFailed"))) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
         }
     }
 
@@ -254,18 +621,48 @@ class GitPanelController(
             try {
                 api.commit(projectId, text)
                 onSent()
-                val refreshed = api.gitStatus(projectId)
+                val refreshed = readStatus()
                 val remaining = refreshed.entries.count { gitStaged(it) }
                 // `commit` returns no receipt, so the index is the only evidence. An empty index is
                 // reported as a commit; a non-empty one is reported for what it is, not as success.
-                val notice = if (remaining == 0) {
-                    L10n.uiText("git.committed")
-                } else {
-                    L10n.uiText("git.commitRemaining", remaining)
-                }
-                _state.update { it.copy(status = refreshed, statusLoaded = true, notice = notice) }
+                val notice = if (remaining == 0) L10n.uiText("git.committed") else L10n.uiText("git.commitRemaining")
+                applyStatus(refreshed)
+                _state.update { it.copy(notice = notice) }
+                refreshBranch()
             } catch (failure: Throwable) {
                 _state.update { it.copy(error = gitError(failure, L10n.uiText("git.commitFailed"))) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    /* Publishing */
+
+    fun pull() {
+        writeScope.launch {
+            _state.update { it.copy(busy = true, error = null, notice = null) }
+            try {
+                val result = api.gitPull(projectId)
+                _state.update { it.copy(branch = result.branch) }
+                applyStatus(result.status)
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = gitError(failure, L10n.uiText("git.pullFailed"))) }
+            } finally {
+                _state.update { it.copy(busy = false) }
+            }
+        }
+    }
+
+    /** Pushes the current branch; without [remote] the server picks the branch's own or the only one. */
+    fun push(remote: String? = null) {
+        writeScope.launch {
+            _state.update { it.copy(busy = true, error = null, notice = null) }
+            try {
+                val result = api.gitPush(projectId, remote)
+                _state.update { it.copy(branch = result.branch) }
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = gitError(failure, L10n.uiText("git.pushFailed"))) }
             } finally {
                 _state.update { it.copy(busy = false) }
             }
@@ -367,7 +764,7 @@ class GitPanelController(
                         changesByCheckpoint = it.changesByCheckpoint - checkpoint.id,
                         pendingRestore = null,
                         pendingRestoreChanges = emptyList(),
-                        diffEntry = null,
+                        diffTarget = null,
                         diff = null,
                     )
                 }
@@ -475,7 +872,17 @@ class GitPanelController(
     }
 }
 
-private fun gitError(error: Throwable, fallback: String): String {
+internal fun gitError(error: Throwable, fallback: String): String {
+    when ((error as? RiffetHttpException)?.code) {
+        "GIT_SWITCH_BLOCKED" -> return L10n.uiText("git.switchBlocked")
+        "GIT_PULL_DIVERGED" -> return L10n.uiText("git.pullDiverged")
+    }
     val detail = error.message?.takeIf { it.isNotBlank() }
     return if (detail != null && detail != fallback) L10n.uiText("git.errorWithDetail", fallback, detail) else fallback
+}
+
+private fun CheckpointChangeKind.letter(): String = when (this) {
+    CheckpointChangeKind.ADDED -> "A"
+    CheckpointChangeKind.MODIFIED -> "M"
+    CheckpointChangeKind.DELETED -> "D"
 }
