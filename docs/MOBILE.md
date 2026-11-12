@@ -830,8 +830,8 @@ cd apps/mobile
 ./gradlew :androidApp:assembleDebug              # 产出 androidApp/build/outputs/apk/debug/*.apk
 ```
 
-Debug 构建默认使用仓库中的 `apps/mobile/androidApp/signing/debug.keystore`。这把 key 沿用已分发版本的
-签名，让不同开发机出包后仍可覆盖安装；新 checkout 无需个人签名配置，也不依赖各机器自动生成的
+Debug 构建默认使用仓库中的 `apps/mobile/androidApp/signing/debug.keystore`。相同 application ID 下，
+不同开发机出包后可覆盖安装；新 checkout 无需个人签名配置，也不依赖各机器自动生成的
 `~/.android/debug.keystore`。证书指纹为：
 
 | 算法 | 指纹 |
@@ -843,6 +843,27 @@ Debug 构建默认使用仓库中的 `apps/mobile/androidApp/signing/debug.keyst
 配置。仓库读者可以制作覆盖已有 debug 版的 APK，这把 key 不再作为秘密，也不用于正式发布。
 Release 使用独立、保存在仓库外的签名 key 与配置。`.gitignore` 只对上述 debug keystore 开例外，
 其他 keystore 仍忽略。
+
+正式应用 ID 为 `io.github.riffable.android`，release 证书 subject 为 `CN=Riffet, O=riffable`。
+GitHub Actions 从仓库 secrets `ANDROID_KEYSTORE_BASE64`、`ANDROID_KEYSTORE_PASSWORD`、
+`ANDROID_KEY_ALIAS`、`ANDROID_KEY_PASSWORD` 读取签名材料；发布工作流会核对 APK 的证书 subject。
+
+已配置发布签名的 Mac 使用 `~/.config/riffet/android-signing/riffable-release.jks`，alias 为
+`riffet-release`，口令保存在登录钥匙串的 `io.github.riffable.android.release-signing` service 中，
+account 与 alias 相同。手动构建 release 时，在 `apps/mobile` 下执行：
+
+```bash
+(
+  set -e
+  export RIFFET_SIGNING_STORE_FILE="$HOME/.config/riffet/android-signing/riffable-release.jks"
+  export RIFFET_SIGNING_KEY_ALIAS=riffet-release
+  RIFFET_SIGNING_STORE_PASSWORD="$(security find-generic-password -s io.github.riffable.android.release-signing -a "$RIFFET_SIGNING_KEY_ALIAS" -w)"
+  test -n "$RIFFET_SIGNING_STORE_PASSWORD"
+  export RIFFET_SIGNING_STORE_PASSWORD
+  export RIFFET_SIGNING_KEY_PASSWORD="$RIFFET_SIGNING_STORE_PASSWORD"
+  ./gradlew :androidApp:assembleRelease
+)
+```
 
 需要覆盖 debug keystore 路径时，可在个人 `GRADLE_USER_HOME/gradle.properties`
 （未设置 `GRADLE_USER_HOME` 时为 `~/.gradle/gradle.properties`）中指定：

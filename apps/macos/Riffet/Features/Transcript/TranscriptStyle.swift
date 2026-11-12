@@ -307,7 +307,7 @@ final class SizeMemory: @unchecked Sendable {
     private var loaded = false
     private var counter: Double = 0
     private var saving = false
-    private static let queue = DispatchQueue(label: "io.github.riffetai.transcript.sizes", qos: .utility)
+    private static let queue = DispatchQueue(label: "io.github.riffable.transcript.sizes", qos: .utility)
 
     init(name: String, limit: Int) {
         file = Self.location(name)

@@ -2,7 +2,7 @@
 
 2026-10-16 测试维护更新：遵循 [AGENTS.md](../AGENTS.md#测试与验证)，非必要不增加测试。UI 展示与 XCUITest 目标已移除，当前只保留关键草稿耐久、配置与 origin 隔离、真实 Keychain 和 WebKit 安全隔离测试。现行命令见[正式工程 README](../apps/mobile/iosApp/README.md#自动化验证)；下文 UI 自动化结果均为历史验收记录。
 
-日期：2026-10-15。状态：原生正式客户端已实现，工程为 `apps/mobile/iosApp/Riffet.xcodeproj`，bundle ID 为 `io.github.riffetai.iphone`。版本号自 0.5.0 起与其他端统一，见[版本与发布](guide/operations.md#版本与发布)。通过共享 RiffetKit 连接现有 HTTP/SSE/WebSocket 协议，正式 App 不引用 Demo 数据。签名模拟器测试与真实 Mac / iOS 18 验收分别记录，不从 Demo 安装结果推定正式版设备验收。V1/V2 交互 Demo 保留，V2 仍可与正式 App 并存。
+日期：2026-10-15。状态：原生正式客户端已实现，工程为 `apps/mobile/iosApp/Riffet.xcodeproj`，bundle ID 为 `io.github.riffable.iphone`。版本号自 0.5.0 起与其他端统一，见[版本与发布](guide/operations.md#版本与发布)。通过共享 RiffetKit 连接现有 HTTP/SSE/WebSocket 协议，正式 App 不引用 Demo 数据。签名模拟器测试与真实 Mac / iOS 18 验收分别记录，不从 Demo 安装结果推定正式版设备验收。V1/V2 交互 Demo 保留，V2 仍可与正式 App 并存。
 
 ## 1. 决策
 
@@ -278,7 +278,7 @@ iOS host façade + Swift 状态订阅（薄适配层）
 
 ## 6. 本次原生 Demo
 
-位置：[`apps/mobile/iosApp/Demo`](../apps/mobile/iosApp/Demo/README.md)。第二版显示为 **Riffet 2**，bundle ID 为 `io.github.riffetai.iphone.demo.v2`，可与正式 App 独立安装；V1/V2 源码都保留。使用独立 SwiftUI fixture App 实现本方案的核心交互，不依赖 Kotlin 构建或真实服务。
+位置：[`apps/mobile/iosApp/Demo`](../apps/mobile/iosApp/Demo/README.md)。第二版显示为 **Riffet 2**，bundle ID 为 `io.github.riffable.iphone.demo.v2`，可与正式 App 独立安装；V1/V2 源码都保留。使用独立 SwiftUI fixture App 实现本方案的核心交互，不依赖 Kotlin 构建或真实服务。
 
 已经实现：单个 NavigationStack、项目范围选择、需要处理/最近分组、搜索与筛选、一次输入开始任务、独立草稿、阅读锚点恢复、回看时新内容提示、上下文审批及原位结果、归档恢复、外观设置与演示数据重置。所有样例保存在 Demo 专属本机快照中，重启不会自动清空；冷启动从列表进入，打开具体会话后恢复其草稿和锚点。
 

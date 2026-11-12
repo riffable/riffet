@@ -5,7 +5,7 @@
 #   RIFFET_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" \
 #   RIFFET_TEAM_ID=TEAMID \
 #   RIFFET_NOTARY_PROFILE=riffet-notary \
-#   RIFFET_DOWNLOAD_PREFIX=https://github.com/riffetai/riffet/releases/download/v0.1.0/ \
+#   RIFFET_DOWNLOAD_PREFIX=https://github.com/riffable/riffet/releases/download/v0.1.0/ \
 #   apps/macos/scripts/release.sh [--skip-build]
 #
 # Without RIFFET_SIGN_IDENTITY the app is ad-hoc signed and not notarized: fine for this Mac,

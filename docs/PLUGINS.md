@@ -161,13 +161,13 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 
 ## 插件市场
 
-[插件市场](https://riffetai.github.io/riffet/plugins/)是 `site/plugins/` 的静态页面，和它旁边的 `index.json` 一起由 `pnpm build:site` 生成、随 Pages 发布。页面和每个 Riffet 读同一份索引：每个包的 manifest、说明，以及每个版本的归档地址、内容完整性摘要、要求的能力和是否需要显式信任。
+[插件市场](https://riffable.github.io/riffet/plugins/)是 `site/plugins/` 的静态页面，和它旁边的 `index.json` 一起由 `pnpm build:site` 生成、随 Pages 发布。页面和每个 Riffet 读同一份索引：每个包的 manifest、说明，以及每个版本的归档地址、内容完整性摘要、要求的能力和是否需要显式信任。
 
 - 安装：`riffet plugin install <id>[@版本]`。参数不是已存在的路径时按 ID 查索引；不写版本时取索引里本机能运行（`hostApi`）的最新版本。授权与信任规则和本地包相同（`--yes`、`--grant`、`--trusted`）。
 - 校验：服务端（或服务未运行时的 CLI）下载归档，按安装时的方式解包，内容完整性必须等于索引所列，否则得 422 `PLUGIN_MARKET_MISMATCH`，什么也不安装。摘要与归档格式无关，同 `riffet plugin pack` 输出的那个；安装记录的来源为 `market:<id>@<版本>`。摘要只证明内容是索引审核时的那份，不证明发布者。
 - 接口：`GET /api/integrations/market` 列出索引里可安装的包（内置插件除外），各取本服务能运行的最新版本，`?refresh=1` 跳过一分钟的缓存；`GET /api/integrations/market/:id?version=` 返回形如授权请求的 `PluginMarketOffer`；`POST /api/integrations/install` 接受 `{ market: { id, version? }, grant, trusted? }`。任何客户端都可以请求，显式信任仍只限服务所在设备。
 - 客户端：Web 与 Mac 的插件页有「浏览」，经服务端读同一份索引，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
-- 索引地址：默认 `https://riffetai.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
+- 索引地址：默认 `https://riffable.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
 
 发布：`riffet plugin pack` 输出归档路径和它的完整性摘要。把归档放到可公开下载的 https 地址（如 GitHub Release），再提交 `site/plugins/registry/<id>.json`：
 

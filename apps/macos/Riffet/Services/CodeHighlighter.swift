@@ -21,7 +21,7 @@ final class CodeHighlighter: @unchecked Sendable {
     /// Larger sources stay plain: tokenizing them costs more than the colors are worth.
     static let maxLength = 160_000
 
-    private let queue = DispatchQueue(label: "io.github.riffetai.highlight", qos: .userInitiated)
+    private let queue = DispatchQueue(label: "io.github.riffable.highlight", qos: .userInitiated)
     private var function: JSValue?
     private var loaded = false
     private let cache = NSCache<NSString, Box>()

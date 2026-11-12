@@ -183,7 +183,7 @@
 
         <!--
           The default alias keeps the activity's old name, so home-screen pins and
-          `adb shell am start -n io.github.riffetai.android/riffet.android.MainActivity` still resolve.
+          `adb shell am start -n io.github.riffable.android/riffet.android.MainActivity` still resolve.
         -->
         <activity-alias
             android:name=".MainActivity"

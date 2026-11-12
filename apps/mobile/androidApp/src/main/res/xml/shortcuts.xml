@@ -9,6 +9,6 @@
         <intent
             android:action="riffet.android.action.QUICK_CHAT"
             android:targetClass="riffet.android.QuickChatActivity"
-            android:targetPackage="io.github.riffetai.android" />
+            android:targetPackage="io.github.riffable.android" />
     </shortcut>
 </shortcuts>

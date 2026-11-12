@@ -1,6 +1,6 @@
 # Riffet 2 · 原生 iPhone 交互 Demo
 
-第二版独立 SwiftUI 应用，最低 iOS 18.0，支持 iOS 18.7.8。显示名称为 **Riffet 2**，bundle ID 为 `io.github.riffetai.iphone.demo.v2`，可以与第一版 `io.github.riffetai.iphone.demo` 并存。所有会话、设备、回复、工具与审批都是本地样例，不连接 Mac 或真实 Agent，不执行命令。
+第二版独立 SwiftUI 应用，最低 iOS 18.0，支持 iOS 18.7.8。显示名称为 **Riffet 2**，bundle ID 为 `io.github.riffable.iphone.demo.v2`，可以与第一版 `io.github.riffable.iphone.demo` 并存。所有会话、设备、回复、工具与审批都是本地样例，不连接 Mac 或真实 Agent，不执行命令。
 
 使用系统 NavigationStack、List、Form、Menu、sheet、SF Symbols 与语义颜色。iOS 18 保留该版本的系统外观，iOS 26 采用系统控件的新外观；消息正文保持平整、可读的内容背景。没有新增第三方依赖，不需要 Kotlin framework 或服务端。
 

@@ -184,7 +184,7 @@ final class Updater {
 enum SpotlightIndex {
     private static var indexed: [String: String] = [:]
     private static var pending: (sessions: [Session], projects: [Project])?
-    private static let domain = "io.github.riffetai.sessions"
+    private static let domain = "io.github.riffable.sessions"
 
     /// Forgets everything indexed: the server was left, forgotten or replaced, and its conversations
     /// must not stay searchable.

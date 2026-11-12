@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report privately through GitHub: open the [Security tab](https://github.com/riffetai/riffet/security) of this repository and choose **Report a vulnerability**. Please do not open a public issue, and do not paste access tokens or session content anywhere public.
+Report privately through GitHub: open the [Security tab](https://github.com/riffable/riffet/security) of this repository and choose **Report a vulnerability**. Please do not open a public issue, and do not paste access tokens or session content anywhere public.
 
 Include the affected version, how to reproduce, and what an attacker gains.
 

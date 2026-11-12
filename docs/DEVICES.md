@@ -293,7 +293,7 @@ T2 后端按顺序接入：
 - **手动**：受限时先到应用信息「允许受限制的设置」（ColorOS 上找不到时，用系统文件管理器重新安装一次），再到无障碍详情打开 Riffet；回到 App 自动重新检测。
 - **通过电脑**：服务端检测到这台手机经 adb 连着（读手机写在 `Android/data/<包名>/files/riffet-installation-id` 的安装 ID 比对，不按型号猜）时才出现。服务端只执行两条固定命令：`pm grant <包名> android.permission.WRITE_SECURE_SETTINGS` 与 `appops set <包名> ACCESS_RESTRICTED_SETTINGS allow`（后者不支持时跳过）。之后 App 自己写入无障碍列表并等服务连上。ColorOS「权限监控」、小米「USB 调试（安全设置）」导致的授权失败按原始错误给出对应的一句修法。接口：`GET /api/devices/me/adb`、`POST /api/devices/me/adb/grant`，只认设备令牌。
 - **自愈**：持有 `WRITE_SECURE_SETTINGS` 时，读屏 / 操作 / 打开 App 的调用遇到 `NOT_RUNNING` 先自行重启服务（移除、约 1 秒后加回、最多等 2.5 秒），再执行；因此这种状态下照常上报 T1 能力。
-- **安全**：adb 已授权时 Mac 本就能对手机做任何事，一键授权不扩大 Agent 的能力；服务端只认白名单里的 Riffet 包（`io.github.riffetai.android`），请求里的包名不在其中直接拒绝。
+- **安全**：adb 已授权时 Mac 本就能对手机做任何事，一键授权不扩大 Agent 的能力；服务端只认白名单里的 Riffet 包（`io.github.riffable.android`），请求里的包名不在其中直接拒绝。
 
 ### 实现（R2，T0）
 

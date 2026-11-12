@@ -16,7 +16,7 @@ final class HostedConnectionTests: XCTestCase {
     }
     private var credentialQuery: [String: Any] {
         [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: "io.github.riffetai.iphone.credentials",
+         kSecAttrService as String: "io.github.riffable.iphone.credentials",
          kSecAttrAccount as String: "paired-server"]
     }
     private func credentialData() throws -> Data {

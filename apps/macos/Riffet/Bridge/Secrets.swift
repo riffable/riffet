@@ -9,7 +9,7 @@ import RiffetKit
 final class AppSecrets: NSObject, SecretStore {
     static let shared = AppSecrets()
 
-    private let service = "io.github.riffetai.mac"
+    private let service = "io.github.riffable.mac"
     private let usesKeychain = AppSecrets.hasTeamIdentifier()
     private let lock = NSLock()
 

@@ -31,7 +31,7 @@ const outFlag = process.argv.indexOf('--out');
 const out = resolve(root, outFlag >= 0 ? process.argv[outFlag + 1]! : 'dist/site');
 const publishedFlag = process.argv.indexOf('--published');
 const published = publishedFlag >= 0 ? process.argv[publishedFlag + 1]! : DEFAULT_PLUGIN_INDEX;
-const repository = 'https://github.com/riffetai/riffet';
+const repository = 'https://github.com/riffable/riffet';
 const registry = join(root, 'site/plugins/registry');
 const assetsDir = join(out, 'plugins/assets');
 const packagesDir = join(out, 'plugins/packages');

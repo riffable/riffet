@@ -57,7 +57,7 @@ final class MessageDraft {
     @ObservationIgnored private var restoring = true
     // A single queue orders writes across draft instances as well as individual fields.
     // Explicit save() drains earlier writes before persisting the current snapshot.
-    private static let persistence = DispatchQueue(label: "io.github.riffetai.iphone.drafts", qos: .userInitiated)
+    private static let persistence = DispatchQueue(label: "io.github.riffable.iphone.drafts", qos: .userInitiated)
     @ObservationIgnored private(set) var persistenceWriteCount = 0
     private struct SavedAttachment: Codable, Sendable {
         let id: String, name: String, mimeType: String, path: String

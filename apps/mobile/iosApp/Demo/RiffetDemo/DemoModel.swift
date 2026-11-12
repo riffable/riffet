@@ -77,7 +77,7 @@ final class DemoStore {
     private var readingAnchors: [String: UUID] = [:]
     private let persist: Bool
     // This namespace belongs only to the standalone Demo; it never reads production app data.
-    private static let storageKey = "io.github.riffetai.iphone.demo.interaction-v2"
+    private static let storageKey = "io.github.riffable.iphone.demo.interaction-v2"
 
     private struct Snapshot: Codable {
         var sessions: [DemoSession]

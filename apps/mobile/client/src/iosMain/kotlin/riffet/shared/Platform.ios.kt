@@ -20,7 +20,7 @@ import platform.UIKit.UIDevice
 import kotlin.coroutines.resume
 
 /** Legacy credentials and the paired-service snapshot use the same Keychain item. */
-internal class IosKeychainTokenStore(private val service: String = "io.github.riffetai.iphone.credentials") : DeviceTokenStore {
+internal class IosKeychainTokenStore(private val service: String = "io.github.riffable.iphone.credentials") : DeviceTokenStore {
     private data class Credential(val token: String? = null, val origin: String? = null, val server: String? = null)
 
     private fun read(): Credential {

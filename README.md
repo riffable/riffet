@@ -10,11 +10,11 @@
 
 A self-hosted workbench for Claude Code, Codex, Cursor, pi, and more.
 
-[![CI](https://github.com/riffetai/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffetai/riffet/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/riffetai/riffet)](https://github.com/riffetai/riffet/releases)
+[![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-English · [简体中文](README.zh-CN.md) · [Releases](https://github.com/riffetai/riffet/releases) · [Issues](https://github.com/riffetai/riffet/issues) · [Discussions](https://github.com/riffetai/riffet/discussions) · [Changelog](CHANGELOG.md)
+English · [简体中文](README.zh-CN.md) · [Releases](https://github.com/riffable/riffet/releases) · [Issues](https://github.com/riffable/riffet/issues) · [Discussions](https://github.com/riffable/riffet/discussions) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -151,7 +151,7 @@ Clients hold no agent and no code. Loopback is the default; reach the server fro
 **Option A — Build from source (available today)**
 
 ```bash
-git clone https://github.com/riffetai/riffet.git ~/.local/src/riffet
+git clone https://github.com/riffable/riffet.git ~/.local/src/riffet
 cd ~/.local/src/riffet
 pnpm install && pnpm build
 
@@ -164,8 +164,8 @@ ln -s "$HOME/.local/src/riffet/scripts/riffet.mjs" "$HOME/.local/bin/riffet"
 | Surface | Channel | Notes |
 | :--- | :--- | :--- |
 | **Server + Web CLI** | `npm install -g riffet` *(upcoming)* | Upgrades via `npm i -g riffet@latest && riffet restart` (avoid `npx` so hook/MCP paths stay permanent) |
-| **macOS App** | [`Riffet.dmg` on Releases](https://github.com/riffetai/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime out of the box |
-| **Android App** | [`APK` on Releases](https://github.com/riffetai/riffet/releases) *(upcoming)* | Pairs via QR code or address + one-time code |
+| **macOS App** | [`Riffet.dmg` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime out of the box |
+| **Android App** | [`APK` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | Pairs via QR code or address + one-time code |
 | **iPhone App** | Source build (`apps/mobile/iosApp`) | iOS 18+; sign with your Apple team ID ([guide](apps/mobile/iosApp/README.md)) |
 
 ### 2. Verify your environment & launch

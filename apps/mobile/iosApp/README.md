@@ -2,7 +2,7 @@
 
 正式客户端位于 `Riffet/`，采用 **SwiftUI / UIKit 原生界面 + KMP 共享业务逻辑**，最低 **iOS 18.0**，覆盖 iOS 18.7.8。工程由 XcodeGen 生成，独立于 Gradle 的应用模块；Xcode 构建阶段会调用 `:client:embedAndSignAppleFrameworkForXcode` 生成并嵌入 `RiffetKit.framework`。主界面不嵌入 Compose 或 Web 工作台。
 
-版本号与其他端统一，来自根目录 `package.json`（见[版本与发布](../../../docs/guide/operations.md#版本与发布)），正式 bundle ID 为 `io.github.riffetai.iphone`。设计取舍、功能矩阵与验收边界见 [iPhone 方案](../../../docs/IOS.md)。`Demo/` 保留独立的 V1/V2 交互样例；V2 的显示名称为 Riffet 2、bundle ID 为 `io.github.riffetai.iphone.demo.v2`。它与正式客户端的数据和设备授权分离。
+版本号与其他端统一，来自根目录 `package.json`（见[版本与发布](../../../docs/guide/operations.md#版本与发布)），正式 bundle ID 为 `io.github.riffable.iphone`。设计取舍、功能矩阵与验收边界见 [iPhone 方案](../../../docs/IOS.md)。`Demo/` 保留独立的 V1/V2 交互样例；V2 的显示名称为 Riffet 2、bundle ID 为 `io.github.riffable.iphone.demo.v2`。它与正式客户端的数据和设备授权分离。
 
 ## 已实现的链路
 
@@ -49,7 +49,7 @@ xcodebuild -project Riffet.xcodeproj -scheme Riffet -configuration Debug \
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration build
 xcrun devicectl device install app --device "$RIFFET_DEVICE_UDID" \
   /tmp/riffet-iphone-device/Build/Products/Debug-iphoneos/Riffet.app
-xcrun devicectl device process launch --device "$RIFFET_DEVICE_UDID" io.github.riffetai.iphone
+xcrun devicectl device process launch --device "$RIFFET_DEVICE_UDID" io.github.riffable.iphone
 ```
 
 设备需要开启开发者模式，并在系统提示时信任本机开发签名。开发签名和设备配置描述文件的有效期由当前账号决定，不在仓库固定写入日期。

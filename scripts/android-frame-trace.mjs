@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Records a Perfetto trace of the Android app while you use it, then prints its main-thread frame
-// times. Usage: node scripts/android-frame-trace.mjs [seconds=10] [package=io.github.riffetai.android]
+// times. Usage: node scripts/android-frame-trace.mjs [seconds=10] [package=io.github.riffable.android]
 // Compare a debug build only against another debug build; release frames are several times faster.
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
@@ -8,7 +8,7 @@ import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const seconds = Number(process.argv[2] ?? 10);
-const app = process.argv[3] ?? 'io.github.riffetai.android';
+const app = process.argv[3] ?? 'io.github.riffable.android';
 const work = mkdtempSync(join(tmpdir(), 'riffet-trace-'));
 const device = `/data/misc/perfetto-traces/riffet-${Date.now()}.pftrace`;
 const local = join(work, 'trace.pftrace');

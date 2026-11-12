@@ -22,7 +22,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>io.github.riffetai.mac</string>
+			<string>io.github.riffable.mac</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>riffet</string>
@@ -91,6 +91,6 @@
 	<key>SUPublicEDKey</key>
 	<string>$(RIFFET_SPARKLE_PUBLIC_KEY)</string>
 	<key>RiffetServerAgentLabel</key>
-	<string>io.github.riffetai.mac.server</string>
+	<string>io.github.riffable.mac.server</string>
 </dict>
 </plist>

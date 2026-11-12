@@ -53,7 +53,7 @@ android {
     compileSdk = libs.versions.androidCompileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "io.github.riffetai.android"
+        applicationId = "io.github.riffable.android"
         minSdk = libs.versions.androidMinSdk.get().toInt()
         targetSdk = libs.versions.androidTargetSdk.get().toInt()
         versionCode = (riffetPackage["buildNumber"] as Number).toInt()

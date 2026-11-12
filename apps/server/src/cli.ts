@@ -76,7 +76,7 @@ export function saveLaunchConfig(options:CliOptions,args:string[]):void {
 /** What the running server reports about its launcher; undefined for servers that predate the field. */
 async function managedBy(record:DaemonRecord):Promise<string|undefined>{try{const response=await fetch(serverUrl(record)+'/health',{signal:AbortSignal.timeout(1500)});return (await response.json() as {managedBy?:string}).managedBy;}catch{return;}}
 const APP_MANAGED='This server is hosted by Riffet.app; stop or restart it in Riffet → 设置 → 本机服务器';
-const APP_AGENT_LABEL='io.github.riffetai.mac.server';
+const APP_AGENT_LABEL='io.github.riffable.mac.server';
 function appAgentLoaded(){return process.platform==='darwin'&&spawnSync('launchctl',['print',`gui/${process.getuid!()}/${APP_AGENT_LABEL}`],{stdio:'ignore'}).status===0;}
 function show(record:DaemonRecord,options:CliOptions,showToken=true){console.log(`Riffet running: ${serverUrl(record)}`);console.log(`PID: ${record.pid} · state: ${state(options)}`);if(record.args.includes('--no-auth'))console.log('Access: local, no token required');else if(showToken)console.log(`Sign in: ${serverUrl(record)}/?token=${encodeURIComponent(token(options))}`);}
 function claimState(options:CliOptions){

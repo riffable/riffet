@@ -18,7 +18,7 @@ export const REQUIRED_SCOPES = [
 
 const APP_NAME = 'Riffet';
 const APP_DESC = '在飞书里使用 Riffet 会话';
-const APP_AVATAR = 'https://raw.githubusercontent.com/riffetai/riffet/main/docs/brand/avatar.png';
+const APP_AVATAR = 'https://raw.githubusercontent.com/riffable/riffet/main/docs/brand/avatar.png';
 const AVATAR_PROBE_MS = 2000;
 /** The platform's "app not installed" code. */
 const NOT_INSTALLED = 212100;

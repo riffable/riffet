@@ -64,7 +64,7 @@ final class PluginSchemeHandler: NSObject, WKURLSchemeHandler {
                 urlSchemeTask.didFinish()
             case .failure(let error):
                 // Only the description survives the trip through WebKit, so it is what the view reports.
-                urlSchemeTask.didFailWithError(NSError(domain: "io.github.riffetai.plugin", code: 1, userInfo: [NSLocalizedDescriptionKey: error.localizedDescription]))
+                urlSchemeTask.didFailWithError(NSError(domain: "io.github.riffable.plugin", code: 1, userInfo: [NSLocalizedDescriptionKey: error.localizedDescription]))
             }
         }
         running[key] = (urlSchemeTask, work)

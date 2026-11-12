@@ -68,7 +68,7 @@ import riffet.ui.theme.RiffetTheme
  * remembers it:
  *
  * ```
- * adb shell am start -n io.github.riffetai.android/riffet.android.RiffetActivity --es riffet.server http://<mac>.local:4337
+ * adb shell am start -n io.github.riffable.android/riffet.android.RiffetActivity --es riffet.server http://<mac>.local:4337
  * ```
  *
  * This Activity is exported (every launcher icon is an alias of it, and the default alias keeps the

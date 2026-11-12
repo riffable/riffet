@@ -33,8 +33,8 @@ PERF="$HOME/Library/Application Support/Riffet/perf"
 [[ -d "$APP" ]] || { echo "没有 dev 包：先运行 scripts/build.sh dev" >&2; exit 2; }
 # The app ignores riffet://perf links until they are turned on from this machine; the installed
 # app shares these defaults, so they go off again on the way out.
-defaults write io.github.riffetai.mac riffet.perf.links -bool true
-trap 'defaults delete io.github.riffetai.mac riffet.perf.links 2>/dev/null || true' EXIT
+defaults write io.github.riffable.mac riffet.perf.links -bool true
+trap 'defaults delete io.github.riffable.mac riffet.perf.links 2>/dev/null || true' EXIT
 pgrep -f "build/Release/Riffet.app/Contents/MacOS/Riffet" >/dev/null || { open "$APP"; sleep 8; }
 
 # run <url> <report name>: opens the link and waits for a fresh report.

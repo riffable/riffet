@@ -1,6 +1,6 @@
 name: Riffet
 options:
-  bundleIdPrefix: io.github.riffetai
+  bundleIdPrefix: io.github.riffable
   deploymentTarget:
     iOS: "18.0"
   developmentLanguage: zh-Hans
@@ -59,7 +59,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: YES
         CFBundleURLTypes:
-          - CFBundleURLName: io.github.riffetai.iphone
+          - CFBundleURLName: io.github.riffable.iphone
             CFBundleURLSchemes: [riffet]
     dependencies:
       - package: SwiftTerm
@@ -74,7 +74,7 @@ targets:
           ./gradlew :client:embedAndSignAppleFrameworkForXcode --console=plain
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.iphone
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.iphone
         PRODUCT_NAME: Riffet
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-purple AppIcon-magenta AppIcon-pink AppIcon-red AppIcon-orange AppIcon-yellow AppIcon-lime AppIcon-green AppIcon-cyan AppIcon-graphite AppIcon-white"
@@ -97,7 +97,7 @@ targets:
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.iphone.tests
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.iphone.tests
         FRAMEWORK_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/../client/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)

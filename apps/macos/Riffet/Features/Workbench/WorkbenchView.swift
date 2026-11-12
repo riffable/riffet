@@ -1626,7 +1626,7 @@ struct RiffetCommands: Commands {
         }
         CommandGroup(replacing: .help) {
             Button("Riffet 文档") {
-                if let url = URL(string: "https://github.com/riffetai/riffet#readme") { NSWorkspace.shared.open(url) }
+                if let url = URL(string: "https://github.com/riffable/riffet#readme") { NSWorkspace.shared.open(url) }
             }
             Button("诊断…") {
                 UserDefaults.standard.set(SettingsSection.diagnostics.rawValue, forKey: PreferenceKey.settingsSection)

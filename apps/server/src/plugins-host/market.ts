@@ -11,7 +11,7 @@ import { MAX_ARCHIVE_BYTES } from './archive.js';
 // the archive and then takes the same path as an upload; the package store refuses content whose
 // integrity differs from the index's, so the index vouches for exactly the files it was built from.
 
-export const DEFAULT_PLUGIN_INDEX = 'https://riffetai.github.io/riffet/plugins/index.json';
+export const DEFAULT_PLUGIN_INDEX = 'https://riffable.github.io/riffet/plugins/index.json';
 
 /** The index this server and the CLI read: `RIFFET_PLUGIN_INDEX` (an https, loopback http or file URL), or the public one. */
 export const pluginIndexUrl = () => process.env.RIFFET_PLUGIN_INDEX?.trim() || DEFAULT_PLUGIN_INDEX;

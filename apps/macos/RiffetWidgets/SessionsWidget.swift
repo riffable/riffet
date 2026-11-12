@@ -38,7 +38,7 @@ struct SnapshotProvider: TimelineProvider {
 @main
 struct SessionsWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "io.github.riffetai.mac.widgets.sessions", provider: SnapshotProvider()) { entry in
+        StaticConfiguration(kind: "io.github.riffable.mac.widgets.sessions", provider: SnapshotProvider()) { entry in
             SessionsWidgetView(snapshot: entry.snapshot)
                 .containerBackground(.fill.tertiary, for: .widget)
         }

@@ -41,7 +41,7 @@ enum PluginContentRules {
         let json = String(decoding: try JSONSerialization.data(withJSONObject: rules), as: UTF8.self)
         let task = Task { @MainActor () -> WKContentRuleList in
             guard let store = WKContentRuleListStore.default() else { throw PluginPageFailure("The content rules could not be compiled") }
-            let identifier = network ? "io.github.riffetai.plugin.network-https" : "io.github.riffetai.plugin.network-closed"
+            let identifier = network ? "io.github.riffable.plugin.network-https" : "io.github.riffable.plugin.network-closed"
             guard let list = try await store.compileContentRuleList(forIdentifier: identifier, encodedContentRuleList: json) else {
                 throw PluginPageFailure("The content rules could not be compiled")
             }
@@ -66,7 +66,7 @@ enum PluginContentRules {
 @MainActor
 final class PluginWebSession: NSObject, WKNavigationDelegate, WKScriptMessageHandler {
     static let handlerName = "riffetBridge"
-    private static let world = WKContentWorld.world(name: "io.github.riffetai.plugin-bridge")
+    private static let world = WKContentWorld.world(name: "io.github.riffable.plugin-bridge")
 
     let webView: WKWebView
     /// Called once when the page cannot be loaded or its process ends.

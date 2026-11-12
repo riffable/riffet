@@ -191,7 +191,7 @@ final class PerfMonitor: NSObject {
     static let shared = PerfMonitor()
     static let enabledKey = "riffet.perf.enabled"
     static let hudKey = "riffet.perf.hud"
-    /// `defaults write io.github.riffetai.mac riffet.perf.links -bool true` lets `riffet://perf/*` links in.
+    /// `defaults write io.github.riffable.mac riffet.perf.links -bool true` lets `riffet://perf/*` links in.
     static let linksKey = "riffet.perf.links"
 
     private let store = PerfStore.shared
@@ -456,9 +456,9 @@ final class PerfMonitor: NSObject {
     }
 }
 
-/// Named phases, visible in Instruments (subsystem `io.github.riffetai.mac`) and in the monitor's report.
+/// Named phases, visible in Instruments (subsystem `io.github.riffable.mac`) and in the monitor's report.
 enum Perf {
-    static let signposter = OSSignposter(subsystem: "io.github.riffetai.mac", category: "perf")
+    static let signposter = OSSignposter(subsystem: "io.github.riffable.mac", category: "perf")
 
     @inline(__always)
     static func measure<T>(_ name: StaticString, _ body: () throws -> T) rethrows -> T {

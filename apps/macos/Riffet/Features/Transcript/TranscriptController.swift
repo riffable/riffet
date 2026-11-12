@@ -571,7 +571,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// Passes never overlap (`building`), so one thread per pass is enough.
     private func runLayout(_ work: @escaping @Sendable () -> Void) {
         let thread = Thread(block: work)
-        thread.name = "io.github.riffetai.transcript.layout"
+        thread.name = "io.github.riffable.transcript.layout"
         thread.stackSize = 4 * 1024 * 1024
         thread.qualityOfService = .userInitiated
         thread.start()

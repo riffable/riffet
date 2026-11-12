@@ -120,7 +120,7 @@ final class ScannerController: UIViewController, @preconcurrency AVCaptureMetada
 /// The preview layer only reads the session; UI callbacks are explicitly delivered on MainActor.
 private final class CaptureEngine: @unchecked Sendable {
     let session = AVCaptureSession()
-    private let queue = DispatchQueue(label: "io.github.riffetai.camera")
+    private let queue = DispatchQueue(label: "io.github.riffable.camera")
     private var configured = false
 
     func start(delegate: AVCaptureMetadataOutputObjectsDelegate, failure: @escaping @Sendable (ScannerFailure) -> Void) {

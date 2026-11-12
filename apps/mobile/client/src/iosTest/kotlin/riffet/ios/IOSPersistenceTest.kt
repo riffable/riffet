@@ -18,7 +18,7 @@ import kotlin.test.assertFailsWith
 class IOSPersistenceTest {
     @kotlin.test.Ignore // Requires hosted Keychain environment: standalone test.kexe receives errSecNotAvailable (-25291).
     @Test fun keychainCredentialSurvivesNewStoreAndStaysOriginBound() = runTest {
-        val service = "io.github.riffetai.ios-tests.${NSUUID().UUIDString}"
+        val service = "io.github.riffable.ios-tests.${NSUUID().UUIDString}"
         val first = IosKeychainTokenStore(service)
         try {
             first.save("test-token", "http://mac.local:8080")

@@ -1,6 +1,6 @@
 name: RiffetDemo
 options:
-  bundleIdPrefix: io.github.riffetai
+  bundleIdPrefix: io.github.riffable
   deploymentTarget:
     iOS: "18.0"
   developmentLanguage: zh-Hans
@@ -22,7 +22,7 @@ targets:
     sources: [RiffetDemo]
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.iphone.demo.v2
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.iphone.demo.v2
         TARGETED_DEVICE_FAMILY: "1"
 schemes:
   RiffetDemo:

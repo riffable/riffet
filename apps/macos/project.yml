@@ -2,7 +2,7 @@
 # not committed: run `xcodegen` here, or `./scripts/build.sh`, which does it first.
 name: Riffet
 options:
-  bundleIdPrefix: io.github.riffetai
+  bundleIdPrefix: io.github.riffable
   deploymentTarget:
     macOS: "15.0"
   createIntermediateGroups: true
@@ -86,7 +86,7 @@ targets:
         NSUserNotificationsUsageDescription: Riffet 在会话完成、失败或等待确认时提醒你。
         NSAppleEventsUsageDescription: Riffet 用它在你选择的编辑器里打开文件。
         CFBundleURLTypes:
-          - CFBundleURLName: io.github.riffetai.mac
+          - CFBundleURLName: io.github.riffable.mac
             CFBundleURLSchemes: [riffet]
         NSServices:
           - NSMenuItem: { default: 发送到 Riffet }
@@ -103,7 +103,7 @@ targets:
         SUFeedURL: $(RIFFET_APPCAST_URL)
         SUPublicEDKey: $(RIFFET_SPARKLE_PUBLIC_KEY)
         SUEnableAutomaticChecks: true
-        RiffetServerAgentLabel: io.github.riffetai.mac.server
+        RiffetServerAgentLabel: io.github.riffable.mac.server
     dependencies:
       - package: SwiftTerm
       - package: Sparkle
@@ -148,7 +148,7 @@ targets:
           "$SRCROOT/scripts/sign-frameworks.sh"
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.mac
         PRODUCT_NAME: Riffet
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         FRAMEWORK_SEARCH_PATHS:
@@ -160,7 +160,7 @@ targets:
           - -framework
           - RiffetKit
           - -lsqlite3
-        RIFFET_APPCAST_URL: https://github.com/riffetai/riffet/releases/latest/download/appcast.xml
+        RIFFET_APPCAST_URL: https://github.com/riffable/riffet/releases/latest/download/appcast.xml
         RIFFET_SPARKLE_PUBLIC_KEY: ""
         RIFFET_BUNDLE_SERVER: NO
       configs:
@@ -191,7 +191,7 @@ targets:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.widgets
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.mac.widgets
         SKIP_INSTALL: YES
   # Share menu entry: turns shared text, links and files into `riffet://new?prompt=…`.
   RiffetShare:
@@ -220,7 +220,7 @@ targets:
               NSExtensionActivationSupportsFileWithMaxCount: 10
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.share
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.mac.share
         SKIP_INSTALL: YES
   RiffetTests:
     type: bundle.unit-test
@@ -233,7 +233,7 @@ targets:
         BUNDLE_LOADER: $(TEST_HOST)
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/Riffet.app/Contents/MacOS/Riffet
         GENERATE_INFOPLIST_FILE: YES
-        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffetai.mac.tests
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.mac.tests
 schemes:
   Riffet:
     build:

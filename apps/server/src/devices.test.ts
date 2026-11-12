@@ -301,7 +301,7 @@ describe('device channel',()=>{
     try {
       const phone=booted.auth.issueDevice('Phone');
       await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:booted.headers(phone.token),payload:{...REPORT,installationId:'install-mine'}});
-      const pkg='io.github.riffetai.android';
+      const pkg='io.github.riffable.android';
       expect((await booted.app.inject({method:'GET',url:`/api/devices/me/adb?package=${pkg}`,headers:booted.headers(phone.token)})).json()).toEqual({state:'ready'});
       calls.length=0;
       const granted=await booted.app.inject({method:'POST',url:'/api/devices/me/adb/grant',headers:booted.headers(phone.token),payload:{packageName:pkg}});

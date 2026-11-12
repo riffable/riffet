@@ -41,7 +41,7 @@ cpSync(join(root, 'dist'), join(out, 'dist'), {
 copyFileSync(join(root, 'scripts/riffet.mjs'), join(out, 'scripts/riffet.mjs'));
 for (const file of ['LICENSE', 'NOTICE', 'README.md', 'README.zh-CN.md']) copyFileSync(join(root, file), join(out, file));
 
-const repository = 'https://github.com/riffetai/riffet';
+const repository = 'https://github.com/riffable/riffet';
 const manifest = {
   name: 'riffet',
   version: project.version,

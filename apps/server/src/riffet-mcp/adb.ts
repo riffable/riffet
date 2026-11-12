@@ -13,7 +13,7 @@ import { isExecutableFile, pathEntries } from '../environment.js';
  */
 
 /** The only packages the grant may name: the Riffet app. Anything a caller sends is checked against this, never trusted. */
-export const RIFFET_PACKAGES: ReadonlySet<string> = new Set(['io.github.riffetai.android']);
+export const RIFFET_PACKAGES: ReadonlySet<string> = new Set(['io.github.riffable.android']);
 const ADB_TIMEOUT_MS = 8_000;
 const SERIAL = /^[A-Za-z0-9._:\-]{1,200}$/;
 

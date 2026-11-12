@@ -420,7 +420,7 @@ apps/macos/
     Services/                 通知、打开文件与编辑器、URL / 服务菜单 / Sparkle / Spotlight / App Intents、
                               Performance（性能监测、悬浮读数、基准）
     Theme/                    RiffetTheme.swift（`pnpm gen:theme` 生成）与 Theme.swift
-    Resources/                Assets、entitlements、LaunchAgents/io.github.riffetai.mac.server.plist、String Catalogs
+    Resources/                Assets、entitlements、LaunchAgents/io.github.riffable.mac.server.plist、String Catalogs
   RiffetTests/
   scripts/
     build.sh                  debug | release | dev | test
@@ -503,7 +503,7 @@ Release 是同一条路径，Gradle 负责增量。不额外维护 XCFramework �
 
 - 用 `CADisplayLink` 记录帧间隔，按页面（转录、首页、统计、终端）和场景（滚动、流式、交互、空闲）分别统计
   p50/p95/p99、每秒卡顿毫秒数和掉帧数；用 runloop 观察者记录主线程阻塞（超过 50 ms 记一次）；记录从点击或按键到
-  下一帧上屏的延迟；`Perf.measure` 的阶段耗时同时出现在 Instruments（subsystem `io.github.riffetai.mac`）里。
+  下一帧上屏的延迟；`Perf.measure` 的阶段耗时同时出现在 Instruments（subsystem `io.github.riffable.mac`）里。
 - 悬浮读数显示帧率、每秒卡顿、最差帧、主线程占用和最近一次点击到上屏的延迟。
 - 报告导出到 `~/Library/Application Support/Riffet/perf/`，带构建类型（Debug/Release）、机型、系统和屏幕刷新率。
 
@@ -514,7 +514,7 @@ Release 是同一条路径，Gradle 负责增量。不额外维护 XCFramework �
 （`scripts/perf-bench.sh` 会自动做这一步）：
 
 ```bash
-defaults write io.github.riffetai.mac riffet.perf.links -bool true
+defaults write io.github.riffable.mac riffet.perf.links -bool true
 open -a apps/macos/build/Release/Riffet.app "riffet://perf/bench?session=<会话 id>"
 # 结果：~/Library/Application Support/Riffet/perf/latest-bench.json
 ```
@@ -556,7 +556,7 @@ open -a apps/macos/build/Release/Riffet.app "riffet://perf/bench?session=<会话
   - 侧栏的行按显示内容比较（相对时间按文字比较，不按时钟比较），右键菜单不参与比较，列表重算时只重新测量变化的行。
 - 系统指针自定义时，AppKit 在跟踪区域变化后（滚动带悬停的列表、切换页面）都会重设光标，每次都要重新渲染指针图像。
   `CursorGuard` 让同一个光标在 250 ms 内的重复设置直接跳过；App 重新激活、窗口变为主窗口后，第一次设置照常生效。
-  `defaults write io.github.riffetai.mac riffet.cursor-guard-off -bool YES` 可以关掉它做对比。
+  `defaults write io.github.riffable.mac riffet.cursor-guard-off -bool YES` 可以关掉它做对比。
 - 文件预览：着色、段落样式和行号起点都在后台构建，内容判断用长度加首、中、尾采样，不再对全文求哈希。
   「变更」「文件」面板翻页去掉了滑动动画：动画的每一帧都要重新布局整个窗口。
 

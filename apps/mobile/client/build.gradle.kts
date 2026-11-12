@@ -24,7 +24,7 @@ kotlin {
             isStatic = true
             export(project(":contracts"))
             export(project(":core"))
-            binaryOption("bundleId", "io.github.riffetai.client")
+            binaryOption("bundleId", "io.github.riffable.client")
         }
     }
     iosSimulatorArm64 {
@@ -33,7 +33,7 @@ kotlin {
             isStatic = true
             export(project(":contracts"))
             export(project(":core"))
-            binaryOption("bundleId", "io.github.riffetai.client")
+            binaryOption("bundleId", "io.github.riffable.client")
         }
     }
     macosArm64 {

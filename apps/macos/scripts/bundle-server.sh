@@ -62,7 +62,7 @@ fi
 
 cat > "$DEST/riffet-server" <<LAUNCHER
 #!/bin/sh
-# Started by launchd through Riffet.app's LaunchAgent (io.github.riffetai.mac.server).
+# Started by launchd through Riffet.app's LaunchAgent (io.github.riffable.mac.server).
 DIR="\$(cd "\$(dirname "\$0")" && pwd)"
 STATE="\${RIFFET_STATE_DIR:-\$HOME/.local/share/riffet}"
 mkdir -p "\$STATE" && chmod 700 "\$STATE"

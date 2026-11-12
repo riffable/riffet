@@ -97,7 +97,7 @@ jobs:
         run: |
           apk=androidApp/build/outputs/apk/release/androidApp-release.apk
           apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
-          "$apksigner" verify --print-certs "$apk" | grep -q 'CN=Riffet, O=riffetai'
+          "$apksigner" verify --print-certs "$apk" | grep -q 'CN=Riffet, O=riffable'
           mv "$apk" "$RUNNER_TEMP/Riffet-${{ needs.meta.outputs.version }}.apk"
       - uses: actions/upload-artifact@v7
         with:

@@ -82,7 +82,7 @@ enum ServerState: Equatable {
 @MainActor
 @Observable
 final class ServerHost {
-    static let agentLabel = (Bundle.main.object(forInfoDictionaryKey: "RiffetServerAgentLabel") as? String) ?? "io.github.riffetai.mac.server"
+    static let agentLabel = (Bundle.main.object(forInfoDictionaryKey: "RiffetServerAgentLabel") as? String) ?? "io.github.riffable.mac.server"
 
     private(set) var state: ServerState = .checking
     private(set) var appAgentStatus: SMAppService.Status = .notRegistered
