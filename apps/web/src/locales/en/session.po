@@ -169,10 +169,6 @@ msgstr "CLI status: {0}"
 msgid "Esc 拒绝"
 msgstr "Esc to deny"
 
-#: src/app/session/ModelPicker.tsx
-msgid "MAX 模式"
-msgstr "MAX mode"
-
 #: src/app/session/ToolsPicker.tsx
 msgid "MCP"
 msgstr "MCP"
@@ -550,10 +546,6 @@ msgstr "Delete files"
 #: src/app/session/Composer.tsx
 msgid "加入队列"
 msgstr "Add to queue"
-
-#: src/app/session/ModelPicker.tsx
-msgid "加载中…"
-msgstr "Loading…"
 
 #: src/app/session/SessionReferences.tsx
 msgid "助手"
@@ -1028,10 +1020,6 @@ msgstr "Timed out; denied automatically"
 msgid "已跳过"
 msgstr "Skipped"
 
-#: src/app/session/ModelPicker.tsx
-msgid "已达用量上限 · "
-msgstr "Usage limit reached · "
-
 #: src/app/session/Attempts.tsx
 msgid "已采用"
 msgstr "Adopted"
@@ -1115,10 +1103,6 @@ msgstr "Pending"
 #: src/app/session/toolView.ts
 msgid "思考"
 msgstr "Think"
-
-#: src/app/session/ModelPicker.tsx
-msgid "思考程度"
-msgstr "Thinking level"
 
 #: src/app/session/Composer.tsx
 msgid "思考输出"
@@ -1204,10 +1188,6 @@ msgstr "Submit"
 msgid "提交中…"
 msgstr "Submitting…"
 
-#: src/app/session/ModelPicker.tsx
-msgid "提供商"
-msgstr "Provider"
-
 #. placeholder {0}: content.slice(0, answer)
 #: src/app/session/SessionReferences.tsx
 msgid "提问节选：{0}"
@@ -1224,10 +1204,6 @@ msgstr "Searching…"
 #: src/app/session/toolView.ts
 msgid "搜索内容"
 msgstr "Search"
-
-#: src/app/session/ModelPicker.tsx
-msgid "搜索模型"
-msgstr "Search models"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "摘要模型不可用，已改用对话记录：{reason}"
@@ -1581,17 +1557,12 @@ msgid "检查状态"
 msgstr "Check status"
 
 #: src/app/session/Composer.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "模型"
 msgstr "Model"
 
 #: src/app/session/Composer.tsx
 msgid "模型与参数"
 msgstr "Model and parameters"
-
-#: src/app/session/ModelPicker.tsx
-msgid "模型列表加载失败：{catalogError}"
-msgstr "Failed to load the model list: {catalogError}"
 
 #: src/app/session/pickers.ts
 msgid "模型列表还没准备好，稍后再试"
@@ -1666,12 +1637,7 @@ msgstr "No matching sessions or files"
 msgid "没有匹配的文件"
 msgstr "No matching files"
 
-#: src/app/session/ModelPicker.tsx
-msgid "没有匹配的模型"
-msgstr "No matching models"
-
 #: src/app/session/Composer.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "没有可用模型"
 msgstr "No models available"
 
@@ -1979,11 +1945,6 @@ msgstr "Read files"
 msgid "调用工具"
 msgstr "Use tools"
 
-#. placeholder {0}: status.loadPercent
-#: src/app/session/ModelPicker.tsx
-msgid "负载 {0}%"
-msgstr "Load {0}%"
-
 #. placeholder {0}: usage.cost.currency
 #. placeholder {1}: usage.cost.amount.toFixed(2)
 #: src/app/session/Composer.tsx
@@ -1993,10 +1954,6 @@ msgstr "Cost {0} {1}"
 #: src/app/session/Attempts.tsx
 msgid "起点"
 msgstr "Base"
-
-#: src/app/session/ModelPicker.tsx
-msgid "跟随默认设置"
-msgstr "Use default settings"
 
 #. placeholder {0}: index + 1
 #: src/app/session/TurnRail.tsx
@@ -2218,7 +2175,6 @@ msgstr "Reload attachment"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
-#: src/app/session/ModelPicker.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
 #: src/app/session/ToolsPicker.tsx
@@ -2323,14 +2279,12 @@ msgid "黄色"
 msgstr "Yellow"
 
 #: src/app/session/Attempts.tsx
-#: src/app/session/ModelPicker.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "默认"
 msgstr "Default"
 
 #: src/app/session/Composer.tsx
 #: src/app/session/LaunchTargetBar.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "默认模型"
 msgstr "Default model"
 

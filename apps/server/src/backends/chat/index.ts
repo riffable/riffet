@@ -85,8 +85,8 @@ const FAST_OPTION: ModelConfigOption = {
   options: [{ value: 'false', name: 'Off' }, { value: 'true', name: 'On' }],
 };
 const SEARCH_OPTION: ModelConfigOption = {
-  id: 'search', name: '联网搜索', category: 'model_config', type: 'select', currentValue: 'false',
-  options: [{ value: 'false', name: '关' }, { value: 'true', name: '开' }],
+  id: 'search', name: 'Web search', category: 'model_config', type: 'select', currentValue: 'false',
+  options: [{ value: 'false', name: 'Off' }, { value: 'true', name: 'On' }],
 };
 
 export interface ChatBackendOptions {

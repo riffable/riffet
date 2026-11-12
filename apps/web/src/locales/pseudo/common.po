@@ -47,52 +47,8 @@ msgstr ""
 msgid "{count, plural, other {# 年前}}"
 msgstr ""
 
-#: src/lib/usage.ts
-msgid "{hours} 小时"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{hours} 小时后重置"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{left}，{reset}"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{minutes} 分钟"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{minutes} 分钟后重置"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{month}月{day}日重置"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{name}剩余 {left}%"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "{name}额度剩余 {leftPercent}%"
-msgstr ""
-
 #: src/lib/document-title.ts
 msgid "⏸ 待确认 · {name} — {APP_TITLE}"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "5 小时"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "credits {balance}"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "credits 不限"
 msgstr ""
 
 #: src/components/ContentPreview.tsx
@@ -174,16 +130,8 @@ msgctxt "common-metric-sessions"
 msgid "会话"
 msgstr ""
 
-#: src/lib/usage.ts
-msgid "低优先级"
-msgstr ""
-
 #: src/lib/themes.ts
 msgid "低饱和绿色系，暖而沉稳。"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "余 {remaining}/{limit}"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
@@ -197,10 +145,6 @@ msgstr ""
 
 #: src/lib/stats-query.ts
 msgid "全部时间"
-msgstr ""
-
-#: src/lib/models.ts
-msgid "关"
 msgstr ""
 
 #: src/components/ui/dialog.tsx
@@ -243,10 +187,6 @@ msgstr ""
 msgid "删除行号"
 msgstr ""
 
-#: src/lib/usage.ts
-msgid "剩余 {left}%"
-msgstr ""
-
 #: src/lib/theme-role-labels.ts
 msgid "占位文本"
 msgstr ""
@@ -273,10 +213,6 @@ msgstr ""
 
 #: src/lib/theme-role-labels.ts
 msgid "危险浅底"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "即将重置"
 msgstr ""
 
 #: src/lib/shares.ts
@@ -399,10 +335,6 @@ msgstr ""
 msgid "已恢复"
 msgstr ""
 
-#: src/lib/models.ts
-msgid "开"
-msgstr ""
-
 #: src/lib/theme-role-labels.ts
 msgid "弱化背景"
 msgstr ""
@@ -437,14 +369,6 @@ msgstr ""
 
 #: src/lib/theme-role-labels.ts
 msgid "强调色文字"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "当前负载 {percent}%"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "当前负载 {percent}%，超出容量，请求会排队"
 msgstr ""
 
 #: src/lib/shares.ts
@@ -577,12 +501,6 @@ msgstr ""
 msgid "无法预览此文件"
 msgstr ""
 
-#. placeholder {0}: formatQuotaAmount(quota.remaining)
-#. placeholder {1}: formatQuotaAmount(quota.limit)
-#: src/lib/usage.ts
-msgid "日余 {0}/{1}"
-msgstr ""
-
 #: src/lib/themes.ts
 msgid "旧书纸底与牛血红。"
 msgstr ""
@@ -650,22 +568,6 @@ msgstr ""
 
 #: src/lib/theme-role-labels.ts
 msgid "正文 / 页面"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "每周"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "每日"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "每日额度用尽，请求仍可用"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "每月"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
@@ -748,10 +650,6 @@ msgstr ""
 
 #: src/lib/stats-series.ts
 msgid "缓存命中率"
-msgstr ""
-
-#: src/lib/models.ts
-msgid "联网搜索"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
@@ -902,18 +800,6 @@ msgstr ""
 
 #: src/lib/shares.ts
 msgid "预览连接已中断，请重试"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "额度"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "额度暂不可用"
-msgstr ""
-
-#: src/lib/usage.ts
-msgid "额度用尽"
 msgstr ""
 
 #: src/lib/stats-series.ts

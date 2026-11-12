@@ -128,6 +128,8 @@ data class NativeBackendUsage(
 data class NativeBackendOption(
     val id: String,
     val label: String,
+    /** The name a toolbar shows when [label] would not fit beside the model. */
+    val shortLabel: String? = null,
     val description: String? = null,
 )
 

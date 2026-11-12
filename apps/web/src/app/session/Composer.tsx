@@ -65,39 +65,36 @@ function contextPartLabel(id: string, parts: readonly { id: string }[]): string 
   return contextLabels[id] ? i18n._(contextLabels[id]!) : undefined;
 }
 
-const ContextMeter = memo(function ContextMeter({ usage, ringOnly: compact }: { usage: ContextUsage; ringOnly?: boolean }) {
+const ContextMeter = memo(function ContextMeter({ usage }: { usage: ContextUsage }) {
   const { t } = useLingui();
   const ratio = Math.min(1, Math.max(0, usage.used / usage.size));
-  // The number appears once the window is three-quarters full; below that the ring says enough.
-  const ringOnly = compact || ratio < 0.75;
   const percent = Math.round(usage.used / usage.size * 100);
   const title = t`上下文用量`;
-  const color = ratio >= 0.9 ? 'var(--danger)' : ratio >= 0.75 ? 'var(--warning)' : 'var(--accent)';
+  // The ring alone, in the toolbar's own ink until the window runs short; the figures live in the
+  // tooltip and the popover, so the row never carries a number that changes every turn.
+  const color = ratio >= 0.9 ? 'var(--danger)' : ratio >= 0.75 ? 'var(--warning)' : 'currentColor';
   const cost = usage.cost ? ` · ${usage.cost.currency} ${usage.cost.amount.toFixed(2)}` : '';
   const limitLabel = usage.limitKind === 'compaction' ? t`自动压缩阈值` : t`上下文长度`;
   const label = `${title} ${percent}% · ${compactTokens(usage.used)} / ${limitLabel} ${compactTokens(usage.size)} tokens${cost}`;
-  // 2πr for r = 6.5, so the dash length maps directly onto the ratio.
-  const circumference = 2 * Math.PI * 6.5;
+  // 2πr for r = 6, so the dash length maps directly onto the ratio.
+  const circumference = 2 * Math.PI * 6;
   const parts = usage.breakdown?.filter((item) => item.tokens > 0) ?? [];
   const breakdownTotal = parts.reduce((total, item) => total + item.tokens, 0);
   return (
     <Popover>
-      <PopoverTrigger
-        aria-label={label}
-        className={cn(
-          'inline-flex h-11 shrink-0 items-center gap-1.5 rounded-full text-xs tabular-nums text-fg-3 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover md:h-7 no-hover:h-11',
-          // The trailing padding is kept tight: the meter sits immediately left of the model name,
-          // and the footer's own gap plus this padding is what the eye reads as the distance between
-          // the two. `pr-2` left a visible hole there.
-          ringOnly ? 'w-9 justify-center' : 'pl-1.5 pr-1',
-        )}
-      >
-        <svg viewBox="0 0 16 16" className={cn('shrink-0 -rotate-90', ringOnly ? 'size-4' : 'size-3.5')} aria-hidden="true">
-          <circle cx="8" cy="8" r="6.5" fill="none" stroke="var(--line-strong)" strokeWidth="2.5" />
-          <circle cx="8" cy="8" r="6.5" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeDasharray={`${ratio * circumference} ${circumference}`} />
-        </svg>
-        {!ringOnly && <span>{percent}%</span>}
-      </PopoverTrigger>
+      <Tip label={`${title} ${percent}%`} side="top">
+        <PopoverTrigger
+          aria-label={label}
+          // The same square as the toolbar's other glyph buttons, so the meter sits one footer gap
+          // from the model name exactly as the attach and approval buttons sit from each other.
+          className="grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus aria-expanded:bg-hover aria-expanded:text-fg md:size-7"
+        >
+          <svg viewBox="0 0 16 16" className="size-4 shrink-0 -rotate-90" aria-hidden="true">
+            <circle cx="8" cy="8" r="6" fill="none" stroke="var(--line-strong)" strokeWidth="2" />
+            <circle cx="8" cy="8" r="6" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeDasharray={`${ratio * circumference} ${circumference}`} />
+          </svg>
+        </PopoverTrigger>
+      </Tip>
       <PopoverContent side="top" align="start" className="w-72 p-3">
         <div className="flex items-baseline justify-between text-sm">
           <span className="font-medium text-fg">{title} <span className="tabular-nums text-fg-3">{percent}%</span></span>
@@ -234,8 +231,8 @@ export interface ComposerProps {
   toolbarLabel?: string;
   /** Optional current-value summary for opaque custom pickers shown in the mobile settings sheet. */
   mobileSettingsLabel?: string;
-  /** Shown before `mobileSettingsLabel`, e.g. the approval mode as an icon. */
-  mobileSettingsIcon?: ReactNode;
+  /** Shown before `mobileSettingsLabel`, e.g. the approval mode's short name. */
+  mobileSettingsPrefix?: ReactNode;
   /**
    * A picker shown immediately before the model, for a choice the model depends on. The agent
    * sits here when a session is being created: it decides which models exist, so it reads first.
@@ -1578,10 +1575,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 )}
               </div>
               {hasMobileSettings && <>
-                {isMobile && props.usage && !compact && <ContextMeter usage={props.usage} ringOnly />}
+                {isMobile && props.usage && !compact && <ContextMeter usage={props.usage} />}
                 <DialogTrigger asChild>
                   <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact ? 'hidden' : toggleEntrance)}>
-                    {props.mobileSettingsIcon}
+                    {props.mobileSettingsPrefix}
                     <span className="min-w-0 truncate">{settingsSummary}</span>
                     {modelsIssue && <StatusDot tone="warning" />}
                     {props.modelsLoading && <Spinner className="size-3 shrink-0 text-fg-4" />}
@@ -1626,7 +1623,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               the model added 12px of nothing to the row's own 6px gap, which is why the meter looked
               stranded from the model while the send button sat right against it.
             */}
-            <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 md:flex-nowrap">
+            <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 md:flex-nowrap">
               {!isMobile && props.usage && <span className="hidden md:inline-flex"><ContextMeter usage={props.usage} /></span>}
               {!isMobile && props.startPickers && <span className="hidden min-w-0 md:inline-flex">{props.startPickers}</span>}
               {!isMobile && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}

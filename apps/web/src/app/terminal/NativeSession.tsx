@@ -19,7 +19,7 @@ import { useOverlayState } from '@/lib/overlay-navigation';
 import { backendSelection, hasNativeTerminal, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { useWakeLock } from '@/lib/wake-lock';
 import type { HeaderSlots } from '../Header';
-import { ApprovalIcon, ApprovalPicker } from '../session/ApprovalPicker';
+import { ApprovalPicker, ApprovalSummary } from '../session/ApprovalPicker';
 import { ToolsPicker, offersExtensionToggles, offersRiffetTools, useControllablePhones, useExtensionsOffered } from '../session/ToolsPicker';
 import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
@@ -834,15 +834,16 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       followUps={followUpList}
     />
   ), [followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
-  const approvalIcon = useMemo(() => <ApprovalIcon mode={approval} />, [approval]);
+  // Without the backend's permissions there is no name to show, only an id.
+  const approvalSummary = useMemo(() => (backendCapabilities?.permissions.length ? <ApprovalSummary mode={approval} options={backendCapabilities.permissions} /> : undefined), [approval, backendCapabilities]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (
     <ApprovalPicker
-      iconOnly={!mobileViewport}
+      compact={!mobileViewport}
       value={approval}
       options={backendCapabilities.permissions}
       onChange={changeApproval}
       disabled={pickersBlocked || !backendCapabilities.supportsPermissionSelection}
-      note={paneAnswers ? t`切换权限后会恢复原生会话` : undefined}
+      note={paneAnswers ? t`对话会保留；正在回复时，本轮结束后生效` : undefined}
     />
   ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, pickersBlocked, paneAnswers, t]);
   const [toolGroupsValue, changeToolGroups] = useSessionPick(session, 'toolGroups', NO_TOOL_GROUPS, onSessionChanged, onError);
@@ -1035,7 +1036,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     projectId: session.projectId,
     draftKey: session.id,
     enterBehavior: enterBehavior,
-    ...(quickChat ? {} : { mobileSettingsIcon: approvalIcon }),
+    ...(quickChat ? {} : { mobileSettingsPrefix: approvalSummary }),
     mobileSettingsLabel: cleanLabel(catalog.find((item) => item.value === parseSelection(backendSelection(backendId, catalog, session.model)).model)?.name ?? t({ message: '选择模型', context: 'terminal-model-picker-label' })),
     disabled: archived,
     submitDisabled: !canSend || sendingInitial || starting || switchingApproval || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,

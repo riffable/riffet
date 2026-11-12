@@ -59,7 +59,7 @@ struct ModelControls: View {
             open.toggle()
         } label: {
             HStack(spacing: 5) {
-                Text(modelLabel(catalog: activeModels, value: selection).ifEmpty(String(localized: "选择模型")))
+                Text(verbatim: modelLabel(catalog: activeModels, value: selection).ifEmpty("Select model"))
                     .lineLimit(1)
                     .frame(maxWidth: compact ? 120 : 220, alignment: .leading)
                     .fixedSize(horizontal: true, vertical: false)
@@ -102,7 +102,8 @@ struct ModelControls: View {
     private func mark(_ param: ModelParam_) -> some View {
         switch paramKind(param: param) {
         case .fast:
-            if isOn(param: param) { Image(icon: "bolt.fill").font(.riffet(size: S(11))).foregroundStyle(palette.fg2).accessibilityLabel("Fast") }
+            // A word in the effort's own style, as the web's trigger says it.
+            if isOn(param: param), !compact { Text(verbatim: "Fast").foregroundStyle(palette.fg3) }
         case .toggle:
             if param.id == "thinking", !isOn(param: param) { Image(icon: "brain").font(.riffet(size: S(11))).foregroundStyle(palette.fg4) }
         case .effort:
@@ -155,9 +156,20 @@ struct ModelPanel: View {
     /// Parameters and quota describe the provider in use, so they stay off while another is previewed.
     private var isActiveProvider: Bool { !twoColumn || shownProvider?.id == activeProviderId }
     private var shownParams: [ModelParam_] { isActiveProvider ? params : [] }
-    private var rows: Int { max(twoColumn ? providers.count : 1, shownModels.count) }
-    private var chromeHeight: CGFloat { (shownParams.isEmpty ? 0 : CGFloat(shownParams.count) * 32 + 17) + (showsAccountUsage && isActiveProvider ? ModelAccountUsage.height + 1 : 0) }
-    private var listHeight: CGFloat { min(300, CGFloat(max(1, rows)) * 30 + 12, max(42, availableSize.height - chromeHeight)) }
+    /// Beside the providers the lists are as tall as the longest provider's (a loading one is one
+    /// row), so moving between providers never resizes the panel; a single list fits its catalog.
+    private var rows: Int {
+        guard twoColumn else { return catalog.count }
+        return providers.reduce(providers.count) { max($0, $1.models?.count ?? 1) }
+    }
+    /// The parameters and quota row of the provider in force, whether or not they are shown.
+    private var activeChrome: CGFloat { (params.isEmpty ? 0 : CGFloat(params.count) * 32 + 17) + (showsAccountUsage ? ModelAccountUsage.height + 1 : 0) }
+    private var chromeHeight: CGFloat { isActiveProvider ? activeChrome : 0 }
+    /// While another provider is previewed its parameters are hidden, and the lists take their
+    /// height: the panel keeps its size and its top edge, so the row under the pointer stays put.
+    private var listHeight: CGFloat {
+        min(300, CGFloat(max(1, rows)) * 30 + 12, max(42, availableSize.height - activeChrome)) + activeChrome - chromeHeight
+    }
     private var orderedParams: [ModelParam_] { shownParams.sorted { Self.order($0) < Self.order($1) } }
 
     var body: some View {
@@ -239,10 +251,10 @@ struct ModelPanel: View {
                 VStack(spacing: 0) {
                     if let provider = shownProvider, provider.models == nil {
                         HStack(spacing: Space.xs) {
-                            Text(provider.issue ?? String(localized: "加载中…")).font(RiffetFont.caption).foregroundStyle(palette.fg3).lineLimit(2)
+                            Text(verbatim: provider.issue ?? "Loading…").font(RiffetFont.caption).foregroundStyle(palette.fg3).lineLimit(2)
                             Spacer(minLength: Space.xs)
                             if provider.issue != nil, let retryProvider {
-                                Button(String(localized: "重试")) { retryProvider(provider.id) }
+                                Button { retryProvider(provider.id) } label: { Text(verbatim: "Retry") }
                                     .buttonStyle(.plain).font(.riffet(size: S(11))).foregroundStyle(palette.mark)
                             }
                         }
@@ -250,7 +262,7 @@ struct ModelPanel: View {
                     }
                     ForEach(shownModels, id: \.value) { modelRow($0).id($0.value) }
                     if shownModels.isEmpty, !twoColumn || shownProvider?.models != nil {
-                        Text("没有可用模型").font(RiffetFont.caption).foregroundStyle(palette.fg3).frame(height: 30)
+                        Text(verbatim: "No models available").font(RiffetFont.caption).foregroundStyle(palette.fg3).frame(height: 30)
                     }
                 }
                 .padding(6)
@@ -298,15 +310,15 @@ struct ModelPanel: View {
             switch kind {
             case .fast, .toggle:
                 if kind == .fast, param.options.contains(where: { $0.value == "default" }) {
-                    Button("默认") { value(for: param, "default") }
+                    Button { value(for: param, "default") } label: { Text(verbatim: "Default") }
                         .font(.riffet(size: S(11)))
                         .foregroundStyle(param.value == "default" ? palette.mark : palette.fg3)
                         .buttonStyle(.plain)
-                        .help("跟随 Claude Code 的 Fast 设置")
+                        .help(Text(verbatim: "Follows Claude Code's Fast setting"))
                 }
                 Toggle(Self.title(param, kind), isOn: Binding(get: { isOn(param: param) }, set: { value(for: param, toggledValue(param: param, on: $0, fallback: nil)) }))
                     .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(palette.accent)
-                    .accessibilityValue(param.value == "default" ? "跟随默认设置" : isOn(param: param) ? "开启" : "关闭")
+                    .accessibilityValue(Text(verbatim: param.value == "default" ? "Default" : isOn(param: param) ? "On" : "Off"))
             default:
                 ChoiceMenu(options: (kind == .max ? param.options : listValues(param: param)).map { option in
                     ChoiceOption(title: optionLabel(param: param, value: option.value), selected: param.value == option.value) { value(for: param, option.value) }
@@ -329,10 +341,10 @@ struct ModelPanel: View {
 
     private static func title(_ param: ModelParam_, _ kind: ParamKind) -> String {
         switch kind {
-        case .effort: String(localized: "推理强度")
+        case .effort: "Effort"
         case .fast: "Fast"
-        case .max: String(localized: "MAX 模式")
-        case .toggle: param.id == "thinking" ? String(localized: "深度思考") : paramTitle(param: param)
+        case .max: "Max"
+        case .toggle: param.id == "thinking" ? "Thinking" : paramTitle(param: param)
         default: paramTitle(param: param)
         }
     }
@@ -384,13 +396,13 @@ struct ModelAccountUsage: View {
                 usageWindowView(window)
                     .padding(.horizontal, Space.md)
             } else if let account, account.limitReached {
-                Label("已达用量上限", icon: "exclamationmark.circle")
+                Label { Text(verbatim: "Usage limit reached") } icon: { Image(icon: "exclamationmark.circle") }
                     .font(.riffet(size: S(11))).foregroundStyle(palette.danger)
             } else if let credits = account?.credits, credits.unlimited || credits.balance != nil {
                 HStack {
-                    Text("Credits 余额")
+                    Text(verbatim: "Credits")
                     Spacer()
-                    Text(credits.unlimited ? String(localized: "不限") : credits.balance!.doubleValue.rounded(.towardZero).formatted(.number.precision(.fractionLength(0))))
+                    Text(verbatim: credits.unlimited ? "Unlimited" : credits.balance!.doubleValue.rounded(.towardZero).formatted(.number.precision(.fractionLength(0))))
                         .monospacedDigit()
                 }
                 .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
@@ -400,7 +412,7 @@ struct ModelAccountUsage: View {
             } else {
                 HStack(spacing: Space.sm) {
                     if loading { Spinner(size: .mini) }
-                    Text(loading ? "正在读取额度…" : "额度暂不可用").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
+                    Text(verbatim: loading ? "Reading quota…" : "Quota unavailable").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
             }
@@ -411,21 +423,21 @@ struct ModelAccountUsage: View {
         let ratio = min(1, max(0, Double(window.usedPercent) / 100))
         let reached = account?.limitReached == true || window.usedPercent >= 100
         let tone = reached ? palette.danger : window.usedPercent >= 80 ? palette.warning : palette.fg3
-        let title = window.windowMinutes == nil ? String(localized: "额度") : String(localized: "\(windowName(minutes: window.windowMinutes))额度")
-        let reset = resetLabel(iso: window.resetsAt, now: platformNowMillis(), offsetOf: { KotlinLong(value: platformUtcOffsetMillis(epochMillis: $0.int64Value)) })
+        let title = ModelUsageCopy.window(window.windowMinutes?.intValue)
+        let reset = ModelUsageCopy.reset(window.resetsAt)
         return HStack(spacing: Space.sm) {
-            Text(title).fixedSize()
+            Text(verbatim: title).fixedSize()
             GeometryReader { geometry in
                 Capsule().fill(palette.line)
                 Capsule().fill(tone).frame(width: geometry.size.width * ratio)
             }
             .frame(height: 3)
             .accessibilityHidden(true)
-            Text("剩余 \(max(0, 100 - window.usedPercent))%").monospacedDigit().fixedSize()
+            Text(verbatim: "\(max(0, 100 - window.usedPercent))% left").monospacedDigit().fixedSize()
                 .foregroundStyle(reached ? palette.danger : palette.fg2)
         }
         .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
-        .help([reached ? String(localized: "已达用量上限") : nil, reset].compactMap { $0 }.joined(separator: " · "))
+        .help([reached ? "Usage limit reached" : nil, reset].compactMap { $0 }.joined(separator: " · "))
         .accessibilityElement(children: .combine)
         .accessibilityValue(reset ?? "")
     }
@@ -437,13 +449,13 @@ struct ModelStatusTags: View {
 
     var body: some View {
         HStack(spacing: 6) {
-            if let quota = status.quota { tag(quotaLabel(quota: quota), tone: quota.depleted ? .danger : quota.usedPercent >= 80 ? .warning : .muted) }
+            if let quota = status.quota { tag(ModelUsageCopy.quota(quota), tone: quota.depleted ? .danger : quota.usedPercent >= 80 ? .warning : .muted) }
             if let daily = status.dailyQuota {
-                tag(dailyQuotaLabel(quota: daily), tone: .muted)
-                if daily.depleted { tag(dailyQuotaLowPriorityLabel(), tone: .muted) }
+                tag("Daily \(formatQuotaAmount(value: daily.remaining))/\(formatQuotaAmount(value: daily.limit)) left", tone: .muted)
+                if daily.depleted { tag("Low priority", tone: .muted) }
             }
-            if quotaUnavailable(status: status) { tag(quotaUnavailableLabel(), tone: .muted) }
-            if let load = status.loadPercent?.intValue { tag(String(localized: "负载 \(load)%"), tone: loadTone(percent: Int32(load))) }
+            if quotaUnavailable(status: status) { tag("Quota unavailable", tone: .muted) }
+            if let load = status.loadPercent?.intValue { tag("Load \(load)%", tone: loadTone(percent: Int32(load))) }
         }
         .fixedSize()
     }
@@ -454,6 +466,46 @@ struct ModelStatusTags: View {
         case .warning: palette.warning
         default: palette.fg3
         }
-        return Text(text).font(.riffet(size: S(11)).monospacedDigit()).foregroundStyle(color)
+        return Text(verbatim: text).font(.riffet(size: S(11)).monospacedDigit()).foregroundStyle(color)
+    }
+}
+
+/// Usage figures in the model panel, which reads in English throughout as the web's does (model,
+/// parameter and provider names are English). Worded as the shared layer's `en` table.
+enum ModelUsageCopy {
+    static func window(_ minutes: Int?) -> String {
+        switch minutes {
+        case nil, 0: "Quota"
+        case 300: "5 hours"
+        case 1440: "Daily"
+        case 10080: "Weekly"
+        case let minutes? where (40320...44640).contains(minutes): "Monthly"
+        case let minutes? where minutes % 60 == 0: "\(minutes / 60)h"
+        case let minutes?: "\(minutes)m"
+        }
+    }
+
+    static func quota(_ quota: ModelQuota) -> String {
+        if quota.depleted { return "Quota used up" }
+        if let remaining = quota.remaining, let limit = quota.limit { return "\(remaining.intValue) of \(limit.intValue) left" }
+        return "\(max(0, 100 - quota.usedPercent))% left"
+    }
+
+    static func reset(_ iso: String?, now: Date = Date()) -> String? {
+        guard let iso, let at = parse(iso) else { return nil }
+        let left = at.timeIntervalSince(now)
+        if left <= 0 { return "Resets soon" }
+        if left < 3600 { return "Resets in \(max(1, Int((left / 60).rounded()))) min" }
+        if left < 86400 { return "Resets in \(Int((left / 3600).rounded())) hr" }
+        let day = Calendar.current.dateComponents([.month, .day], from: at)
+        return "Resets on \(day.month ?? 0)/\(day.day ?? 0)"
+    }
+
+    private static func parse(_ iso: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: iso) { return date }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: iso)
     }
 }

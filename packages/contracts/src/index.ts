@@ -921,7 +921,8 @@ export interface NativeBackendUsage {
   fetchedAt: string;
 }
 
-export interface NativeBackendOption { id: string; label: string; description?: string; }
+/** `shortLabel` is the name a toolbar shows when the full label would not fit beside the model. */
+export interface NativeBackendOption { id: string; label: string; shortLabel?: string; description?: string; }
 /** Input types one model accepts. DSH names the DeepSeek catalog field `inputModalities`. */
 export type ModelInputModality = 'text' | 'image';
 /** Declared input types per model id, at least one type per entry. */

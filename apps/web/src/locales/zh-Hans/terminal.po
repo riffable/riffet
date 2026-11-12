@@ -124,10 +124,6 @@ msgid "切换对话视图"
 msgstr "切换对话视图"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "切换权限后会恢复原生会话"
-msgstr "切换权限后会恢复原生会话"
-
-#: src/app/terminal/NativeSession.tsx
 msgid "切换终端视图"
 msgstr "切换终端视图"
 
@@ -183,6 +179,10 @@ msgstr "在终端中"
 #: src/app/terminal/NativeSession.tsx
 msgid "存为定时任务…"
 msgstr "存为定时任务…"
+
+#: src/app/terminal/NativeSession.tsx
+msgid "对话会保留；正在回复时，本轮结束后生效"
+msgstr "对话会保留；正在回复时，本轮结束后生效"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"

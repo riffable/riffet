@@ -118,7 +118,7 @@ export class DshBackendAdapter implements NativeBackendDriver {
         { id: 'workspace-write', label: 'Workspace write', description: 'Writes inside the workspace and temporary directories; anything wider asks first' },
         { id: 'read-only', label: 'Read only', description: 'Reads anything; every write asks first' },
         { id: 'danger-full-access', label: 'Full access', description: 'No sandbox and no approval prompts' },
-        { id: 'auto', label: 'Auto review (experimental)', description: 'The agent\'s own model reviews each tool call before it runs with full access, and a denied call asks you; it costs extra tokens and can misjudge' },
+        { id: 'auto', label: 'Auto review (experimental)', shortLabel: 'Auto review', description: 'The agent\'s own model reviews each tool call before it runs with full access, and a denied call asks you; it costs extra tokens and can misjudge' },
       ],
       interactionTransport: 'protocol',
       supportsResume: true,

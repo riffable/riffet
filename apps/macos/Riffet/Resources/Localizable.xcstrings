@@ -2080,22 +2080,6 @@
         }
       }
     },
-    "%@ %@ / %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ %@ / %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "new",
-            "value": "%1$@ %2$@ / %3$@"
-          }
-        }
-      }
-    },
     "%@ %@，%lld 轮，%@": {
       "localizations": {
         "en": {
@@ -2526,16 +2510,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ menu"
-          }
-        }
-      }
-    },
-    "%@额度": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ quota"
           }
         }
       }
@@ -3474,16 +3448,6 @@
         }
       }
     },
-    "Credits 余额": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Credits balance"
-          }
-        }
-      }
-    },
     "Cursor CLI": {
       "localizations": {
         "en": {
@@ -3520,16 +3484,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Esc to reject"
-          }
-        }
-      }
-    },
-    "Fast": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fast"
           }
         }
       }
@@ -3590,16 +3544,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "MAX"
-          }
-        }
-      }
-    },
-    "MAX 模式": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "MAX mode"
           }
         }
       }
@@ -6294,16 +6238,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Go"
-          }
-        }
-      }
-    },
-    "剩余 %d%%": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d%% left"
           }
         }
       }
@@ -9144,16 +9078,6 @@
         }
       }
     },
-    "已达用量上限": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usage limit reached"
-          }
-        }
-      }
-    },
     "已运行": {
       "localizations": {
         "en": {
@@ -10679,16 +10603,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Take over terminal"
-          }
-        }
-      }
-    },
-    "推理强度": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reasoning effort"
           }
         }
       }
@@ -14047,16 +13961,6 @@
         }
       }
     },
-    "正在读取额度…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Loading credits…"
-          }
-        }
-      }
-    },
     "正在连接 Riffet…": {
       "localizations": {
         "en": {
@@ -14639,16 +14543,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Subtle divider"
-          }
-        }
-      }
-    },
-    "深度思考": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deep thinking"
           }
         }
       }
@@ -16762,16 +16656,6 @@
         }
       }
     },
-    "负载 %lld%%": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Load %lld%%"
-          }
-        }
-      }
-    },
     "账户": {
       "localizations": {
         "en": {
@@ -16812,16 +16696,6 @@
         }
       }
     },
-    "跟随 Claude Code 的 Fast 设置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Follow Claude Code's Fast setting"
-          }
-        }
-      }
-    },
     "跟随主题": {
       "localizations": {
         "en": {
@@ -16838,16 +16712,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "System"
-          }
-        }
-      }
-    },
-    "跟随默认设置": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Use default settings"
           }
         }
       }
@@ -18962,26 +18826,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Color %lld"
-          }
-        }
-      }
-    },
-    "额度": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quota"
-          }
-        }
-      }
-    },
-    "额度暂不可用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quota currently unavailable"
           }
         }
       }

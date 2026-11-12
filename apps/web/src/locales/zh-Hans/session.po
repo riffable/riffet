@@ -169,10 +169,6 @@ msgstr "CLI 状态：{0}"
 msgid "Esc 拒绝"
 msgstr "Esc 拒绝"
 
-#: src/app/session/ModelPicker.tsx
-msgid "MAX 模式"
-msgstr "MAX 模式"
-
 #: src/app/session/ToolsPicker.tsx
 msgid "MCP"
 msgstr "MCP"
@@ -550,10 +546,6 @@ msgstr "删除文件"
 #: src/app/session/Composer.tsx
 msgid "加入队列"
 msgstr "加入队列"
-
-#: src/app/session/ModelPicker.tsx
-msgid "加载中…"
-msgstr "加载中…"
 
 #: src/app/session/SessionReferences.tsx
 msgid "助手"
@@ -1028,10 +1020,6 @@ msgstr "已超时，自动拒绝"
 msgid "已跳过"
 msgstr "已跳过"
 
-#: src/app/session/ModelPicker.tsx
-msgid "已达用量上限 · "
-msgstr "已达用量上限 · "
-
 #: src/app/session/Attempts.tsx
 msgid "已采用"
 msgstr "已采用"
@@ -1115,10 +1103,6 @@ msgstr "待处理"
 #: src/app/session/toolView.ts
 msgid "思考"
 msgstr "思考"
-
-#: src/app/session/ModelPicker.tsx
-msgid "思考程度"
-msgstr "思考程度"
 
 #: src/app/session/Composer.tsx
 msgid "思考输出"
@@ -1204,10 +1188,6 @@ msgstr "提交"
 msgid "提交中…"
 msgstr "提交中…"
 
-#: src/app/session/ModelPicker.tsx
-msgid "提供商"
-msgstr "提供商"
-
 #. placeholder {0}: content.slice(0, answer)
 #: src/app/session/SessionReferences.tsx
 msgid "提问节选：{0}"
@@ -1224,10 +1204,6 @@ msgstr "搜索中…"
 #: src/app/session/toolView.ts
 msgid "搜索内容"
 msgstr "搜索内容"
-
-#: src/app/session/ModelPicker.tsx
-msgid "搜索模型"
-msgstr "搜索模型"
 
 #: src/app/session/SessionHandoff.tsx
 msgid "摘要模型不可用，已改用对话记录：{reason}"
@@ -1581,17 +1557,12 @@ msgid "检查状态"
 msgstr "检查状态"
 
 #: src/app/session/Composer.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "模型"
 msgstr "模型"
 
 #: src/app/session/Composer.tsx
 msgid "模型与参数"
 msgstr "模型与参数"
-
-#: src/app/session/ModelPicker.tsx
-msgid "模型列表加载失败：{catalogError}"
-msgstr "模型列表加载失败：{catalogError}"
 
 #: src/app/session/pickers.ts
 msgid "模型列表还没准备好，稍后再试"
@@ -1666,12 +1637,7 @@ msgstr "没有匹配的会话或文件"
 msgid "没有匹配的文件"
 msgstr "没有匹配的文件"
 
-#: src/app/session/ModelPicker.tsx
-msgid "没有匹配的模型"
-msgstr "没有匹配的模型"
-
 #: src/app/session/Composer.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "没有可用模型"
 msgstr "没有可用模型"
 
@@ -1979,11 +1945,6 @@ msgstr "读取文件"
 msgid "调用工具"
 msgstr "调用工具"
 
-#. placeholder {0}: status.loadPercent
-#: src/app/session/ModelPicker.tsx
-msgid "负载 {0}%"
-msgstr "负载 {0}%"
-
 #. placeholder {0}: usage.cost.currency
 #. placeholder {1}: usage.cost.amount.toFixed(2)
 #: src/app/session/Composer.tsx
@@ -1993,10 +1954,6 @@ msgstr "费用 {0} {1}"
 #: src/app/session/Attempts.tsx
 msgid "起点"
 msgstr "起点"
-
-#: src/app/session/ModelPicker.tsx
-msgid "跟随默认设置"
-msgstr "跟随默认设置"
 
 #. placeholder {0}: index + 1
 #: src/app/session/TurnRail.tsx
@@ -2218,7 +2175,6 @@ msgstr "重新读取附件"
 
 #: src/app/session/Activities.tsx
 #: src/app/session/Attempts.tsx
-#: src/app/session/ModelPicker.tsx
 #: src/app/session/NativeInteractionCard.tsx
 #: src/app/session/SideDiscussion.tsx
 #: src/app/session/ToolsPicker.tsx
@@ -2323,14 +2279,12 @@ msgid "黄色"
 msgstr "黄色"
 
 #: src/app/session/Attempts.tsx
-#: src/app/session/ModelPicker.tsx
 #: src/app/session/ToolsPicker.tsx
 msgid "默认"
 msgstr "默认"
 
 #: src/app/session/Composer.tsx
 #: src/app/session/LaunchTargetBar.tsx
-#: src/app/session/ModelPicker.tsx
 msgid "默认模型"
 msgstr "默认模型"
 

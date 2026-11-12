@@ -124,10 +124,6 @@ msgid "切换对话视图"
 msgstr "Switch to chat view"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "切换权限后会恢复原生会话"
-msgstr "Changing permissions resumes the native session"
-
-#: src/app/terminal/NativeSession.tsx
 msgid "切换终端视图"
 msgstr "Switch to terminal view"
 
@@ -183,6 +179,10 @@ msgstr "In terminal"
 #: src/app/terminal/NativeSession.tsx
 msgid "存为定时任务…"
 msgstr "Save as scheduled task…"
+
+#: src/app/terminal/NativeSession.tsx
+msgid "对话会保留；正在回复时，本轮结束后生效"
+msgstr "The conversation is kept; mid-reply, it applies when the turn ends"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"

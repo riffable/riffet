@@ -240,7 +240,7 @@ struct HomeView: View {
             ) {
                 if !quickChat, let catalog = shownCatalog {
                     if catalog.capabilities.supportsPermissionSelection, !catalog.capabilities.permissions.isEmpty {
-                        OptionMenu(symbol: "checkmark.shield", title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: approval ?? catalog.capabilities.permissions.first?.id ?? "") { approval = $0 }
+                        OptionMenu(title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: approval ?? catalog.capabilities.permissions.first?.id ?? "") { approval = $0 }
                             .equatable()
                             .disabled(!catalogCurrent)
                     }

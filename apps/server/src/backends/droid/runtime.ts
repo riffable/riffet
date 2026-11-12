@@ -417,14 +417,14 @@ export function droidModelInfos(models: unknown[]): ModelInfo[] {
         options: efforts.map(effort => ({ value: effort, name: effort === 'xhigh' ? 'Extra high' : effort[0]!.toUpperCase() + effort.slice(1) })),
       }] : []), ...(model.isCustom === false && model.kind !== 'router' ? [{
         id: 'context',
-        name: '上下文预算',
+        name: 'Context budget',
         category: 'model_config',
-        description: '默认继承 Droid 压缩设置；长上下文请求最高 1M 压缩阈值，实际阈值受模型输入窗口与组织策略限制。修改后从下一轮生效。',
+        description: 'Default follows Droid\'s compaction setting. Long context requests a compaction threshold of up to 1M; the actual threshold is bounded by the model\'s input window and organization policy. A change applies from the next turn.',
         type: 'select' as const,
         currentValue: 'default',
         options: [
-          { value: 'default', name: '默认' },
-          { value: 'long', name: '长上下文 · ≤1M', description: '请求上限，实际可用预算以 Droid 回报为准。' },
+          { value: 'default', name: 'Default' },
+          { value: 'long', name: 'Long · ≤1M', description: 'An upper bound; the budget in force is what Droid reports.' },
         ],
       }] : [])],
     }];

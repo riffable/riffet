@@ -14,7 +14,7 @@ import { backendSelection, launchSelection, sessionBackend, useBackendLabel } fr
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
-import { ApprovalIcon, ApprovalPicker } from './session/ApprovalPicker';
+import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
 import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered } from './session/ToolsPicker';
 import { BackendPicker } from './session/BackendPicker';
 import { DirectoryMenu } from './session/DirectoryMenu';
@@ -319,11 +319,12 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
             value={approval}
             options={capabilities.permissions}
             onChange={setApproval}
+            compact={!mobile}
             disabled={busy || !capabilities.supportsPermissionSelection}
           />
         ) : undefined}
         toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} disabled={busy} onError={onError} /> : undefined}
-        mobileSettingsIcon={quickChat ? undefined : <ApprovalIcon mode={approval} />}
+        mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
         startPickers={quickChat ? undefined : <BackendPicker backends={backends} backendId={backendId} onChange={onBackendChange} disabled={busy} fullWidth={mobile} />}
         startPickersLabel={quickChat ? undefined : label(backendId)}

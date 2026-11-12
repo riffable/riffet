@@ -1,5 +1,3 @@
-import { i18n } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
 import { MAX_VALUE, paramKind, type ModelParam } from '@contracts';
 
 export {
@@ -14,15 +12,15 @@ const effortLabels: Record<string, string> = { none: 'Off', minimal: 'Minimal', 
 
 export function optionLabel(param: ModelParam, value: string): string {
   if (param.id === 'search') {
-    if (value === 'true') return i18n._(msg`开`);
-    if (value === 'false') return i18n._(msg`关`);
+    if (value === 'true') return 'On';
+    if (value === 'false') return 'Off';
   }
   if (paramKind(param) === 'effort') return effortLabels[value] ?? param.options.find((option) => option.value === value)?.label ?? value;
   return param.options.find((option) => option.value === value)?.label ?? value;
 }
 
 export function paramTitle(param: ModelParam): string {
-  if (param.id === 'search') return i18n._(msg`联网搜索`);
+  if (param.id === 'search') return 'Web search';
   switch (paramKind(param)) {
     case 'effort': return 'Effort';
     case 'fast': return 'Fast';

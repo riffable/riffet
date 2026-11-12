@@ -7,7 +7,7 @@ import {
   KeyRound, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
-  Search, Send, Server, Settings, Settings2, ShieldCheck, ShieldHalf, Shrink, Slash, Smartphone, Sparkle,
+  Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
@@ -114,7 +114,6 @@ export const IconServer = icon(Server);
 export const IconSettings = icon(Settings);
 export const IconSettings2 = icon(Settings2);
 export const IconShieldCheck = icon(ShieldCheck);
-export const IconShieldHalf = icon(ShieldHalf);
 export const IconSlash = icon(Slash);
 /** One agent at work, on the canvas; [IconSparkles] stands for the subagents it starts. */
 export const IconSparkle = icon(Sparkle);
@@ -140,7 +139,6 @@ export const IconUser = icon(User);
 export const IconWrapText = icon(WrapText);
 export const IconWrench = icon(Wrench);
 export const IconZap = icon(Zap);
-export const IconZapFilled = filled(Zap);
 export const IconCornerUpRight = icon(CornerUpRight);
 export const IconMessageSquareText = icon(MessageSquareText);
 export const IconSend = icon(Send);

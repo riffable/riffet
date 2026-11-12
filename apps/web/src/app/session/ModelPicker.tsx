@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import type { ModelStatus, NativeBackendUsage } from '@contracts';
-import { IconCheck, IconChevronDown, IconRotateCw, IconSearch, IconZapFilled } from '@/components/icons';
+import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -60,10 +60,9 @@ function SlidingSegments({ param, onChange, disabled, options = param.options, v
 }
 
 function ParamControl({ param, onChange, disabled, mobile = false }: { param: ModelParam; onChange: (value: string) => void; disabled?: boolean; mobile?: boolean }) {
-  const { t } = useLingui();
   const kind = paramKind(param);
   if (kind === 'effort' || kind === 'select') {
-    const title = mobile && kind === 'effort' ? t`思考程度` : paramTitle(param);
+    const title = paramTitle(param);
     // More than four steps cannot be a segment strip on any width: every label would be ellipsised
     // and the reader could not see which level is selected. Nine effort levels is the normal case.
     const asList = mobile || param.options.length > 4;
@@ -105,14 +104,14 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
           row *does* is said by its hint and by the switch already on the right.
         */}
         <span className="truncate text-xs font-medium text-fg-2">
-          {kind === 'max' ? t`MAX 模式` : paramTitle(param)}
+          {paramTitle(param)}
         </span>
         {paramHint(param) && <span className="truncate text-2xs text-fg-3">{paramHint(param)}</span>}
       </span>
       {kind === 'fast' && param.options.some(option => option.value === 'default') && (
-        <button type="button" disabled={disabled} aria-pressed={param.value === 'default'} onClick={() => onChange('default')} className={cn('rounded px-1 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-focus', param.value === 'default' ? 'text-accent' : 'text-fg-3')}><Trans>默认</Trans></button>
+        <button type="button" disabled={disabled} aria-pressed={param.value === 'default'} onClick={() => onChange('default')} className={cn('rounded px-1 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-focus', param.value === 'default' ? 'text-accent' : 'text-fg-3')}>Default</button>
       )}
-      <Switch checked={on} disabled={disabled} onCheckedChange={(checked) => onChange(toggledValue(param, checked))} aria-label={paramTitle(param)} aria-description={param.value === 'default' ? t`跟随默认设置` : undefined} />
+      <Switch checked={on} disabled={disabled} onCheckedChange={(checked) => onChange(toggledValue(param, checked))} aria-label={paramTitle(param)} aria-description={param.value === 'default' ? 'Follows the default' : undefined} />
     </div>
   );
   if (kind !== 'max') return row;
@@ -155,7 +154,7 @@ function ModelStatusTags({ status }: { status?: ModelStatus }) {
         <span key={`${tag.text}:${index}`} title={tag.hint} className={cn('shrink-0 text-2xs tabular-nums', loadToneClass[tag.tone])}>{tag.text}</span>
       ))}
       {status.loadPercent !== undefined && (
-        <span title={loadHint(status.loadPercent)} className={cn('shrink-0 text-2xs tabular-nums', loadToneClass[loadTone(status.loadPercent)])}><Trans>负载 {status.loadPercent}%</Trans></span>
+        <span title={loadHint(status.loadPercent)} className={cn('shrink-0 text-2xs tabular-nums', loadToneClass[loadTone(status.loadPercent)])}>Load {status.loadPercent}%</span>
       )}
     </>
   );
@@ -176,6 +175,25 @@ export function selectionTags(params: ModelParam[]) {
     context: context && context.value !== 'default' ? optionLabel(context, context.value) : undefined,
   };
 }
+
+/**
+ * The pixel height a model list needs on a pointer device: 32px rows, a 24px heading for the first
+ * group and 30px for each one after it, inside the list's 4px padding. Mirrors the classes below.
+ */
+function modelListHeight(models: Choice[], fallbackGroup?: string) {
+  let height = 8;
+  let group: string | undefined | null = null;
+  let headings = 0;
+  for (const model of models) {
+    const next = model.group ?? fallbackGroup;
+    if (next !== group) { if (next) { height += headings ? 30 : 24; headings += 1; } group = next; }
+    height += 32;
+  }
+  return height;
+}
+
+/** Tallest the list grows before it scrolls. */
+const MODEL_LIST_MAX = 256;
 
 /** One provider in a provider→models menu: the profile and the choices it offers. */
 export interface ModelProviderChoices {
@@ -234,7 +252,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   providerLabel?: string;
 }) {
   const { t } = useLingui();
-  const shownPlaceholder = placeholder ?? t`默认模型`;
+  const shownPlaceholder = placeholder ?? 'Default model';
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -259,6 +277,17 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   /** Whether the listed provider is the one in force; parameters and quota only describe that one. */
   const previewIsActive = !providerColumn || previewProvider?.id === activeProvider?.id;
   const selectableModels = providerColumn ? previewProvider?.models : models;
+  /*
+   * Beside the providers the list is as tall as the longest provider's needs (or the provider
+   * column's), so moving between providers never resizes it; a short provider leaves room only
+   * when another one needs it. A loading or empty provider shows a one-line note in the same space.
+   */
+  const providerListHeight = useMemo(() => {
+    if (!providerColumn || !providers) return 0;
+    const column = 8 + providers.length * 34 - 2;
+    const lists = providers.map((provider) => provider.models.length ? modelListHeight(provider.models, providerLabel) : 72);
+    return Math.min(MODEL_LIST_MAX, Math.max(column, ...lists));
+  }, [providerColumn, providers, providerLabel]);
   // Load and quota move by the minute, so they are read when the list opens rather than kept with
   // the catalog. A failed read leaves the figures out; the list itself never waits for it.
   useEffect(() => {
@@ -292,12 +321,12 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const current = models.find((model) => model.id === value);
   const label = current?.label ?? (value || shownPlaceholder);
   const catalogError = error?.trim();
-  const failure = catalogError ? t`模型列表加载失败：${catalogError}` : undefined;
+  const failure = catalogError ? `Couldn't load models: ${catalogError}` : undefined;
   // Stays the retry while that retry runs, so the focused trigger is not disabled out from under it.
   const retryOnly = !models.length && !failure && Boolean(onRetry);
   const retryHeld = retryOnly && (loading || refreshing);
   const waited = useLingering(loading, WAIT_GRACE_MS);
-  const retryTitle = retryOnly && !loading ? failure ?? t`没有可用模型` : undefined;
+  const retryTitle = retryOnly && !loading ? failure ?? 'No models available' : undefined;
   const tags = selectionTags(params);
   const sorted = useMemo(() => [...params].sort((a, b) => kindOrder[paramKind(a)] - kindOrder[paramKind(b)]), [params]);
   const filtered = useMemo(() => {
@@ -353,13 +382,13 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         ref={searchRef}
         autoFocus={!isMobile && window.matchMedia('(hover: hover)').matches}
         className="h-full min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-fg-4"
-        aria-label={t`搜索模型`}
+        aria-label="Search models"
         role="combobox"
         aria-autocomplete="list"
         aria-expanded
         aria-controls={listId}
         aria-activedescendant={filtered.length ? optionId(active) : undefined}
-        placeholder={t`搜索模型`}
+        placeholder="Search models"
         value={query}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
@@ -374,9 +403,9 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   );
 
   const modelList = (
-    // Beside the providers the list keeps one height: a provider still loading, or one with fewer
-    // models, leaves the popover's edges where they were.
-    <div id={listId} role="listbox" aria-label={t`模型`} className={cn('min-h-0 overflow-y-auto overscroll-contain p-1', providerColumn ? 'h-64' : 'max-h-64')}>
+    // Beside the providers the list starts at the height every provider fits in, then takes up
+    // whatever the locked popover leaves it (see `lockedHeight`).
+    <div id={listId} role="listbox" aria-label="Models" style={providerColumn ? { flexBasis: providerListHeight } : undefined} className={cn('min-h-0 overflow-y-auto overscroll-contain p-1', providerColumn ? 'shrink grow' : 'max-h-64')}>
       {/* Sections come from the *rendered* rows, so a search that filters a group down to
           nothing never leaves its heading behind. */}
       {sections.map((section) => (
@@ -408,10 +437,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       ))}
       {!filtered.length && (
         <div className="px-2 py-6 text-center text-sm text-fg-3">
-          {query.trim() ? <Trans>没有匹配的模型</Trans>
-            : providerColumn && previewProvider?.loading ? <Trans>加载中…</Trans>
+          {query.trim() ? 'No matching models'
+            : providerColumn && previewProvider?.loading ? 'Loading…'
               : providerColumn && previewProvider?.issue ? <span className="break-words">{previewProvider.issue}</span>
-                : <Trans>没有匹配的模型</Trans>}
+                : 'No models available'}
         </div>
       )}
     </div>
@@ -420,7 +449,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   // The providers of the agent being started, beside their models. A click only previews one:
   // picking a model is what commits that provider, so looking around never resets a setting.
   const providerList = providerColumn ? (
-    <div role="listbox" aria-label={t`提供商`} className="flex w-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1">
+    <div role="listbox" aria-label="Providers" className="flex w-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1 [contain:size]">
       {providers!.map((provider) => (
         <button
           key={provider.id}
@@ -437,6 +466,24 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       ))}
     </div>
   ) : null;
+
+  /*
+   * The popover opens above its trigger, so any change in its height moves its top edge — and the
+   * provider row under the pointer with it. Its height is read once it opens and held until it
+   * closes: previewing another provider (which hides the parameters and the quota row) or a
+   * parameter that adds a row only resizes the model list inside it.
+   */
+  const [lockedHeight, setLockedHeight] = useState<number>();
+  useEffect(() => {
+    if (!open || !providerColumn) { setLockedHeight(undefined); return; }
+    // The portal mounts its content a render after `open`, so the content is read on the next
+    // frame, found through the list it holds; the frame painted before it is the same height.
+    const frame = requestAnimationFrame(() => {
+      const height = document.getElementById(listId)?.closest<HTMLElement>('.ui-popover-content')?.offsetHeight;
+      if (height) setLockedHeight(height);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, providerColumn, listId]);
 
   // A mobile settings dialog isolates scrolling; the portalled model list needs its own scope.
   const picker = (
@@ -456,9 +503,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       >
         <span className={cn('max-w-32 truncate sm:max-w-44', inlineParams && 'min-w-0 flex-1 max-w-none text-left sm:max-w-none')}>{label}</span>
         {tags.effort && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">{tags.effort}</span>}
-        {tags.fast && <IconZapFilled aria-label="Fast" className="size-3 shrink-0 text-warning" />}
-        {tags.max && <span className="shrink-0 rounded bg-fg px-1 text-2xs font-semibold leading-4 tracking-wide text-bg">MAX</span>}
-        {tags.context && <span className="shrink-0 text-xs text-fg-3">{tags.context}</span>}
+        {/* Parameters read as words in the effort's own style: a glyph or chip apiece was noise. */}
+        {tags.fast && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">Fast</span>}
+        {tags.max && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">MAX</span>}
+        {tags.context && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">{tags.context}</span>}
         {failure && <StatusDot tone="warning" />}
         {loading ? waited && <Spinner className="size-3 shrink-0 text-fg-4" /> : retryOnly ? <IconRotateCw aria-hidden className="size-3 shrink-0" /> : null}
       </PopoverTrigger>
@@ -472,17 +520,13 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           event.preventDefault();
           contentRef.current?.focus({ preventScroll: true });
         }}
+        style={lockedHeight ? { height: lockedHeight } : undefined}
         className={cn('flex max-h-[min(64dvh,420px)] flex-col', providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
         {failure && (
           <div role="status" className="flex shrink-0 items-center gap-2 edge-b px-3 py-1.5 text-2xs text-fg-3">
             <span className="max-h-24 min-w-0 flex-1 overflow-y-auto break-words">{failure}</span>
-            {onRetry && <Button size="xs" variant="quiet" className="-my-1 shrink-0" disabled={loading || refreshing} onClick={onRetry}><Trans>重试</Trans></Button>}
-          </div>
-        )}
-        {usage?.account && previewIsActive && (
-          <div className={cn('shrink-0 edge-b px-3 py-1.5 text-2xs tabular-nums', usage.account.limitReached ? 'text-danger' : 'text-fg-3')}>
-            {usage.account.limitReached && <Trans>已达用量上限 · </Trans>}{accountSummary(usage.account)}
+            {onRetry && <Button size="xs" variant="quiet" className="-my-1 shrink-0" disabled={loading || refreshing} onClick={onRetry}>Retry</Button>}
           </div>
         )}
         {providerColumn ? (
@@ -500,6 +544,13 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           </>
         )}
         {!inlineParams && previewIsActive && controls}
+        {/* Below the list with the parameters: both describe the provider in force and go while
+            another is previewed, and what comes and goes at the bottom moves nothing above it. */}
+        {usage?.account && previewIsActive && (
+          <div className={cn('shrink-0 edge-t px-3 py-1.5 text-2xs tabular-nums', usage.account.limitReached ? 'text-danger' : 'text-fg-3')}>
+            {usage.account.limitReached && 'Usage limit reached · '}{accountSummary(usage.account)}
+          </div>
+        )}
       </PopoverContent>
     </Popover>
   );

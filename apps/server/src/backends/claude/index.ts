@@ -201,13 +201,13 @@ const STARTING_SEND_WAIT_MS = READY_GATE_MS + 5_000;
 const STARTUP_FAILED_MS = 45_000;
 const STARTUP_FAILED_MESSAGE = 'Claude Code startup timed out; check the terminal.';
 const CLAUDE_PERMISSIONS = [
-  { id: 'default', label: 'Claude default' },
-  { id: 'manual', label: 'Ask before each permission' },
-  { id: 'acceptEdits', label: 'Accept edits automatically' },
-  { id: 'plan', label: 'Plan mode (read only)' },
-  { id: 'auto', label: 'Auto mode' },
-  { id: 'dontAsk', label: 'Deny tools that need permission' },
-  { id: 'bypassPermissions', label: 'Bypass permissions' },
+  { id: 'default', label: 'Claude default', shortLabel: 'Default' },
+  { id: 'manual', label: 'Ask before each permission', shortLabel: 'Ask' },
+  { id: 'acceptEdits', label: 'Accept edits automatically', shortLabel: 'Accept edits' },
+  { id: 'plan', label: 'Plan mode (read only)', shortLabel: 'Plan' },
+  { id: 'auto', label: 'Auto mode', shortLabel: 'Auto' },
+  { id: 'dontAsk', label: 'Deny tools that need permission', shortLabel: 'Deny' },
+  { id: 'bypassPermissions', label: 'Bypass permissions', shortLabel: 'Bypass' },
 ];
 
 const CLAUDE_MODELS: ModelInfo[] = [
@@ -217,7 +217,7 @@ const CLAUDE_MODELS: ModelInfo[] = [
 ];
 
 const CLAUDE_EFFORTS = [
-  { value: 'default', name: '默认' },
+  { value: 'default', name: 'Default' },
   { value: 'low', name: 'Low' },
   { value: 'medium', name: 'Medium' },
   { value: 'high', name: 'High' },
@@ -398,13 +398,13 @@ function claudeModels(configured?: string, catalog?: ModelInfo[], probe?: Claude
     }]), ...(claudeFastModel(model.value, probe) ? [{
       id: 'fast', name: 'Fast', category: 'model_config', type: 'select' as const,
       currentValue: model.value === currentModel ? selection.params.fast ?? 'default' : 'default',
-      description: '默认继承 Claude Code；开启会请求 Fast，实际可用性由模型、账户、组织策略和上游服务决定。Fast 可能增加费用，改动将在空闲后生效。',
-      options: [{ value: 'default', name: '默认' }, { value: 'true', name: '开启' }, { value: 'false', name: '关闭' }],
+      description: 'Default follows Claude Code. On requests Fast; whether it applies depends on the model, account, organization policy and upstream service. Fast may cost more; a change applies once the session is idle.',
+      options: [{ value: 'default', name: 'Default' }, { value: 'true', name: 'On' }, { value: 'false', name: 'Off' }],
     }] : []), ...(claudeLongContextModel(model.value, probe, model.contextWindow, model.longContext) ? [{
-      id: 'context', name: '上下文', category: 'model_config', type: 'select' as const,
+      id: 'context', name: 'Context', category: 'model_config', type: 'select' as const,
       currentValue: model.value === currentModel ? currentContext : 'default',
-      description: `请求 1M 上下文；实际可用性由账户、组织策略和上游模型决定，可能增加费用。${(!claudeNativeModel(model.value) && model.contextWindow !== undefined) || (profile && declaresLongContext(profile, model.value)) ? '默认使用服务商声明的上下文窗口' : '默认继承 Claude Code 设置'}，改动在空闲后生效。`,
-      options: [{ value: 'default', name: '默认' }, { value: '1m', name: '1M' }],
+      description: `Requests a 1M context window; whether it applies depends on the account, organization policy and upstream model, and it may cost more. ${(!claudeNativeModel(model.value) && model.contextWindow !== undefined) || (profile && declaresLongContext(profile, model.value)) ? 'Default uses the window the provider declares' : 'Default follows Claude Code'}; a change applies once the session is idle.`,
+      options: [{ value: 'default', name: 'Default' }, { value: '1m', name: '1M' }],
     }] : [])],
   }));
 }

@@ -707,7 +707,7 @@ struct SessionControls: View {
         HStack(spacing: Space.xxs) {
             if let catalog {
                 if catalog.capabilities.supportsPermissionSelection, !catalog.capabilities.permissions.isEmpty {
-                    OptionMenu(symbol: "checkmark.shield", title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: workbench.status?.approval ?? session.approval ?? "") { value in
+                    OptionMenu(title: String(localized: "审批"), options: catalog.capabilities.permissions, selection: workbench.status?.approval ?? session.approval ?? "") { value in
                         Task { await workbench.setApproval(value, for: session.id) }
                     }
                     .equatable()
@@ -798,21 +798,22 @@ struct ContextMeter: View {
     private var ratio: Double { min(1, max(0, Double(context.used) / Double(context.size))) }
     private var title: String { String(localized: "上下文用量") }
     private var breakdownTotal: Int64 { parts.reduce(0) { $0 + $1.tokens } }
-    private var tone: Color { ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.mark }
+    /// The chip's own ink until the window runs short: the ring is a glance, not an accent.
+    private var tone: Color { ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.fg2 }
 
     var body: some View {
         Button { open.toggle() } label: {
-            HStack(spacing: 5) {
-                ZStack {
-                    Circle().stroke(palette.lineStrong, lineWidth: 2)
-                    Circle().trim(from: 0, to: ratio).stroke(tone, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
-                }
-                .frame(width: 13, height: 13)
-                if !compact { Text("\(percent)%").font(.riffet(size: S(12)).monospacedDigit()) }
+            // The ring alone; the figures are in the tooltip and the popover.
+            ZStack {
+                Circle().stroke(palette.lineStrong, lineWidth: 2)
+                Circle().trim(from: 0, to: ratio).stroke(tone, style: StrokeStyle(lineWidth: 2, lineCap: .round)).rotationEffect(.degrees(-90))
             }
+            .frame(width: S(13), height: S(13))
         }
         .buttonStyle(ChipButtonStyle())
-        .help("\(title) \(Self.compactTokens(context.used)) / \(Self.compactTokens(context.size))")
+        .help(hint)
+        .accessibilityLabel(title)
+        .accessibilityValue(Text(verbatim: "\(percent)%"))
         .stylePopover(isPresented: $open, arrowEdge: .top) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
@@ -859,11 +860,10 @@ struct ContextMeter: View {
     }
 
     private var percent: Int { Int((Double(context.used) / Double(context.size) * 100).rounded()) }
+    private var hint: String { "\(title) \(percent)% · \(Self.compactTokens(context.used)) / \(Self.compactTokens(context.size))" }
 
     /// The breakdown without empty parts, as the web lists it.
     private var parts: [NativeContextBreakdown] { context.breakdown.filter { $0.tokens > 0 } }
-
-    @Environment(\.compactControls) private var compact
 
     /// The used share as one rounded bar of contiguous segments, each a lighter step of the tone.
     private var bar: some View {
@@ -893,9 +893,10 @@ struct ContextMeter: View {
     }
 }
 
-/// Approval or mode as a glyph; its choices live in the native menu.
+/// The approval mode by its short name, as the model chip beside it says the model; its choices
+/// live in the native menu. Words rather than a glyph apiece, as the agents' own CLIs say them:
+/// only running everything is marked, by colour.
 struct OptionMenu: View, Equatable {
-    let symbol: String
     let title: String
     let options: [NativeBackendOption]
     let selection: String
@@ -906,23 +907,23 @@ struct OptionMenu: View, Equatable {
     /// Compare the chip's data; each click builds a separate static AppKit menu so streaming
     /// updates cannot rebuild subtitle rows while AppKit is tracking the open menu.
     static func == (lhs: OptionMenu, rhs: OptionMenu) -> Bool {
-        lhs.symbol == rhs.symbol && lhs.title == rhs.title && lhs.options == rhs.options && lhs.selection == rhs.selection
+        lhs.title == rhs.title && lhs.options == rhs.options && lhs.selection == rhs.selection
     }
 
     var body: some View {
         let current = options.first { $0.id == selection }
-        let glyph = Self.glyph(for: selection, kind: symbol)
+        let label = current?.label ?? String(localized: "默认")
         Button { showMenu() } label: {
-            Image(icon: glyph)
-                .font(.riffet(size: S(12)))
+            Text(current?.shortLabel ?? label)
+                .lineLimit(1)
                 .foregroundStyle(Self.risky(selection) ? palette.warning : palette.fg2)
         }
         .buttonStyle(ChipButtonStyle())
         .background(MenuAnchorView(anchor: anchor))
         .fixedSize()
-        .help("\(title)：\(current?.label ?? String(localized: "默认"))")
+        .help("\(title)：\(label)")
         .accessibilityLabel(title)
-        .accessibilityValue(current?.label ?? String(localized: "默认"))
+        .accessibilityValue(label)
     }
 
     private func showMenu() {
@@ -935,10 +936,6 @@ struct OptionMenu: View, Equatable {
             let item = MenuAction.item(option.label) { selected = id }
             item.subtitle = option.description_
             item.state = id == selection ? .on : .off
-            let glyph = Self.glyph(for: id, kind: symbol)
-            item.image = Self.risky(id)
-                ? Self.tinted(glyph, palette.nsColor(\.warning))
-                : NSImage.icon(glyph, accessibilityDescription: nil)
             menu.addItem(item)
         }
         // Apply the choice only after AppKit has finished tracking and closed the menu.
@@ -946,31 +943,7 @@ struct OptionMenu: View, Equatable {
     }
 
     private static func risky(_ id: String) -> Bool {
-        ["unrestricted", "bypassPermissions", "danger-full-access"].contains(id)
-    }
-
-    /// Menus re-template SF Symbols to the label color, so a colored entry needs a pre-rendered image.
-    private static func tinted(_ name: String, _ color: NSColor) -> NSImage {
-        let config = NSImage.SymbolConfiguration(paletteColors: [color])
-        let image = NSImage.icon(name, accessibilityDescription: nil)?.withSymbolConfiguration(config) ?? NSImage()
-        image.isTemplate = false
-        return image
-    }
-
-    /// The glyph for one choice: approval modes by how much they allow, agent modes by what they do.
-    static func glyph(for id: String, kind: String) -> String {
-        // TRAE CLI's Agent mode is called `default`, which as an approval level means "ask first".
-        if kind == "wand.and.stars", id == "default" { return "wand.and.stars" }
-        switch id {
-        case "allowlist", "default", "untrusted", "on-request": return "checkmark.shield"
-        case "auto-review", "auto", "acceptEdits", "on-failure": return "shield.lefthalf.filled"
-        case "unrestricted", "bypassPermissions", "danger-full-access", "never": return "shield.slash"
-        case "agent": return "wand.and.stars"
-        case "plan": return "list.bullet.clipboard"
-        case "ask": return "questionmark.bubble"
-        case "debug": return "ladybug"
-        default: return kind
-        }
+        ["unrestricted", "bypassPermissions", "danger-full-access", "never", "high"].contains(id)
     }
 }
 

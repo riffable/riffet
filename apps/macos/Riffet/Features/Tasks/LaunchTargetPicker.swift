@@ -110,7 +110,7 @@ struct LaunchTargetPicker: View {
             }
             if capabilities.supportsPermissionSelection, !capabilities.permissions.isEmpty {
                 row(String(localized: "审批")) {
-                    NativeChipMenu(text: label(of: choice.approval, in: capabilities.permissions), symbol: "checkmark.shield") {
+                    NativeChipMenu(text: label(of: choice.approval, in: capabilities.permissions)) {
                         optionEntries(String(localized: "审批"), capabilities.permissions, selection: choice.approval) { choice.approval = $0 }
                     }
                 }

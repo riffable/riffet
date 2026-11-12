@@ -47,53 +47,9 @@ msgstr "{count, plural, one {# year} other {# years}}"
 msgid "{count, plural, other {# 年前}}"
 msgstr "{count, plural, one {# year ago} other {# years ago}}"
 
-#: src/lib/usage.ts
-msgid "{hours} 小时"
-msgstr "{hours, plural, one {# hour} other {# hours}}"
-
-#: src/lib/usage.ts
-msgid "{hours} 小时后重置"
-msgstr "Resets in {hours, plural, one {# hour} other {# hours}}"
-
-#: src/lib/usage.ts
-msgid "{left}，{reset}"
-msgstr "{left} · {reset}"
-
-#: src/lib/usage.ts
-msgid "{minutes} 分钟"
-msgstr "{minutes, plural, one {# minute} other {# minutes}}"
-
-#: src/lib/usage.ts
-msgid "{minutes} 分钟后重置"
-msgstr "Resets in {minutes, plural, one {# minute} other {# minutes}}"
-
-#: src/lib/usage.ts
-msgid "{month}月{day}日重置"
-msgstr "Resets on {month}/{day}"
-
-#: src/lib/usage.ts
-msgid "{name}剩余 {left}%"
-msgstr "{name}: {left}% left"
-
-#: src/lib/usage.ts
-msgid "{name}额度剩余 {leftPercent}%"
-msgstr "{name}: {leftPercent}% left"
-
 #: src/lib/document-title.ts
 msgid "⏸ 待确认 · {name} — {APP_TITLE}"
 msgstr "⏸ Waiting for confirmation · {name} — {APP_TITLE}"
-
-#: src/lib/usage.ts
-msgid "5 小时"
-msgstr "5 hours"
-
-#: src/lib/usage.ts
-msgid "credits {balance}"
-msgstr "Credits {balance}"
-
-#: src/lib/usage.ts
-msgid "credits 不限"
-msgstr "Unlimited credits"
 
 #: src/components/ContentPreview.tsx
 msgid "下载"
@@ -174,17 +130,9 @@ msgctxt "common-metric-sessions"
 msgid "会话"
 msgstr "Sessions"
 
-#: src/lib/usage.ts
-msgid "低优先级"
-msgstr "Low priority"
-
 #: src/lib/themes.ts
 msgid "低饱和绿色系，暖而沉稳。"
 msgstr "Muted greens, warm and calm."
-
-#: src/lib/usage.ts
-msgid "余 {remaining}/{limit}"
-msgstr "{remaining}/{limit} left"
 
 #: src/lib/theme-role-labels.ts
 msgid "侧栏"
@@ -198,10 +146,6 @@ msgstr "The saved message conflicts with the current state and can't be retried"
 #: src/lib/stats-query.ts
 msgid "全部时间"
 msgstr "All time"
-
-#: src/lib/models.ts
-msgid "关"
-msgstr "Off"
 
 #: src/components/ui/dialog.tsx
 msgid "关闭"
@@ -243,10 +187,6 @@ msgstr "Deleted line"
 msgid "删除行号"
 msgstr "Deleted line number"
 
-#: src/lib/usage.ts
-msgid "剩余 {left}%"
-msgstr "{left}% left"
-
 #: src/lib/theme-role-labels.ts
 msgid "占位文本"
 msgstr "Placeholder text"
@@ -274,10 +214,6 @@ msgstr "Danger text"
 #: src/lib/theme-role-labels.ts
 msgid "危险浅底"
 msgstr "Danger tint"
-
-#: src/lib/usage.ts
-msgid "即将重置"
-msgstr "Resets soon"
 
 #: src/lib/shares.ts
 msgid "发布此分享的插件未启用"
@@ -399,10 +335,6 @@ msgstr "Copied"
 msgid "已恢复"
 msgstr "Recovered"
 
-#: src/lib/models.ts
-msgid "开"
-msgstr "On"
-
 #: src/lib/theme-role-labels.ts
 msgid "弱化背景"
 msgstr "Muted background"
@@ -438,14 +370,6 @@ msgstr "Accent hover"
 #: src/lib/theme-role-labels.ts
 msgid "强调色文字"
 msgstr "Accent text"
-
-#: src/lib/usage.ts
-msgid "当前负载 {percent}%"
-msgstr "Current load {percent}%"
-
-#: src/lib/usage.ts
-msgid "当前负载 {percent}%，超出容量，请求会排队"
-msgstr "Current load {percent}%, over capacity; requests will queue"
 
 #: src/lib/shares.ts
 msgid "当前账号没有发布权限"
@@ -577,12 +501,6 @@ msgstr "Couldn't access the clipboard"
 msgid "无法预览此文件"
 msgstr "Can't preview this file"
 
-#. placeholder {0}: formatQuotaAmount(quota.remaining)
-#. placeholder {1}: formatQuotaAmount(quota.limit)
-#: src/lib/usage.ts
-msgid "日余 {0}/{1}"
-msgstr "Daily {0}/{1} left"
-
 #: src/lib/themes.ts
 msgid "旧书纸底与牛血红。"
 msgstr "Old-book paper and oxblood."
@@ -651,22 +569,6 @@ msgstr "Body text"
 #: src/lib/theme-role-labels.ts
 msgid "正文 / 页面"
 msgstr "Body text / Page"
-
-#: src/lib/usage.ts
-msgid "每周"
-msgstr "Weekly"
-
-#: src/lib/usage.ts
-msgid "每日"
-msgstr "Daily"
-
-#: src/lib/usage.ts
-msgid "每日额度用尽，请求仍可用"
-msgstr "Daily quota used up; requests still go through"
-
-#: src/lib/usage.ts
-msgid "每月"
-msgstr "Monthly"
 
 #: src/lib/theme-role-labels.ts
 msgid "气泡背景"
@@ -749,10 +651,6 @@ msgstr "Green"
 #: src/lib/stats-series.ts
 msgid "缓存命中率"
 msgstr "Cache hit rate"
-
-#: src/lib/models.ts
-msgid "联网搜索"
-msgstr "Web search"
 
 #: src/lib/theme-role-labels.ts
 msgid "背景"
@@ -903,18 +801,6 @@ msgstr "Project"
 #: src/lib/shares.ts
 msgid "预览连接已中断，请重试"
 msgstr "The preview connection was interrupted; try again."
-
-#: src/lib/usage.ts
-msgid "额度"
-msgstr "Quota"
-
-#: src/lib/usage.ts
-msgid "额度暂不可用"
-msgstr "Quota unavailable"
-
-#: src/lib/usage.ts
-msgid "额度用尽"
-msgstr "Quota exhausted"
 
 #: src/lib/stats-series.ts
 msgid "首字延迟 p50"
