@@ -425,8 +425,9 @@ export class TerminalService {
   }
 
   private async createTerminal(currentProject: Project, input: TerminalCreateInput & { kind: TerminalInfo['kind'] }): Promise<TerminalInfo> {
-    await this.assertTmuxVersion();
+    // A missing task directory is the more specific answer, and holds whether or not tmux is installed.
     await assertTaskWorkspaceAvailable(currentProject);
+    await this.assertTmuxVersion();
     const kind = input.kind;
     const cols = validDimension(input.cols, isAgentTerminal(kind) ? BACKGROUND_COLS : 80);
     const rows = validDimension(input.rows, isAgentTerminal(kind) ? BACKGROUND_ROWS : 24);
