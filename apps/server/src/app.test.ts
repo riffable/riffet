@@ -1906,7 +1906,8 @@ describe('Riffet MCP tools', () => {
     expect(((await rpc(token, 'tools/call', { name: 'list_devices', arguments: {} })).json() as { result: { structuredContent: { devices: unknown[] } } }).result.structuredContent.devices).toEqual([]);
     // The credential is not a device token, and a forged one is refused.
     expect((await app.inject({ method: 'GET', url: '/api/sessions', headers: { host: '127.0.0.1:4317', authorization: `Bearer ${token}` } })).statusCode).toBe(401);
-    expect((await rpc(`${token.slice(0, -1)}A`, 'tools/list')).statusCode).toBe(401);
+    // The last character of a random credential is `A` one time in sixteen: always forge a different one.
+    expect((await rpc(`${token.slice(0, -1)}${token.endsWith('A') ? 'B' : 'A'}`, 'tools/list')).statusCode).toBe(401);
 
     // Another conversation's credential cannot touch this one's wake-up.
     const scheduled = (await rpc(token, 'tools/call', { name: 'schedule_wakeup', arguments: { inMinutes: 5, note: 'check the build' } })).json() as { result: { structuredContent: { scheduled: { id: string } } } };
