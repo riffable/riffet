@@ -1,0 +1,37 @@
+version: 2
+
+# Weekly, with minor and patch updates grouped into one pull request per ecosystem. A new release
+# waits a week before it is proposed, so a compromised version is usually pulled before it lands.
+# The macOS app's Swift packages are resolved by XcodeGen, which Dependabot cannot read.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      npm:
+        update-types: [minor, patch]
+
+  - package-ecosystem: gradle
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    open-pull-requests-limit: 5
+    groups:
+      gradle:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ['*']

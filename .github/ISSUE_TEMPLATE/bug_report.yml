@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent
+      multiple: true
+      options:
+        - Cursor
+        - Claude Code
+        - Codex
+        - DeepSeek Harness
+        - Factory Droid
+        - TRAE CLI
+        - pi
+        - Not agent-specific
+  - type: dropdown
+    id: client
+    attributes:
+      label: Client
+      multiple: true
+      options:
+        - Web
+        - macOS
+        - iPhone
+        - Android
+        - Feishu / Lark
+        - riffet CLI
+  - type: input
+    id: version
+    attributes:
+      label: Riffet version
+      placeholder: riffet status
+  - type: textarea
+    id: doctor
+    attributes:
+      label: riffet doctor
+      description: Do not paste access tokens or private session content.
+      render: text
