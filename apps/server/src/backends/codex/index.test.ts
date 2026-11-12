@@ -2066,7 +2066,7 @@ describe('Codex native protocol controls', () => {
     expect(requestedPages[1]).toEqual(requestedPages[0]);
     expect(legacyReads).toBe(0);
     // The complete-read path has exactly the same retry contract, not an earlier legacy shortcut.
-    const readAll = () => (runtime as unknown as { readAllTurns(threadId: string): Promise<{ turns: RpcTurn[] } | undefined> }).readAllTurns('history-child');
+    const readAll = () => (runtime as unknown as { history: { readAllTurns(threadId: string): Promise<{ turns: RpcTurn[] } | undefined> } }).history.readAllTurns('history-child');
     resetFlush(1);
     expect((await readAll())?.turns).toEqual([committed]);
     expect(requestedPages).toHaveLength(2);
@@ -2089,7 +2089,7 @@ describe('Codex native protocol controls', () => {
     legacyEmpty = false;
     // Undefined/pending legacy results also cannot turn this exact flush error into success.
     for (const unavailable of [undefined, 'pending'] as const) {
-      const legacy = vi.spyOn(runtime as unknown as { readLegacyTurns(threadId: string): Promise<RpcTurn[] | 'pending' | undefined> }, 'readLegacyTurns').mockResolvedValue(unavailable);
+      const legacy = vi.spyOn((runtime as unknown as { history: { readLegacyTurns(threadId: string): Promise<RpcTurn[] | 'pending' | undefined> } }).history, 'readLegacyTurns').mockResolvedValue(unavailable);
       resetFlush();
       await expect(runtime.turnsPage(request)).rejects.toThrow('failed to flush live thread history');
       resetFlush();

@@ -482,3 +482,35 @@ export function codexNativeContext(tokenUsage: Record<string, unknown> | undefin
   if (!used || window === undefined) return undefined;
   return { used, size: window, breakdown: codexTokenBreakdown(last) };
 }
+
+/** A workbench event for a turn; `turnCreatedAt` is when the turn's run began, if a run is known. */
+export function buildEvent(
+  sessionId: string, turnCreatedAt: string | undefined, nativeId: string, turnId: string, runId: string | undefined,
+  type: string, data: Record<string, unknown>, raw?: unknown,
+): NativeWorkbenchEvent {
+  return {
+    sequence: 0,
+    sessionId,
+    ...(runId || turnId ? { runId: runId || turnId } : {}),
+    type,
+    data: { sessionUpdate: type, ...data },
+    ...(raw ? { raw } : {}),
+    createdAt: turnCreatedAt ?? new Date().toISOString(),
+    nativeId,
+    nativeTurnId: turnId,
+  };
+}
+
+/** The id of a plan row read from a rollout: by turn when it names one, else by its position in the log. */
+export function rolloutPlanNativeId(threadId: string, snapshot: { turnId?: string; ordinal?: number; timestamp: string }): string {
+  const turnId = snapshot.turnId;
+  return turnId
+    ? codexPlanNativeId(threadId, turnId)
+    : `${threadId}:rollout:${snapshot.ordinal ?? Date.parse(snapshot.timestamp)}:plan`;
+}
+
+/** The turn id an event belongs to: the one it states, or the one its native id carries. */
+export function nativeTurnIdOf(event: NativeWorkbenchEvent, threadId: string | undefined): string | undefined {
+  const prefix = `${threadId ?? 'unknown'}:`;
+  return event.nativeTurnId ?? (event.nativeId.startsWith(prefix) ? event.nativeId.slice(prefix.length).split(':')[0] : undefined);
+}

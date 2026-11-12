@@ -1,4 +1,6 @@
 import type { NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
+import { DatabaseSync } from 'node:sqlite';
+import type { NativeBackendHost } from '../types.js';
 import { Journal, scratchKeyOf } from '../../journal/journal.js';
 import { NativeEventLog } from '../../journal/native-log.js';
 
@@ -154,3 +156,17 @@ export class CodexJournalSpace {
   hasOlder(identity: number): boolean { return this.log?.hasOlder(identity) ?? false; }
 }
 
+
+/**
+ * Hosts without a store (unit tests, tools) get a private in-memory journal, shared by every
+ * runtime of that host, so numbering still survives a rebuilt runtime. A real host passes the
+ * store's journal and nothing here is process-local.
+ */
+const privateJournals = new WeakMap<object, Journal>();
+
+export function journalOf(host: NativeBackendHost): Journal {
+  if (host.journal) return host.journal;
+  let journal = privateJournals.get(host);
+  if (!journal) privateJournals.set(host, journal = new Journal(new DatabaseSync(':memory:')));
+  return journal;
+}

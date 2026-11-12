@@ -429,3 +429,31 @@ export function interactionFingerprint(response: NativeInteractionResponse): str
   });
   return createHash('sha256').update(payload).digest('hex');
 }
+
+/** The decision shown for a collaboration-mode change TRAE CLI asks for; `plan` is the proposed plan's text when leaving Plan mode. */
+export function modeChangeInteraction(
+  flavorId: string, key: string, params: Record<string, unknown>, supported: boolean, leavingPlan: boolean, plan: string | undefined,
+): NativeInteraction {
+  const prompts = asArray<Record<string, unknown>>(params.allowedPrompts).flatMap(entry => {
+    const prompt = str(entry.prompt);
+    return prompt ? [`${str(entry.tool) ?? 'Tool'}: ${prompt}`] : [];
+  });
+  const message = [
+    str(params.reason),
+    plan,
+    prompts.length ? `Allowed without asking:\n${prompts.map(prompt => `- ${prompt}`).join('\n')}` : undefined,
+  ].filter(Boolean).join('\n\n');
+  const interaction: NativeInteraction = {
+    id: `${flavorId}:${str(params.threadId) ?? 'thread'}:${key}`, revision: `1:${key}`, transport: 'protocol', requestId: key, request: params,
+    kind: leavingPlan ? 'plan' : 'confirmation',
+    title: supported ? leavingPlan ? 'Leave Plan mode and start working?' : 'Switch to Plan mode?' : 'Resolve mode change in the native terminal',
+    ...(message ? { message } : {}),
+    options: [],
+    actions: supported ? [
+      { id: 'approve', label: leavingPlan ? 'Start working' : 'Switch', tone: 'primary' },
+      { id: 'deny', label: leavingPlan ? 'Keep planning' : 'Stay', tone: 'danger' },
+      { id: 'cancel', label: 'Cancel' },
+    ] : [],
+  };
+  return interaction;
+}

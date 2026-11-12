@@ -1,4 +1,3 @@
-import { DatabaseSync } from 'node:sqlite';
 import { isDeepStrictEqual } from 'node:util';
 import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
@@ -11,7 +10,7 @@ import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
 import { listWorkbenchAppServers, stopWorkbenchAppServerAt } from '../shared/app-server-daemons.js';
 import { CodexDraftStream, messagePhase, type CodexDraftOptions } from './drafts.js';
 import { codexFlavor, type CodexFlavor } from './flavors.js';
-import { findCodexRollout, parseRolloutContext } from './rollout-usage.js';
+import { findCodexRollout } from './rollout-usage.js';
 import { normalizePlanEntries, parseRolloutPlan, type RolloutPlanSnapshot } from './rollout-plan.js';
 import { notificationSpan, rolloutItemSpans, type ItemSpans } from './item-spans.js';
 import { codexTrustArgs } from '../shared/cli-trust.js';
@@ -24,25 +23,33 @@ import { AppError } from '../../errors.js';
 import { sameTerminalAppearance } from '../../terminal/appearance.js';
 import { firstHumanMessage, firstMessageTitlePatch, isPromptTitle, nativeTitlePatch } from '../../session-title.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativePtyLaunchSpec, NativeControlMessage, NativeDispatchBinding, NativeInteractionReceipt } from '../types.js';
-import { Journal } from '../../journal/journal.js';
 import { turnMetaId } from '../../journal/ingest.js';
 import { activityEvent, isLiveActivity, withActivity } from '../../journal/activity.js';
 import { CodexActivities } from './activities.js';
 import type { CodexNativeCommand } from './commands.js';
 import { projectCodexItem, rowTextKey, userMessageText } from './project-item.js';
-import { CodexTurnMetering } from './metering.js';
+import { CodexTurnMetering, CodexContextMeter, noteItemMeter, noteRequestWaitStart, noteRequestWaitEnd } from './metering.js';
 import { CodexSubagents, type CodexSubagentFrame } from './subagents.js';
 import { codexInvocation, codexInvocationFingerprint, codexTerminalEndpoint } from './endpoint.js';
-import { CodexJournalSpace, type CodexIngestState } from './journal-space.js';
+import { CodexJournalSpace, journalOf, type CodexIngestState } from './journal-space.js';
 import type { CodexLiveFeed, CodexThreadReader, CodexTurnPage, CodexTurnsRequest } from './transcript-source.js';
 import type {
   TerminalEndpointState, CodexPendingInteraction, TurnRun, RpcThread, RpcTurn, RpcItem, RpcQuestion,
 } from './types.js';
+import {
+  RESIDENT_EVENTS, MAX_EVENTS, ROUTINE_TURNS, IMPORT_PAGE_TURNS, TAIL_TURNS, TURN_CACHE_THREADS,
+  THREAD_MATERIALIZATION_GRACE_MS, HISTORY_POLL_MS, HISTORY_FALLBACK_POLL_MS, ANSWER_CONFIRM_MS,
+} from './runtime-limits.js';
+import {
+  stableTurnIdsOf, insertPlanEvent, mergeResidentEvents, shownTextRowsOf, extendCachedTurns, settleTurnPages, withinMaterializationGrace,
+  planSnapshotForTurns, latestPlanTextOf, CodexHistoryReader,
+} from './history-read.js';
+import { threadStatusUpdate } from './thread-status.js';
 import { codexGoal, sameGoal } from './goal.js';
-import { requestIdString, toIso, titleCase, str, finiteToken, asRecord, asArray, canonicalJson, readFileTail } from './util.js';
+import { requestIdString, toIso, str, finiteToken, asRecord, asArray, canonicalJson } from './util.js';
 import {
   MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, executableOf, runtimeFingerprintFor, runtimeScopeFingerprintFor, matchesRuntimeFingerprint, providerEnv, credentialDirFor, collaborationModeOf,
-  probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion,
+  probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion, TUI_TOKEN_ENV, permissionParamsOf, hasNativePermissions, riffetMcpOverride,
 } from './config.js';
 import { fastServiceTier, listModels, modelBackendVariant, resolveModelSelection } from './catalog.js';
 import { extensionsOffNames } from '../../extensions/toggles.js';
@@ -51,13 +58,13 @@ import type { RuntimeAttachment, RuntimeContext } from '@riffet/plugin-api';
 import type { PluginRegistry } from '../../plugins/registry.js';
 import {
   makePendingInteraction, commandApprovalDecision, questionInteraction, answerValues, elicitationContent, interactionFingerprint, asyncQuestionsOf, asyncQuestionInteraction,
-  asyncAnswerText, asyncQuestionReply, isAsyncQuestionInteraction, parseAsyncQuestionReplies, type CodexAsyncQuestion,
+  asyncAnswerText, modeChangeInteraction, asyncQuestionReply, isAsyncQuestionInteraction, parseAsyncQuestionReplies, type CodexAsyncQuestion,
 } from './interactions.js';
 import { CodexQuestionHistory, isCodexQuestionTool } from './question-history.js';
 import {
-  isCodexToolItem, projectStartedTool, projectCompletedTool, codexPlanNativeId, timestampOf, turnIdAt,
-  turnStatus, isFinalTurnStatus, userItemText, codexNativeContext,
-  isProvisionalItemId, type ItemSpan,
+  isCodexToolItem, projectStartedTool, projectCompletedTool, codexPlanNativeId,
+  turnStatus, isFinalTurnStatus, userItemText,
+  isProvisionalItemId, buildEvent, rolloutPlanNativeId, nativeTurnIdOf, type ItemSpan,
 } from './transcript.js';
 import {
   isMissingTerminalError, isUnmaterializedThreadError, isUnavailableSocket, isActiveWriterError, isTurnsListUnsupportedError,
@@ -65,72 +72,6 @@ import {
 } from './errors.js';
 import { MESSAGE_ID_PREFIX, STEER_ELEMENT_PREFIX, commandIdOfMessageId, commandIdOfSteerPlaceholder, isTaggedMessageId } from './message-tag.js';
 
-/** Env var a TUI reads its loopback app-server token from; the token never appears in argv. */
-const TUI_TOKEN_ENV = 'RIFFET_APP_SERVER_TOKEN';
-/**
- * The workbench's own tools act only on their conversation; a per-call approval would hold a
- * wake-up or notice for a reader who may be away. `approve` is the CLI's own per-server setting.
- */
-/**
- * How the Riffet server is offered (verified on codex-cli 0.160.0):
- * - `default_tools_approval_mode: approve`: the workbench's own tools act only on their
- *   conversation; a per-call approval would hold a wake-up or notice for a reader who may be away.
- * - `omit_tools_from: [deferred]`: a model whose catalog claims tool search gets MCP tools only
- *   through `tool_search`, which a model behind a compatible gateway may never be offered; the
- *   agent then sees none of them. Five small tools are cheaper listed directly.
- * - `startup_readiness: catalog`: the first turn, sent right after `thread/start`, waits for the
- *   shim's `tools/list` instead of being built without it.
- * - `tool_timeout_sec: 330`: a device call waits up to 300 s for the device (docs/DEVICES.md §3);
- *   the CLI's own 60 s default would abandon it first.
- */
-const RIFFET_MCP_EXPOSURE = { default_tools_approval_mode: 'approve', omit_tools_from: ['deferred'], startup_readiness: 'catalog', tool_timeout_sec: 330 } as const;
-const CONTEXT_KIND_LABELS: Record<string, string> = {
-  systemPrompt: 'System prompt', toolDefinitions: 'Tools', developerMessages: 'Instructions',
-  userMessages: 'Your messages', assistantMessages: 'Replies', toolResponses: 'Tool results', otherMessages: 'Other',
-};
-/** Events a runtime keeps in memory; everything older is read from the journal when a page asks for it. */
-const RESIDENT_EVENTS = 1_000;
-const MAX_EVENTS = RESIDENT_EVENTS;
-/** Turns a routine read asks for once the journal holds the thread; the rest of the history is already logged. */
-const ROUTINE_TURNS = 3;
-/** Settled turns fetched and committed per step of a background import. */
-const IMPORT_PAGE_TURNS = 3;
-/**
- * Turns asked for by a routine history poll. Settled turns older than these are taken from the last
- * complete read of the same thread over the same connection; a reconnect, or a page that does not
- * reach back into that read, reads the whole thread again.
- */
-const TAIL_TURNS = 20;
-const TURN_CACHE_THREADS = 8;
-/**
- * Bytes of a rollout's tail read for the context meter; one `token_count` line is a few hundred. A
- * megabyte is chosen so the read survives the usual tail of a session — a large tool result or a
- * long answer after the last usage line — since this happens once per thread.
- */
-const CONTEXT_TAIL_BYTES = 1024 * 1024;
-/** How often a thread whose provider states no window may have its rollout re-read. */
-const CONTEXT_WINDOW_RETRY_MS = 15_000;
-const THREAD_MATERIALIZATION_GRACE_MS = 60_000;
-/** History read cadence: while notifications cannot be trusted, and as a backstop while they can. */
-const HISTORY_POLL_MS = 1_500;
-const HISTORY_FALLBACK_POLL_MS = 10_000;
-/** How long an answer waits for the provider to report its request settled before it is left unconfirmed. */
-const ANSWER_CONFIRM_MS = 4_000;
-/** The counters of a `thread/tokenUsage/updated` breakdown. */
-const USAGE_FIELDS = ['inputTokens', 'cachedInputTokens', 'cacheCreationInputTokens', 'outputTokens', 'reasoningOutputTokens', 'totalTokens'];
-/**
- * Hosts without a store (unit tests, tools) get a private in-memory journal, shared by every
- * runtime of that host, so numbering still survives a rebuilt runtime. A real host passes the
- * store's journal and nothing here is process-local.
- */
-const privateJournals = new WeakMap<object, Journal>();
-
-function journalOf(host: NativeBackendHost): Journal {
-  if (host.journal) return host.journal;
-  let journal = privateJournals.get(host);
-  if (!journal) privateJournals.set(host, journal = new Journal(new DatabaseSync(':memory:')));
-  return journal;
-}
 
 /** The plugins' runtime hooks, as `PluginRegistry` serves them. */
 export type NativeRuntimeHooks = Pick<PluginRegistry, 'runtimeHooks'>;
@@ -208,8 +149,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private stableTurnIds: ReadonlySet<string> = new Set();
   private transcriptLoaded = false;
   private historySnapshotReady = false;
-  /** Only a confirmed new thread may start empty; the first input starts its bounded disk catch-up. */
-  private materialization: { threadId: string; startedAt?: number } | undefined;
   /** The name the thread itself last reported, or was last given. */
   private threadName: string | undefined;
   /** The name a `thread/name/set` in flight is giving the thread. */
@@ -254,26 +193,14 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private feed: CodexLiveFeed | undefined;
   private refreshTask: Promise<NativeWorkbenchEvent[] | undefined> | undefined;
   private refreshQueued: Promise<NativeWorkbenchEvent[] | undefined> | undefined;
-  /** Each turn's running totals from just before its first model request. */
-  private readonly usageBaselines = new Map<string, Record<string, number>>();
-  /**
-   * Context-window occupancy the meter draws, or undefined while the provider has reported none.
-   * `contextWindow` is the model's window, from a live frame or the rollout; `contextWindowLookupAt`
-   * throttles the rollout lookup a provider that never states a window would otherwise repeat.
-   */
-  private context: NativeContext | undefined;
-  /** The provider's last per-category split of the window, kept across usage frames that carry none. */
-  private contextBreakdown: NativeContext['breakdown'] | undefined;
-  private contextWindow: number | undefined;
-  private contextWindowLookupAt = 0;
+  private readonly usage: CodexContextMeter;
   private rolloutPlanCache?: { generation: string; snapshot?: RolloutPlanSnapshot };
   /** When the conversation thread's items happened, as its rollout last read says (`item-spans.ts`). */
   private itemSpans?: { threadId: string; spans: ItemSpans };
   /** The last complete turn list per thread, with the connection it was read over (see `TAIL_TURNS`). */
   /** Marker of each turn as of the last read, for telling which settled turns cannot have changed. */
   private turnMarkersSeen = new Map<string, string>();
-  private readonly turnCache = new Map<string, { transport: CodexAppServerClient; turns: RpcTurn[] }>();
-  private readonly childHistoryPendingSince = new Map<string, number>();
+  private readonly history: CodexHistoryReader;
   /** The rollout the provider itself reported for this thread (`thread.path`), when it did. */
   private rolloutPath: string | undefined;
   /** The model the thread last reported; Plan mode settings must name one. */
@@ -347,12 +274,29 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.profileConfig = this.profile.config;
     this.profileFingerprint = runtimeFingerprintFor(this.project, this.profile, this.flavor);
     this.scopeFingerprint = runtimeScopeFingerprintFor(this.project, this.profile, this.flavor);
+    this.history = new CodexHistoryReader({
+      requireTransport: () => this.requireTransport(),
+      label: () => this.label,
+      subagents: () => this.subagents,
+      dispatchCommandId: () => this.dispatchCommandId,
+      foregroundEndedTurnId: () => this.foregroundEndedTurnId,
+      routineWindow: () => this.space.ready || (this.journalRead && this.space.initialized),
+    });
     this.subagents = new CodexSubagents({
-      readTurns: threadId => this.readTurns(threadId),
-      readThread: (threadId, includeTurns) => this.readThread(threadId, includeTurns),
+      readTurns: threadId => this.history.readTurns(threadId),
+      readThread: (threadId, includeTurns) => this.history.readThread(threadId, includeTurns),
       projectChildItem: (item, turn, childThreadId) => this.projectChildItem(item, turn, childThreadId),
       turnCompleted: (threadId, turn) => this.completeTurnWaiters(turn.id, threadId),
       emit: message => this.emit(message),
+    });
+    this.usage = new CodexContextMeter({
+      contextUsage: this.flavor.contextUsage,
+      emit: message => { for (const listener of this.listeners) listener(message); },
+      threadId: () => this.nativeSessionId,
+      transport: () => this.transport,
+      bindingScopeMismatch: () => this.bindingScopeMismatch,
+      rolloutFile: threadId => this.rolloutFile(threadId),
+      contextUsed: used => this.activities.noteContext(used),
     });
     this.metering = new CodexTurnMetering({
       sessionId: session.id,
@@ -369,7 +313,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       threadId: () => this.nativeSessionId,
       transport: () => this.transport?.isOnline ? this.transport : undefined,
       journal: () => journalOf(this.host),
-      contextUsed: () => this.context?.used,
+      contextUsed: () => this.usage.context?.used,
       rolloutFile: threadId => this.rolloutFile(threadId),
       write: (activity, turnId) => this.writeActivity(activity, turnId),
       // The journal's reader follows background terminals too, whether or not a v2 client listens.
@@ -455,8 +399,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private hasNativePermissions(settings: Record<string, unknown> | undefined): boolean {
-    return Boolean(settings && (asRecord(settings.activePermissionProfile) || asRecord(settings.permissionProfile)
-      || asRecord(settings.sandboxPolicy) || asRecord(settings.sandbox)));
+    return hasNativePermissions(settings);
   }
 
   private adoptMode(mode: string | undefined): void {
@@ -616,7 +559,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend could not be verified; it was left running.', 409);
     }
     const idle = async () => {
-      const thread = await this.readThread(threadId, false);
+      const thread = await this.history.readThread(threadId, false);
       return thread?.id === threadId && thread.status?.type !== 'active' && this.canSwitchProfile;
     };
     if (!await idle()) return false;
@@ -715,7 +658,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
           // Old rows have only a launch hash. A verified terminal proves their cwd/thread; a
           // headless owner must prove both through the protocol before relaxing the old gate.
           if (!binding.scopeFingerprint && !terminalAddress) {
-            const thread = threadId ? await this.readThread(threadId, false).catch(() => undefined) : undefined;
+            const thread = threadId ? await this.history.readThread(threadId, false).catch(() => undefined) : undefined;
             const [storedCwd, projectCwd] = await Promise.all([
               thread?.cwd ? realpath(thread.cwd).catch(() => undefined) : undefined,
               realpath(this.project.cwd).catch(() => undefined),
@@ -900,7 +843,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       let permissionObservation = this.permissionObservation;
       const modeObservation = this.modeObservation;
       if (existingId) {
-        const observed = await this.readThread(existingId, false).catch(() => undefined);
+        const observed = await this.history.readThread(existingId, false).catch(() => undefined);
         const active = this.activeTurnId !== undefined || this.status.phase === 'busy' || observed?.status?.type === 'active';
         try {
           permissionObservation = this.permissionObservation;
@@ -948,7 +891,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.nativeSessionId = thread.id;
       // A newly created thread has no older transcript to seed before accepting live events.
       if (!existingId) {
-        this.materialization = { threadId: thread.id };
+        this.history.startMaterialization(thread.id);
         this.space.adoptThread(thread.id);
         if (!this.space.initialized) { this.space.bind('real'); this.space.writeState({ phase: 'ready', turns: 0 }); this.space.markInitialized(); }
       }
@@ -956,10 +899,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (this.permissionObservation === permissionObservation) this.adoptApproval(settings);
       if (this.modeObservation === modeObservation) this.adoptSettingsMode(settings);
       // A different thread is a different window: the old numbers must not be repainted under it.
-      this.context = undefined;
-      this.contextBreakdown = undefined;
-      this.contextWindow = undefined;
-      this.contextWindowLookupAt = 0;
+      this.usage.reset();
       this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
       this.host.setNativeSessionId(this.session.id, thread.id);
       void this.readGoal(thread.id);
@@ -1025,7 +965,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
    */
   private riffetMcpConfig(): Record<string, unknown> {
     const server = this.host.riffetMcp?.server(this.session.id);
-    return server ? { [`mcp_servers.${server.name}`]: { command: server.command, args: server.args, ...RIFFET_MCP_EXPOSURE } } : {};
+    return riffetMcpOverride(server);
   }
 
   /**
@@ -1562,13 +1502,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
       } catch (error) {
         // A definite rejection leaves a new thread empty. A lost acknowledgement may already
         // have started its first turn; native notifications independently supply that evidence.
-        if (!(error as { rpcError?: boolean })?.rpcError) this.beginMaterialization();
+        if (!(error as { rpcError?: boolean })?.rpcError) this.history.beginMaterialization();
         // A message the provider never took must not claim a TUI message with the same text later.
         const index = steerClaim ? this.pendingSteers.indexOf(steerClaim) : -1;
         if (index >= 0) this.pendingSteers.splice(index, 1);
         throw error;
       }
-      this.beginMaterialization();
+      this.history.beginMaterialization();
       // Codex acknowledges with the turn; TRAE CLI's steer answers with just its id.
       const turnId = response.turn?.id ?? str(response.turnId);
       if (!turnId) throw new Error(`${this.label} app-server did not acknowledge the submitted turn`);
@@ -1663,7 +1603,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
           if (this.nativeCommand === pending && pending.candidate) this.confirmNativeCommand(pending.candidate, pending);
         })).catch(error => { this.rejectNativeCommand(pending, error); throw error; });
       await Promise.race([response, cancelled]);
-      this.beginMaterialization();
+      this.history.beginMaterialization();
       // The empty compact ACK means accepted, not completed. A missing start remains uncertain
       // behind the dispatch fence; it must never fall back to a prompt or retry the operation.
       const turnId = pending.turnId ?? await Promise.race([observed, new Promise<never>((_resolve, reject) => {
@@ -1871,11 +1811,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // An unchanged TRAE mode inherits the actual native profile, including additional roots and
     // custom restrictions. Only an explicit switch may replace it with a bare built-in preset.
     if (this.flavor.id === 'traex' && !force && this.nativeApproval === permission.id && !this.host.getSession(this.session.id).configPending) return {};
-    return {
-      approvalPolicy: permission.approvalPolicy,
-      ...(permission.permissions ? { permissions: permission.permissions, approvalsReviewer: permission.approvalsReviewer }
-        : { [sandboxField]: sandboxField === 'sandbox' ? permission.sandbox : this.sandboxPolicy(permission.sandbox) }),
-    };
+    return permissionParamsOf(permission, sandboxField);
   }
 
   async applyThreadConfig(config: { model?: string; approval?: string; mode?: string }, updateApproval = true): Promise<{ approval?: string; mode?: string }> {
@@ -1889,7 +1825,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // snapshot; the native settings update below keeps an already-attached thread in step rather
       // than correcting a thread that this call has just created with stale settings.
       if (this.nativeSessionId && this.flavor.id !== 'traex') {
-        const observed = await this.readThread(this.nativeSessionId, false).catch(() => undefined);
+        const observed = await this.history.readThread(this.nativeSessionId, false).catch(() => undefined);
         if (this.activeTurnId || this.status.phase === 'busy' || observed?.status?.type === 'active') {
           this.applyThreadStatus(observed?.status);
           return {};
@@ -1976,7 +1912,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.listeners.add(listener);
     // Seed child activity before the main phase: an idle parent can still have working children.
     for (const watch of this.subagents.values()) if (watch.running) listener({ type: 'subagent', toolCallId: watch.toolCallId, agentId: watch.childId, running: true });
-    if (this.context) listener({ type: 'context', context: this.context });
+    if (this.usage.context) listener({ type: 'context', context: this.usage.context });
     listener({ type: 'status', status: this.status });
     if (this.interaction) listener({ type: 'status', status: { ...this.status, phase: 'attention', interaction: this.interaction } });
     if ((!this.historyPoll || this.pollDormant) && this.nativeSessionId && this.transport?.isOnline) this.scheduleHistoryPoll(true);
@@ -2051,8 +1987,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
     void this.subagents.refresh();
     // A resumed thread reports nothing until its next turn, so the rollout is consulted once when
     // nothing has been reported yet; after that the provider's own frames lead.
-    await this.seedContextWindow().catch(() => undefined);
-    if (!this.contextBreakdown) await this.refreshContextBreakdown().catch(() => undefined);
+    await this.usage.seedContextWindow().catch(() => undefined);
+    if (!this.usage.contextBreakdown) await this.usage.refreshContextBreakdown().catch(() => undefined);
   }
 
   async respond(response: NativeInteractionResponse): Promise<NativeInteractionResult> {
@@ -2376,99 +2312,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
   /** The highest number handed out so far: a steer's baseline for "events after the input". */
   private get headSequence(): number { return this.space.peekNext() - 1; }
 
-  /**
-   * One turn's usage in the shape of Codex's own breakdown. `last` is a single model request and
-   * `total` the thread's running sum, so a turn of several requests is how far `total` has moved
-   * since just before its first request.
-   */
-  private turnUsage(turnId: string | undefined, tokenUsage: Record<string, unknown> | undefined): Record<string, unknown> | undefined {    const last = asRecord(tokenUsage?.last);
-    const total = asRecord(tokenUsage?.total);
-    if (!turnId || !total) return last;
-    const count = (record: Record<string, unknown> | undefined, field: string) => typeof record?.[field] === 'number' && Number.isFinite(record[field]) ? record[field] as number : 0;
-    let baseline = this.usageBaselines.get(turnId);
-    if (!baseline) {
-      baseline = Object.fromEntries(USAGE_FIELDS.map(field => [field, count(total, field) - count(last, field)]));
-      this.usageBaselines.set(turnId, baseline);
-      if (this.usageBaselines.size > 64) this.usageBaselines.delete(this.usageBaselines.keys().next().value!);
-    }
-    const turn: Record<string, unknown> = { ...total };
-    for (const field of USAGE_FIELDS) if (typeof total[field] === 'number') turn[field] = count(total, field) - baseline[field]!;
-    return turn;
-  }
-
-  /**
-   * Remember the meter's numbers and tell whoever is watching, but only when they moved: the
-   * provider sends this frame per model request, and a repaint per request on an unchanged window
-   * is churn the browser does not need.
-   */
-  private noteContext(next: NativeContext | undefined): void {
-    if (!next) return;
-    const merged = this.contextBreakdown?.length
-      ? { ...next, breakdown: this.contextBreakdown }
-      : next;
-    const current = this.context;
-    if (current && current.used === merged.used && current.size === merged.size
-      && JSON.stringify(current.breakdown) === JSON.stringify(merged.breakdown)) return;
-    this.context = merged;
-    this.activities.noteContext(merged.used);
-    for (const listener of this.listeners) listener({ type: 'context', context: merged });
-  }
-
-  /**
-   * Learn the model's window from the thread's rollout, once, and keep it.
-   *
-   * The app-server's `ThreadTokenUsage` is `{ total, last, modelContextWindow }`, but
-   * `modelContextWindow` is optional and is null for a provider whose model catalog does not say —
-   * and a resumed thread reports no usage at all until its next turn. The rollout has both the
-   * window and the last request's occupancy, so it is read for whichever of the two the live frames
-   * cannot supply. Only the tail is read, and the lookup is throttled: a provider that never states
-   * a window must not turn every snapshot into a megabyte of file reads.
-   */
-  private async seedContextWindow(): Promise<void> {
-    if (this.contextWindow !== undefined || this.bindingScopeMismatch) return;
-    const now = Date.now();
-    if (now - this.contextWindowLookupAt < CONTEXT_WINDOW_RETRY_MS) return;
-    this.contextWindowLookupAt = now;
-    const threadId = this.nativeSessionId;
-    if (!threadId) return;
-    try {
-      const file = await this.rolloutFile(threadId);
-      if (!file) return;
-      const parsed = parseRolloutContext(await readFileTail(file, CONTEXT_TAIL_BYTES));
-      if (!parsed) return;
-      this.contextWindow = parsed.size;
-      this.noteContext({ used: parsed.used, size: parsed.size, breakdown: parsed.breakdown ?? [] });
-    } catch {
-      // A rollout that vanished, shrank, or is half-written is not an error: the meter stays absent
-      // (the browser already renders a composer without it) and a later turn tries again.
-    }
-  }
-
-  /**
-   * The meter's numbers for one `thread/tokenUsage/updated` frame.
-   *
-   * The frame leads: it is per model request, so its `last` is the freshest occupancy there is. The
-   * window is taken from the frame when the provider states one and from the rollout otherwise, and
-   * the rollout is consulted exactly when the frame could not supply it.
-   */
-  private async applyUsageFrame(tokenUsage: Record<string, unknown> | undefined, params: Record<string, unknown>): Promise<void> {
-    const immediate = codexNativeContext(tokenUsage, params, this.contextWindow);
-    if (immediate) {
-      this.noteContext(immediate);
-      return;
-    }
-    await this.seedContextWindow();
-    const merged = codexNativeContext(tokenUsage, params, this.contextWindow);
-    if (merged) this.noteContext(merged);
-  }
-
   private requireTransport(): CodexAppServerClient {
     if (!this.transport?.isOnline) throw new Error(`${this.label} app-server is offline`);
     return this.transport;
   }
 
   private async discardFailedTransport(): Promise<void> {
-    this.beginMaterialization();
+    this.history.beginMaterialization();
     const transport = this.transport;
     this.transport = undefined;
     this.attached = false;
@@ -2478,180 +2328,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
     await this.releaseAttachment(this.transportBorrowed);
   }
 
-  private async readThread(threadId: string, includeTurns: boolean, materialization = this.materialization): Promise<RpcThread | undefined> {
-    try {
-      const response = await this.requireTransport().request<{ thread: RpcThread }>('thread/read', { threadId, includeTurns });
-      return response.thread;
-    } catch (error) {
-      if (this.isHistoryPending(threadId, error, materialization) || isTurnsListUnsupportedError(error)) return undefined;
-      throw error;
-    }
-  }
-
-  private async readLegacyTurns(threadId: string): Promise<RpcTurn[] | 'pending' | undefined> {
-    const materialization = this.materialization;
-    try {
-      const response = await this.requireTransport().request<{ thread?: RpcThread }>('thread/read', { threadId, includeTurns: true });
-      if (!response.thread) throw new Error(`${this.label} app-server thread/read did not return a thread while loading legacy history.`);
-      if (!Array.isArray(response.thread.turns)) throw new Error(`${this.label} app-server thread/read returned invalid legacy turns.`);
-      this.noteMaterialized(threadId, response.thread.turns);
-      return response.thread.turns;
-    } catch (error) {
-      // Before its first user message a new thread answers every read after the first with "list_turns
-      // is not supported yet" (codex-cli 0.166), the same pending state under the name of an old server.
-      if (this.isHistoryPending(threadId, error, materialization) || (isTurnsListUnsupportedError(error) && this.isMaterializing(threadId, materialization))) {
-        return this.isEmptyNewThread(threadId) ? [] : 'pending';
-      }
-      if (isTurnsListUnsupportedError(error)) return undefined;
-      throw error;
-    }
-  }
-
-  private isHistoryPending(threadId: string, error: unknown, materialization: CodexSessionRuntime['materialization']): boolean {
-    if (!isUnmaterializedThreadError(error, threadId) && !isEmptyThreadRolloutError(error, threadId)) return false;
-    // Classify against this request's starting evidence: a concurrent successful page may
-    // have cleared the runtime's field before an older empty-rollout reply arrives.
-    if (materialization?.threadId === threadId) return this.isMaterializing(threadId, materialization);
-    const watch = [...this.subagents.values()].find(candidate => candidate.childId === threadId);
-    if (!watch || watch.loaded || !watch.running) return false;
-    const message = error instanceof Error ? error.message : String(error);
-    if (!message.includes(threadId)) return false;
-    const since = this.childHistoryPendingSince.get(threadId) ?? Date.now();
-    this.childHistoryPendingSince.set(threadId, since);
-    return Date.now() - since < THREAD_MATERIALIZATION_GRACE_MS;
-  }
-
-  /** This runtime started the thread and has read no turn of it yet, within the grace after its first message. */
-  private isMaterializing(threadId: string, materialization: CodexSessionRuntime['materialization']): boolean {
-    if (materialization?.threadId !== threadId) return false;
-    return materialization.startedAt === undefined || Date.now() - materialization.startedAt < THREAD_MATERIALIZATION_GRACE_MS;
-  }
-
-  private isChildFlushUnavailable(threadId: string, error: unknown): boolean {
-    if (!this.subagents.owns(threadId)) return false;
-    const message = error instanceof Error ? error.message : String(error);
-    return message.match(/^failed to flush live thread history before paginated read: thread (.+) not found$/i)?.[1] === threadId;
-  }
-
-  private isEmptyNewThread(threadId: string): boolean {
-    return this.materialization?.threadId === threadId && this.materialization.startedAt === undefined && !this.dispatchCommandId;
-  }
-
   hasEmptyHistoryBaseline(threadId: string): boolean {
-    return this.materialization?.threadId === threadId;
-  }
-
-  private beginMaterialization(): void {
-    if (this.materialization && this.materialization.startedAt === undefined) this.materialization.startedAt = Date.now();
-  }
-
-  private noteMaterialized(threadId: string, turns: readonly RpcTurn[]): void {
-    if (turns.length && this.materialization?.threadId === threadId) this.materialization = undefined;
-  }
-
-  /**
-   * Every turn of one thread, newest page first reversed into conversational order.
-   *
-   * Both the parent conversation and each subagent thread are read this way, so a child is exactly
-   * as cheap to follow as the parent. `undefined` means the thread cannot be read yet: still being
-   * materialized, or an app-server too old for `thread/turns/list` and for its legacy fallback.
-   */
-  private async readTurns(threadId: string): Promise<RpcTurn[] | undefined> {
-    const transport = this.requireTransport();
-    const cached = this.turnCache.get(threadId);
-    if (cached?.transport === transport) {
-      // Any failure here is left to the complete read below, which knows how to report it.
-      const page = await transport.request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', {
-        threadId, limit: TAIL_TURNS, sortDirection: 'desc', itemsView: 'full',
-      }).catch(() => undefined);
-      const tail = Array.isArray(page?.data) ? [...page.data].reverse() : undefined;
-      if (page && tail) {
-        if (!page.nextCursor) return this.cacheTurns(threadId, transport, tail);
-        // The page must overlap the cached list, and everything it leaves to the cache must be final:
-        // a turn still running there could have changed since it was read.
-        const joint = tail.length ? cached.turns.findIndex(turn => turn.id === tail[0]!.id) : -1;
-        if (joint >= 0 && cached.turns.slice(0, joint).every(turn => isFinalTurnStatus(turn.status))) {
-          return this.cacheTurns(threadId, transport, [...cached.turns.slice(0, joint), ...tail]);
-        }
-      }
-    }
-    const read = await this.readAllTurns(threadId);
-    // The legacy fallback has no paging to take a tail from, so its result is never reused.
-    if (read && read !== 'pending' && !read.legacy) this.cacheTurns(threadId, transport, read.turns);
-    else this.turnCache.delete(threadId);
-    return read && read !== 'pending' ? read.turns : undefined;
-  }
-
-  private cacheTurns(threadId: string, transport: CodexAppServerClient, turns: RpcTurn[]): RpcTurn[] {
-    this.turnCache.delete(threadId);
-    this.turnCache.set(threadId, { transport, turns });
-    while (this.turnCache.size > TURN_CACHE_THREADS) this.turnCache.delete(this.turnCache.keys().next().value!);
-    return turns;
-  }
-
-  private async readAllTurns(threadId: string, maxTurns?: number, throughTurnId?: string): Promise<{ turns: RpcTurn[]; legacy: boolean; complete: boolean } | 'pending' | undefined> {
-    const turns: RpcTurn[] = [];
-    let legacyRead = false;
-    let complete = false;
-    let cursor: string | undefined;
-    for (let pageCount = 0; pageCount < 100; pageCount += 1) {
-      const materialization = this.materialization;
-      let response: { data?: RpcTurn[]; nextCursor?: string | null };
-      const params = {
-        threadId,
-        ...(cursor ? { cursor } : {}),
-        limit: maxTurns ? Math.min(100, maxTurns - turns.length) : 100,
-        sortDirection: 'desc',
-        itemsView: 'full',
-      };
-      try {
-        response = await this.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', params);
-      } catch (error) {
-        if (pageCount === 0 && this.isHistoryPending(threadId, error, materialization)) {
-          return this.isEmptyNewThread(threadId) ? { turns: [], legacy: false, complete: true } : 'pending';
-        }
-        if (this.isChildFlushUnavailable(threadId, error)) {
-          try {
-            response = await this.requireTransport().request<{ data?: RpcTurn[]; nextCursor?: string | null }>('thread/turns/list', params);
-          } catch (retryError) {
-            // Retry the identical page even mid-read, but never translate an opaque cursor or
-            // accept absent/empty legacy history as recovery of an unavailable live owner.
-            if (!this.isChildFlushUnavailable(threadId, retryError) || cursor) throw retryError;
-            const legacyTurns = await this.readLegacyTurns(threadId);
-            if (!legacyTurns || legacyTurns === 'pending' || !legacyTurns.length) throw retryError;
-            this.childHistoryPendingSince.delete(threadId);
-            turns.push(...legacyTurns);
-            legacyRead = true;
-            break;
-          }
-        } else if (pageCount === 0 && isTurnsListUnsupportedError(error)) {
-          const legacyTurns = await this.readLegacyTurns(threadId);
-          if (!legacyTurns || legacyTurns === 'pending') return legacyTurns;
-          this.childHistoryPendingSince.delete(threadId);
-          turns.push(...legacyTurns);
-          legacyRead = true;
-          break;
-        } else throw error;
-      }
-      if (!Array.isArray(response.data)) throw new Error(`${this.label} app-server thread/turns/list returned invalid history data.`);
-      this.noteMaterialized(threadId, response.data);
-      this.childHistoryPendingSince.delete(threadId);
-      turns.push(...response.data);
-      if (!response.nextCursor) { complete = true; break; }
-      // Recovery needs an ordered overlap with the observed end, not every old turn. Stop as
-      // soon as that boundary is in the page; unrelated history stays outside routine polling.
-      if (throughTurnId && response.data.some(turn => turn.id === throughTurnId)) break;
-      // A bounded read stops once it has the newest `maxTurns`; the rest of the thread stays unread.
-      if (maxTurns && turns.length >= maxTurns) break;
-      if (response.nextCursor === cursor || pageCount === 99) {
-        throw new Error(`${this.label} app-server history paging did not reach the beginning of the thread.`);
-      }
-      cursor = response.nextCursor;
-    }
-    if (!legacyRead) turns.reverse();
-    // The legacy read has no paging: it already holds the whole thread, so only its tail is worked on.
-    if (legacyRead && maxTurns && turns.length > maxTurns) return { turns: turns.slice(-maxTurns), legacy: true, complete: false };
-    return { turns, legacy: legacyRead, complete: complete || legacyRead };
+    return this.history.materialization?.threadId === threadId;
   }
 
   private rolloutSpan(threadId: string, item: RpcItem): ItemSpan | undefined {
@@ -2676,11 +2354,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.rolloutPlanCache = { generation, snapshot };
       }
       if (!snapshot) return undefined;
-      const matchingTurn = snapshot.turnId && turns.some(turn => turn.id === snapshot.turnId)
-        ? snapshot.turnId
-        : turnIdAt(timestampOf(snapshot.timestamp), turns);
-      const { turnId: _loggedTurnId, ...plan } = snapshot;
-      return matchingTurn ? { ...plan, turnId: matchingTurn } : plan;
+      return planSnapshotForTurns(snapshot, turns);
     } catch {
       // Rollout history is an optional recovery source; unreadable or partial logs must not hide
       // the app-server transcript.
@@ -2706,7 +2380,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private async readEvents(): Promise<NativeWorkbenchEvent[] | undefined> {
-    const materializationBeforeRead = this.materialization;
+    const materializationBeforeRead = this.history.materialization;
     const statusBeforeRead = this.status;
     const activeTurnBeforeRead = this.activeTurnId;
     const foregroundEndedBeforeRead = this.foregroundEndedTurnId;
@@ -2719,7 +2393,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // Keep that snapshot ready until this read either replaces it or actually fails.
     const eventsBeforeRead = new Map(this.events.map(event => [event.nativeId, event]));
     const draftsBeforeRead = this.drafts.texts();
-    const window = await this.readThreadWindow(threadId);
+    const window = await this.history.readThreadWindow(threadId);
     // Before its first user message a new thread has no native history yet. Keep that normal
     // preparation distinct from a reader that cannot read this thread at all.
     if (!window || window === 'pending') {
@@ -2742,8 +2416,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     // A settled turn whose marker has not moved since the last published read cannot have changed.
     const markersNow = turnMarkers(turns);
-    const stableTurns = new Set<string>();
-    for (const turn of turns) if (isFinalTurnStatus(turn.status) && this.turnMarkersSeen.get(turn.id) === markersNow.get(turn.id)) stableTurns.add(turn.id);
+    const stableTurns = stableTurnIdsOf(turns, markersNow, this.turnMarkersSeen);
     this.stableTurnIds = stableTurns;
     const rolloutPlan = await this.readRolloutPlanSnapshot(threadId, turns);
     await this.loadItemSpans(threadId);
@@ -2796,19 +2469,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // the remaining items after the loop groups all questions ahead of all answers on recovery.
       const projected = this.projectTurnItems(turn, { shown, provisionalRows, superseded });
       const planEvent = plansByTurn.get(turn.id);
-      if (planEvent) {
-        // Restore relative order before the first numbering. An existing sequence always wins on
-        // later reads: moving published events would invalidate history cursors and streamed rows.
-        const callId = rolloutPlan?.turnId === turn.id && planEvent.createdAt === rolloutPlan.timestamp ? rolloutPlan.callId : undefined;
-        const anchor = callId ? projected.findLastIndex(event => {
-          const item = asRecord(event.raw);
-          return item?.id === callId || item?.callId === callId || item?.call_id === callId;
-        }) : -1;
-        // Some app-servers omit plan calls from history. This is a semantic fallback, not a claim
-        // about timestamps (item createdAt is the turn's start, not its position within the turn).
-        const answer = projected.findIndex(event => event.type === 'agent_message_chunk' && event.data.phase === 'final_answer');
-        projected.splice(anchor >= 0 ? anchor + 1 : answer >= 0 ? answer : projected.length, 0, planEvent);
-      }
+      if (planEvent) insertPlanEvent(projected, planEvent, rolloutPlan, turn.id);
       const final = isFinalTurnStatus(turn.status);
       for (const event of projected) {
         const numbered = this.withStableSequence(event);
@@ -2832,19 +2493,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       events.push(this.withStableSequence(planEvent));
       this.pushEvent(planEvent);
     }
-    const unique = new Map<string, NativeWorkbenchEvent>();
-    for (const event of events) if (!unique.has(event.nativeId)) unique.set(event.nativeId, event);
-    // A row whose item has since been returned under the id it keeps is that item's provisional
-    // copy, and the settled one replaces it rather than joining it.
-    for (const event of this.events) {
-      if (superseded.has(event.nativeId) || streaming.has(event.nativeId)) continue;
-      // A notification received after this read began is newer than its frozen response. A live
-      // completion also outranks partial in-progress history on subsequent polls; an explicitly
-      // final record requested after that notification remains authoritative (including edits).
-      const newerCompletion = this.liveCompletedIds.has(event.nativeId) &&
-        (!committed.has(event.nativeId) || eventsBeforeRead.get(event.nativeId) !== event);
-      if (newerCompletion || !unique.has(event.nativeId)) unique.set(event.nativeId, event);
-    }
+    const unique = mergeResidentEvents(events, this.events, superseded, streaming, this.liveCompletedIds, committed, eventsBeforeRead);
     for (const nativeId of streaming) this.seenEvents.delete(nativeId);
     for (const nativeId of superseded) {
       this.seenEvents.delete(nativeId);
@@ -2905,7 +2554,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // The first real turn page can arrive before the provider's metadata view catches up. Use
     // this read's initial evidence even if that page just completed materialization; later reads
     // still start without the grace, and genuine or foreign-thread errors remain failures.
-    const thread = await this.readThread(threadId, false, materializationBeforeRead);
+    const thread = await this.history.readThread(threadId, false, materializationBeforeRead);
     this.noteThread(thread);
     if (thread) {
       this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
@@ -2927,7 +2576,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         this.applyThreadStatus(thread.status);
       }
     }
-    this.noteMaterialized(threadId, turns);
+    this.history.noteMaterialized(threadId, turns);
     this.turnMarkersSeen = markersNow;
     this.transcriptLoaded = true;
     this.noteHistoryReady();
@@ -2941,24 +2590,6 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   // ---- journal ingest ---------------------------------------------------------------------------
-
-  /**
-   * The newest turns of the thread, in order. Once the journal holds the thread a read only needs to
-   * cover what may have changed since (the last few turns); before that it takes a window large enough
-   * to serve while the rest is imported. `complete` says the window reaches the thread's first turn.
-   */
-  private async readThreadWindow(threadId: string): Promise<{ turns: RpcTurn[]; complete: boolean } | 'pending' | undefined> {
-    // Read only for its own bookkeeping once the journal serves, a runtime keeps to the newest turns after its first read.
-    let read = await this.readAllTurns(threadId, this.space.ready || (this.journalRead && this.space.initialized) ? ROUTINE_TURNS : TAIL_TURNS);
-    const ended = this.foregroundEndedTurnId;
-    if (read && read !== 'pending' && !read.complete && ended && !read.turns.some(turn => turn.id === ended)) {
-      // The foreground end may fall out of the three-turn tail while nobody receives starts.
-      // Different ids alone cannot prove new work: hydrate back to the end and use provider
-      // order. The caller's observation fence still rejects reads raced by a newer live end.
-      read = await this.readAllTurns(threadId, undefined, ended);
-    }
-    return read && read !== 'pending' ? { turns: read.turns, complete: read.complete } : read;
-  }
 
   /** Decides, at the first read of a thread, which log serves it and how its history gets in. */
   private chooseLog(threadId: string, complete: boolean): void {
@@ -3043,38 +2674,38 @@ export class CodexSessionRuntime implements CodexThreadReader {
    * yet reads as undefined.
    */
   async turnsPage(request: CodexTurnsRequest): Promise<CodexTurnPage | undefined> {
-    const materialization = this.materialization;
+    const materialization = this.history.materialization;
     const { threadId, cursor, limit, sortDirection, itemsView } = request;
     const params = { threadId, ...(cursor ? { cursor } : {}), limit, sortDirection, itemsView: itemsView ?? 'full' };
     let flushError: unknown;
     try {
       const page = await this.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
-      if (Array.isArray(page.data)) this.noteMaterialized(threadId, page.data);
-      this.childHistoryPendingSince.delete(threadId);
+      if (Array.isArray(page.data)) this.history.noteMaterialized(threadId, page.data);
+      this.history.clearChildPending(threadId);
       return page;
     } catch (error) {
-      if (!cursor && this.isHistoryPending(threadId, error, materialization)) {
-        return this.isEmptyNewThread(threadId) ? { data: [], nextCursor: null } : undefined;
+      if (!cursor && this.history.isHistoryPending(threadId, error, materialization)) {
+        return this.history.isEmptyNewThread(threadId) ? { data: [], nextCursor: null } : undefined;
       }
-      if (this.isChildFlushUnavailable(threadId, error)) {
+      if (this.history.isChildFlushUnavailable(threadId, error)) {
         // A child may unload between lookup and live-history flush. Retry the same page first;
         // persisted legacy history is a fallback only at the head (opaque cursors cannot be
         // translated safely). Never replace it with an empty successful snapshot.
         try {
           const page = await this.requireTransport().request<CodexTurnPage>('thread/turns/list', params);
-          if (Array.isArray(page.data)) this.noteMaterialized(threadId, page.data);
-          this.childHistoryPendingSince.delete(threadId);
+          if (Array.isArray(page.data)) this.history.noteMaterialized(threadId, page.data);
+          this.history.clearChildPending(threadId);
           return page;
         } catch (retryError) {
-          if (!this.isChildFlushUnavailable(threadId, retryError) || (cursor && !cursor.startsWith('legacy:'))) throw retryError;
+          if (!this.history.isChildFlushUnavailable(threadId, retryError) || (cursor && !cursor.startsWith('legacy:'))) throw retryError;
           flushError = retryError;
         }
       } else if (!isTurnsListUnsupportedError(error)) throw error;
     }
-    const turns = await this.readLegacyTurns(threadId);
+    const turns = await this.history.readLegacyTurns(threadId);
     if (flushError && (!turns || turns === 'pending' || !turns.length)) throw flushError;
     if (!turns || turns === 'pending') return undefined;
-    this.childHistoryPendingSince.delete(threadId);
+    this.history.clearChildPending(threadId);
     const at = cursor?.startsWith('legacy:') ? Number(cursor.slice('legacy:'.length)) : sortDirection === 'asc' ? 0 : turns.length;
     const start = sortDirection === 'asc' ? at : Math.max(0, at - limit);
     const end = sortDirection === 'asc' ? Math.min(turns.length, at + limit) : at;
@@ -3305,7 +2936,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // Native TUI input can precede the workbench's first send. Observe it before waking the
     // journal reader, and never restart the deadline on subsequent items or turns.
     if (threadId === this.nativeSessionId && (method === 'turn/started' || method === 'turn/completed'
-      || (method.startsWith('item/') && typeof params.turnId === 'string'))) this.beginMaterialization();
+      || (method.startsWith('item/') && typeof params.turnId === 'string'))) this.history.beginMaterialization();
     try { this.feed?.notification(method, params); } catch { /* the journal's reader must not break the live runtime */ }
     // Streamed text is shown as a draft until `item/completed` commits the item and replaces it, so
     // the answer is readable while the TUI is still printing it without ever rendering twice.
@@ -3327,9 +2958,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     if (method === 'thread/tokenUsage/updated') {
       const tokenUsage = asRecord(params.tokenUsage);
-      const usage = this.turnUsage(str(params.turnId), tokenUsage);
+      const usage = this.usage.turnUsage(str(params.turnId), tokenUsage);
       if (usage) this.metering.noteTurnUsage(str(params.turnId), usage);
-      void this.applyUsageFrame(tokenUsage, params).catch(() => undefined);
+      void this.usage.applyUsageFrame(tokenUsage, params).catch(() => undefined);
       return;
     }
     if (method === 'turn/started') {
@@ -3385,7 +3016,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (turnId) this.activities.turnCompleted(turnId, turn?.status as RpcTurn['status']);
       this.activities.hint();
       this.transientNotice = undefined;
-      void this.refreshContextBreakdown();
+      void this.usage.refreshContextBreakdown();
       if (turn && turnId) {
         const completedTurn = turn as unknown as RpcTurn;
         this.projectKnownUserReceipts(completedTurn);
@@ -3501,34 +3132,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       if (method === 'item/started' && item.type === 'agentMessage' && !str(item.text) && messagePhase(item.phase)) {
         this.drafts.note('item/agentMessage/delta', { itemId: item.id, turnId, delta: '', phase: item.phase }, this.nativeSessionId ?? 'unknown');
       }
-      if (isCodexToolItem(item) && !this.metering.isSettled(turnId)) {
-        const meter = this.metering.meterFor(turnId);
-        const waitKey = `tool:${item.id ?? item.type}`;
-        if (method === 'item/started') {
-          meter.activeWaits.add(waitKey);
-          meter.waiting = true;
-          this.metering.closeMeterRequest(meter, true);
-          meter.requestStartAt = undefined;
-        } else {
-          const hadWait = meter.activeWaits.delete(waitKey);
-          if (!hadWait && !meter.waiting) {
-            const toolDuration = typeof item.durationMs === 'number' && Number.isFinite(item.durationMs) && item.durationMs > 0 ? item.durationMs : 0;
-            this.metering.closeMeterRequest(meter, true, Math.max(meter.requestStartAt ?? 0, Date.now() - toolDuration));
-          }
-          meter.waiting = meter.activeWaits.size > 0;
-          if (!meter.waiting) {
-            meter.requestStartAt = Date.now();
-            meter.requestAccounted = false;
-          }
-        }
-      } else if ((item.type === 'reasoning' || item.type === 'agentMessage') && !this.metering.isSettled(turnId)) {
-        const meter = this.metering.meterFor(turnId);
-        meter.activeWaits.clear();
-        meter.waiting = false;
-        meter.requestStartAt ??= Date.now();
-        meter.requestAccounted = false;
-        meter.pendingUsageInterval = false;
-      }
+      noteItemMeter(this.metering, method, item, turnId);
       const turn = this.turnRuns.get(turnId);
       const commandId = this.commandIdOf(item, turnId);
       if (commandId && !this.commandRuns.has(commandId)) {
@@ -3587,14 +3191,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         }
       }
       const meter = main && turnId ? this.metering.active(turnId) : undefined;
-      if (meter) {
-        meter.activeWaits.delete(`req:${requestId}`);
-        meter.waiting = meter.activeWaits.size > 0;
-        if (!meter.waiting) {
-          meter.requestStartAt = Date.now();
-          meter.requestAccounted = false;
-        }
-      }
+      if (meter) noteRequestWaitEnd(meter, requestId);
       if (pending) pending.resolve?.(NO_SERVER_RESPONSE);
       if (pending && this.interaction?.requestId === requestId) this.interaction = this.pending.values().next().value?.interaction;
       this.setStatus({
@@ -3619,13 +3216,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const pending = makePendingInteraction(request);
     if (!pending) throw new Error(`${this.label} request ${request.method} is not supported by the workbench.`);
     pending.interaction.requestId = requestId;
-    if (main && requestedTurnId) {
-      const meter = this.metering.meterFor(requestedTurnId);
-      meter.activeWaits.add(`req:${requestId}`);
-      meter.waiting = true;
-      this.metering.closeMeterRequest(meter, true);
-      meter.requestStartAt = undefined;
-    }
+    if (main && requestedTurnId) noteRequestWaitStart(this.metering, requestedTurnId, requestId);
     this.pending.set(requestId, pending);
     if (request.method === 'item/tool/requestUserInput') {
       const question = this.questionHistory.request(request.params, threadId);
@@ -3696,9 +3287,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private rolloutPlanEvent(threadId: string, snapshot: RolloutPlanSnapshot): NativeWorkbenchEvent {
     const turnId = snapshot.turnId;
-    const nativeId = turnId
-      ? codexPlanNativeId(threadId, turnId)
-      : `${threadId}:rollout:${snapshot.ordinal ?? Date.parse(snapshot.timestamp)}:plan`;
+    const nativeId = rolloutPlanNativeId(threadId, snapshot);
     const event = this.makeEvent(
       nativeId,
       turnId ?? '',
@@ -3710,17 +3299,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private makeEvent(nativeId: string, turnId: string, runId: string | undefined, type: string, data: Record<string, unknown>, raw?: unknown): NativeWorkbenchEvent {
-    return {
-      sequence: 0,
-      sessionId: this.session.id,
-      ...(runId || turnId ? { runId: runId || turnId } : {}),
-      type,
-      data: { sessionUpdate: type, ...data },
-      ...(raw ? { raw } : {}),
-      createdAt: this.turnRuns.get(turnId)?.createdAt ?? new Date().toISOString(),
-      nativeId,
-      nativeTurnId: turnId,
-    };
+    return buildEvent(this.session.id, this.turnRuns.get(turnId)?.createdAt, nativeId, turnId, runId, type, data, raw);
   }
 
   /** Only a reliable turn terminal (live or recovered history), never an offline/unknown state. */
@@ -3814,20 +3393,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
    * copy standing in for a settled row must not pass for one.
    */
   private shownTextRows(threadId: string, turnIds: readonly string[]): Map<string, Set<string>> {
-    const provisional = new Set([...this.provisionalRows.values()].flat());
-    const wanted = new Set(turnIds);
-    const rows = new Map<string, Set<string>>();
-    for (const event of this.events) {
-      if (provisional.has(event.nativeId) || !event.nativeId.startsWith(`${threadId}:`)) continue;
-      const turnId = event.nativeId.slice(threadId.length + 1).split(':')[0];
-      if (!turnId || !wanted.has(turnId)) continue;
-      const key = rowTextKey(event);
-      if (!key) continue;
-      const keys = rows.get(turnId) ?? new Set<string>();
-      keys.add(key);
-      rows.set(turnId, keys);
-    }
-    return rows;
+    return shownTextRowsOf(this.provisionalRows, this.events, threadId, turnIds);
   }
 
   /** Which text row a provisional native id stands for, if it is one this transcript still holds. */
@@ -3917,8 +3483,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   private withStableSequence(event: NativeWorkbenchEvent): NativeWorkbenchEvent {
     const sequence = this.space.assign(event, event.nativeTurnId !== undefined && this.stableTurnIds.has(event.nativeTurnId));
-    const prefix = `${this.nativeSessionId ?? 'unknown'}:`;
-    const nativeTurnId = event.nativeTurnId ?? (event.nativeId.startsWith(prefix) ? event.nativeId.slice(prefix.length).split(':')[0] : undefined);
+    const nativeTurnId = nativeTurnIdOf(event, this.nativeSessionId);
     const numbered = { ...event, sequence, ...(nativeTurnId ? { nativeTurnId } : {}) };
     return numbered;
   }
@@ -4037,28 +3602,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const targetMode = str(params.targetMode);
     const supported = this.flavor.modes.some(mode => mode.id === targetMode);
     const leavingPlan = targetMode === 'default';
-    const prompts = asArray<Record<string, unknown>>(params.allowedPrompts).flatMap(entry => {
-      const prompt = str(entry.prompt);
-      return prompt ? [`${str(entry.tool) ?? 'Tool'}: ${prompt}`] : [];
-    });
     const plan = leavingPlan ? this.latestPlanText(str(params.turnId), str(params.threadId)) : undefined;
-    const message = [
-      str(params.reason),
-      plan,
-      prompts.length ? `Allowed without asking:\n${prompts.map(prompt => `- ${prompt}`).join('\n')}` : undefined,
-    ].filter(Boolean).join('\n\n');
-    const interaction: NativeInteraction = {
-      id: `${this.flavor.id}:${str(params.threadId) ?? 'thread'}:${key}`, revision: `1:${key}`, transport: 'protocol', requestId: key, request: params,
-      kind: leavingPlan ? 'plan' : 'confirmation',
-      title: supported ? leavingPlan ? 'Leave Plan mode and start working?' : 'Switch to Plan mode?' : 'Resolve mode change in the native terminal',
-      ...(message ? { message } : {}),
-      options: [],
-      actions: supported ? [
-        { id: 'approve', label: leavingPlan ? 'Start working' : 'Switch', tone: 'primary' },
-        { id: 'deny', label: leavingPlan ? 'Keep planning' : 'Stay', tone: 'danger' },
-        { id: 'cancel', label: 'Cancel' },
-      ] : [],
-    };
+    const interaction = modeChangeInteraction(this.flavor.id, key, params, supported, leavingPlan, plan);
     const pending: CodexPendingInteraction = { request: { id: key, method: 'mode/changeRequested', params }, interaction, currentQuestion: 0, revisionCounter: 0, answers: {}, candidateSent: false };
     this.modeRequests.set(pending, { observation: this.modeObservation });
     this.pending.set(key, pending);
@@ -4117,25 +3662,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const prefix = turnId ? `${threadId ?? 'unknown'}:${turnId}:` : undefined;
     const events = threadId === this.nativeSessionId ? this.events
       : [...this.subagents.values()].find(watch => watch.childId === threadId)?.events ?? [];
-    const event = events.findLast(candidate => candidate.type === 'tool_call' && candidate.data.kind === 'plan' && (!prefix || candidate.nativeId.startsWith(prefix)));
-    const content = asArray<Record<string, unknown>>(event?.data.content).find(part => part.type === 'markdown');
-    return str(content?.text);
-  }
-
-  /** The provider's own context breakdown, for the meter's popover. Only read when a turn settles. */
-  private async refreshContextBreakdown(): Promise<void> {
-    if (!this.flavor.contextUsage || !this.nativeSessionId || !this.transport?.isOnline) return;
-    try {
-      const response = await this.transport.request<{ contextWindowUsage?: unknown }>('thread/contextUsage', { threadId: this.nativeSessionId }, 10_000);
-      const breakdown = asArray<Record<string, unknown>>(asRecord(response.contextWindowUsage)?.categories).flatMap(category => {
-        const id = str(category.kind);
-        const tokens = finiteToken(category.tokens);
-        return id && tokens !== undefined && tokens > 0 ? [{ id, label: CONTEXT_KIND_LABELS[id] ?? titleCase(id), tokens }] : [];
-      });
-      if (!breakdown.length) return;
-      this.contextBreakdown = breakdown;
-      if (this.context) this.noteContext({ ...this.context, breakdown });
-    } catch { /* the meter keeps its single bar */ }
+    return latestPlanTextOf(events, prefix);
   }
 
   private setStatus(status: NativeStatus, noticeSource?: 'transient' | 'other'): void {
@@ -4239,7 +3766,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private applyThreadStatus(status: RpcThread['status']): void {
-    if (status?.type === 'active') this.beginMaterialization();
+    if (status?.type === 'active') this.history.beginMaterialization();
     // TRAE's thread status aggregates background work. A confirmed foreground end wins until
     // a new native turn starts or a dispatch is in flight; Codex retains its aggregate-active phase.
     const foregroundEnded = this.flavor.id === 'traex' && this.foregroundEndedTurnId !== undefined
@@ -4255,18 +3782,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.threadErrorTurnId = status.type === 'active' && this.activeTurnId && !this.settledTurns.has(this.activeTurnId)
         ? this.activeTurnId : undefined;
     } else if (status?.type === 'systemError') this.threadError = true;
-    const base = {
-      ...(this.status.model ? { model: this.status.model } : {}),
-      ...(this.noticeSource !== 'thread' && this.status.notice ? { notice: this.status.notice, noticeLevel: this.status.noticeLevel } : {}),
-    };
-    if (status?.type === 'active') this.setStatus({ ...base, phase: this.interaction ? 'attention' : foregroundEnded ? 'idle' : 'busy', ...(this.interaction ? { interaction: this.interaction } : {}) });
-    else if (status?.type === 'systemError') this.setStatus({ ...(this.status.model ? { model: this.status.model } : {}), phase: this.transport?.isOnline ? phase : 'offline', ...(this.interaction ? { interaction: this.interaction } : {}) });
-    else if (status?.type === 'idle') this.setStatus({ ...base, phase, ...(this.interaction ? { interaction: this.interaction } : {}) });
+    const update = threadStatusUpdate(status, this.status, this.noticeSource === 'thread', this.interaction, phase, foregroundEnded, Boolean(this.transport?.isOnline));
+    if (update) this.setStatus(update);
   }
 
   private onExit(error: Error): void {
     this.requestInterrupt();
-    this.beginMaterialization();
+    this.history.beginMaterialization();
     for (const [turnId, waiters] of this.completionWaiters) {
       for (const waiter of waiters) waiter.reject(new Error(`${this.label} app-server exited before confirming interruption for turn ${turnId}.`));
     }

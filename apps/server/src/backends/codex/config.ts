@@ -9,7 +9,7 @@ import { readProbe, type AppServerProbe, type CodexFlavor } from './flavors.js';
 import { resolveCliExecutable } from '../shared/cli-resolve.js';
 import { versionAtLeast } from '../shared/cli-version.js';
 import type { NativeBackendProfileConfig } from '../types.js';
-import { str } from './util.js';
+import { asRecord, str } from './util.js';
 
 /** A rollout larger than this is not read whole for statistics. */
 export const MAX_ROLLOUT_BYTES = 64 * 1024 * 1024;
@@ -200,4 +200,44 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
   })();
   probes.set(key, task);
   return await task;
+}
+
+/** Env var a TUI reads its loopback app-server token from; the token never appears in argv. */
+export const TUI_TOKEN_ENV = 'RIFFET_APP_SERVER_TOKEN';
+/**
+ * The workbench's own tools act only on their conversation; a per-call approval would hold a
+ * wake-up or notice for a reader who may be away. `approve` is the CLI's own per-server setting.
+ */
+/**
+ * How the Riffet server is offered (verified on codex-cli 0.160.0):
+ * - `default_tools_approval_mode: approve`: the workbench's own tools act only on their
+ *   conversation; a per-call approval would hold a wake-up or notice for a reader who may be away.
+ * - `omit_tools_from: [deferred]`: a model whose catalog claims tool search gets MCP tools only
+ *   through `tool_search`, which a model behind a compatible gateway may never be offered; the
+ *   agent then sees none of them. Five small tools are cheaper listed directly.
+ * - `startup_readiness: catalog`: the first turn, sent right after `thread/start`, waits for the
+ *   shim's `tools/list` instead of being built without it.
+ * - `tool_timeout_sec: 330`: a device call waits up to 300 s for the device (docs/DEVICES.md §3);
+ *   the CLI's own 60 s default would abandon it first.
+ */
+export const RIFFET_MCP_EXPOSURE = { default_tools_approval_mode: 'approve', omit_tools_from: ['deferred'], startup_readiness: 'catalog', tool_timeout_sec: 330 } as const;
+
+/** The permission fields of a `thread/start`, `thread/resume` or `turn/start` request; `sandboxField` names where the sandbox goes. */
+export function permissionParamsOf(permission: Permission, sandboxField: 'sandbox' | 'sandboxPolicy'): Record<string, unknown> {
+  return {
+    approvalPolicy: permission.approvalPolicy,
+    ...(permission.permissions ? { permissions: permission.permissions, approvalsReviewer: permission.approvalsReviewer }
+      : { [sandboxField]: sandboxField === 'sandbox' ? permission.sandbox : sandboxPolicyOf(permission.sandbox) }),
+  };
+}
+
+/** Whether thread settings carry an extended native permission profile rather than a bare preset. */
+export function hasNativePermissions(settings: Record<string, unknown> | undefined): boolean {
+  return Boolean(settings && (asRecord(settings.activePermissionProfile) || asRecord(settings.permissionProfile)
+    || asRecord(settings.sandboxPolicy) || asRecord(settings.sandbox)));
+}
+
+/** The config override that offers the Riffet MCP server to a thread, or none when the host has no such server. */
+export function riffetMcpOverride(server: { name: string; command: string; args: string[] } | undefined): Record<string, unknown> {
+  return server ? { [`mcp_servers.${server.name}`]: { command: server.command, args: server.args, ...RIFFET_MCP_EXPOSURE } } : {};
 }

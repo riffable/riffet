@@ -1,9 +1,13 @@
-import type { NativeStreamMessage } from '../../../../../packages/contracts/src/index.js';
+import type { NativeContext, NativeStreamMessage } from '../../../../../packages/contracts/src/index.js';
 import { estimateTokens } from '../../metrics/tokens.js';
 import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
-import type { NativeBackendHost } from '../types.js';
+import type { NativeBackendHost, NativeControlMessage } from '../types.js';
 import type { CodexTurnMeter, RpcItem } from './types.js';
-import { asArray, finiteToken, str } from './util.js';
+import { isCodexToolItem, codexNativeContext } from './transcript.js';
+import { parseRolloutContext } from './rollout-usage.js';
+import { CONTEXT_TAIL_BYTES, CONTEXT_WINDOW_RETRY_MS } from './runtime-limits.js';
+import type { CodexAppServerClient } from '../shared/codex-app-server.js';
+import { asArray, asRecord, finiteToken, readFileTail, str, titleCase } from './util.js';
 
 /** What the metering reads from the runtime it measures. */
 export interface CodexMeteringContext {
@@ -304,5 +308,234 @@ export class CodexTurnMetering {
     this.meters.delete(turnId);
     this.settled.add(turnId);
     if (this.settled.size > 64) this.settled.delete(this.settled.values().next().value!);
+  }
+}
+
+export const CONTEXT_KIND_LABELS: Record<string, string> = {
+  systemPrompt: 'System prompt', toolDefinitions: 'Tools', developerMessages: 'Instructions',
+  userMessages: 'Your messages', assistantMessages: 'Replies', toolResponses: 'Tool results', otherMessages: 'Other',
+};
+/** The counters of a `thread/tokenUsage/updated` breakdown. */
+export const USAGE_FIELDS = ['inputTokens', 'cachedInputTokens', 'cacheCreationInputTokens', 'outputTokens', 'reasoningOutputTokens', 'totalTokens'];
+
+/**
+ * One turn's usage in the shape of Codex's own breakdown. `last` is a single model request and
+ * `total` the thread's running sum, so a turn of several requests is how far `total` has moved
+ * since just before its first request. `usageBaselines` remembers that starting point per turn.
+ */
+export function turnUsageOf(
+  usageBaselines: Map<string, Record<string, number>>,
+  turnId: string | undefined,
+  tokenUsage: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  const last = asRecord(tokenUsage?.last);
+  const total = asRecord(tokenUsage?.total);
+  if (!turnId || !total) return last;
+  const count = (record: Record<string, unknown> | undefined, field: string) => typeof record?.[field] === 'number' && Number.isFinite(record[field]) ? record[field] as number : 0;
+  let baseline = usageBaselines.get(turnId);
+  if (!baseline) {
+    baseline = Object.fromEntries(USAGE_FIELDS.map(field => [field, count(total, field) - count(last, field)]));
+    usageBaselines.set(turnId, baseline);
+    if (usageBaselines.size > 64) usageBaselines.delete(usageBaselines.keys().next().value!);
+  }
+  const turn: Record<string, unknown> = { ...total };
+  for (const field of USAGE_FIELDS) if (typeof total[field] === 'number') turn[field] = count(total, field) - baseline[field]!;
+  return turn;
+}
+
+/** The meter's numbers with the provider's breakdown laid over them. */
+export function contextWithBreakdown(next: NativeContext, contextBreakdown: NativeContext['breakdown'] | undefined): NativeContext {
+  return contextBreakdown?.length
+    ? { ...next, breakdown: contextBreakdown }
+    : next;
+}
+
+/** Whether a new meter reading says nothing the shown one does not. */
+export function sameContext(current: NativeContext | undefined, merged: NativeContext): boolean {
+  return Boolean(current && current.used === merged.used && current.size === merged.size
+    && JSON.stringify(current.breakdown) === JSON.stringify(merged.breakdown));
+}
+
+/** The categories of a `thread/contextUsage` response, labelled for the meter's popover. */
+export function contextBreakdownOf(response: { contextWindowUsage?: unknown }): NonNullable<NativeContext['breakdown']> {
+  return asArray<Record<string, unknown>>(asRecord(response.contextWindowUsage)?.categories).flatMap(category => {
+    const id = str(category.kind);
+    const tokens = finiteToken(category.tokens);
+    return id && tokens !== undefined && tokens > 0 ? [{ id, label: CONTEXT_KIND_LABELS[id] ?? titleCase(id), tokens }] : [];
+  });
+}
+
+/** What an item's start or completion does to its turn's wait accounting. */
+export function noteItemMeter(metering: CodexTurnMetering, method: string, item: RpcItem, turnId: string): void {
+  if (isCodexToolItem(item) && !metering.isSettled(turnId)) {
+    const meter = metering.meterFor(turnId);
+    const waitKey = `tool:${item.id ?? item.type}`;
+    if (method === 'item/started') {
+      meter.activeWaits.add(waitKey);
+      meter.waiting = true;
+      metering.closeMeterRequest(meter, true);
+      meter.requestStartAt = undefined;
+    } else {
+      const hadWait = meter.activeWaits.delete(waitKey);
+      if (!hadWait && !meter.waiting) {
+        const toolDuration = typeof item.durationMs === 'number' && Number.isFinite(item.durationMs) && item.durationMs > 0 ? item.durationMs : 0;
+        metering.closeMeterRequest(meter, true, Math.max(meter.requestStartAt ?? 0, Date.now() - toolDuration));
+      }
+      meter.waiting = meter.activeWaits.size > 0;
+      if (!meter.waiting) {
+        meter.requestStartAt = Date.now();
+        meter.requestAccounted = false;
+      }
+    }
+  } else if ((item.type === 'reasoning' || item.type === 'agentMessage') && !metering.isSettled(turnId)) {
+    const meter = metering.meterFor(turnId);
+    meter.activeWaits.clear();
+    meter.waiting = false;
+    meter.requestStartAt ??= Date.now();
+    meter.requestAccounted = false;
+    meter.pendingUsageInterval = false;
+  }
+}
+
+/** A server request opens a wait on its turn's meter. */
+export function noteRequestWaitStart(metering: CodexTurnMetering, turnId: string, requestId: string): void {
+  const meter = metering.meterFor(turnId);
+  meter.activeWaits.add(`req:${requestId}`);
+  meter.waiting = true;
+  metering.closeMeterRequest(meter, true);
+  meter.requestStartAt = undefined;
+}
+
+/** A settled server request closes its wait; the turn's clock restarts once nothing else is awaited. */
+export function noteRequestWaitEnd(meter: CodexTurnMeter, requestId: string): void {
+  meter.activeWaits.delete(`req:${requestId}`);
+  meter.waiting = meter.activeWaits.size > 0;
+  if (!meter.waiting) {
+    meter.requestStartAt = Date.now();
+    meter.requestAccounted = false;
+  }
+}
+
+/** What the context meter reads from the runtime it measures. */
+export interface CodexContextMeterContext {
+  /** Whether the provider can state its own per-category split of the window. */
+  readonly contextUsage: boolean;
+  /** Tell whoever is watching. */
+  emit(message: NativeControlMessage): void;
+  threadId(): string | undefined;
+  transport(): CodexAppServerClient | undefined;
+  bindingScopeMismatch(): boolean;
+  rolloutFile(threadId: string): Promise<string | undefined>;
+  /** The meter's occupancy moved. */
+  contextUsed(used: number): void;
+}
+
+/** The context-window meter of one Codex thread and each turn's usage baseline. */
+export class CodexContextMeter {
+  /** Each turn's running totals from just before its first model request. */
+  private readonly usageBaselines = new Map<string, Record<string, number>>();
+  /**
+   * Context-window occupancy the meter draws, or undefined while the provider has reported none.
+   * `contextWindow` is the model's window, from a live frame or the rollout; `contextWindowLookupAt`
+   * throttles the rollout lookup a provider that never states a window would otherwise repeat.
+   */
+  context: NativeContext | undefined;
+  /** The provider's last per-category split of the window, kept across usage frames that carry none. */
+  contextBreakdown: NativeContext['breakdown'] | undefined;
+  private contextWindow: number | undefined;
+  private contextWindowLookupAt = 0;
+
+  constructor(private readonly host: CodexContextMeterContext) {}
+
+  /** A different thread is a different window: the old numbers must not be repainted under it. */
+  reset(): void {
+    this.context = undefined;
+    this.contextBreakdown = undefined;
+    this.contextWindow = undefined;
+    this.contextWindowLookupAt = 0;
+  }
+
+  /**
+   * One turn's usage in the shape of Codex's own breakdown. `last` is a single model request and
+   * `total` the thread's running sum, so a turn of several requests is how far `total` has moved
+   * since just before its first request.
+   */
+  turnUsage(turnId: string | undefined, tokenUsage: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    return turnUsageOf(this.usageBaselines, turnId, tokenUsage);
+  }
+
+  /**
+   * Remember the meter's numbers and tell whoever is watching, but only when they moved: the
+   * provider sends this frame per model request, and a repaint per request on an unchanged window
+   * is churn the browser does not need.
+   */
+  noteContext(next: NativeContext | undefined): void {
+    if (!next) return;
+    const merged = contextWithBreakdown(next, this.contextBreakdown);
+    const current = this.context;
+    if (sameContext(current, merged)) return;
+    this.context = merged;
+    this.host.contextUsed(merged.used);
+    this.host.emit({ type: 'context', context: merged });
+  }
+
+  /**
+   * Learn the model's window from the thread's rollout, once, and keep it.
+   *
+   * The app-server's `ThreadTokenUsage` is `{ total, last, modelContextWindow }`, but
+   * `modelContextWindow` is optional and is null for a provider whose model catalog does not say —
+   * and a resumed thread reports no usage at all until its next turn. The rollout has both the
+   * window and the last request's occupancy, so it is read for whichever of the two the live frames
+   * cannot supply. Only the tail is read, and the lookup is throttled: a provider that never states
+   * a window must not turn every snapshot into a megabyte of file reads.
+   */
+  async seedContextWindow(): Promise<void> {
+    if (this.contextWindow !== undefined || this.host.bindingScopeMismatch()) return;
+    const now = Date.now();
+    if (now - this.contextWindowLookupAt < CONTEXT_WINDOW_RETRY_MS) return;
+    this.contextWindowLookupAt = now;
+    const threadId = this.host.threadId();
+    if (!threadId) return;
+    try {
+      const file = await this.host.rolloutFile(threadId);
+      if (!file) return;
+      const parsed = parseRolloutContext(await readFileTail(file, CONTEXT_TAIL_BYTES));
+      if (!parsed) return;
+      this.contextWindow = parsed.size;
+      this.noteContext({ used: parsed.used, size: parsed.size, breakdown: parsed.breakdown ?? [] });
+    } catch {
+      // A rollout that vanished, shrank, or is half-written is not an error: the meter stays absent
+      // (the browser already renders a composer without it) and a later turn tries again.
+    }
+  }
+
+  /**
+   * The meter's numbers for one `thread/tokenUsage/updated` frame.
+   *
+   * The frame leads: it is per model request, so its `last` is the freshest occupancy there is. The
+   * window is taken from the frame when the provider states one and from the rollout otherwise, and
+   * the rollout is consulted exactly when the frame could not supply it.
+   */
+  async applyUsageFrame(tokenUsage: Record<string, unknown> | undefined, params: Record<string, unknown>): Promise<void> {
+    const immediate = codexNativeContext(tokenUsage, params, this.contextWindow);
+    if (immediate) {
+      this.noteContext(immediate);
+      return;
+    }
+    await this.seedContextWindow();
+    const merged = codexNativeContext(tokenUsage, params, this.contextWindow);
+    if (merged) this.noteContext(merged);
+  }
+
+  /** The provider's own context breakdown, for the meter's popover. Only read when a turn settles. */
+  async refreshContextBreakdown(): Promise<void> {
+    if (!this.host.contextUsage || !this.host.threadId() || !this.host.transport()?.isOnline) return;
+    try {
+      const response = await this.host.transport()!.request<{ contextWindowUsage?: unknown }>('thread/contextUsage', { threadId: this.host.threadId() }, 10_000);
+      const breakdown = contextBreakdownOf(response);
+      if (!breakdown.length) return;
+      this.contextBreakdown = breakdown;
+      if (this.context) this.noteContext({ ...this.context, breakdown });
+    } catch { /* the meter keeps its single bar */ }
   }
 }
