@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { createElement, type ComponentType } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import * as phosphor from '@phosphor-icons/react';
-import * as hero from '@heroicons/react/16/solid';
 import { DOMParser } from '@xmldom/xmldom';
 import { Path2D } from '@napi-rs/canvas';
 import { toPath } from './svg-icon-path.js';
@@ -18,8 +17,8 @@ import { toPath } from './svg-icon-path.js';
  * - `apps/macos/scripts/icon-map.json` is the one hand-kept vocabulary: SF Symbol name -> semantic key.
  * - Android's keys and glyphs are read from its checked-in outputs (`LucideIcons.generated.kt`,
  *   `BuiltinIconPacks.generated.kt`), so both platforms draw the same pack from the same sources. A key the
- *   Android set lacks (`KEYS` below) takes its glyph by name from lucide-react, Phosphor and Heroicons.
- * - A pack without a glyph for a key uses lucide's, as Android does. `web` is the web app's own mix.
+ *   Android set lacks (`KEYS` below) takes its glyph by name from lucide-react and Phosphor.
+ * - A pack without a glyph for a key uses lucide's, as Android does. `web` is the web app's own family: lucide at its 1.25 stroke.
  * - Custom symbols are filled outlines: stroked glyphs (lucide, tabler) are stroked and merged with Skia
  *   (`@napi-rs/canvas`'s Path2D, installed through pdfjs-dist) into one outline per glyph.
  *
@@ -47,136 +46,135 @@ const PACKS: [id: string, title: string][] = [
 
 /** lucide-react glyph: its file name, or a spec. `fill` also fills the closed outline; `solid` fills the first element and cuts the rest out of it. */
 type Lucide = string | { n: string; fill?: boolean; solid?: boolean };
-/** `h:` Heroicons 16 solid, `p:` Phosphor fill (`!` mirrors it), `l:` lucide at the web's stroke width 2. */
-interface Key { l?: Lucide; p?: string | null; web: string }
+interface Key { l?: Lucide; p?: string | null; web: Lucide }
 
 /**
  * The keys. An Android key (the 83 in `RiffetIcons`) carries only its web glyph; its lucide and pack glyphs come
  * from the Kotlin outputs (`p` fills a pack gap there). A key new to the Mac names its glyph in lucide (`l`) and
  * Phosphor (`p`, regular weight; null when it has none), which are what the other packs then fall back on.
- * The web column follows `apps/web/src/components/icons.tsx`.
+ * The web column is the lucide glyph `apps/web/src/components/icons.tsx` uses for the concept, at the web's stroke; filled only where the web fills (`…Filled` on-states, transport controls).
  */
 const KEYS: Record<string, Key> = {
   // Android keys.
-  Archive: { web: 'h:ArchiveBox' }, ArchiveRestore: { web: 'p:BoxArrowUp' }, ArrowDown: { web: 'h:ArrowDown' }, ArrowLeft: { web: 'h:ArrowLeft' },
-  ArrowRightLeft: { web: 'h:ArrowsRightLeft' }, Bell: { web: 'h:Bell' }, Bookmark: { web: 'h:Bookmark' }, Bot: { web: 'p:Robot' }, Brain: { web: 'h:LightBulb' },
-  Branch: { web: 'p:GitBranch' }, Bug: { web: 'h:BugAnt' }, Chart: { web: 'h:ChartBar' }, Check: { web: 'h:Check' }, ChevronDown: { web: 'h:ChevronDown' },
-  ChevronLeft: { web: 'h:ChevronLeft' }, ChevronRight: { web: 'h:ChevronRight' }, Circle: { web: 'l:circle' }, CircleAlert: { web: 'h:ExclamationCircle' },
-  CircleCheck: { web: 'h:CheckCircle' }, CircleDashed: { web: 'l:circle-dashed' }, Clock: { web: 'h:Clock' }, Close: { web: 'h:XMark' }, Copy: { web: 'h:Square2Stack' },
-  Dices: { p: 'DiceFive', web: 'l:dices' }, Download: { web: 'h:ArrowDownTray' }, Ellipsis: { web: 'h:EllipsisHorizontal' }, Error: { web: 'h:XCircle' },
-  ExternalLink: { web: 'h:ArrowTopRightOnSquare' }, Eye: { web: 'h:Eye' }, FilePenLine: { web: 'h:PencilSquare' }, FileText: { web: 'h:DocumentText' },
-  Filter: { web: 'h:Funnel' }, Folder: { web: 'h:Folder' }, FolderOpen: { web: 'h:FolderOpen' }, FolderPlus: { web: 'h:FolderPlus' }, Globe: { web: 'h:GlobeAlt' },
-  House: { web: 'h:Home' }, Image: { web: 'h:Photo' }, Info: { web: 'h:InformationCircle' }, Layers: { web: 'h:Square3Stack3D' }, Link: { web: 'h:Link' },
-  ListTodo: { web: 'h:ClipboardDocumentList' }, Message: { web: 'h:ChatBubbleLeft' }, MessageQuestion: { web: 'h:ChatBubbleOvalLeftEllipsis' },
-  MessageSquarePlus: { web: 'h:PencilSquare' }, MessageSquarePlusFilled: { web: 'h:PencilSquare' }, Monitor: { web: 'h:ComputerDesktop' }, Moon: { web: 'h:Moon' },
-  OctagonX: { web: 'h:StopCircle' }, Palette: { web: 'h:Swatch' }, Pencil: { web: 'h:Pencil' }, Pin: { web: 'p:PushPin' }, PinOff: { web: 'p:PushPinSlash' },
-  Plus: { web: 'h:Plus' }, Pointer: { web: 'h:CursorArrowRays' }, Puzzle: { web: 'h:PuzzlePiece' }, Refresh: { web: 'h:ArrowPath' }, Repeat: { web: 'h:ArrowPathRoundedSquare' },
-  Reply: { web: 'h:ArrowUturnLeft' }, Search: { web: 'h:MagnifyingGlass' }, Send: { web: 'h:PaperAirplane' }, Settings: { web: 'h:Cog6Tooth' },
-  SettingsFilled: { web: 'h:Cog6Tooth' }, Shield: { web: 'h:ShieldCheck' }, ShieldHalf: { web: 'h:ShieldExclamation' }, Sliders: { web: 'h:AdjustmentsHorizontal' },
-  SquareTerminal: { web: 'h:CommandLine' }, Star: { web: 'h:Star' }, StarFilled: { web: 'h:Star' }, Steer: { web: 'h:ArrowTurnUpRight' }, Stop: { web: 'h:Stop' },
-  Sun: { web: 'h:Sun' }, Tag: { web: 'h:Tag' }, Target: { web: 'p:Target' }, Terminal: { web: 'h:CommandLine' }, Trash: { web: 'h:Trash' }, User: { p: 'User', web: 'h:User' },
-  Warning: { web: 'h:ExclamationTriangle' }, Wrench: { web: 'h:Wrench' }, Zap: { web: 'h:Bolt' },
+  Archive: { web: 'archive' }, ArchiveRestore: { web: 'archive-restore' }, ArrowDown: { web: 'arrow-down' }, ArrowLeft: { web: 'arrow-left' },
+  ArrowRightLeft: { web: 'arrow-right-left' }, Bell: { web: 'bell' }, Bookmark: { web: 'bookmark' }, Bot: { web: 'bot' }, Brain: { web: 'brain' },
+  Branch: { web: 'git-branch' }, Bug: { web: 'bug' }, Chart: { web: 'chart-column' }, Check: { web: 'check' }, ChevronDown: { web: 'chevron-down' },
+  ChevronLeft: { web: 'chevron-left' }, ChevronRight: { web: 'chevron-right' }, Circle: { web: 'circle' }, CircleAlert: { web: 'circle-alert' },
+  CircleCheck: { web: 'circle-check' }, CircleDashed: { web: 'circle-dashed' }, Clock: { web: 'clock' }, Close: { web: 'x' }, Copy: { web: 'copy' },
+  Dices: { p: 'DiceFive', web: 'dices' }, Download: { web: 'download' }, Ellipsis: { web: 'ellipsis' }, Error: { web: 'circle-x' },
+  ExternalLink: { web: 'external-link' }, Eye: { web: 'eye' }, FilePenLine: { web: 'file-pen-line' }, FileText: { web: 'file-text' },
+  Filter: { web: 'list-filter' }, Folder: { web: 'folder' }, FolderOpen: { web: 'folder-open' }, FolderPlus: { web: 'folder-plus' }, Globe: { web: 'globe' },
+  House: { web: 'house' }, Image: { web: 'image' }, Info: { web: 'info' }, Layers: { web: 'layers' }, Link: { web: 'link' },
+  ListTodo: { web: 'list-todo' }, Message: { web: 'message-square' }, MessageQuestion: { web: 'message-circle-question' },
+  MessageSquarePlus: { web: 'square-pen' }, MessageSquarePlusFilled: { web: 'square-pen' }, Monitor: { web: 'monitor' }, Moon: { web: 'moon' },
+  OctagonX: { web: 'octagon-x' }, Palette: { web: 'palette' }, Pencil: { web: 'pencil' }, Pin: { web: 'pin' }, PinOff: { web: 'pin-off' },
+  Plus: { web: 'plus' }, Pointer: { web: 'pointer' }, Puzzle: { web: 'blocks' }, Refresh: { web: 'refresh-cw' }, Repeat: { web: 'repeat' },
+  Reply: { web: 'reply' }, Search: { web: 'search' }, Send: { web: 'send' }, Settings: { web: 'settings' },
+  SettingsFilled: { web: 'settings' }, Shield: { web: 'shield' }, ShieldHalf: { web: 'shield-half' }, Sliders: { web: 'settings-2' },
+  SquareTerminal: { web: 'square-terminal' }, Star: { web: 'star' }, StarFilled: { web: { n: 'star', fill: true } }, Steer: { web: 'corner-up-right' }, Stop: { web: { n: 'square', fill: true } },
+  Sun: { web: 'sun' }, Tag: { web: 'tag' }, Target: { web: 'target' }, Terminal: { web: 'terminal' }, Trash: { web: 'trash-2' }, User: { p: 'User', web: 'user' },
+  Warning: { web: 'triangle-alert' }, Wrench: { web: 'wrench' }, Zap: { web: 'zap' },
 
   // New to the Mac.
-  Activity: { l: 'activity', p: 'Pulse', web: 'h:Signal' },
-  ListFilter: { l: 'list-filter', p: 'FunnelSimple', web: 'h:BarsArrowDown' },
-  AlignLeft: { l: 'align-left', p: 'TextAlignLeft', web: 'h:Bars3BottomLeft' },
-  AppBadge: { l: 'badge', p: 'Seal', web: 'h:RectangleStack' },
-  AppWindow: { l: 'app-window', p: 'AppWindow', web: 'h:Window' },
-  ArrowRight: { l: 'arrow-right', p: 'ArrowRight', web: 'h:ArrowRight' },
-  ArrowToTop: { l: 'arrow-up-to-line', p: 'ArrowLineUp', web: 'h:ArrowUpTray' },
-  ArrowUp: { l: 'arrow-up', p: 'ArrowUp', web: 'h:ArrowUp' },
-  ArrowUpDown: { l: 'arrow-up-down', p: 'ArrowsDownUp', web: 'h:ArrowsUpDown' },
-  ArrowUpRight: { l: 'arrow-up-right', p: 'ArrowUpRight', web: 'h:ArrowUpRight' },
-  AtSign: { l: 'at-sign', p: 'At', web: 'h:AtSymbol' },
-  BookmarkFilled: { l: { n: 'bookmark', fill: true }, p: 'BookmarkSimple', web: 'h:Bookmark' },
-  BookmarkMinus: { l: 'bookmark-minus', p: null, web: 'h:BookmarkSlash' },
-  Braces: { l: 'braces', p: 'BracketsCurly', web: 'h:CodeBracketSquare' },
-  Briefcase: { l: 'briefcase', p: 'Briefcase', web: 'h:Briefcase' },
-  Calendar: { l: 'calendar', p: 'CalendarBlank', web: 'h:Calendar' },
-  CalendarClock: { l: 'calendar-clock', p: null, web: 'h:Clock' },
-  ChartLine: { l: 'chart-line', p: 'ChartLine', web: 'h:PresentationChartLine' },
-  ChevronUp: { l: 'chevron-up', p: 'CaretUp', web: 'h:ChevronUp' },
-  ChevronsUpDown: { l: 'chevrons-up-down', p: 'CaretUpDown', web: 'h:ChevronUpDown' },
-  CircleArrowDown: { l: 'circle-arrow-down', p: 'ArrowCircleDown', web: 'h:ArrowDownCircle' },
-  CircleCheckFilled: { l: { n: 'circle-check', solid: true }, p: 'CheckCircle', web: 'h:CheckCircle' },
-  CircleDot: { l: 'circle-dot', p: 'RadioButton', web: 'p:RadioButton' },
-  CircleFilled: { l: { n: 'circle', fill: true }, p: 'Circle', web: 'p:Circle' },
-  CircleHalf: { l: 'contrast', p: 'CircleHalf', web: 'p:CircleHalf' },
-  CircleHelp: { l: 'circle-help', p: 'Question', web: 'h:QuestionMarkCircle' },
-  CircleInProgress: { l: 'circle-dot-dashed', p: null, web: 'l:circle-dot-dashed' },
-  CirclePlay: { l: 'circle-play', p: 'PlayCircle', web: 'h:PlayCircle' },
-  CircleStop: { l: 'circle-stop', p: 'StopCircle', web: 'h:StopCircle' },
-  CircleUser: { l: 'circle-user', p: 'UserCircle', web: 'h:UserCircle' },
-  ClockAlert: { l: 'clock-alert', p: null, web: 'h:Clock' },
-  Code: { l: 'code', p: 'Code', web: 'h:CodeBracket' },
-  Columns2: { l: 'columns-2', p: 'Columns', web: 'h:ViewColumns' },
-  Columns3: { l: 'columns-3', p: 'Columns', web: 'h:ViewColumns' },
-  Command: { l: 'command', p: 'Command', web: 'p:Command' },
-  CopyPlus: { l: 'copy-plus', p: null, web: 'h:Square2Stack' },
-  CornerDownRight: { l: 'corner-down-right', p: 'ArrowElbowDownRight', web: 'h:ArrowTurnDownRight' },
-  Cpu: { l: 'cpu', p: 'Cpu', web: 'h:CpuChip' },
-  Devices: { l: 'monitor-smartphone', p: 'Devices', web: 'h:DevicePhoneMobile' },
-  Diff: { l: 'diff', p: 'GitDiff', web: 'p:GitDiff' },
-  File: { l: 'file', p: 'File', web: 'h:Document' },
-  FileSearch: { l: 'file-search', p: 'FileMagnifyingGlass', web: 'h:DocumentMagnifyingGlass' },
-  FolderFilled: { l: { n: 'folder', fill: true }, p: 'Folder', web: 'h:Folder' },
-  Gauge: { l: 'gauge', p: 'Gauge', web: 'p:Gauge' },
-  GitMerge: { l: 'git-merge', p: 'GitMerge', web: 'p:GitMerge' },
-  GitPullRequest: { l: 'git-pull-request', p: 'GitPullRequest', web: 'p:GitPullRequest' },
-  Hammer: { l: 'hammer', p: 'Hammer', web: 'p:Hammer' },
-  Hand: { l: 'hand', p: 'Hand', web: 'h:HandRaised' },
-  HardDrive: { l: 'hard-drive', p: 'HardDrive', web: 'h:CircleStack' },
-  HardDriveDownload: { l: 'hard-drive-download', p: 'HardDrive', web: 'h:CircleStack' },
-  Highlighter: { l: 'highlighter', p: 'Highlighter', web: 'p:Highlighter' },
-  History: { l: 'history', p: 'ClockCounterClockwise', web: 'h:Clock' },
-  Hook: { l: 'webhook', p: 'WebhooksLogo', web: 'p:WebhooksLogo' },
-  Inbox: { l: 'inbox', p: 'Tray', web: 'h:Inbox' },
-  Laptop: { l: 'laptop', p: 'Laptop', web: 'p:Laptop' },
-  LayoutGrid: { l: 'layout-grid', p: 'SquaresFour', web: 'h:Squares2X2' },
-  ListBullet: { l: 'list', p: 'ListBullets', web: 'h:ListBullet' },
-  ListChecks: { l: 'list-checks', p: 'ListChecks', web: 'h:ClipboardDocumentCheck' },
-  Lock: { l: 'lock', p: 'Lock', web: 'h:LockClosed' },
-  Maximize: { l: 'maximize-2', p: 'CornersOut', web: 'p:CornersOut' },
-  MemoryStick: { l: 'memory-stick', p: 'Memory', web: 'p:Memory' },
-  MessageSquareText: { l: 'message-square-text', p: 'ChatCircleText', web: 'h:ChatBubbleBottomCenterText' },
-  MessageWarning: { l: 'message-square-warning', p: null, web: 'h:ChatBubbleOvalLeftEllipsis' },
-  Messages: { l: 'messages-square', p: 'Chats', web: 'h:ChatBubbleLeftRight' },
-  Minimize: { l: 'minimize-2', p: 'CornersIn', web: 'p:CornersIn' },
-  Minus: { l: 'minus', p: 'Minus', web: 'h:Minus' },
-  Network: { l: 'network', p: 'Network', web: 'p:Network' },
-  NoWrap: { l: 'arrow-right-to-line', p: 'ArrowLineRight', web: 'h:ArrowRight' },
-  Package: { l: 'package', p: 'Package', web: 'h:Cube' },
-  PanelLeft: { l: 'panel-left', p: 'SidebarSimple', web: 'p:SidebarSimple' },
-  PanelRight: { l: 'panel-right', p: 'SidebarSimple!', web: 'p:SidebarSimple!' },
-  Paperclip: { l: 'paperclip', p: 'Paperclip', web: 'h:PaperClip' },
-  PencilLine: { l: 'pencil-line', p: 'PencilLine', web: 'h:Pencil' },
-  Play: { l: 'play', p: 'Play', web: 'h:Play' },
-  Plug: { l: 'plug', p: 'Plugs', web: 'p:Plugs' },
-  Power: { l: 'power', p: 'Power', web: 'h:Power' },
-  QrCode: { l: 'qr-code', p: 'QrCode', web: 'h:QrCode' },
-  Quote: { l: 'quote', p: 'Quotes', web: 'p:Quotes' },
-  Save: { l: 'save', p: 'FloppyDisk', web: 'p:FloppyDisk' },
-  Scissors: { l: 'scissors', p: 'Scissors', web: 'h:Scissors' },
-  Server: { l: 'server', p: 'HardDrives', web: 'h:Server' },
-  Share: { l: 'share', p: 'Export', web: 'h:ArrowUpOnSquare' },
-  ShieldCheck: { l: 'shield-check', p: 'ShieldCheck', web: 'h:ShieldCheck' },
-  ShieldOff: { l: 'shield-off', p: 'ShieldSlash', web: 'h:ShieldExclamation' },
-  Sparkle: { l: 'sparkle', p: 'Sparkle', web: 'p:Sparkle' },
-  Sparkles: { l: 'sparkles', p: null, web: 'h:Sparkles' },
-  Square: { l: 'square', p: 'Square', web: 'l:square' },
-  SquareCheck: { l: 'square-check', p: 'CheckSquare', web: 'p:CheckSquare' },
-  SquareCheckFilled: { l: { n: 'square-check', solid: true }, p: 'CheckSquare', web: 'p:CheckSquare' },
-  SquareMinusFilled: { l: { n: 'square-minus', solid: true }, p: 'MinusSquare', web: 'p:MinusSquare' },
-  SquarePen: { l: 'square-pen', p: 'NotePencil', web: 'h:PencilSquare' },
-  Stethoscope: { l: 'stethoscope', p: 'Stethoscope', web: 'p:Stethoscope' },
-  TextCursor: { l: 'text-cursor-input', p: 'Textbox', web: 'p:Textbox' },
-  TextSize: { l: 'a-large-small', p: 'TextAa', web: 'p:TextAa' },
-  Timer: { l: 'timer', p: 'Timer', web: 'h:Clock' },
-  Undo: { l: 'rotate-ccw', p: 'ArrowCounterClockwise', web: 'h:ArrowUturnLeft' },
-  WandSparkles: { l: 'wand-sparkles', p: 'MagicWand', web: 'h:Sparkles' },
-  WifiOff: { l: 'wifi-off', p: 'WifiSlash', web: 'h:SignalSlash' },
-  WrapText: { l: 'wrap-text', p: null, web: 'l:wrap-text' },
+  Activity: { l: 'activity', p: 'Pulse', web: 'activity' },
+  ListFilter: { l: 'list-filter', p: 'FunnelSimple', web: 'list-filter' },
+  AlignLeft: { l: 'align-left', p: 'TextAlignLeft', web: 'align-left' },
+  AppBadge: { l: 'badge', p: 'Seal', web: 'badge' },
+  AppWindow: { l: 'app-window', p: 'AppWindow', web: 'app-window' },
+  ArrowRight: { l: 'arrow-right', p: 'ArrowRight', web: 'arrow-right' },
+  ArrowToTop: { l: 'arrow-up-to-line', p: 'ArrowLineUp', web: 'arrow-up-to-line' },
+  ArrowUp: { l: 'arrow-up', p: 'ArrowUp', web: 'arrow-up' },
+  ArrowUpDown: { l: 'arrow-up-down', p: 'ArrowsDownUp', web: 'arrow-up-down' },
+  ArrowUpRight: { l: 'arrow-up-right', p: 'ArrowUpRight', web: 'arrow-up-right' },
+  AtSign: { l: 'at-sign', p: 'At', web: 'at-sign' },
+  BookmarkFilled: { l: { n: 'bookmark', fill: true }, p: 'BookmarkSimple', web: { n: 'bookmark', fill: true } },
+  BookmarkMinus: { l: 'bookmark-minus', p: null, web: 'bookmark-minus' },
+  Braces: { l: 'braces', p: 'BracketsCurly', web: 'braces' },
+  Briefcase: { l: 'briefcase', p: 'Briefcase', web: 'briefcase' },
+  Calendar: { l: 'calendar', p: 'CalendarBlank', web: 'calendar' },
+  CalendarClock: { l: 'calendar-clock', p: null, web: 'clock' },
+  ChartLine: { l: 'chart-line', p: 'ChartLine', web: 'chart-line' },
+  ChevronUp: { l: 'chevron-up', p: 'CaretUp', web: 'chevron-up' },
+  ChevronsUpDown: { l: 'chevrons-up-down', p: 'CaretUpDown', web: 'chevrons-up-down' },
+  CircleArrowDown: { l: 'circle-arrow-down', p: 'ArrowCircleDown', web: 'circle-arrow-down' },
+  CircleCheckFilled: { l: { n: 'circle-check', solid: true }, p: 'CheckCircle', web: { n: 'circle-check', solid: true } },
+  CircleDot: { l: 'circle-dot', p: 'RadioButton', web: 'circle-dot' },
+  CircleFilled: { l: { n: 'circle', fill: true }, p: 'Circle', web: { n: 'circle', fill: true } },
+  CircleHalf: { l: 'contrast', p: 'CircleHalf', web: 'contrast' },
+  CircleHelp: { l: 'circle-help', p: 'Question', web: 'circle-help' },
+  CircleInProgress: { l: 'circle-dot-dashed', p: null, web: 'circle-dot-dashed' },
+  CirclePlay: { l: 'circle-play', p: 'PlayCircle', web: 'circle-play' },
+  CircleStop: { l: 'circle-stop', p: 'StopCircle', web: 'circle-stop' },
+  CircleUser: { l: 'circle-user', p: 'UserCircle', web: 'circle-user' },
+  ClockAlert: { l: 'clock-alert', p: null, web: 'clock-alert' },
+  Code: { l: 'code', p: 'Code', web: 'code' },
+  Columns2: { l: 'columns-2', p: 'Columns', web: 'columns-2' },
+  Columns3: { l: 'columns-3', p: 'Columns', web: 'columns-3' },
+  Command: { l: 'command', p: 'Command', web: 'command' },
+  CopyPlus: { l: 'copy-plus', p: null, web: 'copy-plus' },
+  CornerDownRight: { l: 'corner-down-right', p: 'ArrowElbowDownRight', web: 'corner-down-right' },
+  Cpu: { l: 'cpu', p: 'Cpu', web: 'cpu' },
+  Devices: { l: 'monitor-smartphone', p: 'Devices', web: 'monitor-smartphone' },
+  Diff: { l: 'diff', p: 'GitDiff', web: 'git-compare' },
+  File: { l: 'file', p: 'File', web: 'file' },
+  FileSearch: { l: 'file-search', p: 'FileMagnifyingGlass', web: 'file-search' },
+  FolderFilled: { l: { n: 'folder', fill: true }, p: 'Folder', web: { n: 'folder', fill: true } },
+  Gauge: { l: 'gauge', p: 'Gauge', web: 'gauge' },
+  GitMerge: { l: 'git-merge', p: 'GitMerge', web: 'git-merge' },
+  GitPullRequest: { l: 'git-pull-request', p: 'GitPullRequest', web: 'git-pull-request' },
+  Hammer: { l: 'hammer', p: 'Hammer', web: 'hammer' },
+  Hand: { l: 'hand', p: 'Hand', web: 'hand' },
+  HardDrive: { l: 'hard-drive', p: 'HardDrive', web: 'hard-drive' },
+  HardDriveDownload: { l: 'hard-drive-download', p: 'HardDrive', web: 'hard-drive-download' },
+  Highlighter: { l: 'highlighter', p: 'Highlighter', web: 'highlighter' },
+  History: { l: 'history', p: 'ClockCounterClockwise', web: 'history' },
+  Hook: { l: 'webhook', p: 'WebhooksLogo', web: 'webhook' },
+  Inbox: { l: 'inbox', p: 'Tray', web: 'inbox' },
+  Laptop: { l: 'laptop', p: 'Laptop', web: 'laptop' },
+  LayoutGrid: { l: 'layout-grid', p: 'SquaresFour', web: 'layout-grid' },
+  ListBullet: { l: 'list', p: 'ListBullets', web: 'list' },
+  ListChecks: { l: 'list-checks', p: 'ListChecks', web: 'list-checks' },
+  Lock: { l: 'lock', p: 'Lock', web: 'lock' },
+  Maximize: { l: 'maximize-2', p: 'CornersOut', web: 'maximize' },
+  MemoryStick: { l: 'memory-stick', p: 'Memory', web: 'memory-stick' },
+  MessageSquareText: { l: 'message-square-text', p: 'ChatCircleText', web: 'message-square-text' },
+  MessageWarning: { l: 'message-square-warning', p: null, web: 'message-square-warning' },
+  Messages: { l: 'messages-square', p: 'Chats', web: 'messages-square' },
+  Minimize: { l: 'minimize-2', p: 'CornersIn', web: 'minimize' },
+  Minus: { l: 'minus', p: 'Minus', web: 'minus' },
+  Network: { l: 'network', p: 'Network', web: 'network' },
+  NoWrap: { l: 'arrow-right-to-line', p: 'ArrowLineRight', web: 'arrow-right-to-line' },
+  Package: { l: 'package', p: 'Package', web: 'package' },
+  PanelLeft: { l: 'panel-left', p: 'SidebarSimple', web: 'panel-left' },
+  PanelRight: { l: 'panel-right', p: 'SidebarSimple!', web: 'panel-right' },
+  Paperclip: { l: 'paperclip', p: 'Paperclip', web: 'paperclip' },
+  PencilLine: { l: 'pencil-line', p: 'PencilLine', web: 'pencil-line' },
+  Play: { l: 'play', p: 'Play', web: { n: 'play', fill: true } },
+  Plug: { l: 'plug', p: 'Plugs', web: 'plug' },
+  Power: { l: 'power', p: 'Power', web: 'power' },
+  QrCode: { l: 'qr-code', p: 'QrCode', web: 'qr-code' },
+  Quote: { l: 'quote', p: 'Quotes', web: 'quote' },
+  Save: { l: 'save', p: 'FloppyDisk', web: 'save' },
+  Scissors: { l: 'scissors', p: 'Scissors', web: 'scissors' },
+  Server: { l: 'server', p: 'HardDrives', web: 'server' },
+  Share: { l: 'share', p: 'Export', web: 'share' },
+  ShieldCheck: { l: 'shield-check', p: 'ShieldCheck', web: 'shield-check' },
+  ShieldOff: { l: 'shield-off', p: 'ShieldSlash', web: 'shield-off' },
+  Sparkle: { l: 'sparkle', p: 'Sparkle', web: 'sparkle' },
+  Sparkles: { l: 'sparkles', p: null, web: 'sparkles' },
+  Square: { l: 'square', p: 'Square', web: 'square' },
+  SquareCheck: { l: 'square-check', p: 'CheckSquare', web: 'square-check' },
+  SquareCheckFilled: { l: { n: 'square-check', solid: true }, p: 'CheckSquare', web: { n: 'square-check', solid: true } },
+  SquareMinusFilled: { l: { n: 'square-minus', solid: true }, p: 'MinusSquare', web: { n: 'square-minus', solid: true } },
+  SquarePen: { l: 'square-pen', p: 'NotePencil', web: 'square-pen' },
+  Stethoscope: { l: 'stethoscope', p: 'Stethoscope', web: 'stethoscope' },
+  TextCursor: { l: 'text-cursor-input', p: 'Textbox', web: 'text-cursor-input' },
+  TextSize: { l: 'a-large-small', p: 'TextAa', web: 'a-large-small' },
+  Timer: { l: 'timer', p: 'Timer', web: 'timer' },
+  Undo: { l: 'rotate-ccw', p: 'ArrowCounterClockwise', web: 'undo-2' },
+  WandSparkles: { l: 'wand-sparkles', p: 'MagicWand', web: 'wand-sparkles' },
+  WifiOff: { l: 'wifi-off', p: 'WifiSlash', web: 'wifi-off' },
+  WrapText: { l: 'wrap-text', p: null, web: 'wrap-text' },
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -189,9 +187,14 @@ interface Glyph { w: number; h: number; parts: Part[]; mirror?: boolean }
 
 const CAP: Record<string, number> = { butt: 0, round: 1, square: 2 };
 const JOIN: Record<string, number> = { miter: 0, round: 1, bevel: 2 };
-/** Android's lucide stroke (`gen-mobile-icons.ts` STROKE) and the web's (`icons-base.tsx` STROKE_WIDTH). */
+/** Android's lucide stroke (`gen-mobile-icons.ts` STROKE). */
 const ANDROID_STROKE = 1.75;
-const WEB_STROKE = 2;
+/**
+ * The web draws lucide at a constant 1.25 screen px (`icons-base.tsx` STROKE_WIDTH with
+ * `non-scaling-stroke`). A symbol's stroke scales with it, so the web's line is matched at a 16pt
+ * box (BOX: a 12.7pt font), between the sidebar's 12pt and the toolbar's 13pt: 1.25 × 24 / 16.
+ */
+const WEB_STROKE = 1.875;
 
 function kotlinFile(name: string): string {
   return readFileSync(join(kotlinIcons, name), 'utf8');
@@ -245,7 +248,7 @@ function lucideGlyph(spec: Lucide, stroke: number): Glyph {
   return { w: 24, h: 24, parts: nodes.map(node => part(node, { fill })) };
 }
 
-/** An SVG string -> parts, for the Phosphor and Heroicons components rendered to markup. */
+/** An SVG string -> parts, for the Phosphor components rendered to markup. */
 function glyphFromSvg(svg: string, mirror = false): Glyph {
   const root = new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement!;
   const [x, y, w, h] = root.getAttribute('viewBox')!.split(/[ ,]+/).map(Number);
@@ -276,19 +279,6 @@ function phosphorGlyph(spec: string, weight: 'regular' | 'fill'): Glyph {
   return glyphFromSvg(renderToStaticMarkup(createElement(component, { weight })), mirror);
 }
 
-function heroGlyph(name: string): Glyph {
-  const component = (hero as unknown as Record<string, ComponentType | undefined>)[name + 'Icon'];
-  if (!component) throw new Error('Heroicons has no icon ' + name);
-  return glyphFromSvg(renderToStaticMarkup(createElement(component)));
-}
-
-function webGlyph(spec: string): Glyph {
-  const [kind, name] = [spec.slice(0, 1), spec.slice(2)];
-  if (kind === 'h') return heroGlyph(name);
-  if (kind === 'p') return phosphorGlyph(name, 'fill');
-  return lucideGlyph(name, WEB_STROKE);
-}
-
 // ---------------------------------------------------------------------------------------------
 // Resolving every key in every pack
 // ---------------------------------------------------------------------------------------------
@@ -315,7 +305,7 @@ function resolveGlyphs(): Record<string, Record<string, Glyph>> {
       } else if (android) glyph = packsAndroid[id]?.[key];
       out[id]![key] = glyph ?? lucide;
     }
-    out.web![key] = webGlyph(spec.web);
+    out.web![key] = lucideGlyph(spec.web, WEB_STROKE);
   }
   return out;
 }

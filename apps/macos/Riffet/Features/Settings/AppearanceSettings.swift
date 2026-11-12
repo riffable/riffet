@@ -121,23 +121,25 @@ struct WindowSettings: View {
                 }
             }
 
-            Section {
-                SettingsRow(String(localized: "材质"), detail: prefs.reduceTransparency ? String(localized: "系统已开启「降低透明度」。") : nil) {
-                    FormSegmented("材质", selection: $prefs.windowMaterial) {
-                        ForEach(WindowMaterial.available) { material in
-                            Text(material.title).tag(material)
+            if prefs.materialApplies {
+                Section {
+                    SettingsRow(String(localized: "材质"), detail: prefs.reduceTransparency ? String(localized: "系统已开启「降低透明度」。") : nil) {
+                        FormSegmented("材质", selection: $prefs.windowMaterial) {
+                            ForEach(WindowMaterial.available) { material in
+                                Text(material.title).tag(material)
+                            }
                         }
+                        .labelsHidden()
+                        .disabled(prefs.reduceTransparency)
                     }
-                    .labelsHidden()
-                    .disabled(prefs.reduceTransparency)
-                }
 
-                if !prefs.reduceTransparency, prefs.windowMaterial != .solid {
-                    SettingsRow("侧栏透明度") {
-                        SettingsNumberSlider(value: $prefs.sidebarTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 60)
-                    }
-                    SettingsRow("主区透明度") {
-                        SettingsNumberSlider(value: $prefs.contentTransparency, range: 0...WindowMaterial.contentLimit, step: 2, suffix: "%", defaultValue: 0)
+                    if !prefs.reduceTransparency, prefs.windowMaterial != .solid {
+                        SettingsRow("侧栏透明度") {
+                            SettingsNumberSlider(value: $prefs.sidebarTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 60)
+                        }
+                        SettingsRow("主区透明度") {
+                            SettingsNumberSlider(value: $prefs.contentTransparency, range: 0...100, step: 5, suffix: "%", defaultValue: 0)
+                        }
                     }
                 }
             }
@@ -185,6 +187,24 @@ struct TypographySettings: View {
                     Toggle("章节导航", isOn: $prefs.chapterNavigation)
                         .labelsHidden()
                         .toggleStyle(.switch)
+                }
+
+                if prefs.style.rightPanel == .outline {
+                    SettingsRow("会话右侧") {
+                        FormSegmented("会话右侧", selection: $prefs.sessionOverview) {
+                            Text("概览").tag(true)
+                            Text("仅导航条").tag(false)
+                        }
+                        .labelsHidden()
+                    }
+                }
+
+                SettingsRow("导航条样式") {
+                    FormSegmented("导航条样式", selection: $prefs.railDots) {
+                        Text("线").tag(false)
+                        Text("圆点").tag(true)
+                    }
+                    .labelsHidden()
                 }
             }
 

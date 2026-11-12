@@ -8,12 +8,12 @@
  <line id="Capline-M" stroke="#27AAE1" stroke-width="0.5" x1="263" x2="3036" y1="1055.541" y2="1055.541"/>
  <line id="Baseline-L" stroke="#27AAE1" stroke-width="0.5" x1="263" x2="3036" y1="1556" y2="1556"/>
  <line id="Capline-L" stroke="#27AAE1" stroke-width="0.5" x1="263" x2="3036" y1="1485.541" y2="1485.541"/>
- <line id="left-margin-Regular-M" stroke="#27AAE1" stroke-width="0.5" x1="1599.4" x2="1599.4" y1="916" y2="1166"/>
- <line id="right-margin-Regular-M" stroke="#27AAE1" stroke-width="0.5" x1="1700.7" x2="1700.7" y1="916" y2="1166"/>
+ <line id="left-margin-Regular-M" stroke="#27AAE1" stroke-width="0.5" x1="1591.1" x2="1591.1" y1="916" y2="1166"/>
+ <line id="right-margin-Regular-M" stroke="#27AAE1" stroke-width="0.5" x1="1709" x2="1709" y1="916" y2="1166"/>
 </g>
 <g id="Symbols">
- <g id="Regular-M" transform="matrix(1 0 0 1 1599.4 1126)">
-  <path d="M85.3 -71.6Q88.6 -69.5 87.9 -65.6Q87.6 -64.4 87 -63.5L47.6 -4.4Q45.6 -1.4 42 -1.8Q39.9 -2.1 38.5 -3.5L14.9 -27.1Q12.3 -29.9 13.8 -33.5Q15.3 -37 19.1 -37Q21.5 -37.1 23.2 -35.5L41.8 -16.9L77.1 -70Q79.3 -73.3 83.2 -72.5Q84.4 -72.3 85.3 -71.6Z"/>
+ <g id="Regular-M" transform="matrix(1 0 0 1 1591.1 1126)">
+  <path d="M45.7 -5.5Q43.3 -3.2 40.3 -4.4Q39.4 -4.8 38.7 -5.5L12.4 -31.7Q10.1 -34.1 11.4 -37.1Q12.6 -40.2 15.9 -40.2Q18 -40.2 19.4 -38.7L42.2 -15.9L96.4 -70.2Q98.8 -72.5 101.8 -71.3Q104.8 -70 104.8 -66.7Q104.8 -64.7 103.4 -63.2L45.7 -5.5Z"/>
  </g>
 </g>
 </svg>

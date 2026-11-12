@@ -18,7 +18,8 @@ struct WorkbenchView: View {
     /// The conversation column's width as last laid out, read when the panel changes. A box, not
     /// state: a window resize writes it every frame, and nothing draws from it.
     @State private var detailWidth = ColumnWidthBox()
-    @AppStorage("riffet.inspector-width") private var inspectorWidth: Double = 420
+    /// The side panel's width as the reader dragged it; 0 until then, when the style's own applies.
+    @AppStorage("riffet.inspector-width") private var storedInspectorWidth: Double = 0
     @AppStorage("riffet.terminal-height") private var terminalHeight: Double = 240
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The drawn sidebar's width, which the panel's room is reckoned against there.
@@ -50,6 +51,11 @@ struct WorkbenchView: View {
     /// The view is a conversation window (`Workbench.Role.window`): the conversation, its panel and
     /// terminal, without the sidebar, the home page or the one-level pages.
     private var isWindow: Bool { workbench.role == .window }
+
+    /// The tab bar's commands, while it is on screen.
+    private var tabCommands: SessionTabCommands? {
+        !isWindow && SessionTabsPreferences.shared.active ? SessionTabs.model(for: workbench.baseURL).commands : nil
+    }
 
     /// The side panel is on screen: open for this conversation, and no page covers it.
     private var inspectorShown: Bool { Self.panelShown(in: workbench) }
@@ -230,6 +236,7 @@ struct WorkbenchView: View {
             searchPresented = false
             importRequest = requested
         }
+        .modifier(QuickOpenOverlay(workbench: workbench))
         .focusedSceneValue(\.workbenchActions, WorkbenchActions(
             newSession: { workbench.showHome() },
             toggleInspector: { workbench.toggleInspector() },
@@ -240,8 +247,9 @@ struct WorkbenchView: View {
             refresh: { workbench.refresh() },
             toggleSidebar: { toggleSidebar() },
             openPage: { page in workbench.page = page },
-            previousSession: { workbench.openAdjacentSession(-1) },
-            nextSession: { workbench.openAdjacentSession(1) },
+            previousSession: { if let tabs = tabCommands { tabs.step(-1) } else { workbench.openAdjacentSession(-1) } },
+            nextSession: { if let tabs = tabCommands { tabs.step(1) } else { workbench.openAdjacentSession(1) } },
+            tabs: tabCommands,
             openSession: { index in
                 // A conversation window has no sidebar of its own: the order is the main window's.
                 guard !isWindow else {
@@ -252,6 +260,7 @@ struct WorkbenchView: View {
             },
             search: { workbench.sidebar.searchRequested = .titles },
             searchContent: { workbench.sidebar.searchRequested = .content },
+            quickOpen: { NotificationCenter.default.post(name: .riffetQuickOpen, object: workbench) },
             find: { workbench.openFind() },
             findNext: { workbench.findNext() },
             findPrevious: { workbench.findPrevious() },
@@ -259,7 +268,8 @@ struct WorkbenchView: View {
             toggleTerminal: { workbench.terminalDock.toggle() },
             openInWindow: isWindow ? nil : {
                 if !workbench.showingHome, let id = workbench.selected?.id { WindowRouter.shared.openConversation(id) }
-            }
+            },
+            pluginCommands: Dictionary(workbench.pluginCommandList.map { command in (command.id, { workbench.pluginCommands.run(command, in: workbench) }) }, uniquingKeysWith: { first, _ in first })
         ))
     }
 
@@ -345,7 +355,7 @@ struct WorkbenchView: View {
             if panelReserved {
                 HStack(spacing: 0) {
                     if !maximized {
-                        PanelResizeHandle(size: $inspectorWidth, limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !cards)
+                        PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !cards)
                             .frame(width: cards ? Space.sm : 1)
                     }
                     InspectorView(workbench: workbench, tab: inspectorTab, maximized: maximized) { workbench.toggleInspectorMaximized() }
@@ -393,6 +403,10 @@ struct WorkbenchView: View {
     private var panelAnimation: Animation { .snappy(duration: reduceMotion ? 0.15 : 0.22) }
 
     private var maximized: Bool { workbench.inspectorMaximized }
+
+    private var inspectorWidth: Double {
+        storedInspectorWidth > 0 ? storedInspectorWidth : Double(DisplayPreferences.shared.style.layout.rightPanel)
+    }
 
     private var panelWidth: CGFloat { min(max(inspectorWidth, 300), max(300, width - 420)) }
 
@@ -1588,11 +1602,15 @@ struct WorkbenchActions {
     let openPage: (WorkbenchPage) -> Void
     let previousSession: () -> Void
     let nextSession: () -> Void
+    /// The session tab bar's commands; nil while no bar is on screen, when the keys keep their other meanings.
+    let tabs: SessionTabCommands?
     /// ⌘1…⌘9, zero-based.
     let openSession: (Int) -> Void
     /// The palette on titles (⌘K) or on message content (⇧⌘F).
     let search: () -> Void
     let searchContent: () -> Void
+    /// ⌘P: a project file by name.
+    let quickOpen: () -> Void
     /// 会话内查找: ⌘F, ⌘G and ⇧⌘G.
     let find: () -> Void
     let findNext: () -> Void
@@ -1601,6 +1619,8 @@ struct WorkbenchActions {
     let toggleTerminal: () -> Void
     /// Opens the shown conversation in its own window; nil in a window that already is one.
     let openInWindow: (() -> Void)?
+    /// The plugin commands on offer, by id (`PluginKeybindingMenu`).
+    let pluginCommands: [String: () -> Void]
 }
 
 struct WorkbenchActionsKey: FocusedValueKey {
@@ -1646,7 +1666,9 @@ struct RiffetCommands: Commands {
             Button("检查器全屏") { actions?.toggleInspectorMaximized() }.keyboardShortcut("f", modifiers: [.command, .option])
             Divider()
             Button("显示/隐藏终端") { actions?.toggleTerminal() }.keyboardShortcut("`", modifiers: [.control])
-            Button("切换对话/终端视图") { actions?.toggleTerminalView() }.keyboardShortcut("t", modifiers: [.command, .shift])
+            // ⇧⌘T reopens a closed tab while the tab bar is on.
+            Button("切换对话/终端视图") { actions?.toggleTerminalView() }
+                .keyboardShortcut(actions?.tabs == nil ? KeyboardShortcut("t", modifiers: [.command, .shift]) : nil)
             Divider()
             Button("刷新") { actions?.refresh() }.keyboardShortcut("r")
             Divider()
@@ -1669,6 +1691,15 @@ struct RiffetCommands: Commands {
             Button("新会话") { WindowRouter.shared.showMain(); actions?.newSession() }
                 .keyboardShortcut("n")
         }
+        // ⌘W closes the tab on screen, else the window.
+        CommandGroup(replacing: .saveItem) {
+            Button("关闭") {
+                // A sheet over the window takes the key, not the tab under it.
+                let sheet = NSApp.keyWindow?.attachedSheet != nil
+                if sheet || actions?.tabs?.closeCurrent() != true { NSApp.keyWindow?.performClose(nil) }
+            }
+            .keyboardShortcut("w")
+        }
         // 前往: the palette, the pages, and moving between conversations.
         CommandMenu("前往") {
             Button("搜索…") { actions?.search() }.keyboardShortcut("k")
@@ -1677,6 +1708,7 @@ struct RiffetCommands: Commands {
             Button("下一个") { actions?.findNext() }.keyboardShortcut("g")
             Button("上一个") { actions?.findPrevious() }.keyboardShortcut("g", modifiers: [.command, .shift])
             Button("命令…") { actions?.openPalette() }.keyboardShortcut("p", modifiers: [.command, .shift])
+            Button("快速打开…") { actions?.quickOpen() }.keyboardShortcut("p")
             Divider()
             Button(WorkbenchPage.marks.title) { actions?.openPage(.marks) }.keyboardShortcut("l", modifiers: [.command, .shift])
             Button(WorkbenchPage.tasks.title) { actions?.openPage(.tasks) }.keyboardShortcut("j", modifiers: [.command, .shift])
@@ -1686,13 +1718,21 @@ struct RiffetCommands: Commands {
             Divider()
             Button("上一个会话") { actions?.previousSession() }.keyboardShortcut("[", modifiers: [.command, .shift])
             Button("下一个会话") { actions?.nextSession() }.keyboardShortcut("]", modifiers: [.command, .shift])
-            Menu("侧栏会话") {
+            if let tabs = actions?.tabs {
+                Button("下一个标签") { tabs.step(1) }.keyboardShortcut(.tab, modifiers: .control)
+                Button("上一个标签") { tabs.step(-1) }.keyboardShortcut(.tab, modifiers: [.control, .shift])
+                Button("重新打开关闭的标签") { tabs.reopen() }.keyboardShortcut("t", modifiers: [.command, .shift])
+            }
+            Menu(actions?.tabs == nil ? "侧栏会话" : "标签页") {
                 ForEach(1...9, id: \.self) { number in
-                    Button("第 \(number) 个") { actions?.openSession(number - 1) }
-                        .keyboardShortcut(KeyEquivalent(Character(String(number))))
+                    Button("第 \(number) 个") {
+                        if let tabs = actions?.tabs { tabs.goTo(number) } else { actions?.openSession(number - 1) }
+                    }
+                    .keyboardShortcut(KeyEquivalent(Character(String(number))))
                 }
             }
         }
+        PluginKeybindingMenu(run: actions?.pluginCommands)
         // 会话: actions on the open conversation only.
         CommandMenu("会话") {
             Button("中断") { actions?.interrupt() }.keyboardShortcut(".")

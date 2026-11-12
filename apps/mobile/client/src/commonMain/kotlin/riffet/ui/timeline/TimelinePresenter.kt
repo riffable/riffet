@@ -21,7 +21,10 @@ import riffet.i18n.L10n
 import riffet.core.StoredSubagent
 import riffet.core.SubagentEntry
 import riffet.core.SubagentState
+import riffet.core.SessionOutput
+import riffet.core.SessionOutputsCache
 import riffet.core.SubagentTranscript
+import riffet.core.sessionOutputs
 import riffet.core.TimelineItem
 import riffet.core.subagentEntries
 import riffet.core.outputRateDescription
@@ -80,6 +83,11 @@ data class TimelinePresentation(
     val dock: ActivityDock = ActivityDock(),
     /** Activities with a stop request out; a row shows them as stopping ([activityView]). */
     val stoppingActivities: Set<String> = emptySet(),
+    /**
+     * The files the session's tools wrote, newest first, with paths as the tools wrote them (no project
+     * root is known here). Only a presenter made with `withOutputs` fills it ([sessionOutputs]).
+     */
+    val outputs: List<SessionOutput> = emptyList(),
 ) {
     /** How many of [subagents] are still working. */
     val runningSubagents: Int get() = subagents.count { it.state == SubagentState.RUNNING }
@@ -115,6 +123,7 @@ class TimelinePresenter(
     scope: CoroutineScope,
     private val context: CoroutineContext = Dispatchers.Default,
     private val prepare: (TimelineGrouping) -> Unit = {},
+    private val withOutputs: Boolean = false,
 ) {
     private class Input(
         val sessionId: String?,
@@ -132,6 +141,7 @@ class TimelinePresenter(
 
     private var previous: TimelineGrouping? = null
     private var previousSession: String? = null
+    private val outputsCache = SessionOutputsCache()
 
     /**
      * The last grouping of each session the store still holds warm ([SessionStore.presentable]), so a
@@ -166,6 +176,7 @@ class TimelinePresenter(
             // Another conversation is grouped from scratch: its rows are none of these.
             previous = null
             previousSession = input.sessionId
+            outputsCache.clear()
         }
         return presentTimeline(previous, input.sessionId, input.timeline, input.queued, input.working, input.metrics, input.outputRate, input.activeTurnId)
             .copy(
@@ -175,6 +186,7 @@ class TimelinePresenter(
                 subagents = subagentEntries(input.timeline, input.subagents),
                 dock = activityDock(input.activity, timelineActivities(input.timeline)),
                 stoppingActivities = input.stopping,
+                outputs = if (withOutputs) sessionOutputs(input.timeline, null, outputsCache) else emptyList(),
             )
             .also { previous = it.grouping; prepare(it.grouping) }
     }

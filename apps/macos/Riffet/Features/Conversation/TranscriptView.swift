@@ -9,6 +9,10 @@ import RiffetKit
 struct TranscriptView: View {
     let workbench: Workbench
     let session: Session
+    /// The overview column carries the turn navigation, so the rail is not drawn.
+    var railHidden = false
+    /// Where the overview column reads the list's turns and the one being read.
+    var link: TranscriptScrollLink?
     let restoreInput: (Run) -> Void
     @State private var scroll = TranscriptScrollState()
     @State private var orchestrator = SessionOrchestrator()
@@ -16,10 +20,14 @@ struct TranscriptView: View {
     @Environment(\.quoteMessage) private var quote
 
     var body: some View {
-        TranscriptHost(workbench: workbench, sessionId: session.id, projectId: session.projectId, scroll: scroll, actions: actions)
+        TranscriptHost(workbench: workbench, sessionId: session.id, projectId: session.projectId, scroll: scroll, actions: actions, railHidden: railHidden)
             .overlay { TranscriptPlaceholder(workbench: workbench, sessionId: session.id, scroll: scroll) }
             .sessionOrchestration(orchestrator, workbench: workbench, session: session)
-            .onAppear { MarksStore.shared.watch(session.id) }
+            .onAppear {
+                MarksStore.shared.watch(session.id)
+                scroll.sessionId = session.id
+                if let link, link.scroll !== scroll { link.scroll = scroll }
+            }
             .onDisappear { MarksStore.shared.unwatch(session.id) }
     }
 
@@ -76,6 +84,7 @@ struct TranscriptHost: NSViewControllerRepresentable {
     let projectId: String
     let scroll: TranscriptScrollState
     let actions: TranscriptActions
+    var railHidden = false
 
     func makeNSViewController(context: Context) -> TranscriptController {
         let workbench = workbench, sessionId = sessionId, projectId = projectId
@@ -136,6 +145,7 @@ struct TranscriptHost: NSViewControllerRepresentable {
     func updateNSViewController(_ controller: TranscriptController, context: Context) {
         controller.actions = actions
         controller.covered = context.environment.covered
+        controller.railHidden = railHidden
     }
 
     /// The presenter's frame for the session once its history has arrived.

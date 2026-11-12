@@ -203,24 +203,41 @@ struct ChangesPanel: View {
             .disabled(busy)
     }
 
-    /// One menu for the views: a segmented control here would sit inside the inspector's segmented tabs.
+    /// The views as underlined tabs, one click apart: a segmented control here would sit inside the
+    /// inspector's segmented tabs. A panel too narrow for them gets one menu instead.
     private var sectionBar: some View {
         HStack(spacing: Space.sm) {
-            ChoiceMenu(options: pages.map { page in ChoiceOption(title: page.title, selected: page == section) { section = page } }) {
-                HStack(spacing: Space.xs) {
-                    Text(verbatim: section.title).font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
-                    Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+            ViewThatFits(in: .horizontal) {
+                sectionTabs(spacing: Space.md)
+                sectionTabs(spacing: Space.sm)
+                ChoiceMenu(options: pages.map { page in ChoiceOption(title: page.title, selected: page == section) { section = page } }) {
+                    HStack(spacing: Space.xs) {
+                        Text(verbatim: section.title).font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
+                        Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                    }
+                    .padding(.horizontal, Space.sm)
+                    .frame(height: 28)
                 }
-                .padding(.horizontal, Space.sm)
-                .frame(height: 28)
+                .fixedSize()
             }
             .accessibilityLabel(plain("Git view"))
             Spacer(minLength: 0)
             if section != .worktrees { refreshButton }
+            PanelMaximizeButton()
         }
-        .padding(.leading, Space.sm)
+        .padding(.leading, Space.md)
         .padding(.trailing, Space.sm)
         .frame(height: InspectorMetrics.headerHeight)
+    }
+
+    private func sectionTabs(spacing: CGFloat) -> some View {
+        let style = DisplayPreferences.shared.style
+        return HStack(spacing: spacing) {
+            ForEach(pages) { page in
+                UnderlineTab(title: page.title, selected: page == section, style: style, size: 12.5) { section = page }
+            }
+        }
+        .fixedSize()
     }
 
     private var scopeBar: some View {

@@ -285,6 +285,8 @@ struct SessionRowMenu {
     /// Nil when the server cannot delete; the closure says whether the entry is enabled (its preview is loading).
     let delete: (() -> Void)?
     var deleteEnabled = true
+    /// The tabs, while the header draws them: the row can add its conversation to the bar or take it out.
+    var tabs: SessionTabs?
 }
 
 /**

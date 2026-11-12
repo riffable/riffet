@@ -1,7 +1,6 @@
 import ServiceManagement
 import SwiftUI
 import RiffetKit
-import CoreImage.CIFilterBuiltins
 
 struct ConnectionSettings: View {
     @Environment(AppModel.self) private var model
@@ -10,6 +9,7 @@ struct ConnectionSettings: View {
     @State private var showRemote = false
     @State private var forgetting: SavedServer?
     @State private var revokeId: String?
+    @State private var confirmIdle = false
     @State private var error: String?
     @State private var loadedAt = Date.distantPast
     @State private var devicesLoaded = false
@@ -54,11 +54,17 @@ struct ConnectionSettings: View {
                     SettingsHint("连接服务器后可查看。", symbol: "info.circle")
                 } else {
                     pairingRow
-                    ForEach(devices, id: \.id) { device in
-                        SettingsRow(device.name, detail: dateLabel(device)) {
+                    ForEach(devices.sorted(by: Self.byPresence), id: \.id) { device in
+                        SettingsRow(device.name, detail: status(device)) {
                             SettingsActionButton("撤销", kind: .secondary) { revokeId = device.id }
                                 .controlSize(.small)
                                 .help("撤销这台设备")
+                        }
+                    }
+                    if !idleDevices.isEmpty {
+                        SettingsRow("超过 7 天未使用 · \(idleDevices.count)") {
+                            SettingsActionButton("全部撤销", kind: .secondary) { confirmIdle = true }
+                                .controlSize(.small)
                         }
                     }
                     if devices.isEmpty, devicesLoaded {
@@ -101,6 +107,15 @@ struct ConnectionSettings: View {
             Button("取消", role: .cancel) { revokeId = nil }
         } message: {
             Text("该设备需要重新配对。")
+        }
+        .confirmationDialog("撤销 \(idleDevices.count) 台设备？", isPresented: $confirmIdle, titleVisibility: .visible) {
+            Button("撤销", role: .destructive) {
+                let ids = idleDevices.map(\.id)
+                Task { for id in ids { await revoke(id) } }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("设备需要重新配对。")
         }
     }
 
@@ -234,18 +249,10 @@ struct ConnectionSettings: View {
         return date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
     }
 
-    private static let qrContext = CIContext()
-
     private static func qrImage(_ pairing: PairingCodeResponse) -> NSImage? {
         // The server's own string when it sends one; an older server gets the same fields built here.
         guard let payload = pairing.payload ?? pairingPayload(pairing) else { return nil }
-        let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(payload.utf8)
-        filter.correctionLevel = "M"
-        guard let output = filter.outputImage else { return nil }
-        let scaled = output.transformed(by: CGAffineTransform(scaleX: 10, y: 10))
-        guard let cgImage = qrContext.createCGImage(scaled, from: scaled.extent) else { return nil }
-        return NSImage(cgImage: cgImage, size: NSSize(width: scaled.extent.width, height: scaled.extent.height))
+        return QRCode.image(payload)
     }
 
     private static func pairingPayload(_ pairing: PairingCodeResponse) -> String? {
@@ -262,8 +269,29 @@ struct ConnectionSettings: View {
         return String(data: data, encoding: .utf8)
     }
 
-    private func dateLabel(_ device: PublicDevice) -> String {
-        formatDateTime(value: device.createdAt).map { String(localized: "配对于 \($0)") } ?? device.createdAt
+    /// Online first, then the most recently seen.
+    private static func byPresence(_ a: PublicDevice, _ b: PublicDevice) -> Bool {
+        if a.online != b.online { return a.online }
+        return (a.lastSeenAt ?? "") > (b.lastSeenAt ?? "")
+    }
+
+    /// Unseen this long, a record is usually one left behind by re-pairing.
+    private var idleDevices: [PublicDevice] {
+        let limit = Date.now.addingTimeInterval(-7 * 24 * 3600)
+        return devices.filter { device in
+            !device.online && (ServerTime.date(device.lastSeenAt ?? device.createdAt) ?? .distantFuture) < limit
+        }
+    }
+
+    private func status(_ device: PublicDevice) -> String {
+        let phone = device.platform == "android" || device.platform == "ios"
+        let duplicated = devices.filter { $0.name == device.name }.count > 1
+        return [
+            device.online ? String(localized: "在线") : ServerTime.relative(device.lastSeenAt).map { String(localized: "最后在线 \($0)") },
+            duplicated ? formatDateTime(value: device.createdAt).map { String(localized: "配对于 \($0)") } : nil,
+            phone && device.allowControl ? String(localized: "允许 Agent 操作") : nil,
+            phone && device.capabilities.contains("screen.observe") ? String(localized: "无障碍已开启") : nil,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     private func load() async {

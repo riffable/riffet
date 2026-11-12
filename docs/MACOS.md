@@ -971,3 +971,34 @@ CSV / JSON 导出；页面可见时订阅
   「Agent 与模型 → Cursor」的 CLI 面板只有检查与更新，没有「安装 CLI」。
 - 变更面板的 diff 是整页下钻而不是对话框。
 - 交互卡片固定在输入框上方，因此不需要「视口外待确认」提醒。
+
+### 2026-11-12 盘点：待补齐
+
+按 `apps/web/src` 重新盘点。画布与「对话 / 终端 / 画布」视图切换（含插件的会话视图位置）见「画布」一节，不在此列。
+
+| 阶段 | 功能 | Web 位置 | Mac 现状 | 做法 |
+| --- | --- | --- | --- | --- |
+| 进行中 | 会话标签页：临时标签、置顶分区、右键菜单、关闭其他 / 右侧、重新打开、溢出菜单、未读点；设置「标签样式」「打开会话时」与快捷键 | `tabs/*`、`settings/TabsSection.tsx` | 仅 Riffet 风格，最多 12 个，只能点击与关闭 | 标签状态移出视图，按服务器存在本机；快捷键用 Mac 惯例：⌘1–9、⌃Tab / ⇧⌘[ ]、⌘W、⇧⌘T。不做「独立一行」 |
+| 一 | 会话概览栏：计划、章节导航、子 Agent 与后台任务、产出文件 | `session/SessionAside.tsx` | 无；计划在输入框上方 | Riffet 风格配方 `rightPanel: outline` 的落地：正文右侧 248pt 一栏；设置「会话右侧：概览 / 仅导航条」，只在 Riffet 风格出现，默认概览；宽度不够或检查器放不下时退回导航条，空栏也保留；显示时隐藏输入框上方计划与右侧刻线；`sessionOutputs` 移到 `apps/mobile/core` 共用 |
+| 一 | 技能与工具选择器：手机控制、MCP、Skill 按会话开关 | `session/ToolsPicker.tsx` | `toolGroups` / `extensionsOff` 固定传 nil | 新会话页输入框左侧工具按钮；已有会话走 `SessionUpdate` |
+| 一 | 插件快捷键生效 | `app/pluginKeybindings.ts` | 只显示文字 | 注册为菜单命令，与 App 快捷键冲突时 App 优先，插件页标出冲突；在标签页之后做 |
+| 二 | 文件面板代码导航：⌘ 点击跳到定义、查找用法、最近查看、⌘P 快速打开 | `panels/FilesPanel.tsx`、`panels/QuickOpen.tsx` | 只有按名称 / 内容搜索 | 走服务端 `code-nav`；`CodeTextView` 点击位置换算成字符偏移；⌘P 独立于命令面板 |
+| 二 | 会话信息：本会话收藏、模型与权限 | `session/marks.tsx`、`SessionInfo.tsx` | 只有目录、分支、创建时间 | 补到现有会话信息弹层 |
+| 二 | 导航条样式：线 / 圆点 | `settings/ViewsSection.tsx` | 只有刻线 | 和「会话右侧」放在同一组 |
+| 二 | 侧栏收起后悬停浮出与「固定侧边栏」 | `use-sidebar-peek.ts` | 无 | 只做自绘风格（Riffet、线条），浮出时盖在内容上不挤正文 |
+| 三 | 机器人（飞书）设置页 | `settings/ChannelsSection.tsx`、`settings/channels/*` | 无 | 现有表单组件 |
+| 三 | 分享管理：全部分享、复制、核对、重试、取消、默认发布目标 | `shares/SharesSection.tsx` | 只有单会话分享 | 设置页列表 |
+| 三 | 设备管理：在线状态、最后在线、Agent 操作与无障碍状态、清理 7 天未用 | `settings/DevicesSection.tsx` | 只有名称、配对时间、撤销 | 补到现有设备列表 |
+
+每项交给写入范围互不重叠的 worker，主 agent 审查与整合；每项过 Debug 构建与 `check-i18n`，改到 Kotlin core 时再编 `:core`。
+
+2026-11-12 以上全部实现（未经人工界面验收）。与表中做法不同或暂缓的：
+
+- 标签页：不做拖拽排序、标签悬停卡片和「独立一行」；⇧⌘T 在标签栏开启时改为重新打开标签，「切换对话/终端视图」此时没有快捷键；⌘W 替换系统「关闭」，没有当前标签时关闭窗口。
+- 会话概览：导航区是回合列表（Web 的 `TurnOutline`），回答内章节仍由章节导航负责；计划折叠后不单列「已完成 N 项」。
+- 技能与工具：已有会话改动后下次启动生效，保存失败时静默回退，没有错误提示。
+- 插件快捷键：App 占用的组合是 `PluginKeybindings.swift` 里的手写表，新增 App 快捷键时同步更新。
+- 代码导航：不做 Web 的跳转返回历史，最近查看标签代替。
+- 侧栏浮出：不做悬停「显示侧栏」按钮触发。
+- 机器人：RiffetKit 还没有 `/api/channels`，暂由 `Services/ServerJSON.swift` 直连，之后移入 Kotlin 客户端供手机端复用；不做斜杠命令说明、卡片实时预览和 `channels` 推送（操作后与添加期间轮询）。
+- 设备：RiffetKit 不提供当前设备 id，没有「这台设备」标记；7 天未用的设备用一行批量撤销，不做折叠分组。

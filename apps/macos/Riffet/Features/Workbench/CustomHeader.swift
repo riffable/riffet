@@ -3,7 +3,7 @@ import SwiftUI
 import RiffetKit
 
 /// The drawn title bar of the content (`StyleSpec.header`), in place of the system toolbar:
-/// `sessionTabs` lists the conversations opened in this window, `titleMenu` names the open one and
+/// `sessionTabs` lists the conversations kept as tabs (or names the open one, with tabs off), `titleMenu` names the open one and
 /// opens its menu. The controls are the toolbar's own (counts, panel, terminal, ⋯ menu); only the
 /// arrangement differs. Its gaps move the window.
 struct CustomHeader<Status: View>: View {
@@ -13,7 +13,6 @@ struct CustomHeader<Status: View>: View {
     /// A plugin's runtime notice for the conversation, the toolbar's own view.
     @ViewBuilder let status: Status
     @Environment(\.palette) private var palette
-    @State private var showingInfo = false
     @State private var titleAnchor = MenuAnchor()
 
     var body: some View {
@@ -27,7 +26,12 @@ struct CustomHeader<Status: View>: View {
                 CustomHeaderLeading(workbench: workbench, sidebarShown: sidebarShown, style: style)
                 switch style.header {
                 case .sessionTabs:
-                    SessionTabsBar(workbench: workbench, home: home, style: style)
+                    if SessionTabsPreferences.shared.style == .titleBar {
+                        SessionTabsBar(workbench: workbench, home: home, style: style)
+                    } else {
+                        title(style, conversation: conversation)
+                        Spacer(minLength: Space.sm)
+                    }
                 case .titleMenu:
                     title(style, conversation: conversation)
                     Spacer(minLength: Space.sm)
@@ -48,7 +52,6 @@ struct CustomHeader<Status: View>: View {
         }
         // Above the content a title bar paints its own; inside a card or a column it has their colour.
         .background(style.header == .titleMenu && style.window != .insetCard ? palette.page.opacity(DisplayPreferences.shared.contentTint) : .clear)
-        .onChange(of: conversation?.id) { _, _ in showingInfo = false }
     }
 
     /// A conversation is the page (not the home page, a one-level page or an attempt group).
@@ -116,12 +119,9 @@ struct CustomHeader<Status: View>: View {
     @ViewBuilder
     private func trailing(_ style: StyleSpec, conversation: Session?) -> some View {
         let quickChat = workbench.quickChatContext
-        let titleMenu = style.header == .titleMenu
         HStack(spacing: 2) {
-            if conversation != nil, !quickChat {
-                status
-                if !titleMenu { SessionWorkActions(workbench: workbench) }
-            }
+            // The work running in the conversation is in 会话信息, or in ⋯ beside a title menu.
+            if conversation != nil, !quickChat { status }
             if workbench.page == nil, !quickChat {
                 switch style.header {
                 case .titleMenu:
@@ -129,13 +129,13 @@ struct CustomHeader<Status: View>: View {
                     // The header keeps the panels of the app's own; the rest waits behind ⋯.
                     SessionWorkActions(workbench: workbench, more: moreItems(conversation: conversation), size: CustomChrome.control(style))
                 case .sessionTabs, .toolbar:
-                    if let conversation { infoButton(conversation, style: style) }
+                    if let conversation { SessionInfoButton(workbench: workbench, session: conversation, size: CustomChrome.control(style)) }
                     inspectorButton(style)
                 }
             }
             // The title menu's own title opens this menu; one instance, one set of its sheets and reads.
             if let conversation, style.header != .titleMenu {
-                SessionMenu(workbench: workbench, session: conversation, inspectorTab: inspectorTab, inspectorOpen: inspectorOpen)
+                SessionMenu(workbench: workbench, session: conversation, inspectorTab: inspectorTab, inspectorOpen: inspectorOpen, infoInHeader: true)
             }
         }
         .fixedSize()
@@ -155,17 +155,6 @@ struct CustomHeader<Status: View>: View {
             .buttonStyle(IconButtonStyle(size: CustomChrome.control(style), active: state.open && !own))
             .help("变更与文件 (⌥⌘I)")
             .accessibilityLabel("变更与文件 (⌥⌘I)")
-    }
-
-    private func infoButton(_ session: Session, style: StyleSpec) -> some View {
-        Button { showingInfo.toggle() } label: { Image(icon: "info.circle") }
-            .buttonStyle(IconButtonStyle(size: CustomChrome.control(style), active: showingInfo))
-            .help("会话信息")
-            .accessibilityLabel("会话信息")
-            .stylePopover(isPresented: $showingInfo, arrowEdge: .bottom) {
-                SessionTitleView(workbench: workbench, session: session)
-                    .padding(Space.md)
-            }
     }
 
     /// The terminal and the built-in panel views (changes, files), one icon each: the panels Claude
@@ -194,7 +183,7 @@ struct CustomHeader<Status: View>: View {
         workbench.inspectorViews.filter { $0.tab == .files || ($0.tab == .changes && conversation != nil) }
     }
 
-    /// ⋯ after the conversation's work: the plugin views, then the panel and its full-screen toggle.
+    /// ⋯ after the conversation's work: the plugin views, then the panel and a plugin view's full-screen toggle.
     private func moreItems(conversation: Session?) -> [HeaderMoreItem] {
         let state = workbench.inspector
         let shown = shownPanel(workbench.inspectorViews)
@@ -207,7 +196,8 @@ struct CustomHeader<Status: View>: View {
                 workbench.toggleInspector()
             })
         }
-        if state.open {
+        // The changes and files panels carry the toggle in their own bar; a plugin's view has none.
+        if state.open, let shown, shown != .changes, shown != .files {
             items.append(HeaderMoreItem(title: String(localized: "全屏"), symbol: "arrow.up.left.and.arrow.down.right", on: workbench.inspectorMaximized, shortcut: ("f", [.option, .command])) {
                 workbench.toggleInspectorMaximized()
             })
@@ -305,50 +295,71 @@ struct MenuLabelButton: View {
 
 // MARK: Session tabs
 
-/// The conversations opened in this window, as tabs. The list is kept on this Mac per server, not in
-/// the view, so switching the style or relaunching keeps it; closing the last tab goes home.
+/// The conversations kept as tabs (`SessionTabs`), pinned ones first. Closing the last tab goes home;
+/// when the tabs do not all fit, the rest are in the trailing menu.
 private struct SessionTabsBar: View {
     let workbench: Workbench
     let home: Bool
     let style: StyleSpec
     @Environment(\.palette) private var palette
-    @AppStorage private var stored: String
-    @State private var index = SessionIndex()
+    @State private var model: SessionTabs
+    @State private var available: CGFloat = 0
+    @State private var renaming: Session?
+    @State private var draft = ""
 
-    /// Opening one more drops the oldest.
-    private static var limit: Int { 12 }
+    /// The narrowest a tab gets before the next one goes to the menu.
+    private static let minimumTabWidth: CGFloat = 96
 
     init(workbench: Workbench, home: Bool, style: StyleSpec) {
         self.workbench = workbench
         self.home = home
         self.style = style
-        _stored = AppStorage(wrappedValue: "", "riffet.session-tabs|\(workbench.baseURL.absoluteString)")
-    }
-
-    private var ids: [String] { stored.split(separator: "\n").map(String.init) }
-
-    /// The tab on screen: none on the home page, a one-level page or an attempt group.
-    private var current: String? {
-        workbench.showingHome || workbench.page != nil || workbench.attemptGroupSelection != nil ? nil : workbench.selected?.id
+        let model = SessionTabs.model(for: workbench.baseURL)
+        model.workbench = workbench
+        _model = State(initialValue: model)
     }
 
     var body: some View {
-        let ids = self.ids
-        let current = self.current
-        let shown = visible(ids)
+        let zones = model.zones
+        let all = zones.pinned + zones.normal
+        let current = model.current
         // A clicked tab lights up at once; the conversation follows a frame later, as from the sidebar.
         let picked = workbench.sidebar.picked
+        let control = CustomChrome.control(style)
+        // Room for the tabs: the row less the new-conversation button and the menu's.
+        let capacity = max(1, Int((available - 2 * (control + Space.xs)) / (Self.minimumTabWidth + 2)))
+        let overflow = all.count > capacity
+        let shown = overflow ? window(all, capacity: capacity, current: current) : all
+        let separator = shown.last { $0.pinned }.flatMap { pin in shown.contains { !$0.pinned } ? pin.id : nil }
         HStack(spacing: Space.xs) {
             HStack(spacing: 2) {
-                ForEach(shown, id: \.id) { session in
-                    tab(session, active: isActive(session.id, picked: picked, current: current))
+                ForEach(shown) { item in
+                    tab(item, active: picked.map { $0 == item.id } ?? (item.id == current))
+                    if item.id == separator {
+                        Rectangle().fill(palette.line).frame(width: 1, height: 16).padding(.horizontal, Space.xs)
+                    }
                 }
                 Button { workbench.showHome() } label: { Image(icon: "plus") }
-                    .buttonStyle(IconButtonStyle(size: CustomChrome.control(style)))
+                    .buttonStyle(IconButtonStyle(size: control))
                     .help("新会话 (⌘N)")
                     .accessibilityLabel("新会话 (⌘N)")
+                if overflow {
+                    ChoiceMenu(options: all.map { item in
+                        ChoiceOption(title: item.session.title.isEmpty ? String(localized: "新会话") : item.session.title, selected: item.id == current) {
+                            model.activate(item.id)
+                        }
+                    }) {
+                        Image(icon: "chevron.down")
+                            .font(.riffet(size: S(style.text.label - 2), weight: .semibold))
+                            .foregroundStyle(palette.fg3)
+                            .frame(width: control, height: control)
+                    }
+                    .help("全部标签")
+                    .accessibilityLabel("全部标签")
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
             if home {
                 HomeModeTabs(workbench: workbench, style: style)
                     .fixedSize()
@@ -356,91 +367,56 @@ private struct SessionTabsBar: View {
                 Color.clear.frame(maxWidth: .infinity)
             }
         }
-        .onChange(of: current, initial: true) { _, id in if let id { add(id) } }
-        .onChange(of: ObjectIdentifier(workbench.list), initial: true) { _, _ in prune() }
+        .onChange(of: current, initial: true) { _, _ in model.sync() }
+        .onChange(of: ObjectIdentifier(workbench.list), initial: true) { _, _ in model.sync() }
+        .alert("重命名会话", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
+            TextField("标题", text: $draft)
+            Button("取消", role: .cancel) {}
+            Button("保存") {
+                let title = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+                if let session = renaming, !title.isEmpty, title != session.title { Task { await workbench.update(session, title: title) } }
+            }
+        }
     }
 
-    private func isActive(_ id: String, picked: String?, current: String?) -> Bool {
-        if let picked { return picked == id }
-        return id == current
+    /// The first [capacity] tabs, with the open one in the last place when it is further on.
+    private func window(_ all: [SessionTabItem], capacity: Int, current: String?) -> [SessionTabItem] {
+        let head = Array(all.prefix(capacity))
+        guard let current, !head.contains(where: { $0.id == current }), let open = all.first(where: { $0.id == current }) else { return head }
+        return head.dropLast() + [open]
     }
 
-    private func tab(_ session: Session, active: Bool) -> SessionTab {
-        let id = session.id
+    private func tab(_ item: SessionTabItem, active: Bool) -> SessionTab {
+        let id = item.id
+        let session = item.session
         return SessionTab(
-            session: session, active: active, style: style,
-            open: { workbench.sidebar.pick(id, clicked: true) }, close: { close(id) }
+            session: session, preview: item.entry.preview, pinned: item.pinned, unread: model.unread.contains(id), active: active, style: style,
+            model: model,
+            open: { model.activate(id) }, close: { model.close(id) },
+            togglePin: { Task { await workbench.update(session, pinned: !item.pinned) } },
+            rename: { draft = session.title; renaming = session }
         )
-    }
-
-    /// The tabs whose conversation is known, in tab order; the open one is its freshest copy.
-    private func visible(_ ids: [String]) -> [Session] {
-        guard !ids.isEmpty else { return [] }
-        let byId = index.sessions(workbench.list)
-        let selected = workbench.selected
-        return ids.compactMap { id in selected?.id == id ? selected : byId[id] }
-    }
-
-    private func add(_ id: String) {
-        var ids = self.ids
-        guard !ids.contains(id) else { return }
-        ids.append(id)
-        if ids.count > Self.limit { ids.removeFirst(ids.count - Self.limit) }
-        stored = ids.joined(separator: "\n")
-    }
-
-    /// A conversation the server no longer lists loses its tab, once a fresh list has loaded: never
-    /// on a cached or loading list, which may simply not have it yet.
-    private func prune() {
-        let list = workbench.list
-        guard list.loaded, !list.loading, list.cachedAt == nil, list.error == nil else { return }
-        let ids = self.ids
-        let byId = index.sessions(list)
-        let kept = ids.filter { byId[$0] != nil || $0 == workbench.selected?.id }
-        if kept.count != ids.count { stored = kept.joined(separator: "\n") }
-    }
-
-    /// Closing the tab on screen opens its visible neighbour, or the home page after the last one.
-    private func close(_ id: String) {
-        let shown = visible(ids).map(\.id)
-        stored = ids.filter { $0 != id }.joined(separator: "\n")
-        guard id == current, let position = shown.firstIndex(of: id) else { return }
-        let rest = shown.filter { $0 != id }
-        if rest.isEmpty {
-            workbench.showHome()
-        } else {
-            workbench.sidebar.pick(rest[min(position, rest.count - 1)], clicked: true)
-        }
-    }
-}
-
-/// The list's conversations by id, rebuilt only when the list itself is replaced.
-@MainActor
-private final class SessionIndex {
-    private var source: ObjectIdentifier?
-    private var byId: [String: Session] = [:]
-
-    func sessions(_ list: SessionListState) -> [String: Session] {
-        let key = ObjectIdentifier(list)
-        if key != source {
-            source = key
-            byId = Dictionary(list.sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        }
-        return byId
     }
 }
 
 private struct SessionTab: View, Equatable {
     let session: Session
+    let preview: Bool
+    let pinned: Bool
+    let unread: Bool
     let active: Bool
     let style: StyleSpec
+    let model: SessionTabs
     let open: () -> Void
     let close: () -> Void
+    let togglePin: () -> Void
+    let rename: () -> Void
     @Environment(\.palette) private var palette
     @State private var hovering = false
 
     static func == (lhs: SessionTab, rhs: SessionTab) -> Bool {
-        lhs.session == rhs.session && lhs.active == rhs.active && lhs.style == rhs.style
+        lhs.session == rhs.session && lhs.preview == rhs.preview && lhs.pinned == rhs.pinned && lhs.unread == rhs.unread
+            && lhs.active == rhs.active && lhs.style == rhs.style
     }
 
     private var title: String { session.title.isEmpty ? String(localized: "新会话") : session.title }
@@ -454,7 +430,7 @@ private struct SessionTab: View, Equatable {
             default:
                 SessionAgentMark(backend: session.agent)
             }
-            CappedWidth(maximum: 200) {
+            CappedWidth(maximum: pinned && !active ? 168 : 200) {
                 Text(title)
                     .font(.riffet(size: S(style.text.secondary), weight: active ? .medium : .regular))
                     .foregroundStyle(active ? palette.fg : palette.fg2)
@@ -472,6 +448,8 @@ private struct SessionTab: View, Equatable {
                     Circle().fill(palette.warning).frame(width: 6, height: 6)
                 } else if session.state == .failed {
                     Circle().fill(palette.danger).frame(width: 6, height: 6)
+                } else if unread {
+                    Circle().fill(palette.accent).frame(width: 6, height: 6)
                 }
             }
             .frame(width: 18, height: 18)
@@ -480,9 +458,29 @@ private struct SessionTab: View, Equatable {
         .padding(.trailing, 5)
         .frame(height: style.layout.header - 2 * Space.sm + 2)
         .background(shape.fill(active ? palette.bgElevated : hovering ? palette.bgHover : .clear))
-        .overlay { if active { shape.strokeBorder(palette.line, lineWidth: 1) } }
+        .overlay {
+            if preview {
+                shape.strokeBorder(active ? palette.fg4 : palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+            } else if active {
+                shape.strokeBorder(palette.line, lineWidth: 1)
+            }
+        }
         .contentShape(shape)
         .onTapGesture(perform: open)
+        // The first click of a double click already opened the tab; the second keeps it.
+        .simultaneousGesture(TapGesture(count: 2).onEnded { model.keep(session.id) })
+        .overlay { MiddleClick(action: close) }
+        .contextMenu {
+            if preview { Button("加入标签栏") { model.keep(session.id) } }
+            Button(pinned ? "取消置顶" : "置顶会话", action: togglePin)
+            Button("重命名", action: rename)
+            Divider()
+            Button("关闭", action: close)
+            Button("关闭其他标签") { model.closeOthers(session.id) }
+                .disabled(model.othersToClose(session.id).isEmpty)
+            Button("关闭右侧标签") { model.closeRight(session.id) }
+                .disabled(model.rightToClose(session.id).isEmpty)
+        }
         .onHover { hovering = $0 }
         .help(title)
         .accessibilityElement(children: .ignore)
@@ -491,6 +489,28 @@ private struct SessionTab: View, Equatable {
         .accessibilityAction { open() }
         .accessibilityAction(named: Text("关闭"), close)
     }
+}
+
+/// Catches the middle button, which SwiftUI has no gesture for; every other event passes through.
+private struct MiddleClick: NSViewRepresentable {
+    let action: () -> Void
+
+    final class Catcher: NSView {
+        var action: () -> Void = {}
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let type = NSApp.currentEvent?.type, type == .otherMouseDown || type == .otherMouseUp else { return nil }
+            return super.hitTest(point)
+        }
+
+        override func otherMouseUp(with event: NSEvent) {
+            if event.buttonNumber == 2 { action() } else { super.otherMouseUp(with: event) }
+        }
+    }
+
+    func makeNSView(context: Context) -> Catcher { Catcher() }
+
+    func updateNSView(_ view: Catcher, context: Context) { view.action = action }
 }
 
 /// Its content at the width it wants, up to [maximum]; narrower when the row runs out of room.
@@ -532,14 +552,23 @@ struct UnderlineTab: View {
     let title: String
     let selected: Bool
     let style: StyleSpec
+    /// The text size, the style's body size unless set.
+    var size: CGFloat?
     let action: () -> Void
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let points = S(size ?? style.text.body)
         Button(action: action) {
+            // Sized by the bold title, so picking a tab does not push the ones after it.
             Text(title)
-                .font(.riffet(size: S(style.text.body), weight: selected ? .semibold : .regular))
-                .foregroundStyle(selected ? palette.fg : palette.fg3)
+                .font(.riffet(size: points, weight: .semibold))
+                .hidden()
+                .overlay {
+                    Text(title)
+                        .font(.riffet(size: points, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? palette.fg : palette.fg3)
+                }
                 .padding(.vertical, 6)
                 .overlay(alignment: .bottom) {
                     Rectangle().fill(selected ? palette.fg : .clear).frame(height: 2)

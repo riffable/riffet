@@ -17,7 +17,7 @@ export const DESKTOP_STYLE_RECIPES = {
   backend: ['native', 'custom'],
   /** The system title bar the traffic lights sit in: a toolbar's (52pt, a 26pt window corner on macOS 26); the compact toolbar's (40pt, a 20pt corner). `layout.header` matches it. */
   titleBar: ['unified', 'compact'],
-  /** System split view; the sidebar on the canvas beside an inset content card; one flat sheet with a hairline. */
+  /** System split view; the sidebar on the canvas beside an inset content card, edged by its colour; one flat opaque sheet with a hairline, which no window material shows through. */
   window: ['system', 'insetCard', 'flat'],
   /** System list grouped by time or project; a project tree with relative times; Pinned / recent / older groups. */
   sidebar: ['systemList', 'projectTree', 'timeGroups'],
@@ -81,7 +81,7 @@ export const DESKTOP_STYLES: readonly DesktopStyle[] = [
     recipes: { backend: 'native', titleBar: 'unified', window: 'system', sidebar: 'systemList', header: 'toolbar', rightPanel: 'inspector', composer: 'card', toolRun: 'summary', approval: 'stack', home: 'tiles', settings: 'window', surface: 'raised', block: 'filled', form: 'grouped', menu: 'system', selection: 'wash' },
     tokens: {
       radii: { control: 6, container: 10, card: 10, floating: 14 },
-      layout: { sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 420 },
+      layout: { sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340 },
       text: { body: 13, secondary: 12, label: 11 },
       icons: 'sf-symbols',
       fonts: { ui: 'system', mono: 'system' },
@@ -101,8 +101,8 @@ export const DESKTOP_STYLES: readonly DesktopStyle[] = [
     },
   },
   {
-    // Drawn after Claude Desktop: one warm sheet, a hairline, panels opened from the header.
-    id: 'claude',
+    // Line (线条): one warm sheet, hairlines for every edge, panels opened from the header.
+    id: 'line',
     recipes: { backend: 'custom', titleBar: 'compact', window: 'flat', sidebar: 'timeGroups', header: 'titleMenu', rightPanel: 'panels', composer: 'line', toolRun: 'list', approval: 'inline', home: 'docked', settings: 'modal', surface: 'outlined', block: 'outlined', form: 'lined', menu: 'drawn', selection: 'block' },
     tokens: {
       // Measured on Claude Desktop: rows, the mode switch and code blocks round by 8pt.

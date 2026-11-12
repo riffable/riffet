@@ -8,6 +8,7 @@ import RiffetKit
 struct SessionInfoButton: View {
     let workbench: Workbench
     let session: Session
+    var size: CGFloat = 28
     @State private var open = false
 
     var body: some View {
@@ -17,7 +18,7 @@ struct SessionInfoButton: View {
                     if working { RunningDot().offset(x: 3, y: -2) }
                 }
         }
-        .buttonStyle(IconButtonStyle(size: 28, active: open))
+        .buttonStyle(IconButtonStyle(size: size, active: open))
         .help("会话信息")
         .accessibilityLabel("会话信息")
         .stylePopover(isPresented: $open, arrowEdge: .bottom) {
@@ -59,6 +60,7 @@ private struct SessionInfoView: View {
                     Divider()
                     places(project)
                 }
+                SessionMarksSection(workbench: workbench, session: session, close: close)
                 SessionWorkActions(workbench: workbench, inline: true, onOpen: close)
             }
         }
@@ -71,7 +73,23 @@ private struct SessionInfoView: View {
 
     private var facts: some View {
         let branch = project.flatMap { GitStatusModel.model(for: $0.id).status?.branch }.flatMap { $0.isEmpty ? nil : $0 }
+        let catalog = workbench.catalogs.cached(for: session)
+        let model = (session.model ?? "").isEmpty ? nil : modelSelectionSummary(catalog: catalog?.models ?? [], selection: session.model)
+        let approval = quickChat ? nil : (workbench.status?.approval ?? session.approval).flatMap { $0.isEmpty ? nil : $0 }
         return Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Space.md, verticalSpacing: 6) {
+            if let model {
+                GridRow {
+                    label("模型")
+                    Text(model).font(.riffet(size: S(12), design: .monospaced)).foregroundStyle(palette.fg)
+                }
+            }
+            if let approval {
+                GridRow {
+                    label("权限")
+                    Text(catalog?.capabilities.permissions.first { $0.id == approval }?.label ?? approval)
+                        .font(.riffet(size: S(12.5))).foregroundStyle(palette.fg)
+                }
+            }
             if let project {
                 GridRow {
                     label("目录")
@@ -217,9 +235,19 @@ private struct PlaceRow<Hint: View>: View {
 /// A group of 会话信息 under a hairline: a quiet title with its count, then its rows.
 struct InfoSection<Content: View>: View {
     let title: String
-    let count: Int
+    let meta: String?
     @ViewBuilder let content: Content
     @Environment(\.palette) private var palette
+
+    init(title: String, meta: String?, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.meta = meta
+        self.content = content()
+    }
+
+    init(title: String, count: Int, @ViewBuilder content: () -> Content) {
+        self.init(title: title, meta: "\(count)", content: content)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -228,7 +256,7 @@ struct InfoSection<Content: View>: View {
                 HStack {
                     Text(title)
                     Spacer(minLength: 0)
-                    Text("\(count)").monospacedDigit().foregroundStyle(palette.fg4)
+                    if let meta { Text(meta).monospacedDigit().foregroundStyle(palette.fg4) }
                 }
                 .font(.riffet(size: S(12)))
                 .foregroundStyle(palette.fg3)
@@ -238,5 +266,75 @@ struct InfoSection<Content: View>: View {
             }
             .padding(Space.xs)
         }
+    }
+}
+
+/// 本会话收藏: this conversation's saved replies, newest first; a row opens it in the transcript.
+private struct SessionMarksSection: View {
+    let workbench: Workbench
+    let session: Session
+    let close: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var expanded = false
+
+    var body: some View {
+        let marks = MarksStore.shared.marks(for: session.id)
+        if !marks.isEmpty {
+            InfoSection(title: String(localized: "本会话收藏"), count: marks.count) {
+                ForEach(expanded ? marks : Array(marks.prefix(3))) { mark in
+                    SessionMarkRow(mark: mark) {
+                        close()
+                        workbench.openMark(mark, file: mark.kind == "file")
+                    }
+                }
+                if !expanded, marks.count > 3 {
+                    Button { expanded = true } label: {
+                        HStack {
+                            Text("其余 \(marks.count - 3) 个").font(.riffet(size: S(13))).foregroundStyle(palette.fg3)
+                            Spacer(minLength: 0)
+                            Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                        }
+                        .padding(.horizontal, Space.sm)
+                        .frame(height: 28)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(HoverRowStyle(radius: 8))
+                }
+            }
+        }
+    }
+}
+
+private struct SessionMarkRow: View {
+    let mark: Mark
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let text = (mark.quote?.exact ?? mark.asset?.path ?? mark.asset?.name ?? mark.snapshot.text)
+            .split(whereSeparator: \.isWhitespace).joined(separator: " ")
+        Button(action: action) {
+            HStack(spacing: Space.sm) {
+                Group {
+                    if mark.isSpan {
+                        Circle().fill(Color(nsColor: mark.markColor.nsColor)).frame(width: 8, height: 8)
+                    } else {
+                        Image(icon: mark.kind == "image" ? "photo" : mark.kind == "file" ? "doc.text" : "bookmark")
+                            .font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+                    }
+                }
+                .frame(width: 18)
+                Text(text).font(.riffet(size: S(13))).foregroundStyle(palette.fg).lineLimit(1)
+                Spacer(minLength: Space.sm)
+                if let created = ServerTime.date(mark.createdAt) {
+                    Text(MarksModel.relative.localizedString(for: created, relativeTo: Date()))
+                        .font(.riffet(size: S(11.5))).foregroundStyle(palette.fg4).monospacedDigit()
+                }
+            }
+            .padding(.horizontal, Space.sm)
+            .frame(height: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(HoverRowStyle(radius: 8))
     }
 }

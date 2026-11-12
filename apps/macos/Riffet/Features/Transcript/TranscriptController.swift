@@ -122,6 +122,8 @@ final class TranscriptScrollState {
     var activeTurn = 0
     var turns: [TurnTick] = []
     var hasRows = false
+    /// The conversation whose list owns this state.
+    var sessionId: String?
     /// The first rows are on screen.
     var loaded = false
     var flags: Set<String> = []
@@ -262,6 +264,10 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// The turn rail, back-to-bottom button and width handle (off for a subagent's transcript).
     var showsChrome = true
     private let rail = TurnRailView()
+    /// The overview column carries the turn navigation, so the rail is not drawn as well.
+    var railHidden = false {
+        didSet { if railHidden != oldValue { layoutChrome() } }
+    }
     private let chapters = ChapterNavigationView()
     private let chapterClip = ChapterNavigationClipView()
     private var chapterRowKey: String?
@@ -435,11 +441,12 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// Re-reads the feed whenever what it read changes, on the next turn of the main loop.
     private func observe() {
         let next = withObservationTracking {
-            (feedProvider(), focusProvider?(), Self.styleSignature(), marksProvider?() ?? [], DisplayPreferences.shared.chapterNavigation, findProvider?())
+            (feedProvider(), focusProvider?(), Self.styleSignature(), marksProvider?() ?? [], DisplayPreferences.shared.chapterNavigation, findProvider?(), DisplayPreferences.shared.railDots)
         } onChange: { [weak self] in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.observe() } }
         }
         applyFind(next.5)
+        rail.dots = next.6
         if next.2 != styleSignature {
             styleSignature = next.2
             restyle()
@@ -510,7 +517,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         guard showsChrome, bounds.width > 0 else { return }
         let railHeight = rail.preferredHeight
         rail.frame = NSRect(x: bounds.width - 6 - 26, y: (bounds.height - railHeight) / 2, width: 26, height: railHeight)
-        rail.setShown(rail.turns.count >= 2, animated: revealed)
+        rail.setShown(rail.turns.count >= 2 && !railHidden, animated: revealed)
         back.frame = NSRect(x: (bounds.width - 30) / 2, y: bounds.height - 12 - 30, width: 30, height: 30)
         let shown = min(style.column + style.gutter * 2, bounds.width)
         let x = min(bounds.width - 8, (bounds.width + shown) / 2 + 6)

@@ -6,7 +6,7 @@ import CoreGraphics
 enum InterfaceStyle: String, CaseIterable, Identifiable, Sendable {
     case native
     case riffet
-    case claude
+    case line
 
     var id: String { rawValue }
 
@@ -14,7 +14,7 @@ enum InterfaceStyle: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .native: .native
         case .riffet: .riffet
-        case .claude: .claude
+        case .line: .line
         }
     }
 }
@@ -69,7 +69,7 @@ struct StyleSpec: Sendable, Equatable {
     static let native = StyleSpec(
         backend: .native, titleBar: .unified, window: .system, sidebar: .systemList, header: .toolbar, rightPanel: .inspector, composer: .card, toolRun: .summary, home: .tiles, approval: .stack, settings: .window, surface: .raised, block: .filled, form: .grouped, menu: .system, selection: .wash,
         radii: Radii(control: 6, container: 10, card: 10, floating: 14),
-        layout: Layout(sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 420),
+        layout: Layout(sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340),
         text: Text(body: 13, secondary: 12, label: 11),
         icons: "sf-symbols",
         fonts: Fonts(ui: "system", mono: "system")
@@ -82,7 +82,7 @@ struct StyleSpec: Sendable, Equatable {
         icons: "web",
         fonts: Fonts(ui: "Inter", mono: "JetBrains Mono")
     )
-    static let claude = StyleSpec(
+    static let line = StyleSpec(
         backend: .custom, titleBar: .compact, window: .flat, sidebar: .timeGroups, header: .titleMenu, rightPanel: .panels, composer: .line, toolRun: .list, home: .docked, approval: .inline, settings: .modal, surface: .outlined, block: .outlined, form: .lined, menu: .drawn, selection: .block,
         radii: Radii(control: 8, container: 8, card: 10, floating: 12),
         layout: Layout(sidebarWidth: 272, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340),

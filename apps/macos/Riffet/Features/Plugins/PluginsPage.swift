@@ -511,7 +511,12 @@ struct PluginsPage: View {
                 ForEach(commands, id: \.id) { command in
                     HStack {
                         Text(localizedText(command.title, fallback: command.id)); Spacer()
-                        if let key = command.keybinding { Text(key).font(.caption).foregroundStyle(palette.fg3) }
+                        if let key = command.keybinding {
+                            let rejected = PluginKeybindings.resolve(workbench.plugins).rejected.contains(command.id)
+                            Text(key).font(.caption).foregroundStyle(palette.fg3)
+                                .opacity(rejected ? 0.5 : 1).strikethrough(rejected)
+                                .help(rejected ? "快捷键未生效" : "")
+                        }
                         Button("运行") {
                             if let command = workbench.pluginCommandList.first(where: { $0.id == command.id }) { workbench.pluginCommands.run(command, in: workbench) }
                         }.disabled(!workbench.pluginCommandList.contains { $0.id == command.id } || store.busy)

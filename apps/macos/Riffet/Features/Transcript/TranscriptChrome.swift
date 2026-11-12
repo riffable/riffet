@@ -19,6 +19,8 @@ final class TurnRailView: NSView {
     }
     var active = 0 { didSet { if active != oldValue { needsDisplay = true } } }
     var style: TranscriptStyle? { didSet { needsDisplay = true } }
+    /// Dots instead of lines (the reader's 导航条样式).
+    var dots = false { didSet { if dots != oldValue { needsDisplay = true } } }
     var onJump: ((TurnTick) -> Void)?
     weak var preview: TurnPreviewView?
     private var hovered: Int?
@@ -98,11 +100,17 @@ final class TurnRailView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         guard let style else { return }
         for index in turns.indices {
-            let width: CGFloat = index == active ? 20 : index == hovered ? 12 : 7
             let color = index == active ? style.color(\.fg2) : index == hovered ? style.color(\.fg3) : style.color(\.fg4, 0.55)
             color.setFill()
-            let y = Self.padding + CGFloat(index) * Self.step + (Self.step - 2) / 2
-            NSBezierPath(roundedRect: NSRect(x: bounds.width - width, y: y, width: width, height: 2), xRadius: 1, yRadius: 1).fill()
+            let slot = Self.padding + CGFloat(index) * Self.step
+            if dots {
+                // A dot grows about one axis, so the column stays straight.
+                let diameter: CGFloat = index == active ? 6 : index == hovered ? 5 : 4
+                NSBezierPath(ovalIn: NSRect(x: bounds.width - 3 - diameter / 2, y: slot + (Self.step - diameter) / 2, width: diameter, height: diameter)).fill()
+            } else {
+                let width: CGFloat = index == active ? 20 : index == hovered ? 12 : 7
+                NSBezierPath(roundedRect: NSRect(x: bounds.width - width, y: slot + (Self.step - 2) / 2, width: width, height: 2), xRadius: 1, yRadius: 1).fill()
+            }
         }
     }
 }

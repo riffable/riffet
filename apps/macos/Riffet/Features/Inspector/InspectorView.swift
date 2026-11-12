@@ -20,10 +20,17 @@ struct InspectorView: View {
         let views = workbench.inspectorViews
         let shown = views.contains { $0.tab == tab } ? tab : (views.first?.tab ?? tab)
         let style = DisplayPreferences.shared.style
+        let maximize = PanelMaximize(on: maximized, toggle: toggleMaximized)
         VStack(spacing: 0) {
-            // One panel per header icon has no bar of its own: the header's icons pick it.
+            // One panel per header icon has no bar of its own: the header's icons pick it, and the
+            // view's own top bar carries the full-screen toggle.
             if style.rightPanel != .panels {
                 HStack(spacing: Space.sm) {
+                    // The segmented views sit in the middle, balanced against the toggle.
+                    if style.rightPanel == .inspector {
+                        Color.clear.frame(width: PanelMaximizeButton.width)
+                        Spacer(minLength: 0)
+                    }
                     if !views.isEmpty {
                         switch style.rightPanel {
                         case .outline:
@@ -51,12 +58,7 @@ struct InspectorView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    Button(action: toggleMaximized) {
-                        Image(icon: maximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                            .font(.riffet(size: S(12)))
-                    }
-                    .buttonStyle(IconButtonStyle())
-                    .help(maximized ? "退出全屏 (⌥⌘F)" : "全屏 (⌥⌘F)")
+                    PanelMaximizeButton().environment(\.panelMaximize, maximize)
                     if style.rightPanel == .outline {
                         Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(12))) }
                             .buttonStyle(IconButtonStyle())
@@ -93,6 +95,7 @@ struct InspectorView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .environment(\.conversationProjectId, project?.id)
+            .environment(\.panelMaximize, style.rightPanel == .panels ? maximize : nil)
         }
         .background(palette.page)
     }
@@ -133,6 +136,36 @@ struct DetailHeader<Actions: View>: View {
         }
         .padding(.horizontal, Space.sm)
         .frame(height: InspectorMetrics.headerHeight)
+    }
+}
+
+/// The side panel's full-screen toggle, for the button that shows it.
+struct PanelMaximize {
+    let on: Bool
+    let toggle: () -> Void
+}
+
+extension EnvironmentValues {
+    /// Set where a view's own top bar carries the panel's full-screen toggle: in a panel without a
+    /// bar of its own (`StyleSpec.RightPanel.panels`).
+    @Entry var panelMaximize: PanelMaximize?
+}
+
+/// The panel's full-screen toggle, at the trailing end of the bar it sits in; nothing where
+/// `panelMaximize` is not set.
+struct PanelMaximizeButton: View {
+    static let width: CGFloat = 26
+    @Environment(\.panelMaximize) private var maximize
+
+    var body: some View {
+        if let maximize {
+            Button(action: maximize.toggle) {
+                Image(icon: maximize.on ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                    .font(.riffet(size: S(12)))
+            }
+            .buttonStyle(IconButtonStyle(size: Self.width))
+            .help(maximize.on ? "退出全屏 (⌥⌘F)" : "全屏 (⌥⌘F)")
+        }
     }
 }
 

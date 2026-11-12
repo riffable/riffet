@@ -19,6 +19,10 @@ enum PreferenceKey {
     static let contentWidth = "riffet.content-width"
     /// Whether an answer shows its chapter navigation.
     static let chapterNavigation = "riffet.chapter-navigation"
+    /// Whether the conversation shows the overview column beside the transcript, where its style has one.
+    static let sessionOverview = "riffet.session-overview"
+    /// Whether the turn rail draws dots instead of lines.
+    static let railDots = "riffet.rail-dots"
     /// Dock icon variant id (`AppIconVariant`).
     static let appIcon = "riffet.app-icon"
     /// What shows behind the window (`WindowMaterial.rawValue`).
@@ -39,10 +43,10 @@ enum PreferenceKey {
 /// pane's case stays so stored selections and links open the pane that took it over (`pane`).
 /// `appearance` is the theme pane: the appearance pane it named was split into its group's pages.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case profile, general, appearance, window, typography, terminal, appIcon
+    case profile, general, appearance, window, tabs, typography, terminal, appIcon
     case input, shortcuts, notifications, files
     case agents, auxiliaryModels, quickChat
-    case connection, server, backup
+    case connection, shares, channels, server, backup
     case diagnostics, about
     case cli, service, projectConfigs
 
@@ -62,6 +66,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "个人资料")
         case .appearance: String(localized: "主题")
         case .window: String(localized: "界面")
+        case .tabs: String(localized: "标签页")
         case .typography: String(localized: "排版")
         case .terminal: String(localized: "终端")
         case .appIcon: String(localized: "应用图标")
@@ -73,6 +78,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .auxiliaryModels: String(localized: "辅助模型")
         case .quickChat: String(localized: "快速对话")
         case .connection: String(localized: "连接与设备")
+        case .shares: String(localized: "会话分享")
+        case .channels: String(localized: "机器人")
         case .server: String(localized: "本机服务器")
         case .backup: String(localized: "备份与恢复")
         case .diagnostics: String(localized: "诊断")
@@ -86,6 +93,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: "person.crop.circle"
         case .appearance: "paintpalette"
         case .window: "macwindow"
+        case .tabs: "rectangle.split.3x1"
         case .typography: "textformat.size"
         case .terminal: "terminal"
         case .appIcon: "app.badge"
@@ -97,6 +105,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .auxiliaryModels: "wand.and.stars"
         case .quickChat: "bubble.left.and.bubble.right"
         case .connection: "laptopcomputer.and.iphone"
+        case .shares: "square.and.arrow.up"
+        case .channels: "paperplane"
         case .server: "server.rack"
         case .backup: "externaldrive"
         case .diagnostics: "stethoscope"
@@ -107,10 +117,10 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var group: SettingsGroup {
         switch pane {
-        case .appearance, .window, .typography, .terminal, .appIcon: .appearance
+        case .appearance, .window, .tabs, .typography, .terminal, .appIcon: .appearance
         case .input, .shortcuts, .notifications, .files: .behavior
         case .agents, .auxiliaryModels, .quickChat: .models
-        case .connection, .server, .backup: .connection
+        case .connection, .shares, .channels, .server, .backup: .connection
         case .diagnostics, .about: .support
         default: .general
         }
@@ -122,6 +132,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "名称与头像")
         case .appearance: String(localized: "明暗、配色主题与自定义主题")
         case .window: String(localized: "材质与透明度")
+        case .tabs: String(localized: "标签栏与打开方式")
         case .typography: String(localized: "文字大小、间距与阅读宽度")
         case .terminal: String(localized: "终端字号与边距")
         case .appIcon: String(localized: "Dock 中的应用图标")
@@ -133,6 +144,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .auxiliaryModels: String(localized: "会话标题与交接摘要")
         case .quickChat: String(localized: "默认模型与归档")
         case .connection: String(localized: "服务器与已配对设备")
+        case .shares: String(localized: "已发布的分享链接")
+        case .channels: String(localized: "飞书机器人与可用账号")
         case .server: String(localized: "状态、数据目录与资源回收")
         case .backup: String(localized: "备份位置与恢复")
         case .diagnostics: String(localized: "诊断信息与性能监测")
@@ -147,6 +160,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "个人 资料 名称 昵称 头像 profile name avatar", comment: "Search terms, space-separated")
         case .appearance: String(localized: "外观 主题 颜色 配色 暗色 浅色 明暗 appearance theme", comment: "Search terms, space-separated")
         case .window: String(localized: "外观 窗口 材质 透明 玻璃 磨砂 侧栏 window material", comment: "Search terms, space-separated")
+        case .tabs: String(localized: "标签 标签栏 会话 快捷键 tab tabs shortcut", comment: "Search terms, space-separated")
         case .typography: String(localized: "外观 文字 字号 字体 间距 宽度 预览 font", comment: "Search terms, space-separated")
         case .terminal: String(localized: "外观 终端 字号 边距 terminal", comment: "Search terms, space-separated")
         case .appIcon: String(localized: "外观 图标 dock icon", comment: "Search terms, space-separated")
@@ -158,6 +172,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .auxiliaryModels: String(localized: "标题 交接 摘要 模型 title handoff summary model", comment: "Search terms, space-separated")
         case .quickChat: String(localized: "快速会话 归档 chat quick archive retention", comment: "Search terms, space-separated")
         case .connection: String(localized: "服务器 设备 配对 配对码 二维码 地址 remote", comment: "Search terms, space-separated")
+        case .shares: String(localized: "分享 链接 发布 取消分享 share publish link", comment: "Search terms, space-separated")
+        case .channels: String(localized: "机器人 飞书 lark 卡片 绑定 群聊 话题 bot feishu channel", comment: "Search terms, space-separated")
         case .server: String(localized: "守护进程 启动 重启 日志 doctor 托管 daemon 回收 监控 cpu 内存 进程", comment: "Search terms, space-separated")
         case .backup: String(localized: "备份 恢复 backup restore", comment: "Search terms, space-separated")
         case .diagnostics: String(localized: "诊断 导出 性能 帧率 基准 diagnostics performance", comment: "Search terms, space-separated")
@@ -171,19 +187,24 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     /// about this Mac's app and service.
     var scope: SettingsScope? {
         switch pane {
-        case .general, .appearance, .window, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
-        case .input, .files, .agents, .auxiliaryModels, .quickChat: .server
+        case .general, .appearance, .window, .tabs, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
+        case .input, .files, .agents, .auxiliaryModels, .quickChat, .shares, .channels: .server
         default: nil
         }
     }
 
     /// The sidebar and command palette walk these, in order.
-    static let navigable: [SettingsSection] = [
+    @MainActor static var navigable: [SettingsSection] {
+        // The tab pane is the Riffet style's: other styles draw no tabs.
+        all.filter { $0 != .tabs || DisplayPreferences.shared.style.header == .sessionTabs }
+    }
+
+    private static let all: [SettingsSection] = [
         .profile, .general,
-        .appearance, .window, .typography, .terminal, .appIcon,
+        .appearance, .window, .tabs, .typography, .terminal, .appIcon,
         .input, .shortcuts, .notifications, .files,
         .agents, .auxiliaryModels, .quickChat,
-        .connection, .server, .backup,
+        .connection, .shares, .channels, .server, .backup,
         .diagnostics, .about,
     ]
 }
@@ -205,7 +226,7 @@ enum SettingsGroup: String, CaseIterable, Identifiable {
         }
     }
 
-    var sections: [SettingsSection] {
+    @MainActor var sections: [SettingsSection] {
         SettingsSection.navigable.filter { $0.group == self }
     }
 }
@@ -226,6 +247,8 @@ final class DisplayPreferences {
     var terminalVerticalPadding: Double { didSet { save(PreferenceKey.terminalVerticalPadding, terminalVerticalPadding) } }
     var contentWidth: Double { didSet { save(PreferenceKey.contentWidth, contentWidth) } }
     var chapterNavigation: Bool { didSet { save(PreferenceKey.chapterNavigation, chapterNavigation) } }
+    var sessionOverview: Bool { didSet { save(PreferenceKey.sessionOverview, sessionOverview) } }
+    var railDots: Bool { didSet { save(PreferenceKey.railDots, railDots) } }
     var appIcon: String { didSet { save(PreferenceKey.appIcon, appIcon); applyIcon() } }
     var windowMaterial: WindowMaterial { didSet { save(PreferenceKey.windowMaterial, windowMaterial.rawValue) } }
     var interfaceStyle: InterfaceStyle {
@@ -236,18 +259,20 @@ final class DisplayPreferences {
     }
     /// The recipe of the style on screen.
     var style: StyleSpec { interfaceStyle.spec }
-    /// 0–100. The sidebar may go fully clear; the content stops at `WindowMaterial.contentLimit`
-    /// so the transcript stays readable.
+    /// 0–100, for the sidebar and the content each.
     var sidebarTransparency: Double { didSet { save(PreferenceKey.sidebarTransparency, sidebarTransparency) } }
     var contentTransparency: Double { didSet { save(PreferenceKey.contentTransparency, contentTransparency) } }
     /// The system's 降低透明度, which overrides the material.
     private(set) var reduceTransparency = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
 
-    /// The material on screen: the stored one unless the system asks for no transparency.
-    var material: WindowMaterial { reduceTransparency ? .solid : windowMaterial }
+    /// A flat window (`StyleSpec.Window.flat`) is one opaque sheet whatever the material.
+    var materialApplies: Bool { style.window != .flat }
+    /// The material on screen: the stored one unless the system asks for no transparency or the
+    /// style draws no material.
+    var material: WindowMaterial { reduceTransparency || !materialApplies ? .solid : windowMaterial }
     /// Alpha of the palette's sidebar and content colours over the material.
     var sidebarTint: Double { material == .solid ? 1 : 1 - sidebarTransparency / 100 }
-    var contentTint: Double { material == .solid ? 1 : 1 - min(contentTransparency, WindowMaterial.contentLimit) / 100 }
+    var contentTint: Double { material == .solid ? 1 : 1 - contentTransparency / 100 }
 
     private init() {
         let defaults = UserDefaults.standard
@@ -265,11 +290,16 @@ final class DisplayPreferences {
         )
         contentWidth = defaults.object(forKey: PreferenceKey.contentWidth) as? Double ?? 640
         chapterNavigation = defaults.object(forKey: PreferenceKey.chapterNavigation) as? Bool ?? true
+        sessionOverview = defaults.object(forKey: PreferenceKey.sessionOverview) as? Bool ?? true
+        railDots = defaults.object(forKey: PreferenceKey.railDots) as? Bool ?? false
         appIcon = defaults.string(forKey: PreferenceKey.appIcon) ?? AppIconVariant.defaultId
         windowMaterial = defaults.string(forKey: PreferenceKey.windowMaterial)
             .flatMap(WindowMaterial.init(rawValue:))
             .flatMap { WindowMaterial.available.contains($0) ? $0 : nil } ?? .defaultValue
-        interfaceStyle = defaults.string(forKey: PreferenceKey.interfaceStyle).flatMap(InterfaceStyle.init(rawValue:)) ?? .defaultValue
+        // `claude` was the line style's id before it was renamed.
+        interfaceStyle = defaults.string(forKey: PreferenceKey.interfaceStyle)
+            .map { $0 == "claude" ? InterfaceStyle.line.rawValue : $0 }
+            .flatMap(InterfaceStyle.init(rawValue:)) ?? .defaultValue
         sidebarTransparency = defaults.object(forKey: PreferenceKey.sidebarTransparency) as? Double ?? 60
         contentTransparency = defaults.object(forKey: PreferenceKey.contentTransparency) as? Double ?? 0
         NSWorkspace.shared.notificationCenter.addObserver(

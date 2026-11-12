@@ -13,7 +13,7 @@ extension InterfaceStyle {
         switch self {
         case .native: String(localized: "原生")
         case .riffet: "Riffet"
-        case .claude: "Claude"
+        case .line: String(localized: "线条")
         }
     }
 }

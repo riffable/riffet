@@ -12,6 +12,8 @@ struct CodeTextView: NSViewRepresentable {
     /// The line to scroll to and flash; the token repeats a jump to the same line.
     var target: (line: Int, token: Int)?
     var onLine: ((Int, String) -> Void)?
+    /// ⌘-click on an identifier (definition) or its context menu (definition, usages); nil turns it off.
+    var onSymbol: ((CodeSymbol, CodeSymbolIntent) -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -21,12 +23,19 @@ struct CodeTextView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scroll = NSTextView.scrollableTextView()
+        let scroll = NSScrollView()
         scroll.drawsBackground = false
         scroll.clipsToBounds = true
+        scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = true
         scroll.autohidesScrollers = true
-        guard let textView = scroll.documentView as? NSTextView else { return scroll }
+        let storage = NSTextStorage()
+        let layout = NSLayoutManager()
+        storage.addLayoutManager(layout)
+        let container = NSTextContainer(size: NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude))
+        layout.addTextContainer(container)
+        let textView = SymbolTextView(frame: .zero, textContainer: container)
+        scroll.documentView = textView
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = true
@@ -44,6 +53,7 @@ struct CodeTextView: NSViewRepresentable {
         scroll.verticalRulerView = ruler
         scroll.hasVerticalRuler = true
         scroll.rulersVisible = true
+        textView.ruler = ruler
         context.coordinator.ruler = ruler
         context.coordinator.textView = textView
         return scroll
@@ -54,6 +64,10 @@ struct CodeTextView: NSViewRepresentable {
         guard let textView = coordinator.textView, let ruler = coordinator.ruler else { return }
         ruler.palette = palette
         ruler.onLine = onLine
+        if let symbolView = textView as? SymbolTextView {
+            symbolView.onSymbol = onSymbol
+            symbolView.linkColor = palette.nsColor(\.accent)
+        }
         ruler.fontSize = fontSize
         let styleFonts = DisplayPreferences.shared.style.fonts
         let key = "\(language ?? "")|\(fontSize)|\(palette.values.id)|\(palette.revision)|\(AppearanceFonts.current.key)|\(styleFonts)"
@@ -205,7 +219,7 @@ final class LineNumberRuler: NSRulerView {
         }
     }
 
-    private func line(atCharacter index: Int) -> Int {
+    func line(atCharacter index: Int) -> Int {
         var low = 0, high = starts.count - 1
         while low < high {
             let mid = (low + high + 1) / 2
@@ -256,5 +270,132 @@ final class LineNumberRuler: NSRulerView {
 
     override func resetCursorRects() {
         if onLine != nil { addCursorRect(bounds, cursor: .pointingHand) }
+    }
+}
+
+/// An identifier in a source file, with where it stands: `line` and `column` are 1-based, the column
+/// in UTF-16 units, as the server's code navigation counts them.
+struct CodeSymbol: Equatable {
+    let word: String
+    let line: Int
+    let column: Int
+    let range: NSRange
+}
+
+enum CodeSymbolIntent { case definition, usages }
+
+/// The preview's text view: with ⌘ held, the identifier under the pointer is underlined and a click
+/// goes to its definition; its context menu offers the definition and the usages.
+final class SymbolTextView: NSTextView {
+    var onSymbol: ((CodeSymbol, CodeSymbolIntent) -> Void)?
+    var linkColor: NSColor = .linkColor
+    weak var ruler: LineNumberRuler?
+    private var hovered: NSRange?
+    private var monitor: Any?
+
+    deinit { if let monitor { NSEvent.removeMonitor(monitor) } }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+        guard window != nil else { return }
+        // Pressing or releasing ⌘ under a resting pointer sends no mouse event.
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            guard let self, let window = self.window else { return event }
+            self.refreshHover(command: event.modifierFlags.contains(.command), at: self.convert(window.mouseLocationOutsideOfEventStream, from: nil))
+            return event
+        }
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas where area.owner === self { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect], owner: self))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        refreshHover(command: event.modifierFlags.contains(.command), at: convert(event.locationInWindow, from: nil))
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHover(nil)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.command), let onSymbol, let symbol = symbol(at: convert(event.locationInWindow, from: nil)) {
+            setHover(nil)
+            onSymbol(symbol, .definition)
+            return
+        }
+        super.mouseDown(with: event)
+    }
+
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event)
+        guard let onSymbol, let menu, let symbol = symbol(at: convert(event.locationInWindow, from: nil)) else { return menu }
+        menu.insertItem(MenuAction.item(String(localized: "跳转到定义"), symbol: "arrow.turn.down.right") { onSymbol(symbol, .definition) }, at: 0)
+        menu.insertItem(MenuAction.item(String(localized: "查找用法"), symbol: "magnifyingglass") { onSymbol(symbol, .usages) }, at: 1)
+        menu.insertItem(.separator(), at: 2)
+        return menu
+    }
+
+    override func resetCursorRects() {
+        super.resetCursorRects()
+        guard let hovered, let rect = rect(of: hovered) else { return }
+        addCursorRect(rect.intersection(visibleRect), cursor: .pointingHand)
+    }
+
+    private func refreshHover(command: Bool, at point: NSPoint) {
+        guard onSymbol != nil, command, let symbol = symbol(at: point) else { setHover(nil); return }
+        setHover(symbol.range)
+    }
+
+    private func setHover(_ range: NSRange?) {
+        guard range != hovered else { return }
+        let length = textStorage?.length ?? 0
+        if let old = hovered {
+            let clamped = NSIntersectionRange(old, NSRange(location: 0, length: length))
+            layoutManager?.removeTemporaryAttribute(.underlineStyle, forCharacterRange: clamped)
+            layoutManager?.removeTemporaryAttribute(.foregroundColor, forCharacterRange: clamped)
+        }
+        hovered = range
+        if let range, NSMaxRange(range) <= length {
+            layoutManager?.addTemporaryAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, forCharacterRange: range)
+            layoutManager?.addTemporaryAttribute(.foregroundColor, value: linkColor, forCharacterRange: range)
+        }
+        window?.invalidateCursorRects(for: self)
+    }
+
+    private func rect(of range: NSRange) -> NSRect? {
+        guard let layout = layoutManager, let container = textContainer, NSMaxRange(range) <= (textStorage?.length ?? 0) else { return nil }
+        let glyphs = layout.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+        var rect = layout.boundingRect(forGlyphRange: glyphs, in: container)
+        rect.origin.x += textContainerOrigin.x
+        rect.origin.y += textContainerOrigin.y
+        return rect
+    }
+
+    /// The identifier under [point] (view coordinates); nil off the text, on punctuation or on a number.
+    private func symbol(at point: NSPoint) -> CodeSymbol? {
+        guard let layout = layoutManager, let container = textContainer, let ruler, let text = textStorage?.string as NSString?, text.length > 0 else { return nil }
+        let local = NSPoint(x: point.x - textContainerOrigin.x, y: point.y - textContainerOrigin.y)
+        let glyph = layout.glyphIndex(for: local, in: container)
+        guard glyph < layout.numberOfGlyphs,
+              layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 1), in: container).contains(local) else { return nil }
+        let index = layout.characterIndexForGlyph(at: glyph)
+        func isWord(_ unit: unichar) -> Bool {
+            (unit >= 48 && unit <= 57) || (unit >= 65 && unit <= 90) || (unit >= 97 && unit <= 122) || unit == 95 || unit == 36
+        }
+        guard index < text.length, isWord(text.character(at: index)) else { return nil }
+        var start = index, end = index + 1
+        while start > 0, index - start < 200, isWord(text.character(at: start - 1)) { start -= 1 }
+        while end < text.length, end - index < 200, isWord(text.character(at: end)) { end += 1 }
+        let first = text.character(at: start)
+        guard !(first >= 48 && first <= 57), end - start <= 200 else { return nil }
+        let line = ruler.line(atCharacter: start)
+        let lineStart = ruler.range(ofLine: line)?.location ?? 0
+        return CodeSymbol(word: text.substring(with: NSRange(location: start, length: end - start)), line: line, column: start - lineStart + 1, range: NSRange(location: start, length: end - start))
     }
 }

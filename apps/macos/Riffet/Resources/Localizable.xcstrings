@@ -31,6 +31,26 @@
         }
       }
     },
+    "App ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App ID"
+          }
+        }
+      }
+    },
+    "App Secret": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Secret"
+          }
+        }
+      }
+    },
     "Riffet 未运行": {
       "localizations": {
         "en": {
@@ -51,12 +71,92 @@
         }
       }
     },
+    "上一个标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous tab"
+          }
+        }
+      }
+    },
     "上一轮仍在运行": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Previous run still in progress"
+          }
+        }
+      }
+    },
+    "上下文占用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Context usage"
+          }
+        }
+      }
+    },
+    "下一个标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Next tab"
+          }
+        }
+      }
+    },
+    "中断按钮": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stop button"
+          }
+        }
+      }
+    },
+    "临时标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary tab"
+          }
+        }
+      }
+    },
+    "产出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Outputs"
+          }
+        }
+      }
+    },
+    "仅导航条": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigation rail only"
+          }
+        }
+      }
+    },
+    "仅手动加入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add manually only"
           }
         }
       }
@@ -71,12 +171,102 @@
         }
       }
     },
+    "会话分享": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shares"
+          }
+        }
+      }
+    },
+    "会话右侧": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Session sidebar"
+          }
+        }
+      }
+    },
     "何时运行": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "When"
+          }
+        }
+      }
+    },
+    "保存凭据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save credentials"
+          }
+        }
+      }
+    },
+    "允许 Agent 操作": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent may operate"
+          }
+        }
+      }
+    },
+    "全部撤销": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoke all"
+          }
+        }
+      }
+    },
+    "全部标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All tabs"
+          }
+        }
+      }
+    },
+    "关闭其他标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close other tabs"
+          }
+        }
+      }
+    },
+    "关闭右侧标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close tabs to the right"
+          }
+        }
+      }
+    },
+    "关闭标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close tab"
           }
         }
       }
@@ -91,6 +281,27 @@
         }
       }
     },
+    "分享 链接 发布 取消分享 share publish link": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "share link publish unshare"
+          }
+        }
+      }
+    },
+    "切换到第 1–8 个标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to tab 1–8"
+          }
+        }
+      }
+    },
     "创建 (⌘↩)": {
       "localizations": {
         "en": {
@@ -101,12 +312,202 @@
         }
       }
     },
+    "创建应用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create app"
+          }
+        }
+      }
+    },
+    "删除 %@？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete %@?"
+          }
+        }
+      }
+    },
+    "加入标签栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add to tab bar"
+          }
+        }
+      }
+    },
+    "单独一条消息，展示思考与工具调用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separate message showing thinking and tool calls"
+          }
+        }
+      }
+    },
+    "卡片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card"
+          }
+        }
+      }
+    },
     "即将运行": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Upcoming"
+          }
+        }
+      }
+    },
+    "去申请": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Request"
+          }
+        }
+      }
+    },
+    "发布此分享的插件未启用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The plugin that published this share is off"
+          }
+        }
+      }
+    },
+    "可以使用的人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowed people"
+          }
+        }
+      }
+    },
+    "启用机器人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bot enabled"
+          }
+        }
+      }
+    },
+    "固定侧边栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin Sidebar"
+          }
+        }
+      }
+    },
+    "圆点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dots"
+          }
+        }
+      }
+    },
+    "在会话菜单中创建分享。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create shares from the conversation menu."
+          }
+        }
+      }
+    },
+    "在浏览器中打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in browser"
+          }
+        }
+      }
+    },
+    "在线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Online"
+          }
+        }
+      }
+    },
+    "在飞书中打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open in Feishu"
+          }
+        }
+      }
+    },
+    "在飞书私聊机器人发一条消息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send the bot a private message in Feishu"
+          }
+        }
+      }
+    },
+    "在飞书私聊机器人发送 /bind %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send /bind %@ to the bot in a Feishu private chat"
+          }
+        }
+      }
+    },
+    "域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Domain"
+          }
+        }
+      }
+    },
+    "复制 App ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy App ID"
           }
         }
       }
@@ -131,12 +532,112 @@
         }
       }
     },
+    "导航条样式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rail style"
+          }
+        }
+      }
+    },
     "已删除的任务": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Deleted task"
+          }
+        }
+      }
+    },
+    "已发布的分享链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Published share links"
+          }
+        }
+      }
+    },
+    "已过期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expired"
+          }
+        }
+      }
+    },
+    "已连接 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected · %@"
+          }
+        }
+      }
+    },
+    "开通权限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grant permissions"
+          }
+        }
+      }
+    },
+    "待完成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "To do"
+          }
+        }
+      }
+    },
+    "待完成 %lld 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld to do"
+          }
+        }
+      }
+    },
+    "快捷键未生效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut not active"
+          }
+        }
+      }
+    },
+    "快速打开…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Open…"
+          }
+        }
+      }
+    },
+    "思考过程": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thinking process"
           }
         }
       }
@@ -161,6 +662,128 @@
         }
       }
     },
+    "手动填写": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter manually"
+          }
+        }
+      }
+    },
+    "打开会话时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When opening a conversation"
+          }
+        }
+      }
+    },
+    "打开开发者后台": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open developer console"
+          }
+        }
+      }
+    },
+    "把事件订阅改为长连接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch event subscription to long connection"
+          }
+        }
+      }
+    },
+    "授权失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authorization failed"
+          }
+        }
+      }
+    },
+    "撤销 %lld 台设备？": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Revoke %lld device?"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Revoke %lld devices?"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "操作结果待核对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Result needs checking"
+          }
+        }
+      }
+    },
+    "收到第一条消息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First message received"
+          }
+        }
+      }
+    },
+    "改动行数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changed lines"
+          }
+        }
+      }
+    },
+    "整群一个会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One conversation per group"
+          }
+        }
+      }
+    },
+    "新设置从下一条回复开始生效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies from the next reply"
+          }
+        }
+      }
+    },
     "无法创建定时任务：%@": {
       "localizations": {
         "en": {
@@ -181,12 +804,82 @@
         }
       }
     },
+    "无法生成二维码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot generate QR code"
+          }
+        }
+      }
+    },
+    "无法跳转到定义": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't go to definition"
+          }
+        }
+      }
+    },
+    "无障碍已开启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility on"
+          }
+        }
+      }
+    },
     "明天 9:00": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Tomorrow 9:00"
+          }
+        }
+      }
+    },
+    "更换凭据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace credentials"
+          }
+        }
+      }
+    },
+    "最后一个标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last tab"
+          }
+        }
+      }
+    },
+    "最后在线 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last online %@"
+          }
+        }
+      }
+    },
+    "最近查看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recently Viewed"
           }
         }
       }
@@ -201,12 +894,144 @@
         }
       }
     },
+    "本会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This session"
+          }
+        }
+      }
+    },
+    "本会话收藏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved in this conversation"
+          }
+        }
+      }
+    },
+    "机器人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bots"
+          }
+        }
+      }
+    },
+    "机器人 飞书 lark 卡片 绑定 群聊 话题 bot feishu channel": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "bot feishu lark card bind group topic channel"
+          }
+        }
+      }
+    },
+    "查找用法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Find Usages"
+          }
+        }
+      }
+    },
+    "查找用法失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't find usages"
+          }
+        }
+      }
+    },
+    "标签 标签栏 会话 快捷键 tab tabs shortcut": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "tab tabs tab bar session shortcut"
+          }
+        }
+      }
+    },
+    "标签栏与打开方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab bar and how conversations open"
+          }
+        }
+      }
+    },
+    "标签样式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab style"
+          }
+        }
+      }
+    },
+    "标签页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tabs"
+          }
+        }
+      }
+    },
+    "标题栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title bar"
+          }
+        }
+      }
+    },
     "检查依赖更新": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Check for dependency updates"
+          }
+        }
+      }
+    },
+    "正在发布…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publishing…"
+          }
+        }
+      }
+    },
+    "正在取消分享…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsharing…"
           }
         }
       }
@@ -227,6 +1052,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Every day 22:00"
+          }
+        }
+      }
+    },
+    "没有找到 %@ 的定义": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No definition found for %@"
+          }
+        }
+      }
+    },
+    "没有找到用法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No usages found"
           }
         }
       }
@@ -341,6 +1186,66 @@
         }
       }
     },
+    "添加飞书机器人": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Feishu bot"
+          }
+        }
+      }
+    },
+    "用时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elapsed time"
+          }
+        }
+      }
+    },
+    "用飞书扫码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan with Feishu"
+          }
+        }
+      }
+    },
+    "直接加入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add directly"
+          }
+        }
+      }
+    },
+    "移出标签栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove from tab bar"
+          }
+        }
+      }
+    },
+    "移除 %@？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove %@?"
+          }
+        }
+      }
+    },
     "稍后发送": {
       "localizations": {
         "en": {
@@ -357,6 +1262,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show Send Later button"
+          }
+        }
+      }
+    },
+    "线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lines"
+          }
+        }
+      }
+    },
+    "绑定你的飞书账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bind your Feishu account"
           }
         }
       }
@@ -663,6 +1588,16 @@
         }
       }
     },
+    "聊天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chats"
+          }
+        }
+      }
+    },
     "自定义…": {
       "localizations": {
         "en": {
@@ -693,12 +1628,72 @@
         }
       }
     },
+    "解绑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbind"
+          }
+        }
+      }
+    },
+    "解绑 %@？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbind %@?"
+          }
+        }
+      }
+    },
+    "计划": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plan"
+          }
+        }
+      }
+    },
+    "设备需要重新配对。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices must be paired again."
+          }
+        }
+      }
+    },
+    "超过 7 天未使用 · %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unused for over 7 days · %lld"
+          }
+        }
+      }
+    },
     "跑一遍测试并汇报失败": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Run the tests and report failures"
+          }
+        }
+      }
+    },
+    "跳转到定义": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go to Definition"
           }
         }
       }
@@ -713,12 +1708,84 @@
         }
       }
     },
+    "还有 %lld 个文件": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more file"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more files"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "还有 %lld 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld more"
+          }
+        }
+      }
+    },
+    "这个聊天里的会话绑定一并忘记": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation bindings in this chat are forgotten too"
+          }
+        }
+      }
+    },
     "这次已跳过": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Skipped this time"
+          }
+        }
+      }
+    },
+    "连接中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connecting"
+          }
+        }
+      }
+    },
+    "连接失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection failed"
+          }
+        }
+      }
+    },
+    "连接飞书": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connect to Feishu"
           }
         }
       }
@@ -733,6 +1800,36 @@
         }
       }
     },
+    "重新打开关闭的标签": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reopen closed tab"
+          }
+        }
+      }
+    },
+    "重新扫码授权": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Re-authorize by QR"
+          }
+        }
+      }
+    },
+    "重新检查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recheck"
+          }
+        }
+      }
+    },
     "错过后补跑": {
       "localizations": {
         "en": {
@@ -743,12 +1840,52 @@
         }
       }
     },
+    "页脚": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Footer"
+          }
+        }
+      }
+    },
     "项目不可用": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Project unavailable"
+          }
+        }
+      }
+    },
+    "飞书": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feishu"
+          }
+        }
+      }
+    },
+    "飞书机器人与可用账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feishu bots and allowed accounts"
+          }
+        }
+      }
+    },
+    "飞书里的应用不会被删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The app in Feishu is not deleted"
           }
         }
       }
@@ -20631,6 +21768,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sidebar width"
+          }
+        }
+      }
+    },
+    "线条": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line"
           }
         }
       }

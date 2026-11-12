@@ -397,10 +397,6 @@ enum WindowMaterial: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The content never clears past this, in percent: what shows through stays a tint, never
-    /// shapes behind the text.
-    static let contentLimit = 10.0
-
     static var defaultValue: WindowMaterial {
         if #available(macOS 26, *) { .glass } else { .solid }
     }

@@ -211,7 +211,7 @@ class MacHost(private val secrets: SecretStore) {
         val lanes = TimelineCache(createLocalFiles(), api.baseUrl, index = createTranscriptIndex(api.baseUrl))
         timelines = lanes
         val created = SessionStore(api = api, scope = child, listCache = lists, timelineCache = lanes)
-        presenter = TimelinePresenter(created, child)
+        presenter = TimelinePresenter(created, child, withOutputs = true)
         val savedMarks = SessionMarks(api, child)
         marks = savedMarks
         _store.value = created
@@ -233,7 +233,7 @@ class MacHost(private val secrets: SecretStore) {
         val parent = storeScope?.coroutineContext?.get(Job) ?: return null
         val child = CoroutineScope(SupervisorJob(parent) + Dispatchers.Main.immediate + failures)
         val created = SessionStore(api = api, scope = child, listCache = lists, timelineCache = timelines)
-        val window = WindowSession(created, TimelinePresenter(created, child), child) { closed, finalWrite ->
+        val window = WindowSession(created, TimelinePresenter(created, child, withOutputs = true), child) { closed, finalWrite ->
             windows.remove(closed)
             writeAfterClose(listOf(finalWrite))
         }

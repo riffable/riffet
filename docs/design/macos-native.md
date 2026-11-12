@@ -1,6 +1,6 @@
 # macOS 原生风格设计语言
 
-原生风格（`InterfaceStyle.native`）的视觉与动效约定。自绘的 Riffet / Claude 风格不受本文约束。改原生风格的界面前先读本文；和本文冲突的旧写法按本文改。
+原生风格（`InterfaceStyle.native`）的视觉与动效约定。自绘的 Riffet / 线条风格不受本文约束。改原生风格的界面前先读本文；和本文冲突的旧写法按本文改。
 
 参照了 Apple Music 的克制、Arc 的动效连贯性、macOS 26 的 HIG 与 WWDC25 设计系统，不照搬其中任何一个。调研来源见文末。
 

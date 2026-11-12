@@ -145,6 +145,8 @@ final class Workbench {
     /// (running first), written only when they change.
     private(set) var jobs: [NativeJob] = []
     private(set) var subagentEntries: [SubagentEntry] = []
+    /// The files the conversation's tools wrote, newest first (paths as written, see `TimelinePresentation.outputs`).
+    private(set) var outputs: [SessionOutput] = []
     /// Subagents still running while the main agent is idle; the stop button and the composer's hint.
     private(set) var backgroundSubagents = 0
     /// Compaction and background tasks above the composer; invisible when the server reports no activity.
@@ -444,6 +446,7 @@ final class Workbench {
                 docks.goal = held.goal
                 docks.jobs = held.jobs
                 docks.subagents = held.subagents
+                docks.outputs = held.outputs
                 docks.backgroundSubagents = held.backgroundSubagents
             }
             showDocks(docks, for: id)
@@ -464,6 +467,7 @@ final class Workbench {
         if docks.goal != goal { goal = docks.goal }
         if docks.jobs != jobs { jobs = docks.jobs }
         if docks.subagents != subagentEntries { subagentEntries = docks.subagents }
+        if docks.outputs != outputs { outputs = docks.outputs }
         if docks.backgroundSubagents != backgroundSubagents { backgroundSubagents = docks.backgroundSubagents }
         if docks.dock != dock { dock = docks.dock }
         if docks.stopping != stoppingActivities { stoppingActivities = docks.stopping }
@@ -471,7 +475,7 @@ final class Workbench {
 
     /// The docks on screen now.
     private var openDocks: SessionDocks {
-        SessionDocks(todos: todos, goal: goal, jobs: jobs, subagents: subagentEntries, backgroundSubagents: backgroundSubagents, dock: dock, stopping: stoppingActivities)
+        SessionDocks(todos: todos, goal: goal, jobs: jobs, subagents: subagentEntries, outputs: outputs, backgroundSubagents: backgroundSubagents, dock: dock, stopping: stoppingActivities)
     }
 
     private func rememberDocks(for id: String) {
@@ -974,6 +978,7 @@ final class Workbench {
             } }
             let sent = try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: cited, onStored: transfer) : store.send(text: text, attachments: attachments, context: cited, interrupt: interrupt, onStored: transfer)).boolValue
             if sent, onStored == nil { clearSubmittedReferences(cited, sessionId: sessionId, projectId: projectId) }
+            if sent, let sessionId { SessionTabs.model(for: baseURL).sent(sessionId) }
             return sent
         } catch {
             return false
@@ -1201,6 +1206,7 @@ final class Workbench {
             backendProfileId: profileId, model: model, mode: mode, approval: approval, context: cited, agentId: agent
         )
         clearSubmittedReferences(cited, sessionId: referenceSessionId, projectId: projectId)
+        SessionTabs.model(for: baseURL).launched(session.id)
         if navigationIntent == intent { open(session) }
         if agent != AgentDirectory.quickChat, defaultsRevision == revision, let accepted = session.model ?? model {
             Task {
@@ -1219,6 +1225,7 @@ final class Workbench {
         let cited = body.initialMessage?.context ?? []
         let sessions = body.initialMessage?.references ?? []
         clearSubmittedReferences(cited, sessions: sessions, sessionId: nil, projectId: body.projectId)
+        SessionTabs.model(for: baseURL).launched(session.id)
         if navigationIntent == intent { open(session) }
         if rememberSelection, let agent = body.agentId ?? body.backendId.map(backendWire), agent != AgentDirectory.quickChat, defaultsRevision == revision, let accepted = session.model ?? body.model {
             Task {
@@ -1235,8 +1242,8 @@ final class Workbench {
         refresh()
     }
 
-    func update(_ session: Session, title: String? = nil, tags: [String]? = nil, archived: Bool? = nil, pinned: Bool? = nil) async {
-        let body = SessionUpdate(title: title, tags: tags, archived: archived.map { KotlinBoolean(bool: $0) }, pinned: pinned.map { KotlinBoolean(bool: $0) }, toolGroups: nil, extensionsOff: nil)
+    func update(_ session: Session, title: String? = nil, tags: [String]? = nil, archived: Bool? = nil, pinned: Bool? = nil, toolGroups: [String]? = nil, extensionsOff: [String]? = nil) async {
+        let body = SessionUpdate(title: title, tags: tags, archived: archived.map { KotlinBoolean(bool: $0) }, pinned: pinned.map { KotlinBoolean(bool: $0) }, toolGroups: toolGroups, extensionsOff: extensionsOff)
         let updated = try? await store.updateSession(id: session.id, body: body)
         // The window's own store has the answer; the main list follows its next poll unless told now.
         if role == .window, let updated { listStore.applySession(session: updated) }
@@ -1682,6 +1689,7 @@ private struct SessionDocks {
     var goal: SessionGoal?
     var jobs: [NativeJob] = []
     var subagents: [SubagentEntry] = []
+    var outputs: [SessionOutput] = []
     var backgroundSubagents = 0
     var dock = ActivityDock(compacting: false, background: 0, tasks: [])
     var stopping: Set<String> = []
@@ -1690,7 +1698,7 @@ private struct SessionDocks {
 private extension SessionDocks {
     init(_ presentation: TimelinePresentation) {
         self.init(
-            todos: presentation.todos, goal: presentation.goal, jobs: presentation.jobs, subagents: presentation.subagents,
+            todos: presentation.todos, goal: presentation.goal, jobs: presentation.jobs, subagents: presentation.subagents, outputs: presentation.outputs,
             backgroundSubagents: Int(presentation.backgroundSubagents), dock: presentation.dock, stopping: presentation.stoppingActivities
         )
     }

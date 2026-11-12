@@ -169,9 +169,14 @@ struct MarksPage: View {
 
     // MARK: Opening
 
+    private func open(_ mark: Mark, file: Bool = false) { workbench.openMark(mark, file: file) }
+}
+
+extension Workbench {
     /// Opens the mark where its message is now: the server re-locates it (rewriting a stale anchor),
     /// and the transcript reads older pages until the message is loaded, as a search hit does.
-    private func open(_ mark: Mark, file: Bool = false) {
+    func openMark(_ mark: Mark, file: Bool = false) {
+        let workbench = self
         Task {
             defer { if file, let path = mark.asset?.path { workbench.preview(path: path) } }
             let location = try? await MarksStore.shared.locate(mark.id)

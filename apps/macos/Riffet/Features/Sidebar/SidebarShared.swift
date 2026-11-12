@@ -26,6 +26,13 @@ struct SessionRowMenuItems: View {
             Button(session.pinnedAt == nil ? "置顶" : "取消置顶", action: menu.togglePin)
             Button("重命名…", action: menu.rename)
             if let editTags = menu.editTags { Button("编辑标签…", action: editTags) }
+            if let tabs = menu.tabs, session.archivedAt == nil {
+                if tabs.isKept(session.id) {
+                    Button("移出标签栏") { tabs.close(session.id) }
+                } else {
+                    Button("加入标签栏") { tabs.add(session.id) }
+                }
+            }
             Divider()
             if let reveal = menu.reveal { Button("在 Finder 中显示项目", action: reveal) }
             Button("复制会话 ID") { copyToPasteboard(session.nativeSessionId ?? session.id) }
@@ -55,7 +62,8 @@ extension Workbench {
             toggleArchive: { Task { await self.update(session, archived: session.archivedAt == nil) } },
             openInWindow: { WindowRouter.shared.openConversation(session.id) },
             delete: list.canDeleteSessions ? { Task { await self.requestDeletion(session) } } : nil,
-            deleteEnabled: deletionLoading == nil
+            deleteEnabled: deletionLoading == nil,
+            tabs: SessionTabsPreferences.shared.active ? SessionTabs.model(for: baseURL) : nil
         )
     }
 }

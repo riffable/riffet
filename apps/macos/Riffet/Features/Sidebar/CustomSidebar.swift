@@ -9,6 +9,7 @@ import RiffetKit
 struct CustomSidebar: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
+    @Environment(\.customSidebarPeeking) private var peeking
     @AppStorage(WorkbenchSidebar.collapsedProjectsKey) private var collapsed = ""
     @AppStorage(WorkbenchSidebar.collapsedTimeGroupsKey) private var collapsedTime = ""
     @State private var renaming: Session?
@@ -46,11 +47,11 @@ struct CustomSidebar: View {
 
     private func toggleButton() -> some View {
         Button { NotificationCenter.default.post(name: .riffetToggleSidebar, object: workbench) } label: {
-            Image(icon: "sidebar.left")
+            Image(icon: peeking ? "pin" : "sidebar.left")
         }
         .buttonStyle(IconButtonStyle())
-        .help("收起/展开侧栏")
-        .accessibilityLabel("收起/展开侧栏")
+        .help(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
+        .accessibilityLabel(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
     }
 
     /// The top row runs level with the traffic lights: the header's height, and a card's gap above it.

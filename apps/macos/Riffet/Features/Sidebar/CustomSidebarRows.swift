@@ -30,8 +30,9 @@ struct CustomNavRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: rowInset) {
+                // A symbol's box is 1.26× its font: 12pt draws the web's 15px nav glyph.
                 Image(icon: symbol)
-                    .font(.riffet(size: S(style.text.body), weight: .regular))
+                    .font(.riffet(size: S(style.text.body - 2), weight: .regular))
                     .foregroundStyle(palette.fg2)
                     .frame(width: iconColumn)
                 Text(title)
@@ -250,7 +251,7 @@ struct CustomProjectRow: View {
             Button(action: toggle) {
                 HStack(spacing: Space.sm) {
                     Image(icon: hovering ? (expanded ? "chevron.down" : "chevron.right") : "folder")
-                        .font(.riffet(size: S(style.text.body - 1), weight: hovering ? .semibold : .regular))
+                        .font(.riffet(size: S(style.text.body - 3), weight: hovering ? .semibold : .regular))
                         .foregroundStyle(palette.fg2)
                         .frame(width: iconColumn)
                     Text(project.name)

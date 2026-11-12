@@ -24,24 +24,43 @@ struct FilesPanel: View {
     @State private var notice: String?
     /// The project's favorite folders, relative to its root; replaced with the project.
     @State private var favorites = FolderFavoritesModel()
+    /// The files viewed last in this project, shown as tabs over the open file.
+    @State private var recent = RecentFiles(projectId: "")
+    /// A symbol's usages (or its several declarations) over the open file.
+    @State private var usages: CodeUsages?
+    @State private var usagesTask: Task<Void, Never>?
 
     enum SearchMode: String { case name, content }
 
     private static let page = 100
 
     var body: some View {
-        ZStack {
-            // The list stays under an open file, so going back keeps its folder and scroll position.
-            listPage.keptAlive(hidden: preview != nil)
-            if let preview {
-                FilePreviewPage(workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, openFolder: browse) { self.preview = nil }
-                    .id("\(project.id)|\(preview.path)")
+        VStack(spacing: 0) {
+            if preview != nil, !recent.files.isEmpty {
+                RecentFilesStrip(files: recent.files.map(\.path), active: preview?.path, open: { open($0) }, close: closeTab)
+            }
+            ZStack {
+                // The list stays under an open file, so going back keeps its folder and scroll position.
+                listPage.keptAlive(hidden: preview != nil)
+                if let preview {
+                    FilePreviewPage(
+                        workbench: workbench, project: project, path: preview.path, target: preview.line.map { ($0, preview.token) }, openFolder: browse,
+                        onShown: shown, onJump: { open($0, line: $1) }, onUsages: findUsages, onChoices: showChoices
+                    ) { self.preview = nil }
+                        .id("\(project.id)|\(preview.path)")
+                        .keptAlive(hidden: usages != nil)
+                }
+                if let usages {
+                    CodeUsagesPage(usages: usages, open: { location in closeUsages(); open(location.path, line: location.line) }, back: closeUsages)
+                }
             }
         }
         // Pages switch without a slide: every frame of one re-laid out the whole window.
         .task(id: project.id) {
             path = ""
             preview = nil
+            closeUsages()
+            recent = RecentFiles(projectId: project.id)
             found = nil
             hits = nil
             // A request made together with switching conversations arrives before this reset.
@@ -64,6 +83,50 @@ struct FilesPanel: View {
 
     private func open(_ file: String, line: Int? = nil) {
         preview = (file, line, (preview?.token ?? 0) + 1)
+    }
+
+    private func shown(_ file: String) {
+        if recent.projectId != project.id { recent = RecentFiles(projectId: project.id) }
+        recent.touch(file)
+    }
+
+    /// Closes a tab; the file on screen gives way to the one viewed before it, or to the list.
+    private func closeTab(_ file: String) {
+        recent.remove(file)
+        guard preview?.path == file else { return }
+        if let next = recent.byRecency.first { open(next.path) } else { preview = nil }
+    }
+
+    private func closeUsages() {
+        usagesTask?.cancel()
+        usages = nil
+    }
+
+    private func showChoices(_ word: String, _ locations: [CodeLocation], from origin: (path: String, line: Int)) {
+        usagesTask?.cancel()
+        usages = CodeUsages(word: word, origin: origin, locations: locations, searching: false)
+    }
+
+    /// Usages inside the module first, then the whole project, as the web does.
+    private func findUsages(_ word: String, from origin: (path: String, line: Int)) {
+        usagesTask?.cancel()
+        usages = CodeUsages(word: word, origin: origin)
+        let projectId = project.id
+        usagesTask = Task {
+            for scope in [CodeNavigation.Scope.module, .project] {
+                do {
+                    let result = try await CodeNavigation.references(projectId: projectId, path: origin.path, word: word, scope: scope)
+                    guard !Task.isCancelled else { return }
+                    usages?.locations = result.locations
+                    usages?.searching = scope == .module
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    usages?.searching = false
+                    usages?.failed = true
+                    return
+                }
+            }
+        }
     }
 
     /// A mentioned path that turned out to be a folder: list it instead of previewing it.
@@ -117,6 +180,7 @@ struct FilesPanel: View {
                         .buttonStyle(IconButtonStyle())
                         .help("刷新")
                 }
+                PanelMaximizeButton()
             }
             .padding(.trailing, Space.sm)
             .frame(height: InspectorMetrics.headerHeight)
@@ -475,9 +539,16 @@ struct FilePreviewPage: View {
     let path: String
     var target: (Int, Int)?
     var openFolder: ((String) -> Void)?
+    /// A text or image file was read: it joins the recent files.
+    var onShown: ((String) -> Void)?
+    /// Code navigation: to a place in a file, to a symbol's usages, to the choice among its declarations.
+    var onJump: ((String, Int) -> Void)?
+    var onUsages: ((String, (path: String, line: Int)) -> Void)?
+    var onChoices: ((String, [CodeLocation], (path: String, line: Int)) -> Void)?
     let back: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var colorScheme
+    @State private var navigation: Task<Void, Never>?
     @State private var preview: FilePreview?
     @State private var error: String?
     @State private var htmlRendered = true
@@ -551,6 +622,7 @@ struct FilePreviewPage: View {
             }
         }
         .onChange(of: target?.1) { _, _ in if target != nil { htmlRendered = false } }
+        .onDisappear { navigation?.cancel() }
         .task(id: "\(path)|\(reload)") {
             htmlRendered = target == nil
             // A file opened lately shows at once and is read again behind it; 刷新 always waits for the read.
@@ -561,6 +633,7 @@ struct FilePreviewPage: View {
                 if let next {
                     Self.recent.setObject(next, forKey: key)
                     if preview?.hash != next.hash || preview?.path != next.path || preview?.truncated != next.truncated { preview = next }
+                    if !next.binary || next.image != nil { onShown?(next.path) }
                 } else if preview != nil {
                     preview = nil
                 }
@@ -594,14 +667,39 @@ struct FilePreviewPage: View {
             } else {
                 CodeTextView(
                     text: preview.content, language: CodeHighlighter.language(forPath: preview.path), palette: palette,
-                    fontSize: S(12), target: target.map { (line: $0.0, token: $0.1) }
-                ) { line, text in
-                    workbench.addReference(path: preview.path, line: line)
-                    _ = text
-                }
+                    fontSize: S(12), target: target.map { (line: $0.0, token: $0.1) },
+                    onLine: { line, _ in workbench.addReference(path: preview.path, line: line) },
+                    onSymbol: { navigate($0, $1, in: preview.path) }
+                )
             }
         } else {
             ProgressView()
+        }
+    }
+
+    /// ⌘-click: the definition, a choice among several, or the usages when the click is on the declaration.
+    private func navigate(_ symbol: CodeSymbol, _ intent: CodeSymbolIntent, in file: String) {
+        navigation?.cancel()
+        notice = nil
+        let origin = (path: file, line: symbol.line)
+        if intent == .usages { onUsages?(symbol.word, origin); return }
+        navigation = Task {
+            do {
+                let found = try await CodeNavigation.definitions(projectId: project.id, path: file, symbol: symbol)
+                guard !Task.isCancelled else { return }
+                if found.isEmpty {
+                    notice = String(localized: "没有找到 \(symbol.word) 的定义")
+                } else if found.contains(where: { $0.path == file && $0.line == symbol.line }) {
+                    onUsages?(symbol.word, origin)
+                } else if found.count == 1 {
+                    onJump?(found[0].path, found[0].line)
+                } else {
+                    onChoices?(symbol.word, found, origin)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                notice = String(localized: "无法跳转到定义")
+            }
         }
     }
 

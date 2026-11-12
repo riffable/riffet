@@ -19,6 +19,9 @@ struct ConversationView: View {
     @State private var autoOpenTask: Task<Void, Never>?
     @State private var visualization: VisualizationTarget?
     @State private var nativeNoticeDetail: String?
+    /// Whether the conversation is wide enough for the overview column (`SessionAsideHost`).
+    @State private var asideFits = false
+    @State private var asideLink = TranscriptScrollLink()
 
     /// Read from the workbench's cache, so a switch never shows another conversation's catalog
     /// or an empty one while the new one loads.
@@ -148,6 +151,9 @@ struct ConversationView: View {
             banner: shownBanner, providerMissing: missingBar,
             unknownAttention: state.unknownAttention, catalogStatus: status, notices: notices
         )
+        // The column is the style's right-hand recipe; whether it fits is decided by width alone.
+        let asideAllowed = DisplayPreferences.shared.style.rightPanel == .outline && DisplayPreferences.shared.sessionOverview && !quickChat && !fullscreen
+        let asideShown = asideAllowed && asideFits
         return ChatMotion(workbench: workbench, composer: composer, sessionId: session.id, layout: layout) {
             VStack(spacing: 0) {
                 if !fullscreen {
@@ -163,7 +169,7 @@ struct ConversationView: View {
                             .padding(.horizontal, Column.gutter)
                             .frame(maxWidth: .infinity)
                         // One list per conversation: another one's rows, scroll offset and row sizes never carry over.
-                        TranscriptView(workbench: workbench, session: session, restoreInput: { run in
+                        TranscriptView(workbench: workbench, session: session, railHidden: asideShown, link: asideLink, restoreInput: { run in
                             let composer = composer
                             Task {
                                 if let draft = await workbench.takeBack(run) { composer.restore(draft, merging: true) }
@@ -231,7 +237,7 @@ struct ConversationView: View {
                         }
                         .modifier(AssemblyEntrance(workbench: workbench, sessionId: session.id))
                     }
-                    ComposerDocks(workbench: workbench, composer: composer, sessionId: session.id, supportsSteer: catalog?.capabilities.supportsSteer == true, supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true, recoveryOnly: fullscreen)
+                    ComposerDocks(workbench: workbench, composer: composer, sessionId: session.id, supportsSteer: catalog?.capabilities.supportsSteer == true, supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true, recoveryOnly: fullscreen, planInAside: asideShown)
                     FeedbackRegion(value: workbench.configurationError ?? workbench.recoveryError?.text, active: feedbackActive) { error, live in
                         HStack {
                             Text(error).font(.riffet(size: S(12))).foregroundStyle(live ? palette.danger : palette.fg3)
@@ -275,6 +281,10 @@ struct ConversationView: View {
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
+            .modifier(SessionAsideHost(
+                workbench: workbench, session: session, link: asideLink, allowed: asideAllowed,
+                needed: Column.width + Column.gutter * 2 + SessionAside.width, fits: $asideFits
+            ))
         }
         .overlay {
             if dropTargeted {
@@ -895,13 +905,15 @@ struct ComposerDocks: View {
     var supportsSteer = false
     var supportsTargetedStop = false
     var recoveryOnly = false
+    /// The overview column shows the goal and the todos, so they are not here as well.
+    var planInAside = false
     private var canSteer: Bool { workbench.connection is RiffetConnectionStateLive && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting }
     @Environment(\.palette) private var palette
 
     var body: some View {
         let tasks = workbench.pageModels.tasks
         VStack(spacing: 6) {
-            if !recoveryOnly {
+            if !recoveryOnly, !planInAside {
                 if let goal = workbench.goal { GoalDockView(goal: goal).transition(ComposerMotion.insert) }
                 if !workbench.todos.isEmpty { TodoDockView(entries: workbench.todos).transition(ComposerMotion.insert) }
             }
