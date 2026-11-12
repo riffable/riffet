@@ -57,6 +57,12 @@ export interface LaneWriter {
   turnEnded(turnId: string, status: TurnEndStatus, at: string, error?: string): void;
   /** The current valid end, if the transcript has not retracted it. */
   turnEndStatus(turnId: string): TurnEndStatus | undefined;
+  /** The committed event being corrected, including its original position and payload. */
+  event(nativeId: string): NativeWorkbenchEvent | undefined;
+  /** Whether a failed end is the exact diagnostic being reclassified, not a later real failure. */
+  turnFailedAt(turnId: string, at: string, error: string): boolean;
+  /** Keep a cursor upgrade and its corrective writes atomic, including nested writer calls. */
+  transaction(task: () => void): void;
   /** Retracts an end when authoritative transcript state resumes or corrects it; optionally checkpoints the reread. */
   turnReopened(turnId: string, at: string, cursor?: string): void;
   /**
@@ -275,6 +281,20 @@ export class JournalLaneWriter implements LaneWriter {
   turnEndStatus(turnId: string): TurnEndStatus | undefined {
     return turnEndStatus(this.journal, this.key, turnId);
   }
+
+  event(nativeId: string): NativeWorkbenchEvent | undefined {
+    const row = this.journal.entity(this.key, nativeId);
+    return row && !row.kind.startsWith('meta.') && row.kind !== TOMBSTONE_KIND && row.kind !== DRAFT_KIND
+      ? row.payload as NativeWorkbenchEvent : undefined;
+  }
+
+  turnFailedAt(turnId: string, at: string, error: string): boolean {
+    const row = this.journal.entity(this.key, turnMetaId(turnId, 'ended'));
+    const payload = row?.payload as { status?: string; error?: string } | undefined;
+    return row?.kind === TURN_ENDED && row.at === at && payload?.status === 'failed' && payload.error === error;
+  }
+
+  transaction(task: () => void): void { this.journal.tx(task); }
 
   turnReopened(turnId: string, at: string, cursor?: string): void {
     this.journal.tx(() => {

@@ -4,10 +4,11 @@ import { basename, dirname, join } from 'node:path';
 import type { NativeActivity, NativeWorkbenchEvent, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET } from '../../../../../packages/contracts/src/sync.js';
 import { activityId, activityOfEvent, isLiveActivity } from '../../journal/activity.js';
-import type { LaneWriter, SubagentInfo, TranscriptSource, TurnEndStatus } from '../../journal/ingest.js';
+import { turnMetaId, type LaneWriter, type SubagentInfo, type TranscriptSource, type TurnEndStatus } from '../../journal/ingest.js';
 import { ClaudeActivities, readTaskOutputTail, type ClaudeActivitiesState } from './activity.js';
+import { activeTurnOf, initialState, reduce } from './session-state.js';
 import {
-  claudePromptKey, claudeRowOwesStep, claudeRowSignals, mapRow, parseRow, subagentSettles, subagentWake,
+  claudeApiFailure, claudeFailureText, claudePromptKey, claudeRowOwesStep, claudeRowSignals, mapRow, parseRow, subagentSettles, subagentWake,
   type ClaudeRow, type ClaudeTask, type ClaudeTranscriptHooks, type MapperState, type ToolCall,
 } from './history.js';
 
@@ -78,7 +79,7 @@ export interface ClaudeTranscriptSourceOptions {
 }
 
 /** The journal turn rows go to. `c`: opened by `/compact`; `s`: by another slash command; `p`: the CLI's prompt id. */
-interface Turn { k: string; open: boolean; p?: string; c?: 1; s?: 1; a?: 1 }
+interface Turn { k: string; open: boolean; p?: string; c?: 1; s?: 1; a?: 1; b?: 1 }
 /**
  * A write outside a commit (a turn mark, an activity state), made right after the commit of the row that
  * caused it. The commit's cursor lists them, so a read that stopped in between makes them again (G7).
@@ -87,9 +88,9 @@ type Op = ['end', string, TurnEndStatus, string, string?] | ['start', string, st
 /** `mapRow`'s state between rows. Tool calls keep only what their result needs. */
 interface MapperSnapshot { n?: string; u?: string; q?: string; c?: Array<[string, ToolCall]>; k?: ClaudeTask[]; x?: ClaudeActivitiesState }
 interface QueueReceipt { nativeId: string; runId: string; commandId: string }
-interface LaneState { m: MapperSnapshot; t?: Turn; r?: string[]; d?: 1; x?: Op[]; q?: Array<{ key?: string; receipt?: QueueReceipt; dequeued?: 1; consumed?: 1 }> }
+interface LaneState { m: MapperSnapshot; t?: Turn; r?: string[]; d?: 1; x?: Op[]; parents?: Array<[string, string]>; q?: Array<{ key?: string; receipt?: QueueReceipt; dequeued?: 1; consumed?: 1 }> }
 /** File `f` of the conversation's transcripts, read up to byte `o`; `i` and `p` are the inode and the bytes before `o` it was read with. */
-interface Cursor { v: 1; f: number; o: number; i?: number; p?: string; s: LaneState }
+interface Cursor { v: 1; f: number; o: number; i?: number; p?: string; s: LaneState; lifecycle?: 1 }
 
 /** Older cursors kept the previous mapper identity when output continued after a control-path stop. */
 function cursorTurn(state: LaneState): Turn | undefined {
@@ -110,7 +111,7 @@ function decode(cursor: string | null): Cursor | undefined {
   } catch { return undefined; }
 }
 
-const fresh = (f: number, o: number): Cursor => ({ v: 1, f, o, s: { m: {} } });
+const fresh = (f: number, o: number): Cursor => ({ v: 1, f, o, s: { m: {} }, lifecycle: 1 });
 
 /** The calls a result may still answer, holding only the input fields a result reads (`mapRow`, `launchOf`). */
 class OpenCalls extends Map<string, ToolCall> {
@@ -552,10 +553,144 @@ export class ClaudeTranscriptSource implements TranscriptSource {
 
   /** Reads one main lane from `cursor`; once it is read to the end, what the files beside it say is settled in it too. */
   private async read(w: LaneWriter, files: ReadonlyArray<string | undefined>, cursor: Cursor, limit: number, metas: readonly SubagentMeta[], signal?: AbortSignal): Promise<{ done: boolean; read: number }> {
+    if (!await this.repairLifecycle(w, files, cursor, true, signal)) return { done: false, read: 0 };
+    cursor = decode(w.cursor) ?? cursor;
     const reader = new LaneRead(this, w, cursor, true);
     const result = await reader.run(files, limit, signal);
     if (result.done && !signal?.aborted) await reader.settle(metas, this.options.exited?.());
     return result;
+  }
+
+  /**
+   * Upgrade an already-read lane once. Only rows which the old classifier demonstrably got wrong
+   * are revised; control-path stops, receipt ownership, unrelated rows and the generation survive.
+   * Scan into memory before writing so an interrupted scan leaves the old cursor fully usable.
+   */
+  private async repairLifecycle(w: LaneWriter, files: ReadonlyArray<string | undefined>, cursor: Cursor, main: boolean, signal?: AbortSignal): Promise<boolean> {
+    if (cursor.lifecycle === 1 || cursor.o === 0 && cursor.f === 0) return true;
+    const changes: NativeWorkbenchEvent[] = [];
+    const reopen = new Map<string, string>();
+    const retire = new Set<string>();
+    const continuations = new Map<string, string>();
+    const stopped = new Set<string>();
+    const ends = new Map<string, { status: TurnEndStatus; at: string; error?: string }>();
+    const mapper: MapperState = { turnAt: '', calls: new OpenCalls(), tasks: new Map(), ...(main ? { activities: new ClaudeActivities(this.sessionId, {}, { retainEnded: RETAIN_ENDED }) } : {}) };
+    const parents = new Map<string, string>();
+    let state = initialState('alive'), correction: { promptId: string; runId?: string } | undefined;
+    let childTurn: string | undefined, childSettled = false, boundary: { promptId: string; blocked: boolean } | undefined;
+    for (let f = 0; f <= cursor.f; f += 1) {
+      const path = files[f];
+      if (!path) continue;
+      const handle = await openFile(path);
+      if (!handle) continue;
+      try {
+        const { size } = await handle.stat();
+        const end = f === cursor.f ? Math.min(cursor.o, size) : size;
+        let position = 0, buffer = EMPTY, since = performance.now();
+        while (position < end) {
+          if (signal?.aborted) return false;
+          const chunk = await readRange(handle, position, Math.min(end, position + READ_CHUNK));
+          if (!chunk.length) break;
+          const bytes = buffer.length ? Buffer.concat([buffer, chunk]) : chunk;
+          for (const line of linesOf(bytes, position - buffer.length, false)) {
+            if (performance.now() - since > STEP_MS) { await giveWay(); since = performance.now(); if (signal?.aborted) return false; }
+            const row = parseLine(line.bytes);
+            if (!row || main && (row.isSidechain === true || row.agentId !== undefined)) continue;
+            const at = typeof row.timestamp === 'string' ? row.timestamp : NO_TIME;
+            const uuid = typeof row.uuid === 'string' ? row.uuid : `line-${line.start}`;
+            const before = activeTurnOf(state.mainTurn);
+            const signals = main ? claudeRowSignals(row, parents, before?.promptId) : [];
+            const failure = claudeApiFailure(row);
+            const message = record(row.message);
+            if (main && row.isApiErrorMessage === true && message?.stop_reason === 'tool_use' && before?.promptId) {
+              const content = message.content;
+              const text = typeof content === 'string' ? content : Array.isArray(content) ? content.map(part => record(part)?.text ?? '').join('') : '';
+              if (w.turnFailedAt(before.promptId, at, claudeFailureText(text))) {
+                correction = { promptId: before.promptId, ...(mapper.turnId ? { runId: mapper.turnId } : {}) };
+                reopen.set(before.promptId, at);
+              }
+            }
+            if (!main && childSettled && subagentWake(row)) { childTurn = mapper.turnId = `claude-turn:${uuid}`; childSettled = false; }
+            if (!main) childSettled = subagentSettles(row) ?? childSettled;
+            const previousTurn = mapper.turnId;
+            const events = mapRow(row, line.start, this.session(), mapper, {}, !main);
+            if (!main && mapper.turnId && (!childTurn || previousTurn !== mapper.turnId)) childTurn = mapper.turnId;
+            for (const event of events) {
+              if (activityOfEvent(event)) continue;
+              if (correction) {
+                const saved = w.event(event.nativeId);
+                // Old readers opened an anonymous continuation after the false failure. Reassign
+                // only rows in that continuation or the original prompt, preserving their data.
+                const old = saved?.nativeTurnId;
+                const belongs = !signals.some(signal => signal.type === 'prompt') && (!old || old === correction.promptId || old.startsWith('claude-turn:'));
+                if (belongs) {
+                  if (old && old !== correction.promptId) {
+                    const status = w.turnEndStatus(old);
+                    if (status === 'cancelled' || status === 'interrupted') stopped.add(correction.promptId);
+                    continuations.set(old, correction.promptId);
+                    retire.add(turnMetaId(old, 'started')); retire.add(turnMetaId(old, 'ended'));
+                  }
+                  changes.push({ ...(saved ?? event), sequence: 0, nativeTurnId: correction.promptId,
+                    ...(correction.runId ? { runId: correction.runId } : {}) } as NativeWorkbenchEvent);
+                }
+              }
+            }
+            if (!main && failure) {
+              const id = `claude:${this.options.nativeSessionId()}:${uuid}:0`;
+              const turnId = w.event(id)?.nativeTurnId ?? childTurn;
+              if (turnId && w.turnEndStatus(turnId) === 'completed') {
+                ends.set(turnId, { status: 'failed', at, error: failure });
+                retire.add(id);
+              }
+            }
+            for (const signal of signals) {
+              const transition = reduce(state, signal);
+              state = transition.state;
+              const ended = transition.ended;
+              if (ended?.promptId && (correction?.promptId === ended.promptId || signal.type === 'turn_end' && signal.reason === 'stop' && w.turnEndStatus(ended.promptId) === undefined)) {
+                ends.set(ended.promptId, { status: ended.reason === 'stop_failure' ? 'failed' : ended.reason === 'interrupted' ? 'cancelled' : 'completed', at, ...(ended.error ? { error: ended.error } : {}) });
+              }
+              if (ended) correction = undefined;
+            }
+            const active = activeTurnOf(state.mainTurn);
+            boundary = active?.promptId ? { promptId: active.promptId, blocked: active.stopBlocked === true } : undefined;
+          }
+          const newline = bytes.lastIndexOf(0x0a);
+          buffer = newline >= 0 ? bytes.subarray(newline + 1) : bytes;
+          position += chunk.length;
+        }
+      } finally { await handle.close(); }
+    }
+    if (signal?.aborted) return false;
+    for (const promptId of stopped) { reopen.delete(promptId); ends.delete(promptId); }
+    for (const [turnId, promptId] of continuations) if (stopped.has(promptId)) {
+      retire.delete(turnMetaId(turnId, 'started')); retire.delete(turnMetaId(turnId, 'ended'));
+    }
+    const next: Cursor = { ...cursor, s: { ...cursor.s, m: { ...cursor.s.m }, ...(parents.size ? { parents: [...parents] } : {}) }, lifecycle: 1 };
+    const old = cursorTurn(cursor.s);
+    if (old && main && (reopen.has(old.p ?? old.k) || retire.has(turnMetaId(old.k, 'started')))) {
+      const promptId = old.p ?? old.k;
+      next.s.t = { k: promptId, p: promptId, open: !ends.has(promptId), ...(boundary?.promptId === promptId && boundary.blocked ? { b: 1 } : {}) };
+      next.s.m.n = promptId;
+      if (mapper.turnId) next.s.m.u = mapper.turnId;
+      next.s.r = (next.s.r ?? []).filter(key => !retire.has(turnMetaId(key, 'started')));
+    } else if (old && ends.has(old.k)) next.s.t = { ...old, open: false };
+    else if (old?.open && boundary && boundary.promptId === old.p) next.s.t = { ...old, ...(boundary.blocked ? { b: 1 } : {}) };
+    next.s.x = next.s.x?.filter(op => op[0] === 'act' || !reopen.has(op[1]) && !ends.has(op[1]) && !retire.has(turnMetaId(op[1], 'started')));
+    // Open calls keep their issuing turn so later tool results merge with the corrected call.
+    next.s.m.c = next.s.m.c?.map(([id, call]) => {
+      const promptId = call.nativeTurnId ? continuations.get(call.nativeTurnId) : undefined;
+      if (!promptId || stopped.has(promptId)) return [id, call];
+      const changed = changes.find(event => event.type === 'tool_call' && event.data.toolCallId === id && event.nativeTurnId === promptId);
+      return [id, { ...call, nativeTurnId: promptId, ...(changed?.runId ? { runId: changed.runId } : {}) }];
+    });
+    w.transaction(() => {
+      for (const [turnId, at] of reopen) w.turnReopened(turnId, at);
+      w.commit({ events: changes.filter(event => !stopped.has(event.nativeTurnId!)), retire: [...retire], cursor: w.cursor });
+      for (const [turnId, end] of ends) w.turnEnded(turnId, end.status, end.at, end.error);
+      w.commit({ events: [], cursor: JSON.stringify(next) });
+    });
+    return true;
   }
 
   /** Every subagent of the conversation into its lane, the agent that spawned it naming it there (G9). */
@@ -586,6 +721,8 @@ export class ClaudeTranscriptSource implements TranscriptSource {
       if (lanes.read.get(meta.toolUseId) === `${seen}:${child.cursor}`) continue;
       let cursor = decode(child.cursor);
       if (cursor && !await sameFile(meta.file, cursor)) { child.rebuild('identity-changed'); cursor = undefined; }
+      if (cursor && !await this.repairLifecycle(child, [meta.file], cursor, false, signal)) { caughtUp = false; continue; }
+      cursor = decode(child.cursor);
       const reader = new LaneRead(this, child, cursor ?? fresh(0, 0), false);
       const { done, read } = await reader.run([meta.file], budget, signal);
       budget -= read;
@@ -659,6 +796,7 @@ class LaneRead {
   private ino?: number;
   private probe: Buffer;
   private queuedInputs: NonNullable<LaneState['q']>;
+  private readonly parents: Map<string, string>;
 
   constructor(private readonly source: ClaudeTranscriptSource, private readonly w: LaneWriter, cursor: Cursor, private readonly main: boolean) {
     const { m, t, r, d, x } = cursor.s;
@@ -679,6 +817,7 @@ class LaneRead {
     this.probe = cursor.p ? Buffer.from(cursor.p, 'base64') : EMPTY;
     this.ops = x ?? [];
     this.queuedInputs = cursor.s.q ?? [];
+    this.parents = new Map(cursor.s.parents ?? []);
   }
 
   /** Reads `files` from the cursor on, about `limit` bytes of them; `done` once the last one is read to its end. */
@@ -801,7 +940,7 @@ class LaneRead {
 
   private mainRow(row: ClaudeRow, start: number): void {
     const m = this.mapper;
-    const signals = claudeRowSignals(row);
+    const signals = claudeRowSignals(row, this.parents, this.turn?.open ? this.turn.p : undefined);
     const prompt = signals.find(signal => signal.type === 'prompt');
     // The CLI's interruption marker names the prompt it ends: it closes a turn and never opens one.
     const marker = signals.some(signal => signal.type === 'turn_end' && signal.reason === 'interrupted');
@@ -819,11 +958,17 @@ class LaneRead {
     for (const signal of signals) {
       const turn = this.turn;
       if (!turn?.open) break;
-      if (signal.type === 'turn_end' && signal.reason === 'duration' && !turn.c) this.end('completed', at);
-      else if (signal.type === 'turn_end' && signal.reason === 'stop_failure') this.end('failed', at, signal.error);
-      else if (signal.type === 'turn_end' && signal.reason === 'interrupted' && (!signal.promptId || !turn.p || signal.promptId === turn.p)) this.end('cancelled', at);
-      else if (signal.type === 'compact_boundary' && turn.c) this.end('completed', at);
-      else if (signal.type === 'command_output' && (turn.s || turn.c)) this.end(turn.c ? 'failed' : 'completed', at);
+      if (!['turn_end', 'stop_blocked', 'compact_boundary', 'command_output'].includes(signal.type)) continue;
+      // The runtime and durable reader use the same end rules, including a Stop hook which sends
+      // the model on. Only the current turn is needed; queue/background state belongs elsewhere.
+      const transition = reduce({ ...initialState('alive'), mainTurn: {
+        kind: turn.c ? 'compacting' : 'running', promptId: turn.p, origin: 'other', slash: turn.s === 1,
+        transcriptSeen: true, ...(turn.b ? { stopBlocked: true } : {}),
+      } }, signal);
+      if (activeTurnOf(transition.state.mainTurn)?.stopBlocked) turn.b = 1; else delete turn.b;
+      const ended = transition.ended;
+      if (ended) this.end(ended.reason === 'stop_failure' || ended.reason === 'command' && ended.compact ? 'failed'
+        : ended.reason === 'interrupted' ? 'cancelled' : 'completed', at, ended.error);
     }
   }
 
@@ -839,7 +984,9 @@ class LaneRead {
     const { visible, activities, at } = this.map(row, start);
     if (m.turnId !== before && !marker && m.turnId) this.open(m.turnId, uuid, at, {});
     this.place(visible, activities, uuid, at);
-    if (marker && this.turn?.open) this.end('cancelled', at);
+    const failure = claudeApiFailure(row);
+    if (failure && this.turn?.open) this.end('failed', at, failure);
+    else if (marker && this.turn?.open) this.end('cancelled', at);
     else if (settles === true && this.turn?.open) this.end('completed', at);
   }
 
@@ -969,8 +1116,9 @@ class LaneRead {
       m: mapper, ...(this.turn ? { t: this.turn } : {}), ...(this.recent.length ? { r: this.recent } : {}),
       ...(this.settled ? { d: 1 as const } : {}), ...(this.ops.length ? { x: this.ops } : {}),
       ...(this.queuedInputs.length ? { q: this.queuedInputs } : {}),
+      ...(this.parents.size ? { parents: [...this.parents] } : {}),
     };
-    const cursor: Cursor = { v: 1, f: this.f, o: this.o, ...(this.ino !== undefined ? { i: this.ino } : {}), ...(this.probe.length ? { p: this.probe.toString('base64') } : {}), s: state };
+    const cursor: Cursor = { v: 1, f: this.f, o: this.o, ...(this.ino !== undefined ? { i: this.ino } : {}), ...(this.probe.length ? { p: this.probe.toString('base64') } : {}), s: state, lifecycle: 1 };
     return JSON.stringify(cursor);
   }
 }

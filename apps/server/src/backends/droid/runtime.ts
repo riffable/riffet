@@ -1448,7 +1448,16 @@ export class DroidRuntime {
     const turnId = str(notification.turnId) ?? state.activeTurn;
     const reason = state.proc?.modelMismatch ? 'model_changed' : str(notification.reason) ?? 'completed';
     const turn = turnId ? state.turns.get(turnId) : undefined;
-    for (const [messageId] of state.steps) this.settleStep(state, messageId);
+    const superseded = state.activeTurn !== undefined && turnId !== undefined && state.activeTurn !== turnId;
+    for (const [messageId, step] of state.steps) if (!superseded || step.turnId === turnId) this.settleStep(state, messageId, !superseded);
+    this.recordChildUsage(state, turnId, notification);
+    // An interrupted turn can finish after its replacement has already echoed. Its accounting
+    // still settles, but the new turn owns the drafts, requests, children and deferred settings.
+    if (superseded) {
+      wake(state);
+      void this.refreshContext(state);
+      return;
+    }
     // A turn Droid ended before it wrote the user message (a refused model, say) never names its
     // command; its run would otherwise wait for a receipt that is not coming. Later commands stay
     // bound: an interrupted turn can end after the message that replaces it was sent.
@@ -1463,7 +1472,6 @@ export class DroidRuntime {
       // A background child outlives the turn that started it; its own outcome settles it.
       if (item.running && !item.background) this.finishSubagent(state, item);
     }
-    this.recordChildUsage(state, turnId, notification);
     state.drafts.clear();
     state.turnActive = state.commands.size > 0;
     state.activeTurn = undefined;
@@ -1730,12 +1738,13 @@ export class DroidRuntime {
   }
 
   /** Publishes a finished assistant message once, with the count Droid reported just before committing it. */
-  private settleStep(state: DroidConversation, messageId: string): void {
+  private settleStep(state: DroidConversation, messageId: string, useCallUsage = true): void {
     const step = state.steps.get(messageId);
     if (!step) return;
     state.steps.delete(messageId);
-    const usage = state.lastCallUsage;
-    state.lastCallUsage = undefined;
+    // Aggregate call usage can already belong to the replacement turn when an old end arrives.
+    const usage = useCallUsage ? state.lastCallUsage : undefined;
+    if (useCallUsage) state.lastCallUsage = undefined;
     this.publishStep(state, messageId, step, false, usage?.outputTokens);
     const range = measuredWindow({ streamStart: step.startedAt, streamEnd: step.lastAt, fallbackStart: step.startedAt });
     if (!range) return;

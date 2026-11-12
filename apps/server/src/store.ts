@@ -960,12 +960,19 @@ export class Store {
       ORDER BY r.rowid DESC LIMIT ?`).all(sessionId, boundedLimit) as {json:string}[]).map(row => this.run(row.json));
   }
   /** Startup reconciliation only: exact turns whose provider end may have been corrected. */
-  listProviderCancelledNativeRuns(): IdentifiedRun[] {
+  listProviderEndedNativeRuns(): IdentifiedRun[] {
     return (this.sql(`SELECT r.json FROM runs r JOIN sessions s ON s.id=r.session_id
       WHERE json_extract(s.json,'$.kind')='native'
-        AND json_extract(r.json,'$.state')='interrupted'
-        AND json_extract(r.json,'$.native.delivery')='cancelled'
-        AND json_extract(r.json,'$.native.stage')='provider_cancelled'
+        AND ((json_extract(r.json,'$.state')='interrupted'
+          AND json_extract(r.json,'$.native.delivery')='cancelled'
+          AND json_extract(r.json,'$.native.stage')='provider_cancelled')
+        OR (((json_extract(r.json,'$.state')='failed' AND json_extract(r.json,'$.native.delivery')='failed'
+          AND json_extract(r.json,'$.native.stage')='provider_failed')
+        OR (json_extract(r.json,'$.state')='completed' AND json_extract(r.json,'$.native.delivery')='observed'
+          AND json_extract(r.json,'$.native.stage')='completed'))
+          AND EXISTS (SELECT 1 FROM journal_events e WHERE e.session_id=r.session_id
+            AND e.native_id='meta:turn:' || json_extract(r.json,'$.native.nativeTurnId') || ':ended'
+            AND e.kind='tombstone')))
         AND json_extract(r.json,'$.native.nativeSessionId') IS NOT NULL
         AND json_extract(r.json,'$.native.nativeTurnId') IS NOT NULL`).all() as { json: string }[]).map(row => this.run(row.json));
   }

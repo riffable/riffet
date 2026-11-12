@@ -9,7 +9,7 @@ import { buildTimeline } from '../../../../packages/timeline/src/buildTimeline.j
 import { projectEvents } from '../../../../packages/timeline/src/projectEvents.js';
 import { timelineRuns } from './fold.js';
 import { timelineRows } from '../../../../packages/timeline/src/rows.js';
-import { JournalLaneWriter } from '../journal/ingest.js';
+import { JournalLaneWriter, turnMetaId } from '../journal/ingest.js';
 import { Journal, laneKey } from '../journal/journal.js';
 import { WorkspaceService } from '../workspace/index.js';
 import { SessionMedia } from './media.js';
@@ -113,6 +113,33 @@ function expectContiguous(frames: TimelineChange[], headSeq: number, from = 1): 
 }
 
 describe('timeline service', () => {
+  it('merges a falsely split continuation back into its original turn across restart', async () => {
+    let env = open(undefined, { stepRows: 1 });
+    commit(env, user('original', 't1', 'work'));
+    env.writer.turnEnded('t1', 'failed', stamp(++tick), 'transient error');
+    const continued = answer('continued', 't2', 'still working');
+    commit(env, continued);
+    const head = await env.ready();
+    env.writer.transaction(() => {
+      env.writer.turnReopened('t1', stamp(++tick));
+      env.writer.commit({ events: [{ ...continued, nativeTurnId: 't1' }], retire: [turnMetaId('t2', 'started'), turnMetaId('t2', 'ended')], cursor: String(++cursor) });
+    });
+    await env.ready();
+    expect(env.journal.projection(S)).toMatchObject({ state: 'running', activeTurnId: 't1', turnCount: 1 });
+    expect(env.journal.projection(S).turns[0]?.events).toBe(2);
+    expect(env.service.outline(S, 'main').turns).toHaveLength(1);
+    expect(env.service.outline(S, 'main').turns[0]).toMatchObject({ turnId: 't1', status: 'running' });
+    env.writer.turnEnded('t1', 'completed', stamp(++tick));
+    await env.ready();
+    const rows = env.all();
+    env.close();
+    env = open();
+    expect((await env.ready()).generation).toBe(head.generation);
+    expect(env.all()).toEqual(rows);
+    expect(env.service.outline(S, 'main').turns).toHaveLength(1);
+    env.close();
+  });
+
   it('serves an image only when a tool call of the session named its path, and only if its bytes are an image', async () => {
     const env = open();
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13]), Buffer.from('IHDR'), Buffer.from([0, 0, 0, 1, 0, 0, 0, 1])]);

@@ -714,22 +714,32 @@ describe('Claude subagent transcripts', () => {
     expect(() => transcript.subagentHistory('tool-9', 'cursor', 'claude-sub:child-9')).toThrowError(/not ready/);
   });
 
-  it('keeps a child running through a long quiet tool call', async () => {
+  it('keeps a quiet child and its background ownership until metadata confirms an end', async () => {
     vi.useFakeTimers();
     try {
       const file = subagentSession(
         [agentCall('tool-1', { description: 'Quiet', prompt: 'x' })],
-        [{ agentId: 'child-1', meta: { toolUseId: 'tool-1', agentType: 'Explore', spawnDepth: 1 }, lines: [toolUse('ca1', new Date().toISOString())] }],
+        [{ agentId: 'child-1', meta: { toolUseId: 'tool-1', agentType: 'Explore', requestShape: 'background', spawnDepth: 1 }, lines: [toolUse('ca1', new Date().toISOString())] }],
       );
       const transcript = await open(file);
       expect(transcript.subagentFrames()[0]!.running).toBe(true);
-      vi.advanceTimersByTime(5 * 60_000);
+      const activeTurnId = transcript.subagentFrames()[0]!.activeTurnId;
+      expect(transcript.backgroundAgents().map(agent => agent.agentId)).toEqual(['child-1']);
+      vi.advanceTimersByTime(30 * 60_000);
       expect((await transcript.refresh()).subagents).toEqual([]);
-      expect(transcript.subagentFrames()[0]!.running).toBe(true);
+      expect(transcript.subagentFrames()[0]).toMatchObject({ running: true, activeTurnId });
+      expect(transcript.backgroundAgents().map(agent => agent.agentId)).toEqual(['child-1']);
+      writeFileSync(join(file.replace(/\.jsonl$/, ''), 'subagents', 'agent-child-1.meta.json'), JSON.stringify({ toolUseId: 'tool-1', agentType: 'Explore', requestShape: 'background', finished: true }));
+      vi.advanceTimersByTime(1_000);
+      const settled = await transcript.refresh();
+      expect(settled.subagents).toHaveLength(1);
+      expect(settled.subagents[0]).toMatchObject({ toolCallId: 'tool-1', reset: false, running: false, events: [] });
+      expect(settled.subagents[0]!.activeTurnId).toBeUndefined();
+      expect(transcript.backgroundAgents()).toEqual([]);
     } finally { vi.useRealTimers(); }
   });
 
-  it('says a child that owes a step is gone once it has been quiet past the stall window', async () => {
+  it('restores an unanswered quiet child as running after reopening its transcript', async () => {
     vi.useFakeTimers();
     try {
       const file = subagentSession(
@@ -737,11 +747,9 @@ describe('Claude subagent transcripts', () => {
         [{ agentId: 'child-1', meta: { toolUseId: 'tool-1', agentType: 'Explore', spawnDepth: 1 }, lines: [toolUse('ca1', new Date().toISOString())] }],
       );
       const transcript = await open(file);
-      vi.advanceTimersByTime(10 * 60_000 + 1_000);
-      const settled = await transcript.refresh();
-      expect(settled.subagents).toHaveLength(1);
-      expect(settled.subagents[0]).toMatchObject({ toolCallId: 'tool-1', reset: false, running: false });
-      expect(settled.subagents[0]!.events).toEqual([]);
+      vi.advanceTimersByTime(30 * 60_000);
+      const restored = await open(file);
+      expect(restored.subagentFrames()[0]).toMatchObject({ toolCallId: 'tool-1', running: true, activeTurnId: transcript.subagentFrames()[0]!.activeTurnId });
     } finally { vi.useRealTimers(); }
   });
 

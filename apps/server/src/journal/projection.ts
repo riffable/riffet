@@ -50,6 +50,8 @@ export interface JournalFoldRow {
   nativeId?: string;
   rev: number;
   turnId?: string;
+  previousTurnId?: string;
+  previousKind?: string;
   at: string;
   payload: unknown;
 }
@@ -93,6 +95,13 @@ export function foldProjection(base: SessionProjection, rows: readonly JournalFo
     next.asOfSeq = row.seq;
     next.lastEventAt = row.at;
     if (row.kind === 'tombstone') {
+      // A repaired continuation no longer has its own turn; its content now names the original.
+      if (row.nativeId?.startsWith('meta:turn:') && row.nativeId.endsWith(':started')) {
+        const turnId = row.nativeId.slice('meta:turn:'.length, -':started'.length);
+        if (open.delete(turnId)) next.turns = next.turns.filter(turn => turn.turnId !== turnId);
+        // turnCount covers the entire history, even when this turn left the bounded outline.
+        if (row.previousKind === 'meta.turn_started') next.turnCount = Math.max(0, next.turnCount - 1);
+      }
       // Only a retracted turn end reopens the turn; retiring a content row has no lifecycle meaning.
       if (row.turnId && row.nativeId === `meta:turn:${row.turnId}:ended`) {
         const turn = turnFor(row);
@@ -126,6 +135,10 @@ export function foldProjection(base: SessionProjection, rows: readonly JournalFo
     } else if (RUN_STATUS[row.kind] && turn) {
       turn.status = RUN_STATUS[row.kind]!;
       turn.endSeq = row.seq; turn.endedAt = row.at;
+    } else if (!row.kind.startsWith('meta.') && row.rev > 1 && row.previousTurnId && row.previousTurnId !== row.turnId) {
+      const previous = open.get(row.previousTurnId);
+      if (previous) previous.events = Math.max(0, previous.events - 1);
+      if (turn) turn.events += 1;
     } else if (!row.kind.startsWith('meta.') && row.rev === 1) {
       next.entities += 1;
       if (turn) {

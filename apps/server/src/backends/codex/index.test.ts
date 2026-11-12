@@ -1023,6 +1023,30 @@ describe('Codex native protocol controls', () => {
     } finally { await h.adapter.close(h.host); }
   });
 
+  it.each([codexFlavor, traexFlavor])('keeps $label’s unfinished turn through thread errors and idle reports until its own end arrives', async flavor => {
+    const h = makeHarness({ flavor });
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      await h.send('thread-recovery');
+      h.transport!.setTurns([{ id: 'turn-1', status: 'inProgress', items: [] }]);
+      for (const type of ['systemError', 'idle'] as const) {
+        h.transport!.setThreadStatus(type);
+        h.transport!.emitNativeNotification('thread/status/changed', { threadId: 'native-thread', status: { type } });
+        expect(h.adapter.status(h.host, h.session)).toMatchObject({ phase: 'busy', activeTurn: { turnId: 'turn-1' } });
+        h.transport!.emitNativeNotification('item/agentMessage/delta', { threadId: 'native-thread', turnId: 'turn-1', itemId: 'answer', delta: 'Continuing.' });
+        expect((await prime(h)).status).toMatchObject({ phase: 'busy', activeTurn: { turnId: 'turn-1' } });
+      }
+      const completed = { id: 'turn-1', status: 'completed', items: [] };
+      h.transport!.setTurns([completed]);
+      h.transport!.finishTurn('turn-1', 'completed', completed);
+      expect(h.adapter.status(h.host, h.session).phase).toBe('idle');
+      expect(h.adapter.status(h.host, h.session).activeTurn).toBeUndefined();
+      h.transport!.emitNativeNotification('item/agentMessage/delta', { threadId: 'native-thread', turnId: 'turn-1', itemId: 'answer', delta: 'Late output.' });
+      expect(h.adapter.status(h.host, h.session).phase).toBe('idle');
+      expect(h.adapter.status(h.host, h.session).activeTurn).toBeUndefined();
+    } finally { await h.adapter.close(h.host); }
+  });
+
   it.each(['turn-first', 'thread-first'])('lets the current root failure own its error in %s notification order', async order => {
     const h = makeHarness();
     try {

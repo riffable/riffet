@@ -2,15 +2,16 @@ import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
 import { ActivityLedger, activityOfEvent } from '../../journal/activity.js';
 import { projectEvents } from '../../../../../packages/timeline/src/projectEvents.js';
 import { ClaudeActivities } from './activity.js';
-import { JournalLaneWriter, pullLane } from '../../journal/ingest.js';
+import { JournalLaneWriter, pullLane, turnMetaId } from '../../journal/ingest.js';
 import { assertUnchanged, checkSession, rowsOf, runIngestContract, snapshot, visibleLanes, type IngestContractFixture } from '../../journal/ingest-contract.js';
 import { Journal, laneKey } from '../../journal/journal.js';
 import { ClaudeTranscript } from './history.js';
+import { activeTurnOf, initialState, phaseOf, reduce } from './session-state.js';
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 
 /** A Claude Code session file as the CLI writes it, with its subagents beside it in `<id>/subagents/`. */
@@ -160,6 +161,57 @@ async function importAll(source: ClaudeTranscriptSource, journal: Journal): Prom
 }
 
 describe('Claude transcript source', () => {
+  it('keeps a turn running through a tool-use stream error, retries and an absorbed input across restart', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-stream-error-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('original').call('first', 'Bash', {});
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    let live = new ClaudeTranscript({ id: 'wb', nativeSessionId: file.id, updatedAt: '' } as Session, file.id);
+    await live.setFile(file.path);
+    let state = initialState('alive');
+    const refresh = async () => {
+      const { lifecycle } = await live.refresh();
+      if (lifecycle.replay) state = initialState('alive');
+      for (const signal of lifecycle.signals) state = reduce(state, signal).state;
+      return importAll(source(), journal);
+    };
+    await refresh();
+    // Claude Code 2.1.322: the stream cuts after a tool call, then the CLI retries under the same prompt.
+    const error = 'API Error: Connection lost mid-response. The response above may be incomplete.';
+    file.write({ type: 'assistant', uuid: 'stream-error', isApiErrorMessage: true, apiError: 'connection_failed', streamCutCause: 'stale_connection',
+      message: { id: 'm-stream-error', role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: error }], stop_reason: 'tool_use' } });
+    await refresh();
+    expect(phaseOf(state)).toBe('busy');
+    expect(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended')).toEqual([]);
+    file.result('first', 'Transient classifier failure', {}, true)
+      .write({ type: 'queue-operation', operation: 'enqueue', content: 'continue' })
+      .call('retry', 'Bash', {})
+      .write({ type: 'queue-operation', operation: 'remove', content: 'continue', reason: 'absorbed_mid_turn' })
+      .result('retry', 'done');
+    let writer = await refresh();
+    expect(activeTurnOf(state.mainTurn)?.promptId).toBe('p-original');
+    expect(state.cliQueue).toEqual([]);
+    expect(source().activeTurn(writer)).toEqual({ turnId: 'p-original', promptId: 'p-original' });
+    expect(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_started')).toHaveLength(1);
+    expect(journal.entity('wb', `claude:${file.id}:c-retry:0`)?.turnId).toBe('p-original');
+    expect(rowsOf(journal, 'wb').filter(row => JSON.stringify(row.payload).includes(error))).toHaveLength(1);
+
+    live = new ClaudeTranscript({ id: 'wb', nativeSessionId: file.id, updatedAt: '' } as Session, file.id);
+    await live.setFile(file.path);
+    writer = await refresh();
+    expect(phaseOf(state)).toBe('busy');
+    expect(source().activeTurn(writer)?.promptId).toBe('p-original');
+    expect(live.allEvents().filter(event => event.type === 'run_failed')).toEqual([]);
+    file.answer('original').duration('original');
+    await refresh();
+    expect(phaseOf(state)).toBe('idle');
+    expect(live.allEvents().filter(event => event.type === 'run_completed')).toHaveLength(1);
+    const ended = rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended');
+    expect(ended).toHaveLength(1);
+    expect(ended[0]?.payload).toEqual({ turnId: 'p-original', status: 'completed' });
+  });
+
   it('keeps continuation ownership and the native prompt together through old cursor recovery', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-continuation-'));
     dirs.push(dir);
@@ -184,6 +236,144 @@ describe('Claude transcript source', () => {
     await importAll(source(), journal);
     expect(journal.entity('wb', `claude:${file.id}:c-later:0`)!.payload).toMatchObject({ runId: continued.runId, nativeTurnId: continued.nativeTurnId });
     expect(rowsOf(journal, 'wb').filter(row => row.kind === 'meta.turn_ended')).toHaveLength(1);
+  });
+
+  it('uses the same Stop boundary for live state and the journal, including blocked hooks across restart', async () => {
+    const { file, source, fixture } = scenario();
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await fixture.append();
+    file().prompt('stop-boundary').answer('stop-boundary').write({ type: 'system', uuid: 'stop-summary', subtype: 'stop_hook_summary' });
+    let writer = await importAll(source(), journal);
+    expect(source().activeTurn(writer)).toBeUndefined();
+    expect(writer.turnEndStatus('p-stop-boundary')).toBe('completed');
+
+    file().prompt('next-after-stop').write({ type: 'system', uuid: 'old-duration', parentUuid: 'stop-summary', subtype: 'turn_duration' });
+    writer = await importAll(source(), journal);
+    expect(source().activeTurn(writer)?.promptId).toBe('p-next-after-stop');
+    const live = new ClaudeTranscript({ id: 'wb', nativeSessionId: file().id, updatedAt: '' } as Session, file().id);
+    await live.setFile(file().path);
+    const state = (await live.refresh()).lifecycle.signals.reduce((state, signal) => reduce(state, signal).state, initialState('alive'));
+    expect(activeTurnOf(state.mainTurn)?.promptId).toBe('p-next-after-stop');
+
+    // A bounded parent cache must not assign an evicted old Stop's duration to this new prompt.
+    for (let index = 0; index < 257; index += 1) file().write({ type: 'attachment', uuid: `between-${index}` });
+    file().write({ type: 'system', uuid: 'evicted-duration', parentUuid: 'stop-summary', subtype: 'turn_duration' });
+    await importAll(source(), journal);
+    const afterEviction = (await live.refresh()).lifecycle.signals.reduce((state, signal) => reduce(state, signal).state, state);
+    expect(activeTurnOf(afterEviction.mainTurn)?.promptId).toBe('p-next-after-stop');
+    expect(source().activeTurn(writer)?.promptId).toBe('p-next-after-stop');
+    file().write({ type: 'system', uuid: 'next-stop', parentUuid: 'between-256', subtype: 'stop_hook_summary' });
+    await importAll(source(), journal);
+    expect(source().activeTurn(writer)).toBeUndefined();
+
+    file().prompt('blocked').answer('blocked').write({ type: 'user', uuid: 'feedback', isMeta: true,
+      message: { role: 'user', content: 'Stop hook feedback:\nRun the checks first.' } });
+    await importAll(source(), journal);
+    file().write({ type: 'system', uuid: 'blocked-summary', subtype: 'stop_hook_summary' });
+    writer = await importAll(source(), journal);
+    expect(source().activeTurn(writer)?.promptId).toBe('p-blocked');
+    file().write({ type: 'system', uuid: 'context-summary', subtype: 'stop_hook_summary', hookAdditionalContext: ['Keep working'] });
+    await importAll(source(), journal);
+    expect(writer.turnEndStatus('p-blocked')).toBeUndefined();
+    file().answer('blocked-final').write({ type: 'system', uuid: 'final-summary', subtype: 'stop_hook_summary' });
+    await importAll(source(), journal);
+    const before = snapshot(journal, 'wb');
+    file().duration('blocked');
+    await importAll(source(), journal);
+    expect(writer.turnEndStatus('p-blocked')).toBe('completed');
+    assertUnchanged(before, snapshot(journal, 'wb'), 'late duration after Stop');
+  });
+
+  it('records a child API failure as failed without treating a recoverable stream error as its end', async () => {
+    const { file, source, dir } = scenario();
+    const root = join(dir, file().id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    const child = new SessionFile(root, 'agent-failed').prompt('child').call('before-error', 'Bash', {});
+    const error = (id: string, stop: string) => ({ type: 'assistant', uuid: id, isSidechain: true, agentId: 'failed', isApiErrorMessage: true,
+      message: { role: 'assistant', model: '<synthetic>', content: [{ type: 'text', text: 'API Error: connection failed' }], stop_reason: stop } });
+    child.write(error('retryable', 'tool_use'));
+    writeFileSync(join(root, 'agent-failed.meta.json'), JSON.stringify({ toolUseId: 'failed-call' }));
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source(), journal);
+    const key = laneKey('wb', 'sub:failed-call');
+    expect(rowsOf(journal, key).filter(row => row.kind === 'meta.turn_ended')).toEqual([]);
+    child.result('before-error', 'retry').write(error('terminal', 'stop_sequence'));
+    await importAll(source(), journal);
+    const ends = rowsOf(journal, key).filter(row => row.kind === 'meta.turn_ended');
+    expect(ends).toHaveLength(1);
+    expect(ends[0]?.payload).toMatchObject({ status: 'failed', error: 'API Error: connection failed' });
+    const childWriter = JournalLaneWriter.open(journal, 'wb').child('failed-call', 'failed');
+    childWriter.turnEnded(String(ends[0]!.turnId), 'completed', ends[0]!.at);
+    const legacy = JSON.parse(childWriter.cursor!);
+    delete legacy.lifecycle;
+    legacy.s.x = [['end', ends[0]!.turnId, 'completed', ends[0]!.at]];
+    childWriter.commit({ events: [], cursor: JSON.stringify(legacy) });
+    await importAll(source(), journal);
+    expect(childWriter.turnEndStatus(String(ends[0]!.turnId))).toBe('failed');
+    writeFileSync(join(root, 'agent-failed.meta.json'), JSON.stringify({ toolUseId: 'failed-call', finished: true }));
+    const before = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(before, snapshot(journal, 'wb'), 'finished metadata after failure');
+  });
+
+  it.each(['running', 'completed', 'cancelled'])('repairs a legacy stream-error end and continuation while preserving a control-path stop: %s', async outcome => {
+    const finished = outcome === 'completed';
+    const cancelled = outcome === 'cancelled';
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-lifecycle-upgrade-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').prompt('original').call('first', 'Bash', {});
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    let writer = await importAll(source(), journal);
+    const error = 'API Error: Connection lost mid-response. The response above may be incomplete.';
+    const at = '2026-10-20T00:00:03.000Z';
+    file.write({ type: 'assistant', uuid: 'broken-stream', isApiErrorMessage: true, timestamp: at,
+      message: { role: 'assistant', model: '<synthetic>', stop_reason: 'tool_use', content: [{ type: 'text', text: error }] } });
+    await importAll(source(), journal);
+    await source().endTurn(writer, 'failed', at, 'p-original');
+    // The old implementation suppressed the error text and incorrectly closed the original turn.
+    writer.turnEnded('p-original', 'failed', at, error);
+    writer.commit({ events: [], retire: [`claude:${file.id}:broken-stream:0`], cursor: writer.cursor });
+    file.call('retry', 'Bash', {});
+    if (outcome !== 'running') file.result('retry', 'ok');
+    if (finished) file.answer('original').duration('original');
+    writer = await importAll(source(), journal);
+    if (cancelled) await source().endTurn(writer, 'cancelled', '2026-10-20T00:00:08.000Z', 'p-original');
+    const anonymous = 'claude-turn:c-retry';
+    expect(journal.entity('wb', `claude:${file.id}:c-retry:0`)?.turnId).toBe(anonymous);
+    const legacy = JSON.parse(writer.cursor!);
+    delete legacy.lifecycle;
+    if (finished) legacy.s.x = [['end', anonymous, 'completed', '2026-10-20T00:00:09.000Z']];
+    writer.commit({ events: [], cursor: JSON.stringify(legacy) });
+    const generation = writer.generation;
+    if (outcome === 'running') {
+      const beforeFailure = snapshot(journal, 'wb');
+      const append = journal.append.bind(journal);
+      const fail = vi.spyOn(journal, 'append').mockImplementation((sessionId, events, options) => {
+        const result = append(sessionId, events, options);
+        if (events.some(event => event.nativeId === `claude:${file.id}:c-retry:0`)) throw new Error('interrupted repair');
+        return result;
+      });
+      await expect(importAll(source(), journal)).rejects.toThrow('interrupted repair');
+      fail.mockRestore();
+      assertUnchanged(beforeFailure, snapshot(journal, 'wb'), 'rollback interrupted repair');
+      expect(writer.cursor).toBe(JSON.stringify(legacy));
+    }
+    writer = await importAll(source(), journal);
+    expect(writer.generation).toBe(generation);
+    expect(journal.entity('wb', `claude:${file.id}:c-retry:0`)?.turnId).toBe(cancelled ? anonymous : 'p-original');
+    expect(journal.entity('wb', turnMetaId(anonymous, 'started'))?.kind).toBe(cancelled ? 'meta.turn_started' : 'tombstone');
+    expect(writer.turnEndStatus('p-original')).toBe(cancelled ? 'failed' : finished ? 'completed' : undefined);
+    expect(source().activeTurn(writer)?.promptId).toBe(finished || cancelled ? undefined : 'p-original');
+    const before = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(before, snapshot(journal, 'wb'), 'restart after lifecycle repair');
+    if (outcome === 'running') {
+      file.result('retry', 'late result');
+      await importAll(source(), journal);
+      const call = journal.entity('wb', `claude:${file.id}:c-retry:0`)?.payload as NativeWorkbenchEvent;
+      expect(journal.entity('wb', `claude:${file.id}:r-retry:0`)?.payload).toMatchObject({ runId: call.runId, nativeTurnId: call.nativeTurnId });
+    }
   });
 
   it.each(['remove', 'dequeue'])('preserves external queue order across restart before associating an identical queued prompt: %s', async operation => {

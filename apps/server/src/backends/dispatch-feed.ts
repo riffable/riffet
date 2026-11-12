@@ -87,15 +87,22 @@ export class DispatchFeed {
     queueMicrotask(() => {
       if (closed) return;
       const turns = new Set<string>();
-      for (const run of store.listProviderCancelledNativeRuns()) {
+      for (const run of store.listProviderEndedNativeRuns()) {
         const native = run.native!;
         const session = store.getSession(run.sessionId);
         if (session.nativeSessionId !== native.nativeSessionId) continue;
         const key = JSON.stringify([run.sessionId, native.nativeTurnId]);
         if (turns.has(key)) continue;
-        turns.add(key);
         const mark = feed.turnEnd(run.sessionId, native.nativeTurnId!);
         if (!mark || mark.revision <= 1) continue;
+        // The journal correction may already have reached the Run before the last shutdown.
+        // Replaying its older retraction again would reset an already settled result's timings.
+        const settled = mark.edge === 'ended' && (mark.status === 'completed'
+          ? run.state === 'completed' && native.stage === 'completed'
+          : mark.status === 'failed' ? run.state === 'failed' && native.stage === 'provider_failed'
+          : run.state === 'interrupted' && native.stage === 'provider_cancelled');
+        if (settled && run.error === mark.error) continue;
+        turns.add(key);
         const recent = feed.recent(run.sessionId, 'main', OPENING_ROWS);
         deliver({ ...recent, items: [{ mark }, ...recent.items.filter(item => 'event' in item && item.event.nativeTurnId === mark.turnId)] });
       }
@@ -173,7 +180,12 @@ export class DispatchFeed {
     for (const turnId of turns) {
       if (!turnId) continue;
       const mark = this.deps.feed.turnEnd(batch.sessionId, turnId);
-      if (mark && mark.revision > 1) out.push(...this.outcome(batch.sessionId, mark, runs.get(turnId) ?? this.startedRun(batch.sessionId, turnId), chat));
+      if (mark && mark.revision > 1) {
+        const runId = runs.get(turnId) ?? this.startedRun(batch.sessionId, turnId);
+        const reopened = this.deps.feed.turnReopened(batch.sessionId, turnId);
+        if (reopened && reopened.revision < mark.revision) out.push(...this.outcome(batch.sessionId, reopened, runId, chat));
+        out.push(...this.outcome(batch.sessionId, mark, runId, chat));
+      }
     }
     // Each entity once, as it now stands: a receipt has to be the one match of its batch.
     const latest = new Set(latestEvents(batch.items));

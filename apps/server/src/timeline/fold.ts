@@ -390,6 +390,11 @@ export class LaneFold {
 
   /** One row of the log into the window; a change to an entity before it is set aside in `frozen` when written after `since`. */
   private applyRow(row: JournalRow, frozen: Array<{ identity: number; row: JournalRow }>, since = -1): void {
+    if (row.kind === TOMBSTONE_KIND && row.nativeId.startsWith('meta:turn:') && row.nativeId.endsWith(':started')) {
+      this.turnMetas.delete(row.nativeId.slice('meta:turn:'.length, -':started'.length));
+      this.reproject = true;
+      return;
+    }
     const reopened = isTurnReopened(row);
     if (row.kind.startsWith(META_PREFIX) || reopened) {
       if (reopened || row.kind === 'meta.turn_started' || row.kind === 'meta.turn_ended') {

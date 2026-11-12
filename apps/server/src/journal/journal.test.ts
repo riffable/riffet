@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../store.js';
 import { JOURNAL_PAYLOAD_LIMIT, Journal, JournalGenerationChanged } from './journal.js';
-import { projectedActivity } from './projection.js';
+import { OUTLINE_TURNS, projectedActivity } from './projection.js';
 
 const dirs: string[] = [];
 afterEach(async () => { await Promise.all(dirs.splice(0).map(dir => rm(dir, { recursive: true, force: true }))); });
@@ -19,6 +19,25 @@ const event = (nativeId: string, text: string, extra: Record<string, unknown> = 
 });
 
 describe('session journal', () => {
+  it('subtracts a retired turn outside the outline window once, including after a projection rebuild', () => {
+    const db = new DatabaseSync(':memory:');
+    const journal = new Journal(db);
+    try {
+      const count = OUTLINE_TURNS + 2;
+      journal.append('s', Array.from({ length: count }, (_, index) => [
+        { kind: 'meta.turn_started', nativeId: `meta:turn:t${index}:started`, turnId: `t${index}`, payload: { turnId: `t${index}` } },
+        { kind: 'meta.turn_ended', nativeId: `meta:turn:t${index}:ended`, turnId: `t${index}`, payload: { turnId: `t${index}`, status: 'completed' } },
+      ]).flat());
+      expect(journal.projection('s')).toMatchObject({ turnCount: count, state: 'idle' });
+      journal.append('s', [{ kind: 'tombstone', nativeId: 'meta:turn:t0:started', payload: {} }]);
+      const repaired = journal.projection('s');
+      expect(repaired).toMatchObject({ turnCount: count - 1, state: 'idle' });
+      expect(journal.rebuildProjection('s')).toEqual(repaired);
+      journal.append('s', [{ kind: 'tombstone', nativeId: 'meta:turn:t0:started', payload: { retired: true } }]);
+      expect(journal.projection('s').turnCount).toBe(count - 1);
+    } finally { db.close(); }
+  });
+
   it('commits a batch with its cursor atomically, and a failed batch leaves neither rows nor cursor', async () => {
     const journal = new Journal(new DatabaseSync(':memory:'));
     journal.append('s', [event('a', 'one')], { cursor: 'c1' });

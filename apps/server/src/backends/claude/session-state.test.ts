@@ -133,7 +133,7 @@ describe('Claude session state', () => {
     state = fold(state, duration);
     expect(phase(state)).toBe('idle');
     expect(phase(fold(state, peer))).toBe('idle');
-    const signals = [human('human-prompt'), duration, peer, assistant].flatMap(claudeRowSignals);
+    const signals = [human('human-prompt'), duration, peer, assistant].flatMap(row => claudeRowSignals(row));
     expect(activeTurnOf(replay(alive(), signals).mainTurn)?.promptId).toBe('peer-prompt');
   });
 

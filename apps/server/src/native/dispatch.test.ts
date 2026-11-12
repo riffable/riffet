@@ -619,8 +619,6 @@ describe('NativeDispatcher durable delivery', () => {
       { stage: 'cancelled', state: 'cancelled', delivery: 'cancelled' },
       { stage: 'steer_stopped', state: 'interrupted', delivery: 'uncertain' },
       { stage: 'interrupted', state: 'interrupted', delivery: 'cancelled' },
-      { stage: 'provider_failed', state: 'failed', delivery: 'failed' },
-      { stage: 'completed', state: 'completed', delivery: 'observed' },
     ] as const;
     const resolved = preserved.map(({ stage, state, delivery }) => {
       const run = store.acceptNativeRun(session.id, stage, input(stage), config, 0, { target, ownerRunId: owner.id });
@@ -648,6 +646,54 @@ describe('NativeDispatcher durable delivery', () => {
     // A restart replays a corrected end that is still a cancellation: the cancelled Run stays as it is.
     backend.emit(session.id, { type: 'events', events: [{ ...outcome('run_cancelled', 2), nativeTurnId: 'other-turn' }] });
     for (const before of resolved) expect(store.getRun(before.id)).toEqual(before);
+    expect(backend.sendCount).toBe(0);
+  });
+
+  it.each([
+    { type: 'run_failed', state: 'failed', delivery: 'failed', stage: 'provider_failed' },
+    { type: 'run_completed', state: 'completed', delivery: 'observed', stage: 'completed' },
+  ] as const)('restores a retracted $type without resending or overriding a user stop', ({ type, state, delivery, stage }) => {
+    const { store, project, workspace } = setup();
+    const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'claude', nativeSessionId: 'chat-1', mode: 'agent' });
+    const target = { nativeSessionId: 'chat-1', turnId: 'turn-1' };
+    const run = store.acceptNativeRun(session.id, 'owner', input('work'), config, 0);
+    store.transitionNativeRun(run.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeSessionId: target.nativeSessionId, nativeTurnId: target.turnId,
+      nativeMessageId: 'receipt', attempt: 1, timings: { inputSentAt: 1, observedAt: 2, completedAt: 3, interruptedAt: 4 } }, { state: 'running' });
+    const backend = new FakeProtocolBackend(store), runtime = new FakeRuntime(), send = dispatcher(store, backend, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+    send.kick();
+    const outcome = (eventType: string, revision: number, turnId = target.turnId): NativeWorkbenchEvent => ({
+      ...makeEvent(session.id, revision, eventType, ''), nativeTurnId: turnId,
+      data: { nativeSessionId: target.nativeSessionId, outcomeRevision: revision, error: 'old failure' },
+    });
+    // A newer ordinary result cannot undo a settled run; only a scoped, newer retraction can.
+    backend.emit(session.id, { type: 'events', events: [outcome(type, 1)] });
+    expect(store.getRun(run.id)).toMatchObject({ state, native: { delivery, stage } });
+    backend.emit(session.id, { type: 'events', events: [outcome('run_completed', 2), outcome('native_turn_reopened', 1)] });
+    expect(store.getRun(run.id).state).toBe(state);
+    backend.emit(session.id, { type: 'events', events: [{ ...outcome('native_turn_reopened', 3), data: { nativeSessionId: 'other-chat', outcomeRevision: 3 } }] });
+    expect(store.getRun(run.id).state).toBe(state);
+    backend.emit(session.id, { type: 'events', events: [outcome('native_turn_reopened', 3)] });
+    expect(store.getRun(run.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', attempt: 1,
+      timings: { inputSentAt: 1, observedAt: 2 } } });
+    expect(store.getRun(run.id).native!.timings?.completedAt).toBeUndefined();
+    expect(store.getRun(run.id).native!.timings?.interruptedAt).toBeUndefined();
+    expect(store.getRun(run.id).error).toBeUndefined();
+    const reopened = store.getRun(run.id);
+    backend.emit(session.id, { type: 'events', events: [outcome('native_turn_reopened', 3), outcome(type, 1)] });
+    expect(store.getRun(run.id)).toEqual(reopened);
+    backend.emit(session.id, { type: 'events', events: [outcome('run_completed', 4)] });
+    expect(store.getRun(run.id)).toMatchObject({ state: 'completed', native: { delivery: 'observed', stage: 'completed' } });
+    // A caught-up journal batch can contain both the retraction and its corrected final result.
+    backend.emit(session.id, { type: 'events', events: [outcome('run_failed', 6), outcome('native_turn_reopened', 5)] });
+    expect(store.getRun(run.id)).toMatchObject({ state: 'failed', native: { delivery: 'failed', stage: 'provider_failed' } });
+
+    const stopped = store.acceptNativeRun(session.id, 'stopped', input('stopped work'), config, 0);
+    store.transitionNativeRun(stopped.id, ['queued'], { delivery, stage, nativeSessionId: target.nativeSessionId, nativeTurnId: 'stopped-turn', nativeMessageId: 'stopped-receipt' }, { state });
+    store.setSetting(`native-stops:${session.id}`, { '"stop-1"': { request: { requestId: 'stop-1', nativeSessionId: target.nativeSessionId, turnId: 'stopped-turn' }, operation: 'stop', state: 'completed', createdAt: '', runId: stopped.id } });
+    const beforeStop = store.getRun(stopped.id);
+    backend.emit(session.id, { type: 'events', events: [outcome('native_turn_reopened', 2, 'stopped-turn')] });
+    expect(store.getRun(stopped.id)).toEqual(beforeStop);
     expect(backend.sendCount).toBe(0);
   });
 

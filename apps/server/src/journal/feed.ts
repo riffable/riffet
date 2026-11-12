@@ -59,6 +59,13 @@ export class JournalFeed {
     return row ? markOf(row) : undefined;
   }
 
+  /** An explicit retraction survives the newer end which replaced it, including across restart. */
+  turnReopened(sessionId: string, turnId: string): TurnMark | undefined {
+    const { key } = servingKey(this.journal, sessionId, 'main');
+    const row = this.journal.retraction(key, turnMetaId(turnId, 'ended'));
+    return row ? markOf(row) : undefined;
+  }
+
   /** Resolves once what the logs have gained so far has reached the listeners. */
   async delivered(): Promise<void> {
     while (this.pending.size) await new Promise(resolve => setImmediate(resolve));

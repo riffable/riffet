@@ -57,7 +57,7 @@ describe('Droid models', () => {
 });
 
 /** A fake CLI exercises only the external protocol and process overlay, never a real Droid session. */
-async function harness(confirmBudget = true, backgroundChild = false, contextReplies?: Array<{ result: Record<string, unknown>; delayMs?: number }>, protocol: { settingsAck?: 'missing' | 'mismatch' | 'timeout'; mismatchedSettings?: Record<string, string>; initialModel?: string; driftModel?: string; routedModel?: string; holdSettingsModel?: string } = {}) {
+async function harness(confirmBudget = true, backgroundChild = false, contextReplies?: Array<{ result: Record<string, unknown>; delayMs?: number }>, protocol: { settingsAck?: 'missing' | 'mismatch' | 'timeout'; mismatchedSettings?: Record<string, string>; initialModel?: string; driftModel?: string; routedModel?: string; holdSettingsModel?: string; holdTurnEnd?: boolean } = {}) {
   const directory = await mkdtemp(join(tmpdir(), 'riffet-droid-test-'));
   const executable = join(directory, 'droid');
   const callsFile = join(directory, 'calls.jsonl');
@@ -84,7 +84,7 @@ if(contextReplies) fs.watchFile(${JSON.stringify(notificationsFile)},{interval:1
   if(stat.size) notify(JSON.parse(fs.readFileSync(${JSON.stringify(notificationsFile)},'utf8')));
 });
 readline.createInterface({input:process.stdin}).on('line', line => {
-  const request=JSON.parse(line); log({method:request.method, params:request.params});
+  const request=JSON.parse(line); log({id:request.id, method:request.method, params:request.params});
   let result={};
   if(request.method==='droid.list_models') result={models:[{id:'builtin',isCustom:false},{id:'custom:tiny',isCustom:true},{id:'auto',isCustom:false,kind:'router'}]};
   if(request.method==='droid.initialize_session') {settings={...settings,...request.params,...(protocol.initialModel?{modelId:protocol.initialModel}:{})};result={sessionId:'riffet-fake-droid-budget',settings};}
@@ -138,6 +138,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
         notify({type:'tool_result',toolUseId:'background-task',messageId:'background-result',content:'done',isError:false});
       });
     }
+    if(protocol.holdTurnEnd) return;
     setTimeout(()=>{
       settings.reasoningEffort='high';notify({type:'settings_updated',settings});
       log({ended:true});notify({type:'agent_turn_completed',turnId:request.id,reason:'completed'});
@@ -161,6 +162,7 @@ readline.createInterface({input:process.stdin}).on('line', line => {
     updateSession: (_id: string, patch: Partial<Session>) => (session = { ...session, ...patch }),
     bumpConfig: (_id: string, patch: Partial<Session>) => (session = { ...session, ...patch }),
     setNativeSessionId: (_id: string, nativeSessionId: string) => (session = { ...session, nativeSessionId }),
+    saveRunMetrics: () => undefined,
   } as unknown as NativeBackendHost;
   const runtime = new DroidRuntime(host);
   const dispatches: unknown[] = [];
@@ -179,6 +181,33 @@ readline.createInterface({input:process.stdin}).on('line', line => {
 }
 
 describe('Droid context budget protocol', () => {
+  it('keeps a replacement turn and its deferred settings when the previous turn ends late', async () => {
+    const h = await harness(true, false, [], { holdTurnEnd: true });
+    try {
+      await h.send();
+      await h.send();
+      const sends = (await h.calls()).filter(call => call.method === 'droid.add_user_message');
+      // The fake CLI echoes the add request id as its user message / native turn id.
+      const oldTurn = sends[0]!.id as string;
+      const newTurn = sends[1]!.id as string;
+      const source = h.runtime.transcriptSource(h.session, h.profile);
+      await vi.waitFor(() => expect(source.live?.command(newTurn)).toBeDefined());
+      await h.emitNotification({ type: 'assistant_text_delta', messageId: 'replacement-answer', blockIndex: 0, textDelta: 'still working' });
+      await vi.waitFor(() => expect(source.live?.streaming()).toMatchObject([{ messageId: 'replacement-answer', text: 'still working' }]));
+      await h.configure({ model: 'builtin[effort=high,context=long]' });
+      const contextRequests = (await h.calls()).filter(call => call.method === 'droid.get_context_breakdown').length;
+      await h.emitNotification({ type: 'agent_turn_completed', turnId: oldTurn, reason: 'cancelled' });
+      await vi.waitFor(async () => expect((await h.calls()).filter(call => call.method === 'droid.get_context_breakdown').length).toBeGreaterThan(contextRequests));
+      expect(h.runtime.status(h.session).phase).toBe('busy');
+      expect(source.live?.streaming()).toMatchObject([{ messageId: 'replacement-answer', text: 'still working' }]);
+      expect((await h.calls()).filter(call => call.method === 'droid.update_session_settings')).toEqual([]);
+      await h.emitNotification({ type: 'agent_turn_completed', turnId: newTurn, reason: 'completed' });
+      await vi.waitFor(() => expect(h.runtime.status(h.session).phase).toBe('idle'));
+      await vi.waitFor(async () => expect((await h.calls()).filter(call => call.method === 'droid.update_session_settings')).toHaveLength(1));
+      expect(source.live?.streaming()).toEqual([]);
+    } finally { await h.close(); }
+  });
+
   it('finishes an older deferred setter before a newer configure and same-settings send can dispatch', async () => {
     const h = await harness(true, false, undefined, { holdSettingsModel: 'builtin-b' });
     try {

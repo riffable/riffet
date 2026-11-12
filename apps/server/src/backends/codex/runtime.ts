@@ -4176,6 +4176,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // a new native turn starts or a dispatch is in flight; Codex retains its aggregate-active phase.
     const foregroundEnded = this.flavor.id === 'traex' && this.foregroundEndedTurnId !== undefined
       && !this.activeTurnId && !this.dispatchCommandId;
+    // Thread status is aggregate evidence. An observed turn keeps its target until its own
+    // completion (or a matching terminal history record) arrives, including during retries.
+    const phase = this.interaction ? 'attention' : this.activeTurnId || this.dispatchCommandId ? 'busy' : 'idle';
     // Only a thread recovery clears its own diagnostic. Transport/history recovery never does.
     if (status?.type === 'active' || status?.type === 'idle') {
       this.threadError = false;
@@ -4189,8 +4192,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(this.noticeSource !== 'thread' && this.status.notice ? { notice: this.status.notice, noticeLevel: this.status.noticeLevel } : {}),
     };
     if (status?.type === 'active') this.setStatus({ ...base, phase: this.interaction ? 'attention' : foregroundEnded ? 'idle' : 'busy', ...(this.interaction ? { interaction: this.interaction } : {}) });
-    else if (status?.type === 'systemError') this.setStatus({ ...(this.status.model ? { model: this.status.model } : {}), phase: this.transport?.isOnline ? 'idle' : 'offline' });
-    else if (status?.type === 'idle') this.setStatus({ ...base, phase: this.interaction ? 'attention' : 'idle', ...(this.interaction ? { interaction: this.interaction } : {}) });
+    else if (status?.type === 'systemError') this.setStatus({ ...(this.status.model ? { model: this.status.model } : {}), phase: this.transport?.isOnline ? phase : 'offline', ...(this.interaction ? { interaction: this.interaction } : {}) });
+    else if (status?.type === 'idle') this.setStatus({ ...base, phase, ...(this.interaction ? { interaction: this.interaction } : {}) });
   }
 
   private onExit(error: Error): void {

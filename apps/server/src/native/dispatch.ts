@@ -1045,17 +1045,22 @@ export class NativeDispatcher {
 
   /** Take all correction evidence before receipts can replay cached outcomes from this batch. */
   private reconcileTurnCorrections(sessionId: string, events: NativeWorkbenchEvent[]): void {
-    const newest = new Map<string, { nativeSessionId: string; turnId: string; revision: number; type: string }>();
+    const newest = new Map<string, { nativeSessionId: string; turnId: string; revision: number; type: string; error?: string; reopenedRevision?: number }>();
     for (const event of events) {
       if (!isTurnOutcome(event)) continue;
       const scope = this.turnOutcomeScope(sessionId, event);
       if (!scope) continue;
       const revision = outcomeRevision(event);
-      if (revision > (newest.get(scope.key)?.revision ?? 0)) newest.set(scope.key, { ...scope, revision, type: event.type });
+      const previous = newest.get(scope.key);
+      const reopenedRevision = Math.max(previous?.reopenedRevision ?? 0, event.type === 'native_turn_reopened' ? revision : 0);
+      const error = typeof event.data.error === 'string' ? event.data.error : typeof event.data.reason === 'string' ? event.data.reason : undefined;
+      if (revision > (previous?.revision ?? 0)) newest.set(scope.key, { ...scope, revision, type: event.type, ...(error ? { error } : {}), ...(reopenedRevision ? { reopenedRevision } : {}) });
+      else if (previous && reopenedRevision) previous.reopenedRevision = reopenedRevision;
     }
     for (const [key, correction] of newest) {
       // Revision 1 is the default fence, so only corrections are kept, and only the newest few.
-      if (correction.revision <= (this.turnOutcomeRevisions.get(key) ?? 1)) continue;
+      const previousRevision = this.turnOutcomeRevisions.get(key) ?? 1;
+      if (correction.revision <= previousRevision) continue;
       this.turnOutcomeRevisions.delete(key);
       this.turnOutcomeRevisions.set(key, correction.revision);
       if (this.turnOutcomeRevisions.size > 256) this.turnOutcomeRevisions.delete(this.turnOutcomeRevisions.keys().next().value!);
@@ -1063,16 +1068,28 @@ export class NativeDispatcher {
       for (const run of this.store.findRunsByNativeTurn(sessionId, correction.nativeSessionId, correction.turnId)) {
         this.pendingSteerOutcomes.delete(run.id);
         const native = run.native!;
-        // Only the provider's mistaken cancellation is retractable. User stops, tracking
-        // resolutions, actual failures and successful completions remain terminal. The fences are
-        // not persisted: a restart replays the current end, and a cancellation that still stands
-        // already matches the provider-cancelled Run.
-        if (correction.type === 'run_cancelled' || run.state !== 'interrupted' || native.delivery !== 'cancelled' || native.stage !== 'provider_cancelled') continue;
+        const matches = correction.type === 'run_completed' && run.state === 'completed' && native.stage === 'completed'
+          || correction.type === 'run_failed' && run.state === 'failed' && native.stage === 'provider_failed'
+          || correction.type === 'run_cancelled' && run.state === 'interrupted' && native.stage === 'provider_cancelled';
+        if (matches && run.error === correction.error) continue;
+        // A newer end can refine a provider cancellation; failures and completions require an
+        // explicit retraction first. Ordinary late activity is never evidence to reopen a turn.
+        // User stops and released tracking remain final even if the provider retracts its end.
+        const cancellation = correction.type !== 'run_cancelled' && run.state === 'interrupted'
+          && native.delivery === 'cancelled' && native.stage === 'provider_cancelled';
+        const retracted = (correction.reopenedRevision ?? 0) > previousRevision
+          && (run.state === 'failed' && native.delivery === 'failed' && native.stage === 'provider_failed'
+            || run.state === 'completed' && native.delivery === 'observed' && native.stage === 'completed');
+        if ((!cancellation && !retracted) || native.queueReleasedAt) continue;
+        const stopped = Object.values(this.store.getSetting<Record<string, StopReceipt>>(`native-stops:${sessionId}`, {}))
+          .some(receipt => receipt.request.nativeSessionId === correction.nativeSessionId && receipt.request.turnId === correction.turnId);
+        if (stopped) continue;
         this.idleSince.delete(run.id);
-        this.store.transitionNativeRun(run.id, ['cancelled'], {
+        const { completedAt: _completed, interruptedAt: _interrupted, ...timings } = native.timings ?? {};
+        this.store.transitionNativeRun(run.id, [native.delivery], {
           delivery: native.nativeMessageId ? 'observed' : 'input_sent',
           stage: native.nativeMessageId ? 'executing' : native.intent === 'steer' ? 'steer_confirmation' : 'confirmation',
-          expectsTurnOutcome: true,
+          expectsTurnOutcome: true, timings,
         }, { state: 'running', error: undefined });
       }
     }

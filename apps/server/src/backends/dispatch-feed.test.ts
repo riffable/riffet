@@ -214,6 +214,68 @@ describe('dispatcher fed by the journal', () => {
     expect(sent).not.toHaveBeenCalled();
   });
 
+  it.each(['failed', 'completed'] as const)('recovers a persisted retraction of %s followed by a corrected end at startup', async state => {
+    const sent = vi.fn();
+    const env = setup('claude', sent);
+    cleanups.push(env.close);
+    const run = env.store.acceptNativeRun(env.session.id, `cmd-restart-${state}`, input('build it'), { mode: 'agent' }, 0);
+    env.store.transitionNativeRun(run.id, ['queued'], {
+      delivery: state === 'failed' ? 'failed' : 'observed', stage: state === 'failed' ? 'provider_failed' : 'completed',
+      backendId: 'claude', nativeSessionId: 'chat-1', nativeTurnId: 'turn-1', nativeMessageId: 'u1', attempt: 1,
+    }, { state, error: state === 'failed' ? 'mistaken failure' : undefined });
+    env.writer.turnStarted('turn-1', at(0), run.id);
+    env.writer.turnEnded('turn-1', state, at(1), state === 'failed' ? 'mistaken failure' : undefined);
+    env.writer.turnReopened('turn-1', at(2));
+    env.writer.turnEnded('turn-1', state === 'failed' ? 'completed' : 'failed', at(3), state === 'completed' ? 'actual provider failure' : undefined);
+    const sibling = env.store.acceptNativeRun(env.session.id, `settled-${state}`, input('already settled'), { mode: 'agent' }, 0,
+      { target: { nativeSessionId: 'chat-1', turnId: 'turn-1' }, ownerRunId: run.id });
+    env.store.transitionNativeRun(sibling.id, ['queued'], { delivery: state === 'failed' ? 'observed' : 'failed',
+      stage: state === 'failed' ? 'completed' : 'provider_failed', nativeMessageId: 'sibling', timings: { completedAt: 123 } },
+    { state: state === 'failed' ? 'completed' : 'failed', error: state === 'completed' ? 'actual provider failure' : undefined });
+    const settledSibling = env.store.getRun(sibling.id);
+    const send = env.dispatcher();
+    cleanups.push(() => send.close());
+    await waitFor(() => expect(env.store.getRun(run.id)).toMatchObject({
+      state: state === 'failed' ? 'completed' : 'failed',
+      native: { stage: state === 'failed' ? 'completed' : 'provider_failed', attempt: 1, nativeMessageId: 'u1' },
+    }));
+    expect(env.store.getRun(run.id).error).toBe(state === 'failed' ? undefined : 'actual provider failure');
+    expect(env.store.getRun(sibling.id)).toEqual(settledSibling);
+    const settled = env.store.getRun(run.id);
+    send.close();
+    const restarted = env.dispatcher();
+    cleanups.push(() => restarted.close());
+    await new Promise(resolve => setImmediate(resolve));
+    expect(env.store.getRun(run.id)).toEqual(settled);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a revised failure at startup without an explicit retraction or across a user stop', async () => {
+    const sent = vi.fn();
+    const env = setup('claude', sent);
+    cleanups.push(env.close);
+    const persisted = ['unchanged', 'user-stopped'].map((commandId, index) => {
+      const turnId = `turn-${index}`;
+      const run = env.store.acceptNativeRun(env.session.id, commandId, input('work'), { mode: 'agent' }, 0);
+      env.store.transitionNativeRun(run.id, ['queued'], { delivery: 'failed', stage: 'provider_failed', backendId: 'claude',
+        nativeSessionId: 'chat-1', nativeTurnId: turnId, nativeMessageId: `u${index}`, attempt: 1 }, { state: 'failed', error: 'failed' });
+      env.writer.turnStarted(turnId, at(0), run.id);
+      env.writer.turnEnded(turnId, 'failed', at(1), 'failed');
+      if (index === 1) {
+        env.store.setSetting(`native-stops:${env.session.id}`, { stop: { request: { requestId: 'stop', nativeSessionId: 'chat-1', turnId },
+          operation: 'stop', state: 'completed', createdAt: at(2) } });
+        env.writer.turnReopened(turnId, at(2));
+      }
+      env.writer.turnEnded(turnId, 'completed', at(3));
+      return env.store.getRun(run.id);
+    });
+    const send = env.dispatcher();
+    cleanups.push(() => send.close());
+    await new Promise(resolve => setImmediate(resolve));
+    expect(persisted.map(run => env.store.getRun(run.id))).toEqual(persisted);
+    expect(sent).not.toHaveBeenCalled();
+  });
+
   it('takes the receipt from the echoed command id and the outcome from the turn end, and after a restart from the rows already logged', async () => {
     let commandId = '';
     const env = setup('codex', (request, w) => {

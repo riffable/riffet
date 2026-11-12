@@ -544,6 +544,13 @@ export class Journal {
     return { ...this.rowOf(raw), identity };
   }
 
+  /** The latest explicit retraction, retained even after a corrected entity supersedes it. */
+  retraction(sessionId: string, nativeId: string): JournalRow | undefined {
+    const raw = this.sql(`SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events
+      WHERE session_id=? AND native_id=? AND kind=? ORDER BY rev DESC LIMIT 1`).get(sessionId, nativeId, TOMBSTONE_KIND) as unknown as RawRow | undefined;
+    return raw ? this.rowOf(raw) : undefined;
+  }
+
   /** The oldest current entity of one kind, in original transcript order, with its latest payload. */
   firstEntity(sessionId: string, kind: string): JournalEntity | undefined {
     const first = this.sql(`SELECT e.native_id FROM journal_events e WHERE e.session_id=? AND e.rev=1
@@ -655,11 +662,17 @@ export class Journal {
       const batch = this.sql('SELECT seq,kind,native_id,rev,turn_id,at,payload,blob_ref,digest FROM journal_events WHERE session_id=? AND seq>? AND seq<=? ORDER BY seq LIMIT ?')
         .all(sessionId, current.asOfSeq, upTo, FOLD_BATCH) as unknown as RawRow[];
       if (!batch.length) break;
-      const rows: JournalFoldRow[] = batch.map(raw => ({
-        seq: raw.seq, kind: raw.kind, nativeId: raw.native_id, rev: raw.rev, turnId: raw.turn_id ?? undefined, at: raw.at,
-        // A fold reads only small fields; an oversized payload's preview carries them.
-        payload: JSON.parse(raw.payload),
-      }));
+      const rows: JournalFoldRow[] = batch.map(raw => {
+        const previous = raw.rev > 1 && (!isHiddenKind(raw.kind) || raw.kind === TOMBSTONE_KIND && raw.native_id.endsWith(':started'))
+          ? this.sql('SELECT kind,turn_id FROM journal_events WHERE session_id=? AND native_id=? AND rev=?')
+            .get(sessionId, raw.native_id, raw.rev - 1) as { kind: string; turn_id: string | null } | undefined : undefined;
+        return {
+          seq: raw.seq, kind: raw.kind, nativeId: raw.native_id, rev: raw.rev, turnId: raw.turn_id ?? undefined, at: raw.at,
+          ...(previous ? { previousTurnId: previous.turn_id ?? undefined, previousKind: previous.kind } : {}),
+          // A fold reads only small fields; an oversized payload's preview carries them.
+          payload: JSON.parse(raw.payload),
+        };
+      });
       current = foldProjection(current, rows);
       current = { ...current, check: projectionCheck(current.asOfSeq, batch[batch.length - 1]!.digest) };
     }

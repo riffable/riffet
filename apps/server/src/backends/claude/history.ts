@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { INLINE_IMAGE_LIMIT, isImagePath, toolImageContent } from '../shared/tool-images.js';
-import { initialState, reduce, type BackgroundAgent, type ClaudeSessionState, type ClaudeSignal, type ClaudeTurnOrigin } from './session-state.js';
+import { activeTurnOf, initialState, reduce, type BackgroundAgent, type ClaudeSessionState, type ClaudeSignal, type ClaudeTurnOrigin } from './session-state.js';
 import {
   ClaudeActivities, commandNameOf, compactedOutput, localCommandOutput, noticeRowKind, outputPreview, readTaskOutputTail, shellInputOf, shellOutputOf, stoppable, taskNotification,
   type ClaudeActivityHooks, type ClaudeTaskKind,
@@ -25,11 +25,6 @@ const SNAPSHOT_EVENTS = 500;
 const HISTORY_PAGE_SIZE = 100;
 /** Subagent transcripts kept per session. */
 const SUBAGENT_LIMIT = 64;
-/**
- * How long a child that still owes a step may stay quiet before it reads as gone (killed with its
- * CLI, say). A tool call writes nothing until it returns, and Bash alone may run for ten minutes.
- */
-const SUBAGENT_STALL_MS = 10 * 60_000;
 const FINAL_STOP_REASONS = new Set(['end_turn', 'stop_sequence', 'max_tokens', 'refusal']);
 /** Bytes one subagent's opening snapshot may spend; older events stay behind its history cursor. */
 const SUBAGENT_SNAPSHOT_BYTES = 96 * 1024;
@@ -59,13 +54,13 @@ export function claudeFailureText(text: string | undefined): string {
 }
 
 /**
- * The API error a main-thread turn failed on. Once its retries are spent the CLI writes the error as an
- * assistant row of its own (`isApiErrorMessage`, model `<synthetic>`) — the text its StopFailure hook
- * carries as `last_assistant_message` — and then the turn's `turn_duration`. It ends the turn; it is not
- * an answer.
+ * A terminal API error. The CLI also writes `isApiErrorMessage` on a cut stream
+ * whose `stop_reason` is `tool_use`: those tools still return and the same turn continues. That row
+ * stays in the transcript, but is not the failure a StopFailure hook / turn_duration would confirm.
  */
-function apiErrorOf(row: ClaudeRow): string | undefined {
-  if (row.type !== 'assistant' || row.isApiErrorMessage !== true || row.isSidechain === true || row.agentId !== undefined) return undefined;
+export function claudeApiFailure(row: ClaudeRow): string | undefined {
+  if (row.type !== 'assistant' || row.isApiErrorMessage !== true) return undefined;
+  if (record(row.message)?.stop_reason === 'tool_use') return undefined;
   return claudeFailureText(rowText(record(row.message)?.content));
 }
 
@@ -233,8 +228,21 @@ export function claudeRowOwesStep(row: ClaudeRow): boolean | undefined {
  * blocked first, which sends the model on (`stop_blocked`); `compact_boundary` closes a
  * compaction, and `agents_killed` ends every background agent at once.
  */
-export function claudeRowSignals(row: ClaudeRow): ClaudeSignal[] {
+export function claudeRowSignals(row: ClaudeRow, parents?: Map<string, string>, activePromptId?: string): ClaudeSignal[] {
   if (row.isSidechain === true || row.agentId !== undefined) return [];
+  // System end records carry their parent row rather than a prompt id. A delayed duration can
+  // follow the next prompt in file order while still pointing to the previous Stop summary.
+  const referenced = promptIdOf(row) ?? (typeof row.parentUuid === 'string' ? parents?.get(row.parentUuid) : undefined);
+  const failure = claudeApiFailure(row);
+  const terminal = row.type === 'system' && (row.subtype === 'turn_duration' || row.subtype === 'stop_hook_summary') || failure !== undefined;
+  // Missing ancestry is not evidence about the current prompt: the parent may have been evicted
+  // or be outside a tail read. In particular, omitting promptId would still close the active turn.
+  if (terminal && parents && typeof row.parentUuid === 'string' && referenced === undefined) return [];
+  const owner = referenced ?? activePromptId;
+  if (parents && owner && row.uuid) {
+    parents.set(row.uuid, owner);
+    while (parents.size > 256) parents.delete(parents.keys().next().value!);
+  }
   if (row.type === 'queue-operation') {
     const operation = string(row.operation);
     const text = string(row.content);
@@ -245,18 +253,17 @@ export function claudeRowSignals(row: ClaudeRow): ClaudeSignal[] {
     return operation === 'popAll' ? [{ type: 'queue', operation: 'clear' }] : [];
   }
   if (row.type === 'system') {
-    if (row.subtype === 'turn_duration') return [{ type: 'turn_end', source: 'transcript', reason: 'duration' }];
+    if (row.subtype === 'turn_duration') return [{ type: 'turn_end', source: 'transcript', reason: 'duration', ...(owner ? { promptId: owner } : {}) }];
     // Written once every Stop hook has returned, which is when the CLI is done; `turn_duration` can be held back
     // past that while background work runs. Context a hook handed back sends the model on under the same prompt.
     if (row.subtype === 'stop_hook_summary') {
-      return Array.isArray(row.hookAdditionalContext) && row.hookAdditionalContext.length ? [] : [{ type: 'turn_end', source: 'transcript', reason: 'stop' }];
+      return Array.isArray(row.hookAdditionalContext) && row.hookAdditionalContext.length ? [] : [{ type: 'turn_end', source: 'transcript', reason: 'stop', ...(owner ? { promptId: owner } : {}) }];
     }
     if (row.subtype === 'compact_boundary') return [{ type: 'compact_boundary' }];
     if (row.subtype === 'agents_killed') return [{ type: 'agents_killed' }];
     return [];
   }
-  const failure = apiErrorOf(row);
-  if (failure) return [{ type: 'turn_end', source: 'transcript', reason: 'stop_failure', error: failure }];
+  if (failure) return [{ type: 'turn_end', source: 'transcript', reason: 'stop_failure', error: failure, ...(owner ? { promptId: owner } : {}) }];
   if (row.type !== 'user') return [];
   const content = record(row.message)?.content;
   if (Array.isArray(content) && content.some(block => record(block)?.type === 'tool_result')) return [];
@@ -286,8 +293,8 @@ export function claudeRowSignals(row: ClaudeRow): ClaudeSignal[] {
   }, ...signals];
 }
 
-function subagentRunning(state: ClaudeSubagentState, lastAt: number, now = Date.now()): boolean {
-  return state.stoppedByUser !== true && state.finished !== true && state.over !== true && state.owesStep && now - lastAt < SUBAGENT_STALL_MS;
+function subagentRunning(state: ClaudeSubagentState): boolean {
+  return state.stoppedByUser !== true && state.finished !== true && state.over !== true && state.owesStep;
 }
 
 /** A subagent update, shaped exactly like the stream frame that carries it. */
@@ -695,7 +702,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
 
   if (type !== 'assistant') return [];
   // The run's failure carries the text (`claudeRowSignals`).
-  if (apiErrorOf(row)) return [];
+  if (claudeApiFailure(row)) return [];
   const model = string(message.model);
   if (model && model !== '<synthetic>') hooks.onModel?.(model);
   if (!state.turnId) {
@@ -1002,6 +1009,7 @@ type OpenToolUse = { id: string; name: string; input: Record<string, unknown> };
 interface ParentProgress {
   state: MapperState;
   turnState: ClaudeSessionState;
+  parents: Map<string, string>;
   meter: ClaudeStepMeter;
   /** Calls the conversation's own thread has made and not had answered yet, in order. */
   openCalls: Map<string, OpenToolUse>;
@@ -1013,7 +1021,7 @@ interface ParentProgress {
 function newProgress(sessionId: string, putBlob: (text: string) => string | undefined): ParentProgress {
   return {
     state: { turnAt: '', calls: new Map(), tasks: new Map(), activities: new ClaudeActivities(sessionId, { putBlob }) },
-    turnState: initialState('alive'), meter: new ClaudeStepMeter(), openCalls: new Map(),
+    turnState: initialState('alive'), parents: new Map(), meter: new ClaudeStepMeter(), openCalls: new Map(),
   };
 }
 
@@ -1251,7 +1259,7 @@ export class ClaudeTranscript {
         for (const value of newRows) {
           index += 1;
           if (!value) continue;
-          const rowSignals = claudeRowSignals(value);
+          const rowSignals = claudeRowSignals(value, progress.parents, activeTurnOf(progress.turnState.mainTurn)?.promptId);
           signals.push(...rowSignals);
           if (value.type === 'user' && typeof value.uuid === 'string') userIds.add(value.uuid);
           if (value.type === 'ai-title' && typeof value.aiTitle === 'string') progress.aiTitle = value.aiTitle;
@@ -1400,9 +1408,9 @@ export class ClaudeTranscript {
     try { info = await stat(state.file); } catch { return undefined; }
     state.over = this.agentsOver.has(state.agentId);
     if (state.loaded && info.size === state.size && info.mtimeMs === state.mtimeMs) {
-      // An unchanged file still has something to say once: when the user stops the child, or when one
-      // that owes a step has been quiet past the stall window.
-      const running = subagentRunning(state, state.lastAt);
+      // Metadata or the parent's task report can end a child without changing its transcript.
+      // A quiet tool call still owes its result and cannot prove an end by elapsed time alone.
+      const running = subagentRunning(state);
       if (running === state.running) return undefined;
       state.running = running;
       return {
@@ -1465,7 +1473,7 @@ export class ClaudeTranscript {
     const continued = state.sentUpTo > 0 && state.sentUpTo <= mapped.length
       && mapped[state.sentUpTo - 1]?.nativeId === state.sentTailId;
     state.owesStep = owesStep;
-    const running = subagentRunning(state, lastAt);
+    const running = subagentRunning(state);
     const becameRunning = state.loaded && running !== state.running;
     state.size = info.size;
     state.mtimeMs = info.mtimeMs;
