@@ -285,7 +285,9 @@ export const SyncFrameSchema = z.discriminatedUnion('type', [
     activities: z.array(NativeActivitySchema),
     context: NativeContextSchema.optional(),
     outline: SyncOutlineSchema,
+    catchingUp: z.boolean().optional(),
   }),
+  z.object({ type: z.literal('caughtUp'), generation: z.string(), headSeq: z.number() }),
   z.object({
     type: z.literal('snapshot'),
     generation: z.string(),

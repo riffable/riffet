@@ -5287,9 +5287,16 @@
       ],
       "futureField": 4
     },
+    "catchingUp": true,
     "futureField": 4
   },
   "SyncFrame#$=branch1": {
+    "type": "caughtUp",
+    "generation": "text",
+    "headSeq": 1,
+    "futureField": 4
+  },
+  "SyncFrame#$=branch2": {
     "type": "snapshot",
     "generation": "text",
     "asOfSeq": 1,
@@ -5368,7 +5375,7 @@
     "hasBefore": true,
     "futureField": 4
   },
-  "SyncFrame#$=branch2": {
+  "SyncFrame#$=branch3": {
     "type": "rows",
     "generation": "text",
     "from": 1,
@@ -5448,13 +5455,13 @@
     ],
     "futureField": 4
   },
-  "SyncFrame#$=branch3": {
+  "SyncFrame#$=branch4": {
     "type": "reset",
     "generation": "text",
     "reason": "rebuilt",
     "futureField": 4
   },
-  "SyncFrame#$=branch4": {
+  "SyncFrame#$=branch5": {
     "type": "status",
     "status": {
       "profilePending": true,
@@ -5600,7 +5607,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch5": {
+  "SyncFrame#$=branch6": {
     "type": "interaction",
     "interaction": {
       "id": "text",
@@ -5643,7 +5650,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch6": {
+  "SyncFrame#$=branch7": {
     "type": "runs",
     "runs": [
       {
@@ -5767,7 +5774,7 @@
     ],
     "futureField": 4
   },
-  "SyncFrame#$=branch7": {
+  "SyncFrame#$=branch8": {
     "type": "run",
     "run": {
       "id": "text",
@@ -5889,7 +5896,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch8": {
+  "SyncFrame#$=branch9": {
     "type": "activities",
     "live": [
       {
@@ -5928,7 +5935,7 @@
     ],
     "futureField": 4
   },
-  "SyncFrame#$=branch9": {
+  "SyncFrame#$=branch10": {
     "type": "outline",
     "turnCount": 1,
     "turns": [
@@ -5950,7 +5957,7 @@
     ],
     "futureField": 4
   },
-  "SyncFrame#$=branch10": {
+  "SyncFrame#$=branch11": {
     "type": "context",
     "context": {
       "used": 1,
@@ -5969,7 +5976,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch11": {
+  "SyncFrame#$=branch12": {
     "type": "metrics",
     "metrics": {
       "stepId": "text",
@@ -5995,7 +6002,7 @@
     "nativeMessageId": "text",
     "futureField": 4
   },
-  "SyncFrame#$=branch12": {
+  "SyncFrame#$=branch13": {
     "type": "session",
     "session": {
       "id": "text",
@@ -6116,7 +6123,7 @@
     },
     "futureField": 4
   },
-  "SyncFrame#$=branch13": {
+  "SyncFrame#$=branch14": {
     "type": "error",
     "code": "text",
     "message": "text",
@@ -8532,7 +8539,8 @@
           "runId": "text"
         }
       ]
-    }
+    },
+    "catchingUp": true
   },
   "TimelineRow#unknown-enum": {
     "key": "text",

@@ -4272,6 +4272,9 @@
                   "turnCount",
                   "turns"
                 ]
+              },
+              "catchingUp": {
+                "type": "boolean"
               }
             },
             "required": [
@@ -4287,6 +4290,26 @@
               "runs",
               "activities",
               "outline"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "caughtUp"
+              },
+              "generation": {
+                "type": "string"
+              },
+              "headSeq": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "type",
+              "generation",
+              "headSeq"
             ]
           },
           {

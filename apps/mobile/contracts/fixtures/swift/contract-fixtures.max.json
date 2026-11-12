@@ -4728,9 +4728,15 @@
           "runId": "text"
         }
       ]
-    }
+    },
+    "catchingUp": true
   },
   "SyncFrame#$=branch1": {
+    "type": "caughtUp",
+    "generation": "text",
+    "headSeq": 1
+  },
+  "SyncFrame#$=branch2": {
     "type": "snapshot",
     "generation": "text",
     "asOfSeq": 1,
@@ -4802,7 +4808,7 @@
     ],
     "hasBefore": true
   },
-  "SyncFrame#$=branch2": {
+  "SyncFrame#$=branch3": {
     "type": "rows",
     "generation": "text",
     "from": 1,
@@ -4875,12 +4881,12 @@
       "text"
     ]
   },
-  "SyncFrame#$=branch3": {
+  "SyncFrame#$=branch4": {
     "type": "reset",
     "generation": "text",
     "reason": "rebuilt"
   },
-  "SyncFrame#$=branch4": {
+  "SyncFrame#$=branch5": {
     "type": "status",
     "status": {
       "profilePending": true,
@@ -5008,7 +5014,7 @@
       }
     }
   },
-  "SyncFrame#$=branch5": {
+  "SyncFrame#$=branch6": {
     "type": "interaction",
     "interaction": {
       "id": "text",
@@ -5047,7 +5053,7 @@
       "extendableUntil": "text"
     }
   },
-  "SyncFrame#$=branch6": {
+  "SyncFrame#$=branch7": {
     "type": "runs",
     "runs": [
       {
@@ -5158,7 +5164,7 @@
       }
     ]
   },
-  "SyncFrame#$=branch7": {
+  "SyncFrame#$=branch8": {
     "type": "run",
     "run": {
       "id": "text",
@@ -5267,7 +5273,7 @@
       }
     }
   },
-  "SyncFrame#$=branch8": {
+  "SyncFrame#$=branch9": {
     "type": "activities",
     "live": [
       {
@@ -5300,7 +5306,7 @@
       }
     ]
   },
-  "SyncFrame#$=branch9": {
+  "SyncFrame#$=branch10": {
     "type": "outline",
     "turnCount": 1,
     "turns": [
@@ -5320,7 +5326,7 @@
       }
     ]
   },
-  "SyncFrame#$=branch10": {
+  "SyncFrame#$=branch11": {
     "type": "context",
     "context": {
       "used": 1,
@@ -5336,7 +5342,7 @@
       "breakdownEstimated": true
     }
   },
-  "SyncFrame#$=branch11": {
+  "SyncFrame#$=branch12": {
     "type": "metrics",
     "metrics": {
       "stepId": "text",
@@ -5359,7 +5365,7 @@
     "runId": "text",
     "nativeMessageId": "text"
   },
-  "SyncFrame#$=branch12": {
+  "SyncFrame#$=branch13": {
     "type": "session",
     "session": {
       "id": "text",
@@ -5468,7 +5474,7 @@
       "updatedAt": "text"
     }
   },
-  "SyncFrame#$=branch13": {
+  "SyncFrame#$=branch14": {
     "type": "error",
     "code": "text",
     "message": "text",
