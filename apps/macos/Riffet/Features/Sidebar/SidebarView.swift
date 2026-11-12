@@ -210,7 +210,7 @@ struct SidebarView: View {
     }
 
     private func displayMenu() -> NSMenu {
-        SidebarFilterMenu.make(workbench: workbench, includeLayout: true)
+        SidebarFilterMenu.make(workbench: workbench)
     }
 
     private static func pageTag(_ page: WorkbenchPage) -> String { "page:" + page.rawValue }

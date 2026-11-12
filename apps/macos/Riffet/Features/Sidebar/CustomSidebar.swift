@@ -74,7 +74,9 @@ struct CustomSidebar: View {
             Spacer(minLength: 0)
             toggleButton()
         }
-        .padding(.leading, CustomChrome.trafficLights(style))
+        // Clear of the traffic lights by twice their own spacing, so the mark does not read as a
+        // fourth button; a fixed gap, as the sidebar's width changes.
+        .padding(.leading, CustomChrome.trafficLights(style) + Space.sm)
         .padding(.trailing, Space.md)
         .frame(height: headerHeight(style))
     }
@@ -149,7 +151,7 @@ struct CustomSidebar: View {
     private func filterButton(addProject: Bool) -> some View {
         SidebarFilterButton {
             SidebarFilterMenu.make(
-                workbench: workbench, includeLayout: DisplayPreferences.shared.style.sidebar == .timeGroups,
+                workbench: workbench,
                 addProject: addProject ? { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } : nil
             )
         }
@@ -174,7 +176,7 @@ struct CustomSidebar: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     tagChip(style)
-                    if tree { projectRows(style) } else { timeRows(style) }
+                    if tree { projectRows(style) } else if style.sidebar == .projectTree { bucketRows(style) } else { timeRows(style) }
                 }
                 .padding(.horizontal, Space.sm)
                 .padding(.bottom, Space.md)
@@ -220,15 +222,7 @@ struct CustomSidebar: View {
     // MARK: Project tree
 
     @ViewBuilder private func projectRows(_ style: StyleSpec) -> some View {
-        CustomSectionTitle(title: String(localized: "项目"), style: style) {
-            HStack(spacing: Space.xxs) {
-                filterButton(addProject: false)
-                Button { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } label: { Image(icon: "folder.badge.plus") }
-                    .buttonStyle(IconButtonStyle(size: 24))
-                    .help("添加项目")
-                    .accessibilityLabel("添加项目")
-            }
-        }
+        CustomSectionTitle(title: String(localized: "项目"), style: style) { listButtons() }
         if workbench.sidebar.groups.isEmpty {
             VStack(spacing: Space.sm) {
                 Text(workbench.sidebar.tag.isEmpty ? "还没有项目" : "没有匹配的结果")
@@ -260,13 +254,51 @@ struct CustomSidebar: View {
         return lines
     }
 
+    /// The list's filter and add-project buttons, on its first label.
+    private func listButtons() -> some View {
+        HStack(spacing: Space.xxs) {
+            filterButton(addProject: false)
+            Button { SidebarProjects.add(workbench: workbench, browsing: $browsing, error: $addError) } label: { Image(icon: "folder.badge.plus") }
+                .buttonStyle(IconButtonStyle(size: 24))
+                .help("添加项目")
+                .accessibilityLabel("添加项目")
+        }
+    }
+
+    // MARK: Time buckets
+
+    /// The project tree's time layout, as the web lays it out: every conversation under light labels
+    /// (置顶, 进行中, 今天…), the first carrying the list's buttons.
+    @ViewBuilder private func bucketRows(_ style: StyleSpec) -> some View {
+        let buckets = workbench.sidebar.buckets
+        if buckets.isEmpty {
+            CustomSectionTitle(title: String(localized: "会话"), style: style) { listButtons() }
+            if !workbench.sidebar.tag.isEmpty {
+                Text("没有匹配的结果")
+                    .font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg3)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, Space.xl)
+            }
+        }
+        ForEach(bucketLines(buckets)) { entry in line(entry, style: style) }
+    }
+
+    private func bucketLines(_ buckets: [TimeBucket]) -> [SidebarLine] {
+        var lines: [SidebarLine] = []
+        for (index, bucket) in buckets.enumerated() where !bucket.sessions.isEmpty {
+            lines.append(.label(bucket.label, first: index == 0))
+            lines += bucket.sessions.map { .session($0, leadingAgent: true, timed: true) }
+        }
+        return lines
+    }
+
     // MARK: Time groups
 
     @ViewBuilder private func timeRows(_ style: StyleSpec) -> some View {
         let sections = workbench.sidebar.timeSections
         // The filter menu holds 添加项目 and 显示已归档: it stays reachable with no band to carry it.
         if sections.isEmpty {
-            CustomSectionTitle(title: "", style: style) { filterButton(addProject: true) }
+            CustomSectionTitle(title: "", style: style, buttonsOnHover: false) { filterButton(addProject: true) }
         }
         if sections.isEmpty, !workbench.sidebar.tag.isEmpty {
             Text("没有匹配的结果")
@@ -306,6 +338,8 @@ struct CustomSidebar: View {
                 if filters { filterButton(addProject: true) }
             }
             .padding(.top, style.layout.sidebarGap)
+        case let .label(title, first):
+            CustomSectionTitle(title: title, style: style) { if first { listButtons() } }
         case .more:
             CustomLinkRow(symbol: nil, title: String(localized: "显示更多"), style: style) { workbench.sidebar.showAllEarlier = true }
         case let .project(group, open):
@@ -387,6 +421,7 @@ private struct SidebarFilterButton: View {
 /// A line of the drawn sidebar's list (`CustomSidebar.line`).
 private enum SidebarLine: Identifiable {
     case band(WorkbenchSidebar.TimeSection, open: Bool, filters: Bool)
+    case label(String, first: Bool)
     case more
     case project(ProjectGroup, open: Bool)
     case expand(ProjectGroup, hidden: Int)
@@ -397,6 +432,7 @@ private enum SidebarLine: Identifiable {
     var id: String {
         switch self {
         case let .band(section, _, _): "band:" + section.id
+        case let .label(title, _): "label:" + title
         case .more: "more"
         case let .project(group, _): "project:" + group.project.id
         case let .expand(group, _): "expand:" + group.project.id

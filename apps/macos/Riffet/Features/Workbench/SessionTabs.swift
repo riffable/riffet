@@ -168,7 +168,7 @@ final class SessionTabs {
     }
 
     /// The server's pin order: ranked pins by rank, unranked ones before them, newest pin first.
-    private static func pinsBefore(_ a: Session, _ b: Session) -> Bool {
+    static func pinsBefore(_ a: Session, _ b: Session) -> Bool {
         let rankA = a.pinRank?.intValue
         let rankB = b.pinRank?.intValue
         if let rankA, let rankB { return rankA < rankB }

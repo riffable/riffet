@@ -19,7 +19,7 @@ final class WorkbenchSidebar {
     /// The sidebar's rows, recomputed only when the list or the reader's filters change.
     private(set) var groups: [ProjectGroup] = []
     private(set) var buckets: [TimeBucket] = []
-    /// How the reader arranged the native list (`PROJECT` or `TIME`).
+    /// How the reader arranged the native list and the project tree (`PROJECT` or `TIME`).
     var preferredLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout") ?? "PROJECT" {
         didSet { UserDefaults.standard.set(preferredLayout, forKey: "riffet.sidebar-layout"); rebuild() }
     }
@@ -27,23 +27,31 @@ final class WorkbenchSidebar {
     var timeGroupsLayout: String = UserDefaults.standard.string(forKey: "riffet.sidebar-layout.time-groups") ?? "TIME" {
         didSet { UserDefaults.standard.set(timeGroupsLayout, forKey: "riffet.sidebar-layout.time-groups"); rebuild() }
     }
-    /// The arrangement on screen: the project tree's is fixed, the others are the reader's choice.
-    /// Derived from the style, so it is never stale.
+    /// The arrangement on screen, as the reader picked it for the style's sidebar. Derived from the
+    /// style, so it is never stale.
     var layout: String {
         switch DisplayPreferences.shared.style.sidebar {
-        case .projectTree: "PROJECT"
         case .timeGroups: timeGroupsLayout
-        case .systemList: preferredLayout
+        case .projectTree, .systemList: preferredLayout
         }
     }
 
     /// Picks the arrangement of the sidebar on screen.
     func choose(layout: String) {
         switch DisplayPreferences.shared.style.sidebar {
-        case .projectTree: break
         case .timeGroups: timeGroupsLayout = layout
-        case .systemList: preferredLayout = layout
+        case .projectTree, .systemList: preferredLayout = layout
         }
+    }
+
+    /// 按标签页顺序: the pinned conversations in the tab bar's order rather than newest pin first.
+    var pinsInTabOrder: Bool = UserDefaults.standard.string(forKey: "riffet.sidebar-sort") == "tabs" {
+        didSet { UserDefaults.standard.set(pinsInTabOrder ? "tabs" : nil, forKey: "riffet.sidebar-sort"); rebuild() }
+    }
+
+    /// Without tabs there is no tab order to follow.
+    var tabsShown: Bool {
+        DisplayPreferences.shared.style.header == .sessionTabs && SessionTabsPreferences.shared.style == .titleBar
     }
     var showArchived: Bool = UserDefaults.standard.bool(forKey: "riffet.show-archived") {
         didSet { UserDefaults.standard.set(showArchived, forKey: "riffet.show-archived"); rebuild() }
@@ -146,6 +154,18 @@ final class WorkbenchSidebar {
             let groups = visibleGroups(projects: projects, sessions: sessions, query: "", showArchived: showArchived)
             self.groups = tag.isEmpty ? groups : groups.filter { !$0.sessions.isEmpty }
         }
+        if pinsInTabOrder, tabsShown { orderPinsAsTabs() }
+    }
+
+    /// Puts the pinned conversations at the head of each list in the tab bar's pinned order.
+    private func orderPinsAsTabs() {
+        func ordered(_ sessions: [Session]) -> [Session] {
+            let pinned = sessions.prefix { $0.pinnedAt != nil }
+            guard pinned.count > 1 else { return sessions }
+            return pinned.sorted(by: SessionTabs.pinsBefore) + sessions.dropFirst(pinned.count)
+        }
+        groups = groups.map { ProjectGroup(project: $0.project, sessions: ordered($0.sessions), forceOpen: $0.forceOpen) }
+        buckets = buckets.map { TimeBucket(label: $0.label, sessions: ordered($0.sessions)) }
     }
 
     /// Draws the row [id] (a conversation, or `page:<name>`) selected at once and opens it on the

@@ -784,12 +784,32 @@
         }
       }
     },
+    "按标签页顺序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab order"
+          }
+        }
+      }
+    },
     "授权失败": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Authorization failed"
+          }
+        }
+      }
+    },
+    "排序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort by"
           }
         }
       }
@@ -902,6 +922,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cannot generate QR code"
+          }
+        }
+      }
+    },
+    "最近活动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent activity"
           }
         }
       }

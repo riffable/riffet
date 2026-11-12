@@ -95,8 +95,12 @@ struct CustomLinkRow: View {
 struct CustomSectionTitle<Trailing: View>: View {
     let title: String
     let style: StyleSpec
+    /// The buttons show while the pointer is on the row, as on the web; a row that is nothing but
+    /// its buttons keeps them.
+    var buttonsOnHover = true
     @ViewBuilder let trailing: Trailing
     @Environment(\.palette) private var palette
+    @State private var hovering = false
 
     var body: some View {
         HStack(spacing: Space.sm) {
@@ -105,11 +109,15 @@ struct CustomSectionTitle<Trailing: View>: View {
                 .foregroundStyle(palette.fg4)
             Spacer(minLength: 0)
             trailing
+                .opacity(!buttonsOnHover || hovering ? 1 : 0)
+                .animation(Motion.fast, value: hovering)
         }
         .padding(.leading, rowInset)
         .padding(.trailing, Space.xs)
         .padding(.top, Space.sm)
         .frame(height: style.layout.sidebarRow)
+        .contentShape(Rectangle())
+        .onHover { hovering = $0 }
     }
 }
 

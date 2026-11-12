@@ -234,11 +234,11 @@ enum SidebarProjects {
     }
 }
 
-/// The menu of arrangement, archive and tag filters. The project tree's arrangement is fixed, so it
-/// leaves the choice out ([includeLayout] false); [addProject], when given, is the menu's first item.
+/// The menu of arrangement, archive and tag filters.
+/// [addProject], when given, is the menu's first item.
 @MainActor
 enum SidebarFilterMenu {
-    static func make(workbench: Workbench, includeLayout: Bool, addProject: (() -> Void)? = nil) -> NSMenu {
+    static func make(workbench: Workbench, addProject: (() -> Void)? = nil) -> NSMenu {
         let menu = NSMenu()
         func add(_ title: String, on: Bool, _ action: @escaping () -> Void) {
             let item = MenuAction.item(title, action)
@@ -249,10 +249,14 @@ enum SidebarFilterMenu {
             menu.addItem(MenuAction.item(String(localized: "添加项目"), symbol: "folder.badge.plus", addProject))
             menu.addItem(.separator())
         }
-        if includeLayout {
-            menu.addItem(.sectionHeader(title: String(localized: "排列方式")))
-            add(String(localized: "按项目分组"), on: workbench.sidebar.layout == "PROJECT") { workbench.sidebar.choose(layout: "PROJECT") }
-            add(String(localized: "按时间平铺"), on: workbench.sidebar.layout == "TIME") { workbench.sidebar.choose(layout: "TIME") }
+        menu.addItem(.sectionHeader(title: String(localized: "排列方式")))
+        add(String(localized: "按项目分组"), on: workbench.sidebar.layout == "PROJECT") { workbench.sidebar.choose(layout: "PROJECT") }
+        add(String(localized: "按时间平铺"), on: workbench.sidebar.layout == "TIME") { workbench.sidebar.choose(layout: "TIME") }
+        menu.addItem(.separator())
+        if workbench.sidebar.tabsShown {
+            menu.addItem(.sectionHeader(title: String(localized: "排序")))
+            add(String(localized: "最近活动"), on: !workbench.sidebar.pinsInTabOrder) { workbench.sidebar.pinsInTabOrder = false }
+            add(String(localized: "按标签页顺序"), on: workbench.sidebar.pinsInTabOrder) { workbench.sidebar.pinsInTabOrder = true }
             menu.addItem(.separator())
         }
         add(String(localized: "显示已归档"), on: workbench.sidebar.showArchived) { workbench.sidebar.showArchived.toggle() }
