@@ -30,17 +30,47 @@ A riff is a short phrase one player starts and the next picks up. Riffet keeps w
 
 Riffet drives the agent CLIs you already use and pay for, and leaves your code, terminals, credentials, and history on that server. Apache-2.0, no account, no cloud relay, no feature paywall.
 
-## A 45-second tour
+## A quick look
+
+**Connect.** Scan once from a phone, and the same session runs live on every screen.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tour-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/tour-light.gif">
-    <img alt="A 45-second tour: choosing an agent, parallel attempts, continuing a terminal session, the model picker, sharing and handoff, QR pairing, an Android build from a plugin, the canvas, tabs, search, a montage of themes, and the native apps" src="docs/assets/tour-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-connect-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-connect-light.gif">
+    <img alt="A phone scans the pairing code on the desktop, then the same answer streams on the desktop and the iPhone at once, and the Mac, iPhone, and Android apps line up" src="docs/assets/reel-connect-light.gif" width="100%">
   </picture>
 </p>
 
-<!-- A sharper .mp4 of this tour can replace the GIF: upload it into any GitHub issue or PR body and paste the https://github.com/user-attachments/assets/<uuid> URL on a line of its own. -->
+**Start.** Choose the agent, try several at once, pick up a terminal session, switch models.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-start-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-start-light.gif">
+    <img alt="Typing a prompt and choosing an agent, parallel attempts arriving one by one, the list of terminal sessions to continue, and the model picker" src="docs/assets/reel-start-light.gif" width="100%">
+  </picture>
+</p>
+
+**Read, share, keep.** A streaming timeline, the canvas, search, highlights in Favorites, and sharing.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-session-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-session-light.gif">
+    <img alt="An answer streams in with its sequence diagram, the view pages over to the canvas, a search for redis, a sentence highlighted and found in Favorites, and the share menu" src="docs/assets/reel-session-light.gif" width="100%">
+  </picture>
+</p>
+
+**Make it yours.** Palettes, light and dark, and plugins.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-shape-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-shape-light.gif">
+    <img alt="Dragging the colour point on a theme board recolours the page behind it, a light-to-dark wipe, the plugin list, and a plugin building an Android app" src="docs/assets/reel-shape-light.gif" width="100%">
+  </picture>
+</p>
 
 ## What you get
 
@@ -51,28 +81,12 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
 - **More than one server.** The Mac, iPhone, and Android apps keep several servers, say your laptop and a build box, and switch between them.
 - **Nothing to pair on a Mac.** The macOS app bundles the server and opens ready to work.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pair-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/pair-light.png">
-    <img alt="Settings, Connection & Access, with a pairing dialog showing a QR code and a single-use code" src="docs/assets/pair-light.png" width="86%">
-  </picture>
-</p>
-
 ### Start the way you work
 
 - **An agent per conversation.** Choose the agent and model for each conversation. Riffet drives the official CLI, so its login, rules, skills, MCP servers, and subscription keep working.
 - **Continue a terminal session.** Pick up a Claude Code or Codex session you started in the terminal, and hand it back with **Resume in terminal** or `riffet resume`. Only one side writes at a time, so the transcript never interleaves.
 - **Parallel attempts.** Send one prompt to 2–4 agents or models. Each attempt runs in its own Git worktree (a shadow repo for folders outside Git); compare the changes side by side and adopt one. *(Web, macOS)*
 - **Quick chat.** Ask something that belongs to no project, straight to a model, with web search and attachments. On the Mac it is `⌃⌥Space` away; on Android, a tile, the share sheet, or selected text. *(Web, macOS, Android)*
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/start-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/start-light.png">
-    <img alt="The new-task page for the atlas-api project with the agent menu open: Codex, Claude Code, DeepSeek Harness, Droid, pi, TRAE CLI, and Cursor, above the Shell terminal, Parallel attempts, and Continue terminal session cards" src="docs/assets/start-light.png" width="100%">
-  </picture>
-</p>
 
 ### Your models
 
@@ -81,28 +95,12 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
 - **A model for each chore.** Set separate models for session titles, quick chat, handoff summaries, and canvas summaries.
 - **Switch within a family.** Move a conversation to another model or provider of the same family and it continues in place. Across families, hand it off.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/models-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/models-light.png">
-    <img alt="The model picker in a Claude Code conversation: Sonnet, Opus, and Haiku, with effort, a 1M context option, and fast mode" src="docs/assets/models-light.png" width="64%">
-  </picture>
-</p>
-
 ### Take it with you, pass it on
 
 - **Terminal, PDF, or a link.** Resume any conversation in the terminal, export it as a PDF, or publish a read-only snapshot with an expiry through a share plugin. *(PDF and links: Web, macOS)*
 - **@ another session.** Type `@` to cite an earlier conversation. The agent gets a short brief and a snapshot of the transcript it can read further, and the cited session is left untouched. *(Claude Code, Codex)*
 - **Hand off.** Out of quota, or want a second opinion? Hand an idle conversation to another agent with a structured summary.
 - **Favorites.** Highlight passages in four colors with a note, or save a whole reply, an image, or a file. Each keeps its own snapshot and outlives the session it came from. *(Web, macOS)*
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/share-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/share-light.png">
-    <img alt="The session menu: Share session, Export as PDF, Resume session, Hand off conversation, Save as scheduled task, and Resume in terminal" src="docs/assets/share-light.png" width="60%">
-  </picture>
-</p>
 
 ### Everything is a plugin
 
@@ -122,27 +120,11 @@ riffet plugin pack ./my-plugin --out my-plugin.tgz
 riffet plugin install my-plugin.tgz
 ```
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/plugins-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/plugins-light.png">
-    <img alt="An Android project’s session with the Android Build plugin’s panel beside it: a finished Build APK with two compiler warnings, the 30 MB debug APK, and the Gradle log" src="docs/assets/plugins-light.png" width="100%">
-  </picture>
-</p>
-
 ### Quiet by default, yours to shape
 
 - **Tabs and an aside.** Keep sessions open as tabs. The aside next to the conversation holds the plan, outline, subagents, background tasks, and output files. *(Tabs: Web, and macOS in the Riffet style)*
 - **Themes.** Twelve built-in palettes, near-neutral ink on low-chroma paper, and a theme editor for your own.
 - **Icons and interface styles.** Swap the icon pack, and choose how the app is drawn: Native, Riffet, or Line on macOS; Material 3, iOS, Expressive, Miuix, or Fluent on Android.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/looks-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/looks-light.png">
-    <img alt="The same conversation cut into vertical strips, each in a different theme: Kiln, Ink, Sepia, Catppuccin, and Celadon" src="docs/assets/looks-light.png" width="100%">
-  </picture>
-</p>
 
 ### The basics, done properly
 
@@ -153,14 +135,6 @@ riffet plugin install my-plugin.tgz
 - **Search and schedules.** Search session titles and content from `⌘K`. Run a prompt once or on a cron schedule, and let agents schedule their own wake-ups.
 - **Three views.** Switch a conversation between the timeline, the live terminal, and a canvas that lays out every turn with its commands and files. *(Web, macOS)*
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/canvas-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/canvas-light.png">
-    <img alt="The canvas view of a session: each turn’s prompt and answer, the files it changed, its subagent, and the commands it ran on a timeline" src="docs/assets/canvas-light.png" width="100%">
-  </picture>
-</p>
-
 ### Native on every screen
 
 - **Web.** The complete workbench in any browser, with nothing to install on the client.
@@ -168,22 +142,6 @@ riffet plugin install my-plugin.tgz
 - **iPhone.** Answer permission prompts, read diffs, browse remote folders, and open a terminal.
 - **Android.** Five interface styles, a touch terminal, and quick chat from anywhere. In preview, an agent on your server can read and operate the phone, behind a per-session switch and a biometric opt-in.
 - **Feishu / Lark.** The bot connects outbound over WebSocket, so it needs no public IP, domain, or tunnel. Start or continue a project conversation in a DM or a group topic, and approve actions in the chat.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mac-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/mac-light.png">
-    <img alt="The native macOS app showing the same session" src="docs/assets/mac-light.png" width="100%">
-  </picture>
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/devices-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/devices-light.png">
-    <img alt="The session list and a conversation on iPhone and on Android" src="docs/assets/devices-light.png" width="100%">
-  </picture>
-</p>
 
 ## What it leaves alone
 

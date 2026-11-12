@@ -30,17 +30,47 @@ Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人
 
 Riffet 驱动的是你已经在用、已经付费的 Agent CLI；代码、终端、登录凭证和历史都留在那台服务器上。Apache-2.0 开源，没有账号，不经云端中继，没有付费功能。
 
-## 45 秒看一遍
+## 先看一眼
+
+**连接。** 手机扫一次码，同一条会话在每块屏幕上实时同步。
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tour-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/tour-light.gif">
-    <img alt="45 秒演示：选择 Agent、并行尝试、接着终端里的会话做、模型选择器、分享与交接、扫码配对、插件里的 Android 构建、画布、标签页、搜索、一组主题的快切，以及原生应用" src="docs/assets/tour-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-connect-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-connect-light.gif">
+    <img alt="手机扫描桌面上的配对码，随后同一段回答在桌面和 iPhone 上同时输出，最后 Mac、iPhone 与 Android 应用并排" src="docs/assets/reel-connect-light.gif" width="100%">
   </picture>
 </p>
 
-<!-- 可以用更清晰的 .mp4 替换这张 GIF：把视频拖进任意 GitHub Issue / PR 的编辑框，再把得到的 https://github.com/user-attachments/assets/<uuid> 链接单独放一行。 -->
+**发起。** 选 Agent，同时试几个，接着终端里的会话做，切换模型。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-start-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-start-light.gif">
+    <img alt="输入需求并选择 Agent，并行尝试逐个加入，可继续的终端会话列表，以及模型选择器" src="docs/assets/reel-start-light.gif" width="100%">
+  </picture>
+</p>
+
+**阅读、分享与收藏。** 实时输出的时间线、画布、搜索、高亮收藏和分享。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-session-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-session-light.gif">
+    <img alt="回答连同时序图逐行输出，视图翻到画布，搜索 redis，高亮一句话并在收藏里找到它，以及分享菜单" src="docs/assets/reel-session-light.gif" width="100%">
+  </picture>
+</p>
+
+**按你的习惯来。** 配色、浅色与深色，以及插件。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/reel-shape-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/reel-shape-light.gif">
+    <img alt="在主题面板上拖动色点，后面的页面随之换色，从浅色擦到深色，插件列表，以及用插件构建 Android 应用" src="docs/assets/reel-shape-light.gif" width="100%">
+  </picture>
+</p>
 
 ## 能做什么
 
@@ -51,28 +81,12 @@ Riffet 驱动的是你已经在用、已经付费的 Agent CLI；代码、终端
 - **不止一台服务器。** Mac、iPhone、Android 应用可以同时保存多台服务器（比如笔记本和编译机），随时切换。
 - **Mac 上不用配对。** macOS 应用内置服务端，打开就能用。
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pair-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/pair-light.png">
-    <img alt="设置里的连接与访问页，配对弹窗显示二维码和一次性配对码" src="docs/assets/pair-light.png" width="86%">
-  </picture>
-</p>
-
 ### 怎么开始都行
 
 - **每条会话选一个 Agent。** 每条会话各自选择 Agent 和模型。Riffet 驱动官方 CLI，CLI 的登录、Rules、Skills、MCP 和订阅照常生效。
 - **接着终端里的会话做。** 在终端里开始的 Claude Code 或 Codex 会话可以导入 Riffet 继续，再用「在终端恢复」或 `riffet resume` 交还终端。同一时刻只有一方写入，记录不会交错。
 - **并行尝试。** 同一条需求同时发给 2–4 个 Agent 或模型，每一路跑在自己的 Git worktree 里（非 Git 目录用影子仓库），并排比较改动后采用其中一路。*（Web、macOS）*
 - **快速对话。** 不属于任何项目的问题直接问模型，支持联网搜索和附件。Mac 上按 `⌃⌥Space`，Android 上从快捷开关、分享菜单或选中的文字发起。*（Web、macOS、Android）*
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/start-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/start-light.png">
-    <img alt="atlas-api 项目的新建任务页，Agent 菜单展开：Codex、Claude Code、DeepSeek Harness、Droid、pi、TRAE CLI、Cursor，下方是 Shell 终端、并行尝试和继续终端会话三张卡片" src="docs/assets/start-light.png" width="100%">
-  </picture>
-</p>
 
 ### 模型自己定
 
@@ -81,28 +95,12 @@ Riffet 驱动的是你已经在用、已经付费的 Agent CLI；代码、终端
 - **辅助模型分开配。** 会话标题、快速对话、交接摘要、画布摘要各自可以指定模型。
 - **同系列换模型。** 会话可以切到同一系列的另一个模型或模型源，原地接着聊；跨系列则用交接。
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/models-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/models-light.png">
-    <img alt="Claude Code 会话里的模型选择器：Sonnet、Opus、Haiku，以及思考强度、1M 上下文和快速模式" src="docs/assets/models-light.png" width="64%">
-  </picture>
-</p>
-
 ### 带走与交接
 
 - **终端、PDF 或链接。** 任意会话都能在终端恢复、导出为 PDF，或通过分享插件发布成带有效期的只读快照。*（PDF 与链接：Web、macOS）*
 - **@ 另一条会话。** 输入 `@` 引用之前的对话：Agent 拿到一份简短导读和可继续读取的原文快照，被引用的会话不受影响。*（Claude Code、Codex）*
 - **交接。** 额度用完或想换个模型看看时，把空闲的会话连同结构化摘要交给另一个 Agent。
 - **收藏。** 用四种颜色高亮片段并写批注，也可以收藏整条回答、图片或文件。每条收藏各自保存快照，原会话删除后仍然可读。*（Web、macOS）*
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/share-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/share-light.png">
-    <img alt="会话菜单：分享会话、导出为 PDF、恢复会话、交接会话、存为定时任务、在终端恢复" src="docs/assets/share-light.png" width="60%">
-  </picture>
-</p>
 
 ### 一切皆插件
 
@@ -122,27 +120,11 @@ riffet plugin pack ./my-plugin --out my-plugin.tgz
 riffet plugin install my-plugin.tgz
 ```
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/plugins-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/plugins-light.png">
-    <img alt="Android 项目的会话，旁边是 Android 构建插件的面板：一次完成的 Build APK，两条编译警告、30 MB 的 debug APK 和 Gradle 日志" src="docs/assets/plugins-light.png" width="100%">
-  </picture>
-</p>
-
 ### 克制，也由你来定
 
 - **标签页与侧栏。** 会话可以作为标签页常开。对话旁的概览栏放着计划、大纲、子 Agent、后台任务和产出文件。*（标签页：Web，以及 macOS 的 Riffet 风格）*
 - **主题。** 内置 12 套配色，接近无彩的墨色配低色度的纸；也可以用主题编辑器做自己的。
 - **图标与界面风格。** 可以换图标包，也可以换整套界面画法：macOS 有原生、Riffet、线条三种，Android 有 Material 3、iOS、Expressive、Miuix、Fluent 五种。
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/looks-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/looks-light.png">
-    <img alt="同一条对话切成几条竖条，每条一种主题：Kiln、Ink、Sepia、Catppuccin、Celadon" src="docs/assets/looks-light.png" width="100%">
-  </picture>
-</p>
 
 ### 基本功扎实
 
@@ -153,14 +135,6 @@ riffet plugin install my-plugin.tgz
 - **搜索与定时任务。** 用 `⌘K` 搜索会话标题和内容。提示词可以只跑一次或按 cron 定时运行，Agent 也能给自己定唤醒。
 - **三种视角。** 同一条会话可以在时间线、实时终端和画布之间切换；画布把每一轮连同执行的命令和写入的文件排在一张图上。*（Web、macOS）*
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/canvas-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/canvas-light.png">
-    <img alt="会话的画布视角：每一轮的提问和回答、改动的文件、子 Agent，以及按时间排开的命令" src="docs/assets/canvas-light.png" width="100%">
-  </picture>
-</p>
-
 ### 每块屏幕都是原生
 
 - **Web**：完整的工作台，客户端不用安装任何东西。
@@ -168,22 +142,6 @@ riffet plugin install my-plugin.tgz
 - **iPhone**：批权限、看 Diff、浏览远端目录、打开终端。
 - **Android**：五种界面风格、触控终端，随处发起快速对话。预览功能里，服务器上的 Agent 可以读取并操作这台手机，需要会话开关和手机上的生物识别确认同时打开。
 - **飞书 / Lark 机器人**：由服务端主动建立出站 WebSocket 连接，不需要公网 IP、域名或内网穿透。在私聊或群话题里新建、续聊项目会话，审批直接在聊天里点。
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/mac-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/mac-light.png">
-    <img alt="macOS 原生应用中的同一条会话" src="docs/assets/mac-light.png" width="100%">
-  </picture>
-</p>
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/devices-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/devices-light.png">
-    <img alt="iPhone 与 Android 上的会话列表和对话页" src="docs/assets/devices-light.png" width="100%">
-  </picture>
-</p>
 
 ## 它不做什么
 
