@@ -119,49 +119,16 @@ struct WindowTitleBarBinder: NSViewRepresentable {
     final class Anchor: NSView {
         var toolbarStyle: NSWindow.ToolbarStyle = .unified
         var drop: CGFloat = 0
-        /// Each button's height as AppKit last laid it out, and the one it was moved to.
-        private var heights: [ObjectIdentifier: (system: CGFloat, moved: CGFloat)] = [:]
-        private var observers: [NSObjectProtocol] = []
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
-            observers.forEach(NotificationCenter.default.removeObserver)
-            observers = []
-            heights = [:]
-            guard let window else { return }
-            // The title bar lays its buttons out again on resizing, full screen and key changes.
-            for button in Self.buttons(window) {
-                button.postsFrameChangedNotifications = true
-                observers.append(NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: button, queue: .main) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.placeLights() }
-                })
-            }
             apply()
         }
 
         func apply() {
-            if let window, window.toolbarStyle != toolbarStyle { window.toolbarStyle = toolbarStyle }
-            placeLights()
-        }
-
-        private static func buttons(_ window: NSWindow) -> [NSButton] {
-            [.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
-        }
-
-        private func placeLights() {
-            // In full screen the lights are in the menu bar's strip, which keeps its own layout.
-            guard let window, !window.styleMask.contains(.fullScreen) else { return }
-            for button in Self.buttons(window) {
-                guard let container = button.superview else { continue }
-                let key = ObjectIdentifier(button)
-                let y = button.frame.origin.y
-                var entry = heights[key] ?? (y, y)
-                // Anywhere but where it was moved, AppKit has placed it anew.
-                if abs(y - entry.moved) > 0.5 { entry.system = y }
-                entry.moved = entry.system + (container.isFlipped ? drop : -drop)
-                heights[key] = entry
-                if abs(y - entry.moved) > 0.5 { button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: entry.moved)) }
-            }
+            guard let window else { return }
+            if window.toolbarStyle != toolbarStyle { window.toolbarStyle = toolbarStyle }
+            TrafficLights.of(window).hold(drop)
         }
     }
 
@@ -171,5 +138,88 @@ struct WindowTitleBarBinder: NSViewRepresentable {
         anchor.toolbarStyle = titleBar == .compact ? .unifiedCompact : .unified
         anchor.drop = lightsDrop
         anchor.apply()
+    }
+}
+
+/// Keeps a window's traffic lights [drop] points below where AppKit lays them out. One per window:
+/// while a style switch rebuilds the view tree two anchors share the window, and each keeping its
+/// own record would take the other's move for AppKit's and push the buttons down without end.
+@MainActor
+private final class TrafficLights {
+    private static let table = NSMapTable<NSWindow, TrafficLights>.weakToStrongObjects()
+
+    static func of(_ window: NSWindow) -> TrafficLights {
+        if let lights = table.object(forKey: window) { return lights }
+        let lights = TrafficLights(window: window)
+        table.setObject(lights, forKey: window)
+        return lights
+    }
+
+    private weak var window: NSWindow?
+    private var drop: CGFloat = 0
+    /// Per button: the one placed (AppKit may replace them), where AppKit put it, where it was moved.
+    private var placed: [NSWindow.ButtonType: Placement] = [:]
+    private var placing = false
+    private var pending = false
+
+    private struct Placement {
+        let button: NSButton
+        let observer: NSObjectProtocol
+        var system: CGFloat
+        var moved: CGFloat
+    }
+
+    private init(window: NSWindow) {
+        self.window = window
+    }
+
+    /// Also after a toolbar style change, which may lay the buttons out again or replace them.
+    func hold(_ drop: CGFloat) {
+        self.drop = drop
+        place()
+    }
+
+    private func place() {
+        // A move of our own posts a frame change; it is not AppKit laying the buttons out again.
+        guard !placing, let window else { return }
+        placing = true
+        defer { placing = false }
+        // In full screen the lights are in the menu bar's strip, which keeps its own layout.
+        let fullScreen = window.styleMask.contains(.fullScreen)
+        for type in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            guard let button = window.standardWindowButton(type), let container = button.superview else { continue }
+            let y = button.frame.origin.y
+            var entry: Placement
+            if let known = placed[type], known.button === button {
+                entry = known
+                // Anywhere but where it was moved, AppKit has placed it anew.
+                if abs(y - entry.moved) > 0.5 { entry.system = y }
+            } else {
+                if let old = placed[type] { NotificationCenter.default.removeObserver(old.observer) }
+                entry = Placement(button: button, observer: observe(button), system: y, moved: y)
+            }
+            entry.moved = fullScreen ? entry.system : entry.system + (container.isFlipped ? drop : -drop)
+            placed[type] = entry
+            if abs(y - entry.moved) > 0.5 { button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: entry.moved)) }
+        }
+    }
+
+    /// The title bar lays its buttons out again on resizing, full screen and key changes. Inside a
+    /// button's own frame notification AppKit drops a move of that button, so the last one it lays
+    /// out (the zoom button) is placed once more after the pass.
+    private func observe(_ button: NSButton) -> NSObjectProtocol {
+        button.postsFrameChangedNotifications = true
+        return NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: button, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, !self.placing else { return }
+                self.place()
+                guard !self.pending else { return }
+                self.pending = true
+                DispatchQueue.main.async { [weak self] in
+                    self?.pending = false
+                    self?.place()
+                }
+            }
+        }
     }
 }
