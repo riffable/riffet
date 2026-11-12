@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-自托管的编码 Agent 工作台，支持 Claude Code、Codex、Cursor、pi 等。
+自托管的编码 Agent 工作台：过程读得懂，中途插得上话，换块屏幕接着做。
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -26,7 +26,9 @@
   </picture>
 </p>
 
-Riffet 是一个自托管的工作台，接的是你已经在用、已经付费的 Agent CLI。把 `riffet` 跑在你的 Mac、开发机或无界面的 Linux 服务器上：代码、终端、登录凭证和历史都留在这台机器里，每条会话都可以从浏览器、macOS / iPhone / Android 原生应用或飞书（Lark）机器人打开并继续。
+Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人接下去。Riffet 让和编码 Agent 的协作保持这个样子：每条会话都是留在你自己机器上的工作区，过程读得懂，中途插得上话，之后从浏览器、macOS / iPhone / Android 原生应用或飞书（Lark）机器人接着做。
+
+把 `riffet` 跑在你的 Mac、开发机或无界面的 Linux 服务器上。它驱动的是你已经在用、已经付费的 Agent CLI；代码、终端、登录凭证和历史都留在这台机器里。
 
 一个终端标签页只能跑一个 CLI、守一个分支，合上电脑就够不着了；云端的 Agent 平台则要你迁走代码库、再付一份订阅，或者放弃本机配好的工具。Riffet 两样都不要：Apache-2.0 开源，不经云端中继，没有付费功能。
 
@@ -44,12 +46,13 @@ Riffet 是一个自托管的工作台，接的是你已经在用、已经付费�
 
 ## 能做什么
 
-### 跑的是真 CLI，读起来不费劲
-
-Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等，见[后端能力矩阵](#后端能力矩阵)），就地读取它们各自的会话存储。CLI 的登录、Rules、Skills 和 MCP 照常生效，代码仍在你自己的 IDE 里改。
+### 读得懂
 
 - **能读的时间线。** 连续的工具调用折叠成一行，每次修改都能展开成 Diff，子 Agent 有独立的转录页。Mermaid、D2、Graphviz、PlantUML、Vega-Lite 图表在本地渲染，另有 KaTeX 公式和 45 种语言的语法高亮。
-- **随时切回真终端。** 支持 TUI 的后端可以在结构化对话和背后的终端（`tmux` 或 `codex --remote`）之间切换。关掉网页或合上笔记本，会话在主机上继续运行。
+- **整条会话一张图。** 画布把每一轮的提问、回答、执行的命令和写入的文件排在一起，分叉并列显示。*（Web）*
+- **文件就地打开。** 20 多种文件格式在本地预览，包括 PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型和压缩包。
+- **高亮与收藏。** 高亮片段、收藏图片或文件都各自保存快照，原会话删除后仍然可读。
+- **随时切回真终端。** 后端带 TUI 时，可以在结构化对话和背后的终端之间切换。关掉网页或合上笔记本，会话在主机上继续运行。
 
 <p align="center">
   <picture>
@@ -59,12 +62,12 @@ Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等�
   </picture>
 </p>
 
-### 在 Agent 干活的地方审阅和发布
+### 插得上话
 
+- **运行中引导。** Agent 正在执行时可以直接补充要求，不用 `Ctrl+C`，已完成的工具调用也不会丢；也可以排到下一轮。
+- **侧边聊天。** 选中回答里的一段，在侧边线程里追问。它带着这条会话的上下文，但不进主时间线；有结论后再带回输入框。
+- **@ 另一条会话。** 输入 `@` 引用之前的对话：Agent 拿到一份简短导读和可继续读取的原文快照，被引用的会话不受影响。
 - **对着 Diff 写批注。** 在任意变更里点行号，写下要改的地方，批注会一并发回给 Agent。
-- **2–4 路并行尝试。** 同一条需求同时发给多个后端或模型，每一路跑在自己的 Git worktree 里（非 Git 目录用影子仓库），并排比较改动后采用其中一路。
-- **交接与回退。** 额度用完或想换个模型看看时，把空闲的会话连同结构化摘要交给另一个后端；也可以从任意回合分叉，或恢复每轮自动建立的检查点。
-- **预览，然后提 PR。** 20 多种文件格式在本地预览，包括 PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型和压缩包。推送分支、创建 GitHub PR、查看 CI 都通过本机的 `gh` 完成。
 
 <p align="center">
   <picture>
@@ -74,11 +77,13 @@ Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等�
   </picture>
 </p>
 
-### 每个屏幕都是原生应用，机器人不需要公网入口
+### 换块屏幕接着做
 
 - **macOS**：原生应用，内置服务端运行时，打开即可使用、无需配对；常驻菜单栏，`⌃⌥Space` 在任何地方发起快速提问。
 - **iPhone** 与 **Android**：扫码配对，可在多台服务器间切换；批权限、看 Diff、浏览远端目录，或打开触控终端。
 - **飞书 / Lark 机器人**：由服务端主动建立出站 WebSocket 连接，不需要公网 IP、域名或内网穿透。在私聊或群话题里新建、续聊项目会话，进度卡片实时更新，审批直接在聊天里点。
+- **终端**：在终端里开始的会话可以导入 Riffet 继续，`riffet resume` 再把它交还终端。同一时刻只有一方写入，记录不会交错。
+- **快速对话**：不属于任何项目的问题可以直接问，支持联网搜索和附件。
 
 <p align="center">
   <picture>
@@ -96,17 +101,18 @@ Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等�
   </picture>
 </p>
 
-### 不打断当前回合
+### 回退、分叉、发布
 
-- **运行中引导。** Claude Code、Codex、Cursor、TRAE CLI 正在执行时可以直接补充要求，不用 `Ctrl+C`，已完成的工具调用也不会丢；也可以排到下一轮。
-- **侧边聊天。** 选中回答里的一段，在侧边线程里追问。它带着这条会话的上下文，但不进主时间线；有结论后再带回输入框。
-- **快速对话与收藏。** 不属于任何项目的问题可以直接问，支持联网搜索和附件。高亮片段、收藏图片或文件都各自保存快照，原会话删除后仍然可读。
+- **检查点与分叉。** 每一轮自动建立检查点，可以恢复到任意一个，或从任意回合分叉出新会话。
+- **并行尝试。** 同一条需求同时发给 2–4 个后端或模型，每一路跑在自己的 Git worktree 里（非 Git 目录用影子仓库），并排比较改动后采用其中一路。
+- **交接。** 额度用完或想换个模型看看时，把空闲的会话连同结构化摘要交给另一个后端。
+- **提 PR。** 推送分支、创建 GitHub PR、查看 CI 都通过本机的 `gh` 完成。
 
 ### 把手机交给 Agent 用 *（Android 预览）*
 
 运行在服务器上的 Agent 可以读取已配对 Android 手机的屏幕、在上面点击和输入、给你发通知，或者给自己的会话定一次性的唤醒（“20 分钟后再检查一次部署”）。这需要两道开关同时打开：会话里的开关，以及手机上的生物识别确认。
 
-## 整体结构
+## 它不做什么
 
 <p align="center">
   <picture>
@@ -116,23 +122,11 @@ Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等�
   </picture>
 </p>
 
-客户端不运行 Agent，也不保存代码。默认只监听本机回环地址；其他设备通过局域网、VPN 或 HTTPS 代理访问。
+- **不自带 Agent。** Riffet 没有自己的 Agent 和模型。它驱动官方 CLI，就地读取它们各自的会话存储，CLI 的登录、Rules、Skills、MCP 和订阅照常生效。
+- **不是编辑器。** 代码仍在你自己的 IDE 里改；Riffet 负责阅读、审阅和引导。
+- **不设云端。** 跑在你自己的 Mac 或远端服务器上。没有账号，不经中继，客户端直连，不运行 Agent 也不保存代码。默认只监听本机回环地址；其他设备通过局域网、VPN 或 HTTPS 代理访问。
 
----
-
-## 后端能力矩阵
-
-| 后端 | CLI | 结构化对话 | 实时 TUI 终端 | 运行中引导 (Steer) | 子 Agent 详情页 | Riffet MCP / 自唤醒 | 按对话开关 MCP / Skill |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| Cursor | `cursor-agent` | ✓ | ✓（`tmux`） | ✓ | ✓ | — | — |
-| Claude Code | `claude` | ✓ | ✓（`tmux`） | ✓ | ✓ | ✓ | MCP + Skills |
-| Codex | `codex` | ✓ | ✓（`--remote`） | ✓ | ✓ | ✓ | MCP |
-| DeepSeek Harness | `dsh`（`0.2.0-rc.2+`） | ✓ | — | — | ✓ | — | — |
-| Factory Droid | `droid` | ✓ | — | — | ✓ | ✓ | — |
-| TRAE CLI | `traex` | ✓ | ✓（原生） | ✓ | ✓ | ✓ | MCP |
-| pi | `pi`（`1.4.0+`） | ✓ | — | — | — | ✓ | — |
-
-> 可通过环境变量（`RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DROID_CLI`、`TRAEX_CLI`、`PI_CLI`）或「设置 → 模型设置」按配置指定 CLI 路径。需要接入自建模型源、自定义工作台视图或配色主题时，可使用 [`@riffet/plugin-api`](docs/PLUGINS.md) 开发独立插件包。
+目前接入了 Claude Code、Codex、Cursor、TRAE CLI、Factory Droid、DeepSeek Harness 和 pi，还在继续增加。各自支持的能力见[后端能力矩阵](#后端能力矩阵)。
 
 ---
 
@@ -142,7 +136,7 @@ Riffet 直接驱动官方 CLI（`claude`、`codex`、`cursor-agent`、`pi` 等�
 
 - **macOS 或 Linux**，已安装 **Node.js `>= 24.19.0`**（从源码构建还需 `pnpm`）。
 - **`tmux >= 3.2`**（Cursor / Claude Code 会话与实时终端视图需要）。
-- 本机至少安装并登录一款上表支持的 Agent CLI。
+- 本机至少安装并登录一款[受支持的 Agent CLI](#后端能力矩阵)。
 
 ### 1. 安装 Riffet
 
@@ -208,6 +202,22 @@ riffet plugin --help   # 开发、打包、安装与诊断插件
 默认值：地址 `http://127.0.0.1:4337/`，默认后端 `cursor-agent`，私有数据目录 `~/.local/share/riffet`（目录权限 `0700`、密钥文件 `0600`），回环地址免令牌访问。可通过 `--port`、`--host`、`--cli`、`--state-dir`、`--workspace`、`--allow-host` 覆盖，前四项同时支持 `RIFFET_PORT`、`RIFFET_HOST`、`RIFFET_CLI`、`RIFFET_STATE_DIR` 环境变量。
 
 </details>
+
+---
+
+## 后端能力矩阵
+
+| 后端 | CLI | 结构化对话 | 实时 TUI 终端 | 运行中引导 (Steer) | 子 Agent 详情页 | Riffet MCP / 自唤醒 | 按对话开关 MCP / Skill | @ 会话引用 | 终端导入 / 交还 |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Cursor | `cursor-agent` | ✓ | ✓（`tmux`） | ✓ | ✓ | — | — | — | — |
+| Claude Code | `claude` | ✓ | ✓（`tmux`） | ✓ | ✓ | ✓ | MCP + Skills | ✓ | ✓ |
+| Codex | `codex` | ✓ | ✓（`--remote`） | ✓ | ✓ | ✓ | MCP | ✓ | ✓ |
+| DeepSeek Harness | `dsh`（`0.2.0-rc.2+`） | ✓ | — | — | ✓ | — | — | — | — |
+| Factory Droid | `droid` | ✓ | — | — | ✓ | ✓ | — | — | — |
+| TRAE CLI | `traex` | ✓ | ✓（原生） | ✓ | ✓ | ✓ | MCP | — | — |
+| pi | `pi`（`1.4.0+`） | ✓ | — | — | — | ✓ | — | — | — |
+
+> 可通过环境变量（`RIFFET_CLI`、`CLAUDE_CLI`、`CODEX_CLI`、`DROID_CLI`、`TRAEX_CLI`、`PI_CLI`）或「设置 → 模型设置」按配置指定 CLI 路径。需要接入自建模型源、自定义工作台视图或配色主题时，可使用 [`@riffet/plugin-api`](docs/PLUGINS.md) 开发独立插件包。
 
 ---
 

@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-A self-hosted workbench for Claude Code, Codex, Cursor, pi, and more.
+A self-hosted workbench for coding agents. Read the work, step in, and pick it up on any screen.
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -26,7 +26,9 @@ English · [简体中文](README.zh-CN.md) · [Releases](https://github.com/riff
   </picture>
 </p>
 
-Riffet is a self-hosted workbench for the agent CLIs you already use and pay for. Run `riffet` on your Mac, a dev box, or a headless Linux server: your code, terminals, credentials, and history stay on that machine, and every session becomes a durable workspace you can open from a browser, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
+A riff is a short phrase one player starts and the next picks up. Riffet keeps work with a coding agent in that shape: every session is a durable workspace on your own machine that you can read, step into, and pick up later from a browser, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
+
+Run `riffet` on your Mac, a dev box, or a headless Linux server. It drives the agent CLIs you already use and pay for; your code, terminals, credentials, and history stay on that machine.
 
 A terminal tab runs one CLI in one checkout and goes out of reach when you close the laptop. Cloud agent platforms ask you to move your repositories, pay a second subscription, or give up your local tools. Riffet does neither: Apache-2.0, no cloud relay, no feature paywall.
 
@@ -44,12 +46,13 @@ A terminal tab runs one CLI in one checkout and goes out of reach when you close
 
 ## What you get
 
-### The real CLIs, made readable
-
-Riffet drives the official CLIs (`claude`, `codex`, `cursor-agent`, `pi`, and [others](#agent-matrix)) and reads their native session stores in place. Your CLI logins, rules, skills, and MCP servers keep working, and you keep editing in your own IDE.
+### Read the work
 
 - **A timeline you can read.** Consecutive tool calls fold into one line, and each edit opens as a diff. Subagents get their own transcript. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite diagrams render locally, alongside KaTeX math and syntax highlighting for 45 languages.
-- **The live terminal, one click away.** For TUI-backed agents, switch between the structured conversation and the real terminal (`tmux` or `codex --remote`). Close the browser or sleep the laptop and sessions keep running on the host.
+- **The whole conversation as one diagram.** The canvas lays out each turn’s question, answer, commands, and written files, with forks shown alongside. *(Web)*
+- **Files open in place.** More than 20 file types preview locally, including PDF, Office documents, Jupyter notebooks, SQLite, 3D models, and archives.
+- **Highlights and bookmarks.** Highlight passages and bookmark images or files; each keeps its own snapshot and outlives the session it came from.
+- **The live terminal, one click away.** Where the agent has a TUI, switch between the structured conversation and the real terminal. Close the browser or sleep the laptop and sessions keep running on the host.
 
 <p align="center">
   <picture>
@@ -59,12 +62,12 @@ Riffet drives the official CLIs (`claude`, `codex`, `cursor-agent`, `pi`, and [o
   </picture>
 </p>
 
-### Review and ship where the agent worked
+### Step in
 
+- **Steer a running turn.** Add an instruction while the agent works, without `Ctrl+C` and without losing the tool calls already done. Or queue it for the next turn.
+- **Side chats.** Select a paragraph of an answer to ask about it in a side thread that inherits the conversation’s context and stays out of the main timeline. Bring the conclusion back into your draft when you have it.
+- **@ another session.** Type `@` to cite an earlier conversation. The agent gets a short brief and a snapshot of the transcript it can read further, and the cited session is left untouched.
 - **Comment on the diff.** Click a line number in any change, write what should be different, and the comments go back to the agent together.
-- **Race 2–4 agents.** Send one prompt to several backends or models. Each attempt runs in its own Git worktree (or a shadow repo for non-Git folders), so you can compare the file matrix side by side and adopt the winner.
-- **Hand off and roll back.** Hit a rate limit or want a second opinion? Hand an idle conversation to another backend with a structured summary, fork from any turn, or restore one of the automatic per-turn checkpoints.
-- **Preview, then open the PR.** More than 20 file types preview locally, including PDF, Office documents, Jupyter notebooks, SQLite, 3D models, and archives. Push the branch, open the GitHub PR, and check CI through `gh`.
 
 <p align="center">
   <picture>
@@ -74,11 +77,13 @@ Riffet drives the official CLIs (`claude`, `codex`, `cursor-agent`, `pi`, and [o
   </picture>
 </p>
 
-### Native on every screen, and a bot with no webhook
+### Pick it up anywhere
 
 - **macOS**. A native app that bundles the server runtime, so it opens ready to work with no pairing, stays in the menu bar, and takes a quick prompt from anywhere with `⌃⌥Space`.
 - **iPhone** and **Android**. Scan a QR code to pair, switch between servers, answer permission prompts, read diffs, browse remote directories, or open a touch terminal.
 - **Feishu / Lark bot.** It connects outbound from your server over WebSocket, so it needs no public IP, domain, or tunnel. Start or continue a project conversation in a DM or a group topic, watch progress cards update, and approve actions in the chat.
+- **Your terminal.** Continue a session you started in the terminal inside Riffet, or run `riffet resume` to take one back. Only one side writes at a time, so the transcript never interleaves.
+- **Quick chat.** Ask a question that belongs to no project, with web search and attachments.
 
 <p align="center">
   <picture>
@@ -96,17 +101,18 @@ Riffet drives the official CLIs (`claude`, `codex`, `cursor-agent`, `pi`, and [o
   </picture>
 </p>
 
-### Stay in the turn
+### Rewind, branch, and ship
 
-- **Steer a running turn.** Add an instruction to Claude Code, Codex, Cursor, or TRAE CLI while it works, without `Ctrl+C` and without losing the tool calls already done. Or queue it for the next turn.
-- **Side chats.** Select a paragraph of an answer to ask about it in a side thread that inherits the conversation’s context and stays out of the main timeline. Bring the conclusion back into your draft when you have it.
-- **Quick chat and bookmarks.** Ask a question that belongs to no project, with web search and attachments. Highlight passages and bookmark images or files; each keeps its own snapshot and outlives the session it came from.
+- **Checkpoints and forks.** Every turn leaves an automatic checkpoint. Restore one, or fork the conversation from any turn.
+- **Parallel attempts.** Send one prompt to 2–4 agents or models. Each attempt runs in its own Git worktree (or a shadow repo for non-Git folders), so you can compare the file matrix side by side and adopt the winner.
+- **Hand off.** Hit a rate limit or want a second opinion? Hand an idle conversation to another agent with a structured summary.
+- **Open the PR.** Push the branch, open the GitHub PR, and check CI through `gh`.
 
 ### Your phone as a tool *(Android preview)*
 
 An agent on your server can read the screen of a paired Android phone, tap and type on it, send you a notification, or schedule a one-shot wake-up of its own conversation (“check the deployment again in 20 minutes”). Two switches gate this: a per-session toggle, and a biometric opt-in on the phone.
 
-## How it fits together
+## What it leaves alone
 
 <p align="center">
   <picture>
@@ -116,23 +122,11 @@ An agent on your server can read the screen of a paired Android phone, tap and t
   </picture>
 </p>
 
-Clients hold no agent and no code. Loopback is the default; reach the server from other devices over your LAN, a VPN, or an HTTPS proxy.
+- **Your agents.** Riffet has no agent or model of its own. It drives the official CLIs and reads their native session stores in place, so their logins, rules, skills, MCP servers, and subscriptions keep working.
+- **Your editor.** Keep editing in your own IDE. Riffet is where you read, review, and steer.
+- **Your server.** It runs where you put it, your Mac or a remote box. No account and no relay: clients connect to it directly and hold no agent and no code. Loopback is the default; reach it from other devices over your LAN, a VPN, or an HTTPS proxy.
 
----
-
-## Agent Matrix
-
-| Agent | CLI | Structured Chat | Live TUI | Mid-Turn Steer | Subagent View | Riffet MCP & Wakeups | Per-Chat MCP / Skill Toggle |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **Cursor** | `cursor-agent` | ✓ | ✓ (`tmux`) | ✓ | ✓ | — | — |
-| **Claude Code** | `claude` | ✓ | ✓ (`tmux`) | ✓ | ✓ | ✓ | MCP + Skills |
-| **Codex** | `codex` | ✓ | ✓ (`--remote`) | ✓ | ✓ | ✓ | MCP |
-| **DeepSeek Harness** | `dsh` (`0.2.0-rc.2+`) | ✓ | — | — | ✓ | — | — |
-| **Factory Droid** | `droid` | ✓ | — | — | ✓ | ✓ | — |
-| **TRAE CLI** | `traex` | ✓ | ✓ (native) | ✓ | ✓ | ✓ | MCP |
-| **pi** | `pi` (`1.4.0+`) | ✓ | — | — | — | ✓ | — |
-
-> Override any CLI path via `RIFFET_CLI`, `CLAUDE_CLI`, `CODEX_CLI`, `DROID_CLI`, `TRAEX_CLI`, `PI_CLI`, or per-profile settings under **Settings → Models**. Need another provider, custom view, or theme? Build an isolated package with [`@riffet/plugin-api`](docs/PLUGINS.md).
+It works today with Claude Code, Codex, Cursor, TRAE CLI, Factory Droid, DeepSeek Harness, and pi, and more are being added. See [what each supports](#agent-matrix).
 
 ---
 
@@ -142,7 +136,7 @@ Clients hold no agent and no code. Loopback is the default; reach the server fro
 
 - **macOS or Linux** with **Node.js `>= 24.19.0`** (`pnpm` is also required when building from source).
 - **`tmux >= 3.2`** (needed for Cursor / Claude Code sessions and live terminal views).
-- At least one supported agent CLI installed and signed in on the host machine.
+- At least one [supported agent CLI](#agent-matrix) installed and signed in on the host machine.
 
 ### 1. Install Riffet
 
@@ -208,6 +202,22 @@ riffet plugin --help   # develop, pack, install, and diagnose plugins
 Defaults: `http://127.0.0.1:4337/`, default backend `cursor-agent`, private state directory `~/.local/share/riffet` (`0700` dir / `0600` secrets), token-free on loopback. Override with `--port`, `--host`, `--cli`, `--state-dir`, `--workspace`, or `--allow-host` (`--port`, `--host`, `--cli`, and `--state-dir` also read `RIFFET_PORT`, `RIFFET_HOST`, `RIFFET_CLI`, and `RIFFET_STATE_DIR`).
 
 </details>
+
+---
+
+## Agent Matrix
+
+| Agent | CLI | Structured Chat | Live TUI | Mid-Turn Steer | Subagent View | Riffet MCP & Wakeups | Per-Chat MCP / Skill Toggle | @ Session | Terminal Import / Resume |
+| :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| **Cursor** | `cursor-agent` | ✓ | ✓ (`tmux`) | ✓ | ✓ | — | — | — | — |
+| **Claude Code** | `claude` | ✓ | ✓ (`tmux`) | ✓ | ✓ | ✓ | MCP + Skills | ✓ | ✓ |
+| **Codex** | `codex` | ✓ | ✓ (`--remote`) | ✓ | ✓ | ✓ | MCP | ✓ | ✓ |
+| **DeepSeek Harness** | `dsh` (`0.2.0-rc.2+`) | ✓ | — | — | ✓ | — | — | — | — |
+| **Factory Droid** | `droid` | ✓ | — | — | ✓ | ✓ | — | — | — |
+| **TRAE CLI** | `traex` | ✓ | ✓ (native) | ✓ | ✓ | ✓ | MCP | — | — |
+| **pi** | `pi` (`1.4.0+`) | ✓ | — | — | — | ✓ | — | — | — |
+
+> Override any CLI path via `RIFFET_CLI`, `CLAUDE_CLI`, `CODEX_CLI`, `DROID_CLI`, `TRAEX_CLI`, `PI_CLI`, or per-profile settings under **Settings → Models**. Need another provider, custom view, or theme? Build an isolated package with [`@riffet/plugin-api`](docs/PLUGINS.md).
 
 ---
 
