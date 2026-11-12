@@ -6,7 +6,10 @@ import remarkMath from 'remark-math';
 import remarkCjkFriendly from 'remark-cjk-friendly';
 import remarkCjkFriendlyGfmStrikethrough from 'remark-cjk-friendly-gfm-strikethrough';
 import rehypeKatex from 'rehype-katex';
+import rehypeRaw from 'rehype-raw';
+import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import katex from 'katex';
+import { randomUUID } from 'node:crypto';
 import { DOMParser, type Node as XmlNode, type Element as XmlElement } from '@xmldom/xmldom';
 import type { OfficeContentNode, SupportedFileType } from 'officeparser';
 import { escapeHtml } from './document.js';
@@ -16,27 +19,128 @@ import type { PreviewFragment, PreviewParseInput } from './parse.js';
 
 const mathOptions = { trust: false, strict: 'ignore' as const, throwOnError: false, maxExpand: 1000, maxSize: 20 };
 const imageUrl = (value: string): boolean => /^data:image\/(?:png|jpeg|gif|webp|avif|svg\+xml);base64,[A-Za-z0-9+/=\s]+$/i.test(value);
-const localImageUrl = (value: string): boolean => value.length > 0 && !/^[a-z][a-z0-9+.-]*:/i.test(value) && !/^[\\/]{2}/.test(value);
-const markdownImageUrl = (value: string): boolean => imageUrl(value) || localImageUrl(value);
+const attachmentImageUrl = (value: string): boolean => /^attachment:[a-f0-9-]{36}$/i.test(value);
+const localImageUrl = (value: string): boolean => value.length > 0 && !/^[a-z][a-z0-9+.-]*:/i.test(value)
+  && !/^[\\/]{2}/.test(value) && !/^[#?]/.test(value);
+const markdownImageUrl = (value: string): boolean => imageUrl(value) || attachmentImageUrl(value) || localImageUrl(value);
+const imageToken = (value: string): boolean => /^riffet-preview-image-[a-f0-9]{32}$/.test(value);
+type Root = Parameters<ReturnType<typeof rehypeRaw>>[0];
+type Element = Extract<Root['children'][number], { type: 'element' }>;
+type Child = Root['children'][number];
+type ImageReference = NonNullable<PreviewFragment['images']>[number];
 
-/** ReactMarkdown quotes source HTML by default; do not add rehype-raw. Keep local image paths
- * for the caller's scope-checked embedding pass; remote sources never reach the output. */
-function markdownHtml(source: string): string {
+// Start with GitHub's schema. Source HTML cannot supply styles, scripts or executable attributes;
+// KaTeX runs only after the untrusted tree has been cleaned.
+const markdownSchema = {
+  ...defaultSchema,
+  attributes: {
+    ...defaultSchema.attributes,
+    '*': ['align', 'alt', 'height', 'width', 'media', 'id', 'title', 'open', 'colSpan', 'rowSpan', 'start', 'lang'],
+    code: [...(defaultSchema.attributes?.code ?? []), ['className', 'math-inline', 'math-display']],
+    img: [...(defaultSchema.attributes?.img ?? []), 'srcSet'],
+  },
+  protocols: { ...defaultSchema.protocols, src: [...(defaultSchema.protocols?.src ?? []), 'data', 'attachment'] },
+  strip: [...(defaultSchema.strip ?? []), 'style', 'iframe', 'object', 'embed', 'form', 'textarea', 'button', 'select', 'template', 'meta', 'link', 'base'],
+};
+
+/** srcset URLs end at whitespace, including when a data URL contains commas. */
+function imageCandidates(value: unknown): { url: string; descriptor: string }[] {
+  if (typeof value !== 'string') return [];
+  const candidates: { url: string; descriptor: string }[] = [];
+  let index = 0;
+  while (index < value.length && candidates.length < 16) {
+    while (index < value.length && /[\s,]/.test(value[index]!)) index++;
+    if (index >= value.length) break;
+    let end = index;
+    while (end < value.length && !/\s/.test(value[end]!)) end++;
+    const word = value.slice(index, end);
+    let url = word.replace(/,+$/, '');
+    let descriptor = '';
+    if (word === url) {
+      const comma = value.indexOf(',', end);
+      descriptor = value.slice(end, comma < 0 ? value.length : comma).trim();
+      index = comma < 0 ? value.length : comma + 1;
+    } else index = end;
+    if (url && /^(?:[1-9]\d*w|(?:\d+(?:\.\d+)?|\.\d+)x)?$/.test(descriptor) && markdownImageUrl(url)) candidates.push({ url, descriptor });
+  }
+  return candidates;
+}
+
+/** Select the Riffet theme before embedding: the system color scheme can differ on another device. */
+function collectMarkdownImages(dark: boolean, images: ImageReference[]) {
+  return (tree: Root): void => {
+    const tokenize = (sources: string[]): string => {
+      const [source] = sources;
+      if (!source) return '';
+      if (imageUrl(source)) return source;
+      const token = `riffet-preview-image-${randomUUID().replace(/-/g, '')}`;
+      images.push({ token, sources: [...new Set(sources.filter(markdownImageUrl))] });
+      return token;
+    };
+    const walk = (parent: Root | Element): void => {
+      const next: Child[] = [];
+      for (const child of parent.children) {
+        if (child.type !== 'element') { next.push(child); continue; }
+        let element = child;
+        if (element.tagName === 'picture') {
+          const fallback = element.children.find((part): part is Element => part.type === 'element' && part.tagName === 'img');
+          if (!fallback) continue;
+          const requested = dark ? 'dark' : 'light';
+          const source = element.children.find(part => part.type === 'element' && part.tagName === 'source'
+            && /^\(\s*prefers-color-scheme\s*:\s*(dark|light)\s*\)$/i.exec(String(part.properties.media ?? ''))?.[1]?.toLowerCase() === requested);
+          const candidates = source?.type === 'element' ? imageCandidates(source.properties.srcSet) : [];
+          element = fallback;
+          if (candidates.length) element.properties.srcSet = candidates.map(item => `${item.url}${item.descriptor ? ` ${item.descriptor}` : ''}`).join(', ');
+          else delete element.properties.srcSet;
+        }
+        if (element.tagName === 'source') continue;
+        if (element.tagName === 'a' && typeof element.properties.href === 'string' && element.properties.href.startsWith('#')) {
+          // The sanitizer prefixes IDs twice when GFM already supplied its own prefix.
+          const target = element.properties.href.slice(1);
+          element.properties.href = `#${target.startsWith('user-content-fn') ? defaultSchema.clobberPrefix : target.startsWith('user-content-') ? '' : defaultSchema.clobberPrefix}${target}`;
+        }
+        if (element.tagName === 'img') {
+          const fallback = String(element.properties.src ?? '');
+          const candidates = imageCandidates(element.properties.srcSet);
+          delete element.properties.srcSet;
+          const sources = [...candidates.map(item => item.url), ...(markdownImageUrl(fallback) ? [fallback] : [])];
+          if (sources.length) element.properties.src = tokenize(sources);
+          else delete element.properties.src;
+        }
+        walk(element);
+        next.push(element);
+      }
+      parent.children = next;
+    };
+    walk(tree);
+  };
+}
+
+/** Parse only sanitized HTML; the parent process resolves selected local image tokens. */
+function markdownHtml(source: string, dark: boolean, images: ImageReference[]): string {
   return renderToStaticMarkup(createElement(ReactMarkdown, {
     children: source,
     remarkPlugins: [remarkGfm, remarkCjkFriendly, remarkCjkFriendlyGfmStrikethrough, remarkMath],
-    rehypePlugins: [[rehypeKatex, mathOptions]],
-    urlTransform: (url, key) => key === 'src' && markdownImageUrl(url) || url.startsWith('#') ? url : '',
+    rehypePlugins: [rehypeRaw, [rehypeSanitize, markdownSchema], () => collectMarkdownImages(dark, images), [rehypeKatex, mathOptions]],
+    urlTransform: (url, key) => key === 'src' ? (markdownImageUrl(url) || imageToken(url) ? url : '') : (url.startsWith('#') ? url : ''),
     components: {
-      img: ({ src, alt }) => src && markdownImageUrl(src) ? createElement('img', { src, alt: alt ?? '' }) : createElement('span', null, alt ?? ''),
+      img: ({ src, srcSet, alt, width, height }) => src && (markdownImageUrl(src) || imageToken(src))
+        ? createElement('img', {
+          src, ...(srcSet ? { srcSet } : {}), alt: alt ?? '', loading: 'lazy', decoding: 'async',
+          style: {
+            ...(typeof width === 'string' && /^(?:100|[1-9]?\d)%$/.test(width) ? { width } : Number(width) > 0 && Number(width) <= 4096 ? { width: Number(width) } : {}),
+            ...(Number(height) > 0 && Number(height) <= 4096 ? { height: Number(height) } : {}),
+          },
+        }) : createElement('span', null, alt ?? ''),
     },
   }));
 }
 
-export function markdownPreview({ data }: PreviewParseInput): PreviewFragment {
+export function markdownPreview({ data, theme }: PreviewParseInput): PreviewFragment {
   const text = decodePreviewText(data);
   if (text === undefined) throw new Error('无法读取 Markdown 文本编码');
-  return { body: `<main class="document">${markdownHtml(text)}</main>` };
+  const images: ImageReference[] = [];
+  return { body: `<main class="document">${markdownHtml(text, theme.dark, images)}</main>`, images };
 }
 
 export async function officePreview({ data, name }: PreviewParseInput): Promise<PreviewFragment> {
@@ -133,7 +237,7 @@ function notebookHtml(source: string): string {
 const textOf = (value: unknown): string => Array.isArray(value) ? value.filter(part => typeof part === 'string').join('') : typeof value === 'string' ? value : '';
 const record = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-export async function notebookPreview({ data }: PreviewParseInput): Promise<PreviewFragment> {
+export async function notebookPreview({ data, theme }: PreviewParseInput): Promise<PreviewFragment> {
   const text = decodePreviewText(data);
   if (text === undefined) throw new Error('无法读取 Notebook 文本编码');
   const notebook = record(JSON.parse(text));
@@ -141,13 +245,14 @@ export async function notebookPreview({ data }: PreviewParseInput): Promise<Prev
   let characters = 2_000_000, imageBytes = 16_000_000;
   let clipped = notebook.cells.length > 500;
   const cells: string[] = [];
+  const images: ImageReference[] = [];
   for (const raw of notebook.cells.slice(0, 500)) {
     if (characters <= 0) { clipped = true; break; }
     const cell = record(raw);
     let source = textOf(cell.source);
     if (source.length > Math.min(200_000, characters)) { source = source.slice(0, Math.min(200_000, characters)); clipped = true; }
     characters -= source.length;
-    let body = cell.cell_type === 'markdown' ? markdownHtml(source) : `<pre><code>${escapeHtml(source)}</code></pre>`;
+    let body = cell.cell_type === 'markdown' ? markdownHtml(source, theme.dark, images) : `<pre><code>${escapeHtml(source)}</code></pre>`;
     if (Array.isArray(cell.outputs)) for (const rawOutput of cell.outputs.slice(0, 100)) {
       const output = record(rawOutput);
       const mime = record(output.data);
@@ -168,7 +273,7 @@ export async function notebookPreview({ data }: PreviewParseInput): Promise<Prev
         const limited = value.slice(0, Math.min(200_000, characters));
         characters -= limited.length;
         if (value.length > limited.length) clipped = true;
-        if (limited) rendered = html ? notebookHtml(limited) : mime['text/markdown'] ? markdownHtml(limited) : `<pre>${escapeHtml(limited)}</pre>`;
+        if (limited) rendered = html ? notebookHtml(limited) : mime['text/markdown'] ? markdownHtml(limited, theme.dark, images) : `<pre>${escapeHtml(limited)}</pre>`;
         else if (mime['application/json']) {
           const size = JSON.stringify(mime['application/json']).length;
           const budget = Math.min(200_000, characters);
@@ -182,5 +287,5 @@ export async function notebookPreview({ data }: PreviewParseInput): Promise<Prev
     const execution = typeof cell.execution_count === 'number' && Number.isFinite(cell.execution_count) ? `<small>[${cell.execution_count}]</small>` : '';
     cells.push(`<section class="cell">${execution}${body}</section>`);
   }
-  return { body: `<main class="document">${cells.join('')}${clipped ? '<p class="muted">内容较多，仅显示前一部分</p>' : ''}</main>` };
+  return { body: `<main class="document">${cells.join('')}${clipped ? '<p class="muted">内容较多，仅显示前一部分</p>' : ''}</main>`, images };
 }

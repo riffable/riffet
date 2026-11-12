@@ -5,7 +5,7 @@ import { isLoopbackHost } from '../connection-addresses.js';
 import { proxiedRequest } from '../auth.js';
 import { DEFAULT_DSH_CONFIG_DIR } from '../compat.js';
 import path from 'node:path';
-import { readFileBounded } from '../workspace/index.js';
+import { previewImageData, readFileBounded } from '../workspace/index.js';
 import { MAX_VISUALIZATION_BYTES, renderVisualization, VISUALIZATION_CSP } from '../visualization.js';
 import { contentDisposition } from '../workspace/download.js';
 import { renderFilePreview } from '../previews/index.js';
@@ -92,6 +92,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     if(request.query.render==='preview'&&request.query.download!=='1'){
       const data=await readFileBounded(file.path,MAX_PREVIEW_FILE_BYTES);
       const page=await renderFilePreview(data,file.name,request.query,async source=>{
+        if(/^attachment:[a-f0-9-]{36}$/i.test(source))return previewImageData((await workspace.readAttachment(source.slice('attachment:'.length))).data);
         const relative=decodeURIComponent(source.split(/[?#]/,1)[0]!);
         return workspace.readPreviewImage(store.getProject(request.params.id),path.resolve(path.dirname(file.path),relative),{allowOutside:allowOutsideRead(request.headers)});
       });
@@ -135,7 +136,10 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
   app.get<{Params:{id:string};Querystring:{render?:string} & PreviewQuery}>('/api/attachments/:id',async(request,reply)=>{
     const {attachment,data}=await workspace.readAttachment(request.params.id);
     if(request.query.render==='preview'){
-      const page=await renderFilePreview(data,attachment.name,request.query);
+      const page=await renderFilePreview(data,attachment.name,request.query,async source=>{
+        if(!/^attachment:[a-f0-9-]{36}$/i.test(source))throw new AppError('INVALID_PATH','Attachment image references require an attachment id',400);
+        return previewImageData((await workspace.readAttachment(source.slice('attachment:'.length))).data);
+      });
       return reply.type('text/html; charset=utf-8').header('Content-Security-Policy',page.csp)
         .header('Referrer-Policy','no-referrer').header('X-Content-Type-Options','nosniff').header('Cache-Control','no-store').send(page.html);
     }

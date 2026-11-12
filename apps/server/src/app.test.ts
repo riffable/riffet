@@ -598,6 +598,31 @@ describe('app route surface after ACP removal', () => {
     const attachment = (await call('POST', `/api/projects/${project.id}/attachments`, { name: 'data.csv', mimeType: 'text/csv', dataBase64: data.toString('base64') })).json();
     expect((await call('GET', `/api/attachments/${attachment.id}?render=preview`)).headers['content-type']).toContain('text/html');
     expect((await call('GET', `/api/attachments/${attachment.id}`)).rawPayload).toEqual(data);
+    await mkdir(join(projectDir, 'docs'));
+    const light = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>light-only</text></svg>');
+    const dark = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>dark-only</text></svg>');
+    await writeFile(join(projectDir, 'docs', 'light.svg'), light);
+    await writeFile(join(projectDir, 'docs', 'dark.svg'), dark);
+    await writeFile(join(projectDir, 'docs', 'README.md'), `<picture><source media="(prefers-color-scheme: dark)" srcset="dark.svg"><source media="(prefers-color-scheme: light)" srcset="light.svg"><img src="light.svg" alt="Logo" width="100%"></picture>\n\n![denied](${join(stateDir, 'access-token')})\n\n<script>parent.fetch('/api/auth/status')</script><iframe src="/api/auth/status"></iframe>`);
+    for (const [scheme, selected, excluded] of [['dark', dark, light], ['light', light, dark]] as const) {
+      const page = await call('GET', `/api/projects/${project.id}/file/raw?path=docs%2FREADME.md&render=preview&scheme=${scheme}`);
+      expect(page.statusCode, page.body).toBe(200);
+      expect(page.body).toContain(`data:image/svg+xml;base64,${selected.toString('base64')}`);
+      expect(page.body).not.toContain(excluded.toString('base64'));
+      expect(page.body).not.toContain('<picture');
+      expect(page.body).not.toContain('srcSet=');
+      expect(page.body).not.toContain('docs/dark.svg');
+      expect(page.body).not.toContain(join(stateDir, 'access-token'));
+      expect(page.body).not.toContain('parent.fetch');
+      expect(page.body).not.toContain('<iframe');
+      expect(page.body).toContain('alt="denied"');
+    }
+    const imageAttachment = (await call('POST', `/api/projects/${project.id}/attachments`, { name: 'dark.svg', mimeType: 'image/svg+xml', dataBase64: dark.toString('base64') })).json();
+    const markdownAttachment = (await call('POST', `/api/projects/${project.id}/attachments`, { name: 'note.md', mimeType: 'text/markdown', dataBase64: Buffer.from(`![attached](attachment:${imageAttachment.id}) ![unscoped](light.svg)`).toString('base64') })).json();
+    const attachedPreview = await call('GET', `/api/attachments/${markdownAttachment.id}?render=preview`);
+    expect(attachedPreview.statusCode, attachedPreview.body).toBe(200);
+    expect(attachedPreview.body).toContain(`data:image/svg+xml;base64,${dark.toString('base64')}`);
+    expect(attachedPreview.body).not.toContain('light.svg');
     const { DatabaseSync } = await import('node:sqlite');
     const databasePath = join(projectDir, 'readonly.db');
     const database = new DatabaseSync(databasePath);

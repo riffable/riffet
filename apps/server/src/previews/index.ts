@@ -11,7 +11,7 @@ import { contentPreviewPage } from './content.js';
 import { escapeHtml, inlineScript, previewDocument, previewTheme, scriptHash, scriptJson, type PreviewTheme, type PreviewQuery } from './document.js';
 import { decodePreviewText, diagramLanguage, extensionOf, MAX_PREVIEW_FILE_BYTES, previewKind, type PreviewKind } from './formats.js';
 
-type Parsed = { body: string; styles?: string; scripts?: string[] };
+type Parsed = { body: string; styles?: string; scripts?: string[]; images?: { token: string; sources: string[] }[] };
 type Input = { data: Uint8Array; name: string; kind: PreviewKind; theme: PreviewTheme; databasePath?: string };
 const MAX_CONCURRENT = 2, MAX_QUEUED = 8;
 let active = 0;
@@ -62,6 +62,8 @@ const mediaMime: Record<string, string> = { mp4: 'video/mp4', m4v: 'video/mp4', 
 
 type Page = { html: string; csp: string };
 type Resource = (path: string) => Promise<{ mimeType: string; data: Buffer }>;
+const MAX_EMBEDDED_IMAGE_BYTES = 16 * 1024 * 1024;
+const MAX_EMBEDDED_IMAGES = 24;
 const pages = new Map<string, { page: Page; bytes: number; at: number }>();
 const pending = new Map<string, Promise<Page>>();
 let cachedBytes = 0;
@@ -129,18 +131,29 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
     return previewDocument(`<main><pre>${escapeHtml(text.slice(0, 512 * 1024))}</pre>${text.length > 512 * 1024 ? '<small>仅显示前 512 KB</small>' : ''}</main>`, theme, [], '', name);
   }
   const result = await parse({ data, name, kind, theme });
-  if (resource && (kind === 'markdown' || kind === 'notebook')) {
+  if (kind === 'markdown' || kind === 'notebook') {
     let bytes = 0, count = 0;
-    const sources = [...new Set([...result.body.matchAll(/<img\b[^>]*\bsrc="([^"<>]+)"/gi)].map(match => match[1]!))];
-    for (const source of sources) {
-      if (count >= 24 || bytes >= 12 * 1024 * 1024 || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(source)) continue;
-      try {
-        const file = await resource(source.replace(/&amp;/g, '&'));
-        if (file.data.length + bytes > 12 * 1024 * 1024) continue;
-        bytes += file.data.length; count++;
-        result.body = result.body.split(`src="${source}"`).join(`src="data:${file.mimeType};base64,${file.data.toString('base64')}"`);
-      } catch { /* A missing or scope-denied image remains a reference; it never gains filesystem access. */ }
+    const loaded = new Map<string, string | undefined>();
+    const embeddedByToken = new Map<string, string>();
+    for (const image of result.images ?? []) {
+      let embedded: string | undefined;
+      if (resource) for (const source of image.sources) {
+        if (!source || /^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(source) && !/^attachment:[a-f0-9-]{36}$/i.test(source)) continue;
+        if (loaded.has(source)) { embedded = loaded.get(source); if (embedded) break; continue; }
+        if (count >= MAX_EMBEDDED_IMAGES || bytes >= MAX_EMBEDDED_IMAGE_BYTES) break;
+        try {
+          const file = await resource(source);
+          if (file.data.length + bytes > MAX_EMBEDDED_IMAGE_BYTES) { loaded.set(source, undefined); continue; }
+          embedded = `data:${file.mimeType};base64,${file.data.toString('base64')}`;
+          loaded.set(source, embedded); bytes += file.data.length; count++;
+          break;
+        } catch { loaded.set(source, undefined); }
+      }
+      // The generated document has no network access. An empty data URL also removes the
+      // original path from failed or scope-denied images without making another request.
+      embeddedByToken.set(image.token, embedded ?? 'data:,');
     }
+    result.body = result.body.replace(/riffet-preview-image-[a-f0-9]{32}/g, token => embeddedByToken.get(token) ?? 'data:,');
   }
   const scripts = [...(result.scripts ?? [])];
   if (kind === 'markdown' || kind === 'notebook') {
@@ -152,5 +165,7 @@ async function renderUncached(data: Buffer, name: string, query: PreviewQuery = 
     }
   }
   const styles = (result.body.includes('class="katex') ? await mathStyles() : '') + (result.styles ?? '');
-  return previewDocument(result.body, theme, scripts, styles, name);
+  const page = previewDocument(result.body, theme, scripts, styles, name);
+  if (Buffer.byteLength(page.html) > MAX_PREVIEW_FILE_BYTES) throw new AppError('PREVIEW_TOO_LARGE', 'Rendered preview exceeds the 32 MB limit; download the original file', 413, undefined, { limit: '32 MB' });
+  return page;
 }

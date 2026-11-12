@@ -1,7 +1,13 @@
 import type { PreviewTheme } from './document.js';
 import { MAX_PREVIEW_FILE_BYTES, type PreviewKind } from './formats.js';
 
-export interface PreviewFragment { body: string; styles?: string; scripts?: string[] }
+export interface PreviewFragment {
+  body: string;
+  styles?: string;
+  scripts?: string[];
+  /** Image paths are resolved by the parent process, never by the parser worker. */
+  images?: { token: string; sources: string[] }[];
+}
 export interface PreviewParseInput { data: Uint8Array; name: string; kind: PreviewKind; theme: PreviewTheme }
 
 /** Runs only inside the preview worker. Resource limits and the document/CSP envelope belong to

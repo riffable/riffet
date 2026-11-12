@@ -16,7 +16,7 @@ import { escapeHtml } from '../previews/document.js';
 import { renderFilePreview } from '../previews/index.js';
 import { previewKind } from '../previews/formats.js';
 import { isWithin } from '../workspace/scope.js';
-import { previewImageMimeType, readFileBounded } from '../workspace/index.js';
+import { previewImageData, previewImageMimeType, readFileBounded } from '../workspace/index.js';
 import { MAX_VISUALIZATION_BYTES } from '../visualization.js';
 import { optimizeShareImage } from './images.js';
 
@@ -203,7 +203,10 @@ export async function buildSharePackage(options: SharePackageOptions): Promise<{
       if (previewKind(attachment.name, data) && !attachment.mimeType.startsWith('image/')) {
         try {
           const previewUrl = `./previews/attachment-${digest(Buffer.concat([Buffer.from(attachment.name + '\0'), data]))}.html`;
-          await put(previewUrl.slice(2), isolatedPage(await renderFilePreview(data, attachment.name)));
+          await put(previewUrl.slice(2), isolatedPage(await renderFilePreview(data, attachment.name, { scheme: snapshot.appearance?.mode === 'dark' ? 'dark' : 'light' }, async source => {
+            if (!/^attachment:[a-f0-9-]{36}$/i.test(source)) throw new Error('Attachment image references require an attachment id');
+            return previewImageData((await workspace.readAttachment(source.slice('attachment:'.length))).data);
+          })));
           resource.previewUrl = previewUrl;
           if (previewKind(attachment.name, data) === 'html') warnings.add('HTML 预览中的脚本不会执行');
         } catch (error) {

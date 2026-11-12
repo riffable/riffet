@@ -52,6 +52,16 @@ export function previewImageMimeType(data: Buffer): string | undefined {
   return undefined;
 }
 
+/** Validate uploaded and project images by their bytes before embedding them in an isolated preview. */
+export function previewImageData(data: Buffer): { mimeType: string; data: Buffer } {
+  if (data.length > MAX_ATTACHMENT_BYTES) throw new AppError('FILE_TOO_LARGE', 'Image exceeds the preview size limit', 413);
+  const svg = data.subarray(0, 8192).toString('utf8');
+  const svgImage = !/<!DOCTYPE/i.test(svg) && /^\uFEFF?\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(svg);
+  const mimeType = previewImageMimeType(data) ?? (svgImage ? 'image/svg+xml' : undefined);
+  if (!mimeType) throw new AppError('UNSUPPORTED_IMAGE_PREVIEW', 'File is not a supported image', 415);
+  return { mimeType, data };
+}
+
 interface ListQuery { path?: string; limit?: number; cursor?: string; offset?: number; }
 interface FindQuery extends ListQuery { q?: string; }
 type Query = string | ListQuery;
@@ -470,11 +480,7 @@ export class WorkspaceService {
       if (!info.isFile()) throw new AppError('NOT_A_FILE', 'Path is not a regular file');
       data = await readFileBounded(target, MAX_ATTACHMENT_BYTES);
     }
-    const svg = data.subarray(0, 8192).toString('utf8');
-    const svgImage = !/<!DOCTYPE/i.test(svg) && /^\uFEFF?\s*(?:<\?xml[^?]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<svg(?:\s|>)/i.test(svg);
-    const mimeType = previewImageMimeType(data) ?? (svgImage ? 'image/svg+xml' : undefined);
-    if (!mimeType) throw new AppError('UNSUPPORTED_IMAGE_PREVIEW', 'File is not a supported image', 415);
-    return { mimeType, data };
+    return previewImageData(data);
   }
 
   /** A file to stream as-is, for downloading or opening in a browser tab. No size limit: it is never buffered. */

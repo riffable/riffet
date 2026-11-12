@@ -93,6 +93,20 @@ describe('share package resource freezing', () => {
     expect(await readFile(path.join(outputDir, 'index.html'), 'utf8')).toContain(`./data/session-${hash}.json`);
   });
 
+  it('keeps explicitly referenced attachment images inside exported Markdown previews', async () => {
+    const project = store.getProject(store.getSession(sessionId).projectId);
+    const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><text>attached</text></svg>');
+    const image = await workspace.upload(project, { name: 'picture.svg', mimeType: 'image/svg+xml', dataBase64: svg.toString('base64') });
+    const document = await workspace.upload(project, { name: 'note.md', mimeType: 'text/markdown', dataBase64: Buffer.from(`![picture](attachment:${image.id})`).toString('base64') });
+    const data = snapshot('answer');
+    data.events[0]!.data.attachments = [{ id: document.id, name: document.name }];
+    const { hash } = await build(data);
+    const frozen = await exported(hash);
+    const preview = await readFile(path.join(outputDir, frozen.resources[document.id]!.previewUrl!), 'utf8');
+    expect(preview).toContain(`data:image/svg+xml;base64,${svg.toString('base64')}`);
+    expect(preview).not.toContain(`attachment:${image.id}`);
+  });
+
   it('blocks symlink escapes, non-image files disguised as images, and unrelated session blobs', async () => {
     await writeFile(path.join(directory, 'outside.png'), png);
     await symlink(path.join(directory, 'outside.png'), path.join(projectDirectory, 'escape.png'));
