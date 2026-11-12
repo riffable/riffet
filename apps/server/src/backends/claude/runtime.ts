@@ -726,8 +726,10 @@ export class ClaudeSessionRuntime {
     const idleScreen = claudeComposerVisible(screen) && !CLAUDE_CODE_BUSY_PATTERN.test(screen) && !claudeViewsSubagent(screen) && !claudeFooterFocused(screen);
     const showsBackground = claudeTasksEntryShown(screen) || claudeAgentRows(screen).length > 0;
     const background = !showsBackground ? entries : [];
-    if ((!background.length && !queued) || !idleScreen || this.state.process !== 'alive' || this.state.mainTurn.kind !== 'idle' || this.pendingSend
-      || this.queuedSends.length > 0 || this.pending.size > 0 || this.status.interaction !== undefined || this.screenAttention || this.interrupting || this.stopping) {
+    // Nothing of the conversation is in motion: what the screen showed can be held against the records.
+    const settled = () => this.state.process === 'alive' && this.state.mainTurn.kind === 'idle' && !this.pendingSend
+      && this.queuedSends.length === 0 && this.pending.size === 0 && this.status.interaction === undefined && !this.screenAttention && !this.interrupting && !this.stopping;
+    if ((!background.length && !queued) || !idleScreen || !settled()) {
       this.backgroundScreen = undefined;
       return;
     }
@@ -737,7 +739,8 @@ export class ClaudeSessionRuntime {
     if (seen.reads < BACKGROUND_SCREEN_MIN_READS || now - seen.since < BACKGROUND_SCREEN_SETTLE_MS) return;
     this.backgroundScreen = undefined;
     if (!await this.screenConvergenceSupported()) return;
-    if (this.state.mainTurn.kind !== 'idle' || this.pendingSend || this.queuedSends.length > 0 || this.terminalExited) return;
+    // The version probe can take a while: a stop, a dialog or a send that began meanwhile makes the screen read stale.
+    if (!settled() || this.terminalExited) return;
     if (this.state.cliQueue.length) {
       console.warn('[claude] cli queue converged from screen', { sessionId: this.session.id, entries: this.state.cliQueue.map(entry => entry.kind) });
       this.dispatchSignal({ type: 'queue', operation: 'clear' });
