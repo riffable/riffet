@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-A self-hosted workbench for coding agents. Read the work, step in, and pick it up on any screen.
+A self-hosted workbench for coding agents. Run it on any machine, open it on every screen, and shape it to fit.
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -22,68 +22,152 @@ English · [简体中文](README.zh-CN.md) · [Releases](https://github.com/riff
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.png">
-    <img alt="The Riffet web workbench showing an agent’s design answer with a rendered sequence diagram, next to the same session on iPhone" src="docs/assets/hero-light.png" width="100%">
+    <img alt="The Riffet web workbench with five sessions open as tabs, an agent’s design answer with a rendered sequence diagram, and the aside with outline, subagent, and output files, next to the same session on iPhone" src="docs/assets/hero-light.png" width="100%">
   </picture>
 </p>
 
-A riff is a short phrase one player starts and the next picks up. Riffet keeps work with a coding agent in that shape: every session is a durable workspace on your own machine that you can read, step into, and pick up later from a browser, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
+A riff is a short phrase one player starts and the next picks up. Riffet keeps work with a coding agent in that shape: every session is a durable workspace on a server you own, and you can start it, read it, step in, and pick it up later from the web, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
 
-Run `riffet` on your Mac, a dev box, or a headless Linux server. It drives the agent CLIs you already use and pay for; your code, terminals, credentials, and history stay on that machine.
+Riffet drives the agent CLIs you already use and pay for, and leaves your code, terminals, credentials, and history on that server. Apache-2.0, no account, no cloud relay, no feature paywall.
 
-A terminal tab runs one CLI in one checkout and goes out of reach when you close the laptop. Cloud agent platforms ask you to move your repositories, pay a second subscription, or give up your local tools. Riffet does neither: Apache-2.0, no cloud relay, no feature paywall.
-
-## A 40-second tour
+## A 45-second tour
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/demo-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/demo-light.gif">
-    <img alt="A walkthrough: reading a design with a rendered diagram, opening the tool calls and an inline diff, then writing a line comment on the change" src="docs/assets/demo-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tour-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/tour-light.gif">
+    <img alt="A 45-second tour: choosing an agent, parallel attempts, continuing a terminal session, the model picker, sharing and handoff, QR pairing, an Android build from a plugin, the canvas, tabs, search, a montage of themes, and the native apps" src="docs/assets/tour-light.gif" width="100%">
   </picture>
 </p>
 
-<!-- A sharper .mp4 of this walkthrough can replace the GIF: upload it into any GitHub issue or PR body and paste the https://github.com/user-attachments/assets/<uuid> URL on a line of its own. -->
+<!-- A sharper .mp4 of this tour can replace the GIF: upload it into any GitHub issue or PR body and paste the https://github.com/user-attachments/assets/<uuid> URL on a line of its own. -->
 
 ## What you get
 
-### Read the work
+### Runs anywhere, pairs in seconds
 
-- **A timeline you can read.** Consecutive tool calls fold into one line, and each edit opens as a diff. Subagents get their own transcript. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite diagrams render locally, alongside KaTeX math and syntax highlighting for 45 languages.
-- **The whole conversation as one diagram.** The canvas lays out each turn’s question, answer, commands, and written files, with forks shown alongside. *(Web)*
-- **Files open in place.** More than 20 file types preview locally, including PDF, Office documents, Jupyter notebooks, SQLite, 3D models, and archives.
-- **Highlights and bookmarks.** Highlight passages and bookmark images or files; each keeps its own snapshot and outlives the session it came from.
-- **The live terminal, one click away.** Where the agent has a TUI, switch between the structured conversation and the real terminal. Close the browser or sleep the laptop and sessions keep running on the host.
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/timeline-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/timeline-light.png">
-    <img alt="A turn with its tool calls unfolded: a subagent, four file edits with line counts, and the diff of one edit inline" src="docs/assets/timeline-light.png" width="100%">
-  </picture>
-</p>
-
-### Step in
-
-- **Steer a running turn.** Add an instruction while the agent works, without `Ctrl+C` and without losing the tool calls already done. Or queue it for the next turn.
-- **Side chats.** Select a paragraph of an answer to ask about it in a side thread that inherits the conversation’s context and stays out of the main timeline. Bring the conclusion back into your draft when you have it.
-- **@ another session.** Type `@` to cite an earlier conversation. The agent gets a short brief and a snapshot of the transcript it can read further, and the cited session is left untouched.
-- **Comment on the diff.** Click a line number in any change, write what should be different, and the comments go back to the agent together.
+- **Any machine.** Run the server on your Mac, a Linux dev box, or a cloud VM, by hand or as a launchd / systemd service. It listens on loopback by default; open it to your LAN, a VPN, or an HTTPS proxy when other devices need it.
+- **A code or a QR.** `riffet pair` prints a single-use code that lasts five minutes, with a QR code. Type the code into a browser or the Mac app, or scan it with the iPhone or Android app.
+- **More than one server.** The Mac, iPhone, and Android apps keep several servers, say your laptop and a build box, and switch between them.
+- **Nothing to pair on a Mac.** The macOS app bundles the server and opens ready to work.
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/review-light.png">
-    <img alt="The diff of src/server.ts with a review comment being written on line 11" src="docs/assets/review-light.png" width="86%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pair-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/pair-light.png">
+    <img alt="Settings, Connection & Access, with a pairing dialog showing a QR code and a single-use code" src="docs/assets/pair-light.png" width="86%">
   </picture>
 </p>
 
-### Pick it up anywhere
+### Start the way you work
 
-- **macOS**. A native app that bundles the server runtime, so it opens ready to work with no pairing, stays in the menu bar, and takes a quick prompt from anywhere with `⌃⌥Space`.
-- **iPhone** and **Android**. Scan a QR code to pair, switch between servers, answer permission prompts, read diffs, browse remote directories, or open a touch terminal.
-- **Feishu / Lark bot.** It connects outbound from your server over WebSocket, so it needs no public IP, domain, or tunnel. Start or continue a project conversation in a DM or a group topic, watch progress cards update, and approve actions in the chat.
-- **Your terminal.** Continue a session you started in the terminal inside Riffet, or run `riffet resume` to take one back. Only one side writes at a time, so the transcript never interleaves.
-- **Quick chat.** Ask a question that belongs to no project, with web search and attachments.
+- **An agent per conversation.** Choose the agent and model for each conversation. Riffet drives the official CLI, so its login, rules, skills, MCP servers, and subscription keep working.
+- **Continue a terminal session.** Pick up a Claude Code or Codex session you started in the terminal, and hand it back with **Resume in terminal** or `riffet resume`. Only one side writes at a time, so the transcript never interleaves.
+- **Parallel attempts.** Send one prompt to 2–4 agents or models. Each attempt runs in its own Git worktree (a shadow repo for folders outside Git); compare the changes side by side and adopt one. *(Web, macOS)*
+- **Quick chat.** Ask something that belongs to no project, straight to a model, with web search and attachments. On the Mac it is `⌃⌥Space` away; on Android, a tile, the share sheet, or selected text. *(Web, macOS, Android)*
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/start-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/start-light.png">
+    <img alt="The new-task page for the atlas-api project with the agent menu open: Codex, Claude Code, DeepSeek Harness, Droid, pi, TRAE CLI, and Cursor, above the Shell terminal, Parallel attempts, and Continue terminal session cards" src="docs/assets/start-light.png" width="100%">
+  </picture>
+</p>
+
+### Your models
+
+- **Your providers.** Add a provider by endpoint, key, and protocol (OpenAI Chat Completions or Responses, Anthropic Messages, Google Generative AI), or install a model-source plugin. Cursor can run through your own gateway.
+- **Quota in view.** The model picker shows how much of the Codex account’s quota is left, and every conversation shows how much of its context window it has used.
+- **A model for each chore.** Set separate models for session titles, quick chat, handoff summaries, and canvas summaries.
+- **Switch within a family.** Move a conversation to another model or provider of the same family and it continues in place. Across families, hand it off.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/models-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/models-light.png">
+    <img alt="The model picker in a Claude Code conversation: Sonnet, Opus, and Haiku, with effort, a 1M context option, and fast mode" src="docs/assets/models-light.png" width="64%">
+  </picture>
+</p>
+
+### Take it with you, pass it on
+
+- **Terminal, PDF, or a link.** Resume any conversation in the terminal, export it as a PDF, or publish a read-only snapshot with an expiry through a share plugin. *(PDF and links: Web, macOS)*
+- **@ another session.** Type `@` to cite an earlier conversation. The agent gets a short brief and a snapshot of the transcript it can read further, and the cited session is left untouched. *(Claude Code, Codex)*
+- **Hand off.** Out of quota, or want a second opinion? Hand an idle conversation to another agent with a structured summary.
+- **Favorites.** Highlight passages in four colors with a note, or save a whole reply, an image, or a file. Each keeps its own snapshot and outlives the session it came from. *(Web, macOS)*
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/share-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/share-light.png">
+    <img alt="The session menu: Share session, Export as PDF, Resume session, Hand off conversation, Save as scheduled task, and Resume in terminal" src="docs/assets/share-light.png" width="60%">
+  </picture>
+</p>
+
+### Everything is a plugin
+
+The canvas and the Cursor settings are plugins themselves, built on the same [plugin API](docs/PLUGINS.md) you get. A plugin can contribute:
+
+- agent backends *(experimental)* and model sources;
+- views in the conversation, sidebar, side panel, main area, or settings *(Web, macOS)*;
+- project tasks, such as building an Android app, installing and launching it, and following its Logcat;
+- share publishers, commands, and actions such as a device-flow sign-in;
+- palettes, icon packs, fonts, and backgrounds.
+
+Plugins run in their own process. Browse the [plugin market](https://riffable.github.io/riffet/plugins/), or build one:
+
+```bash
+riffet plugin dev ./my-plugin
+riffet plugin pack ./my-plugin --out my-plugin.tgz
+riffet plugin install my-plugin.tgz
+```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/plugins-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/plugins-light.png">
+    <img alt="An Android project’s session with the Android Build plugin’s panel beside it: a finished Build APK with two compiler warnings, the 30 MB debug APK, and the Gradle log" src="docs/assets/plugins-light.png" width="100%">
+  </picture>
+</p>
+
+### Quiet by default, yours to shape
+
+- **Tabs and an aside.** Keep sessions open as tabs. The aside next to the conversation holds the plan, outline, subagents, background tasks, and output files. *(Tabs: Web, and macOS in the Riffet style)*
+- **Themes.** Twelve built-in palettes, near-neutral ink on low-chroma paper, and a theme editor for your own.
+- **Icons and interface styles.** Swap the icon pack, and choose how the app is drawn: Native, Riffet, or Line on macOS; Material 3, iOS, Expressive, Miuix, or Fluent on Android.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/looks-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/looks-light.png">
+    <img alt="The same conversation cut into vertical strips, each in a different theme: Kiln, Ink, Sepia, Catppuccin, and Celadon" src="docs/assets/looks-light.png" width="100%">
+  </picture>
+</p>
+
+### The basics, done properly
+
+- **A readable timeline.** Tool calls fold into one line, edits open as diffs, and subagents get their own transcript. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite render locally, alongside KaTeX math and highlighting for 45 languages.
+- **Files in place.** More than 20 file types preview locally, including HTML in a sandbox, PDF, Office documents, Jupyter notebooks, SQLite, and 3D models.
+- **Git.** Review changes, stage by line, commit, switch branches, pull, push, and open the PR through `gh`. Every turn leaves a checkpoint to restore or fork from, and comments on diff lines go back to the agent.
+- **Steer and side chats.** Add an instruction while the agent works, without `Ctrl+C`, or queue it for the next turn. Select part of an answer to ask about it in a side thread that stays out of the main timeline.
+- **Search and schedules.** Search session titles and content from `⌘K`. Run a prompt once or on a cron schedule, and let agents schedule their own wake-ups.
+- **Three views.** Switch a conversation between the timeline, the live terminal, and a canvas that lays out every turn with its commands and files. *(Web, macOS)*
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/canvas-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/canvas-light.png">
+    <img alt="The canvas view of a session: each turn’s prompt and answer, the files it changed, its subagent, and the commands it ran on a timeline" src="docs/assets/canvas-light.png" width="100%">
+  </picture>
+</p>
+
+### Native on every screen
+
+- **Web.** The complete workbench in any browser, with nothing to install on the client.
+- **macOS.** A native app with its own server. The menu bar shows running sessions and pending approvals; Shortcuts, widgets, and Spotlight reach into it.
+- **iPhone.** Answer permission prompts, read diffs, browse remote folders, and open a terminal.
+- **Android.** Five interface styles, a touch terminal, and quick chat from anywhere. In preview, an agent on your server can read and operate the phone, behind a per-session switch and a biometric opt-in.
+- **Feishu / Lark.** The bot connects outbound over WebSocket, so it needs no public IP, domain, or tunnel. Start or continue a project conversation in a DM or a group topic, and approve actions in the chat.
 
 <p align="center">
   <picture>
@@ -101,30 +185,11 @@ A terminal tab runs one CLI in one checkout and goes out of reach when you close
   </picture>
 </p>
 
-### Rewind, branch, and ship
-
-- **Checkpoints and forks.** Every turn leaves an automatic checkpoint. Restore one, or fork the conversation from any turn.
-- **Parallel attempts.** Send one prompt to 2–4 agents or models. Each attempt runs in its own Git worktree (or a shadow repo for non-Git folders), so you can compare the file matrix side by side and adopt the winner.
-- **Hand off.** Hit a rate limit or want a second opinion? Hand an idle conversation to another agent with a structured summary.
-- **Open the PR.** Push the branch, open the GitHub PR, and check CI through `gh`.
-
-### Your phone as a tool *(Android preview)*
-
-An agent on your server can read the screen of a paired Android phone, tap and type on it, send you a notification, or schedule a one-shot wake-up of its own conversation (“check the deployment again in 20 minutes”). Two switches gate this: a per-session toggle, and a biometric opt-in on the phone.
-
 ## What it leaves alone
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture.svg">
-    <img alt="Clients on the left (Web, macOS, iPhone, Android, and a Feishu or Lark bot) connect to a Riffet server on your own machine, which drives the agent CLIs installed there against your repositories" src="docs/assets/architecture.svg" width="100%">
-  </picture>
-</p>
-
-- **Your agents.** Riffet has no agent or model of its own. It drives the official CLIs and reads their native session stores in place, so their logins, rules, skills, MCP servers, and subscriptions keep working.
-- **Your editor.** Keep editing in your own IDE. Riffet is where you read, review, and steer.
-- **Your server.** It runs where you put it, your Mac or a remote box. No account and no relay: clients connect to it directly and hold no agent and no code. Loopback is the default; reach it from other devices over your LAN, a VPN, or an HTTPS proxy.
+- **Your agents.** Riffet has no agent or model of its own. It reads each CLI’s native session store in place.
+- **Your editor.** Keep editing in your own IDE. Riffet is where you start, read, review, and steer.
+- **Your data.** No account and no relay. Clients connect to your server directly and hold no agent and no code.
 
 It works today with Claude Code, Codex, Cursor, TRAE CLI, Factory Droid, DeepSeek Harness, and pi, and more are being added. See [what each supports](#agent-matrix).
 

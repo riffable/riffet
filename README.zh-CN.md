@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-自托管的编码 Agent 工作台：过程读得懂，中途插得上话，换块屏幕接着做。
+自托管的编码 Agent 工作台：部署在哪台机器都行，每块屏幕都能接着做，界面按你的习惯来。
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -22,23 +22,21 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/assets/hero-dark.png">
     <source media="(prefers-color-scheme: light)" srcset="docs/assets/hero-light.png">
-    <img alt="Riffet 网页工作台：Agent 给出的设计方案与渲染出的时序图，旁边是 iPhone 上的同一条会话" src="docs/assets/hero-light.png" width="100%">
+    <img alt="Riffet 网页工作台：五条会话以标签页打开，Agent 给出的设计方案与渲染出的时序图，右侧概览栏列出大纲、子 Agent 和产出文件，旁边是 iPhone 上的同一条会话" src="docs/assets/hero-light.png" width="100%">
   </picture>
 </p>
 
-Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人接下去。Riffet 让和编码 Agent 的协作保持这个样子：每条会话都是留在你自己机器上的工作区，过程读得懂，中途插得上话，之后从浏览器、macOS / iPhone / Android 原生应用或飞书（Lark）机器人接着做。
+Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人接下去。Riffet 让和编码 Agent 的协作保持这个样子：每条会话都是留在你自己服务器上的工作区，可以从网页、macOS / iPhone / Android 原生应用或飞书（Lark）机器人发起、阅读、插话，之后换块屏幕接着做。
 
-把 `riffet` 跑在你的 Mac、开发机或无界面的 Linux 服务器上。它驱动的是你已经在用、已经付费的 Agent CLI；代码、终端、登录凭证和历史都留在这台机器里。
+Riffet 驱动的是你已经在用、已经付费的 Agent CLI；代码、终端、登录凭证和历史都留在那台服务器上。Apache-2.0 开源，没有账号，不经云端中继，没有付费功能。
 
-一个终端标签页只能跑一个 CLI、守一个分支，合上电脑就够不着了；云端的 Agent 平台则要你迁走代码库、再付一份订阅，或者放弃本机配好的工具。Riffet 两样都不要：Apache-2.0 开源，不经云端中继，没有付费功能。
-
-## 40 秒看一遍
+## 45 秒看一遍
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/demo-dark.gif">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/demo-light.gif">
-    <img alt="演示：阅读带时序图的设计方案，展开工具调用和内联 Diff，再在变更上写一条行内批注" src="docs/assets/demo-light.gif" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/tour-dark.gif">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/tour-light.gif">
+    <img alt="45 秒演示：选择 Agent、并行尝试、接着终端里的会话做、模型选择器、分享与交接、扫码配对、插件里的 Android 构建、画布、标签页、搜索、一组主题的快切，以及原生应用" src="docs/assets/tour-light.gif" width="100%">
   </picture>
 </p>
 
@@ -46,44 +44,130 @@ Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人
 
 ## 能做什么
 
-### 读得懂
+### 部署在哪都行，扫码就连
+
+- **任意机器。** 服务端跑在你的 Mac、Linux 开发机或云服务器上，手动启动或注册成 launchd / systemd 服务都可以。默认只监听本机回环地址，需要时再开放给局域网、VPN 或 HTTPS 代理。
+- **配对码或二维码。** `riffet pair` 打印一个 5 分钟内有效的一次性配对码和二维码。浏览器和 Mac 应用输入配对码，iPhone 和 Android 应用扫码。
+- **不止一台服务器。** Mac、iPhone、Android 应用可以同时保存多台服务器（比如笔记本和编译机），随时切换。
+- **Mac 上不用配对。** macOS 应用内置服务端，打开就能用。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/pair-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/pair-light.png">
+    <img alt="设置里的连接与访问页，配对弹窗显示二维码和一次性配对码" src="docs/assets/pair-light.png" width="86%">
+  </picture>
+</p>
+
+### 怎么开始都行
+
+- **每条会话选一个 Agent。** 每条会话各自选择 Agent 和模型。Riffet 驱动官方 CLI，CLI 的登录、Rules、Skills、MCP 和订阅照常生效。
+- **接着终端里的会话做。** 在终端里开始的 Claude Code 或 Codex 会话可以导入 Riffet 继续，再用「在终端恢复」或 `riffet resume` 交还终端。同一时刻只有一方写入，记录不会交错。
+- **并行尝试。** 同一条需求同时发给 2–4 个 Agent 或模型，每一路跑在自己的 Git worktree 里（非 Git 目录用影子仓库），并排比较改动后采用其中一路。*（Web、macOS）*
+- **快速对话。** 不属于任何项目的问题直接问模型，支持联网搜索和附件。Mac 上按 `⌃⌥Space`，Android 上从快捷开关、分享菜单或选中的文字发起。*（Web、macOS、Android）*
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/start-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/start-light.png">
+    <img alt="atlas-api 项目的新建任务页，Agent 菜单展开：Codex、Claude Code、DeepSeek Harness、Droid、pi、TRAE CLI、Cursor，下方是 Shell 终端、并行尝试和继续终端会话三张卡片" src="docs/assets/start-light.png" width="100%">
+  </picture>
+</p>
+
+### 模型自己定
+
+- **自定义模型源。** 填入接口地址、密钥和协议（OpenAI Chat Completions 或 Responses、Anthropic Messages、Google Generative AI）即可添加，也可以安装模型源插件。Cursor 可以走你自己的网关。
+- **额度一眼可见。** 模型选择器显示 Codex 账号剩余的额度，每条会话显示上下文窗口已用多少。
+- **辅助模型分开配。** 会话标题、快速对话、交接摘要、画布摘要各自可以指定模型。
+- **同系列换模型。** 会话可以切到同一系列的另一个模型或模型源，原地接着聊；跨系列则用交接。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/models-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/models-light.png">
+    <img alt="Claude Code 会话里的模型选择器：Sonnet、Opus、Haiku，以及思考强度、1M 上下文和快速模式" src="docs/assets/models-light.png" width="64%">
+  </picture>
+</p>
+
+### 带走与交接
+
+- **终端、PDF 或链接。** 任意会话都能在终端恢复、导出为 PDF，或通过分享插件发布成带有效期的只读快照。*（PDF 与链接：Web、macOS）*
+- **@ 另一条会话。** 输入 `@` 引用之前的对话：Agent 拿到一份简短导读和可继续读取的原文快照，被引用的会话不受影响。*（Claude Code、Codex）*
+- **交接。** 额度用完或想换个模型看看时，把空闲的会话连同结构化摘要交给另一个 Agent。
+- **收藏。** 用四种颜色高亮片段并写批注，也可以收藏整条回答、图片或文件。每条收藏各自保存快照，原会话删除后仍然可读。*（Web、macOS）*
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/share-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/share-light.png">
+    <img alt="会话菜单：分享会话、导出为 PDF、恢复会话、交接会话、存为定时任务、在终端恢复" src="docs/assets/share-light.png" width="60%">
+  </picture>
+</p>
+
+### 一切皆插件
+
+画布和 Cursor 设置本身就是插件，用的是同一套[插件 API](docs/PLUGINS.md)。插件可以提供：
+
+- Agent 后端 *（实验性）* 和模型源；
+- 会话、侧栏、侧边面板、主区或设置里的视图 *（Web、macOS）*；
+- 项目任务，比如构建 Android 应用、安装启动并跟随 Logcat；
+- 分享发布、命令，以及设备码登录这类操作；
+- 配色、图标包、字体和背景。
+
+插件运行在独立进程里。可以浏览[插件市场](https://riffable.github.io/riffet/plugins/)，或者自己写一个：
+
+```bash
+riffet plugin dev ./my-plugin
+riffet plugin pack ./my-plugin --out my-plugin.tgz
+riffet plugin install my-plugin.tgz
+```
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/plugins-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/plugins-light.png">
+    <img alt="Android 项目的会话，旁边是 Android 构建插件的面板：一次完成的 Build APK，两条编译警告、30 MB 的 debug APK 和 Gradle 日志" src="docs/assets/plugins-light.png" width="100%">
+  </picture>
+</p>
+
+### 克制，也由你来定
+
+- **标签页与侧栏。** 会话可以作为标签页常开。对话旁的概览栏放着计划、大纲、子 Agent、后台任务和产出文件。*（标签页：Web，以及 macOS 的 Riffet 风格）*
+- **主题。** 内置 12 套配色，接近无彩的墨色配低色度的纸；也可以用主题编辑器做自己的。
+- **图标与界面风格。** 可以换图标包，也可以换整套界面画法：macOS 有原生、Riffet、线条三种，Android 有 Material 3、iOS、Expressive、Miuix、Fluent 五种。
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/looks-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/looks-light.png">
+    <img alt="同一条对话切成几条竖条，每条一种主题：Kiln、Ink、Sepia、Catppuccin、Celadon" src="docs/assets/looks-light.png" width="100%">
+  </picture>
+</p>
+
+### 基本功扎实
 
 - **能读的时间线。** 连续的工具调用折叠成一行，每次修改都能展开成 Diff，子 Agent 有独立的转录页。Mermaid、D2、Graphviz、PlantUML、Vega-Lite 图表在本地渲染，另有 KaTeX 公式和 45 种语言的语法高亮。
-- **整条会话一张图。** 画布把每一轮的提问、回答、执行的命令和写入的文件排在一起，分叉并列显示。*（Web）*
-- **文件就地打开。** 20 多种文件格式在本地预览，包括 PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型和压缩包。
-- **高亮与收藏。** 高亮片段、收藏图片或文件都各自保存快照，原会话删除后仍然可读。
-- **随时切回真终端。** 后端带 TUI 时，可以在结构化对话和背后的终端之间切换。关掉网页或合上笔记本，会话在主机上继续运行。
+- **文件就地打开。** 20 多种文件格式在本地预览，包括沙箱里的 HTML、PDF、Office 文档、Jupyter Notebook、SQLite 和 3D 模型。
+- **Git。** 查看变更、按行暂存、提交、切换分支、拉取推送，通过 `gh` 提 PR。每一轮自动建立检查点，可以恢复或从任意回合分叉；在 Diff 行上写的批注会一并发回给 Agent。
+- **插话与侧边聊天。** Agent 正在执行时直接补充要求，不用 `Ctrl+C`，也可以排到下一轮。选中回答里的一段，在侧边线程里追问，不进主时间线。
+- **搜索与定时任务。** 用 `⌘K` 搜索会话标题和内容。提示词可以只跑一次或按 cron 定时运行，Agent 也能给自己定唤醒。
+- **三种视角。** 同一条会话可以在时间线、实时终端和画布之间切换；画布把每一轮连同执行的命令和写入的文件排在一张图上。*（Web、macOS）*
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/timeline-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/timeline-light.png">
-    <img alt="展开工具调用的一个回合：一个子 Agent、四次文件修改及行数，其中一次修改的 Diff 直接显示在对话里" src="docs/assets/timeline-light.png" width="100%">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/canvas-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/canvas-light.png">
+    <img alt="会话的画布视角：每一轮的提问和回答、改动的文件、子 Agent，以及按时间排开的命令" src="docs/assets/canvas-light.png" width="100%">
   </picture>
 </p>
 
-### 插得上话
+### 每块屏幕都是原生
 
-- **运行中引导。** Agent 正在执行时可以直接补充要求，不用 `Ctrl+C`，已完成的工具调用也不会丢；也可以排到下一轮。
-- **侧边聊天。** 选中回答里的一段，在侧边线程里追问。它带着这条会话的上下文，但不进主时间线；有结论后再带回输入框。
-- **@ 另一条会话。** 输入 `@` 引用之前的对话：Agent 拿到一份简短导读和可继续读取的原文快照，被引用的会话不受影响。
-- **对着 Diff 写批注。** 在任意变更里点行号，写下要改的地方，批注会一并发回给 Agent。
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/review-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/review-light.png">
-    <img alt="src/server.ts 的 Diff，第 11 行上正在写一条审阅批注" src="docs/assets/review-light.png" width="86%">
-  </picture>
-</p>
-
-### 换块屏幕接着做
-
-- **macOS**：原生应用，内置服务端运行时，打开即可使用、无需配对；常驻菜单栏，`⌃⌥Space` 在任何地方发起快速提问。
-- **iPhone** 与 **Android**：扫码配对，可在多台服务器间切换；批权限、看 Diff、浏览远端目录，或打开触控终端。
-- **飞书 / Lark 机器人**：由服务端主动建立出站 WebSocket 连接，不需要公网 IP、域名或内网穿透。在私聊或群话题里新建、续聊项目会话，进度卡片实时更新，审批直接在聊天里点。
-- **终端**：在终端里开始的会话可以导入 Riffet 继续，`riffet resume` 再把它交还终端。同一时刻只有一方写入，记录不会交错。
-- **快速对话**：不属于任何项目的问题可以直接问，支持联网搜索和附件。
+- **Web**：完整的工作台，客户端不用安装任何东西。
+- **macOS**：原生应用，自带服务端。菜单栏列出运行中的会话和待批的权限请求，快捷指令、小组件和聚焦搜索都能直达。
+- **iPhone**：批权限、看 Diff、浏览远端目录、打开终端。
+- **Android**：五种界面风格、触控终端，随处发起快速对话。预览功能里，服务器上的 Agent 可以读取并操作这台手机，需要会话开关和手机上的生物识别确认同时打开。
+- **飞书 / Lark 机器人**：由服务端主动建立出站 WebSocket 连接，不需要公网 IP、域名或内网穿透。在私聊或群话题里新建、续聊项目会话，审批直接在聊天里点。
 
 <p align="center">
   <picture>
@@ -101,30 +185,11 @@ Riff 是乐手之间来回接的一小段乐句：一个人起头，下一个人
   </picture>
 </p>
 
-### 回退、分叉、发布
-
-- **检查点与分叉。** 每一轮自动建立检查点，可以恢复到任意一个，或从任意回合分叉出新会话。
-- **并行尝试。** 同一条需求同时发给 2–4 个后端或模型，每一路跑在自己的 Git worktree 里（非 Git 目录用影子仓库），并排比较改动后采用其中一路。
-- **交接。** 额度用完或想换个模型看看时，把空闲的会话连同结构化摘要交给另一个后端。
-- **提 PR。** 推送分支、创建 GitHub PR、查看 CI 都通过本机的 `gh` 完成。
-
-### 把手机交给 Agent 用 *（Android 预览）*
-
-运行在服务器上的 Agent 可以读取已配对 Android 手机的屏幕、在上面点击和输入、给你发通知，或者给自己的会话定一次性的唤醒（“20 分钟后再检查一次部署”）。这需要两道开关同时打开：会话里的开关，以及手机上的生物识别确认。
-
 ## 它不做什么
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-dark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture.svg">
-    <img alt="左侧的客户端（Web、macOS、iPhone、Android 和飞书 / Lark 机器人）连接到运行在你自己机器上的 Riffet 服务端，由它驱动本机安装的 Agent CLI 操作你的代码仓库" src="docs/assets/architecture.svg" width="100%">
-  </picture>
-</p>
-
-- **不自带 Agent。** Riffet 没有自己的 Agent 和模型。它驱动官方 CLI，就地读取它们各自的会话存储，CLI 的登录、Rules、Skills、MCP 和订阅照常生效。
-- **不是编辑器。** 代码仍在你自己的 IDE 里改；Riffet 负责阅读、审阅和引导。
-- **不设云端。** 跑在你自己的 Mac 或远端服务器上。没有账号，不经中继，客户端直连，不运行 Agent 也不保存代码。默认只监听本机回环地址；其他设备通过局域网、VPN 或 HTTPS 代理访问。
+- **不自带 Agent。** Riffet 没有自己的 Agent 和模型，就地读取各个 CLI 自己的会话存储。
+- **不是编辑器。** 代码仍在你自己的 IDE 里改；Riffet 负责发起、阅读、审阅和引导。
+- **不碰你的数据。** 没有账号，不经中继。客户端直连你的服务器，不运行 Agent，也不保存代码。
 
 目前接入了 Claude Code、Codex、Cursor、TRAE CLI、Factory Droid、DeepSeek Harness 和 pi，还在继续增加。各自支持的能力见[后端能力矩阵](#后端能力矩阵)。
 
