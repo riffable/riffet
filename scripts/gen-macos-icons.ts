@@ -187,8 +187,15 @@ interface Glyph { w: number; h: number; parts: Part[]; mirror?: boolean }
 
 const CAP: Record<string, number> = { butt: 0, round: 1, square: 2 };
 const JOIN: Record<string, number> = { miter: 0, round: 1, bevel: 2 };
-/** Android's lucide stroke (`gen-mobile-icons.ts` STROKE). */
-const ANDROID_STROKE = 1.75;
+/**
+ * Android's default lucide stroke (`gen-mobile-icons.ts` STROKE), read from the `lucide()` default it
+ * writes into LucideIcons.generated.kt so the two generators cannot drift.
+ */
+const ANDROID_STROKE = (() => {
+  const value = /private fun lucide\([^)]*strokeWidth: Float = ([\d.]+)f/.exec(kotlinFile('LucideIcons.generated.kt'))?.[1];
+  if (!value) throw new Error('No default strokeWidth in LucideIcons.generated.kt');
+  return Number(value);
+})();
 /**
  * The web draws lucide at a constant 1.25 screen px (`icons-base.tsx` STROKE_WIDTH with
  * `non-scaling-stroke`). A symbol's stroke scales with it, so the web's line is matched at a 16pt

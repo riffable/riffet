@@ -29,7 +29,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
-private fun lucide(name: String, pathData: String, strokeWidth: Float = 1.75f, filled: Boolean = false): ImageVector =
+private fun lucide(name: String, pathData: String, strokeWidth: Float = 1.25f, filled: Boolean = false): ImageVector =
     ImageVector.Builder("Lucide$name", 24.dp, 24.dp, 24f, 24f)
         .addPath(
             pathData = addPathNodes(pathData),
@@ -403,12 +403,12 @@ internal object LucideIcons {
         )
     }
 
-    /** lucide `message-square-plus`, stroke 2.25. */
+    /** lucide `message-square-plus`, stroke 1.75. */
     val MessageSquarePlusFilled: ImageVector by lazy {
         lucide(
             "MessageSquarePlusFilled",
             "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2zM12 7v6M9 10h6",
-            strokeWidth = 2.25f,
+            strokeWidth = 1.75f,
         )
     }
 
@@ -540,12 +540,12 @@ internal object LucideIcons {
         )
     }
 
-    /** lucide `settings`, stroke 2.25. */
+    /** lucide `settings`, stroke 1.75. */
     val SettingsFilled: ImageVector by lazy {
         lucide(
             "SettingsFilled",
             "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2zM9 12A3 3 0 1 0 15 12A3 3 0 1 0 9 12Z",
-            strokeWidth = 2.25f,
+            strokeWidth = 1.75f,
         )
     }
 

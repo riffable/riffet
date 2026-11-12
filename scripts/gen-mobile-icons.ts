@@ -21,10 +21,13 @@ const outPath = resolve(process.argv.find((arg) => arg.startsWith('--out='))?.sl
 const packageName = process.argv.find((arg) => arg.startsWith('--package='))?.slice(10) ?? 'riffet.ui.icons';
 const checkOnly = process.argv.includes('--check');
 
-/** Lucide's stroke width is 2 on a 24 grid; the app draws a little lighter, to sit beside text. */
-const STROKE = 1.75;
+/**
+ * Stroke in dp, constant at every rendered size like the web (`ConstantStrokePainter` reads it as dp, so
+ * on a 24dp icon it is also the raw 24-grid width).
+ */
+const STROKE = 1.25;
 /** A selected tab: the same glyph, heavier, since lucide has no filled forms. */
-const HEAVY = 2.25;
+const HEAVY = 1.75;
 
 interface Spec {
   /** The lucide glyph, by its file name. */

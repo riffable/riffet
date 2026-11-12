@@ -3,9 +3,12 @@ package riffet.ui.icons
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -48,9 +51,19 @@ fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifi
         imageVector.name == "RiffetMenu" -> "Menu"
         else -> null // Brand and Agent marks keep their own identity.
     }
-    val resolved = key?.let { LocalIconVectors.current[it] } ?: imageVector
-    androidx.compose.material3.Icon(resolved, contentDescription, modifier, tint)
+    val pack = key?.let { LocalIconVectors.current[it] }
+    val density = LocalDensity.current.density
+    // Lucide's own strokes keep a constant dp width; a pack's replacement glyph is drawn as its author made it.
+    val fixed = remember(imageVector, density, pack != null || key == null) {
+        if (pack == null && key != null) ConstantStrokePainter.of(imageVector, density) else null
+    }
+    // One call site: switching packs swaps the painter, not the node. A VectorPainter can only be
+    // made by this composable, so it always runs; while [fixed] draws, it holds an empty vector.
+    val vectorPainter = rememberVectorPainter(if (fixed != null) BlankVector else pack ?: imageVector)
+    androidx.compose.material3.Icon(fixed ?: vectorPainter, contentDescription, modifier, tint)
 }
+
+private val BlankVector = ImageVector.Builder("Blank", 24.dp, 24.dp, 24f, 24f).build()
 
 @Composable
 fun Icon(painter: Painter, contentDescription: String?, modifier: Modifier = Modifier, tint: Color = LocalContentColor.current) =

@@ -58,7 +58,7 @@ object RiffetIcons {
     ).apply {
         path(
             stroke = SolidColor(Color.Black),
-            strokeLineWidth = 1.75f,
+            strokeLineWidth = 1.25f,
             strokeLineCap = StrokeCap.Round,
         ) {
             moveTo(3.75f, 6f)
