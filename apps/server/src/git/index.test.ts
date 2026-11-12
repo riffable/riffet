@@ -299,3 +299,70 @@ it('holds the workspace fence throughout an asynchronous restore and releases it
     release();
   } finally { await app.close(); await dispatch.close(); store.close(); }
 });
+
+it('stages, unstages and discards chosen lines, and refuses a diff that has gone stale', async () => {
+  const { root, service } = await repository();
+  await change(root, 'a\nb\nc\n');
+  // One line rewritten, and one added without a final newline.
+  await writeFile(path.join(root, 'file.txt'), 'a\nB\nc\nd');
+  const unstaged = await service.diff(root, 'file.txt');
+  await service.applyLines(root, { path: 'file.txt', action: 'stage', changes: [{ before: [1, 2], after: [1, 2] }], version: unstaged.version! });
+  expect(await exec('git', ['show', ':file.txt'], { cwd: root }).then(result => result.stdout)).toBe('a\nB\nc\n');
+  expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('a\nB\nc\nd');
+  await expect(service.applyLines(root, { path: 'file.txt', action: 'stage', changes: [{ before: [3, 3], after: [3, 4] }], version: unstaged.version! })).rejects.toMatchObject({ code: 'GIT_DIFF_STALE' });
+
+  const staged = await service.diff(root, 'file.txt', { staged: true });
+  await service.applyLines(root, { path: 'file.txt', action: 'unstage', changes: [{ before: [1, 2], after: [1, 2] }], version: staged.version! });
+  expect(await git(root, 'diff', '--cached', '--name-only')).toBe('');
+
+  // Taking back only the rewritten line keeps the added one, and the file keeps its missing final newline.
+  const again = await service.diff(root, 'file.txt');
+  const { backup } = await service.applyLines(root, { path: 'file.txt', action: 'discard', changes: [{ before: [1, 2], after: [1, 2] }], version: again.version! });
+  expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('a\nb\nc\nd');
+  await service.restoreCheckpoint(root, backup!.id, await service.checkpointChanges(root, backup!.id));
+  expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('a\nB\nc\nd');
+});
+
+it('discards files into a checkpoint that puts back only those files', async () => {
+  const { root, service } = await repository();
+  await writeFile(path.join(root, 'other.txt'), 'other\n');
+  await git(root, 'add', '.');
+  await git(root, 'commit', '-m', 'other');
+  await writeFile(path.join(root, 'file.txt'), 'edited\n');
+  await writeFile(path.join(root, 'other.txt'), 'kept\n');
+  await mkdir(path.join(root, 'new'));
+  await writeFile(path.join(root, 'new', 'draft.txt'), 'draft\n');
+
+  const { status, backup } = await service.discard(root, ['file.txt', 'new']);
+  expect(status.entries.map(entry => entry.path)).toEqual(['other.txt']);
+  expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('base\n');
+  await expect(readFile(path.join(root, 'new', 'draft.txt'))).rejects.toMatchObject({ code: 'ENOENT' });
+  expect(backup).toMatchObject({ partial: true, files: 2 });
+
+  // Work done after the discard is not the checkpoint's to touch; a file it held untracked leaves the index again.
+  await writeFile(path.join(root, 'other.txt'), 'later\n');
+  await mkdir(path.join(root, 'new'));
+  await writeFile(path.join(root, 'new', 'draft.txt'), 'again\n');
+  await git(root, 'add', 'new/draft.txt');
+  await service.restoreCheckpoint(root, backup!.id, await service.checkpointChanges(root, backup!.id));
+  expect(await readFile(path.join(root, 'file.txt'), 'utf8')).toBe('edited\n');
+  expect(await readFile(path.join(root, 'new', 'draft.txt'), 'utf8')).toBe('draft\n');
+  expect(await readFile(path.join(root, 'other.txt'), 'utf8')).toBe('later\n');
+  expect(await git(root, 'status', '--porcelain', '--', 'new')).toBe('?? new/');
+});
+
+it('answers a followed status from the last read and tells followers of a change after a write', async () => {
+  const { root, service } = await repository();
+  const seen: string[][] = [];
+  const unfollow = await service.followStatus(root, status => seen.push(status.entries.map(entry => `${entry.index}${entry.worktree} ${entry.path}`)));
+  try {
+    await vi.waitFor(() => expect(seen).toEqual([[]]));
+    expect(await service.status(root)).toBe(await service.status(root));
+    await writeFile(path.join(root, 'file.txt'), 'edited\n');
+    // Whether or not the file watcher has reported the edit yet, a fresh read sees it and followers hear of it once.
+    expect((await service.status(root, true)).entries.map(entry => entry.path)).toEqual(['file.txt']);
+    await service.stage(root, ['file.txt']);
+    await vi.waitFor(() => expect(seen.at(-1)).toEqual(['M  file.txt']));
+    expect(seen.filter(entries => entries.join() === ' M file.txt')).toHaveLength(1);
+  } finally { unfollow(); service.close(); }
+});

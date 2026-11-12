@@ -44,7 +44,12 @@ import type {
   PluginsResponse,
   PluginMarketList,
   PluginUpdate,
+  GitCommitDetail,
   GitDiff,
+  GitDiscardResult,
+  GitLineChange,
+  GitLog,
+  GitRefs,
   GitStatus,
   LaunchTarget,
   Mark,
@@ -100,6 +105,7 @@ import type {
   ThemeLibrary,
   ThemeLibraryUpdate,
   WorkbenchEvent,
+  WorktreeComparison,
   WorktreeInfo,
 } from '@contracts';
 import { API, CLIENT_FEATURES_HEADER, TERMINAL_APPEARANCE_HEADER, TERMINAL_PROTOCOL } from '@contracts';
@@ -639,8 +645,24 @@ export const api = {
   upload: (projectId: string, body: { name: string; mimeType: string; dataBase64: string; width?: number; height?: number }) => request<Attachment>(projectId ? `/api/projects/${encodeURIComponent(projectId)}/attachments` : '/api/attachments', json('POST', body)),
   attachmentMetadata: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}/metadata`),
   attachment: (id: string) => request<Attachment>(`/api/attachments/${encodeURIComponent(id)}`),
-  gitStatus: (projectId: string) => request<GitStatus>(`/api/projects/${encodeURIComponent(projectId)}/git/status`),
-  gitDiff: (projectId: string, path: string, staged = false) => request<GitDiff>(`/api/projects/${encodeURIComponent(projectId)}/git/diff?path=${encodeURIComponent(path)}&staged=${staged}`),
+  /** `fresh` reads again even when the server is following the project and knows of no change. */
+  gitStatus: (projectId: string, fresh = false) => request<GitStatus>(`/api/projects/${encodeURIComponent(projectId)}/git/status${fresh ? '?fresh=true' : ''}`),
+  /** `base` compares the working tree with `checkpoint:<id>` or a commit instead of what is staged. */
+  gitDiff: (projectId: string, path: string, options: { staged?: boolean; base?: string; commit?: string; from?: string } = {}) => request<GitDiff>(`/api/projects/${encodeURIComponent(projectId)}/git/diff?path=${encodeURIComponent(path)}&staged=${options.staged === true}${options.base ? `&base=${encodeURIComponent(options.base)}` : ''}${options.commit ? `&commit=${encodeURIComponent(options.commit)}` : ''}${options.from ? `&from=${encodeURIComponent(options.from)}` : ''}`),
+  /** A page of history, newest first; `all` walks every branch and tag. */
+  gitLog: (projectId: string, options: { all?: boolean; skip?: number } = {}) => request<GitLog>(`/api/projects/${encodeURIComponent(projectId)}/git/log?all=${options.all === true}&skip=${options.skip ?? 0}`),
+  gitCommit: (projectId: string, hash: string) => request<GitCommitDetail>(`/api/projects/${encodeURIComponent(projectId)}/git/commits/${encodeURIComponent(hash)}`),
+  gitRefs: (projectId: string) => request<GitRefs>(`/api/projects/${encodeURIComponent(projectId)}/git/refs`),
+  gitFetch: (projectId: string) => request<GitRefs>(`/api/projects/${encodeURIComponent(projectId)}/git/fetch`, json('POST')),
+  /** Fast-forward only; a branch that has diverged is refused with `GIT_PULL_DIVERGED`. */
+  gitPull: (projectId: string) => request<{ branch: BranchInfo; status: GitStatus }>(`/api/projects/${encodeURIComponent(projectId)}/git/pull`, json('POST')),
+  /** `remote` (as in `origin/topic`) checks out a local branch tracking it; `create` cuts a new one from `base` or the current commit. */
+  gitSwitch: (projectId: string, body: { branch?: string; create?: boolean; base?: string; remote?: string }) => request<GitRefs>(`/api/projects/${encodeURIComponent(projectId)}/git/switch`, json('POST', body)),
+  /** What the branch changed since it left the main line. */
+  gitCompare: (projectId: string) => request<WorktreeComparison>(`/api/projects/${encodeURIComponent(projectId)}/git/compare`),
+  /** `permanent` accepts that a file too large to save first cannot be brought back. */
+  gitDiscard: (projectId: string, paths: string[], permanent = false) => request<GitDiscardResult>(`/api/projects/${encodeURIComponent(projectId)}/git/discard`, json('POST', { paths, ...(permanent ? { permanent } : {}) })),
+  gitLines: (projectId: string, body: { path: string; action: 'stage' | 'unstage' | 'discard'; changes: GitLineChange[]; version: string; base?: string }) => request<GitDiscardResult>(`/api/projects/${encodeURIComponent(projectId)}/git/lines`, json('POST', body)),
   stage: (projectId: string, paths: string[]) => request<void>(`/api/projects/${encodeURIComponent(projectId)}/git/stage`, json('POST', { paths })),
   unstage: (projectId: string, paths: string[]) => request<void>(`/api/projects/${encodeURIComponent(projectId)}/git/unstage`, json('POST', { paths })),
   commit: (projectId: string, message: string) => request<unknown>(`/api/projects/${encodeURIComponent(projectId)}/git/commit`, json('POST', { message })),
@@ -902,6 +924,11 @@ export function statsStreamUrl(): string {
 
 export function listsStreamUrl(): string {
   return withClientFeatures('/api/lists/stream');
+}
+
+/** The project's Git status as a stream: one `status` event now and one each time it changes. */
+export function gitStatusStreamUrl(projectId: string): string {
+  return withClientFeatures(`/api/projects/${encodeURIComponent(projectId)}/git/stream`);
 }
 
 export function terminalSocketUrl(id: string): string {

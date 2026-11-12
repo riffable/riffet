@@ -7,8 +7,9 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
   const maxBytes = options.maxOutputBytes ?? 8 * 1024 * 1024;
   const timeoutMs = options.timeoutMs ?? 15_000;
   return new Promise(resolve => {
-    let stdout = Buffer.alloc(0);
-    let stderr = Buffer.alloc(0);
+    // Chunks are joined once at the end: joining on every chunk copies all of the output so far each time, which turns megabytes of output into seconds.
+    const stdoutChunks: Buffer[] = [];
+    const stderrChunks: Buffer[] = [];
     let kept = 0;
     let timedOut = false;
     let truncated = false;
@@ -29,8 +30,7 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
     const append = (target: 'stdout' | 'stderr', chunk: Buffer) => {
       const remaining = Math.max(0, maxBytes - kept);
       const part = chunk.subarray(0, remaining);
-      if (target === 'stdout') stdout = Buffer.concat([stdout, part]);
-      else stderr = Buffer.concat([stderr, part]);
+      if (part.length) (target === 'stdout' ? stdoutChunks : stderrChunks).push(part);
       kept += part.length;
       if (chunk.length > part.length) {
         truncated = true;
@@ -45,7 +45,8 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
       settled = true;
       if (timer) clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
-      const errorData = Buffer.from([stderr.toString('utf8'), error.message].filter(Boolean).join('\n'));
+      const stdout = Buffer.concat(stdoutChunks);
+      const errorData = Buffer.from([Buffer.concat(stderrChunks).toString('utf8'), error.message].filter(Boolean).join('\n'));
       resolve({ code: null, stdout: stdout.toString('utf8'), stderr: errorData.toString('utf8'), stdoutData: stdout, stderrData: errorData, timedOut, truncated });
     });
     child.on('close', code => {
@@ -53,6 +54,7 @@ export function runProcess(file: string, args: string[], options: ProcessOptions
       settled = true;
       if (timer) clearTimeout(timer);
       if (killTimer) clearTimeout(killTimer);
+      const stdout = Buffer.concat(stdoutChunks), stderr = Buffer.concat(stderrChunks);
       resolve({ code, stdout: stdout.toString('utf8'), stderr: stderr.toString('utf8'), stdoutData: stdout, stderrData: stderr, timedOut, truncated });
     });
     timer = setTimeout(() => {

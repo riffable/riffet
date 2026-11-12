@@ -9,7 +9,7 @@ import {
   Paperclip, Pause, PencilLine, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, ShieldHalf, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
-  Timer, Trash2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
+  Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
 
@@ -133,6 +133,7 @@ export const IconTag = icon(Tag);
 export const IconTarget = icon(Target);
 export const IconTerminal = icon(Terminal);
 export const IconTrash2 = icon(Trash2);
+export const IconUndo2 = icon(Undo2);
 export const IconUnlock = icon(Unlock);
 export const IconUpload = icon(Upload);
 export const IconUser = icon(User);

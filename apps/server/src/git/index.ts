@@ -1,7 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { lstat, mkdir, open, readFile, readdir, readlink, realpath, rename, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { watch as watchFiles, type FSWatcher } from 'node:fs';
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, readlink, realpath, rename, rm, rmdir, stat, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { BranchInfo, Checkpoint, CheckpointChange, CheckState, GitDiff, GitEntry, GitStatus, MergeResult, PullRequestCheck, PullRequestInfo, PullRequestStatus, PushResult, WorktreeComparison, WorktreeInfo } from '../../../../packages/contracts/src/index.js';
+import type { BranchInfo, Checkpoint, CheckpointChange, CheckState, GitBranchRef, GitCommit, GitCommitDetail, GitDiff, GitEntry, GitLineChange, GitLog, GitRefLabel, GitRefs, GitStatus, MergeResult, PullRequestCheck, PullRequestInfo, PullRequestStatus, PushResult, WorktreeComparison, WorktreeInfo } from '../../../../packages/contracts/src/index.js';
 import { AppError, requireString } from '../errors.js';
 import { assertWithin, isWithin, projectRoot, resolveScopedPath, toProjectRelative, type ProjectRef } from '../workspace/scope.js';
 import { runProcess, type ProcessResult } from './exec.js';
@@ -14,6 +16,16 @@ const MAX_COUNTED_UNTRACKED = 200;
 const hash = (data: Buffer | string) => createHash('sha256').update(data).digest('hex');
 /** Turn checkpoints kept per project; manual ones are never pruned. Each copies the dirty files of its moment. */
 const TURN_CHECKPOINTS_KEPT = 50;
+/** Partial checkpoints kept per project: the copies taken before a discard, which is what undoes it. */
+const PARTIAL_CHECKPOINTS_KEPT = 20;
+const MAX_LINE_CHANGES = 2_000;
+/** Past this many files, untracked directories are shown as themselves rather than file by file. */
+const MAX_LISTED_UNTRACKED = 2_000;
+/**
+ * A read must not take the index lock: `git status` refreshes the index when it can, and an agent's
+ * own `git add` or `git commit` running at that moment would fail on `index.lock`.
+ */
+const GIT_ENV = { ...process.env, GIT_OPTIONAL_LOCKS: '0' };
 /** A push or `gh` call must fail rather than wait for a credential prompt nobody can answer. */
 const NON_INTERACTIVE_ENV = { ...process.env, GIT_TERMINAL_PROMPT: '0', GH_PROMPT_DISABLED: '1' };
 /**
@@ -32,7 +44,58 @@ interface CheckpointManifest { checkpoint: Checkpoint; projectRoot: string; head
 /** `shadow` is the git directory of a project's shadow repository (see `shadowRepo`), used instead of one found in its directory. */
 interface Repo { root: string; projectRoot: string; projectId: string; shadow?: string; }
 interface LineStat { added: number; removed: number; }
+/**
+ * A project whose status someone is following. Its files are watched, so the last status read stays
+ * good until something changes; then it is read again, no more often than the read itself allows.
+ */
+interface StatusWatch {
+  project: ProjectRef; listeners: Set<(status: GitStatus) => void>; watchers: FSWatcher[];
+  value?: GitStatus; json?: string; stale: boolean; running?: Promise<GitStatus>;
+  timer?: NodeJS.Timeout; poll?: NodeJS.Timeout; lastRun: number; lastDuration: number;
+}
+/** Quiet time after a change before status is read again, so a burst of writes costs one read. */
+const STATUS_SETTLE_MS = 400;
+/** A status read takes seconds in a very large repository; reads are spaced by this many times what the last one took. */
+const STATUS_SPACING = 4;
+const STATUS_SPACING_MAX_MS = 20_000;
+/** One side of a file comparison. `mode` is Git's; `id` names the content; `oid` is set when it is a Git blob. */
+interface Side { exists: boolean; mode: number; data: Buffer; id: string; oid?: string; truncated?: boolean; }
+type DiffScope = { kind: 'worktree' | 'staged' } | { kind: 'commit'; commit: string } | { kind: 'checkpoint'; manifest: CheckpointManifest }
+  /** What one commit changed: `parent` is its first parent, absent for a root commit; `from` is the path a renamed file had there. */
+  | { kind: 'revision'; commit: string; parent?: string; from?: string };
+const LOG_PAGE = 150;
+const REMOTE_BRANCHES_LISTED = 50;
+/** Line counts are read per file; a change wider than this is listed without them. */
+const MAX_STAT_FILES = 300;
+/** Files of one commit or comparison sent to a client. */
+const MAX_CHANGED_FILES = 2_000;
+/** Porcelain codes of a path in the middle of a merge: its contents are both sides, not something to discard. */
+const UNMERGED = new Set(['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU']);
+const LOG_FORMAT = ['%H', '%P', '%an', '%ae', '%aI', '%s'].join('%x1f');
+
+interface GitFile { absolute: string; projectRelative: string; gitRelative: string; }
+const MISSING_SIDE: Side = { exists: false, mode: 0, data: Buffer.alloc(0), id: '' };
 interface ParsedStatus { branch: string; paths: Array<{ status: string; path: string; originalPath?: string }>; }
+
+function logCommit(record: string, labels?: Map<string, GitRefLabel[]>): GitCommit | undefined {
+  const [hash, parents, author, email, date, subject] = record.replace(/^\n/, '').split('\x1f');
+  if (!hash || subject === undefined) return undefined;
+  return { hash, parents: parents ? parents.split(' ') : [], subject, author, email, date, refs: labels?.get(hash) ?? [] };
+}
+
+/** A commit object as `cat-file` prints it: header lines, a blank line, the message. */
+function rawCommit(hash: string, text: string): GitCommit & { body: string } {
+  const split = text.indexOf('\n\n');
+  const headers = (split === -1 ? text : text.slice(0, split)).split('\n');
+  const message = split === -1 ? '' : text.slice(split + 2);
+  const person = /^author (.*) <([^>]*)> (\d+) /.exec(headers.find(line => line.startsWith('author ')) ?? '');
+  const subjectEnd = message.indexOf('\n\n');
+  return {
+    hash, parents: headers.filter(line => line.startsWith('parent ')).map(line => line.slice(7)),
+    subject: (subjectEnd === -1 ? message : message.slice(0, subjectEnd)).replace(/\n/g, ' ').trim(), body: subjectEnd === -1 ? '' : message.slice(subjectEnd + 2).trim(),
+    author: person?.[1] ?? '', email: person?.[2] ?? '', date: person ? new Date(Number(person[3]) * 1000).toISOString() : '', refs: [],
+  };
+}
 
 /** Keep the source project recognizable; unnamed conversations retain a dated, unique suffix. */
 export function generatedBranch(projectName: string, options: { name?: string; suffix?: string } = {}): string {
@@ -134,6 +197,59 @@ function ghError(result: ProcessResult, operation: string): AppError {
   return new AppError('GH_OPERATION_FAILED', message, 422, { operation, code: result.code, timedOut: result.timedOut });
 }
 
+/** The lines of [data], each with its terminator. */
+function splitLines(data: Buffer): Buffer[] {
+  const lines: Buffer[] = [];
+  for (let start = 0; start < data.length;) {
+    const end = data.indexOf(10, start);
+    lines.push(data.subarray(start, end === -1 ? data.length : end + 1));
+    if (end === -1) break;
+    start = end + 1;
+  }
+  return lines;
+}
+
+/**
+ * [target] with each chosen range of its lines replaced by the matching range of [source]. Ranges
+ * are clamped to the content, so an editor that counts the empty line after a final newline still
+ * names a valid position.
+ */
+function spliceLines(target: Buffer, source: Buffer, changes: Array<{ target: [number, number]; source: [number, number] }>): Buffer {
+  const lines = splitLines(target), origin = splitLines(source);
+  const within = (range: [number, number], length: number): [number, number] => [Math.min(range[0], length), Math.min(range[1], length)];
+  const ordered = changes.map(change => ({ target: within(change.target, lines.length), source: within(change.source, origin.length) }))
+    .sort((a, b) => a.target[0] - b.target[0] || a.source[0] - b.source[0]);
+  for (let index = 1; index < ordered.length; index += 1) {
+    if (ordered[index].target[0] < ordered[index - 1].target[1] || ordered[index].source[0] < ordered[index - 1].source[1]) throw new AppError('INVALID_LINE_CHANGES', 'Line changes overlap');
+  }
+  for (const change of ordered.reverse()) lines.splice(change.target[0], change.target[1] - change.target[0], ...origin.slice(change.source[0], change.source[1]));
+  // A last line without a newline that is no longer last would otherwise run into the one after it.
+  const newline = Buffer.from((target.length ? target : source).includes('\r\n') ? '\r\n' : '\n');
+  return Buffer.concat(lines.flatMap((line, index) => index < lines.length - 1 && line.at(-1) !== 10 ? [line, newline] : [line]));
+}
+
+function lineChanges(value: unknown): GitLineChange[] {
+  const range = (item: unknown): item is [number, number] => Array.isArray(item) && item.length === 2 && item.every(part => Number.isSafeInteger(part) && part >= 0) && item[0] <= item[1];
+  if (!Array.isArray(value) || !value.length || value.length > MAX_LINE_CHANGES) throw new AppError('INVALID_LINE_CHANGES', 'Select between 1 and 2000 changes');
+  return value.map((item: GitLineChange) => {
+    if (!item || !range(item.before) || !range(item.after) || (item.before[0] === item.before[1] && item.after[0] === item.after[1])) throw new AppError('INVALID_LINE_CHANGES', 'A line change is invalid');
+    return { before: [item.before[0], item.before[1]], after: [item.after[0], item.after[1]] };
+  });
+}
+
+/**
+ * Names the two contents a diff compares, when their lines can be moved one range at a time: both
+ * plain text files (or absent), whole, and without a bare carriage return, which some editors
+ * count as a line break and Git does not.
+ */
+function diffVersion(scope: DiffScope, before: Side, after: Side): string | undefined {
+  const bareReturn = (data: Buffer) => { for (let at = data.indexOf(13); at !== -1; at = data.indexOf(13, at + 1)) if (data[at + 1] !== 10) return true; return false; };
+  const plain = (side: Side) => !side.exists || ((side.mode === 0o100644 || side.mode === 0o100755) && !side.truncated && !side.data.includes(0) && !bareReturn(side.data));
+  if (!plain(before) || !plain(after)) return undefined;
+  const base = scope.kind === 'checkpoint' ? scope.manifest.checkpoint.id : scope.kind === 'commit' || scope.kind === 'revision' ? scope.commit : scope.kind;
+  return hash(JSON.stringify([base, before.exists, before.id, before.mode, after.exists, after.id, after.mode])).slice(0, 32);
+}
+
 function fileStateHash(index: Image, worktree: Image): string {
   const shape = (image: Image) => ({ exists: image.exists, kind: image.kind, mode: image.mode, hash: image.hash });
   return hash(JSON.stringify({ index: shape(index), worktree: shape(worktree) }));
@@ -143,6 +259,8 @@ export class GitService {
   readonly stateDir: string;
   private readonly repositoryMutations = new Set<string>();
   private readonly turnCheckpoints = new Map<string, Promise<Checkpoint | undefined>>();
+  private readonly statusWatches = new Map<string, StatusWatch>();
+  private closed = false;
   constructor(options: { stateDir: string }) {
     if (!options?.stateDir || !path.isAbsolute(options.stateDir)) throw new AppError('INVALID_STATE_DIR', 'stateDir must be an absolute path');
     this.stateDir = path.resolve(options.stateDir);
@@ -159,12 +277,12 @@ export class GitService {
   }
 
   private async git(repo: Repo, args: string[], options: { timeoutMs?: number; maxOutputBytes?: number; input?: Buffer } = {}): Promise<ProcessResult> {
-    if (!repo.shadow) return runProcess('git', args, { cwd: repo.root, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes, input: options.input });
+    if (!repo.shadow) return runProcess('git', args, { cwd: repo.root, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes, input: options.input, env: GIT_ENV });
     // The person's hooks and signing are for their own commits: run against a shadow repository they
     // would see their directory as the repository, and could prompt, fail or rewrite files in it.
     return runProcess('git', ['-c', `core.hooksPath=${path.join(repo.shadow, 'no-hooks')}`, '-c', 'commit.gpgsign=false', ...args], {
       cwd: repo.root, timeoutMs: options.timeoutMs, maxOutputBytes: options.maxOutputBytes, input: options.input,
-      env: { ...process.env, GIT_DIR: repo.shadow, GIT_WORK_TREE: repo.root },
+      env: { ...GIT_ENV, GIT_DIR: repo.shadow, GIT_WORK_TREE: repo.root },
     });
   }
 
@@ -280,17 +398,157 @@ export class GitService {
     finally { this.repositoryMutations.delete(directory); }
   }
 
-  private async statusRaw(repo: Repo): Promise<ParsedStatus> {
-    const result = await this.git(repo, ['status', '--porcelain=v1', '-z', '--branch', '--untracked-files=all'], { maxOutputBytes: 32 * 1024 * 1024 });
+  /**
+   * `git status`, asked for untracked directories as one entry each: listing every file under them
+   * is what makes status slow in a large repository (several times the rest of the work together).
+   * `untracked` then names the files of those directories where a caller needs them: `listed` while
+   * there are few enough to show, `all` for a checkpoint, which has to copy each one. The distance
+   * from the upstream is not asked for either: it is a walk through history, and `branchOf` reports it.
+   */
+  private async statusRaw(repo: Repo, untracked: 'collapsed' | 'listed' | 'all' = 'collapsed'): Promise<ParsedStatus> {
+    const result = await this.git(repo, ['status', '--porcelain=v1', '-z', '--branch', '--no-ahead-behind', '--untracked-files=normal'], { timeoutMs: 60_000, maxOutputBytes: 32 * 1024 * 1024 });
     if (result.code !== 0) throw gitError(result, 'status');
     if (result.truncated) throw new AppError('GIT_STATUS_TOO_LARGE', 'Git status contains too many changed paths to return safely', 413);
-    return parseStatus(result.stdout);
+    const parsed = parseStatus(result.stdout);
+    const folders = parsed.paths.filter(item => item.status === '??' && item.path.endsWith('/'));
+    if (untracked === 'collapsed' || !folders.length) return parsed;
+    const listed = await this.git(repo, ['ls-files', '--others', '--exclude-standard', '-z', '--', ...folders.map(item => literalPath(item.path))], { timeoutMs: 60_000, maxOutputBytes: 32 * 1024 * 1024 });
+    if (listed.code !== 0) throw gitError(listed, 'ls-files');
+    if (listed.truncated) throw new AppError('GIT_STATUS_TOO_LARGE', 'Git status contains too many changed paths to return safely', 413);
+    const files = listed.stdout.split('\0').filter(Boolean);
+    if (untracked === 'listed' && files.length > MAX_LISTED_UNTRACKED) return parsed;
+    return { branch: parsed.branch, paths: [...parsed.paths.filter(item => !folders.includes(item)), ...files.map(file => ({ status: '??', path: file }))].sort((a, b) => a.path.localeCompare(b.path)) };
   }
 
-  async status(project: ProjectRef): Promise<GitStatus> {
+  /**
+   * The project's status. While it is being followed (`followStatus`) the last read is returned as
+   * long as nothing has changed since; `fresh` reads again regardless, as after a write of our own,
+   * whose file events may not have arrived yet.
+   */
+  async status(project: ProjectRef, fresh = false): Promise<GitStatus> {
+    const watch = this.statusWatches.get(await projectRoot(project));
+    if (!watch) return this.readStatus(project);
+    if (fresh) {
+      await watch.running?.catch(() => undefined);
+      watch.stale = true;
+    }
+    return !watch.stale && watch.value ? watch.value : this.refreshStatus(watch);
+  }
+
+  private refreshStatus(watch: StatusWatch): Promise<GitStatus> {
+    if (watch.running) return watch.running;
+    if (watch.timer) { clearTimeout(watch.timer); watch.timer = undefined; }
+    watch.stale = false;
+    const started = Date.now();
+    const run = this.readStatus(watch.project).then(value => {
+      watch.lastDuration = Date.now() - started;
+      const json = JSON.stringify(value);
+      const changed = json !== watch.json;
+      watch.value = value; watch.json = json;
+      if (changed) for (const listener of watch.listeners) listener(value);
+      return value;
+    }, (error: unknown) => {
+      // A failed read is retried, and nothing answers from the value before it meanwhile.
+      watch.stale = true;
+      throw error;
+    }).finally(() => {
+      watch.lastRun = Date.now();
+      watch.running = undefined;
+      if (watch.stale) this.scheduleStatus(watch);
+    });
+    watch.running = run;
+    return run;
+  }
+
+  private scheduleStatus(watch: StatusWatch): void {
+    if (watch.timer || watch.running || !watch.listeners.size) return;
+    const spacing = Math.min(watch.lastDuration * STATUS_SPACING, STATUS_SPACING_MAX_MS);
+    watch.timer = setTimeout(() => {
+      watch.timer = undefined;
+      if (watch.listeners.size) void this.refreshStatus(watch).catch(() => undefined);
+    }, Math.max(STATUS_SETTLE_MS, watch.lastRun + spacing - Date.now()));
+    watch.timer.unref();
+  }
+
+  /**
+   * Follows a project's status: [listener] gets it now and each time it changes, until the returned
+   * function is called. The working tree is watched where the platform can watch a whole tree with
+   * one handle (macOS, Windows); elsewhere a watch per directory would not scale to a large
+   * repository, so only Git's own files are watched (a stage, commit or checkout) and edits to
+   * files are found by reading status again at an interval.
+   */
+  async followStatus(project: ProjectRef, listener: (status: GitStatus) => void): Promise<() => void> {
     const repo = await this.repo(project);
-    const raw = await this.statusRaw(repo);
-    const stats = await this.lineStats(repo, raw).catch(() => new Map<string, LineStat>());
+    if (this.closed) return () => undefined;
+    let watch = this.statusWatches.get(repo.projectRoot);
+    if (!watch) {
+      const created: StatusWatch = { project, listeners: new Set(), watchers: [], stale: true, lastRun: 0, lastDuration: 0 };
+      watch = created;
+      const changed = () => { created.stale = true; this.scheduleStatus(created); };
+      const dirs = (await this.git(repo, ['rev-parse', '--absolute-git-dir', '--git-common-dir'], { maxOutputBytes: 8192 })).stdout.split('\n').map(line => line.trim());
+      const gitDir = dirs[0], commonDir = dirs[1] ? path.resolve(repo.root, dirs[1]) : undefined;
+      const follow = (target: string, recursive: boolean, relevant: (file: string) => boolean) => {
+        try {
+          const watcher = watchFiles(target, { recursive, persistent: false }, (_event, file) => { if (file === null || relevant(String(file))) changed(); });
+          watcher.on('error', () => undefined);
+          created.watchers.push(watcher);
+          return true;
+        } catch { return false; }
+      };
+      // Git's files: the index (a stage), HEAD (a checkout or commit) and the branch refs, which a
+      // `reset --soft` or a commit in another worktree moves alone. Lock files and objects come and go
+      // without changing what status says.
+      const recursive = process.platform === 'darwin' || process.platform === 'win32';
+      if (gitDir) follow(gitDir, false, file => file === 'index' || file === 'HEAD' || file === 'packed-refs');
+      if (commonDir && commonDir !== gitDir) follow(commonDir, false, file => file === 'packed-refs');
+      if (commonDir && recursive) follow(path.join(commonDir, 'refs'), true, file => !file.endsWith('.lock'));
+      const wholeTree = recursive
+        && follow(repo.projectRoot, true, file => { const parts = file.split(path.sep); return !parts.includes('.git') && !parts.includes('node_modules'); });
+      if (!wholeTree) {
+        const again = () => {
+          created.poll = setTimeout(() => { changed(); again(); }, Math.max(5_000, created.lastDuration * 10));
+          created.poll.unref();
+        };
+        again();
+      }
+      // Set after the awaits above: a second follower arriving meanwhile would otherwise find a watch with nothing watching yet.
+      const existing = this.statusWatches.get(repo.projectRoot);
+      if (this.closed) { this.closeStatusWatch(created); return () => undefined; }
+      if (existing) { this.closeStatusWatch(created); watch = existing; } else this.statusWatches.set(repo.projectRoot, created);
+    }
+    const followed = watch;
+    // The first status goes to this follower even when it is no news to the others.
+    let told = false;
+    const tell = (status: GitStatus) => { told = true; listener(status); };
+    followed.listeners.add(tell);
+    if (followed.value && !followed.stale) tell(followed.value);
+    else void this.refreshStatus(followed).then(value => { if (!told && followed.listeners.has(tell)) tell(value); }, () => undefined);
+    return () => {
+      followed.listeners.delete(tell);
+      if (followed.listeners.size || this.statusWatches.get(repo.projectRoot) !== followed) return;
+      this.statusWatches.delete(repo.projectRoot);
+      this.closeStatusWatch(followed);
+    };
+  }
+
+  private closeStatusWatch(watch: StatusWatch): void {
+    if (watch.timer) clearTimeout(watch.timer);
+    if (watch.poll) clearTimeout(watch.poll);
+    for (const watcher of watch.watchers.splice(0)) watcher.close();
+  }
+
+  /** Stops watching every followed project. */
+  close(): void {
+    this.closed = true;
+    for (const watch of this.statusWatches.values()) { watch.listeners.clear(); this.closeStatusWatch(watch); }
+    this.statusWatches.clear();
+  }
+
+  private async readStatus(project: ProjectRef): Promise<GitStatus> {
+    const repo = await this.repo(project);
+    // Both read the whole index, which is most of their cost in a large repository, so they run side by side.
+    const [raw, tracked, base] = await Promise.all([this.statusRaw(repo, 'listed'), this.trackedStats(repo).catch(() => new Map<string, LineStat>()), this.baseRef(repo).catch(() => undefined)]);
+    const stats = await this.lineStats(repo, raw, tracked).catch(() => new Map<string, LineStat>());
     const entries: GitEntry[] = [];
     let added = 0, removed = 0;
     for (const item of raw.paths) {
@@ -301,47 +559,40 @@ export class GitService {
       if (stat) { added += stat.added; removed += stat.removed; }
       entries.push({ path: relative, ...(originalPath === undefined ? {} : { originalPath }), index: item.status[0], worktree: item.status[1], ...(stat ?? {}) });
     }
-    return { root: repo.root, branch: raw.branch, entries, added, removed };
+    return { root: repo.root, branch: raw.branch, entries, added, removed, ...(base && base !== raw.branch ? { base } : {}) };
   }
 
-  /** Lines added/removed per git-relative path, against HEAD (or the empty tree before the first commit). */
-  private async lineStats(repo: Repo, raw: ParsedStatus): Promise<Map<string, LineStat>> {
+  /** Lines added/removed per git-relative path of tracked files, against HEAD (or the empty tree before the first commit). */
+  private async trackedStats(repo: Repo): Promise<Map<string, LineStat>> {
     const stats = new Map<string, LineStat>();
-    if (!raw.paths.length) return stats;
-    let base = await this.headCommit(repo);
-    if (!base) {
-      const empty = await this.git(repo, ['hash-object', '-t', 'tree', '/dev/null'], { maxOutputBytes: 4096 });
-      if (empty.code !== 0) return stats;
-      base = empty.stdout.trim();
-    }
-    const diff = await this.git(repo, ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', base, '--'], { timeoutMs: 15_000, maxOutputBytes: 8 * 1024 * 1024 });
+    const base = await this.headCommit(repo) ?? await this.emptyTree(repo);
+    const diff = await this.git(repo, ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', base, '--'], { timeoutMs: 60_000, maxOutputBytes: 8 * 1024 * 1024 });
     if (diff.code === 0 && !diff.truncated) {
       for (const record of diff.stdout.split('\0')) {
         const match = /^(\d+)\t(\d+)\t([\s\S]+)$/.exec(record);
         if (match) stats.set(match[3], { added: Number(match[1]), removed: Number(match[2]) });
       }
     }
-    let budget = MAX_COUNTED_UNTRACKED;
-    for (const item of raw.paths) {
-      if (item.status !== '??' || budget-- <= 0) continue;
-      const lines = await countLines(path.join(repo.root, item.path));
-      if (lines !== undefined) stats.set(item.path, { added: lines, removed: 0 });
-    }
     return stats;
   }
 
-  private async resolveGitPath(repo: Repo, filePath: string): Promise<{ absolute: string; projectRelative: string; gitRelative: string }> {
+  /** [tracked] with the line counts of untracked files added, as far as a fixed budget of them goes. */
+  private async lineStats(repo: Repo, raw: ParsedStatus, tracked: Map<string, LineStat>): Promise<Map<string, LineStat>> {
+    let budget = MAX_COUNTED_UNTRACKED;
+    for (const item of raw.paths) {
+      if (item.status !== '??' || item.path.endsWith('/') || budget-- <= 0) continue;
+      const lines = await countLines(path.join(repo.root, item.path));
+      if (lines !== undefined) tracked.set(item.path, { added: lines, removed: 0 });
+    }
+    return tracked;
+  }
+
+  private async resolveGitPath(repo: Repo, filePath: string): Promise<GitFile> {
     if (typeof filePath !== 'string' || !filePath || filePath.includes('\0')) throw new AppError('INVALID_PATH', 'Git path is invalid');
     const absolute = await resolveScopedPath(repo.projectRoot, filePath);
     const projectRelative = toProjectRelative(repo.projectRoot, absolute);
     if (!projectRelative) throw new AppError('INVALID_PATH', 'Repository root cannot be used as a file path');
     return { absolute, projectRelative, gitRelative: path.relative(repo.root, absolute).split(path.sep).join('/') };
-  }
-
-  private async show(repo: Repo, revision: string): Promise<Buffer | undefined> {
-    const result = await this.git(repo, ['show', '--no-ext-diff', revision], { maxOutputBytes: MAX_CHECKPOINT_FILE_BYTES + 1, timeoutMs: 15_000 });
-    if (result.code !== 0) return undefined;
-    return result.stdoutData;
   }
 
   private async readDiffWorktreeFile(absolute: string): Promise<Buffer | undefined> {
@@ -361,41 +612,170 @@ export class GitService {
     } finally { await handle.close(); }
   }
 
-  async diff(project: ProjectRef, filePath: string, staged = false): Promise<GitDiff> {
+  /** The file's entry in the index: absent, or `unmerged` while a conflict keeps several versions of it. */
+  private async indexEntry(repo: Repo, gitPath: string): Promise<{ mode: string; oid: string } | 'unmerged' | undefined> {
+    const result = await this.git(repo, ['ls-files', '--stage', '-z', '--', literalPath(gitPath)], { maxOutputBytes: 128 * 1024 });
+    if (result.code !== 0) throw gitError(result, 'ls-files');
+    const records = result.stdout.split('\0').filter(row => row.slice(row.indexOf('\t') + 1) === gitPath).map(row => row.slice(0, row.indexOf('\t')).split(' '));
+    if (!records.length) return undefined;
+    if (records.length > 1 || records[0][2] !== '0') return 'unmerged';
+    return { mode: records[0][0], oid: records[0][1] };
+  }
+
+  private async treeEntry(repo: Repo, commit: string | undefined, gitPath: string): Promise<{ mode: string; oid: string } | undefined> {
+    if (!commit) return undefined;
+    const result = await this.git(repo, ['ls-tree', '-z', commit, '--', literalPath(gitPath)], { maxOutputBytes: 128 * 1024 });
+    if (result.code !== 0) throw gitError(result, 'ls-tree');
+    const record = result.stdout.split('\0').find(row => row.slice(row.indexOf('\t') + 1) === gitPath);
+    if (!record) return undefined;
+    const [mode, type, oid] = record.slice(0, record.indexOf('\t')).split(' ');
+    return type === 'blob' || type === 'commit' ? { mode, oid } : undefined;
+  }
+
+  private async blobSide(repo: Repo, entry: { mode: string; oid: string } | undefined): Promise<Side> {
+    if (!entry) return MISSING_SIDE;
+    const mode = parseInt(entry.mode, 8);
+    // A submodule's entry names a commit of another repository; there is no content to compare here.
+    if (mode === 0o160000) return { exists: true, mode, data: Buffer.alloc(0), id: entry.oid };
+    const result = await this.git(repo, ['cat-file', 'blob', entry.oid], { maxOutputBytes: MAX_DIFF_BYTES + 1, timeoutMs: 15_000 });
+    if (result.code !== 0 && !result.truncated) throw gitError(result, 'cat-file');
+    return { exists: true, mode, data: result.stdoutData, id: entry.oid, oid: entry.oid, ...(result.truncated || result.stdoutData.length > MAX_DIFF_BYTES ? { truncated: true } : {}) };
+  }
+
+  private async worktreeSide(absolute: string): Promise<Side> {
+    const info = await lstat(absolute).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return undefined;
+      throw error;
+    });
+    if (!info) return MISSING_SIDE;
+    if (info.isSymbolicLink()) {
+      const target = Buffer.from(await readlink(absolute));
+      return { exists: true, mode: 0o120000, data: target, id: hash(target) };
+    }
+    if (!info.isFile()) return { exists: true, mode: 0o160000, data: Buffer.alloc(0), id: 'directory' };
+    const data = await this.readDiffWorktreeFile(absolute) ?? Buffer.alloc(0);
+    return { exists: true, mode: info.mode & 0o111 ? 0o100755 : 0o100644, data, id: hash(data), ...(data.length > MAX_DIFF_BYTES ? { truncated: true } : {}) };
+  }
+
+  /** The file as a checkpoint has it: its saved copy, or the commit the checkpoint was taken on for a file that was clean then. */
+  private async checkpointSide(repo: Repo, manifest: CheckpointManifest, file: GitFile): Promise<Side> {
+    const saved = manifest.files.find(item => item.path === file.projectRelative);
+    if (!saved) return this.blobSide(repo, await this.treeEntry(repo, manifest.head, file.gitRelative));
+    if (!saved.worktree.exists) return MISSING_SIDE;
+    const data = await this.imageData(this.checkpointPath(repo, manifest.checkpoint.id), saved.worktree);
+    return {
+      exists: true, mode: saved.worktree.kind === 'symlink' ? 0o120000 : saved.worktree.mode & 0o111 ? 0o100755 : 0o100644,
+      data: data.subarray(0, MAX_DIFF_BYTES + 1), id: saved.worktree.hash!, ...(data.length > MAX_DIFF_BYTES ? { truncated: true } : {}),
+    };
+  }
+
+  /** What a diff compares the working tree with: the index, `checkpoint:<id>`, or a commit. `staged` compares the index with HEAD instead. */
+  private async diffScope(repo: Repo, options: { staged?: boolean; base?: string; commit?: string; from?: string }): Promise<DiffScope> {
+    if (options.commit) {
+      const [commit, parent] = await this.commitParents(repo, options.commit);
+      return { kind: 'revision', commit, ...(parent ? { parent } : {}), ...(options.from ? { from: (await this.resolveGitPath(repo, options.from)).gitRelative } : {}) };
+    }
+    if (options.staged) return { kind: 'staged' };
+    const base = options.base;
+    if (!base) return { kind: 'worktree' };
+    if (typeof base !== 'string' || base.length > 255 || base.startsWith('-') || base.includes('\0')) throw new AppError('INVALID_BASE', 'Comparison base is invalid');
+    if (base.startsWith('checkpoint:')) return { kind: 'checkpoint', manifest: await this.readManifest(repo, base.slice('checkpoint:'.length)) };
+    const commit = await this.revision(repo, `${base}^{commit}`);
+    if (!commit) throw new AppError('INVALID_BASE', 'Comparison base does not identify a commit', 422);
+    return { kind: 'commit', commit };
+  }
+
+  private async diffSides(repo: Repo, file: GitFile, scope: DiffScope): Promise<{ before: Side; after: Side; unmerged?: boolean }> {
+    const mode = (entry: { mode: string } | 'unmerged' | undefined) => (entry && entry !== 'unmerged' ? parseInt(entry.mode, 8) : 0o100644);
+    if (scope.kind === 'revision') {
+      const [before, after] = await this.readBlobs(repo, [...(scope.parent ? [`${scope.parent}:${scope.from ?? file.gitRelative}`] : []), `${scope.commit}:${file.gitRelative}`]).then(blobs => (scope.parent ? blobs : [undefined, blobs[0]]));
+      return { before: this.blobAsSide(before, 0o100644), after: this.blobAsSide(after, 0o100644) };
+    }
+    if (scope.kind === 'staged') {
+      const head = await this.headCommit(repo);
+      const [index, tree, blobs] = await Promise.all([this.indexEntry(repo, file.gitRelative), this.treeEntry(repo, head, file.gitRelative), this.readBlobs(repo, [`HEAD:${file.gitRelative}`, `:${file.gitRelative}`])]);
+      const before = tree ? this.blobAsSide(blobs[0], mode(tree)) : MISSING_SIDE;
+      return index === 'unmerged' ? { before, after: MISSING_SIDE, unmerged: true } : { before, after: index ? this.blobAsSide(blobs[1], mode(index)) : MISSING_SIDE };
+    }
+    if (scope.kind === 'checkpoint') return { before: await this.checkpointSide(repo, scope.manifest, file), after: await this.worktreeSide(file.absolute) };
+    if (scope.kind === 'commit') {
+      const [tree, blobs, after] = await Promise.all([this.treeEntry(repo, scope.commit, file.gitRelative), this.readBlobs(repo, [`${scope.commit}:${file.gitRelative}`]), this.worktreeSide(file.absolute)]);
+      return { before: tree ? this.blobAsSide(blobs[0], mode(tree)) : MISSING_SIDE, after };
+    }
+    const [index, blobs, after] = await Promise.all([this.indexEntry(repo, file.gitRelative), this.readBlobs(repo, [`:${file.gitRelative}`]), this.worktreeSide(file.absolute)]);
+    // A conflicted file has no single staged version; what the branch had is the nearest thing to compare with.
+    if (index === 'unmerged') return { before: await this.blobSide(repo, await this.treeEntry(repo, await this.headCommit(repo), file.gitRelative)), after, unmerged: true };
+    return { before: index ? this.blobAsSide(blobs[0], mode(index)) : MISSING_SIDE, after };
+  }
+
+  /**
+   * Several blobs in one Git process, each named as `cat-file` takes them (`:path`, `HEAD:path`,
+   * `<commit>:path`); a name that resolves to nothing comes back undefined. Opening the object store
+   * is the expensive step in a repository of many packs, so it is done once for all of them.
+   */
+  private async readBlobs(repo: Repo, names: string[]): Promise<Array<{ oid: string; data: Buffer; truncated?: boolean } | undefined>> {
+    if (names.some(name => /[\n\0]/.test(name))) throw new AppError('INVALID_PATH', 'Git path is invalid');
+    const result = await this.git(repo, ['cat-file', '--batch'], { input: Buffer.from(names.map(name => `${name}\n`).join('')), maxOutputBytes: names.length * (MAX_DIFF_BYTES + 4096), timeoutMs: 30_000 });
+    if (result.code !== 0 && !result.truncated) throw gitError(result, 'cat-file');
+    const output = result.stdoutData;
+    const blobs: Array<{ oid: string; data: Buffer; truncated?: boolean } | undefined> = [];
+    let at = 0;
+    for (let index = 0; index < names.length; index += 1) {
+      const end = output.indexOf(10, at);
+      // Output cut short by a blob too large to show: that one and any after it are known only as too large.
+      if (end === -1) { blobs.push(result.truncated ? { oid: names[index], data: Buffer.alloc(0), truncated: true } : undefined); continue; }
+      const header = output.subarray(at, end).toString('utf8').split(' ');
+      at = end + 1;
+      if (header.length !== 3 || header[1] !== 'blob') { if (header.length === 3) at += Number(header[2]) + 1; blobs.push(undefined); continue; }
+      const size = Number(header[2]);
+      const data = output.subarray(at, Math.min(at + size, output.length));
+      at += size + 1;
+      blobs.push({ oid: header[0], data: data.subarray(0, MAX_DIFF_BYTES + 1), ...(data.length < size || size > MAX_DIFF_BYTES ? { truncated: true } : {}) });
+    }
+    return blobs;
+  }
+
+  private blobAsSide(blob: { oid: string; data: Buffer; truncated?: boolean } | undefined, mode: number): Side {
+    if (mode === 0o160000) return { exists: true, mode, data: Buffer.alloc(0), id: blob?.oid ?? 'submodule' };
+    if (!blob) return MISSING_SIDE;
+    return { exists: true, mode, data: blob.data, id: blob.oid, oid: blob.oid, ...(blob.truncated ? { truncated: true } : {}) };
+  }
+
+  /**
+   * The unified diff of two contents, made from the contents themselves: the repository is not
+   * consulted again, so the patch always matches the `before` and `after` it is returned with.
+   */
+  private async patchText(file: GitFile, before: Side, after: Side): Promise<{ text: string; truncated: boolean }> {
+    if (before.exists === after.exists && before.data.equals(after.data)) return { text: '', truncated: false };
+    const folder = await mkdtemp(path.join(tmpdir(), 'riffet-diff-'));
+    try {
+      await Promise.all([writeFile(path.join(folder, 'a'), before.data), writeFile(path.join(folder, 'b'), after.data)]);
+      const patch = await runProcess('git', ['diff', '--no-index', '--no-ext-diff', '--no-color', '--unified=3', '--', 'a', 'b'], { cwd: folder, maxOutputBytes: MAX_DIFF_BYTES + 1, timeoutMs: 15_000, env: { ...GIT_ENV, GIT_CONFIG_GLOBAL: '/dev/null', GIT_CONFIG_NOSYSTEM: '1' } });
+      if (patch.code !== 0 && patch.code !== 1) throw gitError(patch, 'diff');
+      const hunks = patch.stdout.indexOf('\n@@');
+      const header = `diff --git a/${file.gitRelative} b/${file.gitRelative}\n--- ${before.exists ? `a/${file.gitRelative}` : '/dev/null'}\n+++ ${after.exists ? `b/${file.gitRelative}` : '/dev/null'}`;
+      return { text: hunks === -1 ? '' : `${header}${patch.stdout.slice(hunks)}`, truncated: patch.truncated };
+    } finally { await rm(folder, { recursive: true, force: true }).catch(() => undefined); }
+  }
+
+  async diff(project: ProjectRef, filePath: string, options: { staged?: boolean; base?: string; commit?: string; from?: string } = {}): Promise<GitDiff> {
     const repo = await this.repo(project);
     const file = await this.resolveGitPath(repo, filePath);
-    const status = await this.statusRaw(repo);
-    const statusItem = status.paths.find(item => item.path === file.gitRelative || item.originalPath === file.gitRelative);
-    const untracked = statusItem?.status === '??';
-    let before: Buffer | undefined;
-    let after: Buffer | undefined;
-    if (staged) {
-      before = await this.show(repo, `HEAD:${file.gitRelative}`);
-      after = await this.show(repo, `:${file.gitRelative}`);
-    } else if (untracked) {
-      before = Buffer.alloc(0);
-      after = await this.readDiffWorktreeFile(file.absolute);
-    } else {
-      before = await this.show(repo, `:${file.gitRelative}`) ?? await this.show(repo, `HEAD:${file.gitRelative}`);
-      after = await this.readDiffWorktreeFile(file.absolute);
-    }
-    before ??= Buffer.alloc(0);
-    after ??= Buffer.alloc(0);
-    const binary = before.includes(0) || after.includes(0);
-    const args = ['diff', '--no-ext-diff', '--no-color', '--unified=3'];
-    if (staged) args.push('--cached');
-    if (untracked && !staged) args.push('--no-index', '--', '/dev/null', file.gitRelative);
-    else args.push('--', literalPath(file.gitRelative));
-    const patch = await this.git(repo, args, { maxOutputBytes: MAX_DIFF_BYTES + 1, timeoutMs: 15_000 });
-    if (patch.code !== 0 && patch.code !== 1) throw gitError(patch, 'diff');
-    const rendered = patch.stdout;
+    const scope = await this.diffScope(repo, options);
+    const { before, after, unmerged } = await this.diffSides(repo, file, scope);
+    const binary = before.data.includes(0) || after.data.includes(0);
+    const patch = binary ? { text: '', truncated: false } : await this.patchText(file, before, after);
+    const cut = before.truncated || after.truncated || patch.truncated || patch.text.length > MAX_DIFF_BYTES;
+    // A commit is read, never changed; and a cut patch does not show whole runs of lines.
+    const version = unmerged || cut || scope.kind === 'revision' ? undefined : diffVersion(scope, before, after);
     return {
       path: file.projectRelative,
-      before: binary ? '' : before.subarray(0, MAX_DIFF_BYTES).toString('utf8'),
-      after: binary ? '' : after.subarray(0, MAX_DIFF_BYTES).toString('utf8'),
-      patch: binary ? 'Binary files differ' : rendered.slice(0, MAX_DIFF_BYTES),
+      before: binary ? '' : before.data.subarray(0, MAX_DIFF_BYTES).toString('utf8'),
+      after: binary ? '' : after.data.subarray(0, MAX_DIFF_BYTES).toString('utf8'),
+      patch: binary ? 'Binary files differ' : patch.text.slice(0, MAX_DIFF_BYTES),
       binary,
-      ...((before.length > MAX_DIFF_BYTES || after.length > MAX_DIFF_BYTES || patch.truncated || rendered.length > MAX_DIFF_BYTES) ? { truncated: true } : {}),
+      ...(cut ? { truncated: true } : {}),
+      ...(version ? { version } : {}),
     };
   }
 
@@ -406,7 +786,7 @@ export class GitService {
       if (!safe.length) throw new AppError('INVALID_PATHS', 'At least one project path is required');
       const result = await this.git(repo, ['add', '--', ...safe.map(literalPath)], { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 });
       if (result.code !== 0) throw gitError(result, 'stage');
-      return this.status(project);
+      return this.status(project, true);
     });
   }
 
@@ -423,7 +803,115 @@ export class GitService {
           if (result.code !== 0) throw gitError(result, 'unstage');
         }
       }
-      return this.status(project);
+      return this.status(project, true);
+    });
+  }
+
+  /**
+   * Throws away the working tree's changes to [paths] (files, or directories of them): tracked files
+   * go back to what is staged, untracked ones are deleted. Their current content is saved first as a
+   * partial checkpoint, returned as `backup`, so restoring it undoes the discard. When a file cannot
+   * be saved (too large, say) nothing is discarded unless `permanent` accepts that there is no undo.
+   */
+  async discard(project: ProjectRef, paths: string[], options: { permanent?: boolean } = {}): Promise<{ status: GitStatus; backup?: Checkpoint }> {
+    const repo = await this.repo(project);
+    return this.mutate(repo, async () => {
+      const safe = await this.gitPaths(repo, paths);
+      if (!safe.length) throw new AppError('INVALID_PATHS', 'At least one project path is required');
+      const chosen = (file: string) => safe.some(item => file === item || file.startsWith(`${item}/`));
+      const targets = (await this.statusRaw(repo, 'all')).paths.filter(item => chosen(item.path) && (item.status === '??' || item.status[1] !== ' ') && !UNMERGED.has(item.status) && asRelativePath(repo.root, repo.projectRoot, item.path) !== undefined);
+      if (!targets.length) return { status: await this.status(project, true) };
+      const backup = await this.discardBackup(repo, targets.map(item => asRelativePath(repo.root, repo.projectRoot, item.path)!), options.permanent === true);
+      const tracked = targets.filter(item => item.status !== '??').map(item => item.path);
+      if (tracked.length) {
+        const restored = await this.git(repo, ['restore', '--worktree', '--pathspec-from-file=-', '--pathspec-file-nul'], { input: Buffer.from(tracked.map(literalPath).join('\0')), timeoutMs: 60_000, maxOutputBytes: 1024 * 1024 });
+        if (restored.code !== 0) throw gitError(restored, 'restore');
+      }
+      for (const item of targets) {
+        if (item.status === '??') await this.removeWorktreeFile(repo, path.join(repo.root, item.path));
+      }
+      return { status: await this.status(project, true), ...(backup ? { backup } : {}) };
+    });
+  }
+
+  /** Deletes a file and the directories it leaves empty, as far up as the project's own. */
+  private async removeWorktreeFile(repo: Repo, absolute: string): Promise<void> {
+    await rm(absolute, { force: true });
+    for (let folder = path.dirname(absolute); folder !== repo.projectRoot && isWithin(repo.projectRoot, folder); folder = path.dirname(folder)) {
+      if (!(await rmdir(folder).then(() => true, () => false))) break;
+    }
+  }
+
+  /** Saves [paths] as they are now, before a discard changes them. Without `permanent`, a path that cannot be saved stops the discard. */
+  private async discardBackup(repo: Repo, paths: string[], permanent = false): Promise<Checkpoint | undefined> {
+    const title = `Before discard: ${paths[0]}${paths.length > 1 ? ` and ${paths.length - 1} more` : ''}`;
+    const { checkpoint } = await this.createCheckpointRecord(repo, { title, paths });
+    if (checkpoint.excluded.length) {
+      // A checkpoint with files left out cannot be restored, so it would only promise an undo it cannot give.
+      await rm(this.checkpointPath(repo, checkpoint.id), { recursive: true, force: true });
+      if (!permanent) throw new AppError('DISCARD_UNRECOVERABLE', 'Some of these files cannot be saved first, so discarding them could not be undone', 409, { paths: checkpoint.excluded });
+      return undefined;
+    }
+    for (const stale of (await this.listCheckpoints(repo)).filter(item => item.partial).slice(PARTIAL_CHECKPOINTS_KEPT)) await rm(this.checkpointPath(repo, stale.id), { recursive: true, force: true }).catch(() => undefined);
+    return checkpoint;
+  }
+
+  private async writeIndex(repo: Repo, gitPath: string, content?: { data: Buffer; mode: number; clean?: boolean }): Promise<void> {
+    if (!content) {
+      const removed = await this.git(repo, ['update-index', '--force-remove', '--', gitPath], { maxOutputBytes: 1024 * 1024 });
+      if (removed.code !== 0) throw gitError(removed, 'update-index');
+      return;
+    }
+    // `clean` content comes from the working tree, so it passes through the path's filters (line endings, say) as `git add` would.
+    const blob = await this.git(repo, ['hash-object', '-w', ...(content.clean ? [`--path=${gitPath}`] : []), '--stdin'], { input: content.data, maxOutputBytes: 4096 });
+    if (blob.code !== 0) throw gitError(blob, 'hash-object');
+    const result = await this.git(repo, ['update-index', '--add', '--cacheinfo', content.mode.toString(8), blob.stdout.trim(), gitPath], { maxOutputBytes: 1024 * 1024 });
+    if (result.code !== 0) throw gitError(result, 'update-index');
+  }
+
+  /**
+   * Stages, unstages or discards chosen lines of one file, the way a diff shows them: each change
+   * pairs a range of the diff's `before` lines with a range of its `after` lines. `version` is the
+   * one that diff carried; if either content has changed since, nothing is written and the reader
+   * has to look again. A discard saves the file first and returns that checkpoint as `backup`; with
+   * `base` it takes the lines back to a checkpoint or commit rather than to what is staged.
+   */
+  async applyLines(project: ProjectRef, input: { path: string; action: 'stage' | 'unstage' | 'discard'; changes: GitLineChange[]; version: string; base?: string }): Promise<{ status: GitStatus; backup?: Checkpoint }> {
+    const changes = lineChanges(input?.changes);
+    if (!['stage', 'unstage', 'discard'].includes(input.action)) throw new AppError('INVALID_INPUT', 'Choose stage, unstage or discard');
+    const repo = await this.repo(project);
+    return this.mutate(repo, async () => {
+      const file = await this.resolveGitPath(repo, input.path);
+      const scope = input.action === 'unstage' ? { kind: 'staged' as const } : await this.diffScope(repo, input.action === 'discard' ? { base: input.base } : {});
+      const { before, after, unmerged } = await this.diffSides(repo, file, scope);
+      const version = unmerged ? undefined : diffVersion(scope, before, after);
+      if (!version) throw new AppError('GIT_LINES_UNSUPPORTED', 'Lines of this file cannot be changed one range at a time', 422);
+      if (version !== input.version) throw new AppError('GIT_DIFF_STALE', 'The file changed since this diff was read', 409);
+      if (input.action === 'stage') {
+        const data = spliceLines(before.data, after.data, changes.map(change => ({ target: change.before, source: change.after })));
+        await this.writeIndex(repo, file.gitRelative, !after.exists && !data.length ? undefined : { data, mode: before.exists ? before.mode : after.mode, clean: true });
+        return { status: await this.status(project, true) };
+      }
+      if (input.action === 'unstage') {
+        const data = spliceLines(after.data, before.data, changes.map(change => ({ target: change.after, source: change.before })));
+        await this.writeIndex(repo, file.gitRelative, !before.exists && !data.length ? undefined : { data, mode: after.exists ? after.mode : before.mode });
+        return { status: await this.status(project, true) };
+      }
+      // What Git stores may differ from what it checks out (line endings); the lines put back are the checked-out ones.
+      let source = before.data;
+      if (before.oid) {
+        const smudged = await this.git(repo, ['cat-file', '--filters', `--path=${file.gitRelative}`, before.oid], { maxOutputBytes: 4 * MAX_DIFF_BYTES, timeoutMs: 15_000 });
+        if (smudged.code !== 0 || smudged.truncated) throw gitError(smudged, 'cat-file');
+        source = smudged.stdoutData;
+        if (splitLines(source).length !== splitLines(before.data).length) throw new AppError('GIT_LINES_UNSUPPORTED', 'Lines of this file cannot be changed one range at a time', 422);
+      }
+      const data = spliceLines(after.data, source, changes.map(change => ({ target: change.after, source: change.before })));
+      const backup = await this.discardBackup(repo, [file.projectRelative]);
+      // The lines put back were worked out from the file as it was read above; an edit since then would be lost.
+      if ((await this.worktreeSide(file.absolute)).id !== after.id) throw new AppError('GIT_DIFF_STALE', 'The file changed since this diff was read', 409);
+      if (!before.exists && !data.length) await this.removeWorktreeFile(repo, file.absolute);
+      else await this.replaceWorktreeFile(repo, file.projectRelative, { data, mode: before.exists && !after.exists ? (before.mode & 0o111 ? 0o755 : 0o644) : undefined });
+      return { status: await this.status(project, true), ...(backup ? { backup } : {}) };
     });
   }
 
@@ -447,7 +935,7 @@ export class GitService {
       if (result.code !== 0) throw gitError(result, 'commit');
       const head = await this.git(repo, ['rev-parse', 'HEAD'], { maxOutputBytes: 4096 });
       if (head.code !== 0) throw gitError(head, 'rev-parse');
-      return { hash: head.stdout.trim(), message, status: await this.status(project) };
+      return { hash: head.stdout.trim(), message, status: await this.status(project, true) };
     });
   }
 
@@ -460,7 +948,7 @@ export class GitService {
   }
 
   private async dirtyPaths(repo: Repo): Promise<string[]> {
-    const status = await this.statusRaw(repo);
+    const status = await this.statusRaw(repo, 'all');
     const paths = new Set<string>();
     for (const item of status.paths) {
       if (asRelativePath(repo.root, repo.projectRoot, item.path) !== undefined) paths.add(item.path);
@@ -547,7 +1035,8 @@ export class GitService {
     return this.objectImage(repo, oid, mode, folder);
   }
 
-  private async createCheckpointRecord(repo: Repo, options: { sessionId?: string; runId?: string; title?: string }): Promise<CheckpointManifest> {
+  /** With `paths` (project-relative files) the checkpoint is partial: it holds those files, changed or not, and nothing else. */
+  private async createCheckpointRecord(repo: Repo, options: { sessionId?: string; runId?: string; title?: string; paths?: string[] }): Promise<CheckpointManifest> {
     const id = randomUUID();
     const createdAt = new Date().toISOString();
     const title = options.title?.trim().slice(0, 300) || `Checkpoint ${createdAt}`;
@@ -555,12 +1044,12 @@ export class GitService {
     await mkdir(folder, { recursive: true, mode: 0o700 });
     const head = await this.headCommit(repo);
     const manifest: CheckpointManifest = {
-      checkpoint: { id, projectId: repo.projectId, ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(options.runId ? { runId: options.runId } : {}), title, createdAt, files: 0, excluded: [] },
+      checkpoint: { id, projectId: repo.projectId, ...(options.sessionId ? { sessionId: options.sessionId } : {}), ...(options.runId ? { runId: options.runId } : {}), title, createdAt, files: 0, excluded: [], ...(options.paths ? { partial: true } : {}) },
       projectRoot: repo.projectRoot,
       ...(head ? { head } : {}),
       files: [],
     };
-    const dirty = await this.dirtyPaths(repo);
+    const dirty = options.paths ? options.paths.map(item => path.relative(repo.root, path.resolve(repo.projectRoot, item)).split(path.sep).join('/')) : await this.dirtyPaths(repo);
     let totalBytes = 0;
     for (const gitPath of dirty.slice(0, MAX_CHECKPOINT_FILES)) {
       const relative = asRelativePath(repo.root, repo.projectRoot, gitPath);
@@ -626,7 +1115,7 @@ export class GitService {
       const data = JSON.parse(await readFile(manifestPath, 'utf8')) as CheckpointManifest;
       const actualFolder = await realpath(folder);
       const checkpointRoot = await realpath(this.checkpointFolder(repo));
-      if (!data || typeof data !== 'object' || !data.checkpoint || typeof data.checkpoint !== 'object' || !Array.isArray(data.files) || data.files.length > MAX_CHECKPOINT_FILES || !Array.isArray(data.checkpoint.excluded) || data.checkpoint.excluded.length > MAX_CHECKPOINT_FILES || !actualFolder.startsWith(`${checkpointRoot}${path.sep}`) || data.checkpoint.id !== id || data.checkpoint.projectId !== repo.projectId || data.projectRoot !== repo.projectRoot || !Number.isSafeInteger(data.checkpoint.files) || data.checkpoint.files !== data.files.length || typeof data.checkpoint.title !== 'string' || (data.checkpoint.runId !== undefined && typeof data.checkpoint.runId !== 'string') || typeof data.checkpoint.createdAt !== 'string' || (data.head !== undefined && !/^[a-f0-9]{40,64}$/i.test(data.head))) throw new Error('checkpoint does not belong to project');
+      if (!data || typeof data !== 'object' || !data.checkpoint || typeof data.checkpoint !== 'object' || !Array.isArray(data.files) || data.files.length > MAX_CHECKPOINT_FILES || !Array.isArray(data.checkpoint.excluded) || data.checkpoint.excluded.length > MAX_CHECKPOINT_FILES || !actualFolder.startsWith(`${checkpointRoot}${path.sep}`) || data.checkpoint.id !== id || data.checkpoint.projectId !== repo.projectId || data.projectRoot !== repo.projectRoot || !Number.isSafeInteger(data.checkpoint.files) || data.checkpoint.files !== data.files.length || typeof data.checkpoint.title !== 'string' || (data.checkpoint.runId !== undefined && typeof data.checkpoint.runId !== 'string') || typeof data.checkpoint.createdAt !== 'string' || (data.checkpoint.partial !== undefined && data.checkpoint.partial !== true) || (data.head !== undefined && !/^[a-f0-9]{40,64}$/i.test(data.head))) throw new Error('checkpoint does not belong to project');
       const seen = new Set<string>();
       const validImage = (image: Image): boolean => Boolean(image && typeof image === 'object' && typeof image.exists === 'boolean' && Number.isSafeInteger(image.mode) && image.mode >= 0 && image.mode <= 0o177777 && (image.exists
         ? (image.kind === 'file' || image.kind === 'symlink') && Number.isSafeInteger(image.size) && image.size! >= 0 && image.size! <= MAX_CHECKPOINT_FILE_BYTES && typeof image.blob === 'string' && /^blob-[a-f0-9]{64}$/.test(image.blob) && typeof image.hash === 'string' && /^[a-f0-9]{64}$/.test(image.hash) && (image.kind !== 'symlink' || typeof image.linkTarget === 'string')
@@ -644,7 +1133,10 @@ export class GitService {
   }
 
   async checkpoints(project: ProjectRef): Promise<Checkpoint[]> {
-    const repo = await this.repo(project);
+    return this.listCheckpoints(await this.repo(project));
+  }
+
+  private async listCheckpoints(repo: Repo): Promise<Checkpoint[]> {
     const folder = this.checkpointFolder(repo);
     const names = await readdir(folder).catch(() => [] as string[]);
     const records: Checkpoint[] = [];
@@ -673,7 +1165,8 @@ export class GitService {
   private async changeList(repo: Repo, manifest: CheckpointManifest): Promise<CheckpointChange[]> {
     if (manifest.checkpoint.excluded.length) throw new AppError('CHECKPOINT_EXCLUDED_CHANGES', 'Checkpoint includes paths that cannot be safely inspected', 409, { paths: manifest.checkpoint.excluded });
     const allPaths = new Set(manifest.files.map(item => item.path));
-    for (const gitPath of await this.dirtyPaths(repo)) {
+    // A partial checkpoint speaks only for its own files; anything else changed is not its to put back.
+    for (const gitPath of manifest.checkpoint.partial ? [] : await this.dirtyPaths(repo)) {
       const relative = asRelativePath(repo.root, repo.projectRoot, gitPath);
       if (relative !== undefined) allPaths.add(relative);
     }
@@ -733,26 +1226,34 @@ export class GitService {
       }
       return;
     }
+    const data = await this.imageData(folder, image);
+    await this.replaceWorktreeFile(repo, projectRelative, image.kind === 'symlink' ? { data, link: image.linkTarget ?? data.toString('utf8') } : { data, mode: image.mode & 0o777 || 0o600 });
+  }
+
+  /** Writes a file (or symlink) beside its destination and renames it into place. Without `mode` an existing file keeps its own. */
+  private async replaceWorktreeFile(repo: Repo, projectRelative: string, content: { data: Buffer; mode?: number; link?: string }): Promise<void> {
+    const target = await resolveScopedPath(repo.projectRoot, projectRelative, true);
     const parent = path.dirname(target);
     await mkdir(parent, { recursive: true, mode: 0o755 });
     const parentRelative = toProjectRelative(repo.projectRoot, parent);
     await resolveScopedPath(repo.projectRoot, parentRelative || '.', true);
-    const data = await this.imageData(folder, image);
     const temporary = `${target}.${randomUUID()}.codex-tmp`;
     try {
-      if (image.kind === 'symlink') {
-        const linkTarget = image.linkTarget ?? data.toString('utf8');
-        assertWithin(repo.projectRoot, path.resolve(parent, linkTarget), 'CHECKPOINT_SYMLINK_OUTSIDE_PROJECT');
-        await symlink(linkTarget, temporary);
-      } else {
-        const handle = await open(temporary, 'wx', image.mode & 0o777 || 0o600);
-        try { await handle.writeFile(data); await handle.chmod(image.mode & 0o777 || 0o600); await handle.sync(); } finally { await handle.close(); }
-      }
-      await resolveScopedPath(repo.projectRoot, parentRelative || '.', true);
+      let existingMode: number | undefined;
       try {
         const existing = await lstat(target);
-        if (existing.isDirectory()) throw new AppError('RESTORE_TARGET_DIRECTORY', 'Refusing to replace a directory during checkpoint restore', 409, { path: projectRelative });
+        if (existing.isDirectory()) throw new AppError('RESTORE_TARGET_DIRECTORY', 'Refusing to replace a directory with a file', 409, { path: projectRelative });
+        if (existing.isFile()) existingMode = existing.mode & 0o777;
       } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+      if (content.link !== undefined) {
+        assertWithin(repo.projectRoot, path.resolve(parent, content.link), 'CHECKPOINT_SYMLINK_OUTSIDE_PROJECT');
+        await symlink(content.link, temporary);
+      } else {
+        const mode = content.mode ?? existingMode ?? 0o644;
+        const handle = await open(temporary, 'wx', mode);
+        try { await handle.writeFile(content.data); await handle.chmod(mode); await handle.sync(); } finally { await handle.close(); }
+      }
+      await resolveScopedPath(repo.projectRoot, parentRelative || '.', true);
       await rename(temporary, target);
     } finally { await rm(temporary, { force: true }).catch(() => {}); }
   }
@@ -761,15 +1262,10 @@ export class GitService {
     const absolute = await resolveScopedPath(repo.projectRoot, projectRelative, true);
     const gitPath = path.relative(repo.root, absolute).split(path.sep).join('/');
     if (!image.exists) {
-      const removed = await this.git(repo, ['update-index', '--force-remove', '--', literalPath(gitPath)], { maxOutputBytes: 1024 * 1024 });
-      if (removed.code !== 0) throw gitError(removed, 'update-index');
-      return;
+      // `update-index` takes plain paths: given pathspec magic it removed nothing and reported success.
+      return this.writeIndex(repo, gitPath);
     }
-    const data = await this.imageData(folder, image);
-    const blob = await this.git(repo, ['hash-object', '-w', '--stdin'], { input: data, maxOutputBytes: 4096 });
-    if (blob.code !== 0) throw gitError(blob, 'hash-object');
-    const result = await this.git(repo, ['update-index', '--add', '--cacheinfo', image.mode.toString(8), blob.stdout.trim(), gitPath], { maxOutputBytes: 1024 * 1024 });
-    if (result.code !== 0) throw gitError(result, 'update-index');
+    await this.writeIndex(repo, gitPath, { data: await this.imageData(folder, image), mode: image.mode });
   }
 
   private async applyManifest(repo: Repo, manifest: CheckpointManifest, paths: string[]): Promise<void> {
@@ -789,9 +1285,10 @@ export class GitService {
       if (!Array.isArray(expectedChanges) || expectedChanges.length > MAX_CHECKPOINT_FILES) throw new AppError('INVALID_EXPECTED_CHANGES', 'Expected checkpoint changes are invalid');
       const current = await this.changeList(repo, manifest);
       if (normalizeChanges(current) !== normalizeChanges(expectedChanges)) throw new AppError('CHECKPOINT_CONFLICT', 'Project files changed since the checkpoint preview; refresh the changes before restoring', 409, { changes: current });
-      if (!current.length) return { restored: 0, backup: await this.createCheckpoint(project, { title: `Before restore: ${manifest.checkpoint.title}` }) };
+      const scope = manifest.checkpoint.partial ? { paths: manifest.files.map(item => item.path) } : {};
+      if (!current.length) return { restored: 0, backup: (await this.createCheckpointRecord(repo, { title: `Before restore: ${manifest.checkpoint.title}`, ...scope })).checkpoint };
 
-      const backupManifest = await this.createCheckpointRecord(repo, { title: `Before restore: ${manifest.checkpoint.title}` });
+      const backupManifest = await this.createCheckpointRecord(repo, { title: `Before restore: ${manifest.checkpoint.title}`, ...scope });
       const changedPaths = current.map(change => change.path);
       const checkedAgain = await this.changeList(repo, manifest);
       if (normalizeChanges(current) !== normalizeChanges(checkedAgain)) throw new AppError('CHECKPOINT_CONFLICT', 'Project files changed while restoring; no files were restored', 409, { changes: checkedAgain, backup: backupManifest.checkpoint });
@@ -903,7 +1400,7 @@ export class GitService {
       }
       if (!mainPath) throw new AppError('WORKTREE_MAIN_UNAVAILABLE', 'Could not identify the main worktree safely; nothing was removed', 409);
       if (requestedPath === mainPath) throw new AppError('WORKTREE_MAIN', 'The main working tree cannot be removed', 409, { path: target.path });
-      const dirty = await runProcess('git', ['status', '--porcelain=v1', '-z', '--untracked-files=all'], { cwd: target.path, maxOutputBytes: 16 * 1024 * 1024, timeoutMs: 15_000 });
+      const dirty = await runProcess('git', ['status', '--porcelain=v1', '-z', '--untracked-files=normal'], { cwd: target.path, maxOutputBytes: 16 * 1024 * 1024, timeoutMs: 60_000, env: GIT_ENV });
       if (dirty.code !== 0) throw gitError(dirty, 'worktree status');
       if (dirty.truncated) throw new AppError('GIT_STATUS_TOO_LARGE', 'Worktree status contains too many paths to verify safely', 413);
       if (dirty.stdout) throw new AppError('WORKTREE_DIRTY', 'Commit or stash worktree changes before removing it', 409, { path: target.path, entries: dirty.stdout.split('\0').filter(Boolean).length });
@@ -972,16 +1469,260 @@ export class GitService {
     if (symbolic.code !== 0 || !symbolic.stdout.trim()) throw new AppError('GIT_DETACHED_HEAD', 'This checkout is not on a branch', 409);
     const branch = symbolic.stdout.trim();
     const remotes = (await this.git(repo, ['remote'], { timeoutMs: 10_000, maxOutputBytes: 64 * 1024 })).stdout.split(/\r?\n/).filter(Boolean);
-    const head = await this.revision(repo, 'HEAD^{commit}');
+    const head = await this.headCommit(repo);
     const upstreamName = await this.git(repo, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}'], { timeoutMs: 10_000, maxOutputBytes: 4096 });
     const upstream = upstreamName.code === 0 ? upstreamName.stdout.trim() || undefined : undefined;
     let ahead = 0, behind = 0;
-    if (upstream && head) {
-      const counts = await this.git(repo, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD'], { timeoutMs: 15_000, maxOutputBytes: 4096 });
+    // Level with its upstream is the usual case, and needs no walk through history to know.
+    if (upstream && head && await this.revision(repo, '@{upstream}') !== head) {
+      const counts = await this.git(repo, ['rev-list', '--left-right', '--count', '@{upstream}...HEAD'], { timeoutMs: 60_000, maxOutputBytes: 4096 });
       const [left, right] = counts.stdout.trim().split(/\s+/).map(Number);
       if (counts.code === 0 && Number.isSafeInteger(left) && Number.isSafeInteger(right)) { behind = left; ahead = right; }
     }
     return { branch, ...(head ? { head } : {}), ...(upstream ? { upstream } : {}), ahead, behind, remotes };
+  }
+
+  private async emptyTree(repo: Repo): Promise<string> {
+    const empty = await this.git(repo, ['hash-object', '-t', 'tree', '/dev/null'], { maxOutputBytes: 4096 });
+    if (empty.code !== 0) throw gitError(empty, 'hash-object');
+    return empty.stdout.trim();
+  }
+
+  private async commitHash(repo: Repo, spec: string): Promise<string> {
+    if (typeof spec !== 'string' || !spec || spec.length > 255 || spec.startsWith('-') || spec.includes('\0')) throw new AppError('INVALID_COMMIT', 'Commit reference is invalid');
+    const commit = await this.revision(repo, `${spec}^{commit}`);
+    if (!commit) throw new AppError('COMMIT_NOT_FOUND', 'That commit is not in this repository', 404);
+    return commit;
+  }
+
+  /** A commit and its parents, resolved by one Git process. */
+  private async commitParents(repo: Repo, spec: string): Promise<string[]> {
+    if (typeof spec !== 'string' || !/^[0-9a-f]{7,64}$/i.test(spec)) throw new AppError('INVALID_COMMIT', 'Commit reference is invalid');
+    const result = await this.git(repo, ['rev-parse', `${spec}^{commit}`, `${spec}^@`], { timeoutMs: 30_000, maxOutputBytes: 64 * 1024 });
+    const hashes = result.stdout.split('\n').filter(Boolean);
+    if (result.code !== 0 || !hashes.length) throw new AppError('COMMIT_NOT_FOUND', 'That commit is not in this repository', 404);
+    return hashes;
+  }
+
+  /** The directory a project covers, as a pathspec: history and commits of a project in a subdirectory show only what touched it. */
+  private scopeArgs(repo: Repo): string[] {
+    const scope = path.relative(repo.root, repo.projectRoot).split(path.sep).join('/');
+    return scope ? ['--', literalPath(scope)] : [];
+  }
+
+  /**
+   * What history is labelled with, by commit: local branches, tags, and the remote branches the
+   * local ones track. Read from the refs alone and matched here: asking `git log` to label commits
+   * makes it load every ref of the repository, tens of thousands of remote branches included.
+   */
+  private async shownRefs(repo: Repo): Promise<{ labels: Map<string, GitRefLabel[]>; upstreams: string[] }> {
+    const listed = await this.git(repo, ['for-each-ref', '--format=%(refname)%00%(objectname)%00%(*objectname)%00%(HEAD)%00%(upstream)', 'refs/heads', 'refs/tags'], { timeoutMs: 30_000, maxOutputBytes: 16 * 1024 * 1024 });
+    if (listed.code !== 0) throw gitError(listed, 'for-each-ref');
+    const labels = new Map<string, GitRefLabel[]>();
+    const add = (hash: string, label: GitRefLabel) => { const list = labels.get(hash); if (list) list.push(label); else labels.set(hash, [label]); };
+    const upstreams = new Set<string>();
+    let onBranch = false;
+    for (const row of listed.stdout.split('\n')) {
+      const [ref, hash, peeled, head, upstream] = row.split('\0');
+      if (!ref || !hash) continue;
+      if (ref.startsWith('refs/tags/')) { add(peeled || hash, { kind: 'tag', name: ref.slice(10) }); continue; }
+      if (head === '*') onBranch = true;
+      add(hash, { kind: 'branch', name: ref.slice(11), ...(head === '*' ? { current: true } : {}) });
+      if (upstream?.startsWith('refs/remotes/')) upstreams.add(upstream);
+    }
+    const tracked = [...upstreams].slice(0, 200);
+    if (tracked.length) {
+      const remote = await this.git(repo, ['for-each-ref', '--format=%(refname)%00%(objectname)', ...tracked], { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 });
+      for (const row of remote.code === 0 ? remote.stdout.split('\n') : []) {
+        const [ref, hash] = row.split('\0');
+        if (ref && hash) add(hash, { kind: 'remote', name: ref.slice(13) });
+      }
+    }
+    const head = onBranch ? undefined : await this.headCommit(repo);
+    if (head) add(head, { kind: 'head', name: 'HEAD' });
+    return { labels, upstreams: tracked };
+  }
+
+  /**
+   * A page of history, newest first, with each commit's parents so the reader can draw the graph.
+   * `all` walks every local branch and what it tracks rather than only what the checkout can reach.
+   */
+  async log(project: ProjectRef, options: { all?: boolean; skip?: number; limit?: number } = {}): Promise<GitLog> {
+    const repo = await this.repo(project);
+    const limit = Math.min(Math.max(1, Math.trunc(options.limit ?? LOG_PAGE)), 500);
+    const skip = Math.min(Math.max(0, Math.trunc(options.skip ?? 0)), 1_000_000);
+    if (!(await this.headCommit(repo))) return { commits: [], more: false };
+    const shown = await this.shownRefs(repo);
+    // Git's own order streams the newest commits without first walking all of history, which a
+    // topological order has to; a repository's remote branches can run to tens of thousands, so
+    // `all` starts from the local ones and what they track rather than from every ref.
+    const result = await this.git(repo, [
+      'log', `--format=${LOG_FORMAT}%x1e`, `--max-count=${limit + 1}`, `--skip=${skip}`,
+      // An upstream deleted on the remote is still named by its branch; it is skipped rather than failing the walk.
+      ...(options.all ? ['--ignore-missing', '--branches', ...shown.upstreams, 'HEAD'] : ['HEAD']), ...this.scopeArgs(repo),
+    ], { timeoutMs: 60_000, maxOutputBytes: 8 * 1024 * 1024 });
+    if (result.code !== 0 || result.truncated) throw gitError(result, 'log');
+    const commits = result.stdout.split('\x1e').map(record => logCommit(record, shown.labels)).filter((item): item is GitCommit => Boolean(item));
+    return { commits: commits.slice(0, limit), more: commits.length > limit };
+  }
+
+  /** `--name-status -z` output, renames included, as project-relative files; those outside the project are left out. */
+  private changedFiles(repo: Repo, output: string): Array<{ path: string; git: string; originalPath?: string; status: string }> {
+    const files: Array<{ path: string; git: string; originalPath?: string; status: string }> = [];
+    const parts = output.split('\0');
+    for (let index = 0; index + 1 < parts.length;) {
+      const status = parts[index++];
+      const from = status.startsWith('R') || status.startsWith('C') ? parts[index++] : undefined;
+      const file = parts[index++];
+      const relative = file === undefined ? undefined : asRelativePath(repo.root, repo.projectRoot, file);
+      if (file === undefined || relative === undefined) continue;
+      const originalPath = from === undefined ? undefined : asRelativePath(repo.root, repo.projectRoot, from);
+      files.push({ path: relative, git: file, ...(originalPath !== undefined ? { originalPath } : {}), status: status[0] });
+    }
+    return files;
+  }
+
+  /** `--numstat -z` output per git path; a renamed file's counts are followed by its two paths as separate fields. */
+  private numstat(output: string): Map<string, LineStat> {
+    const stats = new Map<string, LineStat>();
+    const counted = output.split('\0');
+    for (let index = 0; index < counted.length; index += 1) {
+      const match = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/.exec(counted[index]);
+      if (!match) continue;
+      const file = match[3] || counted[index += 2];
+      if (file && match[1] !== '-') stats.set(file, { added: Number(match[1]), removed: Number(match[2]) });
+    }
+    return stats;
+  }
+
+  /**
+   * One commit: its whole message, and the files it changed against its first parent (a merge shows
+   * what it brought in). Line counts mean reading every changed file, so they are left out of a
+   * commit that touches more than [MAX_STAT_FILES]; past [MAX_CHANGED_FILES] the list itself is cut
+   * and `filesTotal` says how long it was.
+   */
+  async commitDetail(project: ProjectRef, spec: string): Promise<GitCommitDetail> {
+    const repo = await this.repo(project);
+    if (typeof spec !== 'string' || !/^[0-9a-f]{7,64}$/i.test(spec)) throw new AppError('INVALID_COMMIT', 'Commit reference is invalid');
+    const tree = ['diff-tree', '--root', '-r', '--no-commit-id', '-m', '--first-parent', '--no-ext-diff', '-z'];
+    const [shown, names] = await Promise.all([
+      // The commit object itself: `show` works out a merge's combined diff even when told to print none of it.
+      this.git(repo, ['cat-file', 'commit', spec], { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 }),
+      this.git(repo, [...tree, '--no-renames', '--name-status', spec, ...this.scopeArgs(repo)], { timeoutMs: 60_000, maxOutputBytes: 32 * 1024 * 1024 }),
+    ]);
+    if (shown.code !== 0 || !shown.stdout.trim()) throw new AppError('COMMIT_NOT_FOUND', 'That commit is not in this repository', 404);
+    if (names.code !== 0) throw gitError(names, 'diff-tree');
+    const commit = rawCommit(spec, shown.stdout);
+    let changed = this.changedFiles(repo, names.stdout);
+    let stats = new Map<string, LineStat>();
+    // Renames and line counts both read file contents, so they are worked out only for a commit of ordinary width.
+    if (changed.length <= MAX_STAT_FILES) {
+      const [renamed, numbers] = await Promise.all([
+        this.git(repo, [...tree, '-M', '--name-status', spec, ...this.scopeArgs(repo)], { timeoutMs: 60_000, maxOutputBytes: 8 * 1024 * 1024 }),
+        this.git(repo, [...tree, '-M', '--numstat', spec, ...this.scopeArgs(repo)], { timeoutMs: 60_000, maxOutputBytes: 8 * 1024 * 1024 }),
+      ]);
+      if (renamed.code === 0 && numbers.code === 0) { changed = this.changedFiles(repo, renamed.stdout); stats = this.numstat(numbers.stdout); }
+    }
+    const files = changed.slice(0, MAX_CHANGED_FILES).map(({ git, ...file }) => ({ ...file, ...(stats.get(git) ?? {}) }));
+    return { ...commit, files, ...(changed.length > files.length || names.truncated ? { filesTotal: changed.length } : {}) };
+  }
+
+  /**
+   * Local branches, tags, and the remote branches that have no local one yet. Only ref names and
+   * the commits they point at are read: sorting by date or counting ahead/behind opens an object per
+   * ref, which takes tens of seconds across thousands of them. `query` narrows the remote branches,
+   * of which at most [REMOTE_BRANCHES_LISTED] come back; `remoteCount` is how many match in all.
+   */
+  async refs(project: ProjectRef, options: { query?: string } = {}): Promise<GitRefs> {
+    const repo = await this.repo(project);
+    const [heads, others] = await Promise.all([
+      this.git(repo, ['for-each-ref', '--format=%(refname)%00%(objectname)%00%(upstream:short)%00%(HEAD)%00%(worktreepath)', 'refs/heads'], { timeoutMs: 30_000, maxOutputBytes: 8 * 1024 * 1024 }),
+      this.git(repo, ['for-each-ref', '--format=%(refname)%00%(objectname)', 'refs/remotes', 'refs/tags'], { timeoutMs: 30_000, maxOutputBytes: 32 * 1024 * 1024 }),
+    ]);
+    if (heads.code !== 0 || heads.truncated) throw gitError(heads, 'for-each-ref');
+    if (others.code !== 0 || others.truncated) throw gitError(others, 'for-each-ref');
+    const refs: GitRefs = { branches: [], remotes: [], remoteCount: 0, tags: [] };
+    for (const row of heads.stdout.split('\n')) {
+      const [ref, hash, upstream, head, worktree] = row.split('\0');
+      if (!ref || !hash) continue;
+      const branch: GitBranchRef = { name: ref.slice(11), hash, ...(upstream ? { upstream } : {}) };
+      if (head === '*') { branch.current = true; refs.head = branch.name; }
+      else if (worktree) branch.elsewhere = true;
+      refs.branches.push(branch);
+    }
+    refs.branches.sort((a, b) => Number(Boolean(b.current)) - Number(Boolean(a.current)));
+    const local = new Set(refs.branches.map(branch => branch.name));
+    const query = options.query?.trim().toLowerCase();
+    for (const row of others.stdout.split('\n')) {
+      const [ref, hash] = row.split('\0');
+      if (!ref || !hash) continue;
+      if (ref.startsWith('refs/tags/')) { if (refs.tags.length < 500) refs.tags.push({ name: ref.slice(10), hash }); continue; }
+      const name = ref.slice(13);
+      if (ref.endsWith('/HEAD') || local.has(name.slice(name.indexOf('/') + 1)) || (query && !name.toLowerCase().includes(query))) continue;
+      refs.remoteCount += 1;
+      if (refs.remotes.length < REMOTE_BRANCHES_LISTED) refs.remotes.push({ name, hash });
+    }
+    return refs;
+  }
+
+  /**
+   * Checks out a branch: an existing local one, a new one (`create`, from `base` or the current
+   * commit), or a remote one (`remote`, as in `origin/topic`), which gets a local branch tracking it.
+   * Uncommitted changes travel along when they fit; when they would be overwritten Git refuses and
+   * nothing changes.
+   */
+  async switchBranch(project: ProjectRef, input: { branch?: string; create?: boolean; base?: string; remote?: string }): Promise<GitRefs> {
+    const repo = await this.repo(project);
+    await this.mutate(repo, async () => {
+      let args: string[];
+      if (input.remote !== undefined) {
+        const remote = requireString(input.remote, 'remote', 255);
+        if (!(await this.revision(repo, `refs/remotes/${remote}`))) throw new AppError('INVALID_BRANCH', 'That remote branch does not exist', 404);
+        const local = remote.slice(remote.indexOf('/') + 1);
+        args = await this.revision(repo, `refs/heads/${local}`) ? ['switch', local] : ['switch', '--track', remote];
+      } else {
+        const branch = requireString(input.branch, 'branch', 255);
+        const valid = await this.git(repo, ['check-ref-format', '--branch', branch], { maxOutputBytes: 4096 });
+        if (valid.code !== 0) throw new AppError('INVALID_BRANCH', 'Branch name is invalid');
+        if (input.create) {
+          const base = input.base?.trim() ? await this.commitHash(repo, input.base.trim()) : undefined;
+          args = ['switch', '--create', branch, ...(base ? [base] : [])];
+        } else {
+          if (!(await this.revision(repo, `refs/heads/${branch}`))) throw new AppError('INVALID_BRANCH', 'That branch does not exist', 404);
+          args = ['switch', branch];
+        }
+      }
+      const result = await this.git(repo, args, { timeoutMs: 120_000, maxOutputBytes: 1024 * 1024 });
+      if (result.code !== 0) {
+        if (/would be overwritten by checkout/i.test(result.stderr)) throw new AppError('GIT_SWITCH_BLOCKED', 'Uncommitted changes would be overwritten by switching; commit or discard them first', 409);
+        throw gitError(result, 'switch');
+      }
+    });
+    return this.refs(project);
+  }
+
+  /** Brings every remote's branches up to date and drops the ones deleted there. Nothing in the checkout changes. */
+  async fetch(project: ProjectRef): Promise<GitRefs> {
+    const repo = await this.repo(project);
+    const result = await runProcess('git', ['fetch', '--all', '--prune', '--no-recurse-submodules'], { cwd: repo.root, timeoutMs: 120_000, maxOutputBytes: 1024 * 1024, env: NON_INTERACTIVE_ENV });
+    if (result.code !== 0) throw gitError(result, 'fetch');
+    return this.refs(project);
+  }
+
+  /**
+   * Brings the branch up to its upstream when that only moves it forward. A branch that has also
+   * gained commits of its own is left alone: merging or rebasing it is a choice, not a button.
+   */
+  async pull(project: ProjectRef): Promise<{ branch: BranchInfo; status: GitStatus }> {
+    const repo = await this.repo(project);
+    if (!(await this.branchOf(repo)).upstream) throw new AppError('GIT_NO_UPSTREAM', 'This branch has no upstream to pull from', 409);
+    await this.mutate(repo, async () => {
+      const result = await runProcess('git', ['pull', '--ff-only', '--no-rebase', '--no-recurse-submodules'], { cwd: repo.root, timeoutMs: 120_000, maxOutputBytes: 1024 * 1024, env: NON_INTERACTIVE_ENV });
+      if (result.code === 0) return;
+      if (/not possible to fast-forward|diverg/i.test(result.stderr)) throw new AppError('GIT_PULL_DIVERGED', 'This branch and its upstream have each gained commits; merge or rebase to bring them together', 409);
+      throw gitError(result, 'pull');
+    });
+    return { branch: await this.branchOf(repo), status: await this.status(project, true) };
   }
 
   /**
@@ -1012,41 +1753,64 @@ export class GitService {
     return { branch: await this.branchOf(repo), output: `${result.stdout}${result.stderr}`.trim().slice(0, 4000) };
   }
 
+  /** The repository's main line as this checkout can name it: the remote's default branch, else a `main` or `master`. Only refs are read. */
+  private async baseRef(repo: Repo): Promise<string | undefined> {
+    const remoteHead = (await this.git(repo, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], { maxOutputBytes: 4096 })).stdout.trim();
+    for (const ref of [remoteHead, 'origin/main', 'origin/master', 'main', 'master']) {
+      // Asked for as a ref, without peeling it to a commit: that would open the object store, which is the slow part of a large repository.
+      if (ref && await this.revision(repo, ref)) return ref;
+    }
+    return undefined;
+  }
+
+  /**
+   * Where the checked-out branch left the main line: its merge base with `baseRef`. On the main
+   * line itself that is its upstream, so the comparison shows what has not been pushed.
+   */
+  private async branchBase(repo: Repo): Promise<{ commit: string; ref: string }> {
+    const current = (await this.git(repo, ['symbolic-ref', '--quiet', '--short', 'HEAD'], { maxOutputBytes: 4096 })).stdout.trim();
+    const ref = await this.baseRef(repo);
+    if (ref && ref !== current) {
+      // A long history without a commit graph can take this a while; it runs only when the comparison is asked for.
+      const merged = await this.git(repo, ['merge-base', 'HEAD', ref], { timeoutMs: 120_000, maxOutputBytes: 4096 });
+      if (merged.code === 0 && merged.stdout.trim()) return { commit: merged.stdout.trim(), ref };
+    }
+    throw new AppError('GIT_NO_BASE', 'This branch has no main line to compare with', 422);
+  }
+
   /**
    * What a worktree changed since [base], committed and not: the view an attempt is judged by.
+   * Without a base it is what the branch changed since it left the main line (see `branchBase`).
    * Untracked files count as added, since an agent rarely stages what it creates.
    */
-  async compare(project: ProjectRef, base: string): Promise<WorktreeComparison> {
+  async compare(project: ProjectRef, base?: string): Promise<WorktreeComparison> {
     const repo = await this.repo(project);
-    const baseCommit = await this.revision(repo, `${base}^{commit}`);
+    if (base !== undefined && (typeof base !== 'string' || !base || base.length > 255 || base.startsWith('-') || base.includes('\0'))) throw new AppError('INVALID_BASE', 'Comparison base is invalid');
+    const branchBase = base === undefined ? await this.branchBase(repo) : undefined;
+    const baseCommit = branchBase?.commit ?? await this.revision(repo, `${base}^{commit}`);
     if (!baseCommit) throw new AppError('INVALID_BASE', 'Comparison base does not identify a commit', 422);
     const head = await this.headCommit(repo);
-    const count = head ? await this.git(repo, ['rev-list', '--count', `${baseCommit}..${head}`], { maxOutputBytes: 4096 }) : undefined;
-    const names = await this.git(repo, ['diff', '--name-status', '-z', '--no-renames', '--no-ext-diff', baseCommit, '--'], { timeoutMs: 15_000, maxOutputBytes: 8 * 1024 * 1024 });
+    const count = head ? await this.git(repo, ['rev-list', '--count', `${baseCommit}..${head}`], { timeoutMs: 60_000, maxOutputBytes: 4096 }) : undefined;
+    const names = await this.git(repo, ['diff', '--name-status', '-z', '--no-renames', '--no-ext-diff', baseCommit, '--'], { timeoutMs: 120_000, maxOutputBytes: 32 * 1024 * 1024 });
     if (names.code !== 0) throw gitError(names, 'diff');
-    const numbers = await this.git(repo, ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', baseCommit, '--'], { timeoutMs: 15_000, maxOutputBytes: 8 * 1024 * 1024 });
-    const stats = new Map<string, LineStat>();
-    for (const record of numbers.code === 0 ? numbers.stdout.split('\0') : []) {
-      const match = /^(\d+)\t(\d+)\t([\s\S]+)$/.exec(record);
-      if (match) stats.set(match[3], { added: Number(match[1]), removed: Number(match[2]) });
-    }
-    const files: WorktreeComparison['files'] = [];
-    const parts = names.stdout.split('\0');
-    for (let index = 0; index + 1 < parts.length; index += 2) {
-      const relative = asRelativePath(repo.root, repo.projectRoot, parts[index + 1]);
-      if (relative !== undefined) files.push({ path: relative, status: parts[index], ...(stats.get(parts[index + 1]) ?? {}) });
-    }
+    const changed = this.changedFiles(repo, names.stdout);
+    // Counting lines reads both versions of every changed file: fine for an attempt, minutes for a branch tens of thousands of files from its base.
+    const stats = changed.length <= MAX_STAT_FILES
+      ? this.numstat((await this.git(repo, ['diff', '--numstat', '-z', '--no-renames', '--no-ext-diff', baseCommit, '--'], { timeoutMs: 60_000, maxOutputBytes: 8 * 1024 * 1024 })).stdout)
+      : new Map<string, LineStat>();
+    const files: WorktreeComparison['files'] = changed.map(file => ({ path: file.path, status: file.status, ...(stats.get(file.git) ?? {}) }));
     let budget = MAX_COUNTED_UNTRACKED;
-    for (const item of (await this.statusRaw(repo)).paths) {
+    for (const item of (await this.statusRaw(repo, 'listed')).paths) {
       if (item.status !== '??') continue;
       const relative = asRelativePath(repo.root, repo.projectRoot, item.path);
       if (relative === undefined) continue;
-      const lines = budget-- > 0 ? await countLines(path.join(repo.root, item.path)) : undefined;
+      const lines = !item.path.endsWith('/') && budget-- > 0 ? await countLines(path.join(repo.root, item.path)) : undefined;
       files.push({ path: relative, status: '?', ...(lines !== undefined ? { added: lines, removed: 0 } : {}) });
     }
     files.sort((a, b) => a.path.localeCompare(b.path));
     return {
-      base: baseCommit, ...(head ? { head } : {}), commits: Number(count?.stdout.trim()) || 0, files,
+      base: baseCommit, ...(branchBase ? { ref: branchBase.ref } : {}), ...(head ? { head } : {}), commits: Number(count?.stdout.trim()) || 0, files: files.slice(0, MAX_CHANGED_FILES),
+      ...(files.length > MAX_CHANGED_FILES ? { filesTotal: files.length } : {}),
       added: files.reduce((sum, file) => sum + (file.added ?? 0), 0), removed: files.reduce((sum, file) => sum + (file.removed ?? 0), 0),
     };
   }

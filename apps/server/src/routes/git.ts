@@ -6,11 +6,68 @@ import { generatedBranch } from '../git/index.js';
 import { isWithin } from '../workspace/scope.js';
 import { paths } from './params.js';
 import type { RouteDeps } from './deps.js';
+import type { GitLineChange } from '../../../../packages/contracts/src/index.js';
 
 export function registerGitRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const {store,git}=deps;
-  app.get<{Params:{id:string}}>('/api/projects/:id/git/status',async(request)=>git.status(store.getProject(request.params.id)));
-  app.get<{Params:{id:string};Querystring:{path:string;staged?:string}}>('/api/projects/:id/git/diff',async(request)=>git.diff(store.getProject(request.params.id),request.query.path,request.query.staged==='true'));
+  /** `fresh=true` reads again even when the project is being followed and nothing is known to have changed. */
+  app.get<{Params:{id:string};Querystring:{fresh?:string}}>('/api/projects/:id/git/status',async(request)=>git.status(store.getProject(request.params.id),request.query.fresh==='true'));
+  /**
+   * The project's status now and each time it changes, as `status` events carrying the whole status.
+   * While any client holds this stream open the project's files are watched (see `followStatus`).
+   */
+  app.get<{Params:{id:string}}>('/api/projects/:id/git/stream',async(request,reply)=>{
+    const project=store.getProject(request.params.id);
+    const unwatch=deps.auth.onRevoke(request,()=>reply.raw.destroy());
+    reply.raw.once('close',unwatch);
+    reply.hijack(); deps.streams.add(reply.raw);
+    reply.raw.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+    reply.raw.write(': connected\n\n');
+    const open=()=>!reply.raw.destroyed&&!reply.raw.writableEnded;
+    const heartbeat=setInterval(()=>{if(open())reply.raw.write(': heartbeat\n\n');},15_000);
+    let unfollow:(()=>void)|undefined;
+    reply.raw.on('close',()=>{clearInterval(heartbeat);unfollow?.();deps.streams.delete(reply.raw);});
+    try{
+      const stop=await git.followStatus(project,status=>{if(open())reply.raw.write(`event: status\ndata: ${JSON.stringify(status)}\n\n`);});
+      if(open())unfollow=stop;else stop();
+    }catch(error){
+      // Not a repository: the client is told once and reads status the ordinary way if it wants the reason.
+      // Any other failure just ends the stream, and the client dials again.
+      if(open()&&error instanceof AppError&&error.code==='NOT_A_GIT_REPOSITORY')reply.raw.write(`event: unavailable\ndata: ${JSON.stringify({code:error.code})}\n\n`);
+      if(open())reply.raw.end();
+    }
+  });
+  /** `base` compares the working tree with `checkpoint:<id>` or a commit instead of the index. */
+  app.get<{Params:{id:string};Querystring:{path:string;staged?:string;base?:string;commit?:string;from?:string}}>('/api/projects/:id/git/diff',async(request)=>{
+    const {path:file,staged,base,commit,from}=request.query;
+    return git.diff(store.getProject(request.params.id),file,{staged:staged==='true',...(base?{base}:{}),...(commit?{commit}:{}),...(from?{from}:{})});
+  });
+  /** History, newest first: `all=true` walks every branch and tag, `skip` pages back. */
+  app.get<{Params:{id:string};Querystring:{all?:string;skip?:string;limit?:string}}>('/api/projects/:id/git/log',async(request)=>git.log(store.getProject(request.params.id),{all:request.query.all==='true',skip:Number(request.query.skip)||0,...(request.query.limit?{limit:Number(request.query.limit)||undefined}:{})}));
+  app.get<{Params:{id:string;commit:string}}>('/api/projects/:id/git/commits/:commit',async(request)=>git.commitDetail(store.getProject(request.params.id),request.params.commit));
+  /** `q` narrows the remote branches listed. */
+  app.get<{Params:{id:string};Querystring:{q?:string}}>('/api/projects/:id/git/refs',async(request)=>git.refs(store.getProject(request.params.id),request.query.q?{query:request.query.q.slice(0,200)}:{}));
+  app.post<{Params:{id:string}}>('/api/projects/:id/git/fetch',async(request)=>git.fetch(store.getProject(request.params.id)));
+  /** Both rewrite the checkout's files, so neither runs under a turn that is editing them. */
+  app.post<{Params:{id:string};Body:{branch?:string;create?:boolean;base?:string;remote?:string}}>('/api/projects/:id/git/switch',async(request)=>{
+    const project=store.getProject(request.params.id),body=request.body??{};
+    const release=deps.dispatch.reserveWorkspace([project.id]);
+    try{return await git.switchBranch(project,{...(body.branch!==undefined?{branch:body.branch}:{}),create:body.create===true,...(body.base!==undefined?{base:requireString(body.base,'base',255)}:{}),...(body.remote!==undefined?{remote:body.remote}:{})});}
+    finally{release();}
+  });
+  app.post<{Params:{id:string}}>('/api/projects/:id/git/pull',async(request)=>{
+    const project=store.getProject(request.params.id);
+    const release=deps.dispatch.reserveWorkspace([project.id]);
+    try{return await git.pull(project);}
+    finally{release();}
+  });
+  /** What the branch changed since it left the main line, or since `base`. */
+  app.get<{Params:{id:string};Querystring:{base?:string}}>('/api/projects/:id/git/compare',async(request)=>git.compare(store.getProject(request.params.id),request.query.base||undefined));
+  app.post<{Params:{id:string};Body:{paths:string[];permanent?:boolean}}>('/api/projects/:id/git/discard',async(request)=>git.discard(store.getProject(request.params.id),paths(request.body?.paths),{permanent:request.body?.permanent===true}));
+  app.post<{Params:{id:string};Body:{path:string;action:'stage'|'unstage'|'discard';changes:GitLineChange[];version:string;base?:string}}>('/api/projects/:id/git/lines',async(request)=>{
+    const body=request.body??{} as never;
+    return git.applyLines(store.getProject(request.params.id),{path:requireString(body.path,'path',8192),action:body.action,changes:body.changes,version:requireString(body.version,'version',64),...(body.base!==undefined?{base:requireString(body.base,'base',255)}:{})});
+  });
   app.post<{Params:{id:string};Body:{paths:string[]}}>('/api/projects/:id/git/stage',async(request)=>git.stage(store.getProject(request.params.id),paths(request.body?.paths)));
   app.post<{Params:{id:string};Body:{paths:string[]}}>('/api/projects/:id/git/unstage',async(request)=>git.unstage(store.getProject(request.params.id),paths(request.body?.paths)));
   app.post<{Params:{id:string};Body:{message:string}}>('/api/projects/:id/git/commit',async(request)=>git.commit(store.getProject(request.params.id),requireString(request.body?.message,'message',10_000)));
@@ -19,7 +76,9 @@ export function registerGitRoutes(app: FastifyInstance, deps: RouteDeps): void {
   app.get<{Params:{id:string;checkpointId:string}}>('/api/projects/:id/checkpoints/:checkpointId/changes',async(request)=>git.checkpointChanges(store.getProject(request.params.id),request.params.checkpointId));
   app.post<{Params:{id:string;checkpointId:string};Body:{expectedChanges:unknown}}>('/api/projects/:id/checkpoints/:checkpointId/restore',async(request)=>{
     const project=store.getProject(request.params.id);
-    const release=deps.dispatch.reserveWorkspace([project.id]);
+    // Undoing a discard puts back the few files it took, each checked against its fingerprint, so it does not have to wait for a running turn.
+    const partial=(await git.checkpoints(project)).some(item=>item.id===request.params.checkpointId&&item.partial);
+    const release=partial?()=>{}:deps.dispatch.reserveWorkspace([project.id]);
     try{return await git.restoreCheckpoint(project,request.params.checkpointId,request.body?.expectedChanges as never);}
     finally{release();}
   });

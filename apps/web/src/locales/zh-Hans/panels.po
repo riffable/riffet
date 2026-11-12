@@ -7,33 +7,54 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
-#. placeholder {0}: formatBytes(preview.size)
-#: src/app/panels/FilesPanel.tsx
-msgid "{0} · 无法在这里预览"
-msgstr "{0} · 无法在这里预览"
+#. placeholder {0}: reviews.length
+#: src/app/panels/GitPanel.tsx
+msgid "{0, plural, =1 {# comment} other {# comments}}"
+msgstr "{0, plural, =1 {# comment} other {# comments}}"
 
 #. placeholder {0}: checkpoint.files
 #. placeholder {0}: status.entries.length
 #: src/app/panels/GitPanel.tsx
 #: src/app/panels/PublishSection.tsx
-msgid "{0} 个文件"
-msgstr "{0} 个文件"
+msgid "{0, plural, =1 {# file} other {# files}}"
+msgstr "{0, plural, =1 {# file} other {# files}}"
 
-#. placeholder {0}: checkpoint.files
-#. placeholder {1}: checkpoint.excluded.length
+#. placeholder {0}: conflicts.length - 8
+#. placeholder {0}: total - shownRows
 #: src/app/panels/GitPanel.tsx
-msgid "{0} 个文件 · 已排除 {1}"
-msgstr "{0} 个文件 · 已排除 {1}"
-
-#. placeholder {0}: result.into
 #: src/app/panels/PublishSection.tsx
-msgid "{0} 已包含这个分支的全部提交"
-msgstr "{0} 已包含这个分支的全部提交"
+msgid "{0, plural, =1 {# more file} other {# more files}}"
+msgstr "{0, plural, =1 {# more file} other {# more files}}"
 
 #. placeholder {0}: reviews.length
 #: src/app/panels/GitPanel.tsx
-msgid "{0} 条审阅意见"
-msgstr "{0} 条审阅意见"
+msgid "{0, plural, =1 {Sent # comment to the agent} other {Sent # comments to the agent}}"
+msgstr "{0, plural, =1 {Sent # comment to the agent} other {Sent # comments to the agent}}"
+
+#. placeholder {0}: formatBytes(preview.size)
+#: src/app/panels/FilesPanel.tsx
+msgid "{0} · 无法在这里预览"
+msgstr "{0} · 无法在这里预览"
+
+#. placeholder {0}: branch.ahead
+#: src/app/panels/PublishSection.tsx
+msgid "{0} ahead"
+msgstr "{0} ahead"
+
+#. placeholder {0}: result.into
+#: src/app/panels/PublishSection.tsx
+msgid "{0} already has every commit of this branch"
+msgstr "{0} already has every commit of this branch"
+
+#. placeholder {0}: branch.behind
+#: src/app/panels/PublishSection.tsx
+msgid "{0} behind"
+msgstr "{0} behind"
+
+#. placeholder {0}: checkpoint.excluded.length
+#: src/app/panels/GitPanel.tsx
+msgid "{0} excluded"
+msgstr "{0} excluded"
 
 #. placeholder {0}: favorite.path
 #: src/app/panels/FilesPanel.tsx
@@ -41,44 +62,813 @@ msgid "{0}（不存在）"
 msgstr "{0}（不存在）"
 
 #: src/app/panels/PublishSection.tsx
-msgid "{failedCount} 失败"
-msgstr "{failedCount} 失败"
+msgid "{failedCount} failed"
+msgstr "{failedCount} failed"
+
+#. placeholder {0}: pr?.checks.items.length ?? 0
+#: src/app/panels/PublishSection.tsx
+msgid "{passed}/{0} checks passed"
+msgstr "{passed}/{0} checks passed"
 
 #: src/app/panels/PublishSection.tsx
-msgid "{running} 运行中"
-msgstr "{running} 运行中"
+msgid "{running} running"
+msgstr "{running} running"
+
+#: src/app/panels/GitPanel.tsx
+msgid "{stagedCount, plural, =1 {Commit # File} other {Commit # Files}}"
+msgstr "{stagedCount, plural, =1 {Commit # File} other {Commit # Files}}"
 
 #: src/app/panels/PublishSection.tsx
-msgid "{target} 有未提交的改动，先在原项目里提交或暂存它们"
-msgstr "{target} 有未提交的改动，先在原项目里提交或暂存它们"
+msgid "{target} has uncommitted changes. Commit or stash them there first."
+msgstr "{target} has uncommitted changes. Commit or stash them there first."
 
 #: src/app/panels/FilesPanel.tsx
 msgid "⌘ 点击"
 msgstr "⌘ 点击"
 
+#: src/app/panels/PublishSection.tsx
+msgid "A conflict abandons the whole merge, leaving no half-merged files."
+msgstr "A conflict abandons the whole merge, leaving no half-merged files."
+
+#: src/app/panels/PublishSection.tsx
+msgid "Add a title first"
+msgstr "Add a title first"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Add Comment"
+msgstr "Add Comment"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Added"
+msgstr "Added"
+
+#: src/app/panels/HistorySection.tsx
+msgid "All"
+msgstr "All"
+
+#: src/app/panels/PublishSection.tsx
+msgid "An empty title is filled in from the commits."
+msgstr "An empty title is filled in from the commits."
+
+#: src/app/panels/PublishSection.tsx
+msgid "Approved"
+msgstr "Approved"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Ask Agent to Fix"
+msgstr "Ask Agent to Fix"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Ask the agent to merge {target} into the worktree and resolve the conflicts, then merge again."
+msgstr "Ask the agent to merge {target} into the worktree and resolve the conflicts, then merge again."
+
+#: src/app/panels/PublishSection.tsx
+msgid "Automatic"
+msgstr "Automatic"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Base Branch"
+msgstr "Base Branch"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Based on (optional)"
+msgstr "Based on (optional)"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Binary file"
+msgstr "Binary file"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Branch"
+msgstr "Branch"
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgid "Cancel"
+msgstr "Cancel"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Changes"
+msgstr "Changes"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Changes requested"
+msgstr "Changes requested"
+
+#. placeholder {0}: target.ref ?? target.base.slice(0, 8)
+#: src/app/panels/GitPanel.tsx
+msgid "Changes since {0}"
+msgstr "Changes since {0}"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Changes this turn"
+msgstr "Changes this turn"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Check Out"
+msgstr "Check Out"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Check Out Remote Branch"
+msgstr "Check Out Remote Branch"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Check Out Remote Branch…"
+msgstr "Check Out Remote Branch…"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Checked out in another worktree"
+msgstr "Checked out in another worktree"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Checkpoint name (optional)"
+msgstr "Checkpoint name (optional)"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Checkpoint saved"
+msgstr "Checkpoint saved"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Checkpoints"
+msgstr "Checkpoints"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Clear"
+msgstr "Clear"
+
+#: src/app/panels/HistorySection.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "Close"
+msgstr "Close"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Closed"
+msgstr "Closed"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Comment on a line number; Shift selects a range. Comments are sent together below the list."
+msgstr "Comment on a line number; Shift selects a range. Comments are sent together below the list."
+
+#: src/app/panels/GitPanel.tsx
+msgid "Comments cleared"
+msgstr "Comments cleared"
+
+#: src/app/panels/GitPanel.tsx
+msgctxt "panels-commit-action"
+msgid "Commit"
+msgstr "Commit"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Commit failed"
+msgstr "Commit failed"
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgid "Commit message"
+msgstr "Commit message"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Commit message (⌘↵)"
+msgstr "Commit message (⌘↵)"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Committed"
+msgstr "Committed"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Compare with"
+msgstr "Compare with"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Conflicts"
+msgstr "Conflicts"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Conflicts; merge abandoned"
+msgstr "Conflicts; merge abandoned"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Copied"
+msgstr "Copied"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Copy Path"
+msgstr "Copy Path"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't apply this change"
+msgstr "Couldn't apply this change"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Couldn't create the branch"
+msgstr "Couldn't create the branch"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't create the checkpoint"
+msgstr "Couldn't create the checkpoint"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Couldn't create the PR"
+msgstr "Couldn't create the PR"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Couldn't create the worktree"
+msgstr "Couldn't create the worktree"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Couldn't load branches"
+msgstr "Couldn't load branches"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't load changes"
+msgstr "Couldn't load changes"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't load checkpoints"
+msgstr "Couldn't load checkpoints"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Couldn't load history"
+msgstr "Couldn't load history"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't load the checkpoint"
+msgstr "Couldn't load the checkpoint"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't load the diff"
+msgstr "Couldn't load the diff"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Couldn't load the PR"
+msgstr "Couldn't load the PR"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Couldn't load this commit"
+msgstr "Couldn't load this commit"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Couldn't load worktrees"
+msgstr "Couldn't load worktrees"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Couldn't remove the worktree"
+msgstr "Couldn't remove the worktree"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't send the comments"
+msgstr "Couldn't send the comments"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Couldn't send to the agent"
+msgstr "Couldn't send to the agent"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't stage"
+msgstr "Couldn't stage"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Couldn't switch branches"
+msgstr "Couldn't switch branches"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't undo"
+msgstr "Couldn't undo"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Couldn't unstage"
+msgstr "Couldn't unstage"
+
+#: src/app/panels/PublishSection.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "Create"
+msgstr "Create"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Create and Switch"
+msgstr "Create and Switch"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Create PR"
+msgstr "Create PR"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Create Pull Request"
+msgstr "Create Pull Request"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Created PR"
+msgstr "Created PR"
+
+#. placeholder {0}: result.pullRequest.number
+#: src/app/panels/PublishSection.tsx
+msgid "Created PR #{0}"
+msgstr "Created PR #{0}"
+
 #: src/app/panels/FilesPanel.tsx
 msgid "Ctrl 点击"
 msgstr "Ctrl 点击"
 
+#: src/app/panels/HistorySection.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "Current"
+msgstr "Current"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Default branch"
+msgstr "Default branch"
+
 #: src/app/panels/GitPanel.tsx
-msgid "Git 视图"
-msgstr "Git 视图"
+msgid "Delete comment"
+msgstr "Delete comment"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Deleted"
+msgstr "Deleted"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Description"
+msgstr "Description"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Detached HEAD"
+msgstr "Detached HEAD"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Discard"
+msgstr "Discard"
+
+#. placeholder {0}: basename(entry.path)
+#: src/app/panels/GitPanel.tsx
+msgid "Discard \"{0}\"?"
+msgstr "Discard \"{0}\"?"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Discard failed"
+msgstr "Discard failed"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Discarded"
+msgstr "Discarded"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Draft"
+msgstr "Draft"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Fetch failed"
+msgstr "Fetch failed"
+
+#: src/app/panels/GitPanel.tsx
+msgid "File changed, reloaded"
+msgstr "File changed, reloaded"
+
+#. placeholder {0}: branch.branch
+#: src/app/panels/PublishSection.tsx
+msgid "From {0}."
+msgstr "From {0}."
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Git refuses to remove a worktree with uncommitted changes."
+msgstr "Git refuses to remove a worktree with uncommitted changes."
+
+#: src/app/panels/GitPanel.tsx
+msgid "Git view"
+msgstr "Git view"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Has comments"
+msgstr "Has comments"
+
+#: src/app/panels/GitPanel.tsx
+msgid "History"
+msgstr "History"
+
+#: src/app/panels/HistorySection.tsx
+msgid "History scope"
+msgstr "History scope"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "HTML 预览"
 msgstr "HTML 预览"
 
 #: src/app/panels/GitPanel.tsx
-msgid "Worktree"
-msgstr "Worktree"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "Worktree 已创建"
-msgstr "Worktree 已创建"
+msgid "If any of these files changes before the restore, it is refused."
+msgstr "If any of these files changes before the restore, it is refused."
 
 #: src/app/panels/PublishSection.tsx
-msgid "Worktree 里还有未提交的改动，会先用这条说明提交。"
-msgstr "Worktree 里还有未提交的改动，会先用这条说明提交。"
+msgid "Install the GitHub CLI (gh) to create PRs and see CI"
+msgstr "Install the GitHub CLI (gh) to create PRs and see CI"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Keep All Commits"
+msgstr "Keep All Commits"
+
+#. placeholder {0}: comment.line
+#: src/app/panels/GitPanel.tsx
+msgid "Line {0}"
+msgstr "Line {0}"
+
+#. placeholder {0}: comment.line
+#. placeholder {1}: comment.endLine
+#: src/app/panels/GitPanel.tsx
+msgid "Lines {0}–{1}"
+msgstr "Lines {0}–{1}"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Local and remote both have new commits. Merge or rebase first."
+msgstr "Local and remote both have new commits. Merge or rebase first."
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merge"
+msgstr "Merge"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merge failed"
+msgstr "Merge failed"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merge into {mergeTarget}"
+msgstr "Merge into {mergeTarget}"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merge into {target}"
+msgstr "Merge into {target}"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merge strategy"
+msgstr "Merge strategy"
+
+#: src/app/panels/PublishSection.tsx
+msgctxt "panels-pr-state"
+msgid "Merged"
+msgstr "Merged"
+
+#. placeholder {0}: result.into
+#: src/app/panels/PublishSection.tsx
+msgid "Merged into {0}"
+msgstr "Merged into {0}"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merged into the original folder"
+msgstr "Merged into the original folder"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Merges <0>{branch}</0> into the original project."
+msgstr "Merges <0>{branch}</0> into the original project."
+
+#: src/app/panels/GitPanel.tsx
+msgid "Modified"
+msgstr "Modified"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "More"
+msgstr "More"
+
+#: src/app/panels/HistorySection.tsx
+msgid "New Branch"
+msgstr "New Branch"
+
+#: src/app/panels/HistorySection.tsx
+msgid "New Branch from Here"
+msgstr "New Branch from Here"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "New branch name"
+msgstr "New branch name"
+
+#: src/app/panels/HistorySection.tsx
+msgid "New Branch…"
+msgstr "New Branch…"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "New Worktree"
+msgstr "New Worktree"
+
+#: src/app/panels/PublishSection.tsx
+msgid "No changes"
+msgstr "No changes"
+
+#: src/app/panels/GitPanel.tsx
+msgid "No changes this turn"
+msgstr "No changes this turn"
+
+#: src/app/panels/GitPanel.tsx
+msgid "No checkpoints yet"
+msgstr "No checkpoints yet"
+
+#: src/app/panels/HistorySection.tsx
+msgid "No commits yet"
+msgstr "No commits yet"
+
+#. placeholder {0}: scopedList.ref ?? ''
+#: src/app/panels/GitPanel.tsx
+msgid "No differences from {0}"
+msgstr "No differences from {0}"
+
+#: src/app/panels/GitPanel.tsx
+msgid "No file differences"
+msgstr "No file differences"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "No matching worktrees"
+msgstr "No matching worktrees"
+
+#: src/app/panels/PublishSection.tsx
+msgid "No remote"
+msgstr "No remote"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "No worktrees"
+msgstr "No worktrees"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Not a Git repository"
+msgstr "Not a Git repository"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Not pushed yet"
+msgstr "Not pushed yet"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Open"
+msgstr "Open"
+
+#. placeholder {0}: pr.number
+#: src/app/panels/PublishSection.tsx
+msgid "Open #{0}"
+msgstr "Open #{0}"
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/PublishSection.tsx
+msgid "Open a conversation first"
+msgstr "Open a conversation first"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Optional"
+msgstr "Optional"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Other"
+msgstr "Other"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Path copied"
+msgstr "Path copied"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Preview truncated"
+msgstr "Preview truncated"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Publish Branch"
+msgstr "Publish Branch"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Pull failed"
+msgstr "Pull failed"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Push"
+msgstr "Push"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Push failed"
+msgstr "Push failed"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Push to…"
+msgstr "Push to…"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Pushed to {pushedTo}"
+msgstr "Pushed to {pushedTo}"
+
+#. placeholder {0}: branch.branch
+#: src/app/panels/PublishSection.tsx
+msgid "Pushes {0} first."
+msgstr "Pushes {0} first."
+
+#: src/app/panels/GitPanel.tsx
+#: src/app/panels/WorktreeSection.tsx
+msgid "Refresh"
+msgstr "Refresh"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Refresh PR"
+msgstr "Refresh PR"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Remote"
+msgstr "Remote"
+
+#: src/app/panels/PublishSection.tsx
+msgctxt "panels-remote-default"
+msgid "Remote"
+msgstr "Remote"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Remove"
+msgstr "Remove"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Remove Worktree"
+msgstr "Remove Worktree"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Remove Worktree After Merging"
+msgstr "Remove Worktree After Merging"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Remove Worktree?"
+msgstr "Remove Worktree?"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Restore"
+msgstr "Restore"
+
+#. placeholder {0}: checkpoint.title
+#: src/app/panels/GitPanel.tsx
+msgid "Restore \"{0}\"?"
+msgstr "Restore \"{0}\"?"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Restore refused"
+msgstr "Restore refused"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Restored"
+msgstr "Restored"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Revert"
+msgstr "Revert"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Review comment"
+msgstr "Review comment"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Review required"
+msgstr "Review required"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Run gh auth login, or add a GitHub remote, to create PRs"
+msgstr "Run gh auth login, or add a GitHub remote, to create PRs"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Same as the working tree"
+msgstr "Same as the working tree"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Save"
+msgstr "Save"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Search worktrees"
+msgstr "Search worktrees"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Send as one message to this conversation"
+msgstr "Send as one message to this conversation"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Send the failed checks to this conversation"
+msgstr "Send the failed checks to this conversation"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Send to Agent"
+msgstr "Send to Agent"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Sent to the agent"
+msgstr "Sent to the agent"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Showing the first {count} of {total} files"
+msgstr "Showing the first {count} of {total} files"
+
+#. placeholder {0}: detail.filesTotal ?? detail.files.length
+#: src/app/panels/HistorySection.tsx
+msgid "Showing the first {FILES_SHOWN} of {0} files"
+msgstr "Showing the first {FILES_SHOWN} of {0} files"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Side"
+msgstr "Side"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Squash into One Commit"
+msgstr "Squash into One Commit"
+
+#. placeholder {0}: result.into
+#: src/app/panels/PublishSection.tsx
+msgid "Squashed into {0}"
+msgstr "Squashed into {0}"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Stage"
+msgstr "Stage"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Stage All"
+msgstr "Stage All"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Staged"
+msgstr "Staged"
+
+#: src/app/panels/PublishSection.tsx
+msgid "The branch is kept; this folder's project is archived."
+msgstr "The branch is kept; this folder's project is archived."
+
+#: src/app/panels/PublishSection.tsx
+msgid "the original folder"
+msgstr "the original folder"
+
+#: src/app/panels/PublishSection.tsx
+msgid "The original folder already has these changes"
+msgstr "The original folder already has these changes"
+
+#: src/app/panels/PublishSection.tsx
+msgid "the original project"
+msgstr "the original project"
+
+#: src/app/panels/PublishSection.tsx
+msgid "the original project's branch"
+msgstr "the original project's branch"
+
+#: src/app/panels/PublishSection.tsx
+msgid "The remote has commits you don't have. Pull first."
+msgstr "The remote has commits you don't have. Pull first."
+
+#: src/app/panels/PublishSection.tsx
+msgid "They're committed first with this message."
+msgstr "They're committed first with this message."
+
+#: src/app/panels/GitPanel.tsx
+msgid "This file can't be backed up first, so this can't be undone."
+msgstr "This file can't be backed up first, so this can't be undone."
+
+#: src/app/panels/GitPanel.tsx
+msgid "This Turn"
+msgstr "This Turn"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Title"
+msgstr "Title"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Uncommitted changes"
+msgstr "Uncommitted changes"
+
+#: src/app/panels/HistorySection.tsx
+msgid "Uncommitted changes would be overwritten. Commit or discard them first."
+msgstr "Uncommitted changes would be overwritten. Commit or discard them first."
+
+#: src/app/panels/GitPanel.tsx
+msgid "Undo"
+msgstr "Undo"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Unstage"
+msgstr "Unstage"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Unstage All"
+msgstr "Unstage All"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Unstaged"
+msgstr "Unstaged"
+
+#: src/app/panels/PublishSection.tsx
+msgid "Up to date"
+msgstr "Up to date"
+
+#: src/app/panels/GitPanel.tsx
+msgid "What should the agent change? (⌘↵ to add)"
+msgstr "What should the agent change? (⌘↵ to add)"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Whole file"
+msgstr "Whole file"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Working tree changes"
+msgstr "Working tree changes"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Working tree clean"
+msgstr "Working tree clean"
+
+#: src/app/panels/WorktreeSection.tsx
+msgid "Worktree created"
+msgstr "Worktree created"
+
+#: src/app/panels/GitPanel.tsx
+msgid "Worktrees"
+msgstr "Worktrees"
 
 #: src/app/panels/ContextPanel.tsx
 msgid "上下文视图"
@@ -108,60 +898,13 @@ msgstr "下载此文件夹（ZIP）"
 msgid "不存在"
 msgstr "不存在"
 
-#: src/app/panels/GitPanel.tsx
-msgid "不是 Git 仓库"
-msgstr "不是 Git 仓库"
-
-#: src/app/panels/GitPanel.tsx
-msgid "与当前工作区相同"
-msgstr "与当前工作区相同"
-
 #: src/app/panels/FilesPanel.tsx
-#: src/app/panels/GitPanel.tsx
 msgid "二进制文件"
 msgstr "二进制文件"
-
-#. placeholder {0}: branch.branch
-#: src/app/panels/PublishSection.tsx
-msgid "从 {0} 发起。"
-msgstr "从 {0} 发起。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "仓库默认分支"
-msgstr "仓库默认分支"
-
-#. placeholder {0}: branch.branch
-#: src/app/panels/PublishSection.tsx
-msgid "会先把 {0} 推送到远端。"
-msgstr "会先把 {0} 推送到远端。"
-
-#: src/app/panels/GitPanel.tsx
-msgid "作为一条消息发给当前会话"
-msgstr "作为一条消息发给当前会话"
-
-#: src/app/panels/GitPanel.tsx
-msgid "保存"
-msgstr "保存"
-
-#: src/app/panels/PublishSection.tsx
-msgid "保留全部提交"
-msgstr "保留全部提交"
-
-#: src/app/panels/GitPanel.tsx
-msgid "修改"
-msgstr "修改"
 
 #: src/app/panels/ContextPanel.tsx
 msgid "全屏"
 msgstr "全屏"
-
-#: src/app/panels/GitPanel.tsx
-msgid "全部取消"
-msgstr "全部取消"
-
-#: src/app/panels/GitPanel.tsx
-msgid "全部暂存"
-msgstr "全部暂存"
 
 #: src/app/panels/ContextPanel.tsx
 #: src/app/panels/FilesPanel.tsx
@@ -172,72 +915,19 @@ msgstr "关闭"
 msgid "关闭面板"
 msgstr "关闭面板"
 
-#: src/app/panels/WorktreeSection.tsx
-msgid "其他"
-msgstr "其他"
-
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/QuickOpen.tsx
 msgid "内容"
 msgstr "内容"
-
-#: src/app/panels/GitPanel.tsx
-msgid "内容过大，预览已截断"
-msgstr "内容过大，预览已截断"
 
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/QuickOpen.tsx
 msgid "最近查看"
 msgstr "最近查看"
 
-#: src/app/panels/GitPanel.tsx
-msgid "写下要 Agent 修改的地方（⌘↵ 添加）"
-msgstr "写下要 Agent 修改的地方（⌘↵ 添加）"
-
-#: src/app/panels/PublishSection.tsx
-msgid "分支会保留；这个目录对应的项目会被归档。"
-msgstr "分支会保留；这个目录对应的项目会被归档。"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "分离 HEAD"
-msgstr "分离 HEAD"
-
-#: src/app/panels/PublishSection.tsx
-#: src/app/panels/WorktreeSection.tsx
-msgctxt "panels-create-action"
-msgid "创建"
-msgstr "创建"
-
-#: src/app/panels/PublishSection.tsx
-msgid "创建 PR"
-msgstr "创建 PR"
-
-#: src/app/panels/PublishSection.tsx
-msgid "创建 Pull Request"
-msgstr "创建 Pull Request"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "创建 Worktree"
-msgstr "创建 Worktree"
-
-#: src/app/panels/GitPanel.tsx
-msgctxt "panels-change-deleted"
-msgid "删除"
-msgstr "删除"
-
-#: src/app/panels/GitPanel.tsx
-msgid "删除这条意见"
-msgstr "删除这条意见"
-
 #: src/app/panels/FilesPanel.tsx
-#: src/app/panels/GitPanel.tsx
-#: src/app/panels/WorktreeSection.tsx
 msgid "刷新"
 msgstr "刷新"
-
-#: src/app/panels/PublishSection.tsx
-msgid "刷新 PR 状态"
-msgstr "刷新 PR 状态"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "加载中…"
@@ -248,44 +938,6 @@ msgstr "加载中…"
 msgid "加载更多"
 msgstr "加载更多"
 
-#: src/app/panels/PublishSection.tsx
-msgid "压缩"
-msgstr "压缩"
-
-#: src/app/panels/PublishSection.tsx
-msgid "压缩为一个提交"
-msgstr "压缩为一个提交"
-
-#: src/app/panels/PublishSection.tsx
-msgid "原目录"
-msgstr "原目录"
-
-#: src/app/panels/PublishSection.tsx
-msgid "原目录已包含这些改动"
-msgstr "原目录已包含这些改动"
-
-#: src/app/panels/PublishSection.tsx
-msgid "原项目"
-msgstr "原项目"
-
-#: src/app/panels/PublishSection.tsx
-msgid "原项目的当前分支"
-msgstr "原项目的当前分支"
-
-#: src/app/panels/PublishSection.tsx
-msgid "发布分支"
-msgstr "发布分支"
-
-#: src/app/panels/GitPanel.tsx
-msgid "发给 Agent"
-msgstr "发给 Agent"
-
-#: src/app/panels/GitPanel.tsx
-#: src/app/panels/PublishSection.tsx
-msgctxt "panels-cancel-action"
-msgid "取消"
-msgstr "取消"
-
 #: src/app/panels/FilesPanel.tsx
 msgid "取消收藏"
 msgstr "取消收藏"
@@ -293,47 +945,6 @@ msgstr "取消收藏"
 #: src/app/panels/FilesPanel.tsx
 msgid "取消收藏此文件夹"
 msgstr "取消收藏此文件夹"
-
-#: src/app/panels/GitPanel.tsx
-msgid "取消暂存"
-msgstr "取消暂存"
-
-#. placeholder {0}: conflicts.length - 8
-#: src/app/panels/PublishSection.tsx
-msgid "另 {0} 个文件"
-msgstr "另 {0} 个文件"
-
-#: src/app/panels/PublishSection.tsx
-msgid "可以让 Agent 在 Worktree 里先合入 {target} 并解决冲突，再回来合并。"
-msgstr "可以让 Agent 在 Worktree 里先合入 {target} 并解决冲突，再回来合并。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "可选"
-msgstr "可选"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并"
-msgstr "合并"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并到 {mergeTarget}"
-msgstr "合并到 {mergeTarget}"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并到 {target}"
-msgstr "合并到 {target}"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并后移除 Worktree"
-msgstr "合并后移除 Worktree"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并失败"
-msgstr "合并失败"
-
-#: src/app/panels/PublishSection.tsx
-msgid "合并方式"
-msgstr "合并方式"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "图片无法加载"
@@ -355,14 +966,6 @@ msgstr "在新标签页打开"
 msgid "在编辑器中打开"
 msgstr "在编辑器中打开"
 
-#: src/app/panels/WorktreeSection.tsx
-msgid "基于（可选）"
-msgstr "基于（可选）"
-
-#: src/app/panels/PublishSection.tsx
-msgid "填写标题后可编辑"
-msgstr "填写标题后可编辑"
-
 #: src/app/panels/FilesPanel.tsx
 msgid "复制"
 msgstr "复制"
@@ -380,58 +983,12 @@ msgid "复制绝对路径"
 msgstr "复制绝对路径"
 
 #: src/app/panels/FilesPanel.tsx
-#: src/app/panels/WorktreeSection.tsx
 msgid "复制路径"
 msgstr "复制路径"
-
-#: src/app/panels/PublishSection.tsx
-msgid "安装 GitHub CLI（gh）后可创建 PR、查看 CI"
-msgstr "安装 GitHub CLI（gh）后可创建 PR、查看 CI"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "定位当前文件"
 msgstr "定位当前文件"
-
-#: src/app/panels/GitPanel.tsx
-msgid "审阅意见"
-msgstr "审阅意见"
-
-#: src/app/panels/PublishSection.tsx
-msgid "尚未推送到远端"
-msgstr "尚未推送到远端"
-
-#: src/app/panels/GitPanel.tsx
-msgid "工作区改动"
-msgstr "工作区改动"
-
-#: src/app/panels/GitPanel.tsx
-msgid "工作区是干净的"
-msgstr "工作区是干净的"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已关闭"
-msgstr "已关闭"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已创建 PR"
-msgstr "已创建 PR"
-
-#. placeholder {0}: result.pullRequest.number
-#: src/app/panels/PublishSection.tsx
-msgid "已创建 PR #{0}"
-msgstr "已创建 PR #{0}"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已合并"
-msgstr "已合并"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已合并到原目录"
-msgstr "已合并到原目录"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已同步"
-msgstr "已同步"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "已复制"
@@ -450,48 +1007,8 @@ msgid "已复制绝对路径"
 msgstr "已复制绝对路径"
 
 #: src/app/panels/FilesPanel.tsx
-#: src/app/panels/WorktreeSection.tsx
 msgid "已复制路径"
 msgstr "已复制路径"
-
-#: src/app/panels/GitPanel.tsx
-msgid "已恢复到检查点"
-msgstr "已恢复到检查点"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已批准"
-msgstr "已批准"
-
-#. placeholder {0}: result.commits
-#. placeholder {1}: result.into
-#: src/app/panels/PublishSection.tsx
-msgid "已把 {0} 个提交{squashLabel}合并到 {1}"
-msgstr "已把 {0} 个提交{squashLabel}合并到 {1}"
-
-#. placeholder {0}: reviews.length
-#: src/app/panels/GitPanel.tsx
-msgid "已把 {0} 条审阅意见发给 Agent"
-msgstr "已把 {0} 条审阅意见发给 Agent"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已推送到 {pushedTo}"
-msgstr "已推送到 {pushedTo}"
-
-#: src/app/panels/GitPanel.tsx
-msgid "已提交"
-msgstr "已提交"
-
-#: src/app/panels/GitPanel.tsx
-msgid "已暂存"
-msgstr "已暂存"
-
-#: src/app/panels/GitPanel.tsx
-msgid "已清空审阅意见"
-msgstr "已清空审阅意见"
-
-#: src/app/panels/PublishSection.tsx
-msgid "已让 Agent 修复 CI"
-msgstr "已让 Agent 修复 CI"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "引用到对话"
@@ -507,43 +1024,8 @@ msgid "引用这一行"
 msgstr "引用这一行"
 
 #: src/app/panels/QuickOpen.tsx
-#: src/app/panels/WorktreeSection.tsx
 msgid "当前"
 msgstr "当前"
-
-#: src/app/panels/PublishSection.tsx
-msgid "待审阅"
-msgstr "待审阅"
-
-#: src/app/panels/GitPanel.tsx
-msgid "恢复"
-msgstr "恢复"
-
-#. placeholder {0}: checkpoint.title
-#: src/app/panels/GitPanel.tsx
-msgid "恢复到「{0}」？"
-msgstr "恢复到「{0}」？"
-
-#. placeholder {0}: pr.number
-#: src/app/panels/PublishSection.tsx
-msgid "打开 #{0}"
-msgstr "打开 #{0}"
-
-#: src/app/panels/GitPanel.tsx
-msgid "打开一个会话后可发送"
-msgstr "打开一个会话后可发送"
-
-#: src/app/panels/PublishSection.tsx
-msgid "打开一个会话后可用"
-msgstr "打开一个会话后可用"
-
-#: src/app/panels/PublishSection.tsx
-msgid "把 <0>{branch}</0> 合并进原项目。"
-msgstr "把 <0>{branch}</0> 合并进原项目。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "把失败的检查发给当前会话"
-msgstr "把失败的检查发给当前会话"
 
 #. placeholder {0}: shortcutLabel('P')
 #: src/app/panels/FilesPanel.tsx
@@ -554,44 +1036,6 @@ msgstr "按 {0} 搜索文件"
 #: src/app/panels/QuickOpen.tsx
 msgid "按文件名查找"
 msgstr "按文件名查找"
-
-#: src/app/panels/PublishSection.tsx
-msgid "推送"
-msgstr "推送"
-
-#: src/app/panels/PublishSection.tsx
-msgid "推送到…"
-msgstr "推送到…"
-
-#: src/app/panels/PublishSection.tsx
-msgid "推送失败"
-msgstr "推送失败"
-
-#: src/app/panels/PublishSection.tsx
-msgid "描述"
-msgstr "描述"
-
-#: src/app/panels/GitPanel.tsx
-msgctxt "panels-commit-action"
-msgid "提交"
-msgstr "提交"
-
-#: src/app/panels/GitPanel.tsx
-msgid "提交 {stagedCount} 个文件"
-msgstr "提交 {stagedCount} 个文件"
-
-#: src/app/panels/GitPanel.tsx
-#: src/app/panels/PublishSection.tsx
-msgid "提交说明"
-msgstr "提交说明"
-
-#: src/app/panels/GitPanel.tsx
-msgid "提交说明（⌘↵ 提交）"
-msgstr "提交说明（⌘↵ 提交）"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "搜索 Worktree"
-msgstr "搜索 Worktree"
 
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/QuickOpen.tsx
@@ -617,10 +1061,6 @@ msgstr "搜索方式"
 msgid "搜索结果"
 msgstr "搜索结果"
 
-#: src/app/panels/GitPanel.tsx
-msgid "撤销"
-msgstr "撤销"
-
 #: src/app/panels/FilesPanel.tsx
 msgid "收藏文件夹"
 msgstr "收藏文件夹"
@@ -632,18 +1072,6 @@ msgstr "收藏此文件夹"
 #: src/app/panels/FilesPanel.tsx
 msgid "收藏的文件夹"
 msgstr "收藏的文件夹"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "收起创建"
-msgstr "收起创建"
-
-#: src/app/panels/GitPanel.tsx
-msgid "改动"
-msgstr "改动"
-
-#: src/app/panels/GitPanel.tsx
-msgid "整个文件"
-msgstr "整个文件"
 
 #: src/app/panels/FileTree.tsx
 msgid "文件"
@@ -670,51 +1098,10 @@ msgstr "文件过大，仅显示前一部分"
 msgid "文件预览"
 msgstr "文件预览"
 
-#: src/app/panels/WorktreeSection.tsx
-msgid "新分支名"
-msgstr "新分支名"
-
-#: src/app/panels/GitPanel.tsx
-msgid "新增"
-msgstr "新增"
-
-#: src/app/panels/PublishSection.tsx
-msgid "无改动"
-msgstr "无改动"
-
-#: src/app/panels/PublishSection.tsx
-msgid "无法创建 PR"
-msgstr "无法创建 PR"
-
-#: src/app/panels/WorktreeSection.tsx
-msgctxt "panels-worktree-create-failed"
-msgid "无法创建 Worktree"
-msgstr "无法创建 Worktree"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法创建提交"
-msgstr "无法创建提交"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法创建检查点"
-msgstr "无法创建检查点"
-
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/FileTree.tsx
 msgid "无法加载更多"
 msgstr "无法加载更多"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法发送审阅意见"
-msgstr "无法发送审阅意见"
-
-#: src/app/panels/PublishSection.tsx
-msgid "无法发送给 Agent"
-msgstr "无法发送给 Agent"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法取消暂存"
-msgstr "无法取消暂存"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "无法在 Finder 中显示"
@@ -729,41 +1116,9 @@ msgstr "无法在编辑器中打开"
 msgid "无法打开文件"
 msgstr "无法打开文件"
 
-#: src/app/panels/GitPanel.tsx
-msgid "无法暂存改动"
-msgstr "无法暂存改动"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法暂存文件"
-msgstr "无法暂存文件"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "无法移除 Worktree"
-msgstr "无法移除 Worktree"
-
-#: src/app/panels/PublishSection.tsx
-msgid "无法读取 PR 状态"
-msgstr "无法读取 PR 状态"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "无法读取 Worktree"
-msgstr "无法读取 Worktree"
-
 #: src/app/panels/FilesPanel.tsx
 msgid "无法读取完整的文件内容"
 msgstr "无法读取完整的文件内容"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法读取差异"
-msgstr "无法读取差异"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法读取检查点"
-msgstr "无法读取检查点"
-
-#: src/app/panels/GitPanel.tsx
-msgid "无法读取检查点内容"
-msgstr "无法读取检查点内容"
 
 #: src/app/panels/FilesPanel.tsx
 #: src/app/panels/FileTree.tsx
@@ -778,42 +1133,13 @@ msgstr "无法跳转到定义"
 msgid "显示源码"
 msgstr "显示源码"
 
-#: src/app/panels/GitPanel.tsx
-msgid "暂存"
-msgstr "暂存"
-
 #: src/app/panels/FilesPanel.tsx
-#: src/app/panels/WorktreeSection.tsx
 msgid "更多操作"
 msgstr "更多操作"
 
 #: src/app/panels/ContextPanel.tsx
 msgid "更多视图"
 msgstr "更多视图"
-
-#: src/app/panels/PublishSection.tsx
-msgid "有冲突"
-msgstr "有冲突"
-
-#: src/app/panels/PublishSection.tsx
-msgid "有冲突，已放弃合并"
-msgstr "有冲突，已放弃合并"
-
-#: src/app/panels/GitPanel.tsx
-msgid "有审阅意见"
-msgstr "有审阅意见"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "有未提交改动时 Git 会拒绝移除。"
-msgstr "有未提交改动时 Git 会拒绝移除。"
-
-#: src/app/panels/GitPanel.tsx
-msgid "服务器会再次核对下列文件指纹（SHA-256 前 12 位），若文件在此期间被修改，恢复会被拒绝。"
-msgstr "服务器会再次核对下列文件指纹（SHA-256 前 12 位），若文件在此期间被修改，恢复会被拒绝。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "未提交的改动"
-msgstr "未提交的改动"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法"
@@ -822,43 +1148,6 @@ msgstr "查找用法"
 #: src/app/panels/FilesPanel.tsx
 msgid "查找用法失败"
 msgstr "查找用法失败"
-
-#: src/app/panels/PublishSection.tsx
-msgid "标题"
-msgstr "标题"
-
-#: src/app/panels/PublishSection.tsx
-msgid "标题留空时用提交记录自动填写。"
-msgstr "标题留空时用提交记录自动填写。"
-
-#. placeholder {0}: pr?.checks.items.length ?? 0
-#: src/app/panels/PublishSection.tsx
-msgid "检查 {passed}/{0} 通过"
-msgstr "检查 {passed}/{0} 通过"
-
-#: src/app/panels/GitPanel.tsx
-msgid "检查点"
-msgstr "检查点"
-
-#: src/app/panels/GitPanel.tsx
-msgid "检查点名称（可选）"
-msgstr "检查点名称（可选）"
-
-#: src/app/panels/GitPanel.tsx
-msgid "检查点已保存"
-msgstr "检查点已保存"
-
-#: src/app/panels/GitPanel.tsx
-msgid "检查点恢复被拒绝"
-msgstr "检查点恢复被拒绝"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "没有 Worktree"
-msgstr "没有 Worktree"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "没有匹配的 Worktree"
-msgstr "没有匹配的 Worktree"
 
 #. placeholder {0}: at.word
 #: src/app/panels/FilesPanel.tsx
@@ -874,90 +1163,22 @@ msgstr "没有找到匹配项"
 msgid "没有找到用法"
 msgstr "没有找到用法"
 
-#: src/app/panels/GitPanel.tsx
-msgid "没有文件差异"
-msgstr "没有文件差异"
-
 #: src/app/panels/ContextPanel.tsx
 msgid "没有显示的视图"
 msgstr "没有显示的视图"
-
-#: src/app/panels/PublishSection.tsx
-msgid "没有远端仓库"
-msgstr "没有远端仓库"
-
-#: src/app/panels/GitPanel.tsx
-msgid "添加意见"
-msgstr "添加意见"
-
-#: src/app/panels/GitPanel.tsx
-msgid "清空"
-msgstr "清空"
 
 #: src/app/panels/FilesPanel.tsx
 msgctxt "panels-render-preview-toggle"
 msgid "渲染预览"
 msgstr "渲染预览"
 
-#: src/app/panels/PublishSection.tsx
-msgid "用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR"
-msgstr "用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR"
-
-#: src/app/panels/PublishSection.tsx
-msgid "目标分支"
-msgstr "目标分支"
-
 #: src/app/panels/ContextPanel.tsx
 msgid "视图设置"
 msgstr "视图设置"
 
-#: src/app/panels/WorktreeSection.tsx
-msgid "移除"
-msgstr "移除"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "移除 Worktree"
-msgstr "移除 Worktree"
-
-#: src/app/panels/WorktreeSection.tsx
-msgid "移除 Worktree？"
-msgstr "移除 Worktree？"
-
 #: src/app/panels/FilesPanel.tsx
 msgid "空目录"
 msgstr "空目录"
-
-#. placeholder {0}: comment.line
-#: src/app/panels/GitPanel.tsx
-msgid "第 {0} 行"
-msgstr "第 {0} 行"
-
-#. placeholder {0}: comment.line
-#. placeholder {1}: comment.endLine
-#: src/app/panels/GitPanel.tsx
-msgid "第 {0}–{1} 行"
-msgstr "第 {0}–{1} 行"
-
-#: src/app/panels/PublishSection.tsx
-msgid "自动填写"
-msgstr "自动填写"
-
-#: src/app/panels/PublishSection.tsx
-msgid "草稿"
-msgstr "草稿"
-
-#. placeholder {0}: branch.behind
-#: src/app/panels/PublishSection.tsx
-msgid "落后 {0}"
-msgstr "落后 {0}"
-
-#: src/app/panels/GitPanel.tsx
-msgid "行号上可写审阅意见，Shift 选择多行；意见在改动列表下方统一发送。"
-msgstr "行号上可写审阅意见，Shift 选择多行；意见在改动列表下方统一发送。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "让 Agent 修复"
-msgstr "让 Agent 修复"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "该文件在项目目录之外。可在「设置 → 文件与编辑器」中允许只读预览项目外文件。"
@@ -987,53 +1208,14 @@ msgstr "返回搜索结果"
 msgid "返回文件列表"
 msgstr "返回文件列表"
 
-#: src/app/panels/GitPanel.tsx
-msgid "还没有检查点"
-msgstr "还没有检查点"
-
-#: src/app/panels/PublishSection.tsx
-msgid "进行中"
-msgstr "进行中"
-
-#: src/app/panels/PublishSection.tsx
-msgctxt "panels-remote-default"
-msgid "远端"
-msgstr "远端"
-
-#. placeholder {0}: branch.behind
-#: src/app/panels/PublishSection.tsx
-msgid "远端有 {0} 个新提交，推送前先在终端里同步。"
-msgstr "远端有 {0} 个新提交，推送前先在终端里同步。"
-
-#: src/app/panels/PublishSection.tsx
-msgid "远端有本地没有的提交，先在终端里 pull 或 rebase，再推送"
-msgstr "远端有本地没有的提交，先在终端里 pull 或 rebase，再推送"
-
 #: src/app/panels/ContextPanel.tsx
 msgid "退出全屏"
 msgstr "退出全屏"
-
-#: src/app/panels/PublishSection.tsx
-msgid "选择远端"
-msgstr "选择远端"
-
-#: src/app/panels/PublishSection.tsx
-msgid "遇到冲突会整体放弃，不会在原项目里留下半合并的文件。"
-msgstr "遇到冲突会整体放弃，不会在原项目里留下半合并的文件。"
 
 #: src/app/panels/FilesPanel.tsx
 msgid "重试"
 msgstr "重试"
 
-#: src/app/panels/PublishSection.tsx
-msgid "需要修改"
-msgstr "需要修改"
-
 #: src/app/panels/ContextPanel.tsx
 msgid "项目上下文"
 msgstr "项目上下文"
-
-#. placeholder {0}: branch.ahead
-#: src/app/panels/PublishSection.tsx
-msgid "领先 {0}"
-msgstr "领先 {0}"

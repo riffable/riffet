@@ -53,7 +53,7 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
       setLoadError('');
     } catch (error) {
       if (!mounted.current || sequence !== request.current) return;
-      const message = errorMessage(error, t`无法读取 Worktree`);
+      const message = errorMessage(error, t`Couldn't load worktrees`);
       setLoadError(message);
       errorHandler.current(message);
     } finally {
@@ -105,23 +105,23 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
       const created = await api.createWorktree(project.id, { branch: branch.trim(), ...(base.trim() ? { base: base.trim() } : {}) });
       if (!mounted.current) return;
       setBranch(''); setBase(''); setCreating(false); setQuery(''); setRevealPath(created.path);
-      toast.success(t`Worktree 已创建`);
+      toast.success(t`Worktree created`);
       await refresh();
     } catch (error) {
-      if (mounted.current) errorHandler.current(errorMessage(error, t({ message: '无法创建 Worktree', context: 'panels-worktree-create-failed' })));
+      if (mounted.current) errorHandler.current(errorMessage(error, t`Couldn't create the worktree`));
     } finally { if (mounted.current) setBusy(false); }
   };
   const remove = async (worktree: WorktreeInfo) => {
-    const ok = await confirmDialog({ title: t`移除 Worktree？`, description: t`有未提交改动时 Git 会拒绝移除。`, detail: worktree.path, confirmLabel: t`移除`, destructive: true });
+    const ok = await confirmDialog({ title: t`Remove Worktree?`, description: t`Git refuses to remove a worktree with uncommitted changes.`, detail: worktree.path, confirmLabel: t`Remove`, destructive: true });
     if (!ok || !mounted.current) return;
     setBusy(true);
     try { await api.removeWorktree(project.id, worktree.path); if (mounted.current) await refresh(); }
-    catch (error) { if (mounted.current) errorHandler.current(errorMessage(error, t`无法移除 Worktree`)); }
+    catch (error) { if (mounted.current) errorHandler.current(errorMessage(error, t`Couldn't remove the worktree`)); }
     finally { if (mounted.current) setBusy(false); }
   };
 
   const row = (worktree: WorktreeInfo, current = false) => {
-    const name = worktree.branch?.replace(/^refs\/heads\//, '') ?? t`分离 HEAD`;
+    const name = worktree.branch?.replace(/^refs\/heads\//, '') ?? t`Detached HEAD`;
     const canOpen = !current && !worktree.bare && Boolean(onOpenWorktree);
     return (
       <div key={worktree.path} ref={(element) => { if (element) rows.current.set(worktree.path, element); else rows.current.delete(worktree.path); }} className={cn('group/wt flex items-start gap-1 rounded-lg hover:bg-hover', current && 'bg-muted')}>
@@ -130,17 +130,17 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span className="flex min-w-0 items-start gap-2">
               <span className="line-clamp-2 min-w-0 break-all text-sm font-medium text-fg">{name}</span>
-              {current && <span className="shrink-0 rounded bg-accent-soft px-1 text-2xs font-medium text-accent"><Trans>当前</Trans></span>}
+              {current && <span className="shrink-0 rounded bg-accent-soft px-1 text-2xs font-medium text-accent"><Trans>Current</Trans></span>}
             </span>
             {!worktree.branch && <span className="font-mono text-2xs text-fg-3">{worktree.head.slice(0, 8)}</span>}
             <span className="block truncate text-left font-mono text-2xs text-fg-3 [direction:rtl]"><bdi>{worktree.path}</bdi></span>
           </span>
         </button>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button size="icon-xs" variant="quiet" aria-label={t`更多操作`} className="mr-1 mt-1.5 shrink-0 max-md:size-10" disabled={busy}><IconEllipsis /></Button></DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild><Button size="icon-xs" variant="quiet" aria-label={t`More`} className="mr-1 mt-1.5 shrink-0 max-md:size-10" disabled={busy}><IconEllipsis /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => void copyWithToast(worktree.path, t`已复制路径`)}><IconCopy /><Trans>复制路径</Trans></DropdownMenuItem>
-            {!worktree.bare && !current && <DropdownMenuItem variant="danger" onSelect={() => void remove(worktree)}><IconTrash2 /><Trans>移除 Worktree</Trans></DropdownMenuItem>}
+            <DropdownMenuItem onSelect={() => void copyWithToast(worktree.path, t`Path copied`)}><IconCopy /><Trans>Copy Path</Trans></DropdownMenuItem>
+            {!worktree.bare && !current && <DropdownMenuItem variant="danger" onSelect={() => void remove(worktree)}><IconTrash2 /><Trans>Remove Worktree</Trans></DropdownMenuItem>}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -165,27 +165,27 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
       <div className="flex shrink-0 items-center gap-1 px-3 pb-2">
         <div className="relative min-w-0 flex-1">
           <IconSearch aria-hidden className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-4" />
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t`搜索 Worktree`} aria-label={t`搜索 Worktree`} className="pl-8 max-md:h-10" />
+          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t`Search worktrees`} aria-label={t`Search worktrees`} className="pl-8 max-md:h-10" />
         </div>
-        <Tip label={creating ? t`收起创建` : t`创建 Worktree`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={creating ? t`收起创建` : t`创建 Worktree`} aria-expanded={creating} onClick={() => setCreating((value) => !value)}>{creating ? <IconX /> : <IconPlus />}</Button></Tip>
-        <Tip label={t`刷新`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`刷新`} disabled={refreshing || busy} onClick={() => void refresh()}><IconRefreshCw className={cn(refreshing && 'animate-spin')} /></Button></Tip>
+        <Tip label={creating ? t`Close` : t`New Worktree`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={creating ? t`Close` : t`New Worktree`} aria-expanded={creating} onClick={() => setCreating((value) => !value)}>{creating ? <IconX /> : <IconPlus />}</Button></Tip>
+        <Tip label={t`Refresh`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`Refresh`} disabled={refreshing || busy} onClick={() => void refresh()}><IconRefreshCw className={cn(refreshing && 'animate-spin')} /></Button></Tip>
       </div>
       {creating && (
         <form className="flex shrink-0 flex-col gap-2 px-3 pb-2" onSubmit={(event) => { event.preventDefault(); void create(); }}>
-          <Input autoFocus value={branch} onChange={(event) => setBranch(event.target.value)} placeholder={t`新分支名`} aria-label={t`新分支名`} disabled={busy} />
+          <Input autoFocus value={branch} onChange={(event) => setBranch(event.target.value)} placeholder={t`New branch name`} aria-label={t`New branch name`} disabled={busy} />
           <div className="flex gap-2">
-            <Input value={base} onChange={(event) => setBase(event.target.value)} placeholder={t`基于（可选）`} aria-label={t`基于（可选）`} disabled={busy} />
-            <Button type="submit" disabled={!branch.trim() || busy}>{busy ? <Spinner /> : <IconPlus />}<Trans context="panels-create-action">创建</Trans></Button>
+            <Input value={base} onChange={(event) => setBase(event.target.value)} placeholder={t`Based on (optional)`} aria-label={t`Based on (optional)`} disabled={busy} />
+            <Button type="submit" disabled={!branch.trim() || busy}>{busy ? <Spinner /> : <IconPlus />}<Trans>Create</Trans></Button>
           </div>
         </form>
       )}
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-3">
         {!worktrees && !loadError && <div className="flex justify-center py-10"><Spinner /></div>}
         {!worktrees && loadError && <EmptyState title={loadError} />}
-        {worktrees && !found && <EmptyState title={search ? t`没有匹配的 Worktree` : t`没有 Worktree`} />}
+        {worktrees && !found && <EmptyState title={search ? t`No matching worktrees` : t`No worktrees`} />}
         {groups.current && matches(groups.current) && row(groups.current, true)}
         {group('Riffet', groups.managed, managedOpen, () => setManagedOpen((value) => !value))}
-        {group(t`其他`, groups.others, othersOpen ?? groups.managed.length === 0, () => setOthersOpen((value) => !(value ?? groups.managed.length === 0)))}
+        {group(t`Other`, groups.others, othersOpen ?? groups.managed.length === 0, () => setOthersOpen((value) => !(value ?? groups.managed.length === 0)))}
       </div>
     </div>
   );

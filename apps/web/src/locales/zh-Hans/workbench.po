@@ -58,6 +58,10 @@ msgstr "Agent 扩展"
 msgid "CLI 与终端工具"
 msgstr "CLI 与终端工具"
 
+#: src/app/state/gitStatusStore.ts
+msgid "Couldn't read Git status"
+msgstr "Couldn't read Git status"
+
 #: src/app/ProjectHome.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "Shell 终端"
@@ -1190,10 +1194,6 @@ msgstr "无法确认授权状态"
 #: src/app/state/navStore.ts
 msgid "无法离开扩展管理页面"
 msgstr "无法离开扩展管理页面"
-
-#: src/app/state/gitStatusStore.ts
-msgid "无法读取 Git 状态"
-msgstr "无法读取 Git 状态"
 
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { msg, plural } from '@lingui/core/macro';
+import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowDown, IconArrowUp, IconCheck, IconChevronRight, IconCircleDashed, IconExternalLink, IconGitBranch, IconGitMerge, IconGitPullRequest, IconRefreshCw, IconSparkles, IconUpload, IconX } from '@/components/icons';
 import type { BranchInfo, CheckState, GitStatus, MergeResult, PullRequestInfo } from '@contracts';
 import { Button } from '@/components/ui/button';
@@ -13,6 +13,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, type MergeOptions, type ProjectRecord } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
+import { refreshGitStatus } from '../state/gitStatusStore';
 
 type PullState = { loading: boolean; pullRequest?: PullRequestInfo | null; unavailable?: string };
 /** How often checks still running are re-read while someone watches them. */
@@ -23,8 +24,8 @@ const checkTone = (state: CheckState | 'none'): 'success' | 'danger' | 'warning'
 /** gh being absent or signed out is a setup state, not an error worth a toast each time the panel opens. */
 function ghProblem(error: unknown): string | undefined {
   if (!(error instanceof HttpError)) return undefined;
-  if (error.code === 'GH_UNAVAILABLE') return i18n._(msg`安装 GitHub CLI（gh）后可创建 PR、查看 CI`);
-  if (error.code === 'GH_OPERATION_FAILED' && /auth|login|token|not a git|no git remotes|none of the git remotes/i.test(error.message)) return i18n._(msg`用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR`);
+  if (error.code === 'GH_UNAVAILABLE') return i18n._(msg`Install the GitHub CLI (gh) to create PRs and see CI`);
+  if (error.code === 'GH_OPERATION_FAILED' && /auth|login|token|not a git|no git remotes|none of the git remotes/i.test(error.message)) return i18n._(msg`Run gh auth login, or add a GitHub remote, to create PRs`);
   return undefined;
 }
 
@@ -51,14 +52,14 @@ export function PublishSection({ project, status, sessionId, active, onError, on
 }) {
   const { t } = useLingui();
   const reviewLabel: Record<string, { label: string; tone: 'success' | 'danger' | 'warning' }> = {
-    APPROVED: { label: t`已批准`, tone: 'success' },
-    CHANGES_REQUESTED: { label: t`需要修改`, tone: 'danger' },
-    REVIEW_REQUIRED: { label: t`待审阅`, tone: 'warning' },
+    APPROVED: { label: t`Approved`, tone: 'success' },
+    CHANGES_REQUESTED: { label: t`Changes requested`, tone: 'danger' },
+    REVIEW_REQUIRED: { label: t`Review required`, tone: 'warning' },
   };
   const [open, setOpen] = useState(false);
   const [branch, setBranch] = useState<BranchInfo>();
   const [pull, setPull] = useState<PullState>({ loading: false });
-  const [busy, setBusy] = useState<'push' | 'pr' | 'fix'>();
+  const [busy, setBusy] = useState<'push' | 'pull' | 'pr' | 'fix'>();
   const [checksOpen, setChecksOpen] = useState(false);
   const [prDialog, setPrDialog] = useState(false);
   const [mergeDialog, setMergeDialog] = useState(false);
@@ -81,7 +82,7 @@ export function PublishSection({ project, status, sessionId, active, onError, on
       if (ticket !== requested.current) return;
       const unavailable = ghProblem(error);
       setPull({ loading: false, ...(unavailable ? { unavailable } : {}) });
-      if (!unavailable && open) onError(errorMessage(error, t`无法读取 PR 状态`));
+      if (!unavailable && open) onError(errorMessage(error, t`Couldn't load the PR`));
     }
   }, [project.id, open, onError]);
 
@@ -128,20 +129,30 @@ export function PublishSection({ project, status, sessionId, active, onError, on
   // Without an upstream git needs to be told where; `origin` or a lone remote is the obvious answer.
   const remoteChoice = !branch.upstream && branch.remotes.length > 1 && !branch.remotes.includes('origin');
   const synced = Boolean(branch.upstream) && !branch.ahead && !branch.behind;
-  const mergeTarget = into || t`原项目`;
+  const mergeTarget = into || t`the original project`;
 
   const push = async (remote?: string) => {
     setBusy('push');
     try {
       const result = await api.gitPush(project.id, remote);
       setBranch(result.branch);
-      const pushedTo = result.branch.upstream ?? remote ?? t({ message: '远端', context: 'panels-remote-default' });
-      toast.success(t`已推送到 ${pushedTo}`);
+      const pushedTo = result.branch.upstream ?? remote ?? t({ message: 'Remote', context: 'panels-remote-default' });
+      toast.success(t`Pushed to ${pushedTo}`);
       void refreshPull();
     } catch (error) {
       onError(error instanceof HttpError && /non-fast-forward|rejected|fetch first/i.test(error.message)
-        ? t`远端有本地没有的提交，先在终端里 pull 或 rebase，再推送`
-        : errorMessage(error, t`推送失败`));
+        ? t`The remote has commits you don't have. Pull first.`
+        : errorMessage(error, t`Push failed`));
+    } finally { setBusy(undefined); }
+  };
+
+  const pullBranch = async () => {
+    setBusy('pull');
+    try {
+      setBranch((await api.gitPull(project.id)).branch);
+      void refreshGitStatus(project.id, true);
+    } catch (error) {
+      onError(error instanceof HttpError && error.code === 'GIT_PULL_DIVERGED' ? t`Local and remote both have new commits. Merge or rebase first.` : errorMessage(error, t`Pull failed`));
     } finally { setBusy(undefined); }
   };
 
@@ -156,8 +167,8 @@ export function PublishSection({ project, status, sessionId, active, onError, on
       "可以用 `gh pr checks` 和 `gh run view --log-failed` 读取失败日志。修好后在本地跑一遍相关检查，再告诉我结果。",
     ].join('\n');
     setBusy('fix');
-    try { await api.nativeSend(sessionId, { commandId: newId(), text }); toast.success(t`已让 Agent 修复 CI`); }
-    catch (error) { onError(errorMessage(error, t`无法发送给 Agent`)); }
+    try { await api.nativeSend(sessionId, { commandId: newId(), text }); toast.success(t`Sent to the agent`); }
+    catch (error) { onError(errorMessage(error, t`Couldn't send to the agent`)); }
     finally { setBusy(undefined); }
   };
 
@@ -165,9 +176,9 @@ export function PublishSection({ project, status, sessionId, active, onError, on
   const failedCount = pr?.checks.items.filter((item) => item.state === 'failure').length ?? 0;
   const running = pr?.checks.items.filter((item) => item.state === 'pending').length ?? 0;
   const checksSummary = [
-    t`检查 ${passed}/${pr?.checks.items.length ?? 0} 通过`,
-    running ? t`${running} 运行中` : '',
-    failedCount ? t`${failedCount} 失败` : '',
+    t`${passed}/${pr?.checks.items.length ?? 0} checks passed`,
+    running ? t`${running} running` : '',
+    failedCount ? t`${failedCount} failed` : '',
   ].filter(Boolean).join(' · ');
 
   return (
@@ -192,37 +203,36 @@ export function PublishSection({ project, status, sessionId, active, onError, on
       <Collapse open={open}>
         <div className="mx-2 mb-2 flex flex-col gap-2.5 rounded-xl bg-subtle p-3">
           <div className="flex min-w-0 items-center gap-2 text-xs">
-            <span className="min-w-0 truncate font-mono text-fg-3">{branch.upstream ?? (noRemote ? t`没有远端仓库` : t`尚未推送到远端`)}</span>
+            <span className="min-w-0 truncate font-mono text-fg-3">{branch.upstream ?? (noRemote ? t`No remote` : t`Not pushed yet`)}</span>
             <span className="ml-auto shrink-0 text-fg-3">
-              {synced ? <span className="text-success"><Trans>已同步</Trans></span> : branch.upstream ? [branch.ahead ? t`领先 ${branch.ahead}` : '', branch.behind ? t`落后 ${branch.behind}` : ''].filter(Boolean).join(' · ') : ''}
+              {synced ? <span className="text-success"><Trans>Up to date</Trans></span> : branch.upstream ? [branch.ahead ? t`${branch.ahead} ahead` : '', branch.behind ? t`${branch.behind} behind` : ''].filter(Boolean).join(' · ') : ''}
             </span>
           </div>
-          {branch.behind > 0 && <p className="text-xs text-warning"><Trans>远端有 {branch.behind} 个新提交，推送前先在终端里同步。</Trans></p>}
-
           <div className="flex flex-wrap items-center gap-1.5">
+            {branch.behind > 0 && <Button size="xs" disabled={Boolean(busy)} onClick={() => void pullBranch()}>{busy === 'pull' ? <Spinner /> : <IconArrowDown />}Pull</Button>}
             {!noRemote && (remoteChoice ? (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button size="xs" disabled={Boolean(busy)}>{busy === 'push' ? <Spinner /> : <IconUpload />}<Trans>推送到…</Trans></Button></DropdownMenuTrigger>
+                <DropdownMenuTrigger asChild><Button size="xs" disabled={Boolean(busy)}>{busy === 'push' ? <Spinner /> : <IconUpload />}<Trans>Push to…</Trans></Button></DropdownMenuTrigger>
                 <DropdownMenuContent>
-                  <DropdownMenuLabel><Trans>选择远端</Trans></DropdownMenuLabel>
+                  <DropdownMenuLabel><Trans>Remote</Trans></DropdownMenuLabel>
                   {branch.remotes.map((remote) => <DropdownMenuItem key={remote} onSelect={() => void push(remote)}>{remote}</DropdownMenuItem>)}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
               <Button size="xs" disabled={Boolean(busy) || !branch.head || (Boolean(branch.upstream) && !branch.ahead)} onClick={() => void push()}>
-                {busy === 'push' ? <Spinner /> : <IconUpload />}{branch.upstream ? <Trans>推送</Trans> : <Trans>发布分支</Trans>}
+                {busy === 'push' ? <Spinner /> : <IconUpload />}{branch.upstream ? <Trans>Push</Trans> : <Trans>Publish Branch</Trans>}
               </Button>
             ))}
             {!noRemote && !pull.unavailable && (pr ? (
-              <Button size="xs" asChild><a href={pr.url} target="_blank" rel="noreferrer noopener"><IconExternalLink /><Trans>打开 #{pr.number}</Trans></a></Button>
+              <Button size="xs" asChild><a href={pr.url} target="_blank" rel="noreferrer noopener"><IconExternalLink /><Trans>Open #{pr.number}</Trans></a></Button>
             ) : (
-              <Button size="xs" disabled={Boolean(busy) || pull.loading || !branch.head} onClick={() => setPrDialog(true)}><IconGitPullRequest /><Trans>创建 PR</Trans></Button>
+              <Button size="xs" disabled={Boolean(busy) || pull.loading || !branch.head} onClick={() => setPrDialog(true)}><IconGitPullRequest /><Trans>Create PR</Trans></Button>
             ))}
             {project.worktree && (
-              <Button size="xs" disabled={Boolean(busy)} onClick={() => setMergeDialog(true)}><IconGitMerge /><Trans>合并到 {mergeTarget}</Trans></Button>
+              <Button size="xs" disabled={Boolean(busy)} onClick={() => setMergeDialog(true)}><IconGitMerge /><Trans>Merge into {mergeTarget}</Trans></Button>
             )}
             {!noRemote && !pull.unavailable && (
-              <Tip label={t`刷新 PR 状态`}><Button size="icon-xs" variant="quiet" className="ml-auto" aria-label={t`刷新 PR 状态`} disabled={pull.loading} onClick={() => void refreshPull()}>{pull.loading ? <Spinner /> : <IconRefreshCw />}</Button></Tip>
+              <Tip label={t`Refresh PR`}><Button size="icon-xs" variant="quiet" className="ml-auto" aria-label={t`Refresh PR`} disabled={pull.loading} onClick={() => void refreshPull()}>{pull.loading ? <Spinner /> : <IconRefreshCw />}</Button></Tip>
             )}
           </div>
           {pull.unavailable && <p className="text-xs text-fg-4">{pull.unavailable}</p>}
@@ -232,10 +242,10 @@ export function PublishSection({ project, status, sessionId, active, onError, on
               <a href={pr.url} target="_blank" rel="noreferrer noopener" className="line-clamp-2 text-sm font-medium text-fg hover:text-accent">{pr.title}</a>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge tone={pr.state === 'OPEN' ? (pr.isDraft ? 'neutral' : 'success') : pr.state === 'MERGED' ? 'accent' : 'danger'}>
-                  {pr.state === 'MERGED' ? <Trans>已合并</Trans> : pr.state === 'CLOSED' ? <Trans>已关闭</Trans> : pr.isDraft ? <Trans>草稿</Trans> : <Trans>进行中</Trans>}
+                  {pr.state === 'MERGED' ? <Trans context="panels-pr-state">Merged</Trans> : pr.state === 'CLOSED' ? <Trans>Closed</Trans> : pr.isDraft ? <Trans>Draft</Trans> : <Trans>Open</Trans>}
                 </Badge>
                 {pr.state === 'OPEN' && pr.reviewDecision && reviewLabel[pr.reviewDecision] && <Badge tone={reviewLabel[pr.reviewDecision]!.tone}>{reviewLabel[pr.reviewDecision]!.label}</Badge>}
-                {pr.mergeable === 'CONFLICTING' && <Badge tone="danger"><Trans>有冲突</Trans></Badge>}
+                {pr.mergeable === 'CONFLICTING' && <Badge tone="danger"><Trans>Conflicts</Trans></Badge>}
                 <span className="ml-auto min-w-0 truncate font-mono text-2xs text-fg-4">{pr.baseRefName} ← {pr.headRefName}</span>
               </div>
               {pr.checks.state !== 'none' && (
@@ -258,8 +268,8 @@ export function PublishSection({ project, status, sessionId, active, onError, on
                 </>
               )}
               {failedCount > 0 && pr.state === 'OPEN' && (
-                <Tip label={sessionId ? t`把失败的检查发给当前会话` : t`打开一个会话后可用`}>
-                  <span className="self-start"><Button size="xs" variant="ghost" disabled={!sessionId || Boolean(busy)} onClick={() => void fixChecks()}>{busy === 'fix' ? <Spinner /> : <IconSparkles />}<Trans>让 Agent 修复</Trans></Button></span>
+                <Tip label={sessionId ? t`Send the failed checks to this conversation` : t`Open a conversation first`}>
+                  <span className="self-start"><Button size="xs" variant="ghost" disabled={!sessionId || Boolean(busy)} onClick={() => void fixChecks()}>{busy === 'fix' ? <Spinner /> : <IconSparkles />}<Trans>Ask Agent to Fix</Trans></Button></span>
                 </Tip>
               )}
             </div>
@@ -282,7 +292,7 @@ function FileTally({ status }: { status?: GitStatus }) {
   const { t } = useLingui();
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1.5 tabular-nums">
-      {status ? (status.entries.length ? t`${status.entries.length} 个文件` : t`无改动`) : ''}
+      {status ? (status.entries.length ? plural(status.entries.length, { 1: '# file', other: '# files' }) : t`No changes`) : ''}
       {status && (status.added || status.removed) ? <><span className="text-success">+{status.added}</span><span className="text-danger">−{status.removed}</span></> : null}
     </span>
   );
@@ -306,29 +316,29 @@ function PullRequestDialog({ open, onOpenChange, projectId, branch, onCreated, o
       const result = await api.createPullRequest(projectId, { ...(title.trim() ? { title: title.trim(), body } : {}), ...(base.trim() ? { base: base.trim() } : {}), draft });
       onCreated(result);
       onOpenChange(false);
-      toast.success(result.pullRequest ? t`已创建 PR #${result.pullRequest.number}` : t`已创建 PR`);
+      toast.success(result.pullRequest ? t`Created PR #${result.pullRequest.number}` : t`Created PR`);
     } catch (error) {
-      onError(ghProblem(error) ?? errorMessage(error, t`无法创建 PR`));
+      onError(ghProblem(error) ?? errorMessage(error, t`Couldn't create the PR`));
     } finally { setBusy(false); }
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle><Trans>创建 Pull Request</Trans></DialogTitle>
-          <DialogDescription>{!branch.upstream || branch.ahead ? <Trans>会先把 {branch.branch} 推送到远端。</Trans> : <Trans>从 {branch.branch} 发起。</Trans>}<Trans>标题留空时用提交记录自动填写。</Trans></DialogDescription>
+          <DialogTitle><Trans>Create Pull Request</Trans></DialogTitle>
+          <DialogDescription>{!branch.upstream || branch.ahead ? <Trans>Pushes {branch.branch} first.</Trans> : <Trans>From {branch.branch}.</Trans>}{' '}<Trans>An empty title is filled in from the commits.</Trans></DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-3">
-          <Field label={t`标题`}><Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t`自动填写`} /></Field>
-          <Field label={t`描述`}><Textarea value={body} disabled={!title.trim()} onChange={(event) => setBody(event.target.value)} placeholder={title.trim() ? t`可选` : t`填写标题后可编辑`} className="min-h-28" /></Field>
+          <Field label={t`Title`}><Input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t`Automatic`} /></Field>
+          <Field label={t`Description`}><Textarea value={body} disabled={!title.trim()} onChange={(event) => setBody(event.target.value)} placeholder={title.trim() ? t`Optional` : t`Add a title first`} className="min-h-28" /></Field>
           <div className="flex items-end gap-3">
-            <Field label={t`目标分支`} className="flex-1"><Input value={base} onChange={(event) => setBase(event.target.value)} placeholder={t`仓库默认分支`} /></Field>
-            <label className="flex min-h-8 shrink-0 items-center gap-2 text-sm text-fg-2"><Switch checked={draft} onCheckedChange={setDraft} aria-label={t`草稿`} /><Trans>草稿</Trans></label>
+            <Field label={t`Base Branch`} className="flex-1"><Input value={base} onChange={(event) => setBase(event.target.value)} placeholder={t`Default branch`} /></Field>
+            <label className="flex min-h-8 shrink-0 items-center gap-2 text-sm text-fg-2"><Switch checked={draft} onCheckedChange={setDraft} aria-label={t`Draft`} /><Trans>Draft</Trans></label>
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="panels-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitPullRequest />}<Trans context="panels-create-action">创建</Trans></Button>
+          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans>Cancel</Trans></Button>
+          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitPullRequest />}<Trans>Create</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -359,7 +369,7 @@ export function MergeDialog({ open, onOpenChange, branch, into, dirty, directory
   const [busy, setBusy] = useState(false);
   const [conflicts, setConflicts] = useState<string[]>();
   useEffect(() => { if (open) { setMessage(''); setPending(''); setRemove(false); setConflicts(undefined); } }, [open]);
-  const target = into || (directory ? t`原目录` : t`原项目的当前分支`);
+  const target = into || (directory ? t`the original folder` : t`the original project's branch`);
   const submit = async () => {
     if (busy) return;
     setBusy(true);
@@ -367,48 +377,48 @@ export function MergeDialog({ open, onOpenChange, branch, into, dirty, directory
     try {
       const result = await merge({ strategy, ...(message.trim() ? { message: message.trim() } : {}), ...(dirty ? { commitPending: pending.trim() || `WIP on ${branch}` } : {}), removeWorktree: remove });
       onOpenChange(false);
-      const squashLabel = result.strategy === 'squash' ? t`压缩` : '';
-      toast.success(directory ? (result.merged ? t`已合并到原目录` : t`原目录已包含这些改动`)
-        : result.merged ? t`已把 ${result.commits} 个提交${squashLabel}合并到 ${result.into}` : t`${result.into} 已包含这个分支的全部提交`);
+      
+      toast.success(directory ? (result.merged ? t`Merged into the original folder` : t`The original folder already has these changes`)
+        : result.merged ? result.strategy === 'squash' ? t`Squashed into ${result.into}` : t`Merged into ${result.into}` : t`${result.into} already has every commit of this branch`);
       onMerged(Boolean(result.removedWorktree));
     } catch (error) {
       if (error instanceof HttpError && error.code === 'MERGE_CONFLICT') {
         const paths = (error.details as { paths?: string[] } | undefined)?.paths ?? [];
         setConflicts(paths);
       } else if (error instanceof HttpError && error.code === 'MERGE_TARGET_DIRTY') {
-        onError(t`${target} 有未提交的改动，先在原项目里提交或暂存它们`);
-      } else onError(errorMessage(error, t`合并失败`));
+        onError(t`${target} has uncommitted changes. Commit or stash them there first.`);
+      } else onError(errorMessage(error, t`Merge failed`));
     } finally { setBusy(false); }
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>{title ?? t`合并到 ${target}`}</DialogTitle>
-          <DialogDescription>{description ?? <Trans>把 <span className="font-mono text-fg-2">{branch}</span> 合并进原项目。</Trans>}<Trans>遇到冲突会整体放弃，不会在原项目里留下半合并的文件。</Trans></DialogDescription>
+          <DialogTitle>{title ?? t`Merge into ${target}`}</DialogTitle>
+          <DialogDescription>{description ?? <Trans>Merges <span className="font-mono text-fg-2">{branch}</span> into the original project.</Trans>}{' '}<Trans>A conflict abandons the whole merge, leaving no half-merged files.</Trans></DialogDescription>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-3">
           {!directory && <>
-            <Segmented value={strategy} onChange={setStrategy} ariaLabel={t`合并方式`} options={[{ value: 'squash', label: t`压缩为一个提交` }, { value: 'merge', label: t`保留全部提交` }]} />
-            <Field label={t`提交说明`}><Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={defaultMessage ?? (strategy === 'squash' ? `Squash ${branch}` : `Merge ${branch} into ${into || '…'}`)} /></Field>
+            <Segmented value={strategy} onChange={setStrategy} ariaLabel={t`Merge strategy`} options={[{ value: 'squash', label: t`Squash into One Commit` }, { value: 'merge', label: t`Keep All Commits` }]} />
+            <Field label={t`Commit message`}><Input value={message} onChange={(event) => setMessage(event.target.value)} placeholder={defaultMessage ?? (strategy === 'squash' ? `Squash ${branch}` : `Merge ${branch} into ${into || '…'}`)} /></Field>
           </>}
-          {dirty && !directory && <Field label={t`未提交的改动`} hint={t`Worktree 里还有未提交的改动，会先用这条说明提交。`}><Input value={pending} onChange={(event) => setPending(event.target.value)} placeholder={`WIP on ${branch}`} /></Field>}
+          {dirty && !directory && <Field label={t`Uncommitted changes`} hint={t`They're committed first with this message.`}><Input value={pending} onChange={(event) => setPending(event.target.value)} placeholder={`WIP on ${branch}`} /></Field>}
           <label className="flex items-center justify-between gap-3 text-sm text-fg-2">
-            <span className="flex flex-col"><span className="text-fg"><Trans>合并后移除 Worktree</Trans></span><span className="text-xs text-fg-3"><Trans>分支会保留；这个目录对应的项目会被归档。</Trans></span></span>
-            <Switch checked={remove} onCheckedChange={setRemove} aria-label={t`合并后移除 Worktree`} />
+            <span className="flex flex-col"><span className="text-fg"><Trans>Remove Worktree After Merging</Trans></span><span className="text-xs text-fg-3"><Trans>The branch is kept; this folder's project is archived.</Trans></span></span>
+            <Switch checked={remove} onCheckedChange={setRemove} aria-label={t`Remove Worktree After Merging`} />
           </label>
           {extra}
           {conflicts && (
             <div className="rounded-xl bg-danger/10 px-3.5 py-2.5 text-sm text-fg-2">
-              <p className="font-medium text-danger"><Trans>有冲突，已放弃合并</Trans></p>
-              {!directory && <p className="mt-1 text-xs text-fg-3"><Trans>可以让 Agent 在 Worktree 里先合入 {target} 并解决冲突，再回来合并。</Trans></p>}
-              {conflicts.length > 0 && <ul className="mt-1.5 flex flex-col gap-0.5 font-mono text-xs text-fg-2">{conflicts.slice(0, 8).map((path) => <li key={path} className="truncate">{path}</li>)}{conflicts.length > 8 && <li className="text-fg-4"><Trans>另 {conflicts.length - 8} 个文件</Trans></li>}</ul>}
+              <p className="font-medium text-danger"><Trans>Conflicts; merge abandoned</Trans></p>
+              {!directory && <p className="mt-1 text-xs text-fg-3"><Trans>Ask the agent to merge {target} into the worktree and resolve the conflicts, then merge again.</Trans></p>}
+              {conflicts.length > 0 && <ul className="mt-1.5 flex flex-col gap-0.5 font-mono text-xs text-fg-2">{conflicts.slice(0, 8).map((path) => <li key={path} className="truncate">{path}</li>)}{conflicts.length > 8 && <li className="text-fg-4"><Plural value={conflicts.length - 8} _1="# more file" other="# more files" /></li>}</ul>}
             </div>
           )}
         </DialogBody>
         <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="panels-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitMerge />}<Trans>合并</Trans></Button>
+          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans>Cancel</Trans></Button>
+          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitMerge />}<Trans>Merge</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
