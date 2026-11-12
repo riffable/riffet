@@ -62,6 +62,8 @@ import org.jetbrains.compose.resources.stringResource
  * distinguished only by colour (`--fg-2` against `--fg`), and folds raw thinking to one row.
  */
 
+private val IN_FLIGHT = setOf(NativeDeliveryState.QUEUED, NativeDeliveryState.PREPARING, NativeDeliveryState.DISPATCHING, NativeDeliveryState.INPUT_SENT)
+
 /** The prompt: right-aligned bubble, attachments, delivery state and time. */
 @Composable
 internal fun UserRow(item: TimelineItem.User) {
@@ -73,6 +75,8 @@ internal fun UserRow(item: TimelineItem.User) {
     val time = formatDateTime(timelineItemTime(item))
     val delivery = deliveryLabel(item.run)
     val deliveryError = deliveryErrorDetails(item.run)
+    // While it is on its way the status says enough; the time returns once it has arrived or settled.
+    val sending = delivery != null && item.run?.let { run -> run.native?.delivery in IN_FLIGHT && !messageRecovery(run).needsCheck } == true
     var errorOpen by rememberSaveable(item.key, deliveryError) { mutableStateOf(false) }
     val restore = LocalRestoreNativeRun.current
     val recoverableRun = item.run?.takeIf(::canRestoreUnsentMessage)
@@ -167,7 +171,7 @@ internal fun UserRow(item: TimelineItem.User) {
                         )
                     }
                 }
-                if (time != null) {
+                if (time != null && !sending) {
                     Text(text = time, style = type.caption, color = colors.fg3, softWrap = false)
                 }
             }

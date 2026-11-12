@@ -43,7 +43,7 @@
 
     <!-- Messages -->
     <string name="timeline_copy_message">复制消息</string>
-    <string name="timeline_steer">补充消息</string>
+    <string name="timeline_steer">补充</string>
     <string name="timeline_thinking">思考中…</string>
 
     <!-- Plans, notifications and statuses -->

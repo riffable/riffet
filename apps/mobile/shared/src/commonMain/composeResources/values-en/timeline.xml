@@ -43,7 +43,7 @@
 
     <!-- Messages -->
     <string name="timeline_copy_message">Copy message</string>
-    <string name="timeline_steer">Follow-up message</string>
+    <string name="timeline_steer">Follow-up</string>
     <string name="timeline_thinking">Thinking…</string>
 
     <!-- Plans, notifications and statuses -->
