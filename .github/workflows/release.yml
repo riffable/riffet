@@ -1,0 +1,153 @@
+name: Release
+
+# A `vX.Y.Z` tag builds the npm package and the signed Android APK, attaches both to the GitHub
+# release (created from the CHANGELOG section when it does not exist yet) and publishes `riffet`
+# to npm. Run it by hand to rebuild the assets of an existing tag; assets are replaced, and a
+# version already on npm is left alone.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag, e.g. v0.7.0
+        required: true
+
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - id: version
+        name: The tag matches package.json
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          [ "$TAG" = "v$version" ] || { echo "::error::$TAG does not match package.json version $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  npm-package:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build without this machine's paths
+        run: pnpm build
+        env:
+          RIFFET_PUBLIC_BUILD: '1'
+      - run: pnpm pack:npm
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm
+          path: build/npm/riffet-${{ needs.meta.outputs.version }}.tgz
+          if-no-files-found: error
+
+  android:
+    needs: meta
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Release keystore
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          [ -n "$KEYSTORE" ] || { echo "::error::ANDROID_KEYSTORE_BASE64 is not set; an unsigned APK is not published."; exit 1; }
+          printf '%s' "$KEYSTORE" | base64 --decode > "$RUNNER_TEMP/release.jks"
+      - name: Signed release APK
+        env:
+          RIFFET_SIGNING_STORE_FILE: ${{ runner.temp }}/release.jks
+          RIFFET_SIGNING_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RIFFET_SIGNING_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RIFFET_SIGNING_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew --no-daemon :androidApp:assembleRelease
+      - name: The APK carries the release signature
+        run: |
+          apk=androidApp/build/outputs/apk/release/androidApp-release.apk
+          apksigner="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)"
+          "$apksigner" verify --print-certs "$apk" | grep -q 'CN=Riffet, O=riffetai'
+          mv "$apk" "$RUNNER_TEMP/Riffet-${{ needs.meta.outputs.version }}.apk"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: android
+          path: ${{ runner.temp }}/Riffet-${{ needs.meta.outputs.version }}.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [meta, npm-package, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: assets
+          merge-multiple: true
+      # Attestations and npm provenance need a public source repository on this plan.
+      - uses: actions/attest-build-provenance@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          subject-path: assets/*
+      - name: GitHub release
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --clobber
+          else
+            awk -v v="$VERSION" 'index($0, "## " v " ") == 1 || $0 == "## " v { found = 1; next } /^## / { if (found) exit } found' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+            [ -s "$RUNNER_TEMP/notes.md" ] || { echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; }
+            gh release create "$TAG" assets/* --verify-tag --title "Riffet $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+          fi
+      - uses: actions/setup-node@v4
+        if: ${{ !github.event.repository.private }}
+        with:
+          node-version-file: .node-version
+          registry-url: https://registry.npmjs.org
+      - name: npm
+        # Trusted publishing: npm exchanges this job's OIDC token, so no npm token is stored here.
+        if: ${{ !github.event.repository.private }}
+        run: |
+          if npm view "riffet@$VERSION" version >/dev/null 2>&1; then
+            echo "riffet@$VERSION is already on npm."
+          else
+            npm publish "assets/riffet-$VERSION.tgz" --access public
+          fi
