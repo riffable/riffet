@@ -425,7 +425,8 @@ describe('timeline service', () => {
     env.writer.turnEnded('t2', 'completed', stamp(++tick));
     await env.ready();
     const rows = env.all();
-    expect(rows.find(row => row.kind === 'activity')).toMatchObject({ turn: 'native:session-1:t2', activity: { status: 'completed' } });
+    expect(rows.slice(-2).map(row => [row.kind, row.turn])).toEqual([['user', 'native:session-1:t2'], ['activity', 'native:session-1:t2']]);
+    expect(withoutSeq(rows)).toEqual(foldedFromScratch(env));
     env.close();
   });
 

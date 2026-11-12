@@ -80,8 +80,9 @@ export interface RowPlace { pos: number; turn: string }
 
 /**
  * Where each row of a timeline sits, in its order: `pos` grows along it, an event row's comes from its
- * first event's sequence (the journal identity), and from the first pending prompt after the last event
- * row on rows sit from {@link PENDING_ROW_POS}. `turn` is the row's `timelineTurnKeys` key.
+ * first event's sequence (the journal identity) unless it is filed after a later one, and from the first
+ * pending prompt after the last event row on rows sit from {@link PENDING_ROW_POS}. `turn` is the row's
+ * `timelineTurnKeys` key.
  */
 export function rowPlaces(items: TimelineItem[], options: RowOptions = {}): RowPlace[] {
   const base = options.base ?? 1;
@@ -92,9 +93,13 @@ export function rowPlaces(items: TimelineItem[], options: RowOptions = {}): RowP
   let pendingFrom = -1;
   return items.map((item, index) => {
     let pos: number;
-    if (!isRunRow(item)) {
-      pos = anchor = item.event.sequence * POS_STEP + EVENT_SLOT;
+    const own = item.event.sequence * POS_STEP + EVENT_SLOT;
+    if (!isRunRow(item) && own > anchor) {
+      pos = anchor = own;
       slot = 0;
+    } else if (!isRunRow(item)) {
+      // Filed after a later entity (Claude's compaction goes after the `/compact` it logged before): it follows that row.
+      pos = anchor + Math.min(++slot, EVENT_SLOT - 1);
     } else if (pendingFrom >= 0 || (index > lastEvent && pendingOf(item))) {
       if (pendingFrom < 0) pendingFrom = index;
       pos = PENDING_ROW_POS + index - pendingFrom;
