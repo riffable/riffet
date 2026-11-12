@@ -617,6 +617,7 @@ msgid "发送失败"
 msgstr "发送失败"
 
 #: src/app/session/nativeRunCommands.ts
+#: src/app/session/Timeline.tsx
 msgid "发送失败，可恢复内容后重试"
 msgstr "发送失败，可恢复内容后重试"
 
@@ -638,10 +639,6 @@ msgctxt "session-cancel-action"
 msgid "取消"
 msgstr "取消"
 
-#: src/app/session/Timeline.tsx
-msgid "取消排队"
-msgstr "取消排队"
-
 #: src/app/session/marks.tsx
 msgid "取消收藏"
 msgstr "取消收藏"
@@ -649,10 +646,6 @@ msgstr "取消收藏"
 #: src/app/session/Markdown.tsx
 msgid "取消自动换行"
 msgstr "取消自动换行"
-
-#: src/app/session/Timeline.tsx
-msgid "取消补充"
-msgstr "取消补充"
 
 #: src/app/session/ComposerDock.tsx
 msgid "受阻"
@@ -1920,6 +1913,10 @@ msgstr "缩小 · {0}滚轮"
 
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
+#: src/app/session/Timeline.tsx
+msgid "补充"
+msgstr "补充"
+
 msgstr "自主读写文件、执行命令"
 
 #: src/app/session/Composer.tsx
@@ -1961,10 +1958,6 @@ msgstr "补充未发送，可恢复内容后重试"
 #: src/app/session/nativeRunCommands.ts
 msgid "补充未发送，输入已保留"
 msgstr "补充未发送，输入已保留"
-
-#: src/app/session/Timeline.tsx
-msgid "补充消息"
-msgstr "补充消息"
 
 #: src/app/session/speed.ts
 msgid "观测到的模型响应时间（含首字延迟）"

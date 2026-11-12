@@ -617,6 +617,7 @@ msgid "发送失败"
 msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
+#: src/app/session/Timeline.tsx
 msgid "发送失败，可恢复内容后重试"
 msgstr ""
 
@@ -638,20 +639,12 @@ msgctxt "session-cancel-action"
 msgid "取消"
 msgstr ""
 
-#: src/app/session/Timeline.tsx
-msgid "取消排队"
-msgstr ""
-
 #: src/app/session/marks.tsx
 msgid "取消收藏"
 msgstr ""
 
 #: src/app/session/Markdown.tsx
 msgid "取消自动换行"
-msgstr ""
-
-#: src/app/session/Timeline.tsx
-msgid "取消补充"
 msgstr ""
 
 #: src/app/session/ComposerDock.tsx
@@ -1920,6 +1913,10 @@ msgstr ""
 
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
+#: src/app/session/Timeline.tsx
+msgid "补充"
+msgstr ""
+
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -1960,10 +1957,6 @@ msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
 msgid "补充未发送，输入已保留"
-msgstr ""
-
-#: src/app/session/Timeline.tsx
-msgid "补充消息"
 msgstr ""
 
 #: src/app/session/speed.ts

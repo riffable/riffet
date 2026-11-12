@@ -19,7 +19,7 @@ import { formatNumber } from '@/lib/i18n/format';
 import { cleanLabel, cn, formatBytes, formatDateTime, isRecord, pixelEdge, str } from '@/lib/utils';
 import { CopyButton, Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
-import { inQueue, nativeTaskOutcome } from './delivery';
+import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreFailedSteer, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
 import { activeToolStates, currentToolActivity, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
@@ -98,7 +98,7 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at }: { text?: 
 
 /**
  * The meta row is always one text line tall, or a finger's height where the pointer is a finger
- * (the copy button there is already that tall), so a queued message gaining 立即发送 / 取消排队 and
+ * (the copy button there is already that tall), so a queued message gaining 停止并发送 / 取消 and
  * losing them once it is sent changes what the row says, never its height. The actions stay inside
  * that height: a target reaching past it would overlap the next action when the row wraps.
  */
@@ -129,6 +129,8 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
   const taskOutcome = run ? nativeTaskOutcome(run) : undefined;
   const delivery = run?.native && !taskOutcome ? nativeDeliveryLabel(run) : '';
   const [errorOpen, setErrorOpen] = useRemembered(`delivery-error:${run?.id ?? ''}`, false);
+  // While it is on its way the status says enough; the time returns once it has arrived or settled.
+  const sending = Boolean(delivery && run && ['submitting', 'queued', 'starting', 'sent'].includes(sendPhase(run) ?? ''));
   const recovery = run ? nativeRecoveries?.[run.id] : undefined;
   const diagnostic = run?.native?.diagnostic;
   const deliveryError = run?.native && (run.native.delivery === 'failed' || run.native.delivery === 'uncertain' || run.native.stage === 'turn_outcome_unknown') ? diagnostic ? [diagnostic.message, diagnostic.code, diagnostic.stage, diagnostic.at].filter(Boolean).join('\n') : run.error : undefined;
@@ -143,16 +145,16 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {(text || time || delivery) && (
         <div data-slot="message-meta" className={cn('flex max-w-[82%] flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/user:opacity-100 can-hover:group-hover/user:pointer-events-auto can-hover:group-focus-within/user:opacity-100 can-hover:group-focus-within/user:pointer-events-auto')}>
-          {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充消息</Trans></span>}
+          {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}
           {!taskOutcome && openTerminal}
           {run?.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown' && onRetryNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRetryNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>重试发送</Trans></button>}
           {!taskOutcome && needsCheck && run && onCheckNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCheckNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>检查状态</Trans></button>}
           {!taskOutcome && run && recovery?.canContinue && !run.native?.queueReleasedAt && onContinueNativeRun && <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>}
           {run && inQueue(run) && onSendQueuedNow && <button type="button" disabled={runActionPending} title={t`停止并发送`} onClick={() => onSendQueuedNow(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>停止并发送</Trans></button>}
-          {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}>{run.native.intent === 'steer' ? <Trans>取消补充</Trans> : <Trans>取消排队</Trans>}</button>}
+          {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
           {run && canRestoreFailedSteer(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
-          {time && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
+          {time && !sending && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
           {text && <CopyButton text={text} label={t`复制消息`} />}
         </div>
       )}
