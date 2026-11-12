@@ -138,7 +138,7 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
   );
 }
 
-/** The last figures read per usage scope, shown again while the next open re-reads them. */
+/** The last successful figures per usage scope, kept while the next read runs or fails. */
 const lastUsage = new Map<string, NativeBackendUsage>();
 const LAST_USAGE_LIMIT = 32;
 
@@ -231,7 +231,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   className?: string;
   /** Show parameters below the trigger in a settings sheet, outside the model list. */
   inlineParams?: boolean;
-  /** Reads account quota and per-model load, keyed by choice id, each time the list opens. */
+  /** Reads account quota and per-model load, keyed by choice id, before opening and while the list is open. */
   loadUsage?: (signal: AbortSignal) => Promise<NativeBackendUsage>;
   /** Re-reads the catalog as the list opens; a failed read leaves the last known list in place. */
   refreshCatalog?: (signal: AbortSignal) => Promise<void> | void;
@@ -259,12 +259,16 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const usageScope = `${usageScopeKey ?? ''}|${activeProviderId ?? ''}`;
-  const [usageRead, setUsageRead] = useState<{ scope: string; usage: NativeBackendUsage }>();
+  const [usageRead, setUsageRead] = useState<{ scope: string; usage?: NativeBackendUsage; loading: boolean }>();
   // A scope read before keeps its figures while this open re-reads them, so the account row is
   // there from the first frame rather than pushing the search and the list down when it lands.
-  const usage = usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined;
+  const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined;
+  const usageLoading = Boolean(loadUsage) && usageRead?.scope === usageScope && usageRead.loading;
+  const usageSummary = usage?.account ? accountSummary(usage.account) : undefined;
+  const hasUsageLoader = Boolean(loadUsage);
   const loadUsageRef = useRef(loadUsage);
   loadUsageRef.current = loadUsage;
+  const refreshUsageRef = useRef<() => void>(() => undefined);
   const refreshCatalogRef = useRef(refreshCatalog);
   // Opening a failed catalog reveals its diagnostic; retry is an explicit action inside it.
   refreshCatalogRef.current = error?.trim() ? undefined : refreshCatalog;
@@ -288,32 +292,54 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
     const lists = providers.map((provider) => provider.models.length ? modelListHeight(provider.models, providerLabel) : 72);
     return Math.min(MODEL_LIST_MAX, Math.max(column, ...lists));
   }, [providerColumn, providers, providerLabel]);
-  // Load and quota move by the minute, so they are read when the list opens rather than kept with
-  // the catalog. A failed read leaves the figures out; the list itself never waits for it.
+  // Prefetch independently of the catalog. One scope owns its request, and opening during that
+  // read reuses it; a switch aborts it before another scope can receive its answer.
+  useEffect(() => {
+    let active = true;
+    let pending: AbortController | undefined;
+    const refreshUsage = () => {
+      const load = loadUsageRef.current;
+      if (!active || pending || !load) return;
+      const controller = new AbortController();
+      pending = controller;
+      setUsageRead(previous => ({
+        scope: usageScope,
+        usage: previous?.scope === usageScope ? previous.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined,
+        loading: true,
+      }));
+      void load(AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)])).then(next => {
+        if (!active || controller.signal.aborted) return;
+        if (usageScopeKey) {
+          lastUsage.delete(usageScope);
+          lastUsage.set(usageScope, next);
+          if (lastUsage.size > LAST_USAGE_LIMIT) lastUsage.delete(lastUsage.keys().next().value!);
+        }
+        setUsageRead({ scope: usageScope, usage: next, loading: false });
+      }, () => {
+        if (!active || controller.signal.aborted) return;
+        setUsageRead(previous => previous?.scope === usageScope ? { ...previous, loading: false } : previous);
+      }).finally(() => { if (pending === controller) pending = undefined; });
+    };
+    refreshUsageRef.current = refreshUsage;
+    refreshUsage();
+    return () => {
+      active = false;
+      pending?.abort();
+      if (refreshUsageRef.current === refreshUsage) refreshUsageRef.current = () => undefined;
+    };
+  }, [usageScope, usageScopeKey, hasUsageLoader]);
+  // Catalog and quota reads start together on open; only quota polls while the list stays open.
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
-    // Catalog membership changes less often than quota, but it must not be the stale half of an
-    // open: the same open reads both, and a closed or provider-switched menu drops either answer.
+    // Catalog membership changes less often than quota, but the same open refreshes both.
+    // Closing or switching scope aborts the catalog; quota keeps its own scope lifetime.
     void refreshCatalogRef.current?.(controller.signal);
-    // Quota belongs to the provider in force: figures are kept per scope, so a switch is never mislabelled.
-    const load = loadUsageRef.current;
-    if (!load) return () => controller.abort();
-    load(controller.signal).then((next) => {
-      if (controller.signal.aborted) return;
-      if (usageScopeKey) {
-        lastUsage.delete(usageScope);
-        lastUsage.set(usageScope, next);
-        if (lastUsage.size > LAST_USAGE_LIMIT) lastUsage.delete(lastUsage.keys().next().value!);
-      }
-      setUsageRead({ scope: usageScope, usage: next });
-    }, () => {
-      if (controller.signal.aborted) return;
-      lastUsage.delete(usageScope);
-      setUsageRead(undefined);
-    });
-    return () => controller.abort();
-  }, [open, activeProviderId, usageScopeKey]);
+    if (!hasUsageLoader) return () => controller.abort();
+    refreshUsageRef.current();
+    const interval = window.setInterval(() => refreshUsageRef.current(), 30_000);
+    return () => { controller.abort(); window.clearInterval(interval); };
+  }, [open, usageScope, hasUsageLoader]);
   // Opening the list, or switching provider for real, starts on the provider in force.
   useEffect(() => {
     if (open) setPreviewProviderId(activeProviderId);
@@ -546,9 +572,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         {!inlineParams && previewIsActive && controls}
         {/* Below the list with the parameters: both describe the provider in force and go while
             another is previewed, and what comes and goes at the bottom moves nothing above it. */}
-        {usage?.account && previewIsActive && (
-          <div className={cn('shrink-0 edge-t px-3 py-1.5 text-2xs tabular-nums', usage.account.limitReached ? 'text-danger' : 'text-fg-3')}>
-            {usage.account.limitReached && 'Usage limit reached · '}{accountSummary(usage.account)}
+        {previewIsActive && (usageSummary || usage?.account?.limitReached || (usageLoading && !usage)) && (
+          <div aria-busy={usageLoading || undefined} className={cn('flex min-h-7 shrink-0 items-center gap-2 edge-t px-3 py-1.5 text-2xs tabular-nums', usage?.account?.limitReached ? 'text-danger' : 'text-fg-3')}>
+            <span className="min-w-0 flex-1">{usage?.account?.limitReached && 'Usage limit reached · '}{usageSummary}</span>
+            <span aria-hidden className="grid size-3 shrink-0 place-items-center">{usageLoading && <Spinner className="size-3 text-fg-4" />}</span>
           </div>
         )}
       </PopoverContent>

@@ -10,7 +10,7 @@
 
 import type {
   ActionStep, PluginField, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo,
-  NativeBackendId, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
+  NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { GatewayProtocol } from '@riffet/contracts';
@@ -262,12 +262,20 @@ export interface ModelSourceProvider {
   /** Synchronous: the drivers build a launch environment synchronously. */
   resolve(overrides: SourceOverrides): ResolvedSource;
   /**
-   * Gets `resolve(overrides)` ready: the host awaits it before a catalog read for the same overrides. A source that
+   * Gets `resolve(overrides)` ready: the host awaits it before a catalog or usage read for the same overrides. A source that
    * runs out of process cannot answer `resolve` from another process, so its proxy returns the value `prepare` last
    * fetched for these overrides (a `reason` until the first one), and refreshes it in the background when it is old.
    */
   prepare?(overrides: SourceOverrides): Promise<void>;
   catalog(backend: ModelSourceBackend, overrides: SourceOverrides): Promise<ModelInfo[]>;
+  /**
+   * Quota and load for these credentials, independent of the Agent consuming this source.
+   * A failed read must reject rather than report zero or unlimited quota.
+   * Percentages, windowMinutes and quota.remaining/limit must be nonnegative Int32 integers
+   * (windowMinutes must be positive); dailyQuota.remaining/limit and credit balances may be fractional.
+   * Times must be UTC ISO 8601 (Z); the isolated host also accepts and normalizes timezone offsets.
+   */
+  usage?(overrides: SourceOverrides): Promise<NativeBackendUsage>;
 }
 
 // ── Share publishing ─────────────────────────────────────────────────────────

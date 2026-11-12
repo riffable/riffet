@@ -76,6 +76,10 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 
 模型源的 ID 存在档案里，档案带 API Key，所以隔离安装的包只能提供 `<插件 id>.<名称>`（名称为小写字母、数字、连字符，全长至多 64 个字符），否则激活失败；不能是内置源的 ID，也不会与别的包重名。样例 `gateway-models` 用 `` `${host.id}.gateway` ``。内置包、开发包和可信安装包只需不与已有的重名，迁出的官方模型源保留旧 ID。
 
+模型源可提供 `usage(overrides): Promise<NativeBackendUsage>`，读取与该 profile 地址、凭据对应的账号额度和模型状态。宿主先激活并准备模型源，再传入与 `resolve`、`catalog` 相同的 `apiEndpoint` / `apiKey` 覆盖；插件自行实现网关的只读接口，网络请求需要 `network`。返回值复用 `@riffet/contracts` 的 `NativeBackendUsage`：账号窗口用 `account.windows`，模型专属额度按目录 ID 写入 `models`，`usedPercent` 为 0–100。已选择模型源的 profile 不回退读取 CLI 登录账号的额度；源未提供 `usage` 时不显示额度。宿主合并同时到达的读取并缓存 30 秒，插件设置、凭据或启停变化时清除缓存。隔离安装包通过同一 RPC 读取并校验返回字段；旧插件无需实现此方法。
+
+为兼容各端，百分比、`windowMinutes`、`quota.remaining/limit` 必须是非负 Int32 整数，`windowMinutes` 必须大于零；`dailyQuota.remaining/limit` 可为非负有限小数，余额可为有限小数。时间须为 UTC ISO 8601（`Z`），隔离宿主也接受带时区偏移的时间并转为 UTC；不兼容的数值会使读取失败，不会静默取整。
+
 ## 声明
 
 `contributes` 里的每个贡献 ID 是 `<插件 id>/<名称>`（名称小写字母、数字、`.`、`-`，至多 64 字符），在所有插件间唯一；不合格的包不加载，原因写在插件管理页和 `riffet doctor`。Agent 的 ID 是例外，见下。

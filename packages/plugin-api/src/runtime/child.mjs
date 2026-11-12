@@ -175,6 +175,7 @@ const handlers = {
         ...(source.overridable ? { overridable: [...source.overridable] } : {}),
         ...(source.loginAction ? { loginAction: source.loginAction } : {}),
         ...(source.hint ? { hint: { text: source.hint.text, ...(source.hint.command ? { command: source.hint.command } : {}) } } : {}),
+        ...(typeof source.usage === 'function' ? { usage: true } : {}),
       })),
       taskProviders: (contributions.taskProviders ?? []).map(provider => ({ id: provider.id, diagnostics: typeof provider.diagnostics === 'function' })),
       actions: Object.entries(contributions.actions ?? {}).map(([id, action]) => ({ id, label: action.label, kind: action.kind })),
@@ -228,6 +229,11 @@ const handlers = {
     if (!source) throw new Error(`no model source ${id}`);
     await source.prepare?.(overrides);
     return JSON.parse(JSON.stringify(source.resolve(overrides) ?? {}));
+  },
+  'modelSource.usage'({ id, overrides }) {
+    const source = sourceOf(id);
+    if (!source || typeof source.usage !== 'function') throw new Error(`no usage provider for model source ${id}`);
+    return source.usage(overrides);
   },
 
   'avatar.generate'({ id, request }) { return avatarStyleOf(id).generate(request); },

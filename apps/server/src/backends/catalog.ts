@@ -8,7 +8,7 @@ import type { TerminalLaunchEnv } from '../terminal/service.js';
 import { validateNativeModelApiProtocol, validateNativeModelSource, validateNativeProfileEndpoint } from '../settings/index.js';
 import { piProviderModels } from './pi/provider.js';
 import { fetchGatewayModels } from './shared/gateway-models.js';
-import { modelSourceOf, modelSourceProvider, prepareSource, sourceCatalog } from './shared/model-source.js';
+import { modelSourceOf, modelSourceProvider, prepareSource, sourceCatalog, sourceUsage } from './shared/model-source.js';
 import { modelFamily, parseNativeModelSelection } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { FreshCache } from './shared/fresh-cache.js';
@@ -147,7 +147,7 @@ export class BackendCatalog {
   private readonly slashListings = new FreshCache<NativeSlashItem[]>(SLASH_LIST_FRESH_MS, MAX_MODEL_LISTINGS);
   /** What a launch loads per backend, profile and directory (`loadedExtensions`); a probe can start a CLI, so a read is kept for a while. */
   private readonly loadedListings = new Map<string, { at: number; value?: LoadedExtensions; request?: Promise<LoadedExtensions> }>();
-  private readonly usageReads = new Map<string, { freshUntil: number; value?: NativeBackendUsage; request?: Promise<NativeBackendUsage> }>();
+  private readonly usageReads = new Map<string, { freshUntil: number; value?: NativeBackendUsage; request?: Promise<NativeBackendUsage | undefined> }>();
   private readonly availability = new Map<string, AvailabilityEntry>();
 
   constructor(
@@ -163,6 +163,7 @@ export class BackendCatalog {
   /** A source login changes credentials without changing its saved profile. */
   invalidateModelCatalogs(): void {
     this.modelListings.clear();
+    this.usageReads.clear();
     this.availability.clear();
     for (const driver of this.registry.list()) driver.invalidateModels?.();
   }
@@ -474,10 +475,14 @@ export class BackendCatalog {
   async usage(backendId: string, project: Project | undefined, profileId?: string, session?: Session): Promise<NativeBackendUsage | undefined> {
     if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
     const driver = this.registry.require(backendId);
-    if (!driver.usage) return undefined;
     const profiles = this.profiles(driver);
-    const profile = session ? this.sessionProfile(session) : (profileId ? profiles.find(item => item.id === profileId) : undefined) ?? profiles.find(item => item.isDefault) ?? profiles[0];
+    // Keep the session's bound identity, but read quota with its current saved settings rather
+    // than the launch snapshot a running session deliberately retains.
+    const selectedProfileId = session ? this.sessionProfile(session).id : profileId;
+    const profile = selectedProfileId ? profiles.find(item => item.id === selectedProfileId) : profiles.find(item => item.isDefault) ?? profiles[0];
     if (!profile || (profileId && profile.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
+    const source = modelSourceOf(profile.config);
+    if (source ? !modelSourceProvider(source) : !driver.usage) return undefined;
     const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
     let read = this.usageReads.get(key);
     if (read?.value && read.freshUntil > Date.now()) return read.value;
@@ -487,8 +492,8 @@ export class BackendCatalog {
       if (this.usageReads.size > MAX_MODEL_LISTINGS) this.usageReads.delete(this.usageReads.keys().next().value!);
     }
     const entry = read;
-    entry.request ??= driver.usage(this.host, project, profile, session)
-      .then(value => { entry.value = value; entry.freshUntil = Date.now() + USAGE_FRESH_MS; return value; })
+    entry.request ??= (source ? sourceUsage(source, profile.config) : driver.usage!(this.host, project, profile, session))
+      .then(value => { entry.value = value; entry.freshUntil = value ? Date.now() + USAGE_FRESH_MS : 0; return value; })
       .finally(() => { entry.request = undefined; });
     return await entry.request;
   }

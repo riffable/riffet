@@ -7,6 +7,7 @@ import type {
   SourceEndpoint, SourceOverrides, TaskDiagnostic, TaskProvider,
 } from '@riffet/plugin-api';
 import type { ChildContributions, ChildDeviceFlow, HostToChild } from '../../../../packages/plugin-api/src/runtime/protocol.js';
+import type { ModelStatus, NativeBackendUsage, UsageWindow } from '@riffet/contracts';
 import { confined } from '../plugins/development.js';
 import { HostService } from './host-service.js';
 import { PluginProcess } from './process.js';
@@ -124,7 +125,8 @@ function describedByChild(raw: unknown): ChildContributions {
       || !optional(item.protocols, value => Array.isArray(value) && value.length <= 8 && value.every(protocol => typeof protocol === 'string' && PROTOCOL.test(protocol)))
       || !optional(item.backends, value => Array.isArray(value) && value.every(backend => backend === 'claude' || backend === 'codex'))
       || !optional(item.defaultEndpoint, httpUrl) || !optional(item.overridable, value => Array.isArray(value) && value.every(key => key === 'apiEndpoint' || key === 'apiKey'))
-      || !optional(item.loginAction, value => text(value, 64)) || !optional(item.hint, hint)) throw malformed('a model source');
+      || !optional(item.loginAction, value => text(value, 64)) || !optional(item.hint, hint)
+      || !optional(item.usage, value => typeof value === 'boolean')) throw malformed('a model source');
   }
   for (const item of list(raw.taskProviders, 'a task provider')) if (!isRecord(item) || !text(item.id, 200) || typeof item.diagnostics !== 'boolean') throw malformed('a task provider');
   for (const item of list(raw.commands, 'a command')) if (!text(item, 200)) throw malformed('a command');
@@ -139,6 +141,76 @@ function describedByChild(raw: unknown): ChildContributions {
 function statusFromChild(raw: unknown): PluginStatus {
   if (!isRecord(raw) || !['ready', 'attention', 'unavailable'].includes(raw.state as string) || !optional(raw.message, value => typeof value === 'string')) throw malformed('the status');
   return { state: raw.state as PluginStatus['state'], ...(raw.message ? { message: (raw.message as string).slice(0, 2000) } : {}) };
+}
+
+const finite = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+const nonnegative = (value: unknown): value is number => finite(value) && value >= 0;
+const nonnegativeInt = (value: unknown): value is number => nonnegative(value) && Number.isInteger(value) && value <= 2_147_483_647;
+const timestamp = (value: unknown): value is string => text(value, 64) && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
+
+/** Quota is data from an installed package, not trusted host state; only the public contract crosses back to clients. */
+function usageWindowFromChild(raw: unknown): UsageWindow {
+  if (!isRecord(raw) || !nonnegativeInt(raw.usedPercent)
+    || !optional(raw.windowMinutes, value => nonnegativeInt(value) && value > 0)
+    || !optional(raw.resetsAt, timestamp)) throw malformed('a usage window');
+  return {
+    usedPercent: raw.usedPercent,
+    ...(raw.windowMinutes !== undefined ? { windowMinutes: raw.windowMinutes as number } : {}),
+    ...(raw.resetsAt !== undefined ? { resetsAt: new Date(raw.resetsAt as string).toISOString() } : {}),
+  };
+}
+
+function modelQuotaFromChild(raw: unknown, amount = nonnegativeInt): NonNullable<ModelStatus['quota']> {
+  const window = usageWindowFromChild(raw);
+  const quota = raw as Record<string, unknown>;
+  if (!optional(quota.remaining, amount) || !optional(quota.limit, amount)
+    || !optional(quota.depleted, value => typeof value === 'boolean')) throw malformed('a model quota');
+  return {
+    ...window,
+    ...(quota.remaining !== undefined ? { remaining: quota.remaining as number } : {}),
+    ...(quota.limit !== undefined ? { limit: quota.limit as number } : {}),
+    ...(quota.depleted !== undefined ? { depleted: quota.depleted as boolean } : {}),
+  };
+}
+
+function usageFromChild(raw: unknown): NativeBackendUsage {
+  if (!isRecord(raw) || !timestamp(raw.fetchedAt) || !isRecord(raw.models) || Object.keys(raw.models).length > 4096) throw malformed('the usage');
+  let account: NativeBackendUsage['account'];
+  if (raw.account !== undefined) {
+    const value = raw.account;
+    if (!isRecord(value) || !optional(value.plan, item => text(item, 256)) || !Array.isArray(value.windows) || value.windows.length > 64
+      || !optional(value.limitReached, item => typeof item === 'boolean')) throw malformed('the account usage');
+    let credits: NonNullable<NativeBackendUsage['account']>['credits'];
+    if (value.credits !== undefined) {
+      const credit = value.credits;
+      if (!isRecord(credit) || !optional(credit.balance, finite) || !optional(credit.unlimited, item => typeof item === 'boolean')) throw malformed('the account credits');
+      credits = {
+        ...(credit.balance !== undefined ? { balance: credit.balance as number } : {}),
+        ...(credit.unlimited !== undefined ? { unlimited: credit.unlimited as boolean } : {}),
+      };
+    }
+    account = {
+      ...(value.plan !== undefined ? { plan: value.plan as string } : {}),
+      windows: value.windows.map(usageWindowFromChild),
+      ...(credits !== undefined ? { credits } : {}),
+      ...(value.limitReached !== undefined ? { limitReached: value.limitReached as boolean } : {}),
+    };
+  }
+  const models = Object.fromEntries(Object.entries(raw.models).map(([id, value]): [string, ModelStatus] => {
+    if (!text(id, 512) || !isRecord(value) || !optional(value.loadPercent, nonnegativeInt)
+      || !optional(value.quotaLimited, item => typeof item === 'boolean') || !optional(value.dailyQuotaKey, item => text(item, 256))) throw malformed('a model usage');
+    const quota = value.quota === undefined ? undefined : modelQuotaFromChild(value.quota);
+    const daily = value.dailyQuota === undefined ? undefined : modelQuotaFromChild(value.dailyQuota, nonnegative);
+    if (daily && (daily.remaining === undefined || daily.limit === undefined)) throw malformed('a daily model quota');
+    return [id, {
+      ...(value.loadPercent !== undefined ? { loadPercent: value.loadPercent as number } : {}),
+      ...(quota !== undefined ? { quota } : {}),
+      ...(value.quotaLimited !== undefined ? { quotaLimited: value.quotaLimited as boolean } : {}),
+      ...(value.dailyQuotaKey !== undefined ? { dailyQuotaKey: value.dailyQuotaKey as string } : {}),
+      ...(daily !== undefined ? { dailyQuota: { ...daily, remaining: daily.remaining!, limit: daily.limit! } } : {}),
+    }];
+  }));
+  return { ...(account ? { account } : {}), models, fetchedAt: new Date(raw.fetchedAt).toISOString() };
 }
 
 function checksFromChild(raw: unknown): DoctorCheck[] {
@@ -188,6 +260,7 @@ class RemoteModelSource implements ModelSourceProvider {
   readonly overridable?: ReadonlyArray<keyof SourceOverrides>;
   readonly loginAction?: string;
   readonly hint?: { text: string; command?: string };
+  readonly usage?: ModelSourceProvider['usage'];
   private readonly resolved = new Map<string, { value: ResolvedSource; at: number }>();
   private readonly preparing = new Map<string, Promise<void>>();
 
@@ -199,6 +272,7 @@ class RemoteModelSource implements ModelSourceProvider {
     if (description.overridable) this.overridable = description.overridable;
     if (description.loginAction) this.loginAction = description.loginAction;
     if (description.hint) this.hint = description.hint;
+    if (description.usage) this.usage = async overrides => usageFromChild(await this.call('modelSource.usage', { id: this.id, overrides }, TIMEOUTS.catalog));
   }
 
   /** Synchronous, so it answers from the last `prepare` for these overrides; a miss starts one and says the source is not ready. */

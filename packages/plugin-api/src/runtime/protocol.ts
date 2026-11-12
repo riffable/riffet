@@ -5,7 +5,7 @@
 
 import type { ActionOutcome, AvatarStyleRequest, GatewayProtocol, ModelSourceBackend, ResolvedSource, SourceOverrides, TaskActionSpec, TaskDiagnostic, TaskPlan } from '../index.js';
 import type { DoctorCheck, GatewayModelsRequest, PluginStatus } from '../index.js';
-import type { ModelInfo, PluginCommandResult, TaskParams } from '@riffet/contracts';
+import type { ModelInfo, NativeBackendUsage, PluginCommandResult, TaskParams } from '@riffet/contracts';
 
 export const RUNTIME_PROTOCOL_VERSION = 1;
 
@@ -27,7 +27,7 @@ export type ChildToHost = {
 };
 
 export interface ChildContributions {
-  modelSources: Array<{ id: string; label: string; /** The protocols it serves, or the older `backends` they stand for: at least one of the two. */ protocols?: GatewayProtocol[]; backends?: ModelSourceBackend[]; defaultEndpoint?: string; overridable?: Array<keyof SourceOverrides>; loginAction?: string; hint?: { text: string; command?: string } }>;
+  modelSources: Array<{ id: string; label: string; /** The protocols it serves, or the older `backends` they stand for: at least one of the two. */ protocols?: GatewayProtocol[]; backends?: ModelSourceBackend[]; defaultEndpoint?: string; overridable?: Array<keyof SourceOverrides>; loginAction?: string; hint?: { text: string; command?: string }; usage?: boolean }>;
   taskProviders: Array<{ id: string; diagnostics: boolean }>;
   actions: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   /** The ids of the commands it handles (`Contributions.commands`); the server checks each against the manifest. */
@@ -56,6 +56,7 @@ export type HostToChild = {
   doctorChecks: { params: Record<string, never>; result: DoctorCheck[] };
   'modelSource.catalog': { params: { id: string; backend: ModelSourceBackend; overrides: SourceOverrides }; result: ModelInfo[] };
   'modelSource.prepare': { params: { id: string; overrides: SourceOverrides }; result: ResolvedSource };
+  'modelSource.usage': { params: { id: string; overrides: SourceOverrides }; result: NativeBackendUsage };
   'task.detect': { params: { provider: string; project: ProjectCall }; result: boolean };
   'task.actions': { params: { provider: string; project: ProjectCall }; result: TaskActionSpec[] };
   'task.plan': { params: { provider: string; action: string; taskParams: TaskParams; project: ProjectCall }; result: TaskPlan };

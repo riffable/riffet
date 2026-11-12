@@ -217,7 +217,7 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
         loadUsage={(signal) => api.backendUsage(backendId, { sessionId }, signal)
           .then((usage) => grouped ? { ...usage, models: Object.fromEntries(Object.entries(usage.models).map(([id, status]) => [composeChoice(profileId!, id), status])) } : usage)}
         refreshCatalog={refreshCatalog}
-        usageScopeKey={`${backendId}|${sessionId}`}
+        usageScopeKey={JSON.stringify([backendId, sessionId, profileId ?? '', grouped])}
         loading={loading}
         refreshing={refreshing}
         error={catalogError}

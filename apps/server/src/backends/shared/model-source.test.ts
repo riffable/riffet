@@ -7,7 +7,8 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { codexFlavor } from '../codex/flavors.js';
-import { modelSourceOf, provideModelSources, resolveSource, sourceCatalog } from './model-source.js';
+import type { ModelSourceProvider } from '@riffet/plugin-api';
+import { modelSourceOf, provideModelSources, resolveSource, sourceCatalog, sourceUsage } from './model-source.js';
 import { profileChatModels, profileModelEndpoint } from '../../auxiliary/models.js';
 import { streamChat } from '../../auxiliary/gateway.js';
 
@@ -15,6 +16,21 @@ const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; vi.unstubAllEnvs(); provideModelSources(() => []); });
 
 describe('without integrations', () => {
+  it('activates before reading source quota and passes only the selected profile overrides', async () => {
+    const usage = vi.fn(async () => ({ models: {}, fetchedAt: '2026-11-12T00:00:00Z' }));
+    let provider: ModelSourceProvider = { id: 'fixture-source', label: 'Fixture', resolve: () => ({}), catalog: async () => [] };
+    const activate = vi.fn(async () => { provider = { ...provider, usage }; });
+    provideModelSources(() => [provider], activate);
+    expect(await sourceUsage('fixture-source', { apiEndpoint: ' https://gateway.example/prefix/v1 ', apiKey: ' selected-key ', ignored: 'private' }))
+      .toEqual({ models: {}, fetchedAt: '2026-11-12T00:00:00Z' });
+    expect(activate).toHaveBeenCalledWith('fixture-source');
+    expect(usage).toHaveBeenCalledExactlyOnceWith({ apiEndpoint: 'https://gateway.example/prefix/v1', apiKey: 'selected-key' });
+    provideModelSources(() => [{ ...provider, usage: undefined }]);
+    expect(await sourceUsage('fixture-source', {})).toBeUndefined();
+    provideModelSources(() => []);
+    await expect(sourceUsage('fixture-source', {})).rejects.toThrow('当前不可用');
+  });
+
   it('uses a side chat source endpoint, fresh command credential and headers on the model request', async () => {
     const ref = { backendId: 'codex' as const, profileId: 'source-profile', model: 'source-model' };
     let token = 'first-token';

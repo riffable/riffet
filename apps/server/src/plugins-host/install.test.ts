@@ -374,6 +374,7 @@ describe('running an installed package', () => {
     await install(reg, pkg('acme.models', '1.0.0'));
     const [source] = reg.modelSources();
     expect(source).toMatchObject({ id: 'acme.models.remote', backends: ['codex'] });
+    expect(source!.usage).toBeUndefined();
     await source!.prepare!({ apiKey: 'k1' });
     expect(source!.resolve({ apiKey: 'k1' })).toMatchObject({ codexBaseUrl: 'https://models.example/v1', headers: { codex: { 'x-key': 'k1' } } });
     expect(source!.resolve({ apiKey: 'other' })).toMatchObject({ reason: expect.stringContaining('尚未准备好') });
@@ -384,6 +385,40 @@ describe('running an installed package', () => {
     const commanded = source!.resolve({ apiKey: 'command' });
     expect(commanded.credential).toBeUndefined();
     expect(commanded.reason).toBeTruthy();
+  });
+
+  it('reads optional model-source usage with profile overrides and rejects malformed quota reports', async () => {
+    const { registry: reg } = await registry();
+    const served = entry().replace('catalog: async () =>', `usage: async overrides => {
+      const report = {
+        account: { plan: 'Pro', windows: [{ usedPercent: overrides.apiKey === 'k2' ? 75 : 25, windowMinutes: 300, resetsAt: '2026-11-13T03:30:00+08:00' }], credits: { balance: 10 }, limitReached: false, credential: 'not-public' },
+        models: { m1: { loadPercent: overrides.apiEndpoint === 'https://second.example' ? 90 : 10, quota: { usedPercent: 40, remaining: 6, limit: 10, depleted: false }, dailyQuota: { usedPercent: 25, remaining: 0.75, limit: 1 } } },
+        fetchedAt: '2026-11-12T23:36:00+08:00',
+        credential: 'not-public',
+      };
+      if (overrides.apiKey === 'bad-percentage') report.account.windows[0].usedPercent = '25';
+      if (overrides.apiKey === 'bad-time') report.fetchedAt = 'yesterday';
+      if (overrides.apiKey === 'bad-models') report.models = [];
+      if (overrides.apiKey === 'fractional-percentage') report.account.windows[0].usedPercent = 25.5;
+      if (overrides.apiKey === 'overflow-window') report.account.windows[0].windowMinutes = 2147483648;
+      if (overrides.apiKey === 'fractional-load') report.models.m1.loadPercent = 10.5;
+      if (overrides.apiKey === 'fractional-count') report.models.m1.quota.remaining = 0.25;
+      if (overrides.apiKey === 'overflow-count') report.models.m1.quota.limit = 2147483648;
+      if (overrides.apiKey === 'fractional-daily-percentage') report.models.m1.dailyQuota.usedPercent = 25.5;
+      return report;
+    }, catalog: async () =>`);
+    await install(reg, pack({ 'riffet-plugin.json': manifest('acme.usage', '1.0.0', { capabilities: ['models.provide'] }), 'server/index.mjs': served }));
+    const [source] = reg.modelSources();
+    expect(source!.usage).toBeTypeOf('function');
+    expect(await source!.usage!({ apiKey: 'k1', apiEndpoint: 'https://first.example' })).toEqual({
+      account: { plan: 'Pro', windows: [{ usedPercent: 25, windowMinutes: 300, resetsAt: '2026-11-12T19:30:00.000Z' }], credits: { balance: 10 }, limitReached: false },
+      models: { m1: { loadPercent: 10, quota: { usedPercent: 40, remaining: 6, limit: 10, depleted: false }, dailyQuota: { usedPercent: 25, remaining: 0.75, limit: 1 } } },
+      fetchedAt: '2026-11-12T15:36:00.000Z',
+    });
+    expect(await source!.usage!({ apiKey: 'k2', apiEndpoint: 'https://second.example' })).toMatchObject({ account: { windows: [{ usedPercent: 75 }] }, models: { m1: { loadPercent: 90 } } });
+    for (const apiKey of ['bad-percentage', 'bad-time', 'bad-models', 'fractional-percentage', 'overflow-window', 'fractional-load', 'fractional-count', 'overflow-count', 'fractional-daily-percentage']) {
+      await expect(source!.usage!({ apiKey })).rejects.toThrow('malformed');
+    }
   });
 
   it('refuses a host call outside the grant, and a project handle that is not the call\'s own', async () => {

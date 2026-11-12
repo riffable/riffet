@@ -7,7 +7,7 @@
 // `ResolvedSource` and never grow a branch per source.
 
 import { protocolBackend, sourceEndpoint, sourceProtocols, type GatewayProtocol, type ModelSourceBackend, type ModelSourceProvider, type ResolvedSource, type SourceCredential, type SourceOverrides } from '@riffet/plugin-api';
-import type { ModelInfo, NativeModelSource } from '../../../../../packages/contracts/src/index.js';
+import type { ModelInfo, NativeBackendUsage, NativeModelSource } from '../../../../../packages/contracts/src/index.js';
 
 export { sourceEndpoint };
 export type { ModelSourceBackend, ResolvedSource };
@@ -97,4 +97,12 @@ export async function sourceCatalog(source: NativeModelSource, consumes: readonl
   if (!backend) throw new Error(`${provider.label} 不支持这个 CLI`);
   const overrides = overridesOf(config);
   return await provider.catalog(backend, overrides);
+}
+
+/** Quota belongs to the selected source's credentials, independently of the CLI's own login. */
+export async function sourceUsage(source: NativeModelSource, config: Record<string, unknown>): Promise<NativeBackendUsage | undefined> {
+  await prepareSource({ ...config, modelSource: source });
+  const provider = modelSourceProvider(source);
+  if (!provider) throw new Error(unavailable(source));
+  return await provider.usage?.(overridesOf(config));
 }

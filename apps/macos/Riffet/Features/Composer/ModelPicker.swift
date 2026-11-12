@@ -15,7 +15,8 @@ struct ModelControls: View {
     let catalog: [ModelInfo]
     let selection: String?
     var usage: (() async -> NativeBackendUsage?)?
-    var showsAccountUsage = false
+    /// Reserves the familiar account row before its first reading; returned account data always shows.
+    var reserveAccountUsage = false
     /// The catalog is still being read: the chip shows a spinner, and with nothing to list
     /// yet it does not open.
     var loading = false
@@ -73,23 +74,27 @@ struct ModelControls: View {
         .accessibilityLabel("选择模型")
         .accessibilityValue(modelSelectionSummary(catalog: activeModels, selection: selection))
         .anchoredPopup(isPresented: $open) {
-            ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loaded,
-                       showsAccountUsage: showsAccountUsage, loadingUsage: loadingUsage,
+            ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loadedKey == usageKey ? loaded : nil,
+                       reserveAccountUsage: reserveAccountUsage, loadingUsage: loadingUsage,
                        providers: providers, activeProviderId: activeProviderId,
                        choose: choose, chooseInProvider: chooseInProvider, retryProvider: retryProvider)
+        }
+        // Directory and quota reads are independent; a slow catalog must not delay current quota.
+        .task(id: open ? usageKey : nil) {
+            guard open else { return }
+            await refresh?()
         }
         // A provider switch writes a new usage read, so the popup's own quota follows it too.
         .task(id: open ? usageKey : nil) {
             guard open else { loadingUsage = false; return }
             let key = usageKey
             loadingUsage = true
-            // Drop another provider's figures before awaiting the new read, including while the
-            // catalog refresh is still in flight; this one's stay until their replacement lands.
+            // Drop another provider's figures before awaiting the new read; this one's stay until
+            // their replacement lands.
             if loadedKey != key {
                 loaded = nil
                 loadedKey = key
             }
-            await refresh?()
             guard !Task.isCancelled, let usage else { loadingUsage = false; return }
             let snapshot = await usage()
             guard !Task.isCancelled else { return }
@@ -126,7 +131,7 @@ struct ModelPanel: View {
     let resolved: ParsedSelection
     let params: [ModelParam_]
     let loaded: NativeBackendUsage?
-    let showsAccountUsage: Bool
+    let reserveAccountUsage: Bool
     let loadingUsage: Bool
     var providers: [ProviderModels] = []
     var activeProviderId: String?
@@ -162,8 +167,11 @@ struct ModelPanel: View {
         guard twoColumn else { return catalog.count }
         return providers.reduce(providers.count) { max($0, $1.models?.count ?? 1) }
     }
-    /// The parameters and quota row of the provider in force, whether or not they are shown.
-    private var activeChrome: CGFloat { (params.isEmpty ? 0 : CGFloat(params.count) * 32 + 17) + (showsAccountUsage ? ModelAccountUsage.height + 1 : 0) }
+    private var accountUsageHeight: CGFloat {
+        reserveAccountUsage || loaded?.account != nil ? ModelAccountUsage.height(account: loaded?.account) : 0
+    }
+    /// The parameters and quota rows of the provider in force, whether or not they are shown.
+    private var activeChrome: CGFloat { (params.isEmpty ? 0 : CGFloat(params.count) * 32 + 17) + (accountUsageHeight > 0 ? accountUsageHeight + 1 : 0) }
     private var chromeHeight: CGFloat { isActiveProvider ? activeChrome : 0 }
     /// While another provider is previewed its parameters are hidden, and the lists take their
     /// height: the panel keeps its size and its top edge, so the row under the pointer stays put.
@@ -207,11 +215,10 @@ struct ModelPanel: View {
                 .padding(.horizontal, Space.md)
                 .padding(.vertical, Space.sm)
             }
-            if showsAccountUsage && isActiveProvider {
+            if accountUsageHeight > 0 && isActiveProvider {
                 Divider().overlay(palette.line)
                 ModelAccountUsage(account: loaded?.account, loading: loadingUsage)
-                    // Keep the menu anchored while the single quota row loads.
-                    .frame(height: ModelAccountUsage.height)
+                    .frame(height: accountUsageHeight)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -385,16 +392,25 @@ struct ModelPanel: View {
 }
 
 struct ModelAccountUsage: View {
-    static let height: CGFloat = 40
+    private static let rowHeight: CGFloat = 24
+    private static let verticalInset: CGFloat = 8
+    static func height(account: AccountUsage?) -> CGFloat {
+        CGFloat(max(1, account?.windows.count ?? 0)) * rowHeight + verticalInset * 2
+    }
     let account: AccountUsage?
     let loading: Bool
     @Environment(\.palette) private var palette
 
     var body: some View {
         Group {
-            if let window = account?.windows.first {
-                usageWindowView(window)
-                    .padding(.horizontal, Space.md)
+            if let windows = account?.windows, !windows.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(Array(windows.enumerated()), id: \.offset) { _, window in
+                        usageWindowView(window).frame(height: Self.rowHeight)
+                    }
+                }
+                .padding(.horizontal, Space.md)
+                .padding(.vertical, Self.verticalInset)
             } else if let account, account.limitReached {
                 Label { Text(verbatim: "Usage limit reached") } icon: { Image(icon: "exclamationmark.circle") }
                     .font(.riffet(size: S(11))).foregroundStyle(palette.danger)

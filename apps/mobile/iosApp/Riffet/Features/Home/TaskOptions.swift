@@ -177,8 +177,11 @@ private struct NewTaskModelPicker: View {
     @State private var failures: [String: String] = [:]
     @State private var loading = true
     @State private var retry = 0
+    @State private var usageRead: (scope: ModelUsageScope, values: [String: NativeBackendUsage])?
     private var effectiveProfile: String { selectedProfileID ?? profiles.first { $0.isDefault?.boolValue == true }?.id ?? "" }
     private var keys: [String] { profiles.isEmpty ? [""] : profiles.map(\.id) }
+    private var usageScope: ModelUsageScope { ModelUsageScope(server: ObjectIdentifier(workbench), backend: backend.name, project: projectID, profiles: keys, retry: retry) }
+    private var usages: [String: NativeBackendUsage] { usageRead?.scope == usageScope ? usageRead?.values ?? [:] : [:] }
     var body: some View {
         List {
             if loading { Section { ProgressView { Text(verbatim: "Loading…") } } }
@@ -187,6 +190,7 @@ private struct NewTaskModelPicker: View {
             }
             ForEach(keys, id: \.self) { key in
                 Section {
+                    ModelAccountUsageSummary(account: usages[key]?.account)
                     if let error = failures[key] { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.red); Button { retry += 1 } label: { Text(verbatim: "Retry") } }
                     if let catalog = catalogs[key] {
                         if !catalog.available { Label(catalog.reason ?? "Unavailable", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
@@ -196,7 +200,7 @@ private struct NewTaskModelPicker: View {
                                 guard catalog.available else { return }
                                 choose(catalog, key.isEmpty ? nil : key, selectionForModel(catalog: catalog.models, model: model.value)); dismiss()
                             } label: {
-                                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value)
+                                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value, trailing: modelUsageLabel(usages[key]?.models[model.value]))
                             }.foregroundStyle(.primary).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
                         }
                         if models.isEmpty { Text(verbatim: query.isEmpty ? "No models available" : "No matching models").foregroundStyle(.secondary) }
@@ -206,7 +210,22 @@ private struct NewTaskModelPicker: View {
         }.accessibilityIdentifier("newTaskModelList")
             .navigationTitle("Models").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $query, prompt: "Search models")
-            .task(id: retry) { await load() }
+            .task(id: usageScope) { await load() }
+            .task(id: usageScope) { await loadUsage(usageScope) }
+    }
+    @MainActor private func loadUsage(_ scope: ModelUsageScope) async {
+        usageRead = (scope, [:])
+        guard let api = workbench.api else { return }
+        // The selected provider answers first; other groups keep their own figures and failures.
+        for key in [effectiveProfile] + keys.filter({ $0 != effectiveProfile }) {
+            do {
+                let value = try await api.backendUsage(backendId: backend, projectId: projectID, profileId: key.isEmpty ? nil : key, sessionId: nil, global: false)
+                try Task.checkCancellation()
+                guard usageRead?.scope == scope else { return }
+                usageRead?.values[key] = value
+            } catch is CancellationError { return }
+            catch { if Task.isCancelled { return } }
+        }
     }
     @MainActor private func load() async {
         loading = true; failures = [:]; catalogs = [:]
@@ -218,7 +237,10 @@ private struct NewTaskModelPicker: View {
                 try Task.checkCancellation()
                 catalogs[key] = entry
             } catch is CancellationError { return }
-            catch { failures[key] = error.riffetMessage }
+            catch {
+                if Task.isCancelled { return }
+                failures[key] = error.riffetMessage
+            }
         }
     }
 }
@@ -241,6 +263,7 @@ struct SessionOptionsView: View {
     @State private var unsentOff: [String]?
     @State private var writingTools = false
     @State private var toolsError: String?
+    @State private var usageRead: (scope: ModelUsageScope, value: NativeBackendUsage)?
     private var current: Session {
         let selected = workbench.selected?.id == session.id ? workbench.selected : nil
         let latest = selected ?? workbench.list.sessions.first { $0.id == session.id } ?? session
@@ -258,6 +281,11 @@ struct SessionOptionsView: View {
             backend: current.backendId ?? .cursor, sessionApproval: current.approval)
     }
     private var context: NativeContext? { workbench.selected?.id == session.id ? workbench.context : nil }
+    private var usageScope: ModelUsageScope {
+        ModelUsageScope(server: ObjectIdentifier(workbench), backend: (current.backendId ?? .cursor).name,
+                        project: current.projectId, profiles: [current.backendProfileId ?? ""], session: current.id)
+    }
+    private var usage: NativeBackendUsage? { usageRead?.scope == usageScope ? usageRead?.value : nil }
     private var tools: [String] { pendingTools ?? ToolGroups.shared.phones(groups: current.toolGroups) }
     private var extensionsOff: [String] { pendingOff ?? ExtensionsOff.shared.clean(value: current.extensionsOff) }
     /// Phones need a backend that takes the tools and something to pick or switch off; quick chat and archived sessions have none.
@@ -296,7 +324,7 @@ struct SessionOptionsView: View {
                 if focus == .model { sendingOptions(catalog) }
                 if focus == .all || focus == .model {
                     if catalog.capabilities.supportsModelSelection {
-                        ModelOptions(catalog: catalog.models, selection: current.model ?? catalog.defaultModel, inlineList: focus == .model, providers: providers(catalog),
+                        ModelOptions(catalog: catalog.models, selection: current.model ?? catalog.defaultModel, inlineList: focus == .model, providers: providers(catalog), usage: usage,
                                      switchTo: { profile, value in change { api in try await api.nativeSwitchProfile(id: session.id, backendProfileId: profile, model: value) } onDone: { Task { await load() } } }) { value in change { api in try await api.nativeSetModel(id: session.id, model: value) } }
                             .disabled(pending || current.archivedAt != nil)
                     } else { Section { Text("此 Agent 不支持在客户端切换模型。").foregroundStyle(.secondary) } }
@@ -326,8 +354,20 @@ struct SessionOptionsView: View {
         }
         .navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .bottomBar)
         .task { await load() }
+        .task(id: usageScope) { await loadUsage(usageScope) }
         .readsToolDevices(toolDevices, workbench: workbench, enabled: true)
         .onChange(of: workbench.selected?.configRevision) { _, _ in if workbench.selected?.id == session.id { receipt = nil } }
+    }
+    @MainActor private func loadUsage(_ scope: ModelUsageScope) async {
+        usageRead = nil
+        guard focus == .all || focus == .model, let api = workbench.api else { return }
+        do {
+            let value = try await api.backendUsage(backendId: current.backendId ?? .cursor, projectId: nil, profileId: nil, sessionId: current.id, global: false)
+            try Task.checkCancellation()
+            guard scope == usageScope else { return }
+            usageRead = (scope, value)
+        } catch is CancellationError { return }
+        catch { /* Unknown quota does not prevent choosing a model. */ }
     }
     @ViewBuilder private func sendingOptions(_ catalog: NativeBackendCatalogEntry) -> some View {
         if catalog.capabilities.supportsModeSelection || catalog.capabilities.supportsPermissionSelection || toolsShown(catalog) {
@@ -542,29 +582,72 @@ private struct ModelProvider: Identifiable {
     var isCurrent = false
 }
 
+/// A suspended quota answer belongs to exactly one server, agent and provider selection.
+private struct ModelUsageScope: Hashable {
+    let server: ObjectIdentifier
+    let backend: String
+    let project: String
+    let profiles: [String]
+    var session: String? = nil
+    var retry = 0
+}
+
+private struct ModelAccountUsageSummary: View {
+    let account: AccountUsage?
+    @Environment(\.palette) private var palette
+    var body: some View {
+        if let account {
+            let summary = accountSummary(account: account, now: platformNowMillis(), offsetOf: {
+                KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value))
+            })
+            if !summary.isEmpty || account.limitReached {
+                Text(verbatim: [account.limitReached ? "Usage limit reached" : nil, summary.isEmpty ? nil : summary].compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(account.limitReached ? palette.danger : palette.fg3)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// Exact model IDs and the shared wording are used on every phone; no provider is guessed here.
+private func modelUsageLabel(_ status: ModelStatus?) -> String? {
+    guard let status else { return nil }
+    var parts: [String] = []
+    if let quota = status.quota { parts.append(quotaLabel(quota: quota)) }
+    if let daily = status.dailyQuota {
+        parts.append(dailyQuotaLabel(quota: daily))
+        if daily.depleted { parts.append(dailyQuotaLowPriorityLabel()) }
+    }
+    if quotaUnavailable(status: status) { parts.append(quotaUnavailableLabel()) }
+    if let load = status.loadPercent { parts.append("Load \(load.intValue)%") }
+    return parts.isEmpty ? nil : parts.joined(separator: " · ")
+}
+
 private struct ModelOptions: View {
     let catalog: [ModelInfo]
     let selection: String?
     var inlineList = false
     /// Non-empty groups the models by provider; `catalog` belongs to the one marked current.
     var providers: [ModelProvider] = []
+    var usage: NativeBackendUsage?
     var switchTo: (String, String) -> Void = { _, _ in }
     let choose: (String) -> Void
     @State private var query = ""
     var body: some View {
         if inlineList { ModelParameterSection(catalog: catalog, selection: selection, choose: choose) }
         Section("模型") {
+            if providers.isEmpty { ModelAccountUsageSummary(account: usage?.account) }
             if inlineList && providers.isEmpty {
                 TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
                 ForEach(catalog.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
                     Button { choose(selectionForModel(catalog: catalog, model: model.value)) } label: {
-                        ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value)
+                        ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
                     }.foregroundStyle(.primary).accessibilityIdentifier("sessionModelChoice.\(model.value)")
                 }
             } else if inlineList {
                 TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
             } else { NavigationLink {
-                ModelSelectionList(catalog: catalog, selection: selection, providers: providers, switchTo: switchTo, choose: choose)
+                ModelSelectionList(catalog: catalog, selection: selection, providers: providers, usage: usage, switchTo: switchTo, choose: choose)
             } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : "Select model").fixedSize(horizontal: false, vertical: true) }
             .disabled(catalog.isEmpty) }
             if catalog.isEmpty { Text(verbatim: "No models available").font(.footnote).foregroundStyle(.secondary) }
@@ -575,7 +658,8 @@ private struct ModelOptions: View {
         if inlineList && !providers.isEmpty {
             ForEach(providers) { provider in
                 Section(provider.name) {
-                    ProviderModelRows(provider: provider, query: query, selection: selection, switchTo: switchTo, choose: choose, dismisses: false)
+                    if provider.isCurrent { ModelAccountUsageSummary(account: usage?.account) }
+                    ProviderModelRows(provider: provider, query: query, selection: selection, usage: provider.isCurrent ? usage : nil, switchTo: switchTo, choose: choose, dismisses: false)
                 }
             }
         }
@@ -587,6 +671,7 @@ private struct ModelSelectionList: View {
     let catalog: [ModelInfo]
     let selection: String?
     var providers: [ModelProvider] = []
+    var usage: NativeBackendUsage?
     var switchTo: (String, String) -> Void = { _, _ in }
     let choose: (String) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -595,7 +680,10 @@ private struct ModelSelectionList: View {
     var body: some View {
         List {
             ForEach(groups) { provider in
-                Section { ProviderModelRows(provider: provider, query: query, selection: selection, switchTo: switchTo, choose: choose, dismisses: true) }
+                Section {
+                    if provider.isCurrent { ModelAccountUsageSummary(account: usage?.account) }
+                    ProviderModelRows(provider: provider, query: query, selection: selection, usage: provider.isCurrent ? usage : nil, switchTo: switchTo, choose: choose, dismisses: true)
+                }
                 header: { if !providers.isEmpty { Text(provider.name) } }
             }
             if groups.allSatisfy({ $0.models.allSatisfy { !(query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query)) } }) { Text(verbatim: "No matching models").foregroundStyle(.secondary) }
@@ -608,6 +696,7 @@ private struct ProviderModelRows: View {
     let provider: ModelProvider
     let query: String
     let selection: String?
+    let usage: NativeBackendUsage?
     let switchTo: (String, String) -> Void
     let choose: (String) -> Void
     let dismisses: Bool
@@ -619,7 +708,7 @@ private struct ProviderModelRows: View {
                 if provider.isCurrent { choose(value) } else { switchTo(provider.id, value) }
                 if dismisses { dismiss() }
             } label: {
-                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: provider.isCurrent && resolveModelSelection(catalog: provider.models, selection: selection).model == model.value)
+                ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: provider.isCurrent && resolveModelSelection(catalog: provider.models, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
             }.foregroundStyle(.primary).accessibilityIdentifier("sessionModelChoice.\(provider.id).\(model.value)")
         }
     }

@@ -781,9 +781,9 @@ struct SessionModelControls: View {
             if let catalog, catalog.capabilities.supportsModelSelection {
                 ModelControls(catalog: catalog.models, selection: session.model, usage: quickChat ? nil : {
                     try? await workbench.host.api?.agentUsage(agentId: session.agentID, projectId: nil, profileId: nil, sessionId: session.id, global: false)
-                }, showsAccountUsage: !quickChat && session.agentID == "codex", loading: loading, providers: providers, activeProviderId: session.backendProfileId, chooseInProvider: { provider, value in
+                }, reserveAccountUsage: !quickChat && session.agentID == "codex", loading: loading, providers: providers, activeProviderId: session.backendProfileId, chooseInProvider: { provider, value in
                     Task { await workbench.switchProfile(provider, model: value, for: session.id) }
-                }, scope: "\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")", refresh: refresh) { value in
+                }, scope: "\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")|\(workbench.catalogs.connectionRevision)", refresh: refresh) { value in
                     Task { await workbench.setModel(value, for: session.id) }
                 }
                 .id("\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")")

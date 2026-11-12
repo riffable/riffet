@@ -264,15 +264,15 @@ struct HomeView: View {
                         selection: effectiveModel,
                         usage: {
                             guard !quickChat else { return nil }
-                            return try? await workbench.host.api?.agentUsage(agentId: backend, projectId: self.project?.id, profileId: profileId, sessionId: nil, global: projectless)
+                            return try? await workbench.host.api?.agentUsage(agentId: backend, projectId: self.project?.id, profileId: resolvedProfileId, sessionId: nil, global: projectless)
                         },
-                        showsAccountUsage: backend == "codex",
+                        reserveAccountUsage: backend == "codex",
                         loading: catalogLoading,
                         providers: providerModels,
                         activeProviderId: resolvedProfileId,
                         chooseInProvider: { provider, value in chooseModel(value, inProvider: provider) },
                         retryProvider: { provider in Task { await loadProfileCatalog(provider, reload: true) } },
-                        scope: "\(backend)|\(profileId ?? "")|\(project?.id ?? "")",
+                        scope: "\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")|\(workbench.catalogs.connectionRevision)",
                         refresh: { await loadCatalog(reload: true, quietly: true); await loadProfileCatalogs() }
                     ) { value in
                         chooseModel(value, inProvider: resolvedProfileId)

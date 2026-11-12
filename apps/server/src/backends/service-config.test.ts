@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { ModelInfo, NativeInteraction, NativeRunConfig, Run, Session } from '../../../../packages/contracts/src/index.js';
 import type { Store } from '../store.js';
 import type { NativeBackendDriver, NativeBackendProfileConfig as ProfileConfig } from './types.js';
+import { BackendCatalog } from './catalog.js';
 import { NativeBackendService } from './service.js';
+import { provideModelSources } from './shared/model-source.js';
+
+afterEach(() => provideModelSources(() => []));
 
 /**
  * One rule, pinned here: a queued message is delivered under the settings in effect when it starts,
@@ -76,7 +80,7 @@ function harness() {
     workspace: {} as never,
     terminal: {} as never,
     runtime: { withSession: async <T>(_id: string, operation: () => Promise<T> | T) => await operation() } as never,
-    registry: { require: () => driver } as never,
+    registry: { require: () => driver, list: () => [driver] } as never,
   });
   services.push(service);
   return { service, driver, delivered, publishedSessions, accepted: () => currentRun, setRun: (value: Run) => { currentRun = value; }, switchTo: (patch: Partial<Session>) => { current = { ...current, ...patch }; } };
@@ -433,4 +437,69 @@ it('keeps global model, usage and skill queries separate from project caches wit
   expect((await service.catalog.usage('dsh',project as never))?.fetchedAt).toBe('project');
   expect((await service.catalog.slashCatalog('dsh',undefined)).items[0]?.name).toBe('global-skill');
   expect((await service.catalog.slashCatalog('dsh',project as never)).items[0]?.name).toBe('project-skill');
+});
+
+it('reads quota from the selected model source with isolated credentials and no CLI account fallback', async () => {
+  const { service, driver } = harness();
+  const calls: unknown[] = [];
+  const first = { modelSource: 'fixture-source', apiEndpoint: 'https://gateway.example', apiKey: 'first-key' };
+  const second = { ...first, apiKey: 'second-key' };
+  driver.profiles = () => [
+    { id: 'first', backendId: 'dsh', name: 'First', config: first },
+    { id: 'second', backendId: 'dsh', name: 'Second', config: second },
+  ];
+  const provider = {
+    id: 'fixture-source', label: 'Fixture', resolve: () => ({}), catalog: async () => [],
+    usage: async (overrides: unknown) => { calls.push(overrides); return { models: {}, fetchedAt: `read-${calls.length}` }; },
+  };
+  provideModelSources(() => [provider]);
+  // The backend itself need not implement usage (Claude is one such consumer).
+  expect(driver.usage).toBeUndefined();
+  const [a, b] = await Promise.all([
+    service.catalog.usage('dsh', undefined, 'first'), service.catalog.usage('dsh', undefined, 'first'),
+  ]);
+  expect(a).toEqual(b);
+  expect((await service.catalog.usage('dsh', undefined, 'second'))?.fetchedAt).toBe('read-2');
+  expect(calls).toEqual([
+    { apiEndpoint: first.apiEndpoint, apiKey: first.apiKey },
+    { apiEndpoint: second.apiEndpoint, apiKey: second.apiKey },
+  ]);
+  service.catalog.invalidateModelCatalogs();
+  expect((await service.catalog.usage('dsh', undefined, 'first'))?.fetchedAt).toBe('read-3');
+  driver.usage = async () => { throw new Error('The CLI login belongs to a different account'); };
+  provideModelSources(() => [{ ...provider, usage: undefined }]);
+  service.catalog.invalidateModelCatalogs();
+  expect(await service.catalog.usage('dsh', undefined, 'first')).toBeUndefined();
+  provideModelSources(() => []);
+  expect(await service.catalog.usage('dsh', undefined, 'first')).toBeUndefined();
+});
+
+it('reads current quota settings for a session bound to an older launch snapshot and never falls back after deletion', async () => {
+  const { service, driver } = harness();
+  const launchConfig = Object.freeze({ apiEndpoint: 'https://old-gateway.example', apiKey: 'old-key' });
+  const launchProfile: ProfileConfig = Object.freeze({ id: 'bound', backendId: 'dsh', name: 'Bound', config: launchConfig });
+  const savedConfig = { modelSource: 'fixture-source', apiEndpoint: 'https://current-gateway.example', apiKey: 'current-key' };
+  let savedProfiles: ProfileConfig[] = [
+    { id: 'default', backendId: 'dsh', name: 'Default', isDefault: true, config: { ...savedConfig, apiKey: 'different-account' } },
+    { id: 'bound', backendId: 'dsh', name: 'Bound', config: savedConfig },
+  ];
+  driver.profiles = () => savedProfiles;
+  const calls: unknown[] = [];
+  provideModelSources(() => [{
+    id: 'fixture-source', label: 'Fixture', resolve: () => ({}), catalog: async () => [],
+    usage: async overrides => { calls.push(overrides); return { models: {}, fetchedAt: 'current-reading' }; },
+  }]);
+  const catalog = new BackendCatalog({ require: () => driver } as never, service.host, {}, () => launchProfile);
+  const current = session({ backendProfileId: 'bound' });
+  expect(await catalog.usage('dsh', undefined, 'bound', current)).toEqual({ models: {}, fetchedAt: 'current-reading' });
+  // A conversation without an explicit choice still uses its bound identity, not today's default.
+  expect(await catalog.usage('dsh', undefined, undefined, session())).toEqual({ models: {}, fetchedAt: 'current-reading' });
+  expect(calls).toEqual([{ apiEndpoint: savedConfig.apiEndpoint, apiKey: savedConfig.apiKey }]);
+  expect(launchProfile.config).toBe(launchConfig);
+  expect(launchConfig).toEqual({ apiEndpoint: 'https://old-gateway.example', apiKey: 'old-key' });
+  expect(current.backendProfileId).toBe('bound');
+  await expect(catalog.usage('dsh', undefined, 'default', current)).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND', statusCode: 404 });
+  savedProfiles = savedProfiles.filter(profile => profile.id !== 'bound');
+  await expect(catalog.usage('dsh', undefined, 'bound', current)).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND', statusCode: 404 });
+  expect(calls).toHaveLength(1);
 });

@@ -266,6 +266,7 @@ node --permission --no-experimental-sqlite
 **本阶段支持的贡献**：模型源、任务提供方、操作（含设备码登录）、命令（`Contributions.commands`）、头像风格（`Contributions.avatarStyles`）、状态、doctor 检查，以及静态声明（视图、外观、任务声明）。不支持的有：Agent 后端（声明了 `contributes.agentBackends` 的包在安装时被拒绝：「agent backends need a trusted package in this version」）、分享发布目标、运行时钩子。
 
 - 模型源的 `resolve()` 是同步的，跨进程做不到，所以代理保存「每组 overrides 最近一次的结果」：`ModelSourceProvider` 增加可选的异步 `prepare(overrides)`，激活后对默认值预取，目录读取（`sourceCatalog`）前核心先 `await prepare`，缓存超过 60 秒的 `resolve` 在后台刷新。没有预取过的 overrides 先返回 `reason`「尚未准备好」，并触发一次预取。子进程返回的结果逐字段校验：地址只能是 http(s)，凭据只能是静态密钥——`command` 凭据会在沙箱外执行（Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`），安装包提供时该源返回 `reason`。
+- 模型源的可选 `usage(overrides)` 通过 `modelSource.usage` RPC 返回 `NativeBackendUsage`。激活描述只在提供该方法时声明能力，宿主校验并投影账号窗口、余额和模型状态，不透传包的其他字段。额度使用 profile 自己的地址和凭据，与 CLI 登录账号分开；旧包省略此方法仍可正常提供模型。
 - 命令：子进程在激活结果里列出命令 ID，宿主对每个生成代理，由命令路由（`POST /api/integrations/:id/commands/:name`，声明、范围、`when`、参数的检查都在路由里）调用；调用带 `projectId`、`sessionId`、已校验的 `args` 和 `timeoutMs`，子进程在期限前 5 秒中止 `signal`（60 秒的调用期限同其他调用，超过使该插件失败），插件关闭时也中止。返回的 `CommandResult` 逐字段校验（`done` 的消息至多 16 种语言、各 500 字；`open` 至少有 `view`、`sessionId`、`path` 之一，`path` 为项目内相对路径；`task` 要有 `taskId`），不合格是协议错误。已安装的包没有 `host.tasks`，命令不能启动任务。
 - 头像风格：子进程在激活结果里列出风格 ID，宿主对每个生成代理，调用 `avatar.generate` 取回 SVG（调用期限 10 秒，核心自己另有 5 秒的等待，超过使该插件失败）；返回值必须是字符串，之后同在进程内的风格一样由核心校验、栅格化。
 - 子进程回复的错误只保留 400、404、409、422 四种状态，其余（含 401、403、5xx 和没有状态）一律 502：状态由包自选，不能冒充服务端自己的结论（401 会被当作登录失效，403 当作权限不足）；错误码限 `^[A-Z][A-Z0-9_]{0,63}$`，否则取 `INTEGRATION_ACTION_FAILED`，消息至多 2000 字。
