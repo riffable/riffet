@@ -15,7 +15,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, terminalSocketUrl } from '@/lib/api';
 import { boundedCache } from '@/lib/bounded-cache';
 import { confirmDialog } from '@/lib/dialogs';
-import { pageTerminalAppearance, terminalAppearanceIsDark, terminalFont, terminalTheme } from '@/lib/terminal-theme';
+import { pageTerminalAppearance, terminalFont, terminalTheme } from '@/lib/terminal-theme';
 import { customThemeAnsi } from '@/lib/theme-library';
 import { useTheme } from '@/lib/theme';
 import { useDisplaySettings } from '@/lib/display-settings';
@@ -52,7 +52,7 @@ const useWebgl = () => !webglUnavailable
   && !window.matchMedia('(pointer: coarse)').matches;
 
 /** The colours this page last asked each conversation's pane for. */
-const requestedAppearances = boundedCache<string, string>({ limit: REQUESTED_APPEARANCE_LIMIT });
+const requestedAppearances = boundedCache<string, { key: string } | null>({ limit: REQUESTED_APPEARANCE_LIMIT });
 
 interface Props {
   terminal: TerminalInfo;
@@ -132,13 +132,13 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
   const [leaseMessage, setLeaseMessage] = useState<LeaseMessage>('checking');
   const [hasControl, setHasControl] = useState(false);
   const { themeId, resolved, revision, pluginAnsi } = useTheme();
-  // The colours as the pane's own stream last reported them. The list copy can lag or be overwritten
-  // by an older read; painting from it while tmux draws the newer colours splits the screen in two.
+  // Compare requests against the pane's own stream: the list copy can lag behind a colour change.
   const [streamAppearance, setStreamAppearance] = useState<{ value: TerminalInfo['appearance'] }>();
-  // Without a recorded appearance the pane keeps tmux's default colours, which this page's theme paints.
   const appearance = streamAppearance ? streamAppearance.value : terminal.appearance;
-  const terminalDark = appearance ? terminalAppearanceIsDark(appearance) : resolved === 'dark';
-  const palette = useMemo(() => terminalTheme(themeId, terminalDark, pluginAnsi ? pluginAnsi[terminalDark ? 'dark' : 'light'] : customThemeAnsi(themeId, terminalDark), appearance), [themeId, terminalDark, revision, appearance?.foreground, appearance?.background]);
+  // Paint with this page's current theme immediately. A busy CLI can keep its launch appearance
+  // until it is safe to relaunch; that must not pin the viewer to the previous light/dark mode.
+  const terminalDark = resolved === 'dark';
+  const palette = useMemo(() => terminalTheme(themeId, terminalDark, pluginAnsi ? pluginAnsi[terminalDark ? 'dark' : 'light'] : customThemeAnsi(themeId, terminalDark)), [themeId, terminalDark, revision, pluginAnsi]);
   const paletteRef = useRef(palette);
   paletteRef.current = palette;
 
@@ -150,17 +150,22 @@ export function TerminalView({ terminal, active, onChanged, onClose, onError, to
     const wanted = pageTerminalAppearance();
     const target = terminal.sessionId ?? terminal.id;
     const key = `${wanted.foreground};${wanted.background}`;
-    const known = requestedAppearances.get(target) === key;
-    requestedAppearances.set(target, key);
-    if (known || (appearance?.foreground === wanted.foreground && appearance.background === wanted.background)) return;
-    void api.setTerminalAppearance(terminal.id, wanted).then((info) => onChangedRef.current(info)).catch(() => undefined);
-  }, [active, terminal.id, terminal.state, appearance?.foreground, appearance?.background, themeId, resolved, revision]);
+    const known = requestedAppearances.get(target)?.key === key;
+    if (known) return;
+    const request = { key };
+    requestedAppearances.set(target, request);
+    if (appearance?.foreground === wanted.foreground && appearance.background === wanted.background) return;
+    void api.setTerminalAppearance(terminal.id, wanted).then((info) => onChangedRef.current(info)).catch(() => {
+      // Reopening or reconnecting must retry a failed request. An older rejection must not erase
+      // a newer request, even if the user has already switched away and back to the same colours.
+      if (requestedAppearances.get(target) === request) requestedAppearances.set(target, null);
+    });
+  }, [active, connection, terminal.id, terminal.state, appearance?.foreground, appearance?.background, themeId, resolved, revision]);
 
   useEffect(() => { epochRef.current = terminal.epoch; }, [terminal.epoch]);
   useEffect(() => { onChangedRef.current = onChanged; onErrorRef.current = onError; }, [onChanged, onError]);
   useEffect(() => { controlRef.current = hasControl; }, [hasControl]);
-  // `revision` is a dependency even though it is not read here: editing a custom palette keeps the
-  // id but changes every colour, and this is what makes the running terminal repaint.
+  // Updating xterm's theme repaints in place, preserving the socket and scrollback.
   useEffect(() => {
     if (termRef.current) termRef.current.options.theme = palette;
   }, [palette]);

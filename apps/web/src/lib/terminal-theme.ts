@@ -20,15 +20,15 @@ export const terminalFont = { fontFamily: '"SF Mono", "JetBrains Mono", Menlo, M
  * #ffffff to #fff, and custom palettes can contain alpha. History's numeric colour calculations
  * and the live terminal must receive the same RGB values. Selection tint is applied afterward.
  */
-export function terminalTheme(themeId: string, dark: boolean, ansi?: readonly string[], appearance?: TerminalAppearance): ITheme {
+export function terminalTheme(themeId: string, dark: boolean, ansi?: readonly string[]): ITheme {
   const root = typeof document === 'undefined' ? null : document.documentElement;
   const token = (name: string, fallback: string, surface = fallback) => {
     const value = root ? getComputedStyle(root).getPropertyValue(name).trim() : '';
     const parsed = parseColor(value || fallback);
     return parsed ? colorToHex([...composite(parsed, parseColor(surface)!), 1]) : fallback;
   };
-  const background = appearance?.background ?? token('--bg', dark ? '#141416' : '#ffffff');
-  const foreground = appearance?.foreground ?? token('--fg', dark ? '#e6e8eb' : '#1f2328', background);
+  const background = token('--bg', dark ? '#141416' : '#ffffff');
+  const foreground = token('--fg', dark ? '#e6e8eb' : '#1f2328', background);
   const accent = token('--accent', dark ? '#5b8cff' : '#3867f0', background);
   return {
     background,
@@ -38,11 +38,6 @@ export function terminalTheme(themeId: string, dark: boolean, ansi?: readonly st
     selectionBackground: tint(accent, dark ? 0.3 : 0.18),
     ...(ansiSlotsFrom(ansi) ?? ansiSlots(themeId, dark)),
   };
-}
-
-export function terminalAppearanceIsDark(appearance: TerminalAppearance): boolean {
-  const [r, g, b] = parseColor(appearance.background) ?? [20, 20, 22, 1];
-  return 0.299 * r + 0.587 * g + 0.114 * b <= 128;
 }
 
 /** Capture applied page colours at the request, including custom themes and CSS shorthand. */
