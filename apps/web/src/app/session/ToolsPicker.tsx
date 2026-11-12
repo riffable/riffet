@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { DeviceInfo, LoadedExtensions, NativeBackendId, ToolGroupId } from '@contracts';
 import { IconPuzzle } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { useStores } from '../state/stores';
@@ -173,6 +173,12 @@ function extensionRows(listed: readonly string[] | undefined, off: readonly stri
 }
 
 /**
+ * Set by the composer around its attach (+) menu: there the picker is a submenu row rather than a
+ * button of its own on the toolbar.
+ */
+export const ToolsPickerInMenu = createContext(false);
+
+/**
  * The phones a conversation's agent may control (the consent lives on the phone, never here), and the
  * MCP servers and skills it keeps. Riffet's own tools need no pick.
  */
@@ -187,6 +193,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   onError?: (message: string) => void;
 }) {
   const { t } = useLingui();
+  const inMenu = useContext(ToolsPickerInMenu);
   const [open, setOpen] = useState(false);
   const picked = phoneGroups(value);
   const { phones } = useControllablePhones(value);
@@ -227,6 +234,49 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
       {trailing}
     </DropdownMenuCheckboxItem>
   );
+  const items = (
+    <>
+      {rows.length > 0 && <DropdownMenuLabel>{t`手机`}</DropdownMenuLabel>}
+      {rows.map((row) => checkboxRow(
+        row.id,
+        picked.includes(row.id),
+        row.name,
+        (on) => toggle(row.id, on),
+        row.offline && <span className="shrink-0 text-xs text-fg-3">{t`离线`}</span>,
+      ))}
+      {mcpRows.length > 0 && <DropdownMenuLabel>{t`MCP`}</DropdownMenuLabel>}
+      {mcpRows.map((name) => {
+        const tools = toolCount.get(name);
+        return checkboxRow(
+          `${MCP_PREFIX}${name}`,
+          !off.includes(`${MCP_PREFIX}${name}`),
+          name,
+          (on) => toggleExtension(`${MCP_PREFIX}${name}`, !on),
+          tools !== undefined && <span className="shrink-0 text-xs tabular-nums text-fg-3">{tools}</span>,
+        );
+      })}
+      {skillRows.length > 0 && <DropdownMenuLabel>{t`Skills`}</DropdownMenuLabel>}
+      {skillRows.map((name) => checkboxRow(`${SKILL_PREFIX}${name}`, !off.includes(`${SKILL_PREFIX}${name}`), name, (on) => toggleExtension(`${SKILL_PREFIX}${name}`, !on)))}
+      {extensions && open && loaded.loading && (
+        <div className="flex min-h-11 items-center px-3 md:min-h-8 md:px-2"><Spinner /></div>
+      )}
+      {extensions && open && loaded.failed && (
+        <DropdownMenuItem onSelect={(event) => { event.preventDefault(); loaded.retry(); }}>
+          <span className="min-w-0 flex-1 truncate text-fg-3">{t`无法读取技能与工具`}</span>
+          <span className="shrink-0 text-xs">{t`重试`}</span>
+        </DropdownMenuItem>
+      )}
+      {footnote && (rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
+    </>
+  );
+  if (inMenu) {
+    // Says what is on only when something differs from the default.
+    return (
+      <MenuSub icon={<IconPuzzle />} label={label} value={count || offCount ? summary : undefined} disabled={disabled} onOpenChange={(next) => { setOpen(next); if (next) load(); }} className="w-[min(22rem,calc(100vw-24px))]">
+        {items}
+      </MenuSub>
+    );
+  }
   return (
     <DropdownMenu open={open} onOpenChange={(next) => { setOpen(next); if (next) load(); }}>
       <Tip label={label}>
@@ -245,37 +295,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
         </DropdownMenuTrigger>
       </Tip>
       <DropdownMenuContent side="top" align="start" className="max-h-[min(60dvh,420px)] w-[min(22rem,calc(100vw-24px))] overflow-y-auto">
-        {rows.length > 0 && <DropdownMenuLabel>{t`手机`}</DropdownMenuLabel>}
-        {rows.map((row) => checkboxRow(
-          row.id,
-          picked.includes(row.id),
-          row.name,
-          (on) => toggle(row.id, on),
-          row.offline && <span className="shrink-0 text-xs text-fg-3">{t`离线`}</span>,
-        ))}
-        {mcpRows.length > 0 && <DropdownMenuLabel>{t`MCP`}</DropdownMenuLabel>}
-        {mcpRows.map((name) => {
-          const tools = toolCount.get(name);
-          return checkboxRow(
-            `${MCP_PREFIX}${name}`,
-            !off.includes(`${MCP_PREFIX}${name}`),
-            name,
-            (on) => toggleExtension(`${MCP_PREFIX}${name}`, !on),
-            tools !== undefined && <span className="shrink-0 text-xs tabular-nums text-fg-3">{tools}</span>,
-          );
-        })}
-        {skillRows.length > 0 && <DropdownMenuLabel>{t`Skills`}</DropdownMenuLabel>}
-        {skillRows.map((name) => checkboxRow(`${SKILL_PREFIX}${name}`, !off.includes(`${SKILL_PREFIX}${name}`), name, (on) => toggleExtension(`${SKILL_PREFIX}${name}`, !on)))}
-        {extensions && open && loaded.loading && (
-          <div className="flex min-h-11 items-center px-3 md:min-h-8 md:px-2"><Spinner /></div>
-        )}
-        {extensions && open && loaded.failed && (
-          <DropdownMenuItem onSelect={(event) => { event.preventDefault(); loaded.retry(); }}>
-            <span className="min-w-0 flex-1 truncate text-fg-3">{t`无法读取技能与工具`}</span>
-            <span className="shrink-0 text-xs">{t`重试`}</span>
-          </DropdownMenuItem>
-        )}
-        {footnote && (rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
+        {items}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -4,7 +4,8 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowLeft, IconArrowUp, IconAtSign, IconChevronDown, IconChevronRight, IconFileText, IconFolder, IconInfinity, IconListTodo, IconMaximize, IconMessageCircleQuestion, IconMinimize, IconPaperclip, IconPlus, IconSlash, IconSparkles, IconSquare, IconX } from '@/components/icons';
 import { isNativeBackendId, type Attachment, type FileEntry, type NativeBackendUsage, type Session } from '@contracts';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { ToolsPickerInMenu } from './ToolsPicker';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
@@ -1277,6 +1278,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   // The sheet hides the model picker, so its trigger carries what the picker would say: a catalog
   // still loading, one that failed, or an empty one, which is also why sending can be held.
   const modelsIssue = props.modelsLoading ? '' : props.modelsError?.trim() || (props.onModelChange && props.models && !props.models.length ? t`没有可用模型` : '');
+  const attachable = props.attachmentsAllowed !== false;
+  const toolsInMenu = !isMobile && Boolean(props.toolsPicker);
   const hasMobileSettings = Boolean(props.toolbar || props.toolsPicker || props.onModelChange || props.startPickers || props.endPickers || props.usage);
   const showStop = Boolean(props.onStop && (props.stopping || (running || props.backgroundCount) && !text.trim()));
   const attachedSummary = [
@@ -1539,12 +1542,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               className="px-4 pt-1 pb-2" icon={null} noticeClassName={cn('bg-transparent! p-0! text-xs', draftAtRisk ? 'text-warning' : 'text-fg-3')} />
           </div>
           <div className={cn('flex items-center gap-1', compact ? cn('shrink-0 flex-nowrap py-0.5 pr-1', !running && !props.backgroundCount && 'hidden') : 'flex-wrap px-2 pb-2 pt-1 md:flex-nowrap')}>
-            {props.attachmentsAllowed !== false && <><input ref={fileInputRef} className="sr-only" type="file" multiple tabIndex={-1} disabled={disabled} onChange={(event) => { const replaceKey = reselectUploadKeyRef.current; reselectUploadKeyRef.current = undefined; void ingestFiles(event.target.files, replaceKey); event.target.value = ''; }} />
-            {sessionMentions ? <DropdownMenu>
-              <DropdownMenuTrigger aria-label={t`添加附件`} disabled={disabled || uploading} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
+            {/* Skills and tools live in the + menu on a pointer device rather than as a button of their
+                own on the row; the phone's settings sheet keeps its own section for them. */}
+            {(attachable || toolsInMenu) && <>{attachable && <input ref={fileInputRef} className="sr-only" type="file" multiple tabIndex={-1} disabled={disabled} onChange={(event) => { const replaceKey = reselectUploadKeyRef.current; reselectUploadKeyRef.current = undefined; void ingestFiles(event.target.files, replaceKey); event.target.value = ''; }} />}
+            {sessionMentions || toolsInMenu ? <DropdownMenu>
+              <DropdownMenuTrigger aria-label={attachable ? t`添加附件` : t`技能与工具`} disabled={disabled || (uploading && !toolsInMenu)} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start">
-                <DropdownMenuItem onSelect={() => fileInputRef.current?.click()}><IconPaperclip /><Trans>添加图片或文件</Trans></DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => { const caret = textareaRef.current?.selectionStart ?? textRef.current.length; const prefix = caret > 0 && !/\s/.test(textRef.current[caret - 1]!) ? ' @' : '@'; updateText(textRef.current.slice(0, caret) + prefix + textRef.current.slice(caret)); setTrigger({ type: 'mention', query: '', start: caret + prefix.length - 1 }); requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(caret + prefix.length, caret + prefix.length); }); }}><IconAtSign /><Trans>引用会话</Trans></DropdownMenuItem>
+                {attachable && <DropdownMenuItem disabled={uploading} onSelect={() => fileInputRef.current?.click()}><IconPaperclip /><Trans>添加图片或文件</Trans></DropdownMenuItem>}
+                {sessionMentions && (
+                  <DropdownMenuItem onSelect={() => { const caret = textareaRef.current?.selectionStart ?? textRef.current.length; const prefix = caret > 0 && !/\s/.test(textRef.current[caret - 1]!) ? ' @' : '@'; updateText(textRef.current.slice(0, caret) + prefix + textRef.current.slice(caret)); setTrigger({ type: 'mention', query: '', start: caret + prefix.length - 1 }); requestAnimationFrame(() => { textareaRef.current?.focus(); textareaRef.current?.setSelectionRange(caret + prefix.length, caret + prefix.length); }); }}><IconAtSign /><Trans>引用会话</Trans></DropdownMenuItem>
+                )}
+                {toolsInMenu && <>
+                  {(attachable || sessionMentions) && <DropdownMenuSeparator />}
+                  <ToolsPickerInMenu.Provider value>{props.toolsPicker}</ToolsPickerInMenu.Provider>
+                </>}
               </DropdownMenuContent>
             </DropdownMenu> : <Tip label={t`添加图片或文件`}>
               <button type="button" aria-label={t`添加附件`} disabled={disabled || uploading} onClick={() => fileInputRef.current?.click()} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:size-7', compact ? 'hidden' : toggleEntrance)}>
@@ -1557,7 +1568,6 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                   model and send controls off the row instead of truncating itself. */}
               <div className="hidden min-w-0 items-center gap-1 md:flex">
                 {!isMobile && props.toolbar}
-                {!isMobile && props.toolsPicker}
                 {!isMobile && fullscreenOffered && (text.trim() || fullscreen) && (
                   <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>
                     <button

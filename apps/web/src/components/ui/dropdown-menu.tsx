@@ -86,16 +86,17 @@ export function DropdownMenuSeparator({ className, ...props }: React.ComponentPr
  * A submenu row (`模式 ▸`, `更多 ▸`) inside a `DropdownMenuContent`, drawn with the menu's own row
  * and surface classes. `value` is the current choice, shown dimmed before the chevron.
  */
-export function MenuSub({ icon, label, value, disabled, children, className }: {
+export function MenuSub({ icon, label, value, disabled, children, className, onOpenChange }: {
   icon?: React.ReactNode;
   label: React.ReactNode;
   value?: React.ReactNode;
   disabled?: boolean;
   children: React.ReactNode;
   className?: string;
+  onOpenChange?: (open: boolean) => void;
 }) {
   return (
-    <Primitive.Sub>
+    <Primitive.Sub onOpenChange={onOpenChange}>
       <Primitive.SubTrigger disabled={disabled} className={cn(menuItem, 'data-[state=open]:bg-hover')}>
         {icon}
         <span className="min-w-0 flex-1 truncate">{label}</span>
