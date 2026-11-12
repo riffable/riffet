@@ -345,6 +345,24 @@ App 内置的服务端版本是确定的；接管的外部服务可能更旧或�
 - 跳转：`TranscriptFocus` 同时带消息 id、序号与引文，`exact` 时逐页读取更早的历史（至多 30 页），仍找不到在输入框上方提示。落点由 `settle(on:item:quote:)` 在约 1.5 秒内逐帧校正：高亮滚到文字本身，过程块内的图片或工具调用先展开块再定位（`RowLayout.items` 记录每项的片段）。
 - 图片与文件：过程块片段的右键菜单「收藏图片 / 收藏文件」（`TranscriptCell.fragmentMenu`）；图片以 PNG 上传，收藏页显示服务端副本，文件卡片可「打开文件」。
 
+### 画布
+
+内置画布插件（`plugins/riffet/canvas`）在 Mac 上原生绘制，不嵌 web。2026-11-12 的探针用两份真实会话（362 / 274 个节点）
+和三倍压测（1086 个节点）验证了做法：120Hz 下帧间隔 p95 / p99 均为 8.33ms，主线程每帧 p95 不超过 2.7ms。
+
+- **布局与 web 共用一份代码**：`flow.ts`、`detail.ts`、`shell-writes.ts` 及其依赖的 `toolView`、`lineDiff` 用 esbuild
+  打成经典脚本 `Resources/canvas-layout.js`（`scripts/build-canvas-layout.sh`），在专属线程的 `JSContext` 里折叠与布局，
+  结果解码成 Swift 结构。布局只依赖数据（卡片尺寸按字符估算，不读实测尺寸），所以两端几何相同。需要 `allow-jit`。
+- **绘制**：一个 layer-hosting 视图里的世界层，相机只改它的 transform。每张卡片一个图层，内容在后台按缩放档位
+  （0.25 / 0.5 / 1 / 2 × 屏幕倍率）画成位图，大卡片切成 512px 分块；远景（k < 0.36）不用位图，只画色块。
+  连线、框、轨道线用形状图层，线宽随缩放保持 1px。视口外的卡片释放位图，命中测试按模型矩形算，不走图层树。
+- **位图换代**：卡片换版本（悬停、内容增长、摘要↔详细）时，旧位图按原尺寸贴顶留着，新版本屏幕内的分块全部画好后同一帧换上，
+  不会一半新一半旧；层级切换先在后台画好可见的新位图再变形，卡片只平移不拉伸。屏幕上的位图不受内存预算回收；
+  调度器不再记账的位图绝不上屏（否则会成为永远撤不掉的残影）。
+- **与 web 对齐是验收标准**：颜色与圆角取自 `index.css` 生成的主题，图标画 Lucide 的同一套路径，动效沿用 web 的时长与曲线。
+  同一份数据、同一相机位置下，原生截图与离屏 WebKit 渲染的 web 画布叠图比对：偏移不超过 1px、颜色值一致。
+- 文字可编辑的地方（分支草稿、继续对话）在屏幕坐标里盖不缩放的真实文本视图：父层带 transform 时 macOS 26 的文本控件会发糊。
+
 ### 设计变量
 
 `scripts/gen-mobile-theme.ts` 已经把 `apps/web/src/styles/index.css` 生成为 `RiffetTheme.kt`。扩展它同时生成
@@ -474,6 +492,8 @@ Release 是同一条路径，Gradle 负责增量。不额外维护 XCFramework �
   Developer ID 时再签 Sparkle 的 XPC 服务与 helper，最后签 App。内置 `node` 用 `scripts/node.entitlements`：官方
   Node 二进制自带的 `allow-jit`、`allow-unsigned-executable-memory`、`disable-library-validation`（加载 `node-pty`
   这类原生模块需要），去掉 `get-task-allow` 与 dyld 环境变量两项。
+- App 自身只有 `allow-jit`：进程内的 JavaScriptCore（代码高亮、画布布局）没有它就只能解释执行，不论是否开
+  Hardened Runtime。2026-11-12 实测画布布局慢 5–15 倍，加上后与 Node 持平。
 - `xcrun notarytool submit --wait`，`xcrun stapler staple`，打 DMG。
 - Sparkle 用 EdDSA 签名的 appcast，版本不低于 2.9.3：低于它的 helper 在 macOS 26 上会被系统策略杀掉，
   cmux 为此升级过（[manaflow-ai/cmux#6678](https://github.com/manaflow-ai/cmux/pull/6678)，2026-06-23 合并）。

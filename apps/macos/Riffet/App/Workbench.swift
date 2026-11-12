@@ -257,8 +257,15 @@ final class Workbench {
     private(set) var previewTarget: PreviewTarget?
     /// The open conversation shown as its transcript or as the CLI's own terminal, full page.
     var showsTerminalPage = false {
-        didSet { if showsTerminalPage { exitInspectorMaximized() } }
+        didSet { if showsTerminalPage { showsCanvasPage = false; exitInspectorMaximized() } }
     }
+    /// The open conversation shown as the canvas plugin's flow in place of its transcript; another conversation opens as its transcript.
+    var showsCanvasPage = false {
+        didSet { if showsCanvasPage { showsTerminalPage = false; exitInspectorMaximized() } }
+    }
+    /// The canvas is a plugin: it is offered while the server has it on.
+    var canvasAvailable: Bool { plugins.contains { $0.id == "riffet.canvas" && $0.enabled } }
+    var showsCanvas: Bool { showsCanvasPage && canvasAvailable && !showingHome && page == nil }
     private var reopeningSessionIds: Set<String> = []
     var reopening: Bool { selected.map { reopeningSessionIds.contains($0.id) } ?? false }
     private var wakeActivity: NSObjectProtocol?
@@ -363,7 +370,10 @@ final class Workbench {
         let session = state.selected
         if let session { lastShown = (session.id, session.projectId) }
         let switched = session?.id != selected?.id
-        if switched { configurationError = nil }
+        if switched {
+            configurationError = nil
+            if showsCanvasPage { showsCanvasPage = false }
+        }
         if switched || (state.status != nil && state.status?.phase != .offline) { recoveryError = nil }
         if let session, let current = selected {
             if !Self.sameForDisplay(current, session) { selected = session }
@@ -965,6 +975,11 @@ final class Workbench {
     }
 
     // MARK: Writes
+
+    func toggleCanvasPage() {
+        guard !showingHome, page == nil, selected != nil, canvasAvailable else { return }
+        showsCanvasPage.toggle()
+    }
 
     @discardableResult
     func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, enqueue: Bool = false, onStored: (() -> Void)? = nil) async -> Bool {

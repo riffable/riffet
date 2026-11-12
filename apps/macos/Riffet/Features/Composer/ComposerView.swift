@@ -30,6 +30,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     @Environment(\.palette) private var palette
     @Environment(\.workbenchScope) private var scope
     @Environment(\.covered) private var covered
+    @Environment(\.composerEscape) private var escape
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var textHeight: CGFloat = 0
     @State private var pickingLater = false
@@ -444,6 +445,8 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { fullscreen.wrappedValue = false }
             return true
         }
+        // Nothing of the composer's is open: Escape belongs to whoever hosts it (the canvas's next-question panel).
+        if key == .dismiss, !menuOpen, let escape { escape(); return true }
         guard menuOpen else { return false }
         switch key {
         case .up:
@@ -981,4 +984,6 @@ enum TouchID {
 extension EnvironmentValues {
     /// The controls sit in a line composer's environment row rather than in the card's toolbar.
     @Entry var composerEnvRow = false
+    /// What Escape does in a composer with no menu open, when its host has a use for it.
+    @Entry var composerEscape: (() -> Void)?
 }

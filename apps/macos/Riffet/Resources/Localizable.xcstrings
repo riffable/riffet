@@ -1790,6 +1790,16 @@
         }
       }
     },
+    "画布无法加载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load the canvas"
+          }
+        }
+      }
+    },
     "超过 7 天未使用 · %lld": {
       "localizations": {
         "en": {
@@ -5986,6 +5996,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Switch modes"
+          }
+        }
+      }
+    },
+    "切换画布视图": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toggle canvas view"
           }
         }
       }

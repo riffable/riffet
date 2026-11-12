@@ -1,7 +1,8 @@
 // The conversation canvas (docs/design/plugin-system.md §4): a session view that draws a conversation
 // and its forks as flows. It has no server side: the manifest declares the view, and the web client
-// draws it from `web/` (registered in `plugins/web.ts`). Turning the plugin off removes the view
-// from the session's switch and from the 视图 settings on every client; turning it on restores it.
+// draws it from `web/` (registered in `plugins/web.ts`); the macOS app draws it natively with the same
+// layout (`apps/macos/Riffet/Features/Canvas`). Turning the plugin off removes the view from the
+// session's switch and from the 视图 settings on every client; turning it on restores it.
 
 import { PLUGIN_API_VERSION, type Plugin } from '@riffet/plugin-api';
 
@@ -13,7 +14,7 @@ export const canvas: Plugin = {
     contributes: {
       views: [{
         id: 'riffet.canvas/canvas', title: { 'zh-Hans': '画布', en: 'Canvas' },
-        locations: ['session-view'], clients: ['web'], instances: 'per-session',
+        locations: ['session-view'], clients: ['web', 'macos'], instances: 'per-session',
       }],
     },
   },

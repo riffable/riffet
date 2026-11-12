@@ -74,6 +74,9 @@ targets:
       - path: RiffetWidgets/Shared
     entitlements:
       path: Riffet/Resources/Riffet.entitlements
+      properties:
+        # The in-process JavaScriptCore (code highlighting, the canvas layout) only JITs with this.
+        com.apple.security.cs.allow-jit: true
     info:
       path: Riffet/Resources/Info.plist
       properties:

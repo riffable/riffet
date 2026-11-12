@@ -1416,6 +1416,10 @@ struct SessionMenu: View {
             let item = add(String(localized: "恢复会话"), "arrow.clockwise") {
                 Task { _ = await workbench.reopen(session) }
             }
+        if workbench.canvasAvailable {
+            let canvas = workbench.showsCanvasPage
+            _ = add(canvas ? String(localized: "切换对话视图") : String(localized: "切换画布视图"), canvas ? "bubble.left.and.text.bubble.right" : "point.3.connected.trianglepath.dotted") { workbench.toggleCanvasPage() }
+        }
             item.isEnabled = !workbench.reopening && (session.model == nil || workbench.catalogs.cached(for: session) != nil)
             menu.addItem(.separator())
         }

@@ -41,6 +41,11 @@ struct PaletteCommand: Identifiable {
                 workbench.toggleTerminalPage()
             }, at: 7)
         }
+        if workbench.selected != nil, !workbench.showingHome, workbench.canvasAvailable {
+            result.insert(PaletteCommand(id: "canvas-view", title: workbench.showsCanvasPage ? String(localized: "切换对话视图") : String(localized: "切换画布视图"), detail: "", symbol: "point.3.connected.trianglepath.dotted") {
+                workbench.toggleCanvasPage()
+            }, at: min(7, result.count))
+        }
         for command in workbench.pluginCommandList {
             result.append(PaletteCommand(id: "plugin:\(command.id)", title: command.title, detail: command.pluginTitle, symbol: "puzzlepiece.extension") {
                 workbench.pluginCommands.run(command, in: workbench)

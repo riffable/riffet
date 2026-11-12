@@ -119,6 +119,9 @@ struct ConversationView: View {
             if slash !== self.slash { self.slash = slash }
             if fullscreen { fullscreen = false }
         }
+        .onChange(of: workbench.showsCanvas) { _, shows in
+            if shows, fullscreen { fullscreen = false }
+        }
         .onChange(of: feedbackScope) { _, _ in
             if nativeNoticeDetail != nil { nativeNoticeDetail = nil }
         }
@@ -152,7 +155,7 @@ struct ConversationView: View {
             unknownAttention: state.unknownAttention, catalogStatus: status, notices: notices
         )
         // The column is the style's right-hand recipe; whether it fits is decided by width alone.
-        let asideAllowed = DisplayPreferences.shared.style.rightPanel == .outline && DisplayPreferences.shared.sessionOverview && !quickChat && !fullscreen
+        let asideAllowed = DisplayPreferences.shared.style.rightPanel == .outline && DisplayPreferences.shared.sessionOverview && !quickChat && !fullscreen && !workbench.showsCanvas
         let asideShown = asideAllowed && asideFits
         return ChatMotion(workbench: workbench, composer: composer, sessionId: session.id, layout: layout) {
             VStack(spacing: 0) {
@@ -168,6 +171,9 @@ struct ConversationView: View {
                             .frame(maxWidth: Column.width)
                             .padding(.horizontal, Column.gutter)
                             .frame(maxWidth: .infinity)
+                        if workbench.showsCanvas {
+                            CanvasPage(workbench: workbench, session: session, composer: session.terminalHold != nil ? AnyView(TerminalHoldBar(workbench: workbench, session: session)) : AnyView(composerView(state, fullscreen: nil)), showTranscript: { workbench.showsCanvasPage = false })
+                        } else {
                         // One list per conversation: another one's rows, scroll offset and row sizes never carry over.
                         TranscriptView(workbench: workbench, session: session, railHidden: asideShown, link: asideLink, restoreInput: { run in
                             let composer = composer
@@ -197,6 +203,7 @@ struct ConversationView: View {
                                     .padding(.top, Space.xs)
                                     .frame(maxWidth: .infinity)
                             }
+                        }
                     }
                     .modifier(AssemblyEntrance(workbench: workbench, sessionId: session.id))
                 }
@@ -247,38 +254,25 @@ struct ConversationView: View {
                     }
                     .id("\(feedbackScope)|configuration")
                     .modifier(AssemblyEntrance(workbench: workbench, sessionId: session.id))
-                    if session.terminalHold != nil {
-                        TerminalHoldBar(workbench: workbench, session: session)
-                            .onAppear { fullscreen = false }
-                    } else {
-                        ComposerView(
-                            model: composer,
-                            placeholder: session.archivedAt != nil ? String(localized: "会话已归档") : quickChat ? String(localized: "发送消息…") : providerMissing ? String(localized: "提供商已移除，无法继续发送") : defaultSendSteers ? String(localized: "补充当前任务…") : workbench.working ? String(localized: "输入下一条消息…") : String(localized: "给 \(state.label) 发消息"),
-                            working: workbench.working,
-                            // Background tasks live in the toolbar; the composer still offers the global stop action.
-                            background: workbench.backgroundSubagents,
-                            sendState: workbench.sendState,
-                            features: features(state),
-                            fullscreen: $fullscreen,
-                            onSend: { interrupt in Task { await send(interrupt: interrupt, state: state) } },
-                            onStop: state.canStop || workbench.sendState.interrupting ? { Task { await workbench.interrupt() } } : nil,
-                            upload: { file in try await workbench.upload(file, projectId: session.projectId) }
-                        ) {
-                            if !quickChat {
-                                SessionControls(workbench: workbench, session: session, catalog: catalog)
-                            }
-                        } trailing: {
-                            SessionModelControls(workbench: workbench, session: session, catalog: catalog, quickChat: quickChat, loading: catalogLoading && catalog?.models.isEmpty != false, refresh: { await loadCatalog(reload: true) })
+                    // The canvas hosts the composer itself, over its next-question slot.
+                    if !workbench.showsCanvas {
+                        if session.terminalHold != nil {
+                            TerminalHoldBar(workbench: workbench, session: session)
+                                .onAppear { fullscreen = false }
+                        } else {
+                            composerView(state, fullscreen: $fullscreen)
+                                .frame(maxHeight: fullscreen ? .infinity : nil)
                         }
-                        .frame(maxHeight: fullscreen ? .infinity : nil)
+                        if !fullscreen { catalogStatusLine(status) }
                     }
-                    if !fullscreen { catalogStatusLine(status) }
                 }
                 .frame(maxWidth: Column.width, maxHeight: fullscreen ? .infinity : nil)
                 .padding(.horizontal, Column.gutter)
                 .padding(.bottom, Space.lg + 2)
                 .padding(.top, fullscreen ? Space.lg : Space.xs)
                 .frame(maxWidth: .infinity)
+                // Over the canvas what is left (a permission card, a notice) floats on the plane rather than taking a strip from it.
+                .frame(height: workbench.showsCanvas ? 0 : nil, alignment: .bottom)
             }
             .frame(maxWidth: .infinity)
             .modifier(SessionAsideHost(
@@ -299,6 +293,28 @@ struct ConversationView: View {
         .onDrop(of: [.fileURL, .image], isTargeted: $dropTargeted) { providers in
             composer.accept(providers: providers, upload: { try await workbench.upload($0, projectId: session.projectId) })
             return true
+        }
+    }
+
+    private func composerView(_ state: ConversationState, fullscreen: Binding<Bool>?) -> some View {
+        ComposerView(
+            model: composer,
+            placeholder: session.archivedAt != nil ? String(localized: "会话已归档") : quickChat ? String(localized: "发送消息…") : providerMissing ? String(localized: "提供商已移除，无法继续发送") : defaultSendSteers ? String(localized: "补充当前任务…") : workbench.working ? String(localized: "输入下一条消息…") : String(localized: "给 \(state.label) 发消息"),
+            working: workbench.working,
+            // Background tasks live in the toolbar; the composer still offers the global stop action.
+            background: workbench.backgroundSubagents,
+            sendState: workbench.sendState,
+            features: features(state),
+            fullscreen: fullscreen,
+            onSend: { interrupt in Task { await send(interrupt: interrupt, state: state) } },
+            onStop: state.canStop || workbench.sendState.interrupting ? { Task { await workbench.interrupt() } } : nil,
+            upload: { file in try await workbench.upload(file, projectId: session.projectId) }
+        ) {
+            if !quickChat {
+                SessionControls(workbench: workbench, session: session, catalog: catalog)
+            }
+        } trailing: {
+            SessionModelControls(workbench: workbench, session: session, catalog: catalog, quickChat: quickChat, loading: catalogLoading && catalog?.models.isEmpty != false, refresh: { await loadCatalog(reload: true) })
         }
     }
 
