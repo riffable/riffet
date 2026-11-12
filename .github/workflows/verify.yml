@@ -49,6 +49,8 @@ jobs:
         run: node apps/macos/scripts/check-acknowledgements.mjs
       - name: Plugins stay separate from the core
         run: pnpm check:plugins
+      - name: Server layers import downward only
+        run: pnpm check:layers
       - name: No private data in source
         run: pnpm check:privacy
       - name: Markdown paths point at files that exist

@@ -6,9 +6,26 @@
 
 `apps/server/src/backends` 定义共享 native driver、注册表、profile 和调度接缝，包含 Codex/Claude/DSH/Droid 等适配器（TRAE CLI 是 Codex 驱动的一个 flavor，见 `backends/codex/flavors.ts`），并把插件提供的 Agent 后端挂入同一注册表（`plugin-backend.ts`）；Cursor 是官方插件 `plugins/riffet/cursor/`，转录、交互、模型目录与标题回填都在其中；`apps/server/src/native` 保留跨后端的持久投递调度，`terminal` 管理 tmux 与 PTY（`observe()` 是服务端的终端输出观察接口），`workspace` 处理文件与附件，`git` 处理 Diff、Checkpoint 和 worktree，`settings` 处理配置及 CLI 管理。`store.ts` 保存工作台状态并负责数据库迁移，`app.ts` 组装受认证保护的 API。
 
+### 服务端分层
+
+`apps/server/src` 的模块（顶层目录或文件）分六层，文件只导入本模块和更低的层：
+
+| 层 | 模块 | 职责 |
+| --- | --- | --- |
+| base | `errors`、`environment`、`auth`、`metrics`、`prompts` 等 | 不知道会话 |
+| kernel | `store`、`native`（投递）、`journal`、`timeline`、`sync`、`backends/*.ts`（驱动接缝）、`terminal`、`settings` | 会话与 Run 的读写主干，不出现具体后端 |
+| kit | `backends/shared`、`adapters` | 驱动共用的机制：子进程、hook、等待 |
+| drivers / features | `backends/<name>`；`git`、`workspace`、`orchestration`、`shares`、`stats`、`plugins` 等 | 同属一层，互不导入 |
+| surfaces | `routes`、`channels` | 协议翻译 |
+| root | `app.ts`、`cli*.ts` | 唯一认识所有模块的地方 |
+
+base、kernel、kit、root 层内的模块可以互相导入；驱动、功能和表面不导入同层的其他模块，彼此需要的东西由 `app.ts` 传入。服务端与 `apps/web` 不互相导入，公共代码放 `packages/`。
+
+`pnpm check:layers`（CI 运行）按模块对统计越层导入了对方多少个文件，与 `scripts/layers-baseline.json` 比较：已有的只许减少，不许出现新的模块对。按文件而不是按 import 语句计数，所以把一个文件拆成两个不会被算作新增依赖。`--list` 列出每一处，`--update` 在清理后下调基线。层的归属写在 `scripts/check-layers.mjs` 的 `LAYERS` 里，新模块必须先登记。
+
 `apps/web` 提供 React 工作台。`packages/contracts` 是共享契约；服务接口见 `apps/server/src/` 下各路由与契约。
 
-`apps/mobile` 是 Compose Multiplatform 移动客户端（Android 与 iOS 共用一份 UI 代码），`docs/MOBILE.md` 是它的设计契约：设备令牌与配对、mDNS 发现、时间线第二实现、分期与验收标准。手机自己就能添加目录并发起会话：首页的目录菜单里有「选择其他目录…」，在服务端的文件系统里浏览并绑定（`POST /api/browse` + `POST /api/projects`，都已注册的目录按路径幂等返回原项目），不必先在电脑上建好项目。与 web 一致，Agent 的待办列表和排队中的消息都只显示在输入框上方的 dock 里（待办默认收起，排队消息执行时才进入正文），转录里的文字可以长按选中复制，文件浏览页搜索框右侧的 ✕ 直接退出整个页面。`contracts/` 与 `core/` 两个模块不依赖任何平台 API，可以只用 JDK 编译与测试（`./gradlew :contracts:jvmTest :core:jvmTest`），不需要 Android SDK。设计变量由 `pnpm gen:theme` 从 `apps/web/src/styles/index.css` 生成，不手工誊抄。
+`apps/mobile` 是移动客户端：Android 界面用 Compose（`shared`），iPhone 界面是 `iosApp` 里的 SwiftUI / UIKit（见 `docs/IOS.md`），两端共用 `client` 模块的会话状态、缓存、网络与时间线规则；`docs/MOBILE.md` 是它的设计契约：设备令牌与配对、mDNS 发现、时间线第二实现、分期与验收标准。手机自己就能添加目录并发起会话：首页的目录菜单里有「选择其他目录…」，在服务端的文件系统里浏览并绑定（`POST /api/browse` + `POST /api/projects`，都已注册的目录按路径幂等返回原项目），不必先在电脑上建好项目。与 web 一致，Agent 的待办列表和排队中的消息都只显示在输入框上方的 dock 里（待办默认收起，排队消息执行时才进入正文），转录里的文字可以长按选中复制，文件浏览页搜索框右侧的 ✕ 直接退出整个页面。`contracts/` 与 `core/` 两个模块不依赖任何平台 API，可以只用 JDK 编译与测试（`./gradlew :contracts:jvmTest :core:jvmTest`），不需要 Android SDK。设计变量由 `pnpm gen:theme` 从 `apps/web/src/styles/index.css` 生成，不手工誊抄。
 
 `apps/macos` 是 macOS 原生客户端（SwiftUI + AppKit，macOS 15+、Apple Silicon），`docs/MACOS.md` 是它的设计契约与实现记录：界面原生实现，会话状态、缓存、网络与时间线规则经 SKIE 复用 `apps/mobile/client`；打开即免配对连上本机服务，本机没有服务时可由 App 用自带的 LaunchAgent 托管。另有菜单栏、可操作通知、全局快速对话（默认 ⌃⌥Space，直接打开 App 页面）、⌘K、Spotlight、快捷指令与 `riffet://` 链接。`apps/macos/scripts/build.sh` 构建 Debug，`build.sh release` 构建带内置服务的 Release，`release.sh` 打 DMG（设置签名身份后公证）。
 
