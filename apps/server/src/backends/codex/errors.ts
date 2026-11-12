@@ -35,10 +35,11 @@ export function isEmptyThreadRolloutError(error: unknown, threadId: string): boo
     && /\brollout at .+\.jsonl is empty$/i.test(message));
 }
 
-export function safeTurnError(value: unknown, config: Record<string, unknown>): string {
+export function safeTurnError(value: unknown, config: Record<string, unknown>, ...otherConfigs: Record<string, unknown>[]): string {
   const error = asRecord(value);
   let message = str(error?.message) ?? str(value) ?? 'Codex turn failed.';
   message = redactProviderSecrets(message, config);
+  for (const additional of otherConfigs) message = redactProviderSecrets(message, additional);
   return message.replace(/[\r\n\t]+/g, ' ').slice(0, 500);
 }
 

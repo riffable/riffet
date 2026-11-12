@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ModelInfo, NativeRunConfig, Run, Session } from '../../../../packages/contracts/src/index.js';
+import type { ModelInfo, NativeInteraction, NativeRunConfig, Run, Session } from '../../../../packages/contracts/src/index.js';
 import type { Store } from '../store.js';
 import type { NativeBackendDriver, NativeBackendProfileConfig as ProfileConfig } from './types.js';
 import { NativeBackendService } from './service.js';
@@ -42,6 +42,7 @@ function harness() {
   let current = session();
   let currentRun = run({ model: 'old-model', mode: 'agent', approval: 'allowlist' });
   const delivered: NativeRunConfig[] = [];
+  const publishedSessions: Session[] = [];
   const driver = {
     id: 'dsh',
     label: 'Test backend',
@@ -60,7 +61,7 @@ function harness() {
     getSession: () => current,
     updateSession: (_id: string, patch: Partial<Session>) => (current = { ...current, ...patch }),
     bumpConfig: (_id: string, patch: Partial<Session>) => (current = { ...current, ...patch, configRevision: (current.configRevision ?? 0) + 1 }),
-    appendEvent: () => undefined,
+    appendEvent: (_id: string, type: string, data: { session?: Session }) => { if (type === 'session' && data.session) publishedSessions.push(data.session); },
     listTerminals: () => [],
     getProject: () => project,
     getRun: () => currentRun,
@@ -78,7 +79,7 @@ function harness() {
     registry: { require: () => driver } as never,
   });
   services.push(service);
-  return { service, driver, delivered, accepted: () => currentRun, setRun: (value: Run) => { currentRun = value; }, switchTo: (patch: Partial<Session>) => { current = { ...current, ...patch }; } };
+  return { service, driver, delivered, publishedSessions, accepted: () => currentRun, setRun: (value: Run) => { currentRun = value; }, switchTo: (patch: Partial<Session>) => { current = { ...current, ...patch }; } };
 }
 
 describe('NativeBackendService.models', () => {
@@ -153,6 +154,133 @@ describe('NativeBackendService.configure', () => {
     const moved = await h.service.configure(h.service.host.getSession('session-a'), { backendProfileId: 'b', model: 'claude-haiku-5-5' });
     expect(launchedOn).toEqual(['b']);
     expect(moved).toMatchObject({ backendProfileId: 'b', model: 'claude-haiku-5-5', configRevision: 4 });
+  });
+
+  it('offers and accepts only protocol-compatible providers within a shared store', async () => {
+    const h = harness();
+    h.switchTo({ backendProfileId: 'a', model: 'gpt-6-astra', nativeRuntime: { address: 'unix:///writer-a', fingerprint: 'writer-a', profileId: 'a' } });
+    h.driver.profiles = () => ['a', 'b', 'c'].map(id => ({ id, backendId: 'dsh', name: id, isDefault: id === 'a', config: { store: 'shared' } }));
+    h.driver.continuationKey = profile => String(profile.config.store);
+    h.driver.canContinueProfile = (from, to, session) => from.id === 'a' && to.id === 'b' && session.nativeRuntime?.profileId === 'a';
+    h.driver.available = async () => ({ available: true });
+    const listed: string[] = [];
+    h.driver.listModels = async (_host, _project, profile) => {
+      listed.push(profile.id);
+      return [{ value: 'gpt-6-astra', name: 'GPT', configOptions: [] }];
+    };
+    const applied: string[] = [];
+    h.driver.configure = async (_host, _session, profile, patch) => { applied.push(profile.id); return patch; };
+    const current = h.service.host.getSession('session-a');
+    const catalog = await h.service.catalog('dsh', project as never, undefined, current);
+    expect(catalog.continuations?.map(item => item.profile.id)).toEqual(['b']);
+    expect(listed).toEqual(['a', 'b']);
+    await expect(h.service.configure(current, { backendProfileId: 'c', model: 'gpt-6-astra' })).rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_UNSUPPORTED' });
+    expect(applied).toEqual([]);
+    expect((await h.service.configure(current, { backendProfileId: 'b', model: 'gpt-6-astra' })).backendProfileId).toBe('b');
+    expect(applied).toEqual(['b']);
+  });
+
+  it('notifies deferred work after the target and revision are published, including repeated intent', async () => {
+    const h = harness();
+    h.switchTo({ backendProfileId: 'a', model: 'gpt-6-astra', configRevision: 3 });
+    h.driver.profiles = () => ['a', 'b'].map(id => ({ id, backendId: 'dsh', name: id, isDefault: id === 'a', config: { store: 'shared' } }));
+    h.driver.continuationKey = profile => String(profile.config.store);
+    h.driver.configure = async (_host, _session, _profile, patch) => patch;
+    const notices: Session[] = [];
+    h.driver.afterConfigure = (host, saved, profile) => {
+      expect(saved).toBe(host.getSession(saved.id));
+      expect(saved).toMatchObject({ backendProfileId: profile.id, model: 'gpt-6-sol', configRevision: 4 });
+      expect(h.publishedSessions.at(-1)).toBe(saved);
+      notices.push(saved);
+      // The request still succeeded if scheduling fails after its configuration was committed.
+      if (notices.length === 2) throw new Error('scheduler unavailable');
+    };
+    const first = await h.service.configure(h.service.host.getSession('session-a'), { backendProfileId: 'b', model: 'gpt-6-sol' });
+    const repeated = await h.service.configure(h.service.host.getSession('session-a'), { backendProfileId: 'b', model: 'gpt-6-sol' });
+    expect(repeated).toBe(first);
+    expect(notices).toEqual([first, repeated]);
+    expect(h.publishedSessions).toEqual([first]);
+  });
+});
+
+describe('NativeBackendService controls after a pending provider is deleted', () => {
+  it('keeps the existing writer controllable and allows cancellation while new sends still reject the missing target', async () => {
+    const h = harness();
+    h.switchTo({
+      backendProfileId: 'b', model: 'gpt-6-astra', nativeSessionId: 'thread-a', configPending: true,
+      nativeRuntime: { address: 'unix:///writer-a', fingerprint: 'writer-a', profileId: 'a' },
+    });
+    h.driver.profiles = () => [{ id: 'a', backendId: 'dsh', name: 'A', isDefault: true, config: {} }];
+    const routed: string[] = [];
+    const checkRoute = (method: string, current: Session, profile: ProfileConfig) => {
+      expect(current.backendProfileId).toBe('a');
+      expect(profile.id).toBe('a');
+      // Codex's status/control paths can resolve the profile again through the host.
+      expect(h.service.host.getProfile?.(current).id).toBe('a');
+      routed.push(method);
+    };
+    const approval: NativeInteraction = {
+      id: 'approval-a', revision: '1', transport: 'protocol', kind: 'permission', title: 'Approve', options: [], actions: [],
+    };
+    h.driver.status = (_host, current, profile) => {
+      checkRoute('status', current, profile);
+      return { phase: 'busy', activeTurn: { nativeSessionId: 'thread-a', turnId: 'turn-a' } };
+    };
+    h.driver.interrupt = async (_host, current, profile, options) => {
+      checkRoute('interrupt', current, profile);
+      options?.beforeWrite?.();
+    };
+    h.driver.interaction = async (_host, current, profile) => { checkRoute('interaction', current, profile); return approval; };
+    h.driver.respond = async (_host, current, profile) => { checkRoute('respond', current, profile); return { status: 'completed' }; };
+    h.driver.extendInteraction = async (_host, current, profile) => { checkRoute('extend', current, profile); return approval; };
+    h.driver.stopActivity = async (_host, current, profile) => {
+      checkRoute('stopActivity', current, profile);
+      return { id: 'background-a', kind: 'background_task', status: 'stopping', title: 'Task' };
+    };
+    h.driver.runtimeAction = async (_host, current, profile) => { checkRoute('runtimeAction', current, profile); };
+    h.driver.available = async () => ({ available: true });
+    h.driver.listModels = async (_host, _project, profile) => {
+      expect(profile.id).toBe('a');
+      return [{ value: 'gpt-6-astra', name: 'GPT', configOptions: [] }];
+    };
+    const current = h.service.host.getSession('session-a');
+    expect(h.service.status(current.id).phase).toBe('busy');
+    await h.service.interrupt(current.id, { expectedStop: { requestId: 'stop-a', nativeSessionId: 'thread-a', turnId: 'turn-a' } });
+    expect(await h.service.interaction(current)).toBe(approval);
+    expect(await h.service.respondInteraction(current, { interactionId: approval.id, revision: '1', requestId: 'answer-a', action: 'approve' })).toEqual({ status: 'completed' });
+    expect(await h.service.extendInteraction(current, approval.id)).toBe(approval);
+    expect((await h.service.stopActivity(current, 'background-a')).status).toBe('stopping');
+    await h.service.runtimeAction(current.id, { action: 'control-a', revision: '1' });
+    expect((await h.service.capabilities(current)).supportsModelSelection).toBe(true);
+    const catalog = await h.service.catalog('dsh', project as never, 'b', current);
+    expect(catalog.models).toEqual([]);
+    expect(catalog.continuations).toMatchObject([{ profile: { id: 'a' }, models: [{ value: 'gpt-6-astra' }] }]);
+    expect(h.service.host.getSession(current.id)).toMatchObject({ backendProfileId: 'b', configPending: true });
+    const accepted = h.accepted();
+    await expect(h.service.sendRun(current, accepted, () => accepted)).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND' });
+    expect(h.delivered).toEqual([]);
+    await expect(h.service.configure(current, { model: 'gpt-6-astra' })).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND' });
+    await expect(h.service.configure(current, { backendProfileId: 'b', model: 'gpt-6-astra' })).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND' });
+    h.driver.configure = async (host, _session, profile, patch) => {
+      expect(profile.id).toBe('a');
+      host.updateSession(current.id, { configPending: false });
+      return patch;
+    };
+    expect(await h.service.configure(current, { backendProfileId: 'a', model: 'gpt-6-astra' })).toMatchObject({ backendProfileId: 'a', configPending: false });
+    expect(routed).toEqual(expect.arrayContaining(['interrupt', 'interaction', 'respond', 'extend', 'stopActivity', 'runtimeAction', 'status']));
+  });
+
+  it.each([
+    { backendProfileId: 'a', configPending: false, actual: 'a' },
+    { backendProfileId: 'b', configPending: true, actual: 'a' },
+    { backendProfileId: 'b', configPending: false, actual: 'a' },
+  ])('keeps deleted actual providers unavailable ($backendProfileId, pending $configPending)', async ({ backendProfileId, configPending, actual }) => {
+    const h = harness();
+    h.switchTo({ backendProfileId, configPending, nativeRuntime: { address: 'unix:///writer-a', fingerprint: 'writer-a', profileId: actual } });
+    h.driver.profiles = () => [{ id: 'other', backendId: 'dsh', name: 'Other', isDefault: true, config: {} }];
+    h.driver.interrupt = async () => { throw new Error('must not reach a deleted writer'); };
+    await expect(h.service.interrupt('session-a')).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND' });
+    await expect(h.service.configure(h.service.host.getSession('session-a'), { backendProfileId: 'a' })).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND' });
   });
 });
 

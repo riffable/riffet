@@ -205,10 +205,11 @@ class FakeAppServer implements CodexAppServerClient {
         if (args?.includeTurns === true) {
           this.legacyThreadReads += 1;
           if (this.state.legacyTurnsError) throw new Error(this.state.legacyTurnsError);
-          result = { thread: { id: String(args.threadId), status: { type: this.state.threadStatus }, turns: subagent?.turns ?? this.state.turns } };
+          result = { thread: { id: String(args.threadId), status: { type: this.state.threadStatus },
+            model: subagent ? subagent.model : this.state.threadSettings?.model, turns: subagent?.turns ?? this.state.turns } };
         } else {
           result = { thread: {
-            id: String(args?.threadId), status: { type: this.state.threadStatus },
+            id: String(args?.threadId), status: { type: this.state.threadStatus }, model: this.state.threadSettings?.model,
             ...(subagent ? {
               model: subagent.model, name: subagent.name, agentNickname: subagent.agentNickname, agentRole: subagent.agentRole,
             } : {}),
@@ -313,7 +314,7 @@ class FakeAppServer implements CodexAppServerClient {
   }
 }
 
-function makeHarness(harnessOptions: { threadId?: string; configDir?: string; terminalEndpoint?: string; resumeError?: string; startError?: string; resumeThreadId?: string; startThreadId?: string; flavor?: CodexFlavor; runtimeHooks?: ConstructorParameters<typeof CodexBackendAdapter>[2]; models?: Array<Record<string, unknown>>; internalUsage?: Record<string, unknown> } = {}) {
+function makeHarness(harnessOptions: { threadId?: string; configDir?: string; terminalEndpoint?: string; resumeError?: string; startError?: string; resumeThreadId?: string; startThreadId?: string; flavor?: CodexFlavor; runtimeHooks?: ConstructorParameters<typeof CodexBackendAdapter>[2]; models?: Array<Record<string, unknown>>; internalUsage?: Record<string, unknown>; onTransport?: (transport: FakeAppServer, options: CodexAppServerOptions) => void } = {}) {
   const harnessThreadId = harnessOptions.threadId ?? 'native-thread';
   const harnessConfigDir = harnessOptions.configDir;
   const id = `smoke-${Math.random().toString(36).slice(2)}`;
@@ -361,6 +362,7 @@ function makeHarness(harnessOptions: { threadId?: string; configDir?: string; te
     }
     transport = new FakeAppServer(serverOptions, threadId, address, state);
     if (serverOptions.listen === 'ws') Object.defineProperty(transport, 'authToken', { value: 'fake-test-token' });
+    harnessOptions.onTransport?.(transport, serverOptions);
     return transport;
   };
   const adapter = new CodexBackendAdapter(factory, harnessOptions.flavor, harnessOptions.runtimeHooks);
@@ -547,7 +549,7 @@ describe('native runtime attachments', () => {
     try {
       await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
       expect(h.factoryCalls[0]!.env?.TRAE_API_BASE_URL).toBeUndefined();
-      expect(h.session.nativeRuntime).toEqual({ address: h.transport!.remoteAddress, fingerprint: expect.any(String), scopeFingerprint: expect.any(String) });
+      expect(h.session.nativeRuntime).toEqual({ address: h.transport!.remoteAddress, fingerprint: expect.any(String), scopeFingerprint: expect.any(String), profileId: h.profile.id });
       expect(h.adapter.status(h.host, h.session).runtimeControl).toBeUndefined();
       expect(messages.some(message => message.type === 'status' && message.status.runtimeControl)).toBe(false);
       await expect(h.adapter.runtimeAction(h.host, h.session, h.profile, { action: 'switch', revision: '' })).rejects.toMatchObject({ code: 'RUNTIME_CONTROL_UNAVAILABLE' });
@@ -3656,6 +3658,261 @@ describe('Codex streamed text', () => {
 
     unsubscribe();
     await h.adapter.dispose(h.host, h.session.id);
+  });
+});
+
+describe('Codex provider continuation', () => {
+  function providerSettings(transport: FakeAppServer, options: CodexAppServerOptions) {
+    const source = options.args?.includes('model_providers.riffet.base_url="https://source.example/v1"');
+    transport.setThreadSettings({ model: source ? 'gpt-5-codex' : 'gpt-5.6-sol' });
+  }
+
+  function continuationProfiles(h: ReturnType<typeof makeHarness>) {
+    Object.assign(h.profile.config, { apiEndpoint: 'https://source.example/v1', apiKey: 'source-probe-key' });
+    h.session.backendProfileId = h.profile.id;
+    h.session.model = 'gpt-5-codex';
+    const target: NativeBackendProfileConfig = {
+      ...h.profile, id: 'gateway-b', name: 'Gateway B',
+      config: { ...h.profile.config, apiEndpoint: 'https://target.example/v1', apiKey: 'target-probe-key' },
+    };
+    h.host.getProfile = session => session.backendProfileId === target.id ? target : h.profile;
+    return target;
+  }
+
+  async function selectProvider(h: ReturnType<typeof makeHarness>, target: NativeBackendProfileConfig) {
+    const result = await h.adapter.configure(h.host, h.session, target, { model: 'gpt-5.6-sol[effort=high]' });
+    // NativeBackendService persists the desired selection before notifying the driver.
+    h.host.bumpConfig(h.session.id, { backendProfileId: target.id, model: result.model });
+    h.adapter.afterConfigure(h.host, h.session);
+  }
+
+  it('moves the verified idle writer to the selected gateway without changing its thread or journal generation', async () => {
+    const h = makeHarness({ onTransport: providerSettings });
+    const target = continuationProfiles(h);
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      const owner = h.transport!;
+      const threadId = h.session.nativeSessionId;
+      const head = h.host.journal!.head(h.session.id);
+      const updates = vi.spyOn(h.host, 'updateSession');
+      const transcript = h.adapter.transcript(h.host, h.session, h.profile);
+      await selectProvider(h, target);
+
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      expect(h.session.configPending).toBe(true);
+      const desiredModel = h.session.model;
+      h.host.updateSession(h.session.id, { model: 'deepseek-v4.1-flash' });
+      const factories = h.factoryCalls.length;
+      await expect(h.adapter.openOrResume(h.host, h.session, h.project, target))
+        .rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_MODEL' });
+      expect(h.factoryCalls).toHaveLength(factories);
+      expect(owner.disposed).toBe(false);
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      h.host.updateSession(h.session.id, { model: desiredModel });
+      await h.adapter.openOrResume(h.host, h.session, h.project, target);
+
+      expect(owner.disposed).toBe(true);
+      expect(h.transport).not.toBe(owner);
+      expect(h.session.nativeSessionId).toBe(threadId);
+      expect(h.session.nativeRuntime).toMatchObject({ address: h.transport!.remoteAddress, profileId: target.id });
+      expect(h.session.configPending).toBe(false);
+      expect(updates.mock.calls.find(([, patch]) => patch.nativeRuntime?.profileId === target.id)?.[1])
+        .toMatchObject({ configPending: false });
+      expect(h.transport!.lastParams('thread/resume')).toMatchObject({ threadId, model: 'gpt-5.6-sol' });
+      expect(h.transport!.requestParams.some(request => ['thread/start', 'thread/fork'].includes(request.method))).toBe(false);
+      expect(h.factoryCalls.at(-1)?.args).toContain('model_providers.riffet.base_url="https://target.example/v1"');
+      expect(h.host.journal!.head(h.session.id).generation).toBe(head.generation);
+
+      // The source object predates the switch; ordinary target failures must use its actual key.
+      h.transport!.setTurns([{ id: 'target-failed', status: 'failed', startedAt: 1, completedAt: 2,
+        error: { message: `Gateway request rejected ${String(target.config.apiKey)}` },
+        items: [{ type: 'userMessage', id: 'target-user', content: [{ type: 'text', text: 'Continue the conversation.' }] }],
+      }]);
+      h.transport!.setTurnsListAvailable(true);
+      const journal = new Journal(new DatabaseSync(':memory:'));
+      const writer = JournalLaneWriter.open(journal, h.session.id);
+      for (let pulls = 0; !(await pullLane(transcript, writer, new AbortController().signal)).caughtUp; pulls += 1) expect(pulls).toBeLessThan(20);
+      const rows = rowsOf(journal, h.session.id);
+      const failed = rows.find(row => row.kind === 'meta.turn_ended' && row.turnId === 'target-failed');
+      expect(failed?.payload).toMatchObject({ status: 'failed', error: 'Gateway request rejected [redacted]' });
+      expect(JSON.stringify(rows)).not.toContain(target.config.apiKey);
+    } finally { await h.adapter.close(h.host); }
+  });
+
+  it('keeps the old turn controllable while the gateway switch waits, then applies it after that turn settles', async () => {
+    const h = makeHarness({ onTransport: providerSettings });
+    const target = continuationProfiles(h);
+    try {
+      await h.send('before-provider-switch');
+      const owner = h.transport!;
+      await selectProvider(h, target);
+      const factories = h.factoryCalls.length;
+      await expect(h.adapter.configure(h.host, h.session, target, { model: 'deepseek-v4.1-flash' }))
+        .rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_MODEL' });
+      expect(h.session.model).toBe('gpt-5.6-sol[effort=high]');
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      const waiting = await h.adapter.openOrResume(h.host, h.session, h.project, target);
+      expect(waiting.status).toMatchObject({ phase: 'busy', connection: { state: 'connected' } });
+      expect(h.factoryCalls).toHaveLength(factories);
+      expect(owner.disposed).toBe(false);
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+
+      const nextTarget = { ...target, id: 'gateway-c', name: 'Gateway C', config: { ...target.config, apiEndpoint: 'https://next-target.example/v1' } };
+      h.host.getProfile = session => session.backendProfileId === nextTarget.id ? nextTarget
+        : session.backendProfileId === target.id ? target : h.profile;
+      await selectProvider(h, nextTarget);
+      expect(h.session.backendProfileId).toBe(nextTarget.id);
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      const cancelled = await h.adapter.configure(h.host, h.session, h.profile, { model: 'gpt-5-codex' });
+      h.host.bumpConfig(h.session.id, { backendProfileId: h.profile.id, model: cancelled.model });
+      h.adapter.afterConfigure(h.host, h.session);
+      expect(h.session.configPending).toBe(false);
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      expect(h.factoryCalls).toHaveLength(factories);
+      expect(owner.disposed).toBe(false);
+      await selectProvider(h, target);
+
+      const interrupting = h.adapter.interrupt(h.host, h.session, target);
+      await waitFor(() => owner.lastParams('turn/interrupt'));
+      owner.finishTurn('turn-1', 'interrupted');
+      await interrupting;
+      await h.adapter.openOrResume(h.host, h.session, h.project, target);
+      expect(owner.disposed).toBe(true);
+      expect(h.session.nativeRuntime?.profileId).toBe(target.id);
+      expect(h.session.nativeSessionId).toBe('native-thread');
+      expect(h.session.configPending).toBe(false);
+    } finally { await h.adapter.close(h.host); }
+  });
+
+  it('restores the original writer and retains pending intent when the target cannot resume the original thread', async () => {
+    const sourceModel = 'gpt-5.6-luna';
+    const h = makeHarness({ onTransport: (transport, options) => {
+      if (options.args?.includes('model_providers.riffet.base_url="https://target.example/v1"')) transport.setResumeError('Target cannot resume this thread: target-probe-key');
+      else transport.setThreadSettings({ model: sourceModel });
+    } });
+    const target = continuationProfiles(h);
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      const owner = h.transport!;
+      const threadId = h.session.nativeSessionId;
+      const head = h.host.journal!.head(h.session.id);
+      expect(h.adapter.status(h.host, h.session).model).toBeUndefined();
+      // The terminal observer may still report the stopped pane during rollback.
+      h.setTerminalEndpoint(owner.remoteAddress);
+      await selectProvider(h, target);
+
+      const switching = h.adapter.openOrResume(h.host, h.session, h.project, target);
+      await expect(switching).rejects.toThrow('Target cannot resume this thread');
+      await expect(switching).rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_FAILED' });
+      await expect(switching).rejects.not.toThrow(String(target.config.apiKey));
+      expect(owner.disposed).toBe(true);
+      expect(h.session).toMatchObject({ backendProfileId: target.id, nativeSessionId: threadId, configPending: true });
+      expect(h.session.nativeRuntime).toMatchObject({ address: h.transport!.remoteAddress, profileId: h.profile.id });
+      expect(h.session.terminalId).toBeUndefined();
+      expect(h.transport!.lastParams('thread/resume')).toMatchObject({ threadId, model: sourceModel });
+      expect(h.transport!.requestParams.some(request => ['thread/start', 'thread/fork', 'turn/start'].includes(request.method))).toBe(false);
+      expect(h.adapter.status(h.host, h.session)).toMatchObject({ connection: { state: 'connected' }, noticeLevel: 'error' });
+      expect(h.adapter.status(h.host, h.session).notice).not.toContain(target.config.apiKey);
+      expect(h.host.journal!.head(h.session.id).generation).toBe(head.generation);
+    } finally { await h.adapter.close(h.host); }
+  });
+
+  it('recovers the actual running provider after service restart while retaining the newer target selection', async () => {
+    const h = makeHarness({ onTransport: providerSettings });
+    const target = continuationProfiles(h);
+    let restarted: CodexBackendAdapter | undefined;
+    try {
+      await h.send('before-pending-restart');
+      const owner = h.transport!;
+      owner.setThreadStatus('active');
+      await selectProvider(h, target);
+      const sourceBinding = h.session.nativeRuntime!;
+      await h.adapter.close(h.host);
+      restarted = new CodexBackendAdapter(h.factory);
+
+      const reopened = await restarted.openOrResume(h.host, h.session, h.project, target);
+      expect(reopened.nativeSessionId).toBe('native-thread');
+      expect(reopened.status).toMatchObject({ phase: 'busy', connection: { state: 'connected' } });
+      expect(h.session).toMatchObject({ backendProfileId: target.id, configPending: true });
+      expect(h.session.nativeRuntime?.address).toBe(sourceBinding.address);
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+      const recovery = h.factoryCalls.find(options => options.remoteAddress === sourceBinding.address);
+      expect(recovery?.args).toContain('model_providers.riffet.base_url="https://source.example/v1"');
+      expect(owner.disposed).toBe(false);
+    } finally { await restarted?.close(h.host); await h.adapter.close(h.host); }
+  });
+
+  it.each([false, true])('recovers a persisted switch after the previous daemon is gone (target resume fails: %s)', async targetFails => {
+    const connections: Array<{ transport: FakeAppServer; options: CodexAppServerOptions }> = [];
+    const h = makeHarness({ onTransport: (transport, options) => {
+      providerSettings(transport, options);
+      connections.push({ transport, options });
+      if (targetFails && options.args?.includes('model_providers.riffet.base_url="https://target.example/v1"')) {
+        transport.setResumeError('The target cannot restore this thread');
+      }
+    } });
+    const target = continuationProfiles(h);
+    let restarted: CodexBackendAdapter | undefined;
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      const sourceAddress = h.transport!.remoteAddress;
+      await selectProvider(h, target);
+      await h.adapter.close(h.host);
+      h.factoryErrors.push(Object.assign(new Error('The saved daemon is gone'), { code: 'ENOENT' }));
+      const firstRecovery = h.factoryCalls.length;
+      restarted = new CodexBackendAdapter(h.factory);
+
+      const reopening = restarted.openOrResume(h.host, h.session, h.project, target);
+      if (targetFails) await expect(reopening).rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_FAILED' });
+      else expect((await reopening).nativeSessionId).toBe('native-thread');
+      const recovery = h.factoryCalls.slice(firstRecovery);
+      expect(recovery[0]?.remoteAddress).toBe(sourceAddress);
+      expect(recovery.filter(options => options.remoteAddress === undefined)).toHaveLength(targetFails ? 3 : 2);
+      const sourceConnections = connections.filter(({ options }) => options.remoteAddress === undefined
+        && options.args?.includes('model_providers.riffet.base_url="https://source.example/v1"'));
+      expect(sourceConnections[1]!.transport.requestParams.some(request => request.method === 'thread/resume')).toBe(false);
+      if (targetFails) expect(sourceConnections[2]!.transport.lastParams('thread/resume'))
+        .toMatchObject({ threadId: 'native-thread', model: 'gpt-5-codex' });
+      expect(h.session.nativeRuntime).toMatchObject({ profileId: targetFails ? h.profile.id : target.id, address: h.transport!.remoteAddress });
+      expect(h.session.configPending).toBe(targetFails);
+      expect(h.transport!.lastParams('thread/resume')).toMatchObject({ threadId: 'native-thread', model: targetFails ? 'gpt-5-codex' : 'gpt-5.6-sol' });
+      expect(sourceConnections.every(({ transport }) => transport.requestParams.filter(request => request.method === 'thread/resume')
+        .every(request => request.params.model === 'gpt-5-codex'))).toBe(true);
+      expect(h.transport!.requestParams.some(request => ['thread/start', 'thread/fork'].includes(request.method))).toBe(false);
+    } finally { await restarted?.close(h.host); await h.adapter.close(h.host); }
+  });
+
+  it('does not recreate a writer when a queued provider switch acquires its lock after disposal and archival', async () => {
+    const h = makeHarness({ onTransport: providerSettings });
+    const target = continuationProfiles(h);
+    let enter: () => void = () => undefined;
+    let release: () => void = () => undefined;
+    let finish: () => void = () => undefined;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const finished = new Promise<void>(resolve => { finish = resolve; });
+    h.host.withDetachedSessionLock = async <T>(_id: string, operation: () => Promise<T> | T): Promise<T> => {
+      enter();
+      await gate;
+      try { return await operation(); }
+      finally { finish(); }
+    };
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      const owner = h.transport!;
+      await selectProvider(h, target);
+      await entered;
+      const factories = h.factoryCalls.length;
+      await h.adapter.dispose(h.host, h.session.id);
+      h.session.archivedAt = new Date().toISOString();
+      release();
+      await finished;
+
+      expect(owner.disposed).toBe(true);
+      expect(h.factoryCalls).toHaveLength(factories);
+      expect(h.session.nativeSessionId).toBe('native-thread');
+      expect(h.session.nativeRuntime?.profileId).toBe(h.profile.id);
+    } finally { release(); await h.adapter.close(h.host); }
   });
 });
 

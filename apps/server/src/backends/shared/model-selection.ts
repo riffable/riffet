@@ -3,6 +3,14 @@ export interface NativeModelSelection {
   params: Record<string, string>;
 }
 
+/** The model line behind a gateway namespace, used to constrain provider continuation. */
+export function modelFamily(id: string): string {
+  const name = parseNativeModelSelection(id).model.toLowerCase().split('/').at(-1)!;
+  if (/claude|opus|sonnet|haiku|fable/.test(name)) return 'claude';
+  if (/^(?:gpt|codex|o\d)/.test(name)) return 'gpt';
+  return /^[a-z]+/.exec(name)?.[0] ?? name;
+}
+
 /** Parses the workbench's `model[key=value,...]` form without rewriting unknown options. */
 export function parseNativeModelSelection(value: string | undefined): NativeModelSelection {
   const raw = value?.trim() ?? '';

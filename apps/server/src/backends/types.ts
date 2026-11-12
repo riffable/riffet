@@ -406,6 +406,8 @@ export interface NativeBackendDriver {
    * `backendProfileId`). A driver without it never switches profiles under a conversation.
    */
   continuationKey?(profile: NativeBackendProfileConfig): string;
+  /** Additional protocol compatibility for profiles sharing a continuation key; sources are prepared before this check. */
+  canContinueProfile?(from: NativeBackendProfileConfig, to: NativeBackendProfileConfig, session: Session): boolean;
   /**
    * Declares that `readShareTranscript` only reads the provider's own stored files, so the search index
    * may read the provider's conversations speculatively. Any other backend's conversations are indexed
@@ -459,6 +461,11 @@ export interface NativeBackendDriver {
   /** Pushes back the deadline of a request that carries `extendableUntil`; only backends that time requests out themselves. */
   extendInteraction?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, interactionId: string): Promise<NativeInteraction>;
   configure(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, patch: NativeBackendConfigurePatch): Promise<NativeBackendConfigureResult>;
+  /**
+   * The requested configuration is persisted and its session event published, including repeated intent.
+   * Schedule deferred work here; this notice must not start work before the saved configuration exists.
+   */
+  afterConfigure?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): void;
   /**
    * Relaunches the terminal client of a CLI that probes the terminal colours once at startup, so it
    * picks up `session.terminalAppearance`. Without it the pane is recoloured in place instead.

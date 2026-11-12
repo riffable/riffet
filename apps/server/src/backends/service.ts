@@ -14,7 +14,8 @@ import { validateNativeModelApiProtocol, validateNativeModelSource, validateNati
 import { piProviderModels } from './pi/provider.js';
 import { fetchGatewayModels } from './shared/gateway-models.js';
 import { modelSourceOf, modelSourceProvider, prepareSource, sourceCatalog } from './shared/model-source.js';
-import { parseNativeModelSelection } from './shared/model-selection.js';
+import { modelFamily, parseNativeModelSelection } from './shared/model-selection.js';
+export { modelFamily } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { TerminalDialogObserver } from './shared/terminal-dialogs.js';
 import { FreshCache } from './shared/fresh-cache.js';
@@ -217,18 +218,6 @@ function modelNormalizer(driver: NativeBackendDriver, profile: NativeBackendProf
  */
 const CONTINUATION_LISTING_WAIT_MS = 2_000;
 
-/**
- * The line a model belongs to (`claude`, `gpt`, `gemini`, `deepseek`…), read from its id behind any
- * gateway namespace. Models of one line accept each other's turns, signed reasoning included, so a
- * conversation moves between them in place; another line gets a handoff.
- */
-export function modelFamily(id: string): string {
-  const name = parseNativeModelSelection(id).model.toLowerCase().split('/').at(-1)!;
-  if (/claude|opus|sonnet|haiku|fable/.test(name)) return 'claude';
-  if (/^(?:gpt|codex|o\d)/.test(name)) return 'gpt';
-  return /^[a-z]+/.exec(name)?.[0] ?? name;
-}
-
 function profileDefaultModel(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): string | undefined {
   const raw = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
   return raw ? driver.normalizeModel?.(raw, profile) ?? raw : undefined;
@@ -313,7 +302,10 @@ export class NativeBackendService {
 
   constructor(private readonly options: NativeBackendServiceOptions) {
     this.registry = options.registry;
-    this.terminalDialogs = new TerminalDialogObserver(options.terminal, (session, dialog) => this.resolveSync(session).driver.endorsesScreenDialog?.(this.host, session, dialog) ?? true);
+    this.terminalDialogs = new TerminalDialogObserver(options.terminal, (session, dialog) => {
+      session = this.currentSession(session);
+      return this.resolveSync(session).driver.endorsesScreenDialog?.(this.host, session, dialog) ?? true;
+    });
     const stats = options.stats ?? noopStats;
     this.host = {
       getSession: id => options.store.getSession(id),
@@ -601,6 +593,7 @@ export class NativeBackendService {
 
   /** The watch a reader needs, with the terminal pump when the conversation's dialogs can only be read from its screen. */
   private armControl(session: Session): { driver: NativeBackendDriver; profile: NativeBackendProfileConfig } {
+    session = this.currentSession(session);
     const selected = this.resolveSync(session);
     this.ensureWatch(session, selected.driver, selected.profile);
     this.scheduleWatchRelease(session.id);
@@ -750,6 +743,18 @@ export class NativeBackendService {
     return { driver, profile };
   }
 
+  /** A deleted pending choice must not hide controls for a writer whose profile still exists. */
+  private currentSession(session: Session): Session {
+    const actual = session.nativeRuntime?.profileId;
+    if (!session.configPending || !actual || !session.backendProfileId || actual === session.backendProfileId) return session;
+    let driver: NativeBackendDriver;
+    try { driver = this.registry.require(this.backendId(session)); } catch { return session; }
+    const profiles = this.profiles(driver);
+    return profiles.some(profile => profile.id === actual) && !profiles.some(profile => profile.id === session.backendProfileId)
+      ? { ...session, backendProfileId: actual }
+      : session;
+  }
+
   private bindProfile(session: Session, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): void {
     // An in-flight open/configure can finish after settings were saved. Its old snapshot must not
     // overwrite the desired settings; Codex keeps the actual launch snapshot inside its runtime.
@@ -839,10 +844,13 @@ export class NativeBackendService {
     if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
     const driver = this.registry.require(backendId);
     const profiles = this.profiles(driver);
+    const requestedSession = session;
+    if (session) session = this.currentSession(session);
     const selected = session ? this.resolveSync(session).profile : (profileId ? profiles.find(item => item.id === profileId) : undefined)
       ?? profiles.find(item => item.isDefault)
       ?? profiles[0];
-    if (!selected || (profileId && selected.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
+    const pendingChoiceRemoved = session !== requestedSession;
+    if (!selected || (profileId && selected.id !== profileId && !(pendingChoiceRemoved && profileId === requestedSession?.backendProfileId))) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
     await prepareSource(selected.config);
     const capabilities = await this.driverCapabilities(driver, selected);
     const availability: NativeBackendAvailability = await driver.available(this.host, selected).catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
@@ -857,6 +865,13 @@ export class NativeBackendService {
     }
     const defaultModel = profileDefaultModel(driver, selected);
     const continuations = session && capabilities.supportsModelSelection ? await this.continuations(driver, selected, profiles, project, session) : [];
+    if (pendingChoiceRemoved && capabilities.supportsModelSelection) {
+      // The client still shows the deleted choice as current. Offer the actual writer explicitly
+      // so picking its model sends a profile cancellation, rather than another write to that choice.
+      const { config: _config, ...publicProfile } = selected;
+      continuations.unshift({ profile: publicProfile, models });
+      models = [];
+    }
     return {
       backendId, label: driver.label, available: availability.available,
       ...(availability.needsLogin ? { needsLogin: true } : {}),
@@ -885,6 +900,7 @@ export class NativeBackendService {
       const normalize = modelNormalizer(driver, profile);
       const listing = (async () => {
         await prepareSource(profile.config);
+        if (driver.canContinueProfile && !driver.canContinueProfile(current, profile, session)) return undefined;
         return curateModels(await this.listModels(driver, project, profile), profile, undefined, normalize);
       })();
       listing.catch(() => undefined);
@@ -1281,12 +1297,13 @@ export class NativeBackendService {
     return {
       // Resolved at every call: the driver behind a conversation can be replaced while this reader is open.
       status: () => {
-        const current = this.options.store.getSession(sessionId);
+        const stored = this.options.store.getSession(sessionId);
+        const current = this.currentSession(stored);
         const missing = this.unavailable(this.backendId(current));
         if (missing) return this.withOutputRate(sessionId, { phase: 'offline', connection: { state: 'failed', message: missing.message } });
         let selected: { driver: NativeBackendDriver; profile: NativeBackendProfileConfig } | undefined;
         try {
-          selected = this.watches.get(sessionId) ?? this.resolveSync(current);
+          selected = current !== stored ? this.resolveSync(current) : this.watches.get(sessionId) ?? this.resolveSync(current);
           return this.withOutputRate(sessionId, this.terminalDialogs.merge(current, selected.driver.status(this.host, current, selected.profile)));
         } catch (error) {
           const reason = error instanceof Error ? error.message : 'Native backend status is unavailable';
@@ -1329,7 +1346,9 @@ export class NativeBackendService {
 
   /** Republish the full driver status when a terminal dialog or recent output sample changes. */
   private publishStatus(sessionId: string, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): void {
-    const session = this.options.store.getSession(sessionId);
+    const stored = this.options.store.getSession(sessionId);
+    const session = this.currentSession(stored);
+    if (session !== stored) profile = this.resolveSync(session).profile;
     if (session.archivedAt) return;
     let status: NativeStatus;
     try { status = driver.status(this.host, session, profile); }
@@ -1748,13 +1767,15 @@ export class NativeBackendService {
   hasRuntime(sessionId: string): boolean { return this.sessionProfiles.has(sessionId); }
 
   status(sessionId: string): NativeStatus {
-    const selected = this.sessionProfiles.get(sessionId);
+    const stored = this.options.store.getSession(sessionId);
+    const session = this.currentSession(stored);
+    const selected = session !== stored ? this.resolveSync(session) : this.sessionProfiles.get(sessionId);
     if (!selected) return this.withOutputRate(sessionId, { phase: 'offline' });
-    const session = this.options.store.getSession(sessionId);
     return this.withOutputRate(sessionId, this.terminalDialogs.merge(session, selected.driver.status(this.host, session, selected.profile)));
   }
 
   async capabilities(session: Session) {
+    session = this.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     return this.driverCapabilities(driver, profile);
   }
@@ -1762,6 +1783,7 @@ export class NativeBackendService {
   async interaction(session: Session): Promise<NativeInteraction | undefined> {
     // Polled by every open page, so a withdrawn backend simply has nothing waiting.
     if (this.unavailable(this.backendId(session))) return undefined;
+    session = this.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     const driverInteraction = await driver.interaction(this.host, session, profile);
     if (driverInteraction || !this.usesTerminalDialogs(session)) return driverInteraction;
@@ -1771,10 +1793,11 @@ export class NativeBackendService {
   }
 
   async respondInteraction(session: Session, response: NativeInteractionResponse): Promise<NativeInteractionResult> {
+    session = this.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     let terminalAnswer = false;
     const result = await this.options.runtime.withSession(session.id, async () => {
-      const current = this.options.store.getSession(session.id);
+      const current = this.currentSession(this.options.store.getSession(session.id));
       // Receipts outlive their screen. Retrying a terminal answer must not fall through to the
       // protocol driver or drive the CLI a second time after the dialog has disappeared.
       const replay = this.terminalDialogs.replay(current, response);
@@ -1793,13 +1816,13 @@ export class NativeBackendService {
         }
         terminalAnswer = true;
         return this.terminalDialogs.respond(current, response, async observed => {
-          const before = this.options.store.getSession(session.id);
+          const before = this.currentSession(this.options.store.getSession(session.id));
           if (!this.usesTerminalDialogs(before) || before.terminalId !== observed.terminalId) return false;
           const selected = this.resolveSync(before);
           if (await selected.driver.interaction(this.host, before, selected.profile)) return false;
           // The driver's read may itself await. Check the binding and synchronous status again
           // after it, at the key/paste boundary, not only before terminal acquisition.
-          const latest = this.options.store.getSession(session.id);
+          const latest = this.currentSession(this.options.store.getSession(session.id));
           if (!this.usesTerminalDialogs(latest) || latest.terminalId !== observed.terminalId) return false;
           if (this.backendId(latest) !== selected.driver.id || latest.backendProfileId !== before.backendProfileId) return false;
           if (selected.driver.status(this.host, latest, selected.profile).interaction) return false;
@@ -1808,7 +1831,7 @@ export class NativeBackendService {
       }
       return driver.respond(this.host, current, profile, response);
     });
-    const current = this.options.store.getSession(session.id);
+    const current = this.currentSession(this.options.store.getSession(session.id));
     if (current.nativeSessionId || current.terminalId) this.bindProfile(current, driver, profile);
     if (terminalAnswer) {
       await this.terminalDialogs.refresh(current).catch(() => undefined);
@@ -1820,6 +1843,7 @@ export class NativeBackendService {
   }
 
   async extendInteraction(session: Session, interactionId: string): Promise<NativeInteraction> {
+    session = this.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     if (!driver.extendInteraction) throw new AppError('NATIVE_INTERACTION_NOT_EXTENDABLE', 'This backend does not time out its requests', 409);
     return await driver.extendInteraction(this.host, session, profile, interactionId);
@@ -1830,6 +1854,7 @@ export class NativeBackendService {
    * backend with no way to stop anything says so, rather than the request silently doing nothing.
    */
   async stopActivity(session: Session, activityId: string): Promise<NativeActivity> {
+    session = this.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     if (!driver.stopActivity) throw new AppError('ACTIVITY_STOP_UNSUPPORTED', 'This backend cannot stop its background tasks from here', 409);
     return await driver.stopActivity(this.host, session, profile, activityId);
@@ -1855,13 +1880,13 @@ export class NativeBackendService {
   }
 
   async interrupt(sessionId: string, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest }): Promise<void> {
-    const session = this.options.store.getSession(sessionId);
+    const session = this.currentSession(this.options.store.getSession(sessionId));
     const { driver, profile } = await this.resolve(session);
     await this.options.runtime.withSession(session.id, () => {
       const expected = options?.expectedStop;
       const beforeWrite = (allowEnded = false) => {
         if (!expected) return;
-        const current = this.options.store.getSession(sessionId);
+        const current = this.currentSession(this.options.store.getSession(sessionId));
         const status = driver.status(this.host, current, profile);
         if ((current.nativeSessionId ?? '') !== expected.nativeSessionId
           || status.activeTurn?.turnId !== expected.turnId && !(allowEnded && !status.activeTurn)
@@ -1872,13 +1897,13 @@ export class NativeBackendService {
         }
       };
       beforeWrite();
-      return driver.interrupt(this.host, this.options.store.getSession(sessionId), profile, expected ? { ...options, beforeWrite } : options);
+      return driver.interrupt(this.host, this.currentSession(this.options.store.getSession(sessionId)), profile, expected ? { ...options, beforeWrite } : options);
     });
     if (session.nativeSessionId || session.terminalId) this.bindProfile(session, driver, profile);
   }
 
   async runtimeAction(sessionId: string, request: NativeRuntimeActionRequest): Promise<void> {
-    const session = this.options.store.getSession(sessionId);
+    const session = this.currentSession(this.options.store.getSession(sessionId));
     if (session.kind !== 'native' || session.archivedAt) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'This conversation has no runtime control', 409);
     const { driver, profile } = await this.resolve(session);
     if (!driver.runtimeAction) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'This backend has no runtime control', 409);
@@ -1897,12 +1922,15 @@ export class NativeBackendService {
 
   async configure(session: Session, request: { model?: string; mode?: string; approval?: string; backendProfileId?: string }): Promise<Session> {
     const { backendProfileId, ...patch } = request;
-    const { driver, profile: from } = await this.resolve(session);
-    const switching = backendProfileId !== undefined && backendProfileId !== from.id;
+    const source = backendProfileId === session.nativeRuntime?.profileId ? this.currentSession(session) : session;
+    const { driver, profile: from } = await this.resolve(source);
+    const switching = backendProfileId !== undefined && backendProfileId !== (session.backendProfileId ?? from.id);
     const profile = switching ? (await this.resolve(session, backendProfileId)).profile : from;
-    if (switching) {
+    if (switching && profile.id !== from.id) {
+      await prepareSource(profile.config);
       const key = driver.continuationKey?.(from);
-      if (key === undefined || driver.continuationKey!(profile) !== key) {
+      if (key === undefined || driver.continuationKey!(profile) !== key
+        || driver.canContinueProfile && !driver.canContinueProfile(from, profile, session)) {
         throw new AppError('NATIVE_PROFILE_SWITCH_UNSUPPORTED', 'This conversation cannot continue on that provider; hand it off instead', 409, { backendId: driver.id });
       }
       const family = (of: NativeBackendProfileConfig, value: string | undefined) => value ? modelFamily(modelNormalizer(driver, of)(value)) : undefined;
@@ -1933,9 +1961,14 @@ export class NativeBackendService {
     const current = this.options.store.getSession(session.id);
     const changed = switching || (['model', 'mode', 'approval'] as const).some(key => key in next &&
       (key === 'model' ? normalize(next.model ?? '') !== normalize(current.model ?? '') : next[key] !== current[key]));
-    if (!changed && Object.entries(next).every(([key, value]) => current[key as keyof Session] === value)) return current;
-    const updated = changed ? this.options.store.bumpConfig(session.id, next) : this.options.store.updateSession(session.id, next);
-    this.options.store.appendEvent(session.id, 'session', { session: updated });
+    let updated = current;
+    if (changed || !Object.entries(next).every(([key, value]) => current[key as keyof Session] === value)) {
+      updated = changed ? this.options.store.bumpConfig(session.id, next) : this.options.store.updateSession(session.id, next);
+      this.options.store.appendEvent(session.id, 'session', { session: updated });
+    }
+    // Deferred scheduling is a notice after commit. A scheduler failure must not turn saved intent
+    // into an apparent failed write; the next open/send can still apply that intent.
+    try { driver.afterConfigure?.(this.host, updated, profile); } catch { /* retried by later session activity */ }
     return updated;
   }
 

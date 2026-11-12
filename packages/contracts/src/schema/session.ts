@@ -43,6 +43,7 @@ export const SessionNativeRuntimeSchema = z.object({
   address: z.string(),
   fingerprint: z.string(),
   scopeFingerprint: z.string().optional(),
+  profileId: z.string().optional(),
   attachment: z.object({ hook: z.string(), id: z.string() }).optional(),
 });
 

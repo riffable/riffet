@@ -6,6 +6,10 @@ Riffet 能列出这台机器上 provider CLI（Claude Code、Codex）存下的�
 
 一个 Riffet 会话绑定 provider 的一个会话：`(backendId, continuationKey(profile), nativeSessionId)`。store 保证一个未归档的绑定只属于一个会话（`NATIVE_SESSION_ID_IN_USE`）。导入就是带着 `nativeSessionId` 建会话，不新增实体。
 
+Codex 的 provider 切换沿用这个绑定：目标配置须共享会话目录、使用同一个 CLI，并提供同系模型。模型菜单复用 `continuations`；`canContinueProfile` 进一步检查原生 provider 配置是否兼容。目前开放同为自定义 Responses provider 的网关之间切换，以及沿用同一原生登录配置的 profile 之间切换。官方登录态与自定义网关之间的往返尚未开放：Codex 0.161.0 的实测中，经过网关后回切官方会在推理时拒绝历史中的 input item IDs。
+
+`Session.backendProfileId` 保存用户选择，`nativeRuntime.profileId` 保存实际 writer，`configPending` 表示等待应用。当前轮次、交互、子任务、后台活动和活跃 Goal 保留在原进程；空闲后先准备目标连接，再核验并释放旧 writer，通过 `thread/resume` 恢复原 `nativeSessionId`。目标绑定与清除 pending 同时保存，journal generation 和消息身份保持不变。目标失败时恢复原 provider，并保留选择供重试；归档或关闭会取消尚未执行的切换。整个过程不创建 fork，不改写原生历史。
+
 ## 发现（driver）
 
 `listExternalSessions` 只读 provider 自己的文件或索引，不启动会话、不发模型请求、不跑 hook。

@@ -26,7 +26,7 @@ import { firstHumanMessage, firstMessageTitlePatch, isPromptTitle, nativeTitlePa
 import type { NativeBackendHost, NativeBackendProfileConfig, NativePtyLaunchSpec, NativeControlMessage, NativeDispatchBinding, NativeInteractionReceipt } from '../types.js';
 import { Journal } from '../../journal/journal.js';
 import { turnMetaId } from '../../journal/ingest.js';
-import { activityEvent, withActivity } from '../../journal/activity.js';
+import { activityEvent, isLiveActivity, withActivity } from '../../journal/activity.js';
 import { CodexActivities } from './activities.js';
 import type { CodexNativeCommand } from './commands.js';
 import { projectCodexItem, rowTextKey, userMessageText } from './project-item.js';
@@ -330,6 +330,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     // These describe the process we connected to. A later profile edit must not retroactively
     // change its launch identity or the fingerprint committed for that process.
     this.project = { ...project };
+    this.session = { ...session };
     this.profile = { ...profile, config: structuredClone(profile.config) };
     this.nativeSessionId = session.nativeSessionId;
     // Sync v3 reads the thread into the journal (`transcript-source.ts`) once its ingest is attached to the
@@ -574,6 +575,67 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   get projectCwd(): string { return this.project.cwd; }
+
+  /** The actual writer's launch profile, independent of the next provider the user selected. */
+  get launchProfile(): NativeBackendProfileConfig { return this.profile; }
+
+  /** The source model for rollback, including saved dimensions when they still name that model. */
+  get currentModel(): string | undefined {
+    const selected = this.status.model ?? (!this.session.backendProfileId || this.session.backendProfileId === this.profile.id ? this.session.model : undefined);
+    return selected && (!this.threadModel || parseNativeModelSelection(selected).model === this.threadModel)
+      ? selected : this.threadModel ?? str(this.profileConfig.defaultModel);
+  }
+
+  get canSwitchProfile(): boolean {
+    return !this.activeTurnId && !this.dispatchCommandId && !this.currentInteraction
+      && this.status.phase !== 'busy' && this.status.phase !== 'attention'
+      && ![...this.subagents.values()].some(child => child.running)
+      && !this.activities.ledger.list().some(isLiveActivity)
+      && this.host.getSession(this.session.id).goal?.status !== 'active';
+  }
+
+  profileSwitchFailed(message: string): void {
+    this.setStatus({ ...this.status, notice: message, noticeLevel: 'error' }, 'other');
+  }
+
+  /** Release only an idle, verified owner; a provider change never interrupts its current work. */
+  async releaseForProfileSwitch(): Promise<boolean> {
+    if (!this.canSwitchProfile) return false;
+    await this.terminalEndpointState(true);
+    this.assertWritable();
+    const transport = this.requireTransport();
+    const threadId = this.nativeSessionId;
+    const binding = this.host.getSession(this.session.id).nativeRuntime;
+    const loaded = threadId ? await this.loadedThread(threadId, true) : undefined;
+    if (loaded === false && !this.transportBorrowed) {
+      // A saved owner was already gone and this reader spawned an unloaded replacement.
+      await this.dispose(this.host);
+      return true;
+    }
+    if (!threadId || binding?.address !== transport.remoteAddress || loaded !== true) {
+      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend could not be verified; it was left running.', 409);
+    }
+    const idle = async () => {
+      const thread = await this.readThread(threadId, false);
+      return thread?.id === threadId && thread.status?.type !== 'active' && this.canSwitchProfile;
+    };
+    if (!await idle()) return false;
+    await this.host.transcript?.drain(this.session.id);
+    if (!await idle()) return false;
+    this.assertWritable();
+    const current = this.host.getSession(this.session.id);
+    if (current.nativeSessionId !== threadId || current.nativeRuntime?.address !== binding.address
+      || current.nativeRuntime.fingerprint !== binding.fingerprint || this.transport !== transport) {
+      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The backend binding changed during restart; no backend was stopped.', 409);
+    }
+    // Reattached Unix clients have no process handle. Stop only the verified Riffet-owned daemon.
+    if (this.transportBorrowed && !transport.processId
+      && !await stopWorkbenchAppServerAt(binding.address, [credentialDirFor(this.flavor)])) {
+      throw new AppError('NATIVE_LAUNCH_ABORTED', 'The existing backend process could not be verified; it was left running.', 409);
+    }
+    await this.dispose(this.host);
+    return true;
+  }
 
   /** Explicit user action, never called by a reader or by ordinary reconnect/send. */
   async restartBackend(expected: string, address: string): Promise<boolean> {
@@ -918,16 +980,21 @@ export class CodexSessionRuntime implements CodexThreadReader {
 
   /** Explicit opens and observer resumes must preserve the same durable native/attachment association. */
   private async commitRuntimeBinding(transport: CodexAppServerClient, threadId: string): Promise<void> {
-    const previous = this.host.getSession(this.session.id).nativeRuntime;
+    const current = this.host.getSession(this.session.id);
+    const previous = current.nativeRuntime;
     const attachment = this.attachment ? { hook: this.attachment.owner, id: this.attachment.value.id }
       : this.transportBorrowed && previous?.address === transport.remoteAddress ? previous?.attachment : undefined;
     // A sidecar that cannot bind says so in its own control; the native writer stays verified.
     try { await this.attachment?.value.bindNative({ address: transport.remoteAddress, nativeSessionId: threadId }); }
     catch { /* reported by the plugin */ }
     // A control outage must not erase a verified native writer or lose the attachment needed on reconnect.
-    this.host.updateSession(this.session.id, { nativeRuntime: {
-      address: transport.remoteAddress, fingerprint: this.runtimeFingerprint, scopeFingerprint: this.scopeFingerprint, ...(attachment ? { attachment } : {}),
-    } });
+    this.host.updateSession(this.session.id, {
+      ...(this.flavor.id === 'codex' && current.configPending && current.backendProfileId === this.profile.id ? { configPending: false } : {}),
+      nativeRuntime: {
+        address: transport.remoteAddress, fingerprint: this.runtimeFingerprint, scopeFingerprint: this.scopeFingerprint,
+        profileId: this.profile.id, ...(attachment ? { attachment } : {}),
+      },
+    });
   }
 
   private async resumeWithConfiguration(threadId: string, selection: NativeModelSelection, permission: ReturnType<typeof permissionOf> | undefined): Promise<{ thread: RpcThread } & Record<string, unknown>> {

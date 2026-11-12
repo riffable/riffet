@@ -219,9 +219,10 @@ export interface Session {
   quickExitCount?: number;
   /**
    * Server-written connection binding; clients cannot set it when creating a conversation.
+   * `profileId` identifies the actual writer while `backendProfileId` may name a pending choice.
    * `attachment` is a plugin's sidecar on the native process, under that plugin's id.
    */
-  nativeRuntime?: { address: string; fingerprint: string; scopeFingerprint?: string; attachment?: { hook: string; id: string } };
+  nativeRuntime?: { address: string; fingerprint: string; scopeFingerprint?: string; profileId?: string; attachment?: { hook: string; id: string } };
   /** Deprecated Cursor reference; retained while old clients or persisted sessions use it. */
   cursorSessionId?: string; terminalId?: string; resumePicker?: boolean;
   model?: string; mode: string; approval?: string; archivedAt?: string; error?: string;
@@ -233,8 +234,9 @@ export interface Session {
    * Cursor and Claude change a model or permission through launch flags, so a switch asked for while a turn
    * is running cannot be applied without killing that turn: it is recorded, and the CLI is relaunched
    * at the first idle moment. This flag is what keeps that promise across a workbench restart, when
-   * the CLI itself is still running behind its persistent terminal. Backends that apply configuration
-   * per turn, such as Codex and DSH, do not need this flag. TRAE also uses it for an offline
+   * the CLI itself is still running behind its persistent terminal. Codex also uses it while a provider
+   * switch waits to resume the same thread on its new writer; model-only changes apply per turn.
+   * DSH applies configuration per turn. TRAE also uses it for an offline
    * permission switch, so reconnecting does not adopt the old native mode over the pending choice.
    */
   configPending?: boolean;

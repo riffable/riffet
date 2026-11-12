@@ -4,7 +4,7 @@ import { queryDirectory } from '../shared/query-directory.js';
 import { readFile, stat } from 'node:fs/promises';
 import { readCodexShare } from './share-read.js';
 import { homedir } from 'node:os';
-import { basename } from 'node:path';
+import { basename, resolve as resolvePath } from 'node:path';
 import { EXTERNAL_CACHE_MS, holderOf, listExternalThreads, scanProcesses, type ProcessRow } from './external.js';
 import type {
   ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendUsage, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest,
@@ -35,7 +35,8 @@ import {
 } from './config.js';
 import { listModels, readUsage } from './catalog.js';
 import { parseCodexNativeCommand, codexNativeSlashItems } from './commands.js';
-import { modelSourceOf, resolveSource, sourceCatalog } from '../shared/model-source.js';
+import { modelSourceOf, prepareSource, resolveSource, sourceCatalog } from '../shared/model-source.js';
+import { modelFamily } from '../shared/model-selection.js';
 import { extensionDiagnostic, fileRuntimeEntries, readConfiguredMcpNames, readMcpRuntime, readMcpServers } from './extensions.js';
 import { RIFFET_MCP_NAME } from '../../riffet-mcp/service.js';
 import { safeProviderError, safeTurnError } from './errors.js';
@@ -86,6 +87,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private readonly runtimes = new Map<string, CodexSessionRuntime>();
   private readonly creating = new Map<string, PendingRuntime>();
   private readonly restarting = new Set<string>();
+  private readonly profileSwitchTimers = new Map<string, NodeJS.Timeout>();
+  private readonly profileSwitchFailures = new Set<string>();
   private readonly sessionListeners = new Map<string, CodexSessionListeners>();
   /** The journal's transcript sources following each session's runtime (`transcript`). */
   private readonly feeds = new Map<string, Set<CodexLiveFeed>>();
@@ -114,6 +117,137 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   profiles(): NativeBackendProfileConfig[] {
     const executable = process.env[this.flavor.executableEnv]?.trim() || this.flavor.command;
     return [{ id: PROFILE_ID, backendId: this.id, name: this.flavor.profileName, isDefault: true, config: { executable } }];
+  }
+
+  continuationKey(profile: NativeBackendProfileConfig): string {
+    return this.id === 'codex' ? resolvePath(this.flavor.stateHome(profile.config)) : profile.id;
+  }
+
+  canContinueProfile(from: NativeBackendProfileConfig, to: NativeBackendProfileConfig): boolean {
+    // Keep the native provider identity as well as the thread. Cross-authentication histories
+    // need a separately verified protocol route; merely sharing CODEX_HOME is insufficient.
+    const customProvider = (profile: NativeBackendProfileConfig) => this.flavor.args(profile.config).includes('model_provider="riffet"');
+    return this.id === 'codex' && customProvider(from) === customProvider(to)
+      && executableOf(from, this.flavor) === executableOf(to, this.flavor);
+  }
+
+  afterConfigure(host: NativeBackendHost, session: Session): void {
+    this.profileSwitchFailures.delete(session.id);
+    this.scheduleProfileSwitch(host, session.id);
+  }
+
+  /** Settings describe the next provider; controls and readers still belong to the live writer. */
+  private activeProfile(host: NativeBackendHost, session: Session, desired: NativeBackendProfileConfig): NativeBackendProfileConfig {
+    const actualId = session.configPending && this.id === 'codex' ? session.nativeRuntime?.profileId : undefined;
+    if (!actualId || actualId === desired.id) return desired;
+    const live = this.runtimes.get(session.id);
+    if (live?.launchProfile.id === actualId) return live.launchProfile;
+    return host.getProfile?.({ ...session, backendProfileId: actualId })
+      ?? (() => { throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The running provider is unavailable', 409); })();
+  }
+
+  private profileSwitchPending(session: Session): boolean {
+    return this.id === 'codex' && session.configPending === true
+      && Boolean(session.nativeRuntime?.profileId && session.backendProfileId
+        && session.nativeRuntime.profileId !== session.backendProfileId);
+  }
+
+  private scheduleProfileSwitch(host: NativeBackendHost, sessionId: string, delay = 250): void {
+    if (this.closing || this.profileSwitchTimers.has(sessionId) || this.profileSwitchFailures.has(sessionId)
+      || host.getSession(sessionId).archivedAt || !this.profileSwitchPending(host.getSession(sessionId))) return;
+    const timer = setTimeout(() => {
+      // Keep the timer as a cancellation token while this callback waits for the session lock.
+      // dispose/close may run before it acquires the lock, even though the timeout already fired.
+      const apply = () => this.profileSwitchTimers.get(sessionId) === timer && !this.closing
+        ? this.applyProfileSwitch(host, sessionId) : Promise.resolve(true);
+      const task = host.withDetachedSessionLock ? host.withDetachedSessionLock(sessionId, apply) : host.withSessionLock(sessionId, apply);
+      void task.catch(error => {
+        this.profileSwitchFailures.add(sessionId);
+        const runtime = this.runtimes.get(sessionId);
+        if (runtime) runtime.profileSwitchFailed(safeProviderError(error, runtime.launchProfile.config));
+      })
+        .finally(() => {
+          if (this.profileSwitchTimers.get(sessionId) !== timer) return;
+          this.profileSwitchTimers.delete(sessionId);
+          if (!this.closing) { try { this.scheduleProfileSwitch(host, sessionId, 1_000); } catch { /* session was deleted */ } }
+        });
+    }, delay);
+    timer.unref?.();
+    this.profileSwitchTimers.set(sessionId, timer);
+  }
+
+  /** Called only for a saved user selection, under the same lock as sends and configuration. */
+  private async applyProfileSwitch(host: NativeBackendHost, sessionId: string): Promise<boolean> {
+    const session = host.getSession(sessionId);
+    if (this.closing || session.archivedAt) return false;
+    if (!this.profileSwitchPending(session)) return true;
+    if (session.terminalHold) return false;
+    const project = host.getProject(session.projectId);
+    const target = host.getProfile?.(session);
+    if (!target) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected provider is unavailable', 409);
+    const source = this.activeProfile(host, session, target);
+    if (this.continuationKey(source) !== this.continuationKey(target) || !this.canContinueProfile(source, target)) {
+      throw new AppError('NATIVE_PROFILE_SWITCH_UNSUPPORTED', 'This conversation cannot continue on that provider; hand it off instead', 409);
+    }
+    if (this.runtimes.get(sessionId)?.canSwitchProfile === false) return false;
+    const previous = await this.ensureRuntime(host, session, project, source, true);
+    if (!previous.canSwitchProfile) return false;
+    // thread/read reports the current model when loaded and the persisted model otherwise.
+    // Read it before releasing a cold source; resuming with the desired target would overwrite it.
+    await previous.prime();
+    if (!previous.canSwitchProfile) return false;
+    const previousModel = previous.currentModel;
+    const selectedModel = session.model ?? str(target.config.defaultModel);
+    if (!previousModel || !selectedModel || modelFamily(previousModel) !== modelFamily(selectedModel)) {
+      throw new AppError('NATIVE_PROFILE_SWITCH_MODEL', 'A conversation moves to another provider within its model line; hand it off instead', 409);
+    }
+    try { await prepareSource(target.config); }
+    catch (error) { throw new AppError('NATIVE_PROFILE_SWITCH_FAILED', safeProviderError(error, target.config), 502); }
+    // A fresh, unloaded process validates the target launch before the old writer is released.
+    // Its snapshot deliberately has no old socket/TUI binding to accidentally reattach.
+    const replacement = new CodexSessionRuntime(host, { ...session, nativeRuntime: undefined, terminalId: undefined }, project, target, this.startAppServer, this.flavor, this.runtimeHooks);
+    let released = false;
+    this.restarting.add(sessionId);
+    const task = Promise.resolve().then(async () => {
+      try {
+        await replacement.start();
+        if (!await previous.releaseForProfileSwitch()) { await replacement.dispose(host); return previous; }
+        released = true;
+        host.updateSession(sessionId, { terminalId: undefined });
+        replacement.attachFeed(this.feedOf(sessionId));
+        await replacement.openOrResume();
+        this.runtimes.set(sessionId, replacement);
+        const updated = host.updateSession(sessionId, { configPending: false, terminalId: undefined });
+        host.emit(sessionId, { type: 'session', session: updated });
+        await this.bindListeners(sessionId, replacement).catch(error => replacement.profileSwitchFailed(safeProviderError(error, target.config)));
+        await replacement.ensureTui().catch(error => replacement.profileSwitchFailed(safeProviderError(error, target.config)));
+        this.profileSwitchFailures.delete(sessionId);
+        return replacement;
+      } catch (error) {
+        await replacement.dispose(host).catch(() => undefined);
+        let restored = previous;
+        if (released) {
+          // The failed target never receives user input. Restore the old writer, retain the
+          // desired provider and pending flag, and let an explicit retry attempt it again.
+          restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks);
+          restored.attachFeed(this.feedOf(sessionId));
+          this.runtimes.set(sessionId, restored);
+          try {
+            await restored.start();
+            await restored.openOrResume({ model: previousModel });
+            await this.bindListeners(sessionId, restored);
+            await restored.ensureTui();
+          } catch { /* The persisted source binding and original thread remain recoverable. */ }
+        }
+        restored.profileSwitchFailed(safeProviderError(error, target.config));
+        this.profileSwitchFailures.add(sessionId);
+        throw new AppError('NATIVE_PROFILE_SWITCH_FAILED', safeProviderError(error, target.config), 502);
+      }
+    });
+    const entry = { projectId: project.id, fingerprint: runtimeFingerprintFor(project, source, this.flavor), promise: task };
+    this.creating.set(sessionId, entry);
+    try { await task; return !this.profileSwitchPending(host.getSession(sessionId)); }
+    finally { this.restarting.delete(sessionId); if (this.creating.get(sessionId) === entry) this.creating.delete(sessionId); }
   }
 
   async capabilities(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendCapabilities> {
@@ -175,6 +309,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
 
   async openOrResume(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, options: NativeBackendOpenOptions = {}): Promise<NativeBackendOpenResult> {
     return await host.withSessionLock(session.id, async () => {
+      await this.applyProfileSwitch(host, session.id);
+      session = host.getSession(session.id);
+      profile = this.activeProfile(host, session, profile);
       let runtime = await this.ensureRuntime(host, session, project, profile, true);
       if (!runtime.canRunWith(project, profile)) {
         runtime.deferWriteBlocked(project, profile);
@@ -220,6 +357,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       throw new AppError('NATIVE_COMMAND_ARGUMENTS', 'Remove attachments and context references before running this command.', 400);
     }
     await host.withSessionLock(request.session.id, async () => {
+      if (!await this.applyProfileSwitch(host, request.session.id)) {
+        throw new AppError('CLI_BUSY', 'The current task is still running; the provider change will apply when it finishes.', 409);
+      }
       const runtime = await this.ensureRuntime(host, request.session, request.project, request.profile, true);
       if (!runtime.canRunWith(request.project, request.profile)) {
         const blocked = runtime.deferWriteBlocked(request.project, request.profile);
@@ -251,9 +391,10 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const session = host.getSession(request.session.id);
       if (session.nativeSessionId !== request.target.nativeSessionId) throw new AppError('STEER_TARGET_CHANGED', 'The target conversation changed.', 409);
       // Reconnect only to a verified existing endpoint: this path must never spawn a new server.
-      const runtime = await this.ensureRuntime(host, session, request.project, request.profile, true, true);
-      if (!runtime.canRunWith(request.project, request.profile)) {
-        const blocked = runtime.deferWriteBlocked(request.project, request.profile);
+      const profile = this.activeProfile(host, session, request.profile);
+      const runtime = await this.ensureRuntime(host, session, request.project, profile, true, true);
+      if (!runtime.canRunWith(request.project, profile)) {
+        const blocked = runtime.deferWriteBlocked(request.project, profile);
         throw new AppError(blocked.code, blocked.message, 409);
       }
       if (!runtime.steerTarget) await runtime.prime();
@@ -275,6 +416,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   async interrupt(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest }): Promise<void> {
     if (!session.nativeSessionId) return;
     await host.withSessionLock(session.id, async () => {
+      profile = this.activeProfile(host, host.getSession(session.id), profile);
       const project = host.getProject(session.projectId);
       const runtime = await this.ensureRuntime(host, session, project, profile, true, Boolean(options?.expectedStop));
       if (!runtime.canRunWith(project, profile)) {
@@ -292,6 +434,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   async runtimeAction(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, request: NativeRuntimeActionRequest): Promise<void> {
     if (!this.runtimeHooks?.runtimeHooks(this.id).length) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'This backend has no runtime control', 409);
     return await host.withSessionLock(session.id, async () => {
+      profile = this.activeProfile(host, host.getSession(session.id), profile);
       const project = host.getProject(session.projectId);
       // A runtime action may reconnect to an existing owner, but must never create a new native turn.
       const runtime = await this.ensureRuntime(host, session, project, profile, true, true);
@@ -309,6 +452,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     // Same gate as interrupt: a runtime whose profile or endpoint no longer matches must not act on the thread.
     // Only the check holds the session lock; the stop itself waits on the provider for seconds.
     await host.withSessionLock(session.id, async () => {
+      profile = this.activeProfile(host, host.getSession(session.id), profile);
       const project = host.getProject(session.projectId);
       if (!runtime.canRunWith(project, profile)) {
         const blocked = runtime.deferWriteBlocked(project, profile);
@@ -321,6 +465,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   async respond(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, response: NativeInteractionResponse): Promise<NativeInteractionResult> {
     if (!session.nativeSessionId) return { status: 'uncertain', message: `This ${this.label} session has no native thread yet.` };
     return await host.withSessionLock(session.id, async () => {
+      profile = this.activeProfile(host, host.getSession(session.id), profile);
       // A request that arrived on this runtime's own socket proves it owns the waiting turn, so its
       // answer goes back the same way. Re-verifying the TUI endpoint guards new writes; for a reply it
       // only lets a slow or failed process scan turn a valid answer into a conflict.
@@ -348,6 +493,24 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       if (patch.model !== undefined) resolved.model = patch.model;
       if (patch.mode !== undefined) resolved.mode = collaborationModeOf(patch.mode) ?? 'default';
       if (patch.approval !== undefined) resolved.approval = normalizePermission(patch.approval, this.flavor.id);
+      if (this.id === 'codex') {
+        const current = host.getSession(session.id);
+        const actualId = runtime?.launchProfile.id ?? current.nativeRuntime?.profileId ?? current.backendProfileId;
+        if (actualId && actualId !== profile.id && current.nativeRuntime) {
+          const sourceModel = runtime?.currentModel;
+          const targetModel = patch.model ?? current.model ?? str(profile.config.defaultModel);
+          if (sourceModel && targetModel && modelFamily(sourceModel) !== modelFamily(targetModel)) {
+            throw new AppError('NATIVE_PROFILE_SWITCH_MODEL', 'A conversation moves to another provider within its model line; hand it off instead', 409);
+          }
+          // Persist who still owns the turn before the service saves the target selection.
+          host.updateSession(session.id, { configPending: true, nativeRuntime: { ...current.nativeRuntime, profileId: actualId } });
+          return resolved;
+        }
+        if (current.configPending && actualId === profile.id) {
+          host.updateSession(session.id, { configPending: false });
+          this.profileSwitchFailures.delete(session.id);
+        }
+      }
       if (runtime?.transport?.isOnline && !runtime.canRunWith(host.getProject(session.projectId), profile)) runtime.deferWriteBlocked(host.getProject(session.projectId), profile);
       // A map entry is not a working runtime: `onExit` deliberately keeps the handle of a dead
       // transport around so a later reopen can dispose it. Pushing the patch into such a zombie
@@ -680,20 +843,24 @@ export class CodexBackendAdapter implements NativeBackendDriver {
           return current?.transport?.isOnline ? current : undefined;
         }
         const current = host.getSession(sessionId);
+        const resolved = this.profileSwitchPending(current)
+          ? this.activeProfile(host, current, profile) : host.getProfile?.(current) ?? profile;
         // A terminal's own CLI holds the thread without Riffet's app-server (a hold, or a reader's own `codex resume`
         // after "resume in terminal"); a second app-server loading it here would be a second holder.
         if (!this.runtimes.get(sessionId)?.transport?.isOnline) {
           const threadId = current.nativeSessionId;
-          const resolved = host.getProfile?.(current) ?? profile;
           if (current.terminalHold || threadId && await this.externalHolder(host, resolved, threadId)) return undefined;
         }
-        const runtime = await this.ensureRuntime(host, current, host.getProject(current.projectId), host.getProfile?.(current) ?? profile);
+        const runtime = await this.ensureRuntime(host, current, host.getProject(current.projectId), resolved);
         return runtime.transport?.isOnline ? runtime : undefined;
       },
       commandOf: (item, turnId) => this.runtimes.get(sessionId)?.commandOf(item, turnId) ?? taggedCommand(item, this.flavor),
       itemSpans: threadId => rolloutItemSpans(this.flavor.stateHome(profile.config), threadId),
       runOf: commandId => host.findRunIdByCommand(sessionId, commandId),
-      turnError: turn => safeTurnError(turn.error, profile.config),
+      turnError: turn => {
+        const actual = this.runtimes.get(sessionId)?.launchProfile.config;
+        return safeTurnError(turn.error, profile.config, actual ?? {});
+      },
       observe: feed => {
         let feeds = this.feeds.get(sessionId);
         if (!feeds) this.feeds.set(sessionId, feeds = new Set());
@@ -764,8 +931,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
 
   status(host: NativeBackendHost, session: Session, profile?: NativeBackendProfileConfig): NativeStatus {
     const runtime = this.runtimes.get(session.id);
-    const desired = host.getProfile?.(session) ?? profile;
-    if (runtime && desired) runtime.syncSessionBinding(session, host.getProject(session.projectId), desired);
+    const observed = this.profileSwitchPending(session) ? { ...session, backendProfileId: session.nativeRuntime!.profileId } : session;
+    const desired = host.getProfile?.(observed) ?? profile;
+    if (runtime && desired) runtime.syncSessionBinding(session, host.getProject(session.projectId), this.activeProfile(host, session, desired));
     return runtime?.status ?? { phase: 'offline' };
   }
 
@@ -777,6 +945,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const subscriptions = this.listenersFor(session.id);
     subscriptions.listeners.add(listener);
     const project = host.getProject(session.projectId);
+    profile = this.activeProfile(host, host.getSession(session.id), profile);
     const current = this.runtimes.get(session.id);
     if (current?.belongsTo(project, profile) && current.transport?.isOnline) {
       current.syncSessionBinding(session, project, profile);
@@ -803,6 +972,9 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   async dispose(host: NativeBackendHost, sessionId: string): Promise<void> {
+    clearTimeout(this.profileSwitchTimers.get(sessionId));
+    this.profileSwitchTimers.delete(sessionId);
+    this.profileSwitchFailures.delete(sessionId);
     const pending = this.creating.get(sessionId);
     if (pending) await pending.promise.catch(() => undefined);
     this.clearListeners(sessionId);
@@ -815,6 +987,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   async close(host: NativeBackendHost): Promise<void> {
     if (this.closeTask) return await this.closeTask;
     this.closing = true;
+    for (const timer of this.profileSwitchTimers.values()) clearTimeout(timer);
+    this.profileSwitchTimers.clear();
     this.closeTask = (async () => {
       await Promise.allSettled([...this.creating.values()].map(entry => entry.promise));
       const runtimes = [...this.runtimes.values()];
@@ -831,6 +1005,8 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     assertSupportedProfile(profile, this.flavor);
     if (this.closing) throw new Error(`${this.label} adapter is shutting down`);
     session = host.getSession(session.id);
+    profile = this.activeProfile(host, session, profile);
+    this.scheduleProfileSwitch(host, session.id);
     if (session.projectId !== project.id) {
       throw new AppError('NATIVE_PROJECT_CHANGED', `This session moved to a different project while ${this.label} was reconnecting. Reload the session and retry.`, 409);
     }

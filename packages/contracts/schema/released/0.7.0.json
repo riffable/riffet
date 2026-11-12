@@ -1114,6 +1114,9 @@
               "scopeFingerprint": {
                 "type": "string"
               },
+              "profileId": {
+                "type": "string"
+              },
               "attachment": {
                 "type": "object",
                 "properties": {
@@ -2587,6 +2590,9 @@
                         "type": "string"
                       },
                       "scopeFingerprint": {
+                        "type": "string"
+                      },
+                      "profileId": {
                         "type": "string"
                       },
                       "attachment": {
@@ -9487,6 +9493,9 @@
                         "type": "string"
                       },
                       "scopeFingerprint": {
+                        "type": "string"
+                      },
+                      "profileId": {
                         "type": "string"
                       },
                       "attachment": {
