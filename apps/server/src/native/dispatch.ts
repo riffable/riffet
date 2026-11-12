@@ -8,6 +8,7 @@ import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
 import type { NativeBackendTraits, NativeDispatchBinding } from '../backends/types.js';
 import { AppError } from '../errors.js';
+import { backendIdOf } from '../session-identity.js';
 import { isAgentTerminal } from '../terminal/kinds.js';
 import { redactSensitiveText } from '../settings/config-documents.js';
 import { admission, holdsUnconfirmed, queueOf, steerTurnEnded, type Admission } from './lane.js';
@@ -37,6 +38,10 @@ const IDLE_RECONCILE_MS = 15_000;
  * session for ever.
  */
 const IDLE_OUTCOME_GRACE_MS = 60_000;
+/** How long a drain holds deliveries without being renewed; whoever waits for a restart renews it as it polls. */
+const DRAIN_LEASE_MS = 30_000;
+/** The holder of a drain request that names none (callers that predate holders). */
+const LEGACY_DRAIN_HOLDER = 'legacy';
 const workspacePath = (cwd: string) => { try { return realpathSync(cwd); } catch { return resolve(cwd); } };
 const overlappingPaths = (left: string, right: string) => left === right || left.startsWith(right.endsWith(sep) ? right : `${right}${sep}`) || right.startsWith(left.endsWith(sep) ? left : `${left}${sep}`);
 
@@ -89,6 +94,8 @@ export interface NativeDispatcherBackend {
   reconcile?(sessionId: string): Promise<void>;
   canReleaseInput?(session: Session, run: Run): Promise<boolean>;
   status(sessionId: string): NativeStatus;
+  /** Whether a driver is bound to the session; without it every session counts as possibly live. */
+  hasRuntime?(sessionId: string): boolean;
   sendRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options?: { now?: boolean }): Promise<void>;
   supportsSteer?(session: Session): Promise<boolean>;
   steerRun?(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run): Promise<void | { deferred: true }>;
@@ -110,6 +117,10 @@ interface NativeDispatcherRuntime {
   /** With `initialPrompt`, must call `beforeSpawn` right before spawning and abort the spawn if it throws. */
   ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void }): Promise<unknown>;
 }
+
+/** What keeps a restart waiting: a write still being confirmed, a turn or a background task that a restart would end. */
+export interface RestartBlocker { sessionId: string; title: string; backendId: string; reason: 'delivery' | 'turn' | 'background' }
+export interface RestartAssessment { restartable: boolean; draining: boolean; blockers: RestartBlocker[] }
 
 /** Durable runs own execution; a browser's presence never owns the worker or its observations. */
 export class NativeDispatcher {
@@ -139,6 +150,10 @@ export class NativeDispatcher {
   private readonly timer: NodeJS.Timeout;
   private closed = false;
   private polling = false;
+  /** Per holder, until when a restart being prepared holds queued runs back; see `drain`. */
+  private readonly drainLeases = new Map<string, number>();
+  /** Steers that arrived during a drain (run → conversation), sent once it ends; see `steer`. */
+  private readonly drainHeldSteers = new Map<string, string>();
 
   /**
    * `beforeTurn` runs once a turn is claimed and before anything reaches the CLI — the moment its
@@ -162,6 +177,7 @@ export class NativeDispatcher {
       for (const id of this.nextAttempt.keys()) if (!unfinishedIds.has(id)) this.nextAttempt.delete(id);
       for (const id of this.pendingSteerOutcomes.keys()) if (!unfinishedIds.has(id)) this.pendingSteerOutcomes.delete(id);
       for (const id of this.idleSince.keys()) if (!unfinishedIds.has(id)) this.idleSince.delete(id);
+      if (!this.draining) this.resumeDrainHeldSteers();
       const sessions = new Set(runs.map(run => run.sessionId));
       for (const [id, unsubscribe] of this.observers) if (!sessions.has(id)) { unsubscribe(); this.observers.delete(id); }
       for (const id of sessions) {
@@ -179,6 +195,8 @@ export class NativeDispatcher {
         if (this.sendOrphanedSteers(id, pending)) pending = this.store.listUnfinishedNativeRuns(id);
         // Nothing to start: the provider's status is not read for it.
         if (!pending.some(run => run.native?.intent !== 'steer' && run.native?.delivery === 'queued')) continue;
+        // Draining: nothing new reaches a CLI. The run stays queued, survives the restart and is sent after it.
+        if (this.draining) continue;
         const { next: run, held } = this.admission(id, pending);
         if (held || !run) continue;
         this.leases.add(id);
@@ -213,6 +231,69 @@ export class NativeDispatcher {
         }
       }
     } finally { this.polling = false; }
+  }
+
+  /**
+   * Holds back every new delivery while a restart waits for the running turns (`restartability`). New
+   * messages are still accepted and persisted as queued. In memory only, and a lease: a restart ends it, and
+   * so does `DRAIN_LEASE_MS` without renewal, so a waiting script that dies does not hold messages back.
+   * Each caller holds its own lease (`holder`): turning one off leaves the others' drains in place.
+   */
+  drain(on: boolean, holder = LEGACY_DRAIN_HOLDER): void {
+    if (on) this.drainLeases.set(holder, now() + DRAIN_LEASE_MS); else this.drainLeases.delete(holder);
+    if (!on) this.kick();
+  }
+
+  private get draining(): boolean {
+    const at = now();
+    let held = false;
+    for (const [holder, until] of this.drainLeases) {
+      if (until > at) held = true; else this.drainLeases.delete(holder);
+    }
+    return held;
+  }
+
+  /** A drain that ended without a restart lets the steers it held go to their turn; one whose turn is over meanwhile goes on as the next message. */
+  private resumeDrainHeldSteers(): void {
+    for (const [runId, sessionId] of this.drainHeldSteers) {
+      this.drainHeldSteers.delete(runId);
+      try { void this.steer(sessionId, runId).catch(() => undefined); } catch { /* sent on as a message or gone */ }
+    }
+  }
+
+  /**
+   * Whether the service can restart now without ending work (docs/DELIVERY.md, 重启). A write being prepared or
+   * confirmed always blocks: a restart would leave it uncertain. Claude, Cursor, Codex and Traex keep their CLI
+   * (tmux or a detached app-server) through a restart (`survivesRestart`) and their observed turns are picked up
+   * again afterwards, so nothing else of theirs blocks. A turn, a pending prompt or a background task of any
+   * other backend (Droid, Pi, DSH, chat: child processes or in-process) ends with the service, so it blocks.
+   */
+  restartability(): RestartAssessment {
+    const blockers: RestartBlocker[] = [];
+    const runsBySession = new Map<string, Run[]>();
+    for (const run of this.store.listUnfinishedNativeRuns()) {
+      const list = runsBySession.get(run.sessionId);
+      if (list) list.push(run); else runsBySession.set(run.sessionId, [run]);
+    }
+    // Only a session with an unfinished run, an active state or a live runtime can block; the rest is skipped before any status read.
+    const candidates = this.store.listSessions().filter(session =>
+      runsBySession.has(session.id) || ['starting', 'running', 'waiting', 'cancelling'].includes(session.state) || (this.native.hasRuntime?.(session.id) ?? true));
+    for (const session of candidates) {
+      const backendId = backendIdOf(session);
+      const runs = runsBySession.get(session.id) ?? [];
+      const blocker = (reason: RestartBlocker['reason']) => blockers.push({ sessionId: session.id, title: session.title, backendId, reason });
+      // An in-flight write blocks whether or not the session was archived meanwhile.
+      if (runs.some(run => ['preparing', 'dispatching', 'input_sent'].includes(run.native?.delivery ?? ''))) { blocker('delivery'); continue; }
+      if (session.archivedAt) continue;
+      if (this.traits(backendId).survivesRestart) continue;
+      if (runs.some(run => run.native?.delivery === 'observed' && run.state === 'running')
+        || ['starting', 'running', 'waiting', 'cancelling'].includes(session.state)) { blocker('turn'); continue; }
+      try {
+        const activity = this.native.status(session.id).activity;
+        if (activity?.background || activity?.compacting) blocker('background');
+      } catch { /* no live runtime: nothing in flight */ }
+    }
+    return { restartable: blockers.length === 0, draining: this.draining, blockers };
   }
 
   /** `admission` over the conversation's runs and what this dispatcher is doing with it right now. */
@@ -375,6 +456,8 @@ export class NativeDispatcher {
     let run = this.store.getRun(runId);
     if (run.native?.intent === 'steer') throw new AppError('STEER_ACTION_UNSUPPORTED', 'A steer message cannot be sent as a new turn', 409);
     if (this.closed || run.native?.delivery !== 'queued') return;
+    // Admitted before a drain began and waited for the conversation's lock: it stays queued, and a kick after the drain sends it.
+    if (this.draining) return;
     const initial = run.native;
     const checkpoint = Boolean(this.options.beforeTurn && !initial.checkpointAttempted && !isSlashCommand(initial));
     if (!this.store.transitionNativeRun(runId, ['queued'], { delivery: 'preparing', stage: 'runtime', attempt: initial.attempt + 1, ...(checkpoint ? { checkpointAttempted: true } : {}), timings: { ...initial.timings, prepareAt: now() } })) return;
@@ -593,6 +676,10 @@ export class NativeDispatcher {
     if (this.workspaceReserved(this.store.getSession(sessionId))) return Promise.reject(this.workspaceBusy());
     if (run.sessionId !== sessionId || run.native?.intent !== 'steer') throw new AppError('RUN_NOT_FOUND', 'The steer message does not exist', 404);
     if (run.native.delivery !== 'queued') return Promise.resolve(run);
+    // Draining: a steer waits like any other send. A boundary wait could hold the restart for the rest of the
+    // turn; the steer stays queued instead, goes to its turn if the drain ends without a restart, and becomes
+    // the next message after one (the store's recovery), as a steer a restart caught before writing does.
+    if (this.draining) { this.drainHeldSteers.set(runId, sessionId); return Promise.resolve(run); }
     const task = this.runtime.withSession(sessionId, async () => {
       let current = this.store.getRun(runId);
       if (current.native?.delivery !== 'queued') return current;
@@ -1387,7 +1474,7 @@ export class NativeDispatcher {
     let accepted: Run | undefined;
     // A backend that replaces its turn itself gets the follow-up straight away. Should it never
     // reach the CLI, the run is still first in the queue and the stop below goes ahead as before.
-    if (submit && !stop && session.terminalId && await this.native.supportsSendNow?.(session) === true) {
+    if (submit && !stop && !this.draining && session.terminalId && await this.native.supportsSendNow?.(session) === true) {
       accepted = this.acceptFollowUp(submit, promotedRunId);
       if (accepted.native && !isSlashCommand(accepted.native) && accepted.native.delivery === 'queued' && accepted.state === 'queued') {
         await this.execute(accepted.id, { now: true });

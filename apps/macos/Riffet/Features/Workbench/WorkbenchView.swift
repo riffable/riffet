@@ -473,9 +473,9 @@ struct WorkbenchView: View {
         }
         // What this window has on screen is what the reader has seen (`UnreadStore`).
         .onChange(of: covered ? nil : workbench.selected?.id, initial: true) { _, id in
-            UnreadStore.shared.show(id, in: ObjectIdentifier(workbench))
+            UnreadStore.shared.show(id, in: workbench)
         }
-        .onDisappear { UnreadStore.shared.show(nil, in: ObjectIdentifier(workbench)) }
+        .onDisappear { UnreadStore.shared.show(nil, in: workbench) }
     }
 
     /// How far a page rises over the drawn header above it, which it covers with its own bar

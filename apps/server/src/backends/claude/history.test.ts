@@ -184,6 +184,34 @@ describe('Claude transcript title', () => {
   });
 });
 
+describe('Claude transcript goal', () => {
+  it('follows /goal through its goal_status rows and steps aside after the next prompt', async () => {
+    const condition = '让解析器测试全部通过';
+    const goalRow = (attachment: Record<string, unknown>, at: string) => ({ type: 'attachment', uuid: `g-${at}`, timestamp: at, isSidechain: false, attachment: { type: 'goal_status', condition, ...attachment } });
+    const file = transcriptFile([
+      goalRow({ met: false, sentinel: true }, '2026-10-04T05:00:00.000Z'),
+      { type: 'user', uuid: 'cmd', timestamp: '2026-10-04T05:00:00.000Z', message: { role: 'user', content: `<command-name>/goal</command-name>\n<command-message>goal</command-message>\n<command-args>${condition}</command-args>` } },
+      { type: 'system', subtype: 'local_command', uuid: 'out', timestamp: '2026-10-04T05:00:00.000Z', content: `<local-command-stdout>Goal set: ${condition}</local-command-stdout>` },
+      { type: 'user', uuid: 'hook', timestamp: '2026-10-04T05:00:00.000Z', isMeta: true, message: { role: 'user', content: `A session-scoped Stop hook is now active with condition: "${condition}".` } },
+    ]);
+    const transcript = new ClaudeTranscript(session, 'native-session');
+    await transcript.setFile(file);
+    expect(transcript.goal).toEqual({ objective: condition, status: 'active', updatedAt: '2026-10-04T05:00:00.000Z' });
+    // The Stop hook's note to the model stays out of the conversation.
+    expect(transcript.allEvents().filter(event => event.type === 'user_message_chunk').map(event => (event.data.content as { text: string }).text)).toEqual([`/goal ${condition}`]);
+
+    appendFileSync(file, `${JSON.stringify(goalRow({ met: false, reason: '还有两个用例失败' }, '2026-10-04T05:01:00.000Z'))}\n`);
+    await transcript.refresh();
+    expect(transcript.goal).toMatchObject({ status: 'active', reason: '还有两个用例失败' });
+    appendFileSync(file, `${JSON.stringify(goalRow({ met: true, reason: '全部通过', iterations: 2, durationMs: 90_400, tokens: 152_907 }, '2026-10-04T05:02:00.000Z'))}\n`);
+    await transcript.refresh();
+    expect(transcript.goal).toEqual({ objective: condition, status: 'complete', reason: '全部通过', tokensUsed: 152_907, seconds: 90, updatedAt: '2026-10-04T05:02:00.000Z' });
+    appendFileSync(file, `${JSON.stringify(user({ uuid: 'u2', at: '2026-10-04T05:03:00.000Z', text: '接着更新文档' }))}\n`);
+    await transcript.refresh();
+    expect(transcript.goal).toBeUndefined();
+  });
+});
+
 describe('Claude tool result images', () => {
   const toolUse = (id: string, name: string, input: unknown) => ({ type: 'assistant', uuid: `a-${id}`, timestamp: '2026-10-04T05:00:01.000Z', message: { id: `msg-${id}`, role: 'assistant', content: [{ type: 'tool_use', id, name, input }] } });
   const toolResult = (id: string, content: unknown) => ({ type: 'user', uuid: `r-${id}`, timestamp: '2026-10-04T05:00:02.000Z', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, content }] } });

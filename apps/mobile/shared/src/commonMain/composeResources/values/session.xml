@@ -135,6 +135,8 @@
     <string name="session_band_last_30_days">近 30 天</string>
     <string name="session_band_earlier">更早</string>
     <string name="session_filter_all">全部</string>
+    <string name="session_filter_unread">未读</string>
+    <string name="session_mark_all_seen">全部标为已读</string>
     <string name="session_band_waiting">待处理</string>
     <string name="session_all_projects">全部项目</string>
     <string name="session_search_placeholder">搜索会话、项目与消息</string>

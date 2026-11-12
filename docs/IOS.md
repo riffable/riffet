@@ -167,7 +167,15 @@ iOS host façade + Swift 状态订阅（薄适配层）
 
 常驻 SSE 不作为锁屏实时提醒的保证。iOS 会暂停一般后台应用，短期后台执行只用于完成必要工作；系统提供的后台任务也不是持续连接替代品。参见 [Preparing your UI to run in the background](https://developer.apple.com/documentation/uikit/preparing-your-ui-to-run-in-the-background)。
 
-正式版通过 `Workbench` 观察真实任务变化，在用户授权后发送本地通知，并按服务器/会话/事件去重；点击通知只在对应服务器源匹配时打开目标会话。首版沿用当前“不引入公网推送中继”的范围：前台实时同步、重新打开时恢复。若需要 App 挂起/退出后也收到远端任务提醒，需要另行设计 APNs provider、设备注册和服务端投递，不将 BGTask 或静默推送包装为可靠常驻通信。APNs 同样不是绝对送达保证。参见 [User Notifications](https://developer.apple.com/documentation/usernotifications)。
+App 在前台时，`Workbench` 观察真实任务变化，在用户授权后发送本地通知，并按服务器/会话/事件去重；点击通知只在对应服务器源匹配时打开目标会话。
+
+App 挂起或退出后的提醒走 APNs，由服务器直接发给 Apple，不经中继，内容不另加密，因此没有 Notification Service Extension。只有主人配置了 APNs 密钥的服务器会推送，其余服务器照旧只在前台提醒。APNs 不保证送达，也不用 BGTask 或静默推送模拟常驻连接。参见 [User Notifications](https://developer.apple.com/documentation/usernotifications)。
+
+- **注册**：允许通知后注册远程通知（`aps-environment`：Debug 为 development，Release 为 production）。`RiffetPush` 把 `push: {token, topic, environment, activityStartToken?, activityToken?}` 随 `PUT /api/devices/me` 报给每台已配对的服务器；topic 是 bundle ID，environment 按签名描述文件判断（无描述文件的 App Store/TestFlight 包为 production）。实时活动的两个令牌只报给当前打开的服务器，其余服务器收到的报告不带它们；切换服务器或活动结束后重报。未允许通知时报 `push: null` 注销。令牌或授权变化、配对新服务器、回到前台时重报，内容未变的不重复发送。服务器回 `DeviceInfo.push`（`direct` / `none` 与原因），显示在「设置 → 通知」。
+- **识别服务器**：推送的 `userInfo.server` 是服务器持久的 `serverId`；每次上报同时读取 `/health` 记下 `serverId`（旧服务器为 `instanceId`）对应的源。找不到时，只有一台已配对服务器才用它，否则提示到对应设备查看。
+- **通知按钮**：分类在启动时注册——`riffet.permission`（`riffet.allow` / `riffet.deny`）、`riffet.plan`（`riffet.approve` / 打开）、`riffet.question`（打开）、`riffet.question.reply`（`riffet.reply` / 打开）、`riffet.finished`（`riffet.reply`）。允许、批准、回复要求设备解锁。按钮在后台用一个只为这台服务器开的短连接处理，不切换当前服务器。请求类推送带 `interactionId`、`revision`、`interactionKind` 和按按钮 ID 列出的 `answers`（`{action, selectedIds?, text?: true}`）：先读当前对话框，ID 与修订号都与通知一致、且对话框确有该动作时，才提交 `POST /api/sessions/:id/native/interaction`（新的 `requestId`；`text: true` 时输入作为 `otherText`）。完成通知的回复按推送带的 `configRevision` 发送为下一条消息。结果未确认、对话框已变化或请求失败时，另发一条本地通知，点开即进入该会话。开启「确认操作前验证本人」时，权限、计划与确认不在通知里提交。没有正文的推送用 App 内的 `push.waiting`、`push.finished`、`push.failed`、`push.interrupted` 文案，开始实时活动的提醒用 `push.activity.title` / `push.activity.body`。设备令牌存在 Keychain，首次解锁后后台可读。
+- **去重与撤回**：App 在前台时，当前服务器的推送不显示，由本地通知负责；其他服务器的照常显示。打开会话即撤回该会话（`thread-id`）的通知；会话列表刷新后，不再等待的会话的请求类推送也会撤回。
+- **实时活动**：Widget Extension `RiffetWidgets` 提供 `RiffetSummaryAttributes`（无属性字段，ContentState 为 `waiting`、`running`、`unseen` 三个整数），锁屏与灵动岛只显示三个计数和静态符号，点按回到任务列表。App 取得 `pushToStartTokenUpdates` 与每个活动的 `pushTokenUpdates`，作为 `activityStartToken` / `activityToken` 上报；活动由服务器推送开始、更新和结束。不需要 App Group。
 
 ## 5. 正式版功能矩阵与验收
 
@@ -187,7 +195,7 @@ iOS host façade + Swift 状态订阅（薄适配层）
 | 使用统计 | 今天、7/30/90 天、一年、全部及自定义日期；项目/Agent/模型多选与主子 Agent 筛选、估算/归档开关、七项趋势指标与三种分组、每日/时段热力图、模型排行、延迟分位数、轮次分页、CSV/JSON 分享 | 管理真实 API 补强验证统计读取与 CSV；设备 UI 读取和系统导出分别验收 |
 | Agent 与提供商 | Provider 增删改、Key 三态、默认 Agent/提供商、模型目录与探测、模型启用列表、CLI 设置、Cursor 网关 | API 补强覆盖 CRUD 与 Key 保留/更新/清除，Key 不回显；配置生效遵从 Mac 服务与 CLI 重启条件 |
 | Rules 与扩展 | Agent/提供商/项目范围，Rules/Skills/Commands/MCP/Hook/插件清单与运行状态、创建、文档编辑、内容 hash 校验、能力允许的插件动作 | API 补强验证创建与 hash 409；冲突需显式重新读取，不能静默覆盖；真实扩展执行依服务端能力 |
-| 系统能力 | 外观、备用应用图标（6 色，`setAlternateIconName`，系统会弹出确认）、通知权限/系统设置、本地任务提醒、打开通知定位、深链、准备任务快捷指令 | 通知由前台实际观察的事件触发，不提供 APNs；锁屏到前台恢复、权限与系统入口仍需真机 |
+| 系统能力 | 外观、备用应用图标（6 色，`setAlternateIconName`，系统会弹出确认）、通知权限/系统设置、本地任务提醒、APNs 后台推送与通知按钮、摘要实时活动、打开通知定位、深链、准备任务快捷指令 | 前台由实际观察的事件触发本地通知；后台推送需要服务器配置 APNs 密钥，送达、按钮与实时活动仍需真机验收 |
 | 网页隔离 | 普通 HTML 禁脚本；可视化 opaque iframe、可信 CSP、受限资源 allowlist、禁止 API/表单/外部导航；公开 KaTeX 页保留 HTTP CSP | 3 项 App-hosted WKWebView 测试通过，实际验证本地交互可用与越界请求被拒绝，不依赖外部 CDN |
 
 统计与管理模块位于 `Features/Management`，从「设置 → Agent 配置与用量」进入，接入真实 API。统计的日期语义、多选参数、指标和粒度遵循 Web；iPhone 使用原生表单、Swift Charts 和可查看准确值的热力图。自定义结束日包含在范围中，以当前时区下一日零点作为 API 排他终点，正确处理夏令时。筛选与同筛选刷新都有独立请求身份，分页和导出绑定已应用的筛选快照。桌面菜单与全局热键使用各平台入口。
@@ -250,7 +258,7 @@ iOS host façade + Swift 状态订阅（薄适配层）
 
 最终 App 为 0.4.0（build 4），`MinimumOSVersion` 为 18.0，已原位安装到 iOS 18。手机继续使用原 Mac 的 4337 服务。已停止旧验收服务和本轮 loopback fixture；正式服务与原 pane 保留。最终已仅移除临时 UI runner，保留 Riffet 与 Riffet 2，正式 App 按普通参数恢复竖屏启动，独立设备进程查询确认运行。开发签名到期需重签。截图位于 `apps/mobile/iosApp/build/acceptance/product-0.4/`，分别标注真实设备与模拟器。
 
-本轮真机验证保持现有草稿和真实会话，不发送真实 Agent 任务、不执行 Git 写操作。发送、配置回执、审批与恢复的客户端行为由独立 HTTP/SSE fixture 验证；真实 CLI 长任务、终端输入/租约、Git 写入、完整 VoiceOver 与切网/锁屏仍须分别做系统验收。已实现的本地通知没有 APNs 或后台常驻保证。
+本轮真机验证保持现有草稿和真实会话，不发送真实 Agent 任务、不执行 Git 写操作。发送、配置回执、审批与恢复的客户端行为由独立 HTTP/SSE fixture 验证；真实 CLI 长任务、终端输入/租约、Git 写入、完整 VoiceOver 与切网/锁屏仍须分别做系统验收。前台本地通知没有后台常驻保证；后台提醒依赖服务器配置的 APNs 密钥，送达需真机验收。
 
 ### 0.4.1–0.4.3 会话细节与滚动
 

@@ -252,7 +252,7 @@ struct ConversationRunDocks: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let goal = workbench.goal {
-                DisclosureGroup { VStack(alignment: .leading, spacing: 6) { Text(goal.objective); if let reason = goal.blockedReason { Text(reason).foregroundStyle(.orange) } }.font(.subheadline).padding(.top, 8) } label: { Label("目标 · \(goalStatusLabel(action: goal.action))", systemImage: "target").font(.subheadline) }
+                DisclosureGroup { VStack(alignment: .leading, spacing: 6) { Text(goal.objective); if goal.status == "blocked", let reason = goal.reason { Text(reason).foregroundStyle(.orange) } }.font(.subheadline).padding(.top, 8) } label: { Label("目标 · \(goalStatusLabel(goal: goal))", systemImage: "target").font(.subheadline) }
             }
             if !workbench.todos.isEmpty {
                 DisclosureGroup { ConversationTodoList(entries: workbench.todos).padding(.top, 8) } label: { Label(todoProgress(entries: workbench.todos), systemImage: "checklist").font(.subheadline) }

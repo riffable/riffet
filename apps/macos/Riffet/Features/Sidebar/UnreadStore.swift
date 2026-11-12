@@ -1,79 +1,106 @@
+import AppKit
 import Foundation
 import Observation
 import RiffetKit
 
-/// Which conversations finished work the reader has not seen, kept only on this Mac: the server has
-/// no read state. A conversation is unread when its last activity is newer than what the reader saw
-/// of it. What they saw is the activity it had while on screen in some window, stamped again as it
-/// leaves the screen; one never shown counts from the first launch, so an existing list does not
-/// start out all unread.
+/// Which conversations finished work the reader has not seen. The read state is the server's
+/// (`Session.seenActivityAt`, shared by every device); this keeps what each window has on screen and
+/// reports that conversation's activity as seen while this Mac is in front, as it arrives.
 @MainActor @Observable
 final class UnreadStore {
     static let shared = UnreadStore()
 
-    private static let key = "unreadViewedAt"
-    private static let seedKey = "unreadSeededAt"
-    private static let keep = 500
+    /// What this Mac kept before the server had read state: seconds since 1970 per session id. Uploaded
+    /// once to a server that has it, then removed.
+    private static let legacyKey = "unreadViewedAt"
+    private static let legacySeedKey = "unreadSeededAt"
 
     /// The conversation each window shows in its detail column, by window. Observed: a row whose
     /// conversation comes on screen loses its marker.
     private var shown: [ObjectIdentifier: String] = [:]
-    /// Seconds since 1970 per session id: the newest activity seen. Rows read it through `isUnread`
-    /// in the list's one pass and receive a Bool, so writing it re-renders no row by itself.
-    @ObservationIgnored private var seen: [String: Double]
-    /// Each session's parsed activity, by the string it came from: the list asks on every pass.
-    @ObservationIgnored private var activity: [String: (raw: String, at: Double)] = [:]
-    @ObservationIgnored private var saving = false
-    private let seededAt: Double
+    private var appActive = NSApplication.shared.isActive
+    /// Windows whose shown conversation is being watched for activity; one watch each.
+    @ObservationIgnored private var watching: Set<ObjectIdentifier> = []
+    @ObservationIgnored private var legacyUpload: LegacyUpload = UserDefaults.standard.object(forKey: legacyKey) == nil ? .done : .waiting
+    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+
+    private enum LegacyUpload { case waiting, watching, uploading, done }
 
     private init() {
-        let defaults = UserDefaults.standard
-        seen = defaults.dictionary(forKey: Self.key) as? [String: Double] ?? [:]
-        if defaults.object(forKey: Self.seedKey) == nil { defaults.set(Date().timeIntervalSince1970, forKey: Self.seedKey) }
-        seededAt = defaults.double(forKey: Self.seedKey)
+        let center = NotificationCenter.default
+        for (name, active) in [(NSApplication.didBecomeActiveNotification, true), (NSApplication.didResignActiveNotification, false)] {
+            observers.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.appActive = active }
+            })
+        }
     }
 
     func isUnread(_ session: Session) -> Bool {
-        guard let at = activityTime(session) else { return false }
-        if shown.values.contains(session.id) {
-            // On screen: what arrives is seen as it arrives.
-            if at > seen[session.id] ?? 0 { stamp(session.id, at) }
-            return false
-        }
-        return at > (seen[session.id] ?? seededAt)
+        !shown.values.contains(session.id) && SidebarModelKt.isDoneUnseen(session: session)
     }
 
-    /// [window] now shows [sessionId] (nil: a page, the home page, or the window went away). The one
-    /// it showed before is stamped as it leaves, with this Mac's clock or the newest activity known
-    /// for it, whichever is later, so work that arrived while it was open does not turn into a marker.
-    func show(_ sessionId: String?, in window: ObjectIdentifier) {
-        let left = shown[window]
-        guard left != sessionId else { return }
+    /// [workbench]'s window now shows [sessionId] (nil: a page, the home page, or the window went away).
+    func show(_ sessionId: String?, in workbench: Workbench) {
+        uploadLegacyWhenReady(workbench)
+        let window = ObjectIdentifier(workbench)
+        guard shown[window] != sessionId else { return }
         shown[window] = sessionId
-        if let left, !shown.values.contains(left) {
-            stamp(left, max(Date().timeIntervalSince1970, activity[left]?.at ?? 0))
+        if sessionId != nil, watching.insert(window).inserted { watch(workbench) }
+    }
+
+    /// Reports the shown conversation whenever it, its activity or this Mac's being in front changes.
+    private func watch(_ workbench: Workbench) {
+        let window = ObjectIdentifier(workbench)
+        guard shown[window] != nil else { watching.remove(window); return }
+        withObservationTracking {
+            guard appActive, let id = shown[window], let session = workbench.selected, session.id == id else { return }
+            _ = session.lastActivityAt
+            // The store skips a conversation with nothing unread and coalesces the rest.
+            DispatchQueue.main.async { workbench.store.markSeen(id: id) }
+        } onChange: { [weak self, weak workbench] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, let workbench else { return }
+                    self.watch(workbench)
+                }
+            }
         }
     }
 
-    private func activityTime(_ session: Session) -> Double? {
-        let raw = session.lastActivityAt ?? session.createdAt
-        if let cached = activity[session.id], cached.raw == raw { return cached.at }
-        guard let at = ServerTime.date(raw)?.timeIntervalSince1970 else { return nil }
-        activity[session.id] = (raw, at)
-        return at
-    }
-
-    private func stamp(_ id: String, _ at: Double) {
-        seen[id] = max(seen[id] ?? 0, at)
-        // Called from a list pass too: write once afterwards, not during the view update.
-        guard !saving else { return }
-        saving = true
-        DispatchQueue.main.async { [self] in
-            saving = false
-            if seen.count > Self.keep + 50 {
-                for (id, _) in seen.sorted(by: { $0.value < $1.value }).prefix(seen.count - Self.keep) { seen[id] = nil }
+    /// Uploads what this Mac saw before the server kept read state, once the list comes from a server
+    /// that does; the server keeps the later of the two.
+    private func uploadLegacyWhenReady(_ workbench: Workbench) {
+        guard legacyUpload == .waiting else { return }
+        let ready = withObservationTracking {
+            workbench.list.sessions.contains { $0.seenActivityAt != nil }
+        } onChange: { [weak self, weak workbench] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, let workbench, self.legacyUpload == .watching else { return }
+                    self.legacyUpload = .waiting
+                    self.uploadLegacyWhenReady(workbench)
+                }
             }
-            UserDefaults.standard.set(seen, forKey: Self.key)
+        }
+        guard ready else { legacyUpload = .watching; return }
+        legacyUpload = .uploading
+        let local = UserDefaults.standard.dictionary(forKey: Self.legacyKey) as? [String: Double] ?? [:]
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let pending = workbench.list.sessions.compactMap { session -> (String, String)? in
+            guard SidebarModelKt.isUnread(session: session), let at = local[session.id] else { return nil }
+            return (session.id, formatter.string(from: Date(timeIntervalSince1970: at)))
+        }
+        Task { [weak self] in
+            var failed = false
+            for (id, at) in pending {
+                do { try await workbench.store.mergeSeen(id: id, activityAt: at) } catch { failed = true }
+            }
+            guard let self else { return }
+            if failed { self.legacyUpload = .waiting; return }
+            UserDefaults.standard.removeObject(forKey: Self.legacyKey)
+            UserDefaults.standard.removeObject(forKey: Self.legacySeedKey)
+            self.legacyUpload = .done
         }
     }
 }

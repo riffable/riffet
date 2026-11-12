@@ -224,6 +224,28 @@ fun isActiveSession(session: Session): Boolean = session.state in activeStates
 /** The conversation's activity time, separate from metadata edits and session views. */
 fun activityAt(session: Session): String = session.lastActivityAt ?: session.createdAt
 
+// What a conversation asks of its reader; mirrors packages/contracts/src/session-attention.ts.
+
+/** Waiting on the reader: a permission, a question or a plan to approve. */
+fun needsYou(session: Session): Boolean = session.state == SessionState.WAITING
+
+/** A turn is underway and nothing is asked of the reader. */
+fun isRunningSession(session: Session): Boolean =
+    session.state == SessionState.STARTING || session.state == SessionState.RUNNING || session.state == SessionState.CANCELLING
+
+/**
+ * Activity arrived after the owner last saw the conversation. A missing `seenActivityAt` comes from a
+ * server without read state and reads as seen; archived conversations are never unread.
+ */
+fun isUnread(session: Session): Boolean {
+    val seen = session.seenActivityAt ?: return false
+    return session.archivedAt == null && instant(activityAt(session)) > instant(seen)
+}
+
+/** Finished, failed or stopped with output the owner has not seen yet: the rows the Unread filter lists. */
+fun isDoneUnseen(session: Session): Boolean =
+    (session.state == SessionState.IDLE || session.state == SessionState.FAILED || session.state == SessionState.INTERRUPTED) && isUnread(session)
+
 private val sessionOrder = Comparator<Session> { a, b -> compareSessions(a, b) }
 
 private val projectOrder = Comparator<ProjectGroup> { a, b ->

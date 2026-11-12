@@ -493,14 +493,35 @@ private struct NotificationSettingsView: View {
                     Text(RiffetNotifications.shared.authorization == .notDetermined ? "启用任务提醒" : "打开系统通知设置")
                         .riffetFont(.body).foregroundStyle(palette.accent)
                 }
-            } footer: { Text("App 被挂起后不再收到提醒。") }
+            } footer: { Text(pushStatus) }
             if let message = error ?? workbench.notificationError {
                 SettingsMessage(text: message)
             }
         }
         .navigationTitle(String(localized: "通知", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .task { await RiffetNotifications.shared.refreshAuthorization() }
+        .task {
+            await RiffetNotifications.shared.refreshAuthorization()
+            RiffetPush.shared.report(force: true)
+        }
         .onDisappear { error = nil; if let shown = workbench.notificationError { workbench.consumeNotificationError(shown) } }
+    }
+}
+
+extension NotificationSettingsView {
+    /// This server's answer about reaching the phone in the background; a server without push says nothing.
+    private var pushStatus: String {
+        guard let push = RiffetPush.shared.route(for: workbench.baseURL) else {
+            return String(localized: "App 被挂起后不再收到提醒。", bundle: .riffet)
+        }
+        if push.route == "direct" { return String(localized: "后台推送：可用", bundle: .riffet) }
+        let reason: String? = switch push.reason {
+        case "no_key": String(localized: "服务器未配置推送密钥", bundle: .riffet)
+        case "no_token": String(localized: "未允许通知", bundle: .riffet)
+        case "failed": push.detail
+        default: nil
+        }
+        guard let reason, !reason.isEmpty else { return String(localized: "后台推送：不可用", bundle: .riffet) }
+        return String(localized: "后台推送：不可用（\(reason)）", bundle: .riffet)
     }
 }
 

@@ -4,7 +4,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import type {
   ModelInfo, NativeActivity, NativeBackendId, NativeContext, NativeInteraction, NativeInteractionResponse,
-  NativeInteractionResult, NativeRunConfig, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget, Project, Run, Session,
+  NativeInteractionResult, NativeRunConfig, NativeRuntimeActionRequest, NativeRuntimeControl, NativeStatus, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget, Project, Run, Session, SessionGoal,
 } from '../../../../../packages/contracts/src/index.js';
 import type { CodexAppServerClient, CodexAppServerFactory, CodexAppServerOptions, JsonRpcServerRequest } from '../shared/codex-app-server.js';
 import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
@@ -38,6 +38,7 @@ import type { CodexLiveFeed, CodexThreadReader, CodexTurnPage, CodexTurnsRequest
 import type {
   TerminalEndpointState, CodexPendingInteraction, TurnRun, RpcThread, RpcTurn, RpcItem, RpcQuestion,
 } from './types.js';
+import { codexGoal, sameGoal } from './goal.js';
 import { requestIdString, toIso, titleCase, str, finiteToken, asRecord, asArray, canonicalJson, readFileTail } from './util.js';
 import {
   MAX_ROLLOUT_BYTES, normalizePermission, permissionOf, reportedTraePermission, sandboxPolicyOf, executableOf, runtimeFingerprintFor, runtimeScopeFingerprintFor, matchesRuntimeFingerprint, providerEnv, credentialDirFor, collaborationModeOf,
@@ -898,6 +899,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.contextWindowLookupAt = 0;
       this.adoptProviderTitle(typeof thread.name === 'string' ? thread.name : undefined);
       this.host.setNativeSessionId(this.session.id, thread.id);
+      void this.readGoal(thread.id);
       this.applyThreadStatus(thread.status);
       if (this.status.phase === 'offline' || this.status.phase === 'starting') this.setStatus({ ...this.status, phase: 'idle' });
       // Commit the durable endpoint only after Codex confirms the requested thread id. History is
@@ -3401,6 +3403,13 @@ export class CodexSessionRuntime implements CodexThreadReader {
       this.adoptProviderTitle(str(params.name));
       return;
     }
+    if (method === 'thread/goal/updated') {
+      // A status this version does not know leaves the shown goal as it is.
+      const goal = codexGoal(params.goal);
+      if (goal || params.goal === null) this.adoptGoal(goal);
+      return;
+    }
+    if (method === 'thread/goal/cleared') { this.adoptGoal(undefined); return; }
     if (method === 'item/started' || method === 'item/completed') {
       const item = asRecord(params.item) as RpcItem | undefined;
       const turnId = str(params.turnId);
@@ -3412,7 +3421,11 @@ export class CodexSessionRuntime implements CodexThreadReader {
         else this.activities.compactionCompleted(item, turnId, typeof params.completedAtMs === 'number' ? params.completedAtMs : undefined);
         return;
       }
-      if (item.type === 'userMessage') this.activities.noteUserMessage(turnId);
+      if (item.type === 'userMessage') {
+        this.activities.noteUserMessage(turnId);
+        // A finished goal steps aside once the conversation moves on, as on every backend.
+        if (method === 'item/started' && this.host.getSession(this.session.id).goal?.status === 'complete') this.adoptGoal(undefined);
+      }
       if (item.type === 'commandExecution') {
         this.activities.noteCommand(item, turnId);
         if (method === 'item/completed') this.activities.sync();
@@ -3851,6 +3864,24 @@ export class CodexSessionRuntime implements CodexThreadReader {
     for (const listener of this.listeners) {
       try { listener(control); } catch { /* A failing listener must not stop the native process observer. */ }
     }
+  }
+
+  /** Keep the session's goal equal to the thread's. */
+  private adoptGoal(goal: SessionGoal | undefined): void {
+    if (sameGoal(goal, this.host.getSession(this.session.id).goal)) return;
+    this.emit({ type: 'session', session: this.host.updateSession(this.session.id, { goal }) });
+  }
+
+  /** Reads the thread's goal once it is attached; a CLI without goals answers with an error and leaves the stored one. */
+  private async readGoal(threadId: string): Promise<void> {
+    try {
+      const response = await this.requireTransport().request<{ goal?: unknown }>('thread/goal/get', { threadId });
+      if (this.nativeSessionId !== threadId) return;
+      const goal = codexGoal(response.goal);
+      // The thread keeps a finished goal until the next one; here it already stepped aside unless it was still on show.
+      if (goal?.status === 'complete' && this.host.getSession(this.session.id).goal?.objective !== goal.objective) return;
+      this.adoptGoal(goal);
+    } catch { /* goals are an opt-in feature of the CLI */ }
   }
 
   /**

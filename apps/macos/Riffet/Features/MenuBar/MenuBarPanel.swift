@@ -148,7 +148,7 @@ struct MenuBarPanel: View {
         .scrollBounceBehavior(.basedOnSize)
         .frame(maxHeight: 420)
         .fixedSize(horizontal: false, vertical: true)
-        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: waiting.map(\.id) + [""] + running.map(\.id))
+        .animation(reduceMotion ? nil : Motion.standard, value: waiting.map(\.id) + [""] + running.map(\.id))
     }
 
     private func runningRow(_ workbench: Workbench, _ session: Session) -> some View {
@@ -276,7 +276,7 @@ struct WaitingRow: View {
         .padding(Space.sm)
         .background(palette.warningSoft, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
         // The dialog's buttons arrive after the row: the row opens to them instead of jumping.
-        .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: interaction?.id)
+        .animation(reduceMotion ? nil : Motion.standard, value: interaction?.id)
         .task(id: session.updatedAt) {
             interaction = try? await workbench.store.currentInteraction(sessionId: session.id)
         }
@@ -328,8 +328,18 @@ struct ServiceAlertBanner: View {
                         Text("已恢复").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
                     }
                 }
+                if live, let blockers = model.server.restartBlockers, !blockers.isEmpty || model.server.restartProblem != nil {
+                    Text(verbatim: ([model.server.restartProblem].compactMap { $0 } + blockers.map { "\($0.title.isEmpty ? backendLabel($0.backendId) : $0.title) · \($0.reasonLabel)" }).joined(separator: "\n"))
+                        .font(.riffet(size: S(11))).foregroundStyle(palette.fg3).lineLimit(4)
+                }
                 HStack(spacing: Space.xs) {
-                    if live && model.canRecoverService {
+                    if live, model.server.restartBlockers?.isEmpty == false || model.server.restartProblem != nil {
+                        // A restart waiting for these conversations: go ahead now, or give it up.
+                        Button("仍然重启") { model.server.restartAnyway() }
+                            .buttonStyle(SolidButtonStyle(kind: .secondary))
+                        Button("取消") { model.server.cancelRestart() }
+                            .buttonStyle(SolidButtonStyle(kind: .secondary))
+                    } else if live && model.canRecoverService {
                         Button(alert.actionTitle) {
                             guard shownAlert == alert else { return }
                             Task { await model.recoverService() }

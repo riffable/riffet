@@ -2039,6 +2039,26 @@
         }
       }
     },
+    "全部标为已读" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mark all as seen"
+          }
+        }
+      }
+    },
+    "未读" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unread"
+          }
+        }
+      }
+    },
     "全部 %lld 个模型" : {
       "localizations" : {
         "en" : {
@@ -10497,6 +10517,108 @@
     "结束并收回" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "End and take back" } }
+      }
+    },
+    "允许" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Allow" } }
+      }
+    },
+    "拒绝" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Deny" } }
+      }
+    },
+    "批准" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Approve" } }
+      }
+    },
+    "打开" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open" } }
+      }
+    },
+    "回复" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reply" } }
+      }
+    },
+    "结果未确认，请打开会话查看" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Result not confirmed. Open the conversation to check." } }
+      }
+    },
+    "回复没有发出" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reply not sent" } }
+      }
+    },
+    "后台推送：可用" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Background push: available" } }
+      }
+    },
+    "后台推送：不可用" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Background push: unavailable" } }
+      }
+    },
+    "后台推送：不可用（%@）" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Background push: unavailable (%@)" } }
+      }
+    },
+    "服务器未配置推送密钥" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The server has no push key" } }
+      }
+    },
+    "未允许通知" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Notifications not allowed" } }
+      }
+    },
+    "push.waiting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Needs your attention" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "需要你处理" } }
+      }
+    },
+    "push.finished" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "This turn is complete" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "本轮任务已完成" } }
+      }
+    },
+    "push.failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Task failed" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "任务失败" } }
+      }
+    },
+    "push.interrupted" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Task stopped" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "任务已停止" } }
+      }
+    },
+    "push.activity.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Riffet" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "Riffet" } }
+      }
+    },
+    "push.activity.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Tasks in progress" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "有任务在进行" } }
       }
     }
   },

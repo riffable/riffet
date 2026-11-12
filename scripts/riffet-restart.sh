@@ -14,6 +14,19 @@
 #   * Neither waits for turns in flight, and a restart marks the ones that were
 #     dispatching as interrupted.
 #
+# Waiting for idle asks the daemon what a restart would actually end
+# (GET /api/service/restartable) instead of "any session running": turns of
+# Claude, Cursor, Codex and Traex live in tmux or a detached app-server, survive
+# the restart and are picked up again after it, so they do not block. Writes
+# still being confirmed, and turns or background tasks of Droid, Pi, DSH and chat,
+# do. While waiting the daemon is drained (POST /api/service/drain): new messages
+# are accepted but stay queued and are sent after the restart, so the wait cannot
+# be extended for ever. On timeout the blocking sessions are printed, the drain
+# is lifted and the script exits 4. The drain is a lease in daemon memory that
+# every poll renews: the restart clears it, and a killed script leaves it to
+# lapse within 30s. A daemon without these endpoints falls back to the running
+# check. Cursor's half-streamed step is not kept across the restart; the turn is.
+#
 # A fourth failure mode is self-inflicted and cost this deployment a restart on
 # 2026-10-08: the idle wait means the script finishes only once the calling
 # agent's own turn ends, and the harness kills the tool process group at that
@@ -467,6 +480,54 @@ busy_sessions() {
   '
 }
 
+# One authenticated call to the daemon at $1: method $2, path $3, optional JSON body $4.
+# Prints the response body; fails on a non-2xx answer (a daemon that predates the
+# endpoint answers 404, which callers treat as "not supported").
+api_call() {
+  local base=$1 method=$2 path=$3 data=${4:-} jar login='' csrf='' token='' body='' args=()
+  [[ -n $data ]] && args=(-H 'content-type: application/json' --data-binary "$data")
+  jar=$(mktemp)
+  # A cookie session needs its CSRF token on every mutation; token-free loopback access may need no login.
+  [[ -f $STATE_DIR/access-token ]] && token=$(<"$STATE_DIR/access-token")
+  if [[ -n $token ]] && login=$(curl -fsS -m 3 -c "$jar" -X POST "$base/api/auth/login" \
+      -H 'content-type: application/json' \
+      --data-binary "$(printf '{"token":"%s"}' "$token")" 2>/dev/null); then
+    csrf=$(printf '%s' "$login" | "$NODE_BIN" -e 'try{process.stdout.write(String(JSON.parse(require("fs").readFileSync(0,"utf8")).csrfToken||""))}catch{}')
+  fi
+  body=$(curl -fsS -m 5 -b "$jar" -X "$method" ${csrf:+-H "x-csrf-token: $csrf"} ${args[@]+"${args[@]}"} "$base$path" 2>/dev/null) || body=''
+  rm -f "$jar"
+  [[ -n $body ]] || return 1
+  printf '%s' "$body"
+}
+
+# Drain on/off at $1: new messages stay queued instead of being delivered, so the idle
+# wait can end. A lease in the daemon's memory: it lapses unless renewed (each poll of
+# drained_blockers renews it), and the restart clears it.
+DRAIN_HOLDER="restart-$$-$RANDOM$RANDOM"
+set_drain() {
+  api_call "$1" POST /api/service/drain "{\"on\":$2,\"holder\":\"$DRAIN_HOLDER\"}" >/dev/null
+}
+
+# What a restart would end, from the daemon at $1. Prints "<count>\t<blockers>".
+# Turns of Claude, Cursor, Codex and Traex survive a restart and do not count.
+# Fails if the daemon predates /api/service/restartable. With $2 = drain, asks
+# through the drain call, which renews the lease and answers the same.
+restart_blockers() {
+  local body
+  if [[ ${2:-} == drain ]]; then
+    body=$(api_call "$1" POST /api/service/drain "{\"on\":true,\"holder\":\"$DRAIN_HOLDER\"}") || return 1
+  else
+    body=$(api_call "$1" GET /api/service/restartable) || return 1
+  fi
+  printf '%s' "$body" | "$NODE_BIN" -e '
+    const r = JSON.parse(require("fs").readFileSync(0, "utf8"));
+    const why = { delivery: "消息写入未确认", turn: "轮次执行中", background: "后台任务运行中" };
+    const b = r.blockers ?? [];
+    process.stdout.write(`${b.length}\t${b.map((x) => `${x.title || x.sessionId}（${x.backendId}：${why[x.reason] ?? x.reason}）`).join(" | ")}`);
+  '
+}
+drained_blockers() { restart_blockers "$1" drain; }
+
 # Options the script has no default for, carried over from the running daemon so
 # a restart does not silently drop LAN access (--allow-host), a project
 # (--workspace) or mDNS advertising (--no-mdns).
@@ -785,8 +846,16 @@ if [[ $RUNNING -eq 1 && $FORCE -eq 0 && ${WAIT_IDLE:-0} -gt 0 ]]; then
   running_url=$(daemon_base_url "$DAEMON_HOST" "$DAEMON_PORT")
   deadline=$(( SECONDS + WAIT_IDLE ))
   announced=0
+  drained=0
+  # Waiting is for what a restart would end, with delivery held back so the wait can finish.
+  # An older daemon has no such endpoint: fall back to "any running session".
+  query=busy_sessions
+  if restart_blockers "$running_url" >/dev/null 2>&1; then
+    if set_drain "$running_url" true; then query=drained_blockers; drained=1
+    else query=restart_blockers; warn "无法暂停派发新消息；等待期间新消息仍会送达"; fi
+  fi
   while :; do
-    if busy=$(busy_sessions "$running_url"); then
+    if busy=$($query "$running_url"); then
       count=${busy%%$'\t'*}; titles=${busy#*$'\t'}
     else
       warn "无法读取会话状态，无法确认是否有轮次在执行；继续重启可能打断它们"
@@ -794,15 +863,16 @@ if [[ $RUNNING -eq 1 && $FORCE -eq 0 && ${WAIT_IDLE:-0} -gt 0 ]]; then
     fi
     [[ $count == 0 ]] && break
     if (( SECONDS >= deadline )); then
-      fail 4 "仍有 $count 个会话在执行（${titles:-无标题}）；重启会打断这些轮次。稍后重试，或用 --force 强制重启、--wait-idle 0 跳过等待"
+      if (( drained == 1 )); then set_drain "$running_url" false || true; fi
+      fail 4 "仍有 $count 个会话无法安全重启（${titles:-无标题}）；重启会打断这些轮次。稍后重试，或用 --force 强制重启、--wait-idle 0 跳过等待"
     fi
     if (( announced == 0 )); then
-      log "等待 $count 个执行中的会话结束（上限 ${WAIT_IDLE}s；--force 可跳过）"
+      log "等待 $count 个会话结束（上限 ${WAIT_IDLE}s；--force 可跳过）：${titles:-无标题}"
       announced=1
     fi
     sleep 3
   done
-  if (( announced == 1 )); then log "会话已空闲，继续重启"; fi
+  if (( announced == 1 )); then log "可以重启，继续"; fi
 fi
 
 # --- start preflight --------------------------------------------------------
@@ -814,7 +884,7 @@ log "环境：node=${NODE_BIN} · PATH 来源=${PATH_SOURCE}"
 if [[ $RUNNING -eq 1 ]]; then
   log "停止服务（PID ${DAEMON_PID}）"
   "$NODE_BIN" "$ENTRY" stop --state-dir "$STATE_DIR" \
-    || fail 2 "停止失败；服务可能仍在运行，请看 $STATE_DIR/server.log"
+    || { if (( ${drained:-0} == 1 )); then set_drain "$running_url" false || true; fi; fail 2 "停止失败；服务可能仍在运行，请看 $STATE_DIR/server.log"; }
 else
   log "服务当前已停止，直接启动"
 fi

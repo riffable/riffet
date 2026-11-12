@@ -1,12 +1,12 @@
 import { memo, useContext, useMemo, useRef, useState, useSyncExternalStore, type ReactNode, type Ref } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeActivity, NativeJob } from '@contracts';
+import type { NativeActivity, NativeJob, SessionGoal } from '@contracts';
 import { IconCheck } from '@/components/icons';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { projectFileUrl } from '@/lib/files';
 import { cn } from '@/lib/utils';
 import { BackgroundTaskItem, BackgroundTasksNotLoaded } from './Activities';
-import { goalStatusLabel, todoEntries, todoSettled, type SessionGoal, type TodoEntry } from './ComposerDock';
+import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './ComposerDock';
 import { previewOnPlainClick } from './fileAccess';
 import type { TimelineItem } from './model';
 import { formatDuration, subagentTitle, transcriptDuration, backgroundTaskSummary, type SubagentBrief } from './SessionWorkActions';
@@ -44,9 +44,9 @@ const Plan = memo(function Plan({ goal, todos }: { goal?: SessionGoal; todos: To
   const visible = folds ? open.slice(0, PLAN_LIMIT - (settled.length ? 1 : 0)) : todos;
   const hiddenOpen = folds ? open.length - visible.length : 0;
   return (
-    <Section title={t`计划`} meta={todos.length ? `${done} / ${todos.length}` : goal ? goalStatusLabel(goal.action) : undefined}>
-      {goal?.objective && <p className={cn('mb-2 line-clamp-4 px-2 text-sm text-fg-2 wrap-anywhere', goal.action === 'blocked' && 'text-warning')} title={goal.objective}>{goal.objective}</p>}
-      {goal?.action === 'blocked' && goal.blockedReason && <p className="mb-2 line-clamp-3 px-2 text-2xs text-warning">{goal.blockedReason}</p>}
+    <Section title={t`计划`} meta={todos.length ? `${done} / ${todos.length}` : goal ? goalStatusLabel(goal) : undefined}>
+      {goal?.objective && <p className={cn('mb-2 line-clamp-4 px-2 text-sm text-fg-2 wrap-anywhere', goal.status === 'blocked' && 'text-warning')} title={goal.objective}>{goal.objective}</p>}
+      {goal?.status === 'blocked' && goal.reason && <p className="mb-2 line-clamp-3 px-2 text-2xs text-warning">{goal.reason}</p>}
       {todos.length > 0 && (
         <ul className="flex flex-col">
           {folds && settled.length > 0 && (

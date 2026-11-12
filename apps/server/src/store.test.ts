@@ -191,6 +191,31 @@ describe('session updates', () => {
       expect(store.updateSession(created.id, { state: 'starting' }).activeSince).not.toBe(running.activeSince);
     } finally { store.close(); }
   });
+
+  it('max-merges what was seen, writes nothing on a repeat, and keeps it across a reopen', () => {
+    const path = scratch();
+    writeLegacyDatabase(path);
+    const store = new Store(path);
+    const legacy = store.getSession('s-native');
+    expect(legacy.seenActivityAt).toBe(legacy.lastActivityAt);
+    const created = store.createSession({ projectId: 'p1', kind: 'native' });
+    expect(created.seenActivityAt).toBe(created.lastActivityAt);
+    store.updateSessionActivity(created.id, '2030-01-01T00:00:02.000Z');
+    const revision = store.listRevision;
+    expect(store.markSessionSeen(created.id, '2030-01-01T00:00:01.000Z')?.seenActivityAt).toBe('2030-01-01T00:00:01.000Z');
+    expect(store.markSessionSeen(created.id, '2030-01-01T00:00:01.000Z')).toBeUndefined();
+    expect(store.markSessionSeen(created.id, '2030-01-01T00:00:00.500Z')).toBeUndefined();
+    // Never past the conversation's own activity, whatever the reporting device's clock says.
+    expect(store.markSessionSeen(created.id, '2031-01-01T00:00:00.000Z')?.seenActivityAt).toBe('2030-01-01T00:00:02.000Z');
+    expect(store.markSessionSeen(created.id)).toBeUndefined();
+    expect(store.listRevision).toBe(revision + 2);
+    store.close();
+    const reopened = new Store(path);
+    try {
+      expect(reopened.getSession(created.id).seenActivityAt).toBe('2030-01-01T00:00:02.000Z');
+      expect(reopened.getSession('s-native').seenActivityAt).toBe(legacy.lastActivityAt);
+    } finally { reopened.close(); }
+  });
 });
 
 describe('conversation naming', () => {
@@ -252,6 +277,16 @@ describe('native backend session identity', () => {
     first.transitionNativeRun(oldUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', expectsTurnOutcome: true, nativeMessageId: 'receipt-two', nativeTurnId: 'turn-two' }, { state: 'interrupted', error: 'old outcome check' });
     first.transitionNativeRun(ambiguous.id, ['queued'], { delivery: 'input_sent', expectsTurnOutcome: true });
     first.transitionNativeRun(unreceipted.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', expectsTurnOutcome: true }, { state: 'interrupted' });
+    // Codex keeps its app-server through a restart: its observed turn waits for the daemon's record of the end.
+    const codex = first.createSession({ projectId: project.id, kind: 'native', backendId: 'codex', nativeSessionId: 'codex-thread' });
+    const codexObserved = first.acceptNativeRun(codex.id, 'codex-observed', input, { mode: 'default' });
+    const codexUnknown = first.acceptNativeRun(codex.id, 'codex-old-unknown', input, { mode: 'default' });
+    first.transitionNativeRun(codexObserved.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeMessageId: 'codex-receipt', nativeTurnId: 'codex-turn' }, { state: 'running' });
+    first.transitionNativeRun(codexUnknown.id, ['queued'], { delivery: 'uncertain', stage: 'turn_outcome_unknown', nativeMessageId: 'codex-receipt-2', nativeTurnId: 'codex-turn-2' }, { state: 'interrupted', error: 'old outcome check' });
+    // Droid dies with the service; recovery leaves its run to the idle/exit rules.
+    const droid = first.createSession({ projectId: project.id, kind: 'native', backendId: 'droid', nativeSessionId: 'droid-chat' });
+    const droidObserved = first.acceptNativeRun(droid.id, 'droid-observed', input, { mode: 'default' });
+    first.transitionNativeRun(droidObserved.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeMessageId: 'droid-receipt', nativeTurnId: 'droid-turn' }, { state: 'running' });
     first.close();
     const restored = new Store(file);
     try {
@@ -262,6 +297,9 @@ describe('native backend session identity', () => {
         expect(restored.getRun(run.id).error).toBeUndefined();
       }
       for (const run of [ambiguous, unreceipted]) expect(restored.getRun(run.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain' } });
+      expect(restored.getRun(codexObserved.id)).toMatchObject({ state: 'running', native: { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true, nativeTurnId: 'codex-turn' } });
+      expect(restored.getRun(codexUnknown.id)).toMatchObject({ state: 'interrupted', native: { delivery: 'uncertain', stage: 'turn_outcome_unknown' } });
+      expect(restored.getRun(droidObserved.id).native?.expectsTurnOutcome).toBeUndefined();
     } finally { restored.close(); }
   });
 

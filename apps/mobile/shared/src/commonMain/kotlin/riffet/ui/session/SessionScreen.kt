@@ -168,6 +168,7 @@ import riffet.ui.timeline.animateScrollToItemNear
 import riffet.ui.timeline.TimelinePresenter
 import riffet.ui.state.traced
 import riffet.ui.theme.LocalRiffetColors
+import riffet.ui.theme.visualWorkActive
 import riffet.ui.theme.localizedAppearanceTitle
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.LocalRiffetPageMotion
@@ -294,6 +295,9 @@ fun SessionScreen(
 
     // A live `session` frame updates the session in place; fall back to the host's copy until then.
     val current = selected?.takeIf { it.id == session.id } ?: session
+    // On screen in the foreground (resumed, the top page, the window focused): what arrives is seen, on every device.
+    val shown = visualWorkActive()
+    LaunchedEffect(current.id, current.lastActivityAt, shown) { if (shown) store.markSeen(current.id) }
     // What the reader last picked: a model or parameter change shows at once, before the server answers.
     val detail = controller?.state?.collectAsState()?.value
     val intended = detail?.intended(current) ?: current

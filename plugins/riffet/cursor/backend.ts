@@ -99,6 +99,7 @@ export const CURSOR_TRAITS: AgentTraits = {
   settlesSlashOnSubmit: true,
   untaggedEcho: true,
   reportsTurnOutcome: true,
+  survivesRestart: true,
   ownsSessionObservation: true,
   resumesByNativeId: true,
   terminalName: 'Cursor',

@@ -500,6 +500,17 @@ class SessionStore(
     /** Folds a server-returned [Session] into the list and the open session. */
     fun applySession(session: Session) = lists.applySession(session)
 
+    /** The conversation is shown in the foreground; call again when its activity moves while it stays shown. */
+    fun markSeen(id: String) = lists.markSeen(id)
+
+    /** Mark all as seen, for every conversation this device lists. */
+    @Throws(Exception::class)
+    suspend fun markAllSeen() = lists.markAllSeen()
+
+    /** Uploads a read time this device kept before the server had read state. */
+    @Throws(Exception::class)
+    suspend fun mergeSeen(id: String, activityAt: String) = lists.mergeSeen(id, activityAt)
+
     /** What deleting [id] would remove (its side chats), and why it cannot be deleted now. */
     @Throws(Exception::class)
     suspend fun deletionPreview(id: String): SessionDeletionPreview = try {
@@ -744,6 +755,12 @@ class SessionStore(
         sync.pause()
         lists.cancelPrefetch()
     }
+
+    /**
+     * Back from the background where the server pushed every alert itself: the next list read is a
+     * fresh baseline, so transitions from while away are not announced a second time.
+     */
+    fun forgetSessionStates() = lists.forgetStates()
 
     /** Writes the open transcript to the device now, e.g. as the app leaves the foreground. */
     fun flush() = sync.flush()

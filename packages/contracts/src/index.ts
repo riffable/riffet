@@ -18,6 +18,7 @@ export { PLUGIN_CAPABILITIES, PLUGIN_WEB_API_VERSION } from './plugin-packages.j
 export { AGENT_ICON_ROUTE, COMMAND_SCOPES, PLUGIN_CLIENTS, PLUGIN_ID, VIEW_INSTANCES, VIEW_LOCATIONS, isContributionOf } from './plugins.js';
 export { NATIVE_BACKEND_IDS, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID_MAX, isAgentOfPlugin, isBuiltinBackendId, isNativeBackendId, isPluginAgentId } from './agent-ids.js';
 export type { BuiltinBackendId, NativeBackendId, PluginAgentId } from './agent-ids.js';
+export { isDoneUnseen, isRunningSession, isUnread, needsYou } from './session-attention.js';
 
 /**
  * Wire-protocol capabilities, advertised by `GET /health` and `GET /api/bootstrap`. A server that
@@ -77,13 +78,37 @@ export type DeviceCapability = typeof DEVICE_CAPABILITIES[number];
  * `installationId` is random, made once per app installation: pairing again from the same installation
  * replaces the earlier record instead of adding another.
  */
-export interface DeviceReport { platform: DevicePlatform; appVersion: string; capabilities: DeviceCapability[]; allowControl: boolean; installationId?: string; }
+export interface DeviceReport {
+  platform: DevicePlatform; appVersion: string; capabilities: DeviceCapability[]; allowControl: boolean; installationId?: string;
+  /** Absent leaves the stored registration as it is; `null` removes it. */
+  push?: DevicePushRegistration | null;
+}
+/**
+ * APNs registration an iOS device sends in `PUT /api/devices/me`. `topic` is the app's bundle id. The Live
+ * Activity tokens are optional: `activityStartToken` is the push-to-start token, `activityToken` the running
+ * summary activity's own; a report without `activityToken` means no activity is running.
+ */
+export interface DevicePushRegistration { token: string; topic: string; environment: 'production' | 'sandbox'; activityStartToken?: string; activityToken?: string; }
+/**
+ * How the server reaches a device in the background: `direct` pushes to APNs with the owner's key. `none` says
+ * why not: the server holds no key, the device registered no token, or APNs refused the last push (`detail`).
+ */
+export interface DevicePushRoute { route: 'direct' | 'none'; reason?: 'no_key' | 'no_token' | 'failed'; detail?: string; }
 /** `GET /api/devices`. A device that never reported has no capabilities and does not allow control. */
 export interface DeviceInfo {
   id: string; name: string; platform?: DevicePlatform; appVersion?: string; createdAt: string; lastSeenAt?: string;
   /** Whether the device's stream is open now. */
   online: boolean; capabilities: DeviceCapability[]; allowControl: boolean;
+  /** Present for iOS devices and any device that registered for push. */
+  push?: DevicePushRoute;
 }
+/**
+ * `GET /api/settings/push`: the APNs auth key this server pushes with. The key itself is never returned.
+ * `status` is `invalid` once APNs refused a token signed with it.
+ */
+export interface PushKeyStatus { configured: boolean; keyId?: string; teamId?: string; status?: 'ok' | 'invalid'; detail?: string; }
+/** `PUT /api/settings/push`: `key` is the `.p8` file's PEM text. */
+export interface PushKeyInput { keyId: string; teamId: string; key: string; }
 /**
  * `GET /api/backends/:id/loaded-extensions?profileId&projectId`: the MCP servers and skills a launch of
  * that backend profile in that project loads, as the CLI reports them. Riffet's own server is left out.
@@ -218,6 +243,11 @@ export interface Session {
   /** Most recent message activity; observing or editing session metadata does not change it. */
   lastActivityAt?: string;
   /**
+   * How far the owner has read: the `lastActivityAt` a client last showed in the foreground, on any
+   * device. Only moves forward. Missing on a server that predates read state, which reads as seen.
+   */
+  seenActivityAt?: string;
+  /**
    * When the conversation last entered an active state (starting, running, waiting, cancelling).
    * Active conversations sort by it, so a streaming turn does not reshuffle them; only meaningful
    * while the state is active.
@@ -247,7 +277,21 @@ export interface Session {
    * nothing here sends, launches or reclaims it until the hold is released (docs/TERMINAL-SESSIONS.md).
    */
   terminalHold?: SessionTerminalHold;
+  /** The conversation's current goal, kept by the server from whichever backend owns it; missing when there is none. */
+  goal?: SessionGoal;
   createdAt: string; updatedAt: string;
+}
+export type SessionGoalStatus = 'active' | 'paused' | 'blocked' | 'usage_limited' | 'budget_limited' | 'complete';
+/** A completion condition the agent keeps working toward (Claude Code `/goal`, Codex thread goals, DSH goals). */
+export interface SessionGoal {
+  objective: string;
+  status: SessionGoalStatus;
+  /** Why it is blocked, or the latest check's verdict. */
+  reason?: string;
+  tokensUsed?: number;
+  tokenBudget?: number;
+  seconds?: number;
+  updatedAt: string;
 }
 export interface SessionTerminalHold {
   since: string;

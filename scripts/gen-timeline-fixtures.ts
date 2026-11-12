@@ -88,9 +88,10 @@ const sessionMax = {
   backendId: 'codex', backendProfileId: 'codex-default', nativeSessionId: 'chat-1', previousNativeSessionIds: ['chat-0'], quickExitCount: 1,
   nativeRuntime: { address: '127.0.0.1:4500', fingerprint: 'fp-runtime', attachment: { hook: 'acme.route', id: 'route-1' } }, cursorSessionId: 'chat-1', terminalId: 'term-1',
   resumePicker: false, model: 'gpt-5', mode: 'default', approval: 'on-request', archivedAt: at(9), error: 'exit 1', configRevision: 3, configPending: true,
-  creationFingerprint: 'fp-create', lastActivityAt: at(8), activeSince: at(7), pinnedAt: at(6), pinRank: 1,
+  creationFingerprint: 'fp-create', lastActivityAt: at(8), seenActivityAt: at(7), activeSince: at(7), pinnedAt: at(6), pinRank: 1,
   origin: { kind: 'fork', sessionId: 'session-0', runId: 'run-0', groupId: 'group-1', templateId: 'template-1', scheduleId: 'schedule-1' },
-  handedOffTo: 'session-2', toolGroups: ['riffet.core', 'device:phone-1'], extensionsOff: ['mcp:docs', 'skill:review'], terminalHold: { since: at(8), pid: 4242 }, createdAt: at(0), updatedAt: at(9),
+  handedOffTo: 'session-2', toolGroups: ['riffet.core', 'device:phone-1'], extensionsOff: ['mcp:docs', 'skill:review'], terminalHold: { since: at(8), pid: 4242 },
+  goal: { objective: '让解析器测试全部通过', status: 'budget_limited', reason: '还有两个用例失败', tokensUsed: 120000, tokenBudget: 100000, seconds: 900, updatedAt: at(8) }, createdAt: at(0), updatedAt: at(9),
   terminalAppearance: { foreground: '#202020', background: '#fafafa' },
 } satisfies Required<Session>;
 const sessionMin = { id: 'session-1', projectId: 'project-1', kind: 'native', title: '', tags: [], state: 'idle', mode: 'default', createdAt: at(0), updatedAt: at(0) } satisfies Min<Session>;

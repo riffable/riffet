@@ -1870,6 +1870,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -1924,6 +1925,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -1975,6 +1986,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2029,6 +2041,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2080,6 +2102,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2134,6 +2157,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2185,6 +2218,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2239,6 +2273,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2290,6 +2334,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2344,6 +2389,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2395,6 +2450,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2449,6 +2505,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2500,6 +2566,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2554,6 +2621,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2605,6 +2682,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2659,6 +2737,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2710,6 +2798,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2764,6 +2853,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2815,6 +2914,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2869,6 +2969,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -2920,6 +3030,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2974,6 +3085,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3025,6 +3146,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3079,6 +3201,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3130,6 +3262,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3184,6 +3317,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3235,6 +3378,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3289,6 +3433,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3340,6 +3494,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3394,6 +3549,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3445,6 +3610,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3499,6 +3665,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3550,6 +3726,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3604,6 +3781,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -3655,6 +3842,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3709,6 +3897,16 @@
     "terminalHold": {
       "since": "text",
       "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
       "futureField": 4
     },
     "createdAt": "text",
@@ -4627,6 +4825,7 @@
       "configPending": true,
       "creationFingerprint": "text",
       "lastActivityAt": "text",
+      "seenActivityAt": "text",
       "activeSince": "text",
       "pinnedAt": "text",
       "pinRank": 1,
@@ -4681,6 +4880,16 @@
       "terminalHold": {
         "since": "text",
         "pid": 1,
+        "futureField": 4
+      },
+      "goal": {
+        "objective": "text",
+        "status": "active",
+        "reason": "text",
+        "tokensUsed": 1,
+        "tokenBudget": 1,
+        "seconds": 1,
+        "updatedAt": "text",
         "futureField": 4
       },
       "createdAt": "text",
@@ -5814,6 +6023,7 @@
       "configPending": true,
       "creationFingerprint": "text",
       "lastActivityAt": "text",
+      "seenActivityAt": "text",
       "activeSince": "text",
       "pinnedAt": "text",
       "pinRank": 1,
@@ -5868,6 +6078,16 @@
       "terminalHold": {
         "since": "text",
         "pid": 1,
+        "futureField": 4
+      },
+      "goal": {
+        "objective": "text",
+        "status": "active",
+        "reason": "text",
+        "tokensUsed": 1,
+        "tokenBudget": 1,
+        "seconds": 1,
+        "updatedAt": "text",
         "futureField": 4
       },
       "createdAt": "text",
@@ -6580,6 +6800,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.platform=ios": {
@@ -6590,6 +6818,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.platform=mac": {
@@ -6600,6 +6836,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=clipboard.read": {
@@ -6610,6 +6854,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=clipboard.write": {
@@ -6620,6 +6872,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=location": {
@@ -6630,6 +6890,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=photo": {
@@ -6640,6 +6908,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=open_url": {
@@ -6650,6 +6926,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=alarm": {
@@ -6660,6 +6944,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=screen.observe": {
@@ -6670,6 +6962,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=screen.act": {
@@ -6680,6 +6980,14 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceReport#$.capabilities[]=app.launch": {
@@ -6690,6 +6998,43 @@
     ],
     "allowControl": true,
     "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
+  "DeviceReport#$.push=branch1": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text",
+    "push": null,
+    "futureField": 4
+  },
+  "DeviceReport#$.push.environment=sandbox": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "sandbox",
+      "activityStartToken": "text",
+      "activityToken": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceCallOutcome": {
@@ -6717,6 +7062,12 @@
       "notify"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.platform=ios": {
@@ -6731,6 +7082,12 @@
       "notify"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.platform=mac": {
@@ -6745,6 +7102,12 @@
       "notify"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=clipboard.read": {
@@ -6759,6 +7122,12 @@
       "clipboard.read"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=clipboard.write": {
@@ -6773,6 +7142,12 @@
       "clipboard.write"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=location": {
@@ -6787,6 +7162,12 @@
       "location"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=photo": {
@@ -6801,6 +7182,12 @@
       "photo"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=open_url": {
@@ -6815,6 +7202,12 @@
       "open_url"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=alarm": {
@@ -6829,6 +7222,12 @@
       "alarm"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=screen.observe": {
@@ -6843,6 +7242,12 @@
       "screen.observe"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=screen.act": {
@@ -6857,6 +7262,12 @@
       "screen.act"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceInfo#$.capabilities[]=app.launch": {
@@ -6871,6 +7282,72 @@
       "app.launch"
     ],
     "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
+  "DeviceInfo#$.push.route=none": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "none",
+      "reason": "no_key",
+      "detail": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
+  "DeviceInfo#$.push.reason=no_token": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_token",
+      "detail": "text",
+      "futureField": 4
+    },
+    "futureField": 4
+  },
+  "DeviceInfo#$.push.reason=failed": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "failed",
+      "detail": "text",
+      "futureField": 4
+    },
     "futureField": 4
   },
   "DeviceCall": {
@@ -7310,6 +7787,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -7359,6 +7837,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "future-value",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -7630,6 +8117,7 @@
       "configPending": true,
       "creationFingerprint": "text",
       "lastActivityAt": "text",
+      "seenActivityAt": "text",
       "activeSince": "text",
       "pinnedAt": "text",
       "pinRank": 1,
@@ -7679,6 +8167,15 @@
       "terminalHold": {
         "since": "text",
         "pid": 1
+      },
+      "goal": {
+        "objective": "text",
+        "status": "future-value",
+        "reason": "text",
+        "tokensUsed": 1,
+        "tokenBudget": 1,
+        "seconds": 1,
+        "updatedAt": "text"
       },
       "createdAt": "text",
       "updatedAt": "text"
@@ -8228,7 +8725,14 @@
       "future-value"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceInfo#unknown-enum": {
     "id": "text",
@@ -8241,7 +8745,12 @@
     "capabilities": [
       "future-value"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "future-value",
+      "reason": "future-value",
+      "detail": "text"
+    }
   },
   "DeviceCall#unknown-enum": {
     "callId": "text",

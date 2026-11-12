@@ -49,8 +49,8 @@ class IOSHost {
         AppLog.log("app", "background failure ${error::class.simpleName}: ${error.message}")
     }
     private val scope = MainScope() + failures
-    private val tokens = createDeviceTokenStore()
-    private val clientConfig = RiffetClientConfig(features = listOf("quick-chat", "pi-agent"))
+    internal val tokens = createDeviceTokenStore()
+    internal val clientConfig = RiffetClientConfig(features = listOf("quick-chat", "pi-agent"))
 
     private val _store = MutableStateFlow<SessionStore?>(null)
     val store: StateFlow<SessionStore?> = _store.asStateFlow()

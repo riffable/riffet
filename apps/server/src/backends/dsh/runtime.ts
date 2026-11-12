@@ -14,6 +14,7 @@ import { firstHumanMessage, firstMessageTitlePatch, providerTitlePatch } from '.
 import { childHasExited, waitForExit } from '../shared/child-process.js';
 import type { NativeBackendHost, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding } from '../types.js';
 import { projectDshEvent } from './events.js';
+import { dshGoalChange } from './goal.js';
 import type { ActivityLedger } from '../../journal/activity.js';
 import { JOB_ACTIVITY_PREFIX, STOP_DEADLINE_MS, noteKilled, type JobWire } from './activities.js';
 import { DshTranscriptSource } from './journal-source.js';
@@ -932,7 +933,10 @@ export class DshProfileRuntime {
     // names a resumed conversation (DSH's own title only ever fills a placeholder).
     const humanMessage = firstHumanMessage(projected);
     if (humanMessage) this.nameFromMessage(state, humanMessage);
-    this.followSubagents(state, projected.filter(item => this.remember(state, item)));
+    const fresh = projected.filter(item => this.remember(state, item));
+    this.followSubagents(state, fresh);
+    const goal = dshGoalChange(state.host.getSession(state.workbenchSessionId).goal, fresh);
+    if (goal !== undefined) notifyListeners(state, { type: 'session', session: state.host.updateSession(state.workbenchSessionId, { goal: goal ?? undefined }) });
     // The committed record carries the provider's exact accounting even when no `usage` chunk
     // was streamed, and it commits before the attempt's `end` frame, so the running attempt can
     // still adopt the number rather than settling on an estimate.

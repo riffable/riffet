@@ -20,7 +20,15 @@ import riffet.contracts.TimelinePage
 data class HealthProtocol(val version: Int, val features: List<String> = emptyList())
 
 @Serializable
-data class RiffetHealth(val ok: Boolean = false, val version: String? = null, val protocol: HealthProtocol? = null)
+data class RiffetHealth(
+    val ok: Boolean = false,
+    val version: String? = null,
+    val protocol: HealthProtocol? = null,
+    /** The running server process; older servers' pushes name their server by it. */
+    val instanceId: String? = null,
+    /** Stable across restarts; push payloads name their server by it. */
+    val serverId: String? = null,
+)
 
 /** `GET /health`, the one public endpoint that names the server's protocol. */
 @Throws(Exception::class)

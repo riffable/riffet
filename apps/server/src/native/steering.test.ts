@@ -121,6 +121,18 @@ describe('native steering through HTTP and durable dispatch', () => {
     expect(h.store.getRun(second.json<Run>().id).state).toBe('completed');
   });
 
+  it('holds a steer while draining for a restart and sends it to its turn once the drain ends', async () => {
+    const h = harness();
+    h.dispatch.drain(true);
+    const held = (await h.submit()).json<Run>();
+    expect(held).toMatchObject({ state: 'queued', native: { intent: 'steer', delivery: 'queued' } });
+    expect(h.native.steerRun).not.toHaveBeenCalled();
+    expect(h.dispatch.restartability().restartable).toBe(true);
+    h.dispatch.drain(false);
+    await vi.waitFor(() => expect(h.store.getRun(held.id)).toMatchObject({ native: { intent: 'steer', delivery: 'observed', nativeTurnId: 'turn-1' } }));
+    expect(h.native.steerRun).toHaveBeenCalledTimes(1);
+  });
+
   it('returns one receipt for concurrent retries and still retrieves it after the target and attachment disappear', async () => {
     const h = harness();
     const extra = { attachments: [{ id: 'attachment-1' }] };

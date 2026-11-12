@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { DEVICE_CAPABILITIES, DEVICE_PLATFORMS, type DeviceCall, type DeviceCallReceipt, type DeviceCapability, type DeviceFile, type DeviceInfo, type DeviceLease, type DeviceReport, type Session, type RiffetWakeup } from '../../../../packages/contracts/src/index.js';
-import { DeviceCallOutcomeSchema } from '../../../../packages/contracts/src/schema/devices.js';
+import { DEVICE_CAPABILITIES, DEVICE_PLATFORMS, type DeviceCall, type DeviceCallReceipt, type DeviceCapability, type DeviceFile, type DeviceInfo, type DeviceLease, type DevicePlatform, type DevicePushRegistration, type DevicePushRoute, type DeviceReport, type Session, type RiffetWakeup } from '../../../../packages/contracts/src/index.js';
+import { DeviceCallOutcomeSchema, DevicePushRegistrationSchema } from '../../../../packages/contracts/src/schema/devices.js';
 import type { Auth, PublicDevice } from '../auth.js';
 import { AppError, parseInput } from '../errors.js';
 import type { Store } from '../store.js';
@@ -59,6 +59,8 @@ export class DeviceChannel {
   private readonly offRevoked: () => void;
   /** What conversations did on device screens; written by the MCP service, read by the session route. */
   readonly audit: DeviceAuditLog;
+  /** How a device is reached in the background (docs/DEVICES.md §3「后台推送」); the push service sets it once it exists. */
+  pushRoute: (deviceId: string, platform?: DevicePlatform) => DevicePushRoute | undefined = () => undefined;
 
   constructor(private readonly deps: DeviceChannelDeps) {
     this.audit = new DeviceAuditLog(deps.store);
@@ -81,6 +83,9 @@ export class DeviceChannel {
     return () => { this.listeners.delete(listener); };
   }
 
+  /** A device's push route reads differently: a push failed or succeeded again, or the key changed. */
+  pushRouteChanged(): void { this.changed(); }
+
   private changed(): void {
     for (const listener of [...this.listeners]) { try { listener(); } catch { /* a closed stream drops itself */ } }
   }
@@ -96,17 +101,22 @@ export class DeviceChannel {
   online(deviceId: string): boolean { return Boolean(this.streams.get(deviceId)?.size); }
 
   info(device: PublicDevice): DeviceInfo {
+    const push = this.pushRoute(device.id, device.platform);
     return {
       id: device.id, name: device.name, ...(device.platform ? { platform: device.platform } : {}), ...(device.appVersion ? { appVersion: device.appVersion } : {}),
       createdAt: device.createdAt, ...(device.lastSeenAt ? { lastSeenAt: device.lastSeenAt } : {}),
       online: this.online(device.id), capabilities: device.capabilities ?? [], allowControl: device.allowControl === true,
+      ...(push ? { push } : {}),
     };
   }
 
   list(): DeviceInfo[] { return this.deps.auth.listDevices().map(device => this.info(device)); }
 
-  /** `PUT /api/devices/me`. Capability ids this server does not know are dropped, not refused. */
-  report(deviceId: string, raw: unknown): DeviceInfo {
+  /**
+   * `PUT /api/devices/me`. Capability ids this server does not know are dropped, not refused. `features` is the
+   * request's client features header, kept so pushes cover only what this device's lists show.
+   */
+  report(deviceId: string, raw: unknown, features?: string[]): DeviceInfo {
     const body = (raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}) as Record<string, unknown>;
     if (!(DEVICE_PLATFORMS as readonly unknown[]).includes(body.platform)) throw new AppError('INVALID_DEVICE_REPORT', 'platform must be android, ios or mac');
     if (typeof body.appVersion !== 'string' || body.appVersion.length > 64 || /[\0\r\n]/.test(body.appVersion)) throw new AppError('INVALID_DEVICE_REPORT', 'appVersion must be a string of at most 64 characters');
@@ -118,7 +128,8 @@ export class DeviceChannel {
       if (typeof body.installationId !== 'string' || !/^[A-Za-z0-9-]{1,100}$/.test(body.installationId)) throw new AppError('INVALID_DEVICE_REPORT', 'installationId must be at most 100 letters, digits or hyphens');
       report.installationId = body.installationId;
     }
-    const info = this.info(this.deps.auth.reportDevice(deviceId, report));
+    if (body.push !== undefined) report.push = body.push === null ? null : pushRegistration(body.push);
+    const info = this.info(this.deps.auth.reportDevice(deviceId, report, features));
     this.changed();
     return info;
   }
@@ -293,6 +304,17 @@ export class DeviceChannel {
     this.write({ ...this.read(), [callId]: { ...call, fileIds: [...call.fileIds ?? [], attachment.id] } });
     return { fileId: attachment.id, name: attachment.name, mimeType: attachment.mimeType, size: attachment.size };
   }
+}
+
+/** `DeviceReport.push`: hex tokens and a bundle id as the topic. */
+function pushRegistration(raw: unknown): DevicePushRegistration {
+  const push = parseInput(DevicePushRegistrationSchema, raw, 'INVALID_DEVICE_REPORT');
+  for (const field of ['token', 'activityStartToken', 'activityToken'] as const) {
+    const value = push[field];
+    if (value !== undefined && !/^[0-9A-Fa-f]{16,400}$/.test(value)) throw new AppError('INVALID_DEVICE_REPORT', `push.${field} must be an APNs token in hex`);
+  }
+  if (!/^[A-Za-z0-9.-]{1,155}$/.test(push.topic)) throw new AppError('INVALID_DEVICE_REPORT', 'push.topic must be the app\'s bundle id');
+  return push;
 }
 
 function leaseOf(wakeup: RiffetWakeup): DeviceLease {

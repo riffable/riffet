@@ -1,5 +1,5 @@
 import { describe,it,expect,vi } from 'vitest';
-import { createHash,createHmac } from 'node:crypto';
+import { createHash,createHmac,generateKeyPairSync } from 'node:crypto';
 import QRCode from 'qrcode';
 import { mkdtempSync,readFileSync,rmSync,statSync } from 'node:fs';
 import { mkdtemp,rm } from 'node:fs/promises';
@@ -11,6 +11,7 @@ import { createPairingCode } from './pairing.js';
 import { createApp } from './app.js';
 import { request as httpRequest } from 'node:http';
 import type { AdbRunner } from './riffet-mcp/adb.js';
+import type { ApnsTransport } from './push/apns.js';
 
 const TOKEN='test-access-token-with-more-than-24-characters';
 function makeAuth() { const dir=mkdtempSync(join(tmpdir(),'riffet-devices-')); return {dir,auth:new Auth(dir,{token:TOKEN})}; }
@@ -368,6 +369,97 @@ describe('device channel',()=>{
       booted.orchestration.cancelWakeup(later.id,session.id);
       await until(()=>online.events.some(item=>item.event==='lease-cancel'&&item.data.id===later.id));
       expect(booted.devices.leases(phone.device.id).map(lease=>lease.id)).toEqual([early.id]);
+    } finally { await booted.close();await rm(booted.dir,{recursive:true,force:true}); }
+  });
+});
+
+describe('background push',()=>{
+  const MASTER='device-push-test-master-token-with-more-than-24-characters';
+  const KEY_ID='ABCDE12345',TEAM_ID='TEAM123456';
+  const pem=()=>generateKeyPairSync('ec',{namedCurve:'prime256v1'}).privateKey.export({type:'pkcs8',format:'pem'}).toString();
+  type Sent={environment:string;token:string;headers:Record<string,string>;payload:any};
+  async function bootPush(answer:(sent:Sent)=>{status:number;reason?:string},stateDir?:string) {
+    const dir=stateDir??await mkdtemp(join(tmpdir(),'riffet-device-push-'));
+    const sent:Sent[]=[];
+    const transport:ApnsTransport=async request=>{const item={...request,payload:JSON.parse(request.body)};sent.push(item);return answer(item);};
+    const booted=await createApp({stateDir:dir,token:MASTER,cliPath:'/nonexistent/cursor-agent',push:{transport,retryDelaysMs:[1,1],timing:{finishedDelayMs:30,debounceMs:1,interactionRetryMs:1}}});
+    await booted.dispatch.close();
+    const login=await booted.app.inject({method:'POST',url:'/api/auth/login',payload:{token:MASTER}});
+    const cookie={cookie:String(login.headers['set-cookie']).split(';')[0]!,'x-csrf-token':login.json().csrfToken};
+    return {...booted,dir,sent,cookie,close:()=>booted.app.close()};
+  }
+  const until=async(check:()=>boolean,ms=3000)=>{const deadline=Date.now()+ms;while(!check()&&Date.now()<deadline)await new Promise(resolve=>setTimeout(resolve,5));expect(check()).toBe(true);};
+  const registration={token:'ab'.repeat(32),topic:'io.github.riffable.iphone',environment:'sandbox'};
+  const report=(push:unknown)=>({platform:'ios',appVersion:'1.0',capabilities:['notify'],allowControl:false,push});
+  // A turn: running long enough to be read, then idle with new activity.
+  const finish=async(booted:Awaited<ReturnType<typeof bootPush>>,id:string)=>{
+    booted.store.updateSession(id,{state:'running'});
+    await new Promise(resolve=>setTimeout(resolve,20));
+    booted.store.updateSession(id,{state:'idle',lastActivityAt:new Date(Date.now()+1000).toISOString()});
+  };
+
+  // The key is accepted and never returned; a registration outlives a restart, and a token APNs calls gone is forgotten.
+  it('keeps the key private, persists the registration and forgets a gone token',async()=>{
+    let booted=await bootPush(()=>({status:410,reason:'Unregistered'}));
+    try {
+      const phone=booted.auth.issueDevice('iPhone');
+      const bearer={authorization:`Bearer ${phone.token}`};
+      expect((await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:bearer,payload:report(registration)})).json().push).toEqual({route:'none',reason:'no_key'});
+      const key=pem();
+      const saved=await booted.app.inject({method:'PUT',url:'/api/settings/push',headers:booted.cookie,payload:{keyId:KEY_ID,teamId:TEAM_ID,key}});
+      expect(saved.json()).toEqual({configured:true,keyId:KEY_ID,teamId:TEAM_ID,status:'ok'});
+      expect((await booted.app.inject({method:'PUT',url:'/api/settings/push',headers:booted.cookie,payload:{keyId:KEY_ID,teamId:TEAM_ID,key:'not a key'}})).statusCode).toBe(400);
+      expect(statSync(join(booted.dir,'apns-key.json')).mode&0o777).toBe(0o600);
+      const listed=await booted.app.inject({method:'GET',url:'/api/devices',headers:booted.cookie});
+      expect(listed.json().devices.find((device:{id:string})=>device.id===phone.device.id).push).toEqual({route:'direct'});
+      for(const body of [listed.body,(await booted.app.inject({method:'GET',url:'/api/settings/push',headers:booted.cookie})).body]){
+        expect(body).not.toContain(registration.token);
+        expect(body).not.toContain('PRIVATE KEY');
+      }
+
+      const stateDir=booted.dir;
+      await booted.close();
+      booted=await bootPush(()=>({status:410,reason:'Unregistered'}),stateDir);
+      expect(booted.auth.devicePush(phone.device.id)).toEqual(registration);
+      const project=booted.store.createProject(booted.dir,'push');
+      const session=booted.store.createSession({projectId:project.id,kind:'native',title:'Refactor'});
+      await finish(booted,session.id);
+      await until(()=>booted.sent.length>0);
+      expect(booted.sent[0]).toMatchObject({environment:'sandbox',token:registration.token,headers:{'apns-topic':registration.topic,'apns-push-type':'alert'}});
+      expect(booted.sent[0]!.headers.authorization).toMatch(/^bearer [\w-]+\.[\w-]+\.[\w-]+$/);
+      await until(()=>booted.auth.devicePush(phone.device.id)===undefined);
+      expect(readFileSync(join(booted.dir,'devices.json'),'utf8')).not.toContain(registration.token);
+      expect(booted.devices.list().find(device=>device.id===phone.device.id)?.push).toEqual({route:'none',reason:'no_token'});
+      // An explicit null unregisters; absence keeps what is stored.
+      await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:bearer,payload:report(registration)});
+      await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:bearer,payload:report(undefined)});
+      expect(booted.auth.devicePush(phone.device.id)).toEqual(registration);
+      await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:bearer,payload:report(null)});
+      expect(booted.auth.devicePush(phone.device.id)).toBeUndefined();
+    } finally { await booted.close();await rm(booted.dir,{recursive:true,force:true}); }
+  });
+
+  // One finish is one push, however often the same state is written again; a conversation read in time gets none.
+  it('pushes a finished conversation once and skips one read before the delay',async()=>{
+    const booted=await bootPush(()=>({status:200}));
+    try {
+      await booted.app.inject({method:'PUT',url:'/api/settings/push',headers:booted.cookie,payload:{keyId:KEY_ID,teamId:TEAM_ID,key:pem()}});
+      const phone=booted.auth.issueDevice('iPhone');
+      await booted.app.inject({method:'PUT',url:'/api/devices/me',headers:{authorization:`Bearer ${phone.token}`},payload:report(registration)});
+      const project=booted.store.createProject(booted.dir,'push');
+      const session=booted.store.createSession({projectId:project.id,kind:'native',title:'Refactor'});
+      const read=booted.store.createSession({projectId:project.id,kind:'native',title:'Read'});
+      await finish(booted,session.id);
+      await finish(booted,read.id);
+      booted.store.updateSession(read.id,{seenActivityAt:booted.store.getSession(read.id).lastActivityAt});
+      for(const title of ['Refactor 2','Refactor 3'])booted.store.updateSession(session.id,{state:'idle',title});
+      await until(()=>booted.sent.length>0);
+      await new Promise(resolve=>setTimeout(resolve,150));
+      expect(booted.sent).toHaveLength(1);
+      expect(booted.sent[0]!.headers).toMatchObject({'apns-collapse-id':`${session.id}:finished`,'apns-priority':'10'});
+      const {serverId}=(await booted.app.inject({url:'/health'})).json() as {serverId:string};
+      expect(serverId).toMatch(/^[0-9a-f-]{36}$/);
+      expect(booted.sent[0]!.payload).toMatchObject({server:serverId,sessionId:session.id,kind:'finished',configRevision:0,aps:{category:'riffet.finished','thread-id':session.id,alert:{title:'Refactor 3',subtitle:'push'}}});
     } finally { await booted.close();await rm(booted.dir,{recursive:true,force:true}); }
   });
 });

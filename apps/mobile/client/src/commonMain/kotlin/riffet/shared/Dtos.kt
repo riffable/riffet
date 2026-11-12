@@ -15,6 +15,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
+import riffet.contracts.DevicePushRoute
 import riffet.contracts.Run
 import riffet.contracts.NativeTurnTarget
 import riffet.contracts.NativeBackendId
@@ -224,6 +225,8 @@ data class PublicDevice(
     val online: Boolean = false,
     val capabilities: List<String> = emptyList(),
     val allowControl: Boolean = false,
+    /** Absent from a server without background push. */
+    val push: DevicePushRoute? = null,
 )
 
 @Serializable

@@ -9,7 +9,7 @@ import { isNativeBackendId } from './backends/registry.js';
 import { acceptedTitlePatch, firstHumanMessage, isPlaceholderTitle } from './session-title.js';
 import type { IndexedMessage } from './search/messages.js';
 import { Journal } from './journal/journal.js';
-import { LEGACY_DEFAULT_BACKEND_ID, applyNativeSessionIdPatch, awaitsHookTurnOutcome, legacyMirrorFields, normalizeRunIdentity, normalizeSessionIdentity, requestedNativeSessionId, type IdentifiedRun, type IdentifiedSession } from './session-identity.js';
+import { LEGACY_DEFAULT_BACKEND_ID, applyNativeSessionIdPatch, restartObservation, legacyMirrorFields, normalizeRunIdentity, normalizeSessionIdentity, requestedNativeSessionId, type IdentifiedRun, type IdentifiedSession } from './session-identity.js';
 
 const now = () => new Date().toISOString();
 const SESSION_SNAPSHOTS_KEPT = 50;
@@ -282,6 +282,18 @@ export class Store {
     // stored timestamps exactly as it did before the migration existed.
     if (!this.getSetting('session-last-activity-backfill-v1', false)) {
       try { this.backfillSessionActivity(); } catch (error) { console.error('[riffet] store migration session-last-activity-backfill-v1 failed; retrying on next start:', error); }
+    }
+    // Read state starts with everything already there seen, so an upgrade does not mark every old
+    // conversation unread. Retried on the next start like the backfill above, and only after it: seen read
+    // from a `lastActivityAt` that backfill later moves forward would turn old conversations unread.
+    if (this.getSetting('session-last-activity-backfill-v1', false) && !this.getSetting('session-seen-backfill-v1', false)) {
+      try {
+        this.transaction(() => {
+          this.db.exec(`UPDATE sessions SET json=json_set(json,'$.seenActivityAt',COALESCE(json_extract(json,'$.lastActivityAt'),json_extract(json,'$.createdAt')))
+            WHERE json_extract(json,'$.seenActivityAt') IS NULL`);
+          this.setSetting('session-seen-backfill-v1', true);
+        });
+      } catch (error) { console.error('[riffet] store migration session-seen-backfill-v1 failed; retrying on next start:', error); }
     }
     // The in-memory prune counter never reaches a conversation that is not written to after a
     // restart, so every start trims all of them once. Indexed per session, so a second start is cheap.
@@ -588,7 +600,7 @@ export class Store {
     return this.transaction(() => {
       this.getProject(input.projectId);
       const stamp = now();
-      const item = normalizeSessionIdentity({...input, id: randomUUID(), title: input.title || 'New conversation', ...clientTitleSource(input.title), tags: input.tags ?? [], state: 'idle', mode: input.mode ?? 'agent', lastActivityAt: input.lastActivityAt ?? stamp, createdAt: stamp, updatedAt: stamp});
+      const item = normalizeSessionIdentity({...input, id: randomUUID(), title: input.title || 'New conversation', ...clientTitleSource(input.title), tags: input.tags ?? [], state: 'idle', mode: input.mode ?? 'agent', lastActivityAt: input.lastActivityAt ?? stamp, seenActivityAt: input.lastActivityAt ?? stamp, createdAt: stamp, updatedAt: stamp});
       this.assertNativeIdentityAvailable(item);
       this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(item.id, item.projectId, JSON.stringify(item)); this.listsChanged();
       return item;
@@ -674,7 +686,7 @@ export class Store {
       const item = normalizeSessionIdentity(merged);
       // Pollers re-write the same state every tick; bumping `updatedAt` for that would push a fresh
       // `session` frame to every open stream several times a second.
-      if (Object.entries(item).every(([key, value]) => key === 'updatedAt' || JSON.stringify((current as unknown as Record<string, unknown>)[key]) === JSON.stringify(value))) return current;
+      if ([...new Set([...Object.keys(item), ...Object.keys(current)])].every(key => key === 'updatedAt' || JSON.stringify((current as unknown as Record<string, unknown>)[key]) === JSON.stringify((item as unknown as Record<string, unknown>)[key]))) return current;
       if (ACTIVE_SESSION_STATES.has(item.state) && !ACTIVE_SESSION_STATES.has(current.state)) item.activeSince = item.updatedAt;
       const identityChanged = current.kind !== item.kind || current.backendId !== item.backendId || current.nativeSessionId !== item.nativeSessionId;
       const restored = Boolean(current.archivedAt) && Object.prototype.hasOwnProperty.call(patch, 'archivedAt') && patch.archivedAt === undefined;
@@ -701,6 +713,25 @@ export class Store {
     const session = this.updateSession(id, { lastActivityAt: stamp });
     this.appendEvent(id, 'session', { session });
     return session;
+  }
+  /**
+   * Records that the owner has seen the conversation up to `activityAt` (its `lastActivityAt` when
+   * omitted). Max-merge: never moves back and never past the conversation's own activity, so retries
+   * and late reports from another device write nothing. Returns the session only when it changed.
+   */
+  markSessionSeen(id: string, activityAt?: string): IdentifiedSession | undefined {
+    return this.transaction(() => {
+      const current = this.getSession(id);
+      const latest = Date.parse(current.lastActivityAt ?? current.createdAt);
+      const requested = activityAt === undefined ? latest : Date.parse(activityAt);
+      if (!Number.isFinite(requested) || !Number.isFinite(latest)) return undefined;
+      const target = Math.min(requested, latest);
+      if (current.seenActivityAt && Date.parse(current.seenActivityAt) >= target) return undefined;
+      const session = this.updateSession(id, { seenActivityAt: new Date(target).toISOString() });
+      // Open views of the conversation hear of it like any other change to the record; activity is not moved.
+      this.appendEvent(id, 'session', { session });
+      return session;
+    });
   }
   /**
    * Name a conversation after a message a client just accepted (see `session-title.ts`). Central
@@ -846,6 +877,7 @@ export class Store {
           configRevision: 0,
           creationFingerprint,
           lastActivityAt: stamp,
+          seenActivityAt: stamp,
           createdAt: stamp,
           updatedAt: stamp,
         };
@@ -856,6 +888,9 @@ export class Store {
       // Derive the first Run's config from the immutable request, never the live Session model,
       // which may have been changed by the time an HTTP retry arrives.
       const run = this.acceptNativeRun(session.id, commandId, normalizedInput, config, session.configRevision ?? 0, undefined, contextSnapshots);
+      // The owner wrote the first message of a conversation opened from the composer; one opened on
+      // their behalf (an automation, a channel, an attempt) starts unseen.
+      if (!stored && !normalized.origin) this.markSessionSeen(session.id);
       return { session: this.getSession(session.id), run };
     });
   }
@@ -1198,12 +1233,16 @@ export class Store {
                 state: 'interrupted',
                 error: 'Local service restarted while native terminal delivery was in progress; the prompt was not resent.',
               });
-            } else if ((delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId
-              && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? ''))
-              && awaitsHookTurnOutcome(run.native.backendId)
-              && (run.native.expectsTurnOutcome || run.native.intent === 'steer')) {
-              // A missing Stop is an unknown outcome, not an unknown send. Keep the durable receipt
-              // and observe this turn; current idle/exit can close it interrupted without replaying it.
+            } else if (restartObservation(run.native.backendId) === 'hook'
+              && (delivery === 'observed' || delivery === 'uncertain' && run.native.nativeMessageId
+                && ['runtime_exit', 'turn_outcome_unknown'].includes(run.native.stage ?? ''))
+              && (run.native.expectsTurnOutcome || run.native.intent === 'steer')
+              || restartObservation(run.native.backendId) === 'daemon' && delivery === 'observed' && run.native.nativeTurnId && !run.native.queueReleasedAt) {
+              // A missing Stop, or a turn end the daemon recorded while we were down, is an unknown outcome,
+              // not an unknown send. Keep the durable receipt and wait for this turn's end; the provider's
+              // record (transcript end rows, the daemon's turn status) or the current idle/exit closes it
+              // without replaying it. Waiting for the outcome gives the first read of the thread the longer
+              // idle grace. A Codex receipt already settled as uncertain stays as it was.
               this.transitionNativeRun(run.id, [delivery], { delivery: 'observed', stage: 'executing', expectsTurnOutcome: true }, {
                 state: 'running', error: undefined,
               });

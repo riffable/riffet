@@ -26,7 +26,7 @@
 **非目标**
 
 - 不在 Android/iOS 上运行服务端、tmux、Agent CLI 或模型。手机作为能力端时，规划与决策仍由服务端会话里的 Agent 完成。
-- 不做公网推送中继（FCM / Firebase Functions）。见「通知」；可预知的设备调用由预约唤醒覆盖（DEVICES.md §3）。
+- 不做公网推送中继（FCM / Firebase Functions，或替用户转发 APNs 的中转服务）。iOS 的后台通知由持有 APNs 密钥的服务端直接发给 Apple，Android 仍靠前台服务。见「通知」；可预知的设备调用由预约唤醒覆盖（DEVICES.md §3）。
 - 不自建 TLS 与证书指纹固定。见「网络接入」。
 - 不做多用户、多租户或共享访问。Riffet 是单用户的。
 - 不把时间线投影下沉到服务端。见「时间线的第二实现」。
@@ -81,7 +81,7 @@ iPhone 也经 SKIE 导出的 `RiffetKit` 复用 `:client`，并已配置 iosArm6
 | S6 | `package.json` | `qrcode-terminal`、`bonjour-service` |
 | S7 | `tsconfig.json` | `"exclude": ["apps/mobile"]` |
 | S8 | `.gitignore` | Gradle 产物与签名密钥；仅统一 debug key `apps/mobile/androidApp/signing/debug.keystore` 纳入版本控制 |
-| S9 | `apps/server/src/backends/transcript-window.ts`、`app.ts` | 原生流与历史接口接受 `window`（字节预算，夹在 320 KiB–4 MiB）；流接受 `generation` + `after` 从锚点续传；新增 `GET /api/sessions/:id/native/snapshot`。见「设备上的会话副本」 |
+| S9 | transcript-window.ts（已随 sync v3 删除）、`apps/server/src/app.ts` | 原生流与历史接口接受 `window`（字节预算，夹在 320 KiB–4 MiB）；流接受 `generation` + `after` 从锚点续传；新增 `GET /api/sessions/:id/native/snapshot`。见「设备上的会话副本」 |
 
 ### Mac 换地址
 
@@ -131,7 +131,7 @@ CSRF 防的是浏览器自动携带的 ambient credential。Bearer 令牌是显�
 客户端只需要 `/api/sessions/:id/native/stream`，不需要 `/api/sessions/:id/stream`。
 原生流已经包含 `reset`、`append`、`runs`、`context`、`metrics`、`status`、`session`、`job`、`subagent` 九类消息，覆盖对话视图的全部输入。
 
-`append` 带 `previous`：这条连接自上一个 `reset` 以来写出的最大事件序号（`native/streamSequence.ts`，未知时省略）。
+`append` 带 `previous`：这条连接自上一个 `reset` 以来写出的最大事件序号（native/streamSequence.ts，已随 sync v3 删除；未知时省略）。
 客户端在传输层按同样规则累计自己收到的帧（app 的 `SequenceTally`，web 的 `sequenceTally`），对不上就说明有帧丢了
 或没解析出来，立即重连让服务端补发。序号本身不连续，没有这个字段客户端无从发现缺帧，只能等下一次重连碰巧补上。
 旧服务端不带 `previous`，客户端只在字段存在时比较。
@@ -309,16 +309,21 @@ tab 里面推进去的页面（设置的各个分区）由 `PageHost` 报给 `Ta
 待办（`plan`）与**目标**都不是消息，所以两者都放在输入卡上方的 dock 里，顺序是
 **目标 → 待办 → 队列**：目标是这个会话「为了什么」，待办是为它服务的清单，队列是还没发出去的话。
 
-目标的来源与其他后端不同，这是必须写下来的原因：**DeepSeek Harness 把目标留在它自己那一侧**，
-客户端只能从它自己的工具调用里读（`create_goal` / `update_goal` / `get_goal`）。因此：
+目标由服务端统一给出：`Session.goal`（`objective`、`status`、`reason`、用量），客户端只读快照，
+不再从时间线推断。来源按后端：
 
-1. 服务端的 DSH 投影把这类调用标成 `kind: "goal"`，`title` 是 objective（没有 objective 的那次调用
-   给出阶段名，如「已完成」），原始参数照旧放 `rawInput`。
-2. **只有部分调用带 objective**：`pause` / `resume` / `complete` / `blocked` 只是一个动词。
-   客户端必须把最近一次出现过的 objective 往前带，否则「已完成」会把会话的目的顶掉。
-   两端同一条规则：`latestGoal`（`GoalDock.kt` / `ComposerDock.tsx`）。
-3. 已完成的目标准入与已完成的待办相同：**出现下一个用户回合之后就不再占位**；`blocked` 要显示
-   harness 给的 `blocked_reason`，那是唯一需要人去处理的阶段。
+1. **Claude Code `/goal`**：转录里 `type: "attachment"`、`attachment.type: "goal_status"` 的行
+   （`backends/claude/goal.ts`）。设定是 `met: false` + `sentinel`；检查未通过是 `met: false` + `reason`，
+   仍为进行中、`reason` 是最新判定；达成是 `met: true`（带 `iterations` / `durationMs` / `tokens`）；
+   `/goal clear` 是 `met: true` + `sentinel`。旧版本只有 `Goal set:` / `Goal cleared:` 的命令输出，同样识别。
+   设定时给模型的 `isMeta` 行（"A session-scoped Stop hook is now active…"）照旧不显示。
+2. **Codex 线程目标**：app-server 的 `thread/goal/updated` / `thread/goal/cleared`，接上线程时再
+   `thread/goal/get` 一次（`backends/codex/goal.ts`）；不改用户的 `[features] goals` 配置。
+3. **DeepSeek Harness**：目标留在 harness 一侧，只能从 `create_goal` / `update_goal` 的参数里读
+   （`backends/dsh/goal.ts`）。`pause` / `resume` / `complete` / `blocked` 不带 objective，沿用上一次的。
+
+已完成的目标与已完成的待办相同：**出现下一个用户回合之后就不再占位**，这条也在服务端做。dock 保持一行，
+状态词各端走 i18n；只有 `usage_limited` / `budget_limited` 时在状态后附 token 用量；时间线不加提示行。
 
 ### DSH 的工具行必须有文件名
 
@@ -377,7 +382,7 @@ tab 里面推进去的页面（设置的各个分区）由 `PageHost` 报给 `Ta
 
 2026-10-09：App 与 Web 均支持 `reset.replaceFrom`（含该序号的权威尾部边界）。同一 `chatId` 与
 `history.generation` 下，只替换该范围，保留更早的已加载消息和游标；草稿结算会移除被替代的全部分片，
-同 ID 的正文更新也会生效。`core/ResidentTranscript.kt` 是主会话、子 Agent 和后台预取共用的规则。
+同 ID 的正文更新也会生效。ResidentTranscript.kt（已删除）是主会话、子 Agent 和后台预取共用的规则。
 `NativeTimelineModel.reconcile` 保留任务状态与未变化行的引用；现有 LazyColumn、稳定 key、上翻预取和
 阅读／贴底模式继续使用，不因普通尾部校正重建整个列表。
 
@@ -463,7 +468,7 @@ App 仍显式请求 3 MiB 预算，并把**看过的会话全部存在本机**�
 | --- | --- | --- |
 | 令牌存储 | SharedPreferences，令牌用 Android Keystore 的 AES-GCM 密钥加密；该文件不进备份与设备迁移 | Keychain：令牌、签发源与服务器地址同项存储，ThisDeviceOnly |
 | 生物识别 | 「交互与输入 › 确认操作前验证本人」，本机保存，开启需验证一次（`ApprovalVerification`）。`BiometricPrompt` 允许锁屏密码回退（API 30+ 弱生物识别或设备凭据，API 29 设备凭据，API 28 仅生物识别）。只拦权限、计划与确认三类，问题和选项不拦；失败或期间请求变化则不提交。开启后通知不再带审批按钮，点开在 App 内验证；开启前发出的按钮会改为提示到 App 处理 | `LocalAuthentication` 本人验证，允许设备密码回退；失败不提交 |
-| 通知 | 前台服务 | UserNotifications：App 观察到真实变化后发本地通知；无 APNs 或挂起后持续接收保证 |
+| 通知 | 前台服务 | 前台：App 观察到真实变化后发本地通知。后台：服务端持有 APNs 密钥时直接推送（DEVICES.md §3「后台推送」），没有密钥则挂起后收不到 |
 | 数学公式 | `WebView` 加载服务端 KaTeX 页 | 原生页面中的非持久化 `WKWebView` 加载公开 KaTeX 页 |
 | 文件与分享 | 既有下载中心与系统分享；分享进 App 接受文本与任意文件（`SEND` / `SEND_MULTIPLE`，沿用输入框的附件数量与大小上限，一个读不了整批不加） | 原生文件/照片导入、下载、Quick Look 与系统分享 |
 | 持久化与生命周期 | Android 既有实现 | UserDefaults + Application Support 缓存/索引/outbox；进入后台保存并暂停订阅，前台恢复 |
@@ -516,7 +521,7 @@ Android 端不再用 Material 的默认外观，`material3` 只作为部分组�
   Material 的 Typography 映射到同一套，残留的 M3 组件不会跳出另一套字号。
 - **控件**：`RiffetSwitch`（拇指弹簧滑动、按下拉长）、`SegmentedControl`（凸起滑块）、`ChipRow`、`Group` / `GroupRow` /
   `IconTile`、`LargeTitle`、`RiffetTabBar`、`AgentAvatar`。
-- **图标**是 Lucide 线性图标（1.75 描边），由 `pnpm gen:icons` 从 `lucide-react` 生成到 `LucideIcons.generated.kt`，
+- **图标**是 Lucide 线性图标（描边沿用 Web：任何尺寸下都是 1.25 像素，Android 按渲染尺寸折算），由 `pnpm gen:icons` 从 `lucide-react` 生成到 `LucideIcons.generated.kt`，
   `RiffetIcons` 保留原名字；`pnpm gen:icons:check` 校验生成结果未被手改。
 
 ### 原生交互
@@ -666,6 +671,8 @@ Riffet 的选择：**前台服务常驻 SSE 连接 + 本地通知**，不引入�
 - **界面上必须诚实标注「常驻连接期间才有通知」**，不能描述成后台推送。这与 Riffet 既有的「精确与估算分得清」「读不到存储会明说」是同一条原则。
 
 FCM 中转被明确排除：它需要一个公网可达的中继服务和 Google 服务，与本地优先的定位冲突。
+
+**iOS 例外：服务端直连 APNs。** iOS 挂起后台 App，前台服务这条路不存在。Riffet 发布官方 iOS App（一个 Apple 团队），服务端的主人在「设置 › 设备管理 › 推送」放入该团队的 APNs 密钥（`.p8`）后，服务端用它直接向 Apple 发推送，中间没有 Riffet 的中继；没放密钥的服务端不推送，iOS 照旧只在前台发本地通知。自己签名构建的 App 同理：设备上报自己的 bundle id 作为 topic，主人放自己团队的密钥。推送内容只发给 Apple，不另做加密。规则与载荷见 DEVICES.md §3「后台推送」。Android 不变：没有 FCM，仍是前台服务。
 
 因此常驻连接的可靠性就是通知与设备能力的可靠性。路线 R0 的保活（Android）：
 
@@ -898,7 +905,7 @@ property、环境变量覆盖，不将卸载重装作为默认处理，避免丢
    在本机 Android Studio 的 SDK Manager 里装上即可；`apps/mobile/local.properties`
    （未纳入版本控制）可以指向别的 SDK。
 3. **`dev/` 里过期的探针会让整个 `:shared:jvmTest` 编译不过。**
-   `apps/mobile/shared/src/jvmTest/kotlin/riffet/ui/dev/` 是本地私有的探索性测试，由
+   `jvmTest/kotlin/riffet/ui/dev/`（在 `apps/mobile/shared/src` 下）是本地私有的探索性测试，由
    `.git/info/exclude` 排除，不在仓库里也不进 CI——但它仍在 `jvmTest` 源集里，只要其中一个文件
    引用了已经不存在的符号（例如 0a6033c 删掉的 `riffet.ui.timeline.onAnyTap`），
    `:shared:compileTestKotlinJvm` 就会失败，整个 `:shared` 的测试一个都跑不起来，看起来像代码坏了。

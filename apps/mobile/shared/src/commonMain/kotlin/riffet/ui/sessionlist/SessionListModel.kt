@@ -9,8 +9,9 @@ import riffet.shared.isQuickChat
  * The list page's filter chips, the iPhone's `HomeFilter`. 已归档 is the old 显示已归档 toggle: it
  * shows what the live list hides (archived sessions and those of archived projects), nothing else.
  * 快速会话 is the quick chat history, which the other filters leave out as the drawer always did.
+ * 未读 is what finished while nobody looked ([isDoneUnseen]), as on every client.
  */
-enum class SessionFilter { ALL, RUNNING, WAITING, QUICK_CHAT, ARCHIVED }
+enum class SessionFilter { ALL, RUNNING, WAITING, UNREAD, QUICK_CHAT, ARCHIVED }
 
 /** The stored form of [SessionFilter]; anything unrecognized is 全部. */
 fun sessionFilter(raw: String?): SessionFilter = SessionFilter.entries.firstOrNull { it.name == raw } ?: SessionFilter.ALL
@@ -32,7 +33,8 @@ data class SessionListContent(
  * query matches and which archived projects take their sessions with them, exactly as before, so the
  * two layouts keep their different search scopes (cwd only in project groups). On top of that:
  *
- *  - [filter] keeps running / waiting sessions, or only what the live list hides;
+ *  - [filter] keeps running / waiting / unread sessions (and [openSessionId] under unread), or
+ *    only what the live list hides;
  *  - [scope] keeps one sidebar group — a worktree's sessions count for their original project;
  *  - waiting sessions, then pinned ones, are lifted out into their own sections, and a project
  *    whose sessions all moved up leaves no empty group behind. Only a project that has no session
@@ -46,6 +48,7 @@ fun sessionListContent(
     scope: String?,
     layout: SidebarLayout,
     dayStartMillis: Long,
+    openSessionId: String? = null,
 ): SessionListContent {
     val archived = filter == SessionFilter.ARCHIVED
     val live = visibleGroups(projects, sessions, "", false).flatMapTo(mutableSetOf()) { group -> group.sessions.map { it.id } }
@@ -57,7 +60,9 @@ fun sessionListContent(
             (scope == null || owner[session.id] == scope) &&
             when (filter) {
                 SessionFilter.RUNNING -> isActiveSession(session)
-                SessionFilter.WAITING -> session.state == SessionState.WAITING
+                SessionFilter.WAITING -> needsYou(session)
+                // The open conversation stays put while it is being read.
+                SessionFilter.UNREAD -> session.id == openSessionId || isDoneUnseen(session)
                 SessionFilter.ALL, SessionFilter.ARCHIVED, SessionFilter.QUICK_CHAT -> true
             }
     fun lifted(matched: List<Session>): Pair<List<Session>, List<Session>> {

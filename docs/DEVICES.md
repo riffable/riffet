@@ -119,7 +119,7 @@ Codex 的两条实测结论：
 
 ## 3. 设备通道
 
-- **设备记录**：`DeviceRecord` 现在只有 `{id, name, hash, createdAt, lastSeenAt}`，增加平台、能力清单、在线状态与权限档位。
+- **设备记录**：`DeviceRecord` 现在只有 `{id, name, hash, createdAt, lastSeenAt}`，增加平台、能力清单、在线状态与权限档位。iOS 设备另存 APNs 注册（见「后台推送」）。
 - **调用队列**：调用先落盘，`callId` 幂等，带截止时间；重试返回第一次的结果。
 - **定向下发**：设备开一条自己的事件流（拟定 `/api/devices/me/stream`），结果用 HTTP 回传。会话的 SSE 保持只读广播，不改。
 - **预约唤醒**：没有 FCM 时，后台手机只有前台服务常驻才收得到请求。凡是能预知“T 时刻要用设备 X”的调用（`schedule_wakeup`、定时任务），服务端提前把预约下发到设备；设备用 `setExactAndAllowWhileIdle` 设闹钟，T−60s 拉起前台服务并连上。临时调用仍要求设备当时在线，因此保活是前提（MOBILE.md「路线」R0）。
@@ -185,6 +185,34 @@ Codex 的两条实测结论：
 **等待**：shim 对 `tools/call` 改用 `node:http`、单次 330 秒（`fetch` 等响应头最多 300 秒）；Codex/TRAE 注入 `tool_timeout_sec: 330`（默认 60 秒）。Claude Code 的 MCP 调用默认不在这个量级超时。Droid、Pi 的 MCP 调用超时未确认。
 
 **文件**：上传存为普通附件（`<stateDir>/attachments`，与输入框附件同一套校验与 30 天清理），MCP 结果给出带原文件名的副本路径（`attachments/materialized/<id>/<name>`）；图片另用 sharp 缩到长边 1024 的 JPEG 作为 `image` 内容块，解码失败时原图不超过 1 MB 才附上。
+
+### 后台推送（iOS，APNs 直连）
+
+iOS 会挂起后台 App，设备流和前台服务都靠不住。Riffet 发布官方 iOS App（bundle `io.github.riffable.iphone`，一个 Apple 团队），**不设中继**：服务端的主人持有该团队的 APNs 密钥（`.p8`）时，服务端直接向 Apple 推送；没有密钥的服务端不推送，iOS 照旧只在前台发本地通知。自己签名的 App 同理，设备把自己的 bundle id 报作 topic，主人放自己团队的密钥。载荷只发给 Apple，不另加密。Android 不变：没有 FCM，仍是前台服务与设备流。
+
+**密钥**：`GET /api/settings/push` 返回 `PushKeyStatus {configured, keyId?, teamId?, status?: 'ok' | 'invalid', detail?}`；`PUT` `{keyId, teamId, key}`（`key` 为 `.p8` 文本，须是 P-256 私钥，400 `INVALID_PUSH_KEY`）；`DELETE` 移除。存于 `<stateDir>/apns-key.json`（0600），任何接口都不返回、日志不记。APNs 以 `InvalidProviderToken` 等拒绝时状态记为 `invalid`，换密钥后清除。Web 在「设置 › 设备管理 › 推送」配置。
+
+**设备注册**：`DeviceReport.push = DevicePushRegistration {token, topic, environment: 'production' | 'sandbox', activityStartToken?, activityToken?}`；省略表示不变，`null` 表示注销。同一 APNs 令牌只归最新上报的那条设备记录。注册存在 `devices.json`，不出现在任何接口里。`DeviceInfo.push = DevicePushRoute {route: 'direct' | 'none', reason?: 'no_key' | 'no_token' | 'failed', detail?}`，iOS 设备与已注册的设备才有；`failed` 是重试后仍失败的最后一次原因，下次成功即清除。
+
+**发送**：`node:http2` 连 `api.push.apple.com` / `api.sandbox.push.apple.com`（按设备的 `environment`），ES256 JWT 提供方令牌（50 分钟内复用），头部 `apns-topic`（活动为 `<topic>.push-type.liveactivity`）、`apns-push-type`、`apns-priority`、`apns-collapse-id`、`apns-expiration`。网络错误、429、5xx 在 1 秒、4 秒后各重试一次；410、`BadDeviceToken`、`Unregistered` 时清掉该令牌（仅当设备仍持有同一令牌；设备令牌失效则整条注册清除）。载荷超过 4 KB 时截短正文。
+
+**提醒规则**：服务端移植客户端的 `sessionAlerts`：状态**变为** `waiting`、`failed`、运行后 `interrupted`、运行后 `idle`（完成）才提醒，第一次看到不提醒，同一状态重复写入不再提醒。
+
+| 类型 | 时机 | category | 按钮所需 |
+| --- | --- | --- | --- |
+| 等待确认 | 立即，`interruption-level: time-sensitive` | `riffet.permission`（`riffet.allow` / `riffet.deny`）、`riffet.plan`（`riffet.approve`）、`riffet.question.reply`（`riffet.reply`，单个可填文本的问题）、其余 `riffet.question`（只能打开） | `interactionId`、`revision`、`interactionKind`、`answers` |
+| 完成 / 失败 / 中断 | 60 秒后；届时已读（`seenActivityAt ≥ lastActivityAt`）、状态已变或已归档则不发 | 完成为 `riffet.finished`（`riffet.reply` 发下一条消息） | 完成带 `configRevision` |
+
+载荷顶层（即 `userInfo`）：`server`（`/health` 的 `serverId`，存于 `<stateDir>/server-id`，重启不变）、`sessionId`、`kind`（`waiting` / `finished` / `failed` / `interrupted`）及上表字段。`answers` 以按钮 id 为键，值为 `{action, selectedIds?, text?: true}`：设备补上自己的 `requestId` 提交 `POST /api/sessions/:id/native/interaction`，`text` 表示把输入的文字作为 `otherText`。完成的回复走 `POST /api/sessions/:id/native/send {commandId, text, expectedConfigRevision}`。`thread-id` 为会话 id，`apns-collapse-id` 为 `<sessionId>:<kind>`。标题为会话标题、副标题为项目名；没有正文时用 `loc-key: push.<kind>` 由 App 本地化。设备流开着的设备（在前台）不推送提醒，由它自己发本地通知。对话框在别处答复、会话被读过后不撤回已发的推送（v1 不做撤回推送）。
+
+**实时活动**：每台设备一个摘要活动，`content-state` 只有 `{waiting, running, unseen}`（`needsYou`、`isRunningSession`、`isDoneUnseen`，不含标题）。计数由全零变为非零且设备有 `activityStartToken`、没有在用的 `activityToken` 时推 `event: start`（`attributes-type: RiffetSummaryAttributes`，`attributes: {}`）；之后计数变化向 `activityToken` 推 `event: update`（同一设备至少间隔 5 秒，带 `timestamp`）；全零持续 10 分钟推 `event: end`（`dismissal-date` 为当时）。结束过的 `activityToken` 不再更新，下一次由全零变为非零时重新 push-to-start。
+
+| 文件 | 作用 |
+| --- | --- |
+| `apps/server/src/push/apns.ts` | 密钥存取与校验、JWT、HTTP/2 发送、重试与载荷截短 |
+| `apps/server/src/push/service.ts` | 状态转换、提醒载荷与按钮映射、延迟发送、实时活动、`DevicePushRoute` |
+| `apps/server/src/push/routes.ts` | `/api/settings/push` |
+| `apps/server/src/server-id.ts` | 持久的 `serverId` |
 
 ### 协议（R3，T1）
 

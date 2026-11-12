@@ -33,28 +33,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
 import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.*
-import riffet.core.TimelineItem
-import riffet.core.TimelineItemKind
-import riffet.core.kind
-import riffet.core.toolView
+import riffet.contracts.SessionGoal
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 
 /*
  * ============================================================================================
- * The goal dock - the harness's goal, above the input card
+ * The goal dock - the session's goal, above the input card
  * ============================================================================================
  *
- * DeepSeek Harness keeps a goal on its own side of the wire: `create_goal` sets one, `update_goal`
- * moves it between phases, `get_goal` reports it. Those calls reach the transcript as tool calls
- * (the DSH projection tags them `kind: "goal"` and puts the objective in `title`), and until now the
- * only sign of a goal was that one row scrolling away in the transcript - a reader had to remember
- * what the session was for.
+ * Claude Code's `/goal`, a Codex thread goal and the DeepSeek Harness goal tools all land in one
+ * `Session.goal` the server keeps; until then the only sign of a goal was a row scrolling away in the
+ * transcript - a reader had to remember what the session was for.
  *
  * This is the todo dock's shape, for the same reason: the state a reader checks while typing belongs
  * above the input card, not inside the message stream. It is deliberately *not* a checklist - a goal
@@ -64,8 +57,8 @@ import riffet.ui.theme.LocalRiffetTypography
 /**
  * The goal, above the input card.
  *
- * `已设定` / `继续中` read as ordinary state; `受阻` carries the harness's own reason, because a
- * blocked goal is the one phase a reader must act on.
+ * `进行中` / `已暂停` read as ordinary state; `受阻` carries the agent's own reason, because a
+ * blocked goal is the one phase a reader must act on, and the only one whose reason is shown.
  */
 @Composable
 fun GoalDock(goal: SessionGoal, modifier: Modifier = Modifier) {
@@ -74,10 +67,10 @@ fun GoalDock(goal: SessionGoal, modifier: Modifier = Modifier) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     var open by remember(goal.objective) { mutableStateOf(false) }
-    LaunchedEffect(goal.action) {
-        if (goal.action == "complete") open = false
+    LaunchedEffect(goal.status) {
+        if (goal.status == "complete") open = false
     }
-    val blocked = goal.action == "blocked"
+    val blocked = goal.status == "blocked"
     val tone = if (blocked) colors.warning else colors.fg3
     val shape = RoundedCornerShape(LocalInterfaceStyle.current.groupRadius)
     Column(
@@ -100,7 +93,7 @@ fun GoalDock(goal: SessionGoal, modifier: Modifier = Modifier) {
             Text(text = stringResource(Res.string.composer_goal), style = typography.label, color = colors.fg)
             Spacer(Modifier.width(8.dp))
             Text(
-                text = goalStatusLabel(goal.action),
+                text = goalStatusLabel(goal),
                 style = typography.caption,
                 color = tone,
                 maxLines = 1,
@@ -125,10 +118,10 @@ fun GoalDock(goal: SessionGoal, modifier: Modifier = Modifier) {
                 if (goal.objective.isNotBlank()) {
                     Text(text = goal.objective, style = typography.bodySmall, color = colors.fg2)
                 }
-                val blockedReason = goal.blockedReason
-                if (blocked && !blockedReason.isNullOrBlank()) {
+                val reason = goal.reason
+                if (blocked && !reason.isNullOrBlank()) {
                     Text(
-                        text = blockedReason,
+                        text = reason,
                         style = typography.caption,
                         color = colors.warning,
                         modifier = Modifier.padding(top = 4.dp),

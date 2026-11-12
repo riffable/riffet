@@ -233,6 +233,10 @@ msgstr "全部"
 msgid "全部会话"
 msgstr "全部会话"
 
+#: src/app/Sidebar.tsx
+msgid "全部标为已读"
+msgstr "全部标为已读"
+
 #: src/app/tabs/TabBar.tsx
 msgid "全部标签"
 msgstr "全部标签"
@@ -468,6 +472,10 @@ msgstr "变更"
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr "变更与文件"
+
+#: src/app/Sidebar.tsx
+msgid "只看未读"
+msgstr "只看未读"
 
 #: src/app/ProjectHome.tsx
 msgid "各自在独立 Worktree"
@@ -1328,6 +1336,10 @@ msgstr "服务器版本不兼容"
 #: src/app/Sidebar.tsx
 msgid "未关联项目"
 msgstr "未关联项目"
+
+#: src/app/Sidebar.tsx
+msgid "未读"
+msgstr "未读"
 
 #: src/app/Sidebar.tsx
 msgid "本机"

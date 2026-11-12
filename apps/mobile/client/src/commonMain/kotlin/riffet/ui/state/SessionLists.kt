@@ -50,6 +50,10 @@ import riffet.shared.projects
 import riffet.shared.sessionsIfChanged
 import riffet.shared.updateProject
 import riffet.shared.updateSession
+import riffet.shared.markAllSessionsSeen
+import riffet.shared.markSessionSeen
+import riffet.ui.sessionlist.activityAt
+import riffet.ui.sessionlist.isUnread
 
 /**
  * The project and session lists behind [SessionStore.list]: the bootstrap read, the cheap polling
@@ -272,6 +276,16 @@ internal class SessionLists(
         return incoming.map { session -> byId[session.id]?.takeIf { it.updatedAt > session.updatedAt } ?: session }
     }
 
+    /**
+     * The next list read only sets the baseline: whatever moved before it raises no alert. It reads
+     * in full (no etag, or a 304 would leave no baseline) and a read already in flight is dropped.
+     */
+    fun forgetStates() {
+        knownStates = null
+        sessionsEtag = null
+        listApplied = ++listReads
+    }
+
     private fun observeSessions(sessions: List<Session>): List<SessionAlert> {
         val alerts = knownStates?.let { sessionAlerts(it, sessions) }.orEmpty()
         knownStates = sessions.associate { it.id to it.state }
@@ -440,6 +454,62 @@ internal class SessionLists(
         scheduleListSave()
     }
 
+    private val seenReports = mutableMapOf<String, Job>()
+    private val seenAgain = mutableSetOf<String>()
+
+    /** The open copy when it is this conversation (its stream is the freshest), else the list's. */
+    private fun knownSession(id: String): Session? =
+        core.value.selected?.takeIf { it.id == id } ?: _list.value.sessions.firstOrNull { it.id == id }
+
+    /**
+     * The conversation is shown in the foreground: report its activity as seen. Called again as
+     * activity arrives while it stays shown; reports are coalesced per conversation, and nothing is
+     * sent while nothing is unread or the server has no read state.
+     */
+    fun markSeen(id: String) {
+        if (seenReports[id]?.isActive == true) { seenAgain += id; return }
+        if (knownSession(id)?.let(::isUnread) != true) return
+        seenReports[id] = scope.launch {
+            do {
+                seenAgain -= id
+                delay(SEEN_REPORT_DELAY_MS)
+                val latest = knownSession(id)?.takeIf(::isUnread) ?: continue
+                try {
+                    applySeen(withContext(background) { api.markSessionSeen(id, activityAt(latest)) })
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Throwable) {
+                    log("mark seen $id failed: ${error.message}")
+                }
+            } while (id in seenAgain)
+            seenReports -= id
+        }
+    }
+
+    /** Reports a read time kept on this device before the server had read state; the server never moves it back. */
+    suspend fun mergeSeen(id: String, activityAt: String) {
+        applySeen(withContext(background) { api.markSessionSeen(id, activityAt) })
+    }
+
+    /**
+     * A seen report's answer. A stream frame may have landed while it was in flight; over a newer
+     * copy only the read time is taken, so a stale running state cannot replace a later idle one.
+     */
+    private fun applySeen(seen: Session) {
+        val held = knownSession(seen.id)
+        applySession(
+            if (held == null || seen.updatedAt >= held.updatedAt) seen
+            else held.copy(seenActivityAt = seen.seenActivityAt ?: held.seenActivityAt),
+        )
+    }
+
+    /** Mark all as seen; the next list read carries the server's values. */
+    suspend fun markAllSeen() {
+        withContext(background) { api.markAllSessionsSeen() }
+        _list.update { state -> state.copy(sessions = state.sessions.map { if (isUnread(it)) it.copy(seenActivityAt = activityAt(it)) else it }) }
+        scheduleListSave()
+    }
+
     suspend fun createSession(
         projectId: String,
         prompt: String,
@@ -551,3 +621,6 @@ private const val PREFETCH_SESSIONS = 8
 
 /** The newest events projected to find a conversation's last reply; a reply is never older than its turn. */
 private const val REPLY_EVENTS = 200
+
+/** Activity streams in many small steps; one report per second keeps up with a reader without a request per step. */
+private const val SEEN_REPORT_DELAY_MS = 1_000L

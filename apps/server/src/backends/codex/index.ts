@@ -76,7 +76,7 @@ interface CodexSessionListeners {
  * A Codex turn is settled by its own `turn/completed`, never by an idle status; closing the driver
  * detaches the reusable app-server that per-session disposal would stop.
  */
-export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, offlineMayBeRunning: true, closesSessionsItself: true, resumesByNativeId: true, riffetTools: true, extensionToggles: { mcp: true, skills: false }, consumesProtocols: ['openai-responses'] };
+export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, survivesRestart: true, offlineMayBeRunning: true, closesSessionsItself: true, resumesByNativeId: true, riffetTools: true, extensionToggles: { mcp: true, skills: false }, consumesProtocols: ['openai-responses'] };
 
 export class CodexBackendAdapter implements NativeBackendDriver {
   readonly id: CodexFlavor['id'];

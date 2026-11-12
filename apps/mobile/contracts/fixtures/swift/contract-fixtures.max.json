@@ -1646,6 +1646,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -1695,6 +1696,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -1741,6 +1751,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -1790,6 +1801,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -1836,6 +1856,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -1885,6 +1906,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -1931,6 +1961,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -1980,6 +2011,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2026,6 +2066,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2075,6 +2116,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2121,6 +2171,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2170,6 +2221,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2216,6 +2276,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2265,6 +2326,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2311,6 +2381,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2360,6 +2431,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2406,6 +2486,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2455,6 +2536,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2501,6 +2591,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2550,6 +2641,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2596,6 +2696,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2645,6 +2746,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2691,6 +2801,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2740,6 +2851,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2786,6 +2906,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2835,6 +2956,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2881,6 +3011,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -2930,6 +3061,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -2976,6 +3116,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3025,6 +3166,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -3071,6 +3221,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3120,6 +3271,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -3166,6 +3326,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3215,6 +3376,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -3261,6 +3431,7 @@
     "configPending": true,
     "creationFingerprint": "text",
     "lastActivityAt": "text",
+    "seenActivityAt": "text",
     "activeSince": "text",
     "pinnedAt": "text",
     "pinRank": 1,
@@ -3310,6 +3481,15 @@
     "terminalHold": {
       "since": "text",
       "pid": 1
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text"
     },
     "createdAt": "text",
     "updatedAt": "text"
@@ -4136,6 +4316,7 @@
       "configPending": true,
       "creationFingerprint": "text",
       "lastActivityAt": "text",
+      "seenActivityAt": "text",
       "activeSince": "text",
       "pinnedAt": "text",
       "pinRank": 1,
@@ -4185,6 +4366,15 @@
       "terminalHold": {
         "since": "text",
         "pid": 1
+      },
+      "goal": {
+        "objective": "text",
+        "status": "active",
+        "reason": "text",
+        "tokensUsed": 1,
+        "tokenBudget": 1,
+        "seconds": 1,
+        "updatedAt": "text"
       },
       "createdAt": "text",
       "updatedAt": "text"
@@ -5194,6 +5384,7 @@
       "configPending": true,
       "creationFingerprint": "text",
       "lastActivityAt": "text",
+      "seenActivityAt": "text",
       "activeSince": "text",
       "pinnedAt": "text",
       "pinRank": 1,
@@ -5243,6 +5434,15 @@
       "terminalHold": {
         "since": "text",
         "pid": 1
+      },
+      "goal": {
+        "objective": "text",
+        "status": "active",
+        "reason": "text",
+        "tokensUsed": 1,
+        "tokenBudget": 1,
+        "seconds": 1,
+        "updatedAt": "text"
       },
       "createdAt": "text",
       "updatedAt": "text"
@@ -5884,7 +6084,14 @@
       "notify"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.platform=ios": {
     "platform": "ios",
@@ -5893,7 +6100,14 @@
       "notify"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.platform=mac": {
     "platform": "mac",
@@ -5902,7 +6116,14 @@
       "notify"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=clipboard.read": {
     "platform": "android",
@@ -5911,7 +6132,14 @@
       "clipboard.read"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=clipboard.write": {
     "platform": "android",
@@ -5920,7 +6148,14 @@
       "clipboard.write"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=location": {
     "platform": "android",
@@ -5929,7 +6164,14 @@
       "location"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=photo": {
     "platform": "android",
@@ -5938,7 +6180,14 @@
       "photo"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=open_url": {
     "platform": "android",
@@ -5947,7 +6196,14 @@
       "open_url"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=alarm": {
     "platform": "android",
@@ -5956,7 +6212,14 @@
       "alarm"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=screen.observe": {
     "platform": "android",
@@ -5965,7 +6228,14 @@
       "screen.observe"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=screen.act": {
     "platform": "android",
@@ -5974,7 +6244,14 @@
       "screen.act"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceReport#$.capabilities[]=app.launch": {
     "platform": "android",
@@ -5983,7 +6260,40 @@
       "app.launch"
     ],
     "allowControl": true,
-    "installationId": "text"
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "production",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
+  },
+  "DeviceReport#$.push=branch1": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text",
+    "push": null
+  },
+  "DeviceReport#$.push.environment=sandbox": {
+    "platform": "android",
+    "appVersion": "text",
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "installationId": "text",
+    "push": {
+      "token": "text",
+      "topic": "text",
+      "environment": "sandbox",
+      "activityStartToken": "text",
+      "activityToken": "text"
+    }
   },
   "DeviceCallOutcome": {
     "ok": true,
@@ -6007,7 +6317,12 @@
     "capabilities": [
       "notify"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.platform=ios": {
     "id": "text",
@@ -6020,7 +6335,12 @@
     "capabilities": [
       "notify"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.platform=mac": {
     "id": "text",
@@ -6033,7 +6353,12 @@
     "capabilities": [
       "notify"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=clipboard.read": {
     "id": "text",
@@ -6046,7 +6371,12 @@
     "capabilities": [
       "clipboard.read"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=clipboard.write": {
     "id": "text",
@@ -6059,7 +6389,12 @@
     "capabilities": [
       "clipboard.write"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=location": {
     "id": "text",
@@ -6072,7 +6407,12 @@
     "capabilities": [
       "location"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=photo": {
     "id": "text",
@@ -6085,7 +6425,12 @@
     "capabilities": [
       "photo"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=open_url": {
     "id": "text",
@@ -6098,7 +6443,12 @@
     "capabilities": [
       "open_url"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=alarm": {
     "id": "text",
@@ -6111,7 +6461,12 @@
     "capabilities": [
       "alarm"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=screen.observe": {
     "id": "text",
@@ -6124,7 +6479,12 @@
     "capabilities": [
       "screen.observe"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=screen.act": {
     "id": "text",
@@ -6137,7 +6497,12 @@
     "capabilities": [
       "screen.act"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
   },
   "DeviceInfo#$.capabilities[]=app.launch": {
     "id": "text",
@@ -6150,7 +6515,66 @@
     "capabilities": [
       "app.launch"
     ],
-    "allowControl": true
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_key",
+      "detail": "text"
+    }
+  },
+  "DeviceInfo#$.push.route=none": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "none",
+      "reason": "no_key",
+      "detail": "text"
+    }
+  },
+  "DeviceInfo#$.push.reason=no_token": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "no_token",
+      "detail": "text"
+    }
+  },
+  "DeviceInfo#$.push.reason=failed": {
+    "id": "text",
+    "name": "text",
+    "platform": "android",
+    "appVersion": "text",
+    "createdAt": "text",
+    "lastSeenAt": "text",
+    "online": true,
+    "capabilities": [
+      "notify"
+    ],
+    "allowControl": true,
+    "push": {
+      "route": "direct",
+      "reason": "failed",
+      "detail": "text"
+    }
   },
   "DeviceCall": {
     "callId": "text",

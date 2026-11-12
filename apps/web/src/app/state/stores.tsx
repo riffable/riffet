@@ -1,5 +1,7 @@
 import { createContext, useContext, useEffect, useLayoutEffect, type ReactNode } from 'react';
-import type { AppSettings, Session } from '@contracts';
+import { isUnread, type AppSettings, type Session } from '@contracts';
+import { api } from '@/lib/api';
+import { sessionActivityAt } from '@/lib/session-order';
 import { loadCachedLists } from '@/lib/list-cache';
 import { writeStatsSearch } from '@/lib/stats-query';
 import { onSessionsDeleted } from '@/lib/session-deletion';
@@ -26,6 +28,8 @@ export interface WorkbenchHandlers {
   /** Locates a 收藏 and opens its conversation at the message. */
   openMark: (id: string) => void;
 }
+
+const SEEN_REPORT_DELAY_MS = 1000;
 
 /** One workbench's state, split by what changes together. */
 export function createWorkbenchStores() {
@@ -84,6 +88,35 @@ export function WorkbenchEffects() {
   const sidebarWidth = useStore(ui, (state) => state.sidebarWidth);
   const panelWidth = useStore(ui, (state) => state.panelWidth);
 
+  // The conversation on screen while the window is visible and focused: what arrived in it is seen, on every device.
+  // Activity comes in many small steps, so one report a second carries the latest.
+  useEffect(() => {
+    if (!loaded) return;
+    let timer: number | undefined;
+    const unseenOnScreen = () => {
+      const state = nav.get();
+      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.extensionsOpen || state.marksOpen || state.attemptsGroupId) return undefined;
+      const session = lists.get().sessions.find((item) => item.id === state.sessionId);
+      return session && isUnread(session) ? session : undefined;
+    };
+    const report = () => {
+      timer = undefined;
+      const session = unseenOnScreen();
+      if (!session) return;
+      // Only the seen mark: the rest of this copy may be older than a frame that arrived meanwhile.
+      void api.markSessionSeen(session.id, sessionActivityAt(session)).then((seen) => {
+        const current = lists.get().sessions.find((item) => item.id === seen.id);
+        if (current && seen.seenActivityAt && !(Date.parse(current.seenActivityAt ?? '') >= Date.parse(seen.seenActivityAt))) lists.upsertSession({ ...current, seenActivityAt: seen.seenActivityAt });
+      }, () => {});
+    };
+    const schedule = () => { if (timer === undefined && unseenOnScreen()) timer = window.setTimeout(report, SEEN_REPORT_DELAY_MS); };
+    schedule();
+    const unsubscribeLists = lists.subscribe(schedule);
+    const unsubscribeNav = nav.subscribe(schedule);
+    document.addEventListener('visibilitychange', schedule);
+    window.addEventListener('focus', schedule);
+    return () => { window.clearTimeout(timer); unsubscribeLists(); unsubscribeNav(); document.removeEventListener('visibilitychange', schedule); window.removeEventListener('focus', schedule); };
+  }, [loaded, lists, nav]);
   useEffect(() => { if (loaded) writeStored(STORAGE_KEYS.project, projectId); }, [loaded, projectId]);
   useEffect(() => { if (loaded) writeStored(STORAGE_KEYS.session, sessionId); }, [loaded, sessionId]);
   useEffect(() => { if (loaded && taskProjectId !== undefined) writeStored(STORAGE_KEYS.taskProject, JSON.stringify(taskProjectId)); }, [loaded, taskProjectId]);

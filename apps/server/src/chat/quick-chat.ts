@@ -30,14 +30,14 @@ export function quickChatProject(store: Store, stateDir: string): Project {
 }
 
 /** Whether the request's client named the feature; a client that did not cannot read quick chats. */
-export function sendsQuickChat(request: FastifyRequest): boolean {
+export function sendsQuickChat(request: Pick<FastifyRequest, 'headers'>): boolean {
   const header = request.headers[CLIENT_FEATURES_HEADER];
   const value = Array.isArray(header) ? header.join(',') : header ?? '';
   return value.split(',').some(item => item.trim() === QUICK_CHAT_FEATURE);
 }
 
 /** What a client that never asked for quick chats is shown of a list: everything else. */
-export function withoutQuickChats<T extends Pick<Session, 'backendId'> | Project>(items: readonly T[], request: FastifyRequest): T[] {
+export function withoutQuickChats<T extends Pick<Session, 'backendId'> | Project>(items: readonly T[], request: Pick<FastifyRequest, 'headers'>): T[] {
   if (sendsQuickChat(request)) return [...items];
   return items.filter(item => 'cwd' in item ? item.system !== 'quick-chat' : item.backendId !== 'chat');
 }

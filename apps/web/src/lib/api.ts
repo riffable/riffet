@@ -4,7 +4,7 @@ import type {
   ActionStep,
   ApiError,
   BuildInfo,
-  DeviceInfo,
+  DeviceInfo, PushKeyInput, PushKeyStatus,
   ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelHealth, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState,
   UpdateCheck,
   ExtensionContext, ExtensionInventory, ExtensionDetail, ExtensionDocument, ExtensionManagementCapabilities, ExtensionActionRequest, ExtensionActionResult, ExtensionRuntimeReport,
@@ -560,6 +560,9 @@ export const api = {
   sessionDeletion: (id: string) => request<SessionDeletionPreview>(`/api/sessions/${encodeURIComponent(id)}/deletion`),
   deleteSession: (id: string, sessionIds: string[]) => request<SessionDeletionReceipt>(`/api/sessions/${encodeURIComponent(id)}`, json('DELETE', { sessionIds })),
   updateSession: (id: string, body: { title?: string; tags?: string[]; archived?: boolean; pinned?: boolean; toolGroups?: ToolGroupId[]; extensionsOff?: string[] }) => request<Session>(`/api/sessions/${encodeURIComponent(id)}`, json('PATCH', body)),
+  /** The conversation was on screen up to `activityAt`; the server keeps the latest such time for every device. */
+  markSessionSeen: (id: string, activityAt: string) => request<Session>(`/api/sessions/${encodeURIComponent(id)}/seen`, json('POST', { activityAt })),
+  markAllSessionsSeen: () => request<{ sessionIds: string[] }>('/api/sessions/seen', json('POST', { all: true })),
   setPinOrder: async (sessionIds: string[]) => (await request<{ sessions: Session[] }>('/api/sessions/pin-order', json('PUT', { sessionIds }))).sessions,
   /** Provider conversations on the server's machine (docs/TERMINAL-SESSIONS.md). */
   externalSessions: (params: { scope: 'project' | 'directory' | 'all'; projectId?: string; cwd?: string; backendId?: string; q?: string; cursor?: string; limit?: number; nonInteractive?: boolean; refresh?: boolean }, signal?: AbortSignal) => request<ExternalSessionPage>(`/api/external-sessions${queryString(params)}`, { signal }),
@@ -786,6 +789,10 @@ export const api = {
   devices: (signal?: AbortSignal) => request<{ devices: DeviceInfo[]; currentId?: string }>('/api/devices', { signal }),
   /** The device must pair again to come back. */
   revokeDevice: (id: string) => request<void>(`/api/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  /** The APNs key this server pushes to iPhones with; the key text is accepted, never returned. */
+  pushKey: (signal?: AbortSignal) => request<PushKeyStatus>('/api/settings/push', { signal }),
+  savePushKey: (input: PushKeyInput) => request<PushKeyStatus>('/api/settings/push', json('PUT', input)),
+  removePushKey: () => request<PushKeyStatus>('/api/settings/push', { method: 'DELETE' }),
   channels: (signal?: AbortSignal) => request<ChannelsState>('/api/channels', { signal }),
   createChannelAccount: (input: ChannelAccountInput) => request<ChannelAccountInfo>('/api/channels/accounts', { method: 'POST', body: JSON.stringify(input) }),
   /** Omitting `appSecret` keeps the stored one. */

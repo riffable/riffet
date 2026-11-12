@@ -103,6 +103,16 @@
         }
       }
     },
+    "iPhone 在后台将不再收到通知": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhones in the background will no longer get notifications"
+          }
+        }
+      }
+    },
     "一次": {
       "localizations": {
         "en": {
@@ -209,6 +219,76 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add manually only"
+          }
+        }
+      }
+    },
+    "仍有会话在运行，未重启：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not restarted; conversations still running: %@"
+          }
+        }
+      }
+    },
+    "按标签页顺序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tab order"
+          }
+        }
+      }
+    },
+    "排序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort by"
+          }
+        }
+      }
+    },
+    "无法确认会话是否都已结束：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't confirm that all conversations have finished: %@"
+          }
+        }
+      }
+    },
+    "最近活动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent activity"
+          }
+        }
+      }
+    },
+    "未重启。%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not restarted. %@"
+          }
+        }
+      }
+    },
+    "仍然重启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart anyway"
           }
         }
       }
@@ -454,6 +534,16 @@
         }
       }
     },
+    "后台任务运行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background task running"
+          }
+        }
+      }
+    },
     "启用机器人": {
       "localizations": {
         "en": {
@@ -580,6 +670,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Schedule"
+          }
+        }
+      }
+    },
+    "密钥只保存在这台服务器上": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The key stays on this server"
           }
         }
       }
@@ -784,16 +884,6 @@
         }
       }
     },
-    "按标签页顺序": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tab order"
-          }
-        }
-      }
-    },
     "授权失败": {
       "localizations": {
         "en": {
@@ -804,22 +894,22 @@
         }
       }
     },
-    "排序": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sort by"
-          }
-        }
-      }
-    },
     "控制 %@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Control %@"
+          }
+        }
+      }
+    },
+    "推送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Push"
           }
         }
       }
@@ -926,12 +1016,12 @@
         }
       }
     },
-    "最近活动": {
+    "消息写入未确认": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Recent activity"
+            "value": "Message delivery unconfirmed"
           }
         }
       }
@@ -1398,6 +1488,16 @@
         }
       }
     },
+    "移除推送密钥？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove the push key?"
+          }
+        }
+      }
+    },
     "稍后发送": {
       "localizations": {
         "en": {
@@ -1690,6 +1790,16 @@
         }
       }
     },
+    "画布无法加载": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't load the canvas"
+          }
+        }
+      }
+    },
     "画布摘要": {
       "localizations": {
         "en": {
@@ -1820,16 +1930,6 @@
         }
       }
     },
-    "画布无法加载": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Couldn't load the canvas"
-          }
-        }
-      }
-    },
     "超过 7 天未使用 · %lld": {
       "localizations": {
         "en": {
@@ -1948,6 +2048,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Connect to Feishu"
+          }
+        }
+      }
+    },
+    "选择 .p8 文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose .p8 file"
           }
         }
       }
@@ -12605,6 +12715,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show archived"
+          }
+        }
+      }
+    },
+    "只看未读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unread only"
+          }
+        }
+      }
+    },
+    "全部标为已读": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mark all as seen"
           }
         }
       }

@@ -135,6 +135,8 @@
     <string name="session_band_last_30_days">Last 30 days</string>
     <string name="session_band_earlier">Earlier</string>
     <string name="session_filter_all">All</string>
+    <string name="session_filter_unread">Unread</string>
+    <string name="session_mark_all_seen">Mark all as seen</string>
     <string name="session_band_waiting">Waiting</string>
     <string name="session_all_projects">All projects</string>
     <string name="session_search_placeholder">Search sessions, projects and messages</string>

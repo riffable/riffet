@@ -91,13 +91,20 @@ export function requestedNativeSessionId(body: RequestedNativeSession): string |
 }
 
 /**
- * Stored runs of the two backends that predate the `reportsTurnOutcome` trait (a hook reports each
- * turn's end) are re-observed after a restart, so that a lost end shows as an unknown outcome. The
- * store recovers its runs before any backend or plugin is up and so cannot read the trait; the list
- * is frozen here. A backend added later is not on it.
+ * How an observed run is picked up after a restart, for backends whose CLI outlives the service (`survivesRestart`):
+ * a turn that ended meanwhile closes by what the provider recorded, one that did not is not left running for ever,
+ * and nothing is resent. The store recovers its runs before any backend or plugin is up and so cannot read the
+ * trait; the list is frozen here and a backend added later is not on it.
+ * - `hook`: Claude and Cursor (the legacy default) report a turn's end by hook, which a restart can lose. A run
+ *   that was waiting for it keeps waiting; Claude's transcript end rows (`stop_hook_summary`, `turn_duration`)
+ *   settle it, otherwise it closes unconfirmed once the CLI is idle.
+ * - `daemon`: Codex and Traex keep a detached app-server that holds the thread. The watch the dispatcher opens
+ *   for every unfinished run reads the thread back, which yields the ends recorded meanwhile; a run it cannot
+ *   settle closes by the same idle rule.
  */
-export function awaitsHookTurnOutcome(backendId: string): boolean {
-  return backendId === LEGACY_DEFAULT_BACKEND_ID || backendId === 'claude';
+export function restartObservation(backendId: string): 'hook' | 'daemon' | undefined {
+  if (backendId === LEGACY_DEFAULT_BACKEND_ID || backendId === 'claude') return 'hook';
+  return backendId === 'codex' || backendId === 'traex' ? 'daemon' : undefined;
 }
 
 /**

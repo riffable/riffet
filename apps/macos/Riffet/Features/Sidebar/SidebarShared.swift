@@ -234,7 +234,7 @@ enum SidebarProjects {
     }
 }
 
-/// The menu of arrangement, archive and tag filters.
+/// The menu of arrangement, archive, unread and tag filters, and mark all as seen.
 /// [addProject], when given, is the menu's first item.
 @MainActor
 enum SidebarFilterMenu {
@@ -260,6 +260,8 @@ enum SidebarFilterMenu {
             menu.addItem(.separator())
         }
         add(String(localized: "显示已归档"), on: workbench.sidebar.showArchived) { workbench.sidebar.showArchived.toggle() }
+        add(String(localized: "只看未读"), on: workbench.sidebar.unreadOnly) { workbench.sidebar.unreadOnly.toggle() }
+        menu.addItem(MenuAction.item(String(localized: "全部标为已读")) { Task { try? await workbench.store.markAllSeen() } })
         if !workbench.sessionTags.isEmpty {
             menu.addItem(.separator())
             menu.addItem(.sectionHeader(title: String(localized: "按标签筛选")))

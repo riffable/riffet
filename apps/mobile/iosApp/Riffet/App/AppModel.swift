@@ -20,6 +20,8 @@ final class AppModel {
     var address = UserDefaults.standard.string(forKey: "riffet.ios.server") ?? ""
     var pendingSessionID: String?
     var pendingPrompt: String?
+    /// The task list, from the summary Live Activity.
+    var pendingHome = false
     private var started = false
     /// Network reachability: a path that becomes usable again redials and re-reads at once instead
     /// of waiting out the stream's or the list poll's backoff.
@@ -68,7 +70,9 @@ final class AppModel {
             await refreshPairedServers()
             if let server = pairedServers.first(where: { ServerAddress.sameOrigin(URL(string: $0.baseUrl) ?? url, url) }) {
                 serverFailures.removeValue(forKey: server.origin)
+                RiffetPush.shared.forget(origin: server.origin)
             }
+            RiffetPush.shared.report()
             return true
         } catch {
             let message = error.riffetMessage
@@ -111,6 +115,8 @@ final class AppModel {
         }
         error = nil
         consumeNotification()
+        // The Live Activity's tokens follow the open server.
+        RiffetPush.shared.report()
     }
     func authorizationExpired() {
         error = String(localized: "这台 iPhone 的连接授权已失效，请在 Mac 上生成新的配对码", bundle: .riffet)
@@ -177,6 +183,7 @@ final class AppModel {
                 UserDefaults.standard.removeObject(forKey: "riffet.ios.server")
             }
             serverFailures.removeValue(forKey: server.origin)
+            RiffetPush.shared.forget(origin: server.origin)
             error = nil
             await refreshPairedServers()
         } catch { self.error = error.riffetMessage }
@@ -193,8 +200,21 @@ final class AppModel {
     }
     func scene(_ phase: ScenePhase) {
         if phase == .background { workbench?.drafts.flush() }
+        // Back from the background of a server that pushes directly: it already sent the alerts for
+        // what moved meanwhile, so the next list read does not post them again.
+        if phase != .background, !host.foreground, let workbench, RiffetPush.shared.route(for: workbench.baseURL)?.route == "direct" {
+            workbench.store.forgetSessionStates()
+        }
         host.foreground = phase != .background
-        if phase == .active { consumeNotification() }
+        if phase == .active {
+            consumeNotification()
+            Task {
+                // Notification permission may have changed in Settings while away.
+                await RiffetNotifications.shared.refreshAuthorization()
+                RiffetPush.shared.report()
+            }
+            workbench?.withdrawSettledNotifications()
+        }
     }
     func consumeNotification() {
         guard let workbench, let notification = RiffetNotifications.shared.consumeOpenedSession() else { return }
@@ -209,5 +229,6 @@ final class AppModel {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if url.host == "session" { pendingSessionID = query.first { $0.name == "id" }?.value }
         if url.host == "new" { pendingPrompt = query.first { $0.name == "prompt" }?.value ?? "" }
+        if url.host == "home" { pendingHome = true }
     }
 }

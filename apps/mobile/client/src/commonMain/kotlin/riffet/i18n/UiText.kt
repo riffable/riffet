@@ -132,12 +132,14 @@ internal object UiText {
         "todo.done" to "已完成",
         "todo.active" to "进行中",
         "todo.pending" to "待处理",
-        "goal.updated" to "已更新",
         "goal.paused" to "已暂停",
-        "goal.resuming" to "继续中",
         "goal.completed" to "已完成",
         "goal.blocked" to "受阻",
         "goal.active" to "进行中",
+        "goal.usageLimited" to "用量已达上限",
+        "goal.budgetLimited" to "预算已用完",
+        "goal.tokens" to "{0} token",
+        "goal.tokensOfBudget" to "{0} / {1} token",
 
         // Timeline rows
         "tool.imageFromTool" to "工具返回的图片",
@@ -409,12 +411,14 @@ internal object UiText {
         "todo.done" to "Done",
         "todo.active" to "In progress",
         "todo.pending" to "Pending",
-        "goal.updated" to "Updated",
         "goal.paused" to "Paused",
-        "goal.resuming" to "Continuing",
         "goal.completed" to "Completed",
         "goal.blocked" to "Blocked",
         "goal.active" to "In progress",
+        "goal.usageLimited" to "Usage limit reached",
+        "goal.budgetLimited" to "Budget used up",
+        "goal.tokens" to "{0} tokens",
+        "goal.tokensOfBudget" to "{0} / {1} tokens",
 
         // Timeline rows
         "tool.imageFromTool" to "Image from tool",

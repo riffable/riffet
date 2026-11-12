@@ -81,6 +81,7 @@ struct RiffetRootView: View {
         }
         .onChange(of: model.pendingSessionID) { _, _ in consumeNavigation() }
         .onChange(of: model.pendingPrompt) { _, _ in consumeNavigation() }
+        .onChange(of: model.pendingHome) { _, _ in consumeNavigation() }
         .alert("未能完成操作", isPresented: Binding(get: { presentsOperationError }, set: { if !$0 { workbench.error = nil } })) {
             Button("好") { workbench.error = nil }
         } message: { Text(workbench.error ?? "") }
@@ -123,6 +124,7 @@ struct RiffetRootView: View {
         return true
     }
     private func consumeNavigation() {
+        if model.pendingHome { tabRaw = RootTab.tasks.rawValue; taskPath = []; model.pendingHome = false }
         if let id = model.pendingSessionID { tabRaw = RootTab.tasks.rawValue; taskPath = [.session(id, true)]; model.pendingSessionID = nil }
         if let prompt = model.pendingPrompt {
             let draft = workbench.drafts.draft("new")
@@ -135,12 +137,13 @@ struct RiffetRootView: View {
 }
 
 private enum HomeFilter: String, CaseIterable {
-    case all = "全部", running = "进行中", waiting = "待处理", quickChat = "快速对话", archived = "归档"
+    case all = "全部", running = "进行中", waiting = "待处理", unread = "未读", quickChat = "快速对话", archived = "归档"
     var title: String {
         switch self {
         case .all: String(localized: "全部", bundle: .riffet)
         case .running: String(localized: "运行中", bundle: .riffet)
         case .waiting: String(localized: "待处理", bundle: .riffet)
+        case .unread: String(localized: "未读", bundle: .riffet)
         case .quickChat: String(localized: "快速对话", bundle: .riffet)
         case .archived: String(localized: "已归档", bundle: .riffet)
         }
@@ -202,9 +205,10 @@ struct SessionHomeView: View {
             (($0.archivedAt != nil || archivedProjects.contains($0.projectId)) == (filter == .archived)) &&
             (scope == nil || $0.projectId == scope || ($0.projectId == chats && filter == .quickChat)) &&
             (filter != .running || $0.state.isActive) && (filter != .waiting || $0.state == .waiting) &&
+            (filter != .unread || $0.id == openSessionID || SidebarModelKt.isDoneUnseen(session: $0)) &&
             (tag == nil || $0.tags.contains(tag!)) &&
             (query.isEmpty || "\($0.title) \(names[$0.projectId] ?? "") \($0.tags.joined(separator: " "))".localizedCaseInsensitiveContains(query))
-        }.sorted { $0.updatedAt > $1.updatedAt }
+        }.sorted { SidebarModelKt.compareSessions(a: $0, b: $1) < 0 }
     }
     private var chatProject: Project? { workbench.list.projects.first { $0.isQuickChat && $0.archivedAt == nil } }
     /// 快速对话 only when the server keeps quick chats.
@@ -427,13 +431,14 @@ struct SessionHomeView: View {
                     ForEach(availableTags, id: \.self) { value in Button { tag = value } label: { if tag == value { Label(value, systemImage: "checkmark") } else { Text(value) } } }
                 }.disabled(availableTags.isEmpty)
                 if scope != nil || tag != nil || filter != .all { Button("清除筛选") { scope = nil; tag = nil; filter = .all } }
+                Button(String(localized: "全部标为已读", bundle: .riffet), systemImage: "checkmark.circle") { Task { await workbench.markAllSeen() } }
             } label: { Image(systemName: "ellipsis") }.accessibilityLabel("筛选与分组")
         }
     }
     private func timeGroups(_ sessions: [Session]) -> [(title: String, items: [Session])] {
         let calendar = Calendar.current
         let groups = Dictionary(grouping: sessions) { session -> Int in
-            guard let date = ServerTime.date(session.updatedAt) else { return 3 }
+            guard let date = ServerTime.date(SidebarModelKt.activityAt(session: session)) else { return 3 }
             if calendar.isDateInToday(date) { return 0 }
             if calendar.isDateInYesterday(date) { return 1 }
             if date >= calendar.date(byAdding: .day, value: -7, to: .now)! { return 2 }
@@ -492,7 +497,7 @@ struct SessionHomeView: View {
     }
     /// Today the clock, yesterday its name, within a week the weekday, else month/day.
     private func timeText(_ session: Session) -> String {
-        guard let date = ServerTime.date(session.updatedAt) else { return "" }
+        guard let date = ServerTime.date(SidebarModelKt.activityAt(session: session)) else { return "" }
         let calendar = Calendar.current
         if calendar.isDateInToday(date) { return date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)) }
         if calendar.isDateInYesterday(date) { return String(localized: "昨天", bundle: .riffet) }
@@ -531,6 +536,10 @@ struct SessionHomeView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(name).riffetFont(.headline).foregroundStyle(session.archivedAt == nil ? palette.fg : palette.fg2).lineLimit(1)
                         Spacer(minLength: 0)
+                        if openSessionID != session.id, SidebarModelKt.isDoneUnseen(session: session) {
+                            Circle().fill(palette.fg).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
+                                .accessibilityLabel(String(localized: "未读", bundle: .riffet))
+                        }
                         Text(time).riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
                     }
                     if let line = subtitle(session) { line.riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1) }

@@ -1026,13 +1026,13 @@ struct GoalDockView: View {
     @State private var open = false
 
     var body: some View {
-        let blocked = goal.action == "blocked"
+        let blocked = goal.status == "blocked"
         VStack(alignment: .leading, spacing: Space.xs) {
             Button { withAnimation(.snappy(duration: 0.18)) { open.toggle() } } label: {
                 HStack(spacing: Space.sm) {
                     Image(icon: "target").font(.riffet(size: S(12))).foregroundStyle(blocked ? palette.warning : palette.fg3)
                     Text("目标").font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg2)
-                    Text(goalStatusLabel(action: goal.action)).font(.riffet(size: S(12))).foregroundStyle(blocked ? palette.warning : palette.fg4)
+                    Text(goalStatusLabel(goal: goal)).font(.riffet(size: S(12))).foregroundStyle(blocked ? palette.warning : palette.fg4)
                     if !open { Text(goal.objective).font(.riffet(size: S(13))).foregroundStyle(palette.fg3).lineLimit(1) }
                     Spacer(minLength: 0)
                     Image(icon: "chevron.up").rotationEffect(.degrees(open ? 180 : 0)).font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
@@ -1044,7 +1044,7 @@ struct GoalDockView: View {
             if open {
                 Text(goal.objective).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
-                if blocked, let reason = goal.blockedReason, !reason.isEmpty {
+                if blocked, let reason = goal.reason, !reason.isEmpty {
                     Text(reason).font(.riffet(size: S(12))).foregroundStyle(palette.warning)
                         .fixedSize(horizontal: false, vertical: true)
                 }

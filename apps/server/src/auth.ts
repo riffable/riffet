@@ -5,7 +5,7 @@ import { networkInterfaces, hostname } from 'node:os';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { AppError } from './errors.js';
 import { mdnsNames } from './mdns-name.js';
-import type { DeviceReport } from '../../../packages/contracts/src/index.js';
+import type { DevicePushRegistration, DeviceReport } from '../../../packages/contracts/src/index.js';
 
 /**
  * A request a proxy relayed: a reverse proxy, an SSH-less front door or `tailscale serve` reaches a
@@ -19,8 +19,12 @@ const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1', '::1']);
  * A paired native client or browser. `hash` never leaves the server. The device's own report
  * (`PUT /api/devices/me`, docs/DEVICES.md §3) fills in the rest; a browser never sends one.
  */
-export interface DeviceRecord extends Partial<DeviceReport> { id: string; name: string; hash: string; createdAt: string; lastSeenAt?: string }
-export type PublicDevice = Omit<DeviceRecord, 'hash' | 'installationId'>;
+export interface DeviceRecord extends Partial<DeviceReport> {
+  id: string; name: string; hash: string; createdAt: string; lastSeenAt?: string;
+  /** The `X-Riffet-Features` the device sent with its last report: what its lists show, so what may be pushed to it. */
+  features?: string[];
+}
+export type PublicDevice = Omit<DeviceRecord, 'hash' | 'installationId' | 'push' | 'features'>;
 export interface IssuedDevice { device: PublicDevice; token: string }
 /** Cookie callers keep their CSRF obligations; a paired device proves itself with a bearer token. */
 export type AuthKind = 'cookie' | 'device';
@@ -215,11 +219,35 @@ export class Auth {
     const device=this.devices.find(candidate=>candidate.id===id);
     return device&&createHmac('sha256',device.hash).update(nonce).digest('base64url');
   }
+  /** The APNs registration a device reported; it stays server-side (the push service only). */
+  devicePush(id: string): DevicePushRegistration | undefined { return this.devices.find(candidate=>candidate.id===id)?.push??undefined; }
+  /**
+   * Forgets a token APNs said is gone, only while the device still holds that same token: a newer
+   * registration that arrived meanwhile stays. A gone device token ends the whole registration.
+   */
+  clearDevicePush(id: string, field: 'token' | 'activityStartToken' | 'activityToken', value: string): boolean {
+    const device=this.devices.find(candidate=>candidate.id===id);
+    const push=device?.push;
+    if (!device||!push||push[field]!==value) return false;
+    if (field==='token') delete device.push; else delete push[field];
+    this.flushDevices(true);
+    return true;
+  }
+  /** The client features a device reported with; it stays server-side (the push service only). */
+  deviceFeatures(id: string): readonly string[] | undefined { return this.devices.find(candidate=>candidate.id===id)?.features; }
   /** Merges what the device says about itself; written at once, since calls are refused on it. */
-  reportDevice(id: string, report: DeviceReport): PublicDevice {
+  reportDevice(id: string, report: DeviceReport, features?: string[]): PublicDevice {
     const device=this.devices.find(candidate=>candidate.id===id);
     if (!device) throw new AppError('DEVICE_NOT_FOUND','No such paired device',404);
-    Object.assign(device,report);
+    const {push,...rest}=report;
+    Object.assign(device,rest);
+    if (features) device.features=features;
+    if (push===null) delete device.push;
+    else if (push) {
+      device.push=push;
+      // One phone's token belongs to one record: an older pairing of the same app would push twice.
+      for(const other of this.devices)if(other!==device&&other.push&&other.push.token===push.token)delete other.push;
+    }
     this.flushDevices(true);
     // Pairing again from the same installation leaves an older record (earlier in the list) behind; it goes the way a manual revoke does.
     if(report.installationId)for(const other of this.devices.slice(0,this.devices.indexOf(device)).filter(candidate=>candidate.installationId===report.installationId))this.revokeDevice(other.id);
@@ -352,7 +380,7 @@ export function apiRoutePath(url: string): string | undefined {
 function isApiPath(path: string) { return path==='/api' || path.startsWith('/api/'); }
 function hashToken(token: string) { return createHash('sha256').update(token).digest('base64url'); }
 function publicDevice(device: DeviceRecord): PublicDevice {
-  const {hash:_hash,installationId:_installation,...rest}=device;
+  const {hash:_hash,installationId:_installation,push:_push,features:_features,...rest}=device;
   return rest;
 }
 export function requireDeviceName(name: unknown): string {

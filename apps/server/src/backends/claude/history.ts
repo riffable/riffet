@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { open, readFile, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session } from '../../../../../packages/contracts/src/index.js';
+import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { INLINE_IMAGE_LIMIT, isImagePath, toolImageContent } from '../shared/tool-images.js';
 import { initialState, reduce, type BackgroundAgent, type ClaudeSessionState, type ClaudeSignal, type ClaudeTurnOrigin } from './session-state.js';
@@ -11,6 +11,7 @@ import {
 } from './activity.js';
 import { ActivityLedger, activityEvent, activityId, activityOfEvent, isLiveActivity } from '../../journal/activity.js';
 import { firstHumanMessage } from '../../session-title.js';
+import { claudeGoalChange } from './goal.js';
 /**
  * The largest transcript read. Rows are kept without the base64 no transcript shows (see
  * `parseRow`), so what stays in memory is far smaller than the file: a long session of screenshots
@@ -1006,6 +1007,7 @@ interface ParentProgress {
   openCalls: Map<string, OpenToolUse>;
   aiTitle?: string;
   customTitle?: string;
+  goal?: SessionGoal;
 }
 
 function newProgress(sessionId: string, putBlob: (text: string) => string | undefined): ParentProgress {
@@ -1072,6 +1074,7 @@ export class ClaudeTranscript {
   private steps: ClaudeStepMeasurement[] = [];
   private userIds = new Set<string>();
   private titleValue: string | undefined;
+  private goalValue: SessionGoal | undefined;
   private readonly subagents = new Map<string, ClaudeSubagentState>();
   private subagentScannedAt = 0;
   private transcriptState: 'ok' | 'unavailable' | 'unparsed' = 'unavailable';
@@ -1101,6 +1104,9 @@ export class ClaudeTranscript {
    * or a desktop client), else the latest `ai-title` row its own model writes after the first turn.
    */
   get title(): string | undefined { return this.titleValue; }
+
+  /** The conversation's `/goal` as its rows leave it. */
+  get goal(): SessionGoal | undefined { return this.goalValue; }
 
   /** Rows of the conversation's earlier provider sessions, oldest first; unreadable ones are skipped. */
   private async precedingRows(): Promise<Array<ClaudeRow | undefined>> {
@@ -1151,6 +1157,7 @@ export class ClaudeTranscript {
     this.fileGeneration += 1;
     this.loaded = false;
     this.titleValue = undefined;
+    this.goalValue = undefined;
     this.offset = 0;
     this.rows = [];
     this.probe = Buffer.alloc(0);
@@ -1249,6 +1256,8 @@ export class ClaudeTranscript {
           if (value.type === 'user' && typeof value.uuid === 'string') userIds.add(value.uuid);
           if (value.type === 'ai-title' && typeof value.aiTitle === 'string') progress.aiTitle = value.aiTitle;
           if (value.type === 'custom-title' && typeof value.customTitle === 'string') progress.customTitle = value.customTitle;
+          const goalChange = claudeGoalChange(progress.goal, value);
+          if (goalChange !== undefined) progress.goal = goalChange ?? undefined;
           trackOpenToolUses(progress.openCalls, value);
           const events = mapRow(value, index, this.session, progress.state, this.hooks);
           progress.meter.add(value, events);
@@ -1310,6 +1319,7 @@ export class ClaudeTranscript {
       this.steps = progress.meter.steps();
       this.userIds = userIds;
       this.titleValue = progress.customTitle ?? progress.aiTitle;
+      this.goalValue = progress.goal;
       this.transcriptState = 'ok';
       this.loaded = true;
       return { reset: eventReset, events: append, steps: this.steps, lifecycle: { replay: !liveAppend, signals } };

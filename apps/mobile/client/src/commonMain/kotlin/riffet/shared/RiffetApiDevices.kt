@@ -8,6 +8,9 @@ import riffet.contracts.DeviceCallOutcome
 import riffet.contracts.DeviceFile
 import riffet.contracts.DeviceFileUpload
 import riffet.contracts.DeviceReport
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 
 /*
  * This device's side of the device channel (docs/DEVICES.md §3). Every route here takes the device
@@ -18,6 +21,11 @@ import riffet.contracts.DeviceReport
 @Throws(Exception::class)
 suspend fun RiffetApi.reportDevice(report: DeviceReport): PublicDevice =
     put("/api/devices/me", wireBody(report)).decode()
+
+/** [reportDevice] that also removes the saved push registration: `push` is an explicit `null`. */
+@Throws(Exception::class)
+suspend fun RiffetApi.reportDeviceClearingPush(report: DeviceReport): PublicDevice =
+    put("/api/devices/me", JsonObject(wireBody(report.copy(push = null)).jsonObject + ("push" to JsonNull))).decode()
 
 /**
  * `POST /api/devices/me/calls/:callId/result`. Idempotent per call on the server, so a retry after a

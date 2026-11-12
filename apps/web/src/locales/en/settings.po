@@ -193,6 +193,10 @@ msgstr "Enter key"
 msgid "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
 msgstr "The id must be custom- followed by 8–64 lowercase letters, digits, or dashes"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "iPhone 在后台将不再收到通知"
+msgstr "iPhones in the background will no longer get notifications"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "Server 构建"
 msgstr "Server build"
@@ -432,6 +436,7 @@ msgstr "Sidebar"
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "保存"
 msgstr "Save"
@@ -736,6 +741,10 @@ msgstr "Sync failure"
 msgid "名称"
 msgstr "Name"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "后台推送"
+msgstr "Background push"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "启动于"
 msgstr "Started at"
@@ -917,6 +926,10 @@ msgstr "Schedules"
 #: src/app/settings/PreferencesSections.tsx
 msgid "宽松"
 msgstr "Relaxed"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "密钥只保存在这台服务器上"
+msgstr "The key stays on this server"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "对比度提示（{modeLabel}）"
@@ -1240,6 +1253,14 @@ msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr "Queue"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "推送"
+msgstr "Push"
+
+#: src/app/settings/DevicesSection.tsx
+msgid "推送失败"
+msgstr "Push failed"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "提供商来源"
 msgstr "Provider source"
@@ -1336,6 +1357,10 @@ msgstr "Couldn't save the avatar"
 msgid "无法保存快速对话设置"
 msgstr "Couldn't save the quick chat settings"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法保存推送密钥"
+msgstr "Couldn't save the push key"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存文件访问设置"
 msgstr "Couldn't save the file access setting"
@@ -1429,6 +1454,10 @@ msgstr "Couldn't generate a pairing code"
 msgid "无法移除头像"
 msgstr "Couldn't remove the avatar"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法移除推送密钥"
+msgstr "Couldn't remove the push key"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "无法移除聊天"
 msgstr "Couldn't remove the chat"
@@ -1458,6 +1487,10 @@ msgstr "Could not read task file location"
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
 msgstr "Couldn't read available models"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "无法读取推送设置"
+msgstr "Couldn't load push settings"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法读取插件"
@@ -1896,6 +1929,7 @@ msgstr "View switch"
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/DevicesSection.tsx
 #: src/app/settings/ProfileSection.tsx
+#: src/app/settings/PushKeySection.tsx
 msgid "移除"
 msgstr "Remove"
 
@@ -1933,6 +1967,10 @@ msgstr "It will need to pair again, and this browser will be signed out"
 #: src/app/settings/ThemeCanvas.tsx
 msgid "移除强调色"
 msgstr "Remove accent"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "移除推送密钥？"
+msgstr "Remove the push key?"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "空闲后停止 CLI"
@@ -2370,6 +2408,10 @@ msgstr "Sign out"
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出登录"
 msgstr "Sign out"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "选择 .p8 文件"
+msgstr "Choose .p8 file"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "逐项调整"

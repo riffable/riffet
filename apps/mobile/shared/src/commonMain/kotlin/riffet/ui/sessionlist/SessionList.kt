@@ -19,6 +19,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -78,6 +79,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -91,6 +93,7 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.rememberResourceEnvironment
 import riffet.cache.IndexHit
@@ -294,8 +297,9 @@ fun SessionList(
     // local day rolls over, which is exactly when the bands have to be rebuilt.
     val dayStart = localDayStart(now)
     val environment = rememberResourceEnvironment()
-    val content = remember(list.projects, list.sessions, query, filter, scope, layout, dayStart, environment) {
-        sessionListContent(list.projects, list.sessions, query, filter, scope, layout, dayStart)
+    val keptOpen = selectedSessionId.takeIf { filter == SessionFilter.UNREAD }
+    val content = remember(list.projects, list.sessions, query, filter, scope, layout, dayStart, environment, keptOpen) {
+        sessionListContent(list.projects, list.sessions, query, filter, scope, layout, dayStart, keptOpen)
     }
     val projectNames = remember(list.projects) { list.projects.associate { it.id to it.name } }
     val sessionsById = remember(list.sessions) { list.sessions.associateBy { it.id } }
@@ -461,6 +465,17 @@ fun SessionList(
                         preferences.setString(PreferenceKeys.SIDEBAR_LAYOUT, choice.name)
                         layoutName = choice.name
                     },
+                    onMarkAllSeen = {
+                        coroutineScope.launch {
+                            try {
+                                store.markAllSeen()
+                            } catch (cancellation: CancellationException) {
+                                throw cancellation
+                            } catch (failure: Throwable) {
+                                store.reportListError(failure.message?.takeIf { it.isNotBlank() } ?: getString(Res.string.app_operation_failed))
+                            }
+                        }
+                    },
                 )
             },
         )
@@ -608,15 +623,17 @@ private fun filterLabel(option: SessionFilter): String = when (option) {
     SessionFilter.ALL -> stringResource(Res.string.session_filter_all)
     SessionFilter.RUNNING -> stringResource(Res.string.session_state_running)
     SessionFilter.WAITING -> stringResource(Res.string.session_band_waiting)
+    SessionFilter.UNREAD -> stringResource(Res.string.session_filter_unread)
     SessionFilter.QUICK_CHAT -> stringResource(Res.string.session_mode_chat)
     SessionFilter.ARCHIVED -> stringResource(Res.string.session_archived)
 }
 
-/** The app bar's menu: how the list is arranged. The project scope is the chip ahead of the filters. */
+/** The app bar's menu: how the list is arranged, and mark all as seen. The project scope is the chip ahead of the filters. */
 @Composable
 private fun ListMenu(
     layout: SidebarLayout,
     onSelectLayout: (SidebarLayout) -> Unit,
+    onMarkAllSeen: () -> Unit,
 ) {
     val colors = LocalRiffetColors.current
     // Not `rememberSaveable`: a saved `true` would reappear open after a rotation nobody asked for.
@@ -635,6 +652,8 @@ private fun ListMenu(
                 selected = layout == SidebarLayout.TIME,
                 onSelect = { onSelectLayout(SidebarLayout.TIME); menuOpen = false },
             )
+            RiffetMenuSeparator()
+            RiffetMenuItem(stringResource(Res.string.session_mark_all_seen), onClick = { onMarkAllSeen(); menuOpen = false })
         }
     }
 }
@@ -921,6 +940,10 @@ internal fun SessionRow(
                     )
                     if (marked) {
                         Icon(RiffetIcons.Bookmark, contentDescription = null, tint = colors.accent, modifier = Modifier.size(14.dp).alignBy { it.measuredHeight })
+                    }
+                    if (!selected && isDoneUnseen(session)) {
+                        val unread = stringResource(Res.string.session_filter_unread)
+                        Box(Modifier.align(Alignment.CenterVertically).size(6.dp).background(colors.fg, CircleShape).semantics { contentDescription = unread })
                     }
                     if (time != null) {
                         Text(text = time, style = timeStyle, color = colors.fg3, maxLines = 1, modifier = Modifier.alignByBaseline())

@@ -11,6 +11,7 @@ import { confirmDialog } from '@/lib/dialogs';
 import { formatDate } from '@/lib/i18n/format';
 import { cn, errorMessage, timeAgo } from '@/lib/utils';
 import { useStores } from '../state/stores';
+import { PushKeySection } from './PushKeySection';
 import { SettingsGroup } from './SettingsLayout';
 
 const isPhone = (device: DeviceInfo) => device.platform === 'android' || device.platform === 'ios';
@@ -59,7 +60,7 @@ export function DevicesSection() {
     </EmptyState>
     : <div className="flex justify-center p-5"><Spinner /></div>;
 
-  if (!devices.length) return <EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} />;
+  if (!devices.length) return <div className="flex flex-col gap-6"><EmptyState icon={<IconSmartphone />} title={t`没有已配对的设备`} /><PushKeySection /></div>;
 
   const now = Date.now();
   const idle = (device: DeviceInfo) => device.id !== currentId && !device.online && now - Date.parse(device.lastSeenAt ?? device.createdAt) > IDLE_MS;
@@ -80,6 +81,7 @@ export function DevicesSection() {
       shared.has(device.name) ? t`配对于 ${formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })}` : '',
       isPhone(device) && device.allowControl ? t`允许 Agent 操作` : '',
       isPhone(device) && device.capabilities.includes('screen.observe') ? t`无障碍已开启` : '',
+      device.push?.route === 'direct' ? t`后台推送` : device.push?.reason === 'failed' ? t`推送失败` : '',
     ].filter(Boolean).join(' · ');
     return <div key={device.id} className="flex items-center gap-3 py-3.5 max-md:py-3">
       <Icon className="size-4 shrink-0 text-fg-3" />
@@ -109,5 +111,6 @@ export function DevicesSection() {
       </div>
       <Collapse open={idleOpen}><SettingsGroup>{folded.map(row)}</SettingsGroup></Collapse>
     </section>}
+    <PushKeySection />
   </div>;
 }

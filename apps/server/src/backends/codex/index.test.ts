@@ -602,6 +602,25 @@ describe('generic attachments', () => {
   });
 });
 
+describe('Codex thread goals', () => {
+  it('keeps the session goal equal to the thread goal the app-server reports', async () => {
+    const h = makeHarness();
+    await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+    const goal = { threadId: 'native-thread', objective: 'Make the parser tests pass', status: 'budgetLimited', tokensUsed: 120_000, timeUsedSeconds: 900, tokenBudget: 100_000, createdAt: 1_793_000_000, updatedAt: 1_793_000_900 };
+    h.transport!.emitNativeNotification('thread/goal/updated', { threadId: 'native-thread', turnId: null, goal });
+    expect(h.session.goal).toEqual({ objective: 'Make the parser tests pass', status: 'budget_limited', tokensUsed: 120_000, tokenBudget: 100_000, seconds: 900, updatedAt: new Date(1_793_000_900_000).toISOString() });
+    h.transport!.emitNativeNotification('thread/goal/updated', { threadId: 'native-thread', goal: { ...goal, status: 'complete' } });
+    expect(h.session.goal?.status).toBe('complete');
+    // A finished goal steps aside at the next message the user sends.
+    h.transport!.emitNativeNotification('item/started', { threadId: 'native-thread', turnId: 'turn-next', item: { type: 'userMessage', id: 'user-next', content: [] } });
+    expect(h.session.goal).toBeUndefined();
+    h.transport!.emitNativeNotification('thread/goal/updated', { threadId: 'native-thread', goal: { ...goal, status: 'active' } });
+    h.transport!.emitNativeNotification('thread/goal/cleared', { threadId: 'native-thread' });
+    expect(h.session.goal).toBeUndefined();
+    await h.adapter.dispose(h.host, h.session.id);
+  });
+});
+
 describe('Codex thread names', () => {
   it('upgrades the first-message title to the thread name once, then keeps it', async () => {
     const h = makeHarness();

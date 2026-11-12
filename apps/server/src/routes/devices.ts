@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { CLIENT_FEATURES_HEADER } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { RIFFET_PACKAGES } from '../riffet-mcp/adb.js';
 import type { RouteDeps } from './deps.js';
@@ -15,7 +16,11 @@ export function registerDeviceRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if (context.kind !== 'device' || !context.deviceId) throw new AppError('DEVICE_TOKEN_REQUIRED', 'Only a paired device can use this route', 403);
     return context.deviceId;
   };
-  app.put('/api/devices/me', async request => devices.report(me(request), request.body));
+  app.put('/api/devices/me', async request => {
+    const header = request.headers[CLIENT_FEATURES_HEADER];
+    const features = [...new Set((Array.isArray(header) ? header.join(',') : header ?? '').split(',').map(item => item.trim()).filter(item => item && item.length <= 64))].slice(0, 64);
+    return devices.report(me(request), request.body, features);
+  });
   const packageName = (value: unknown) => {
     if (typeof value !== 'string' || !RIFFET_PACKAGES.has(value)) throw new AppError('INVALID_PACKAGE_NAME', 'packageName must name the Riffet app', 400);
     return value;

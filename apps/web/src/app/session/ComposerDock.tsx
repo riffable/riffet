@@ -2,13 +2,12 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { Run } from '@contracts';
-import type { TimelineItem } from './model';
-import { toolView, type ToolView } from './toolView';
+import type { Run, SessionGoal } from '@contracts';
 import { IconArrowUp, IconCornerUpRight, IconChevronDown, IconCircle, IconCircleCheck, IconCircleDashed, IconEllipsis, IconListTodo, IconMessagesSquare, IconMinus, IconPencilLine, IconTarget, IconTrash2 } from '@/components/icons';
 import { Tip } from '@/components/ui/tooltip';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { formatTokens } from '@/lib/stats-format';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { Collapse } from '@/components/ui/collapse';
 import { useHeld } from './sessionLayout';
@@ -75,68 +74,43 @@ const planIcon = (status: TodoEntry['status'], running: boolean) => status === '
       ? <IconCircleDashed className={cn('size-3.5 shrink-0 text-accent', running && 'animate-[spin_3s_linear_infinite]')} />
       : <IconCircle className="size-3.5 shrink-0 text-fg-4" />;
 
-/** One goal phase, in the harness's own vocabulary. `create_goal` carries no action at all. */
-const goalActions: Record<string, MessageDescriptor> = { edit: msg`已更新`, pause: msg`已暂停`, resume: msg`继续中`, complete: msg({ message: '已完成', context: 'session-status-finished' }), blocked: msg`受阻` };
-
-export const goalStatusLabel = (action?: string) => (action && goalActions[action] ? i18n._(goalActions[action]!) : i18n._(msg({ message: '进行中', context: 'session-status-in-progress' })));
-
-export interface SessionGoal { objective: string; action?: string; blockedReason?: string }
+/** The status words; a status this build does not know reads as an active goal. */
+const goalStatuses: Record<SessionGoal['status'], MessageDescriptor> = {
+  active: msg({ message: '进行中', context: 'session-status-in-progress' }),
+  paused: msg`已暂停`,
+  blocked: msg`受阻`,
+  usage_limited: msg`用量已达上限`,
+  budget_limited: msg`预算已用完`,
+  complete: msg({ message: '已完成', context: 'session-status-finished' }),
+};
 
 /**
- * The session's goal, as the newest goal tool call describes it.
- *
- * DeepSeek Harness keeps the goal on its own side of the wire: `create_goal` sets one, `update_goal`
- * moves it between phases. Only some of those calls carry the objective — `complete` is just a verb —
- * so the newest objective is carried forward, otherwise completing a goal would replace what the
- * session is about with the word "已完成".
+ * What the goal's status reads as. A goal stopped by a limit also says how many tokens it used (against
+ * its budget when it has one): that is what the reader decides on next.
  */
-export function latestGoal(timeline: TimelineItem[], viewOf: (event: TimelineItem['event']) => ToolView = toolView): SessionGoal | undefined {
-  let newest = -1;
-  let action: string | undefined;
-  let blockedReason: string | undefined;
-  let objective: string | undefined;
-  for (let index = timeline.length - 1; index >= 0; index -= 1) {
-    const item = timeline[index]!;
-    if (item.kind !== 'tool') continue;
-    const call = goalCall(viewOf(item.event));
-    if (!call) continue;
-    if (newest < 0) {
-      newest = index;
-      ({ action, blockedReason } = call);
-    }
-    objective ??= call.objective;
-    if (objective !== undefined) break;
-  }
-  if (newest < 0) return undefined;
-  // A finished goal steps aside once the conversation has moved on, exactly as a finished todo list.
-  if (action === 'complete' && timeline.slice(newest + 1).some((item) => item.kind === 'user')) return undefined;
-  return { objective: objective ?? '', action, blockedReason };
-}
-
-/** What one goal tool call says, or nothing for any other tool. Shared by every reading of the goal. */
-export function goalCall(view: ToolView): { action?: string; blockedReason?: string; objective?: string } | undefined {
-  if (view.kind !== 'goal') return undefined;
-  const input = view.rawInput && typeof view.rawInput === 'object' && !Array.isArray(view.rawInput) ? view.rawInput as Record<string, unknown> : undefined;
-  return {
-    action: typeof input?.action === 'string' ? input.action : undefined,
-    blockedReason: typeof input?.blocked_reason === 'string' ? input.blocked_reason : typeof input?.blockedReason === 'string' ? input.blockedReason : undefined,
-    objective: typeof input?.objective === 'string' ? input.objective : undefined,
-  };
+export function goalStatusLabel(goal: SessionGoal): string {
+  const label = i18n._(goalStatuses[goal.status] ?? goalStatuses.active);
+  const limited = goal.status === 'usage_limited' || goal.status === 'budget_limited';
+  if (!limited || goal.tokensUsed === undefined) return label;
+  const used = formatTokens(goal.tokensUsed);
+  const budget = goal.tokenBudget === undefined ? undefined : formatTokens(goal.tokenBudget);
+  const tokens = budget ? i18n._(msg`${used} / ${budget} token`) : i18n._(msg`${used} token`);
+  return `${label} · ${tokens}`;
 }
 
 /** The goal, above the input card: one row, no expansion — a goal is a sentence plus a phase. */
 export function GoalDock({ goal }: { goal: SessionGoal }) {
   const { t } = useLingui();
-  const blocked = goal.action === 'blocked';
+  const blocked = goal.status === 'blocked';
   return (
     <div className={cn('flex flex-col gap-0.5 rounded-2xl px-3 py-2', dockSurface)}>
       <div className="flex items-center gap-2">
         <IconTarget aria-hidden className={cn('size-4 shrink-0', blocked ? 'text-warning' : 'text-fg-3')} />
         <span className="text-xs font-medium text-fg">{t`目标`}</span>
-        <span className={cn('text-xs', blocked ? 'text-warning' : 'text-fg-3')}>{goalStatusLabel(goal.action)}</span>
+        <span className={cn('text-xs', blocked ? 'text-warning' : 'text-fg-3')}>{goalStatusLabel(goal)}</span>
       </div>
       {goal.objective && <p className="line-clamp-2 text-sm text-fg-2">{goal.objective}</p>}
-      {blocked && goal.blockedReason && <p className="line-clamp-2 text-2xs text-warning">{goal.blockedReason}</p>}
+      {blocked && goal.reason && <p className="line-clamp-2 text-2xs text-warning">{goal.reason}</p>}
     </div>
   );
 }

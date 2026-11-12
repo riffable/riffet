@@ -46,6 +46,19 @@ export const SessionNativeRuntimeSchema = z.object({
   attachment: z.object({ hook: z.string(), id: z.string() }).optional(),
 });
 
+/** Kotlin keeps this as a string, so a newer server may add a status. */
+export const SessionGoalStatusSchema = z.enum(['active', 'paused', 'blocked', 'usage_limited', 'budget_limited', 'complete']).meta({ open: true });
+
+export const SessionGoalSchema = z.object({
+  objective: z.string(),
+  status: SessionGoalStatusSchema,
+  reason: z.string().optional(),
+  tokensUsed: z.number().int().optional(),
+  tokenBudget: z.number().int().optional(),
+  seconds: z.number().int().optional(),
+  updatedAt: z.string(),
+});
+
 export const SessionSchema = z.object({
   id: z.string(),
   projectId: z.string(),
@@ -75,6 +88,7 @@ export const SessionSchema = z.object({
   configPending: z.boolean().optional(),
   creationFingerprint: z.string().optional(),
   lastActivityAt: z.string().optional(),
+  seenActivityAt: z.string().optional(),
   activeSince: z.string().optional(),
   pinnedAt: z.string().optional(),
   /** Pin order, smaller first. */
@@ -86,6 +100,7 @@ export const SessionSchema = z.object({
   /** `mcp:<name>` or `skill:<name>`; kept as strings so a newer kind never fails decoding. */
   extensionsOff: z.array(z.string()).optional(),
   terminalHold: z.object({ since: z.string(), pid: z.number().int().optional() }).optional(),
+  goal: SessionGoalSchema.optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

@@ -193,6 +193,10 @@ msgstr "Enter 键"
 msgid "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
 msgstr "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "iPhone 在后台将不再收到通知"
+msgstr "iPhone 在后台将不再收到通知"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "Server 构建"
 msgstr "Server 构建"
@@ -432,6 +436,7 @@ msgstr "侧栏色"
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "保存"
 msgstr "保存"
@@ -736,6 +741,10 @@ msgstr "同步失败排查"
 msgid "名称"
 msgstr "名称"
 
+#: src/app/settings/DevicesSection.tsx
+msgid "后台推送"
+msgstr "后台推送"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "启动于"
 msgstr "启动于"
@@ -917,6 +926,10 @@ msgstr "定时任务"
 #: src/app/settings/PreferencesSections.tsx
 msgid "宽松"
 msgstr "宽松"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "密钥只保存在这台服务器上"
+msgstr "密钥只保存在这台服务器上"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "对比度提示（{modeLabel}）"
@@ -1240,6 +1253,14 @@ msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr "排队"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "推送"
+msgstr "推送"
+
+#: src/app/settings/DevicesSection.tsx
+msgid "推送失败"
+msgstr "推送失败"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "提供商来源"
 msgstr "提供商来源"
@@ -1336,6 +1357,10 @@ msgstr "无法保存头像"
 msgid "无法保存快速对话设置"
 msgstr "无法保存快速对话设置"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法保存推送密钥"
+msgstr "无法保存推送密钥"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存文件访问设置"
 msgstr "无法保存文件访问设置"
@@ -1429,6 +1454,10 @@ msgstr "无法生成配对码"
 msgid "无法移除头像"
 msgstr "无法移除头像"
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法移除推送密钥"
+msgstr "无法移除推送密钥"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "无法移除聊天"
 msgstr "无法移除聊天"
@@ -1458,6 +1487,10 @@ msgstr "无法读取任务文件位置"
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
 msgstr "无法读取可用模型"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "无法读取推送设置"
+msgstr "无法读取推送设置"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法读取插件"
@@ -1896,6 +1929,7 @@ msgstr "视图切换"
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/DevicesSection.tsx
 #: src/app/settings/ProfileSection.tsx
+#: src/app/settings/PushKeySection.tsx
 msgid "移除"
 msgstr "移除"
 
@@ -1933,6 +1967,10 @@ msgstr "移除后需要重新配对，这个浏览器会退出登录"
 #: src/app/settings/ThemeCanvas.tsx
 msgid "移除强调色"
 msgstr "移除强调色"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "移除推送密钥？"
+msgstr "移除推送密钥？"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "空闲后停止 CLI"
@@ -2370,6 +2408,10 @@ msgstr "退出"
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出登录"
 msgstr "退出登录"
+
+#: src/app/settings/PushKeySection.tsx
+msgid "选择 .p8 文件"
+msgstr "选择 .p8 文件"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "逐项调整"

@@ -237,6 +237,8 @@ data class Session(
     val creationFingerprint: String? = null,
     /** Most recent message activity; observing or editing session metadata does not change it. */
     val lastActivityAt: String? = null,
+    /** How far the owner has read, on any device; only moves forward. Missing on a server without read state, which reads as seen. */
+    val seenActivityAt: String? = null,
     /**
      * When the conversation last entered an active state (starting, running, waiting, cancelling).
      * Active conversations sort by it, so a streaming turn does not reshuffle them; only meaningful
@@ -259,6 +261,8 @@ data class Session(
     val extensionsOff: List<String>? = null,
     /** Handed to a terminal (`riffet resume`): that CLI is the only writer until the hold is released. */
     val terminalHold: SessionTerminalHold? = null,
+    /** The conversation's current goal (Claude Code `/goal`, Codex thread goal, DSH goal); missing when there is none. */
+    val goal: SessionGoal? = null,
     val createdAt: String,
     val updatedAt: String,
     /** The raw id of a plugin Agent, which [backendId] cannot hold; see [AgentIds]. */
@@ -277,6 +281,21 @@ data class Session(
 /** [pid] is the terminal CLI's process; missing while it is starting. */
 @Serializable
 data class SessionTerminalHold(val since: String, val pid: Int? = null)
+
+/**
+ * [status] is `active`, `paused`, `blocked`, `usage_limited`, `budget_limited` or `complete`; a string,
+ * so a newer server's status cannot fail the session. [reason] is why it is blocked, or the latest check's verdict.
+ */
+@Serializable
+data class SessionGoal(
+    val objective: String,
+    val status: String,
+    val reason: String? = null,
+    val tokensUsed: Long? = null,
+    val tokenBudget: Long? = null,
+    val seconds: Long? = null,
+    val updatedAt: String,
+)
 
 @Serializable
 data class SessionOrigin(

@@ -18,6 +18,7 @@ struct ConnectionSettings: View {
     @State private var pairingQR: NSImage?
     @State private var pairingBusy = false
     @State private var pairingError: String?
+    @State private var pushKey = PushKeyStore()
 
     var body: some View {
         Form {
@@ -73,6 +74,9 @@ struct ConnectionSettings: View {
                 }
                 SettingsErrorText(message: error)
             }
+            if model.workbench != nil {
+                PushKeyBlock(store: pushKey)
+            }
             SettingsScopeFooter()
         }
         .riffetForm()
@@ -88,6 +92,8 @@ struct ConnectionSettings: View {
             pairing = nil
             pairingQR = nil
             pairingError = nil
+            pushKey.reset()
+            Task { await load() }
         }
         .confirmationDialog("忘记这台服务器？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), titleVisibility: .visible) {
             Button("忘记", role: .destructive) {
@@ -307,6 +313,7 @@ struct ConnectionSettings: View {
         } catch {
             self.error = error.riffetMessage
         }
+        await pushKey.load(api)
     }
 
     private func revoke(_ id: String) async {
@@ -405,13 +412,13 @@ struct ServerSettings: View {
                             run { await model.startServer() }
                         }
                     } else {
-                        // A daemon started in a terminal is restarted through the CLI, which replays
-                        // its own arguments; the App only kickstarts what it launched itself.
+                        // Waits for the turns a restart would end first. A daemon started in a terminal is then
+                        // restarted through the CLI, which replays its own arguments; the App only kickstarts
+                        // what it launched itself.
                         SettingsActionButton("重启", symbol: "arrow.clockwise") {
-                            if server.state.running?.manager == .cli { server.restartCliDaemon() }
-                            else { run { try await server.restart() } }
+                            run { try await server.restartWhenIdle() }
                         }
-                        .disabled(server.maintenance?.running == true)
+                        .disabled(server.maintenance?.running == true || server.restartBlockers != nil)
                         if let manager = server.state.running?.manager, manager != .loginService {
                             SettingsActionButton("停止", symbol: "stop.fill", kind: .danger) {
                                 confirmStop = true
@@ -425,6 +432,25 @@ struct ServerSettings: View {
                     }
                     Spacer(minLength: 0)
                     if busy { Spinner(size: .small) }
+                }
+                if let blockers = server.restartBlockers, !blockers.isEmpty || server.restartProblem != nil {
+                    if let problem = server.restartProblem {
+                        Text(verbatim: problem)
+                            .font(.riffet(size: S(12)))
+                            .foregroundStyle(palette.warning)
+                    }
+                    ForEach(blockers) { blocker in
+                        SettingsRow(blocker.title.isEmpty ? backendLabel(blocker.backendId) : blocker.title) {
+                            Text(verbatim: "\(backendLabel(blocker.backendId)) · \(blocker.reasonLabel)")
+                                .font(.riffet(size: S(12)))
+                                .foregroundStyle(palette.fg3)
+                        }
+                    }
+                    HStack(spacing: Space.sm) {
+                        SettingsActionButton("仍然重启", kind: .danger) { server.restartAnyway() }
+                        SettingsActionButton("取消") { server.cancelRestart() }
+                        Spacer(minLength: 0)
+                    }
                 }
                 HStack(spacing: Space.sm) {
                     SettingsActionButton("查看日志", symbol: "doc.text.magnifyingglass") {

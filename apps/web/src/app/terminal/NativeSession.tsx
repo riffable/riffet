@@ -531,7 +531,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   }, [session.id, onSessionChanged, onError]);
 
   const timeline = native.timeline;
-  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince } = useSessionTranscript(native, { working, busy, compacting, root });
+  const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
   const timelineRef = useRef(visibleTimeline);
   timelineRef.current = visibleTimeline;
   const projectName = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.name);

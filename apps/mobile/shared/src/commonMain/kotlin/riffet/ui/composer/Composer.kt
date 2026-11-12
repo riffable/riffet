@@ -1,5 +1,6 @@
 package riffet.ui.composer
 
+import riffet.contracts.SessionGoal
 import riffet.ui.design.riffetMaterial
 import riffet.ui.design.MaterialRole
 import riffet.ui.design.RiffetMaterialContent

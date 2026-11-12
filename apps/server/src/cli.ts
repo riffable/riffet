@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { BuildInfo, ReleaseTag } from '../../../packages/contracts/src/index.js';
 import { requestCliPairing, formatCliPairing, publicOrigin } from './cli-pairing.js';
+import { drainForRestart } from './cli-drain.js';
 import { resumeInTerminal } from './cli-resume.js';
 import { developPlugin, unlinkDevelopmentPlugin, recoverPlugins, inspectPlugin, deletePluginData, installPlugin, listPlugins, readPluginLogs, selectPlugin, uninstallPlugin, type PluginCliContext } from './cli-plugins.js';
 import { packSource, type ArchiveFormat } from '../../../packages/plugin-api/src/tooling.js';
@@ -143,6 +144,24 @@ async function start(options:CliOptions){
 }
 function redactToken(text:string){return text.replace(/token=[^\s&]+/g,'token=[REDACTED]');}
 async function stop(options:CliOptions){const record=await active(options);if(!record){console.log('Riffet is stopped');return;}if(await managedBy(record)==='app')throw new Error(APP_MANAGED);if(!ownsPid(record))throw new Error('Cannot verify daemon process ownership; refusing to signal this PID');process.kill(record.pid,'SIGTERM');for(let i=0;i<70;i++){await sleep(150);if(!pidExists(record.pid)){console.log('Riffet stopped; persistent terminals remain available');return;}}process.kill(record.pid,'SIGKILL');console.log('Riffet force-stopped; inspect session state on restart');}
+/** `restart` and `update` alike: how long to wait for the turns a restart would end; 0 (`--force` or `--wait-idle 0`) does not wait. */
+interface RestartWaitOptions { waitIdle?: string; force?: boolean }
+function restartWaitSeconds(options:RestartWaitOptions):number{
+  const waitSeconds=options.waitIdle===undefined?180:Number(options.waitIdle);
+  if(!Number.isInteger(waitSeconds)||waitSeconds<0)throw new Error('--wait-idle must be a non-negative integer');
+  return options.force?0:waitSeconds;
+}
+/** Restarts once it would end no turn, holding new deliveries back meanwhile (docs/DELIVERY.md, 重启); a service without those endpoints restarts as before. */
+async function restart(options:CliOptions&RestartWaitOptions,command:Command){
+  const previous=readDaemon(options);const next=resolveLaunchOptions(options,command,previous?.args??savedLaunchArgs(options));validateLaunchOptions(next);
+  const waitSeconds=restartWaitSeconds(options);
+  const record=await active(options);
+  if(record&&await managedBy(record)==='app')throw new Error(APP_MANAGED);
+  const release=record&&waitSeconds>0?await drainForRestart(record,token(options),{waitSeconds,log:console.log}):undefined;
+  // The service is still up if stopping failed: let it deliver again.
+  try{await stop(options);}catch(error){await release?.();throw error;}
+  await start(next);
+}
 const LAUNCH_AGENT_PATH=join(homedir(),'Library/LaunchAgents/local.riffet.plist');
 const SYSTEMD_UNIT_PATH=join(homedir(),'.config/systemd/user/riffet.service');
 const SYSTEMD_UNIT='riffet.service';
@@ -260,7 +279,7 @@ async function doctor(options:CliOptions&{json?:boolean}){
   },null,2));
 }
 
-interface UpdateOptions extends CliOptions { check?: boolean; json?: boolean; app?: boolean; configuration?: string; }
+interface UpdateOptions extends CliOptions, RestartWaitOptions { check?: boolean; json?: boolean; app?: boolean; configuration?: string; }
 interface UpdateHealth { ok?: boolean; version?: string; instanceId?: string; managedBy?: string; build?: BuildInfo; }
 
 function updateRoot(): string {
@@ -310,6 +329,7 @@ async function updateNpm(options: UpdateOptions): Promise<void> {
 async function update(options: UpdateOptions): Promise<void> {
   if (options.json && !options.check) throw new Error('--json 仅用于 update --check。');
   if (options.configuration && !options.app) throw new Error('--configuration 仅用于 --app。');
+  const waitSeconds = restartWaitSeconds(options);
   if (isNpmInstall()) return updateNpm(options);
   const root = updateRoot();
   const record = await active(options);
@@ -387,14 +407,24 @@ async function update(options: UpdateOptions): Promise<void> {
           return;
         }
         await updateHealth(record);
-        assertUpdateIdle(options);
-        if (manager === 'launchd') {
-          await controller(process.platform === 'darwin' ? ['bootout', domain, LAUNCH_AGENT_PATH] : ['--user', 'stop', SYSTEMD_UNIT]);
-        } else {
-          process.kill(record.pid, 'SIGTERM');
+        // Turns of Claude, Cursor, Codex and Traex outlive the restart; only the ones it would end are waited for.
+        // `--force` / `--wait-idle 0` stop without waiting, as `riffet restart` does; a service without the drain
+        // endpoints falls back to refusing while any session is active.
+        const release = waitSeconds > 0 ? await drainForRestart(record, token(options), { waitSeconds, log: console.log }) : undefined;
+        try {
+          if (waitSeconds > 0 && !release) assertUpdateIdle(options);
+          if (manager === 'launchd') {
+            await controller(process.platform === 'darwin' ? ['bootout', domain, LAUNCH_AGENT_PATH] : ['--user', 'stop', SYSTEMD_UNIT]);
+          } else {
+            process.kill(record.pid, 'SIGTERM');
+          }
+          for (let attempt = 0; attempt < 100 && pidExists(record.pid); attempt++) await sleep(100);
+          if (pidExists(record.pid)) throw new Error('原服务未能正常停止，尚未修改源码；请检查任务与服务日志。');
+        } catch (error) {
+          // The service is still up: let it deliver again.
+          await release?.();
+          throw error;
         }
-        for (let attempt = 0; attempt < 100 && pidExists(record.pid); attempt++) await sleep(100);
-        if (pidExists(record.pid)) throw new Error('原服务未能正常停止，尚未修改源码；请检查任务与服务日志。');
       },
       restore: async (release: ReleaseTag) => {
         if (!record) { console.log('构建已更新；服务原本停止，保持停止。'); return; }
@@ -434,7 +464,10 @@ export async function main(){
   configure(program.command('serve',{isDefault:true}).description('Run in the foreground')).option('--no-token','Hide login token').action(serve);
   configure(program.command('start').description('Start a background daemon')).option('--no-token','Hide login token').action(async(options:CliOptions,command:Command)=>start(resolveLaunchOptions(options,command,savedLaunchArgs(options))));
   configure(program.command('stop').description('Stop the daemon')).action(stop);
-  configure(program.command('restart').description('Restart the daemon')).option('--no-token','Hide login token').action(async(options:CliOptions,command:Command)=>{const previous=readDaemon(options);const next=resolveLaunchOptions(options,command,previous?.args??savedLaunchArgs(options));validateLaunchOptions(next);await stop(options);await start(next);});
+  configure(program.command('restart').description('Restart the daemon')).option('--no-token','Hide login token')
+    .option('--wait-idle <seconds>','Seconds to wait for turns a restart would end (default 180; 0 restarts without waiting)')
+    .option('--force','Restart without waiting, ending the turns a restart would end')
+    .action(restart);
   configure(program.command('status').description('Show daemon status and login URL')).option('--no-token','Hide login token').action(async(options:CliOptions&{token:boolean})=>{const record=await active(options);if(record){show(record,options,options.token);const manager=await managedBy(record);if(manager)console.log(`Managed by: ${manager==='app'?'Riffet.app':manager==='launchd'?'login service (local.riffet)':'riffet start'}`);}else console.log(`Riffet is stopped · state: ${state(options)}`);});
   program.command('pair').description('Show LAN addresses, a one-use pairing code and a QR code').option('--state-dir <path>','Persistent workbench state',defaultState).option('--json','Print JSON containing a sensitive temporary pairing code').option('--url <url>','Address clients reach this server by (VPN name, SSH tunnel, HTTPS front door); a hostname must also be allowed with --allow-host').action(async(options:{stateDir:string;json?:boolean;url?:string})=>{const cliOptions=options as CliOptions;const url=options.url?publicOrigin(options.url):undefined;const record=await active(cliOptions);if(!record)throw new Error('Riffet is stopped. Run `riffet start --host 0.0.0.0 --auth`, then `riffet pair`.');const pairing=await requestCliPairing(record,token(cliOptions),fetch,{url});console.log(options.json?JSON.stringify(pairing,null,2):await formatCliPairing(pairing));});
   program.command('resume [conversation]').description('Continue a Riffet conversation in this terminal; Riffet follows it until the CLI exits').option('--state-dir <path>','Persistent workbench state',defaultState).option('--all','Choose among the conversations of every project').action(async(target:string|undefined,options:{stateDir:string;all?:boolean})=>{const cliOptions=options as CliOptions;const record=await active(cliOptions);if(!record)throw new Error('Riffet is stopped. Run `riffet start` first.');process.exitCode=await resumeInTerminal(record,token(cliOptions),{target,all:options.all});});
@@ -443,6 +476,8 @@ export async function main(){
     .option('--check','Only check published Git tags; do not change source or stop the server')
     .option('--json','Print the check result as JSON (requires --check)')
     .option('--app','Update the macOS App built in this clone instead of the standalone server')
+    .option('--wait-idle <seconds>','Seconds to wait for turns a restart would end (default 180; 0 restarts without waiting)')
+    .option('--force','Restart without waiting, ending the turns a restart would end')
     .option('--configuration <configuration>','Select Debug or Release when updating the App')
     .action(update);
   program.command('restore').description('Restore a verified backup into an empty state directory').requiredOption('--backup <path>','Backup directory').requiredOption('--state-dir <path>','Empty destination state directory').action(async(options:{backup:string;stateDir:string})=>{const result=await restoreBackup(options.backup,options.stateDir);console.log(`Restored ${result.files} files to ${result.path}`);});
@@ -486,4 +521,4 @@ export async function main(){
   for (const action of ['reload', 'diagnostics'] as const) plugin.command(action + ' <id>').description(action === 'reload' ? 'Reload one plugin' : 'Run diagnostics for one plugin').option('--state-dir <path>','Persistent workbench state',defaultState).action(async(id:string,options:{stateDir:string})=>printLines(await inspectPlugin(await pluginContext(options),id,action)));
   await program.parseAsync(process.argv);
 }
-if(process.argv[1]&&resolve(process.argv[1])===entry)main().catch(error=>{console.error(error instanceof Error?error.message:String(error));process.exitCode=1;});
+if(process.argv[1]&&existsSync(process.argv[1])&&realpathSync(process.argv[1])===realpathSync(entry))main().catch(error=>{console.error(error instanceof Error?error.message:String(error));process.exitCode=1;});

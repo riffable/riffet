@@ -27,6 +27,7 @@ targets:
     platform: iOS
     sources:
       - Riffet
+      - RiffetWidgets/RiffetSummaryAttributes.swift
       - ../../macos/Riffet/Bridge/Flows.swift
       - ../../macos/Riffet/Bridge/TerminalOutputInbox.swift
       - ../../macos/Riffet/Features/Transcript/MarkdownModel.swift
@@ -56,6 +57,7 @@ targets:
         NSLocalNetworkUsageDescription: 发现并连接同一网络中的 Riffet 服务。
         NSBonjourServices: [_riffet._tcp]
         NSFaceIDUsageDescription: 在你选择启用时，验证本人后提交操作确认。
+        NSSupportsLiveActivities: YES
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: YES
         CFBundleURLTypes:
@@ -64,6 +66,7 @@ targets:
     dependencies:
       - package: SwiftTerm
       - package: Markdown
+      - target: RiffetWidgets
     preBuildScripts:
       - name: Build RiffetKit
         basedOnDependencyAnalysis: false
@@ -80,6 +83,7 @@ targets:
         ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: "AppIcon-purple AppIcon-magenta AppIcon-pink AppIcon-red AppIcon-orange AppIcon-yellow AppIcon-lime AppIcon-green AppIcon-cyan AppIcon-graphite AppIcon-white"
         TARGETED_DEVICE_FAMILY: "1,2"
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Riffet/Resources/Riffet.entitlements
         FRAMEWORK_SEARCH_PATHS:
           - $(inherited)
           - $(SRCROOT)/../client/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)
@@ -88,6 +92,27 @@ targets:
           - -framework
           - RiffetKit
           - -lsqlite3
+      configs:
+        Release:
+          CODE_SIGN_ENTITLEMENTS: Riffet/Resources/Riffet-Release.entitlements
+  # The summary Live Activity; it draws pushed counts only and shares no data with the app.
+  RiffetWidgets:
+    type: app-extension
+    platform: iOS
+    sources: [RiffetWidgets]
+    info:
+      path: RiffetWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: Riffet
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.riffable.iphone.widgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
   RiffetTests:
     type: bundle.unit-test
     platform: iOS

@@ -20,6 +20,8 @@ import riffet.contracts.ConfigFile
 import riffet.contracts.MachineReport
 import riffet.contracts.ModelInfo
 import riffet.contracts.NativeBackendId
+import riffet.contracts.PushKeyInput
+import riffet.contracts.PushKeyStatus
 import riffet.contracts.QuickChatPreset
 import riffet.contracts.RiffetJson
 import riffet.contracts.ServiceMonitorSnapshot
@@ -215,3 +217,14 @@ suspend fun RiffetApi.cursorModels(): List<ModelInfo> = get("/api/cursor/models"
 /** Reading the resolved server-side root never allocates a task directory. */
 @Throws(Exception::class)
 suspend fun RiffetApi.taskWorkspaceLocation(): TaskWorkspaceLocation = get("/api/task-workspaces/location").decode()
+
+/** `GET /api/settings/push`: whether this server has an APNs key, never the key. Owner only. */
+@Throws(Exception::class)
+suspend fun RiffetApi.pushKey(): PushKeyStatus = get("/api/settings/push").decode()
+
+/** `PUT /api/settings/push`: the server checks the key before keeping it. */
+@Throws(Exception::class)
+suspend fun RiffetApi.savePushKey(body: PushKeyInput): PushKeyStatus = put("/api/settings/push", wireBody(body)).decode()
+
+@Throws(Exception::class)
+suspend fun RiffetApi.removePushKey(): PushKeyStatus = delete("/api/settings/push").decode()

@@ -667,6 +667,58 @@ describe('NativeDispatcher durable delivery', () => {
     expect(store.getRun(run.id).native?.delivery).toBe('uncertain');
   });
 
+  it('holds new deliveries while draining and blocks a restart only on turns it would end', async () => {
+    const { store, project, createSession, accept, workspace, makeRuntime } = setup();
+    const runtime = makeRuntime(), native = new FakeNative(store), send = dispatcher(store, native, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+    const running = (backendId: 'codex' | 'dsh') => {
+      const session = store.createSession({ projectId: project.id, kind: 'native', backendId, nativeSessionId: `${backendId}-chat`, model: config.model, mode: config.mode });
+      const run = accept(session.id, `${backendId}-turn`, 'keep working');
+      store.transitionNativeRun(run.id, ['queued'], { delivery: 'observed', stage: 'executing', nativeMessageId: `${backendId}-receipt`, nativeTurnId: `${backendId}-turn` }, { state: 'running' });
+      return session;
+    };
+    running('codex');
+    const dsh = running('dsh');
+    expect(send.restartability()).toMatchObject({ restartable: false, blockers: [{ sessionId: dsh.id, backendId: 'dsh', reason: 'turn' }] });
+
+    send.drain(true);
+    const session = createSession(), held = accept(session.id, 'held-by-drain', '/clear');
+    send.kick();
+    await pause(20);
+    expect(store.getRun(held.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
+    expect(native.writes).toEqual([]);
+    send.drain(false);
+    await until(() => store.getRun(held.id).state === 'completed', 'delivery once the drain is lifted');
+    expect(native.writes).toEqual([{ sessionId: session.id, text: '/clear' }]);
+
+    // Drains are per holder: one holder letting go leaves the other's in place.
+    send.drain(true, 'a'); send.drain(true, 'b');
+    send.drain(false, 'a');
+    expect(send.restartability().draining).toBe(true);
+    send.drain(false, 'b');
+    expect(send.restartability().draining).toBe(false);
+
+    // An archived session's write in flight still blocks a restart.
+    const archived = createSession(), inFlight = accept(archived.id, 'archived-in-flight', 'hello');
+    store.transitionNativeRun(inFlight.id, ['queued'], { delivery: 'dispatching', stage: 'sending' }, { state: 'running' });
+    store.updateSession(archived.id, { archivedAt: new Date().toISOString() });
+    expect(send.restartability().blockers.some(item => item.sessionId === archived.id && item.reason === 'delivery')).toBe(true);
+
+    // Admitted before the drain, still waiting for the conversation's lock when it began: not written.
+    const lock = deferred(), locked = runtime.withSession.bind(runtime);
+    runtime.withSession = async (id, action) => { await lock.promise; return locked(id, action); };
+    const waiting = createSession(), admitted = accept(waiting.id, 'admitted-before-drain', '/compact');
+    send.kick();
+    send.drain(true);
+    lock.resolve();
+    await pause(20);
+    expect(store.getRun(admitted.id)).toMatchObject({ state: 'queued', native: { delivery: 'queued' } });
+    expect(native.writes).toHaveLength(1);
+    send.drain(false);
+    await until(() => store.getRun(admitted.id).state === 'completed', 'the admitted run once the drain is lifted');
+    expect(native.writes.at(-1)).toEqual({ sessionId: waiting.id, text: '/compact' });
+  });
+
   it('completes slash commands when the CLI echoes them before the PTY write promise resolves', async () => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, 'slash-echo-race', '/clear');

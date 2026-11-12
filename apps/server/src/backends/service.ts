@@ -1744,6 +1744,9 @@ export class NativeBackendService {
     return await driver.readShareTranscript(this.host, session, profile, options);
   }
 
+  /** A driver is bound to the session in this process (`status` has something to read). */
+  hasRuntime(sessionId: string): boolean { return this.sessionProfiles.has(sessionId); }
+
   status(sessionId: string): NativeStatus {
     const selected = this.sessionProfiles.get(sessionId);
     if (!selected) return this.withOutputRate(sessionId, { phase: 'offline' });

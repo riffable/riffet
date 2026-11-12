@@ -8,17 +8,33 @@ import { z } from 'zod/v4';
 export const DevicePlatformSchema = z.enum(['android', 'ios', 'mac']).meta({ open: true });
 export const DeviceCapabilitySchema = z.enum(['notify', 'clipboard.read', 'clipboard.write', 'location', 'photo', 'open_url', 'alarm', 'screen.observe', 'screen.act', 'app.launch']).meta({ open: true });
 
+/** APNs device and Live Activity tokens are hex; the server checks the format (`DeviceChannel.report`). */
+const ApnsTokenSchema = z.string().max(400);
+export const DevicePushRegistrationSchema = z.object({
+  token: ApnsTokenSchema,
+  topic: z.string().max(155),
+  environment: z.enum(['production', 'sandbox']),
+  activityStartToken: ApnsTokenSchema.optional(),
+  activityToken: ApnsTokenSchema.optional(),
+});
 export const DeviceReportSchema = z.object({
   platform: DevicePlatformSchema,
   appVersion: z.string().max(64),
   capabilities: z.array(DeviceCapabilitySchema).max(64),
   allowControl: z.boolean(),
   installationId: z.string().max(100).regex(/^[A-Za-z0-9-]+$/).optional(),
+  push: DevicePushRegistrationSchema.nullable().optional(),
+});
+export const DevicePushRouteSchema = z.object({
+  route: z.enum(['direct', 'none']).meta({ open: true }),
+  reason: z.enum(['no_key', 'no_token', 'failed']).meta({ open: true }).optional(),
+  detail: z.string().optional(),
 });
 export const DeviceInfoSchema = z.object({
   id: z.string(), name: z.string(), platform: DevicePlatformSchema.optional(), appVersion: z.string().optional(),
   createdAt: z.string(), lastSeenAt: z.string().optional(),
   online: z.boolean(), capabilities: z.array(DeviceCapabilitySchema), allowControl: z.boolean(),
+  push: DevicePushRouteSchema.optional(),
 });
 export const DeviceCallSchema = z.object({
   callId: z.string(), sessionId: z.string(), capability: DeviceCapabilitySchema,

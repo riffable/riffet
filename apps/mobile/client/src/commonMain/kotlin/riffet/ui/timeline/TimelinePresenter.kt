@@ -17,6 +17,7 @@ import riffet.contracts.NativeJob
 import riffet.contracts.OutputRate
 import riffet.contracts.RunMetrics
 import riffet.contracts.RunMetricsTokenSource
+import riffet.contracts.SessionGoal
 import riffet.i18n.L10n
 import riffet.core.StoredSubagent
 import riffet.core.SubagentEntry
@@ -36,9 +37,7 @@ import riffet.core.speedDescription
 import riffet.core.timelineItemTime
 import riffet.core.tokensPerSecond
 import riffet.core.turnHasVisibleOutput
-import riffet.ui.composer.SessionGoal
 import riffet.ui.composer.TodoEntry
-import riffet.ui.composer.latestGoal
 import riffet.ui.composer.latestTodoEntries
 import riffet.ui.composer.todoEntries
 import riffet.ui.composer.visibleTimeline
@@ -55,7 +54,8 @@ data class TimelinePresentation(
     val loaded: Boolean = true,
     val grouping: TimelineGrouping,
     val todos: List<TodoEntry>,
-    val goal: SessionGoal?,
+    /** The session's goal as the server keeps it; the presenter's frame carries it so the docks change together. */
+    val goal: SessionGoal? = null,
     /** What the running turn is doing right now, for the "正在处理" line. */
     val step: String?,
     /** The "正在处理" line shows: the turn runs and has nothing but reasoning (or nothing) on screen. */
@@ -137,6 +137,7 @@ class TimelinePresenter(
         val subagents: List<StoredSubagent>,
         val activity: NativeActivitySummary?,
         val stopping: Set<String>,
+        val goal: SessionGoal?,
     )
 
     private var previous: TimelineGrouping? = null
@@ -158,13 +159,18 @@ class TimelinePresenter(
         Live(byRun, status?.outputRate?.takeIf { connection is RiffetConnectionState.Live }, status?.activeTurnId, status?.activity)
     }
 
-    private class Transcript(val opened: OpenedTimeline, val subagents: List<StoredSubagent>, val stopping: Set<String>)
+    private class Transcript(val opened: OpenedTimeline, val subagents: List<StoredSubagent>, val stopping: Set<String>, val goal: SessionGoal?)
 
-    private val transcript = combine(store.openedTimeline, store.subagents, store.stoppingActivities) { opened, subagents, stopping -> Transcript(opened, subagents, stopping) }
+    /** The server keeps the goal on the session; only a change of it, not every session frame, re-presents. */
+    private val goal = store.selected.map { it?.id to it?.goal }.distinctUntilChanged()
+
+    private val transcript = combine(store.openedTimeline, store.subagents, store.stoppingActivities, goal) { opened, subagents, stopping, (goalSession, goal) ->
+        Transcript(opened, subagents, stopping, goal.takeIf { goalSession == opened.sessionId })
+    }
 
     val presentation: StateFlow<TimelinePresentation?> = combine(transcript, store.queued, store.working, speedInputs, L10n.changes) { transcript, queued, working, live, _ ->
         val opened = transcript.opened
-        Input(opened.sessionId, opened.loaded, opened.timeline, queued.mapTo(HashSet()) { it.id }, working, live.byRun, live.outputRate, live.activeTurnId, transcript.subagents, live.activity, transcript.stopping)
+        Input(opened.sessionId, opened.loaded, opened.timeline, queued.mapTo(HashSet()) { it.id }, working, live.byRun, live.outputRate, live.activeTurnId, transcript.subagents, live.activity, transcript.stopping, transcript.goal)
     }
         .conflate()
         .map { ClientPerf.measure("client.present") { present(it) } }
@@ -181,6 +187,7 @@ class TimelinePresenter(
         return presentTimeline(previous, input.sessionId, input.timeline, input.queued, input.working, input.metrics, input.outputRate, input.activeTurnId)
             .copy(
                 loaded = input.loaded,
+                goal = input.goal,
                 working = input.working,
                 jobs = timelineJobs(input.timeline),
                 subagents = subagentEntries(input.timeline, input.subagents),
@@ -296,7 +303,6 @@ fun presentTimeline(
         sessionId = sessionId,
         grouping = grouping,
         todos = plan?.let(::todoEntries).orEmpty(),
-        goal = latestGoal(timeline),
         step = if (working) currentStep(timeline) else null,
         // The web's gate (`NativeSession.tsx`): busy, and the turn has shown more than thinking. While
         // it has only thought, the process block's own Working header is the progress sign.

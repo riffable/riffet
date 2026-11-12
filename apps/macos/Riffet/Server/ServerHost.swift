@@ -45,6 +45,28 @@ struct RunningServer: Equatable, Sendable {
     let manager: ServerManager
 }
 
+/// A conversation a restart would end now (`GET /api/service/restartable`, docs/DELIVERY.md, 重启).
+struct RestartBlocker: Decodable, Equatable, Identifiable, Sendable {
+    let sessionId: String
+    let title: String
+    let backendId: String
+    let reason: String
+    var id: String { sessionId }
+
+    var reasonLabel: String {
+        switch reason {
+        case "delivery": String(localized: "消息写入未确认")
+        case "background": String(localized: "后台任务运行中")
+        default: String(localized: "运行中")
+        }
+    }
+}
+
+private struct Restartability: Decodable, Sendable {
+    let restartable: Bool
+    let blockers: [RestartBlocker]
+}
+
 /// One maintenance command the settings screen runs against the local installation (a restart of a
 /// daemon started in a terminal, or the server build a restart would pick up). The command's own
 /// output is kept verbatim: it is what says whether it worked and what to fix when it did not.
@@ -280,6 +302,105 @@ final class ServerHost {
         await waitUntilRunning(since: started)
     }
 
+    // MARK: Restart once nothing would be ended
+
+    /// What a waiting restart is held by, while new deliveries are held back; nil when none waits.
+    private(set) var restartBlockers: [RestartBlocker]?
+    /// Why the service last failed to say what blocks the waiting restart; the wait goes on and offers 仍然重启.
+    private(set) var restartProblem: String?
+    private var restartChoice: RestartChoice?
+    /// Names this attempt's drain on the service, so ending it leaves other holders' drains alone.
+    private var drainHolder = UUID().uuidString
+    private enum RestartChoice { case now, cancel }
+    private enum DrainOutcome { case ready, unsupported, cancelled }
+
+    /// Restarts once it would end no turn (docs/DELIVERY.md, 重启): new deliveries are held back (they stay
+    /// queued and go out after the restart) and the service is asked every 2 s what still blocks, which also
+    /// renews the hold. [restartAnyway] and [cancelRestart] end the wait; after 3 minutes it gives up, lifts
+    /// the hold and names the blockers. A service without these endpoints restarts as before; one that fails
+    /// to answer (a timeout, a 5xx, a refused token) is not restarted unless the owner chooses 仍然重启.
+    func restartWhenIdle() async throws {
+        guard let server = state.running, restartBlockers == nil else { return }
+        restartChoice = nil
+        restartBlockers = []
+        restartProblem = nil
+        let outcome: DrainOutcome
+        do { outcome = try await drain(server) } catch { restartBlockers = nil; restartProblem = nil; throw error }
+        restartBlockers = nil
+        restartProblem = nil
+        switch outcome {
+        case .cancelled: return
+        case .ready, .unsupported:
+            if server.manager == .cli { restartCliDaemon(drained: outcome == .ready); return }
+            // A restart that did not happen lets the service deliver again.
+            do { try await restart() } catch { _ = try? await serviceCall(server, drain: false); throw error }
+        }
+    }
+
+    func restartAnyway() { if restartBlockers != nil { restartChoice = .now } }
+
+    func cancelRestart() { if restartBlockers != nil { restartChoice = .cancel } }
+
+    private func drain(_ server: RunningServer) async throws -> DrainOutcome {
+        drainHolder = UUID().uuidString
+        let deadline = ContinuousClock.now + .seconds(180)
+        var asked = false
+        var nextPoll = ContinuousClock.now
+        while true {
+            switch restartChoice {
+            case .now?: return .ready
+            case .cancel?:
+                _ = try? await serviceCall(server, drain: false)
+                return .cancelled
+            case nil: break
+            }
+            if ContinuousClock.now >= nextPoll {
+                do {
+                    let answer = try await serviceCall(server, drain: true)
+                    // The first answer decides whether this service can drain at all: without the endpoint
+                    // (an older service, or no device token here) the restart goes ahead as it always did.
+                    if !asked, answer == nil { return .unsupported }
+                    asked = true
+                    restartProblem = nil
+                    if let answer {
+                        if answer.restartable { return .ready }
+                        restartBlockers = answer.blockers
+                    }
+                } catch {
+                    // Not an older service, just no answer this time: keep asking rather than restart blind.
+                    restartProblem = String(localized: "无法确认会话是否都已结束：\(error.riffetMessage)")
+                }
+                if ContinuousClock.now >= deadline {
+                    _ = try? await serviceCall(server, drain: false)
+                    if restartBlockers?.isEmpty != false, let problem = restartProblem {
+                        throw HostError.command(String(localized: "未重启。\(problem)"))
+                    }
+                    let names = (restartBlockers ?? []).map { $0.title.isEmpty ? $0.sessionId : $0.title }.joined(separator: "、")
+                    throw HostError.command(String(localized: "仍有会话在运行，未重启：\(names)"))
+                }
+                nextPoll = ContinuousClock.now + .seconds(2)
+            }
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+    }
+
+    /// `POST /api/service/drain`; nil when the service has no such endpoint (404) or this Mac holds no token
+    /// for it. Any other failure throws.
+    private func serviceCall(_ server: RunningServer, drain on: Bool) async throws -> Restartability? {
+        guard let token = AppSecrets.shared.read(account: tokenAccount(baseUrl: server.baseURL.absoluteString)), !token.isEmpty else { return nil }
+        var request = URLRequest(url: server.baseURL.appending(path: "api/service/drain"))
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["on": on, "holder": drainHolder])
+        request.timeoutInterval = 5
+        let (data, response) = try await URLSession.shared.data(for: request)
+        let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+        if status == 404 { return nil }
+        guard (200..<300).contains(status) else { throw HostError.command("HTTP \(status)") }
+        return try JSONDecoder().decode(Restartability.self, from: data)
+    }
+
     /// Starts `local.riffet` when it is installed but not running.
     func kickstartLoginService() async throws {
         beginStart()
@@ -328,8 +449,9 @@ final class ServerHost {
 
     /// Restarts a daemon this App does not own, the way its own message says to: `riffet restart`
     /// replays the running daemon's arguments, so host, port and auth survive.
-    func restartCliDaemon() {
-        runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))")
+    /// [drained]: the App already waited (`restartWhenIdle`), so the CLI does not wait again.
+    private func restartCliDaemon(drained: Bool) {
+        runMaintenance(title: String(localized: "重启本机服务器"), script: "riffet restart --state-dir \(Self.shellQuoted(stateDirectory.path))\(drained ? " --force" : "")")
     }
 
     /// Rebuilds the server the daemon runs (`dist/`). The running daemon keeps the code it started

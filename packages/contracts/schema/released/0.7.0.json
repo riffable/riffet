@@ -1188,6 +1188,9 @@
           "lastActivityAt": {
             "type": "string"
           },
+          "seenActivityAt": {
+            "type": "string"
+          },
           "activeSince": {
             "type": "string"
           },
@@ -1368,6 +1371,52 @@
             },
             "required": [
               "since"
+            ]
+          },
+          "goal": {
+            "type": "object",
+            "properties": {
+              "objective": {
+                "type": "string"
+              },
+              "status": {
+                "open": true,
+                "type": "string",
+                "enum": [
+                  "active",
+                  "paused",
+                  "blocked",
+                  "usage_limited",
+                  "budget_limited",
+                  "complete"
+                ]
+              },
+              "reason": {
+                "type": "string"
+              },
+              "tokensUsed": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "tokenBudget": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "seconds": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              },
+              "updatedAt": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "objective",
+              "status",
+              "updatedAt"
             ]
           },
           "createdAt": {
@@ -2614,6 +2663,9 @@
                   "lastActivityAt": {
                     "type": "string"
                   },
+                  "seenActivityAt": {
+                    "type": "string"
+                  },
                   "activeSince": {
                     "type": "string"
                   },
@@ -2794,6 +2846,52 @@
                     },
                     "required": [
                       "since"
+                    ]
+                  },
+                  "goal": {
+                    "type": "object",
+                    "properties": {
+                      "objective": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "open": true,
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "paused",
+                          "blocked",
+                          "usage_limited",
+                          "budget_limited",
+                          "complete"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "tokensUsed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "tokenBudget": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seconds": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "objective",
+                      "status",
+                      "updatedAt"
                     ]
                   },
                   "createdAt": {
@@ -9465,6 +9563,9 @@
                   "lastActivityAt": {
                     "type": "string"
                   },
+                  "seenActivityAt": {
+                    "type": "string"
+                  },
                   "activeSince": {
                     "type": "string"
                   },
@@ -9645,6 +9746,52 @@
                     },
                     "required": [
                       "since"
+                    ]
+                  },
+                  "goal": {
+                    "type": "object",
+                    "properties": {
+                      "objective": {
+                        "type": "string"
+                      },
+                      "status": {
+                        "open": true,
+                        "type": "string",
+                        "enum": [
+                          "active",
+                          "paused",
+                          "blocked",
+                          "usage_limited",
+                          "budget_limited",
+                          "complete"
+                        ]
+                      },
+                      "reason": {
+                        "type": "string"
+                      },
+                      "tokensUsed": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "tokenBudget": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "seconds": {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      "updatedAt": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "objective",
+                      "status",
+                      "updatedAt"
                     ]
                   },
                   "createdAt": {
@@ -14397,6 +14544,46 @@
             "type": "string",
             "maxLength": 100,
             "pattern": "^[A-Za-z0-9-]+$"
+          },
+          "push": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "topic": {
+                    "type": "string",
+                    "maxLength": 155
+                  },
+                  "environment": {
+                    "type": "string",
+                    "enum": [
+                      "production",
+                      "sandbox"
+                    ]
+                  },
+                  "activityStartToken": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "activityToken": {
+                    "type": "string",
+                    "maxLength": 400
+                  }
+                },
+                "required": [
+                  "token",
+                  "topic",
+                  "environment"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -14511,6 +14698,34 @@
           },
           "allowControl": {
             "type": "boolean"
+          },
+          "push": {
+            "type": "object",
+            "properties": {
+              "route": {
+                "open": true,
+                "type": "string",
+                "enum": [
+                  "direct",
+                  "none"
+                ]
+              },
+              "reason": {
+                "open": true,
+                "type": "string",
+                "enum": [
+                  "no_key",
+                  "no_token",
+                  "failed"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "route"
+            ]
           }
         },
         "required": [

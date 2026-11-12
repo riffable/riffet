@@ -214,7 +214,7 @@ final class AppModel {
         do {
             switch alert {
             case .outdated:
-                try await server.restart()
+                try await server.restartWhenIdle()
             case .stopped:
                 if server.hasLoginService { try await server.kickstartLoginService() } else { try await server.startAppManaged() }
             }

@@ -163,6 +163,11 @@ struct ConversationView: View {
         }
         return result
     }
+    /// On screen in the foreground: what arrives is seen, on every device.
+    private var seenActivity: String? {
+        guard scenePhase == .active, workbench.visibleSessionID == sessionID, let session else { return nil }
+        return session.lastActivityAt ?? session.createdAt
+    }
     private var feedbackVisible: Bool {
         scenePhase == .active && ready && workbench.visibleSessionID == sessionID && !terminal && !information && !outline && selection == nil && feedbackDetail == nil && !renaming && restartBinding == nil
     }
@@ -186,6 +191,7 @@ struct ConversationView: View {
         .onDisappear { feedback.pause(); if workbench.visibleSessionID == sessionID { workbench.visibleSessionID = nil } }
         .onChange(of: feedbackSource, initial: true) { _, _ in updateFeedback() }
         .onChange(of: feedbackVisible) { _, _ in updateFeedback() }
+        .onChange(of: seenActivity, initial: true) { _, activity in if activity != nil { workbench.markSeen(sessionID) } }
         .onChange(of: ledgerKey, initial: true) { _, _ in
             feedbackDetail = nil
             feedbackRowVisible = false

@@ -97,6 +97,22 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
   });
   app.patch<{Params:{id:string};Body:SessionPatch}>('/api/sessions/:id',async(request)=>patchSession(deps,request.params.id,request.body??{}));
   app.put<{Body:{sessionIds?:unknown}}>('/api/sessions/pin-order',async(request)=>setPinOrder(deps,request.body?.sessionIds));
+  /** The conversation was shown in the foreground up to `activityAt` on some device; see `Store.markSessionSeen`. */
+  app.post<{Params:{id:string};Body:{activityAt?:unknown}}>('/api/sessions/:id/seen',async(request)=>{
+    const session=store.getSession(request.params.id);
+    requireSessionVisibleToClient(request.headers,session,id=>store.getProject(id));
+    const activityAt=request.body?.activityAt;
+    if(activityAt!==undefined&&(typeof activityAt!=='string'||!Number.isFinite(Date.parse(activityAt))))throw new AppError('INVALID_SEEN','activityAt must be a timestamp');
+    return store.markSessionSeen(session.id,activityAt)??store.getSession(session.id);
+  });
+  /** Mark all as seen: `{all:true}` for every conversation this client lists, or `{sessionIds}`. Answers with the ids that changed. */
+  app.post<{Body:{all?:unknown;sessionIds?:unknown}}>('/api/sessions/seen',async(request)=>{
+    const {all,sessionIds}=request.body??{};
+    if(all!==true&&(!Array.isArray(sessionIds)||sessionIds.length>5000||sessionIds.some(id=>typeof id!=='string')))throw new AppError('INVALID_SEEN','Send all: true or a list of sessionIds');
+    const listed=visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id));
+    const wanted=all===true?undefined:new Set(sessionIds as string[]);
+    return {sessionIds:store.transaction(()=>listed.filter(session=>(!wanted||wanted.has(session.id))&&store.markSessionSeen(session.id)).map(session=>session.id))};
+  });
   app.get<{Params:{id:string};Querystring:{after?:string}}>('/api/sessions/:id/events',async(request)=>{store.getSession(request.params.id);return store.getEvents(request.params.id,sequence(request.query.after));});
   app.get<{Params:{id:string};Querystring:{after?:string}}>('/api/sessions/:id/stream',async(request,reply)=>{
     const id=request.params.id;store.getSession(id);

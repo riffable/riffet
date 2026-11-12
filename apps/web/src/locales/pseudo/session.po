@@ -124,6 +124,14 @@ msgstr ""
 msgid "{title} · 预览不可用"
 msgstr ""
 
+#: src/app/session/ComposerDock.tsx
+msgid "{used} / {budget} token"
+msgstr ""
+
+#: src/app/session/ComposerDock.tsx
+msgid "{used} token"
+msgstr ""
+
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」已完成"
 msgstr ""
@@ -1004,10 +1012,6 @@ msgstr ""
 msgid "已暂停"
 msgstr ""
 
-#: src/app/session/ComposerDock.tsx
-msgid "已更新"
-msgstr ""
-
 #: src/app/session/SubagentSession.tsx
 msgid "已结束"
 msgstr ""
@@ -1690,6 +1694,10 @@ msgstr ""
 msgid "用户"
 msgstr ""
 
+#: src/app/session/ComposerDock.tsx
+msgid "用量已达上限"
+msgstr ""
+
 #: src/app/session/SessionHandoff.tsx
 msgid "由 {profileName} · {model} 生成"
 msgstr ""
@@ -1800,10 +1808,6 @@ msgstr ""
 
 #: src/app/session/TerminalHoldBar.tsx
 msgid "结束终端中的进程？"
-msgstr ""
-
-#: src/app/session/ComposerDock.tsx
-msgid "继续中"
 msgstr ""
 
 #. placeholder {0}: recovery.queuedRunIds.length
@@ -2237,6 +2241,10 @@ msgstr ""
 
 #: src/app/session/Timeline.tsx
 msgid "项目目录之外，只读预览 {path}"
+msgstr ""
+
+#: src/app/session/ComposerDock.tsx
+msgid "预算已用完"
 msgstr ""
 
 #: src/app/session/MessageAttachments.tsx

@@ -7,13 +7,16 @@ import { detectTailscale } from '../../../packages/plugin-api/src/kit/machine.js
 
 interface BackupManifest { format: 'riffet-backup-v1'; createdAt: string; files: Array<{path:string;sha256:string;size:number}>; }
 /** State a backup captures. */
-const included = ['access-token','cookie-secret','settings.json','cursor-cli.json','native-backend-profiles.json','themes.json','devices.json','owner.json','owner','attachments','checkpoints','config-backups','marks'];
+const included = ['access-token','cookie-secret','settings.json','cursor-cli.json','native-backend-profiles.json','themes.json','devices.json','owner.json','owner','apns-key.json','server-id','attachments','checkpoints','config-backups','marks'];
 /** Directories older backups may carry; accepted on restore, never written by a new backup. */
 const legacyIncluded = new Set(['space-assets']);
 /** What a restore may copy: the database plus the state a backup writes, and legacy dead state it ignores. */
 const allowedTopLevel = new Set(['workbench.db', ...included, ...legacyIncluded]);
-/** Paired-device and owner state arrived after backups shipped; old backups omit it and must still restore. */
-const optionalIncluded = new Set(['devices.json','owner.json']);
+/**
+ * Paired-device, owner and push state arrived after backups shipped; old backups omit it and must still restore.
+ * The push key is restored 0600 like every file; `server-id` keeps the id devices match pushes by.
+ */
+const optionalIncluded = new Set(['devices.json','owner.json','apns-key.json','server-id']);
 const digest = (data:Buffer) => createHash('sha256').update(data).digest('hex');
 
 export { detectTailscale };

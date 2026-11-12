@@ -1,0 +1,21 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    "等待你处理：%lld" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Waiting for you: %lld" } }
+      }
+    },
+    "正在运行：%lld" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Running: %lld" } }
+      }
+    },
+    "未读：%lld" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unread: %lld" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}

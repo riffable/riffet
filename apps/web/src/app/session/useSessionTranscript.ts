@@ -1,59 +1,46 @@
 import { useMemo, useRef } from 'react';
-import type { Run } from '@contracts';
+import type { Run, SessionGoal } from '@contracts';
 import type { TimelineItem } from './model';
-import { goalCall, todoPlanForDock, type SessionGoal } from './ComposerDock';
+import { todoPlanForDock } from './ComposerDock';
 import { inQueue, messagePlace, sendPhase } from './delivery';
 import { showsRunningCompaction } from './Activities';
 import { sameMap, sameSet, useStable } from './stable';
 import type { SubagentBrief } from './SessionWorkActions';
 import { turnHasVisibleOutput } from './timelineTurns';
-import { toolView, type ToolView } from './toolView';
+import { toolView } from './toolView';
 import { isRecord, str } from '@/lib/utils';
 import type { useSessionSync } from './useSessionSync';
 
 const noKeys: ReadonlySet<string> = new Set();
-const sameGoal = (a: SessionGoal | undefined, b: SessionGoal | undefined) => a === b || Boolean(a && b && a.objective === b.objective && a.action === b.action && a.blockedReason === b.blockedReason);
+const sameGoal = (a: SessionGoal | undefined, b: SessionGoal | undefined) => a === b || Boolean(a && b && a.objective === b.objective && a.status === b.status && a.reason === b.reason && a.tokensUsed === b.tokensUsed && a.tokenBudget === b.tokenBudget);
 const sameBriefs = (a: ReadonlyMap<string, SubagentBrief>, b: ReadonlyMap<string, SubagentBrief>) => sameMap(a, b, (x, y) => x.title === y.title && x.detail === y.detail);
 
 /** One tool call's parse, kept per event: a row's event is replaced whenever the row changes. */
-interface ToolDigest { view: ToolView; brief: readonly [string, SubagentBrief] | null }
+interface ToolDigest { brief: readonly [string, SubagentBrief] | null }
 
 /**
  * Everything the composer dock and the side column read off the timeline, in one walk: the
- * current todo list, the session's goal and what each Task call asked for. Each tool row is parsed
+ * current todo list and what each Task call asked for. Each tool row is parsed
  * once (through [digestOf]'s cache), so a streamed frame re-walks pointers, not JSON.
  *
  * The todo list is the newest plan; once it is finished and a later turn has started it has done
- * its job — the DeepSeek Harness behaviour is to drop the list at turn start. The goal follows the
- * rules of `latestGoal`.
+ * its job — the DeepSeek Harness behaviour is to drop the list at turn start.
  */
 function digestTimeline(timeline: readonly TimelineItem[], digestOf: (event: TimelineItem['event']) => ToolDigest) {
   let planIndex = -1;
   let lastUserIndex = -1;
-  let goalIndex = -1;
-  let goal: { action?: string; blockedReason?: string; objective?: string } = {};
-  let objective: string | undefined;
   const briefs = new Map<string, SubagentBrief>();
   for (let index = 0; index < timeline.length; index += 1) {
     const item = timeline[index]!;
     if (item.kind === 'user') lastUserIndex = index;
     else if (item.kind === 'plan') planIndex = index;
     if (item.kind !== 'tool') continue;
-    const { view, brief } = digestOf(item.event);
+    const { brief } = digestOf(item.event);
     if (brief) briefs.set(brief[0], brief[1]);
-    const call = goalCall(view);
-    if (!call) continue;
-    goalIndex = index;
-    goal = call;
-    objective = call.objective ?? objective;
   }
   const plan = planIndex < 0 ? undefined : timeline[planIndex] as Extract<TimelineItem, { kind: 'plan' }>;
   return {
     todos: plan ? todoPlanForDock(plan.entries, lastUserIndex > planIndex) : undefined,
-    // A finished goal steps aside once the conversation has moved on, exactly as a finished todo list.
-    goal: goalIndex < 0 || (goal.action === 'complete' && lastUserIndex > goalIndex)
-      ? undefined
-      : { objective: objective ?? '', action: goal.action, blockedReason: goal.blockedReason } satisfies SessionGoal,
     briefs,
   };
 }
@@ -64,7 +51,7 @@ function digestTimeline(timeline: readonly TimelineItem[], digestOf: (event: Tim
  * The session page and the transcript replay (`replay/`) both read it here, so the replay measures
  * the same transcript the reader gets.
  */
-export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, { working, busy, compacting, root }: { working: boolean; busy: boolean; compacting: boolean; root?: string }) {
+export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, { working, busy, compacting, root, goal: sessionGoal }: { working: boolean; busy: boolean; compacting: boolean; root?: string; goal?: SessionGoal }) {
   const timeline = native.timeline;
   // `NativeTimelineModel` patches job rows in place, so the version counters below are what signal
   // a change to these derived snapshots. Each snapshot that has an identity of its own is held
@@ -88,10 +75,10 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
     return new Set(timeline.flatMap((item) => item.kind === 'user' && item.run && ids.has(item.run.id) ? [item.key] : []));
   }, [timeline, timelineVersion, queuedRuns]), sameSet);
   /**
-   * The dock above the composer owns the todo list and the goal, and the side column also lists
+   * The dock above the composer owns the todo list (and the goal), and the side column also lists
    * what each Task call asked for (the CLI documents `description` as the subagent's user-facing
-   * title, so children are named by what they are doing instead of by their type name). All three
-   * come from one walk of the timeline; each is held stable while its contents are.
+   * title, so children are named by what they are doing instead of by their type name). The list and
+   * the briefs come from one walk of the timeline; each is held stable while its contents are.
    */
   const toolDigests = useRef<{ root?: string; byEvent: WeakMap<object, ToolDigest> }>({ byEvent: new WeakMap() });
   const digest = useMemo(() => {
@@ -104,14 +91,15 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
         const input = isRecord(view.rawInput) ? view.rawInput : undefined;
         const title = str(input?.description)?.trim();
         const detail = str(input?.prompt)?.trim();
-        entry = { view, brief: title ? [view.id, { title, ...(detail ? { detail } : {}) }] : null };
+        entry = { brief: title ? [view.id, { title, ...(detail ? { detail } : {}) }] : null };
         cache.set(event, entry);
       }
       return entry;
     });
   }, [timeline, timelineVersion, root]);
   const todoEntries = digest.todos;
-  const goal = useStable(digest.goal, sameGoal);
+  /** The server keeps the goal on the session; held stable so a session frame that did not change it re-renders nothing. */
+  const goal = useStable(sessionGoal, sameGoal);
   const subagentBriefs = useStable(digest.briefs, sameBriefs);
   // A queued message is waiting for its turn, and a plan is a live checklist rather than a message,
   // so both are shown once — in the dock above the composer — exactly like the CLI's own inbox.

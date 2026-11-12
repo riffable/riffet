@@ -2,14 +2,15 @@ package riffet.ui.composer
 
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import riffet.contracts.SessionGoal
 import riffet.core.TimelineItem
 import riffet.core.TimelineItemKind
 import riffet.core.kind
-import riffet.core.toolView
 import riffet.i18n.L10n
+import riffet.ui.timeline.activityTokens
 
 /*
- * What the docks above the composer own: the agent's todo list and the harness's goal. The rules
+ * What the docks above the composer own: the agent's todo list and the session's goal. The rules
  * decide what the transcript leaves out (`visibleTimeline`), so every client renders from these.
  */
 
@@ -98,68 +99,24 @@ fun visibleTimeline(
     return if (visible.size == timeline.size) timeline else visible
 }
 
-/**
- * One goal phase, in the harness's own vocabulary.
- *
- * `create_goal` carries no action at all - setting a goal is not a transition - so a freshly created
- * goal reads as [goalStatusLabel]'s default, "进行中", and only `update_goal` names a phase.
- */
-private val GOAL_ACTIONS = mapOf(
-    "edit" to "goal.updated",
-    "pause" to "goal.paused",
-    "resume" to "goal.resuming",
-    "complete" to "goal.completed",
+/** The status words; a status this build does not know reads as an active goal. */
+private val GOAL_STATUSES = mapOf(
+    "active" to "goal.active",
+    "paused" to "goal.paused",
     "blocked" to "goal.blocked",
+    "usage_limited" to "goal.usageLimited",
+    "budget_limited" to "goal.budgetLimited",
+    "complete" to "goal.completed",
 )
-
-/** What the phase reads as. An action this build does not know still reads as an active goal. */
-fun goalStatusLabel(action: String?): String = L10n.uiText(GOAL_ACTIONS[action] ?: "goal.active")
-
-/** The session's goal, as the newest goal tool call describes it. */
-data class SessionGoal(
-    val objective: String,
-    val action: String?,
-    val blockedReason: String?,
-)
-
-private fun goalField(input: JsonObject?, key: String): String? =
-    (input?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content?.takeIf { it.isNotBlank() }
 
 /**
- * The newest goal in the transcript, or null when the session has none.
- *
- * `create_goal` and an `edit` carry the objective; `pause` / `resume` / `complete` / `blocked` carry
- * only the action, so the objective is carried forward from the newest call that had one - otherwise
- * completing a goal would replace what the session is about with the word "已完成".
- *
- * A finished goal is dropped once the conversation has moved on to a later user turn, exactly as the
- * todo dock drops a finished checklist: it has said everything it had to say.
+ * What the goal's status reads as. A goal stopped by a limit also says how many tokens it used (against
+ * its budget when it has one): that is what the reader decides on next.
  */
-fun latestGoal(timeline: List<TimelineItem>): SessionGoal? {
-    var newestIndex = -1
-    var action: String? = null
-    var blockedReason: String? = null
-    var objective: String? = null
-    for (index in timeline.indices.reversed()) {
-        val tool = timeline[index] as? TimelineItem.Tool ?: continue
-        // `toolView` parses the whole call; its kind is just `data.kind`, so most rows are skipped here.
-        val kind = tool.event.base.data["kind"] as? JsonPrimitive
-        if (kind == null || !kind.isString || kind.content != "goal") continue
-        val view = toolView(tool.event.base, null)
-        if (view.kind != "goal") continue
-        val input = view.rawInput as? JsonObject
-        if (newestIndex < 0) {
-            newestIndex = index
-            action = goalField(input, "action")
-            blockedReason = goalField(input, "blocked_reason") ?: goalField(input, "blockedReason")
-        }
-        if (objective == null) objective = goalField(input, "objective")
-        if (objective != null) break
-    }
-    if (newestIndex < 0) return null
-    if (action == "complete") {
-        val laterTurn = timeline.drop(newestIndex + 1).any { it.kind == TimelineItemKind.USER }
-        if (laterTurn) return null
-    }
-    return SessionGoal(objective = objective.orEmpty(), action = action, blockedReason = blockedReason)
+fun goalStatusLabel(goal: SessionGoal): String {
+    val label = L10n.uiText(GOAL_STATUSES[goal.status] ?: "goal.active")
+    val used = goal.tokensUsed?.takeIf { goal.status == "usage_limited" || goal.status == "budget_limited" } ?: return label
+    val budget = goal.tokenBudget
+    val tokens = if (budget != null) L10n.uiText("goal.tokensOfBudget", activityTokens(used), activityTokens(budget)) else L10n.uiText("goal.tokens", activityTokens(used))
+    return "$label · $tokens"
 }

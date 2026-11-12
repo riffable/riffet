@@ -580,3 +580,18 @@ object PatchValue {
     fun contextWindows(value: Map<String, Long>?): JsonElement =
         if (value == null) JsonNull else buildJsonObject { value.forEach { (id, tokens) -> put(id, JsonPrimitive(tokens)) } }
 }
+
+/** `GET|PUT|DELETE /api/settings/push`: the APNs auth key this server pushes with. The key itself is never returned. */
+@Serializable
+data class PushKeyStatus(
+    val configured: Boolean,
+    val keyId: String? = null,
+    val teamId: String? = null,
+    /** `ok` or `invalid`. */
+    val status: String? = null,
+    val detail: String? = null,
+)
+
+/** `PUT /api/settings/push`: [key] is the `.p8` file's PEM text. */
+@Serializable
+data class PushKeyInput(val keyId: String, val teamId: String, val key: String)

@@ -150,6 +150,17 @@ class RiffetConnection(
         return found
     }
 
+    /**
+     * A paired server's API without selecting or installing it, for work addressed to that server
+     * whichever one is open: a notification action, this device's report. Null when not paired.
+     */
+    @Throws(Exception::class)
+    suspend fun pairedApi(origin: String): RiffetApi? = pairingChanges.withLock {
+        val state = tokens.pairings()
+        state.applyRoutes()
+        state.servers.firstOrNull { it.origin == origin }?.let { authenticated(it.baseUrl) }
+    }
+
     fun requireApi(): RiffetApi = api ?: throw RiffetNotConnectedException()
     fun apiOrNull(): RiffetApi? = api
 

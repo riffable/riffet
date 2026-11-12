@@ -19,6 +19,7 @@ private struct LaunchSplash: View {
 
 @main
 struct RiffetApp: App {
+    @UIApplicationDelegateAdaptor(RiffetAppDelegate.self) private var delegate
     @State private var model = AppModel.shared
     @State private var themeStore = ThemeStore()
     @State private var localization = AppLocalization.shared

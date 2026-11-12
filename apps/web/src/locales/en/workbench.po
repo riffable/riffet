@@ -233,6 +233,10 @@ msgstr "All"
 msgid "全部会话"
 msgstr "All sessions"
 
+#: src/app/Sidebar.tsx
+msgid "全部标为已读"
+msgstr "Mark all as seen"
+
 #: src/app/tabs/TabBar.tsx
 msgid "全部标签"
 msgstr "All tabs"
@@ -468,6 +472,10 @@ msgstr "Changes"
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr "Changes and files"
+
+#: src/app/Sidebar.tsx
+msgid "只看未读"
+msgstr "Unread only"
 
 #: src/app/ProjectHome.tsx
 msgid "各自在独立 Worktree"
@@ -1328,6 +1336,10 @@ msgstr "The server version is incompatible"
 #: src/app/Sidebar.tsx
 msgid "未关联项目"
 msgstr "No project"
+
+#: src/app/Sidebar.tsx
+msgid "未读"
+msgstr "Unread"
 
 #: src/app/Sidebar.tsx
 msgid "本机"

@@ -47,6 +47,17 @@ suspend fun RiffetApi.createSession(body: NativeSessionCreateInput): NativeSessi
 suspend fun RiffetApi.updateSession(id: String, body: SessionUpdate): Session =
     patch("/api/sessions/${id.enc()}", wireBody(body)).decode()
 
+/** The conversation was shown in the foreground up to [activityAt]; the server keeps the latest such time and answers with the session. */
+@Throws(Exception::class)
+suspend fun RiffetApi.markSessionSeen(id: String, activityAt: String): Session =
+    post("/api/sessions/${id.enc()}/seen", buildJsonObject { put("activityAt", activityAt) }).decode()
+
+/** Mark all as seen: every conversation this client lists. */
+@Throws(Exception::class)
+suspend fun RiffetApi.markAllSessionsSeen() {
+    post("/api/sessions/seen", buildJsonObject { put("all", true) }).discard()
+}
+
 /** `session-delete-v1`: what deleting [id] would remove; a deleted id answers 410 `SESSION_DELETED`. */
 @Throws(Exception::class)
 suspend fun RiffetApi.sessionDeletion(id: String): SessionDeletionPreview =

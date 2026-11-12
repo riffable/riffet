@@ -76,12 +76,12 @@ struct SessionAside: View {
         let folds = todos.count > Self.limit && !planExpanded
         let shown = folds ? Array(todos.filter { !settled($0) }.prefix(Self.limit)) : todos
         let hidden = folds ? todos.filter { !settled($0) }.count - shown.count : 0
-        return InfoSection(title: String(localized: "计划"), meta: todos.isEmpty ? goal.map { goalStatusLabel(action: $0.action) } : todoProgress(entries: todos)) {
+        return InfoSection(title: String(localized: "计划"), meta: todos.isEmpty ? goal.map { goalStatusLabel(goal: $0) } : todoProgress(entries: todos)) {
             if let goal {
-                let blocked = goal.action == "blocked"
+                let blocked = goal.status == "blocked"
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(goal.objective).font(.riffet(size: S(13))).foregroundStyle(blocked ? palette.warning : palette.fg2).lineLimit(4)
-                    if blocked, let reason = goal.blockedReason, !reason.isEmpty {
+                    if blocked, let reason = goal.reason, !reason.isEmpty {
                         Text(reason).font(.riffet(size: S(12))).foregroundStyle(palette.warning).lineLimit(3)
                     }
                 }

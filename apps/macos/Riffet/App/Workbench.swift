@@ -450,10 +450,10 @@ final class Workbench {
             if !presentation.loaded {
                 // A frame from before this conversation's history arrived has empty lists: those
                 // keep what is on screen (or what it showed when last open) until the loaded frame.
-                // Compaction, background tasks and stop requests are live and follow at once.
+                // Compaction, background tasks, stop requests and the goal (kept on the session) are
+                // live and follow at once.
                 let held = docksSessionId == id ? openDocks : (recentDocks[id] ?? SessionDocks())
                 docks.todos = held.todos
-                docks.goal = held.goal
                 docks.jobs = held.jobs
                 docks.subagents = held.subagents
                 docks.outputs = held.outputs
@@ -463,8 +463,10 @@ final class Workbench {
         } else if docksSessionId != id {
             // The presenter runs behind the store; until it catches up with this conversation its
             // docks, jobs and subagents belong to the previous one. Show what this conversation
-            // showed when it was last open, or nothing.
-            showDocks(id.flatMap { recentDocks[$0] } ?? SessionDocks(), for: id)
+            // showed when it was last open, or nothing; the goal comes from the session itself.
+            var docks = id.flatMap { recentDocks[$0] } ?? SessionDocks()
+            docks.goal = selected?.goal
+            showDocks(docks, for: id)
         }
     }
 
@@ -974,12 +976,12 @@ final class Workbench {
         showsTerminalPage.toggle()
     }
 
-    // MARK: Writes
-
     func toggleCanvasPage() {
         guard !showingHome, page == nil, selected != nil, canvasAvailable else { return }
         showsCanvasPage.toggle()
     }
+
+    // MARK: Writes
 
     @discardableResult
     func send(_ text: String, attachments: [Attachment], interrupt: Bool = false, enqueue: Bool = false, onStored: (() -> Void)? = nil) async -> Bool {

@@ -20,7 +20,11 @@ final class Workbench {
     private(set) var deletionLoading: String?
     private(set) var removal: SessionRemoval?
     private(set) var notificationError: String?
-    var visibleSessionID: String?
+    var visibleSessionID: String? {
+        didSet { if let id = visibleSessionID, id != oldValue { RiffetNotifications.shared.withdraw(sessionID: id) } }
+    }
+    /// The waiting conversations the last notification sweep saw; nil asks for a sweep at the next list.
+    @ObservationIgnored private var sweptWaiting: Set<String>?
     private(set) var list: SessionListState
     private(set) var selected: Session?
     private(set) var timeline: [TimelineItem] = []
@@ -76,7 +80,10 @@ final class Workbench {
         self.list = store.list.value
         self.drafts = DraftStore(server: baseURL.absoluteString)
         self.resources = ResourceClient(baseURL: baseURL, host: host)
-        subscriptions.observe(store.list) { [weak self] in self?.list = $0 }
+        subscriptions.observe(store.list) { [weak self] in
+            self?.list = $0
+            self?.sweepNotifications()
+        }
         subscriptions.observe(store.selected) { [weak self] in self?.selected = $0 }
         subscriptions.observe(store.removedSessions) { [weak self] ids in self?.sessionsRemoved(ids) }
         subscriptions.observe(store.timeline) { [weak self] in self?.timeline = $0 }
@@ -121,6 +128,16 @@ final class Workbench {
     }
 
     func close() { subscriptions.cancelAll(); drafts.flush(); store.flush() }
+    /// Back in the foreground: pushes that arrived meanwhile are checked against the next list read,
+    /// not the one from before, which may predate them.
+    func withdrawSettledNotifications() { sweptWaiting = nil }
+    private func sweepNotifications() {
+        guard list.loaded, list.cachedAt == nil else { return }
+        let waiting = Set(list.sessions.filter { $0.state == .waiting }.map(\.id))
+        guard waiting != sweptWaiting else { return }
+        sweptWaiting = waiting
+        RiffetNotifications.shared.withdrawSettled(waiting: waiting, known: Set(list.sessions.map(\.id)))
+    }
     func project(_ id: String?) -> Project? { list.projects.first { $0.id == id } }
     func refresh() { store.refresh() }
     func consumeNotificationError(_ displayed: String) {
@@ -172,6 +189,9 @@ final class Workbench {
         do { return try await store.steer(text: text, attachments: attachments, context: context, target: target).boolValue }
         catch { self.error = error.riffetMessage; return false }
     }
+    /// The conversation is on screen in the foreground; call again when its activity moves.
+    func markSeen(_ sessionID: String) { store.markSeen(id: sessionID) }
+    func markAllSeen() async { await perform { try await store.markAllSeen() } }
     func update(_ session: Session, title: String? = nil, tags: [String]? = nil, archived: Bool? = nil, pinned: Bool? = nil) async {
         await perform {
             _ = try await store.updateSession(id: session.id, body: SessionUpdate(title: title, tags: tags,

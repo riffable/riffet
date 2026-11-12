@@ -60,6 +60,32 @@ data class DeviceReport(
     val capabilities: List<String>,
     val allowControl: Boolean,
     val installationId: String? = null,
+    /** Absent leaves the saved registration as it is; an explicit `null` on the wire removes it. */
+    val push: DevicePushRegistration? = null,
+)
+
+/**
+ * An Apple device's APNs addresses. [topic] is the app's bundle id and [environment] `production` or
+ * `sandbox`; the two Live Activity tokens start the summary activity and update the running one.
+ */
+@Serializable
+data class DevicePushRegistration(
+    val token: String,
+    val topic: String,
+    val environment: String,
+    val activityStartToken: String? = null,
+    val activityToken: String? = null,
+)
+
+/**
+ * `DeviceInfo.push`: how the server reaches this device in the background. [route] is `direct` or
+ * `none`; [reason] (`no_key`, `no_token`, `failed`) says why not, with [detail] for `failed`.
+ */
+@Serializable
+data class DevicePushRoute(
+    val route: String,
+    val reason: String? = null,
+    val detail: String? = null,
 )
 
 /** `event: call`. [deadline] and [createdAt] are ISO instants; [args] is the capability's own object. */

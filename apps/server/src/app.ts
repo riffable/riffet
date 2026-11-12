@@ -84,6 +84,7 @@ import { registerAppearanceRoutes } from './appearance/routes.js';
 import { OwnerService } from './owner/index.js';
 import { registerOwnerRoutes } from './owner/routes.js';
 import { registerUpdateRoutes } from './routes/update.js';
+import { registerServiceRoutes } from './routes/service.js';
 import { TimelineService } from './timeline/service.js';
 import { SessionMedia } from './timeline/media.js';
 import { TurnSummaryService } from './turn-summary/service.js';
@@ -101,6 +102,10 @@ import { RiffetMcpService } from './riffet-mcp/service.js';
 import { DeviceChannel } from './riffet-mcp/devices.js';
 import { DeviceAdb, type AdbRunner } from './riffet-mcp/adb.js';
 import { registerDeviceRoutes } from './routes/devices.js';
+import { ApnsClient, type ApnsTransport } from './push/apns.js';
+import { PushService, type PushTiming } from './push/service.js';
+import { registerPushRoutes } from './push/routes.js';
+import { readServerId } from './server-id.js';
 import { ChannelService } from './channels/service.js';
 import type { ChannelProvider } from './channels/types.js';
 import { feishuProvider } from './channels/feishu/index.js';
@@ -118,6 +123,8 @@ export interface AppOptions { stateDir?:string; cliPath?:string; host?:string; t
   port?:number;
   /** Replaces the process runner behind the device adb shortcut; tests only. */
   adbRunner?:AdbRunner;
+  /** Replaces the APNs connection and the push delays; tests only. */
+  push?:{transport?:ApnsTransport;retryDelaysMs?:number[];timing?:PushTiming};
   /** Replaces the built-in IM providers (docs/design/channels.md); tests only. */
   channelProviders?:ChannelProvider[]; }
 export async function createApp(options: AppOptions = {}) {
@@ -296,8 +303,12 @@ export async function createApp(options: AppOptions = {}) {
   const deps:RouteDeps={channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
-  app.get('/health',async()=>({ok:true,version:SERVER_VERSION,build:SERVER_BUILD,instanceId:options.instanceId,managedBy:LAUNCHED_BY,protocol:PROTOCOL_INFO}));
+  // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
+  // Unauthenticated on purpose: iOS reads it here to match a push to its server before it signs in; it is an id, not a credential.
+  const serverId=readServerId(stateDir);
+  app.get('/health',async()=>({ok:true,version:SERVER_VERSION,build:SERVER_BUILD,instanceId:options.instanceId,serverId,managedBy:LAUNCHED_BY,protocol:PROTOCOL_INFO}));
   registerUpdateRoutes(app);
+  registerServiceRoutes(app,deps);
   registerProjectRoutes(app,deps);
   registerSessionRoutes(app,deps);
   registerExternalSessionRoutes(app,deps);
@@ -327,6 +338,13 @@ export async function createApp(options: AppOptions = {}) {
   registerRiffetMcpRoutes(app,deps);
   registerDeviceRoutes(app,deps);
   registerChannelRoutes(app,deps);
+  // Background pushes to iOS devices, straight to APNs with the owner's key (docs/DEVICES.md §3「后台推送」).
+  const apns=new ApnsClient({stateDir,...(options.push?.transport?{transport:options.push.transport}:{}),...(options.push?.retryDelaysMs?{retryDelaysMs:options.push.retryDelaysMs}:{})});
+  const push=new PushService({serverId,store,auth,devices,apns,timing:options.push?.timing,
+    interaction:session=>nativeBackends.interaction(session),
+    latestReply:async sessionId=>{await timeline.ready(sessionId,'main');const turn=timeline.outline(sessionId,'main',1).turns.at(-1);return turn?timeline.turnText(sessionId,turn.turn)?.answer:undefined;}});
+  devices.pushRoute=(deviceId,platform)=>push.route(deviceId,platform);
+  registerPushRoutes(app,{apns,push});
   // The shim reads the server's address from its credential file; it moves on every start.
   app.addHook('onListen',async()=>{
     const address=app.server.address();
@@ -375,12 +393,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,channels,contextReferences,store,auth,riffetMcp,devices,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

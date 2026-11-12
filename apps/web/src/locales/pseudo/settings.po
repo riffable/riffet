@@ -193,6 +193,10 @@ msgstr ""
 msgid "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
 msgstr ""
 
+#: src/app/settings/PushKeySection.tsx
+msgid "iPhone 在后台将不再收到通知"
+msgstr ""
+
 #: src/app/settings/UpdateSection.tsx
 msgid "Server 构建"
 msgstr ""
@@ -432,6 +436,7 @@ msgstr ""
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/PushKeySection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "保存"
 msgstr ""
@@ -736,6 +741,10 @@ msgstr ""
 msgid "名称"
 msgstr ""
 
+#: src/app/settings/DevicesSection.tsx
+msgid "后台推送"
+msgstr ""
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "启动于"
 msgstr ""
@@ -916,6 +925,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "宽松"
+msgstr ""
+
+#: src/app/settings/PushKeySection.tsx
+msgid "密钥只保存在这台服务器上"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
@@ -1240,6 +1253,14 @@ msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr ""
 
+#: src/app/settings/PushKeySection.tsx
+msgid "推送"
+msgstr ""
+
+#: src/app/settings/DevicesSection.tsx
+msgid "推送失败"
+msgstr ""
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "提供商来源"
 msgstr ""
@@ -1336,6 +1357,10 @@ msgstr ""
 msgid "无法保存快速对话设置"
 msgstr ""
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法保存推送密钥"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "无法保存文件访问设置"
 msgstr ""
@@ -1429,6 +1454,10 @@ msgstr ""
 msgid "无法移除头像"
 msgstr ""
 
+#: src/app/settings/PushKeySection.tsx
+msgid "无法移除推送密钥"
+msgstr ""
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "无法移除聊天"
 msgstr ""
@@ -1457,6 +1486,10 @@ msgstr ""
 #: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
+msgstr ""
+
+#: src/app/settings/PushKeySection.tsx
+msgid "无法读取推送设置"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
@@ -1896,6 +1929,7 @@ msgstr ""
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/DevicesSection.tsx
 #: src/app/settings/ProfileSection.tsx
+#: src/app/settings/PushKeySection.tsx
 msgid "移除"
 msgstr ""
 
@@ -1932,6 +1966,10 @@ msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
 msgid "移除强调色"
+msgstr ""
+
+#: src/app/settings/PushKeySection.tsx
+msgid "移除推送密钥？"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -2369,6 +2407,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出登录"
+msgstr ""
+
+#: src/app/settings/PushKeySection.tsx
+msgid "选择 .p8 文件"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx

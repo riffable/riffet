@@ -13,7 +13,7 @@ import { promisify } from 'node:util';
 import type {
   ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendId, NativeContext,
   NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRunConfig,
-  NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Project, Run, Session, TerminalInfo,
+  NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, NativeWorkbenchEvent, Project, Run, Session, SessionGoal, TerminalInfo,
 } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { activityId, isLiveActivity, withActivity, type ActivityLedger } from '../../journal/activity.js';
@@ -915,6 +915,7 @@ function isClaudeSessionId(value: string): boolean {
 export const CLAUDE_TRAITS: NativeBackendTraits = {
   settlesSlashOnSubmit: true,
   reportsTurnOutcome: true,
+  survivesRestart: true,
   offlineMayBeRunning: true,
   stopKeepsPendingInput: true,
   detachedSubagents: true,
@@ -1958,6 +1959,12 @@ class ClaudeSessionRuntime {
     this.emit({ type: 'session', session: this.host.updateSession(this.session.id, patch) });
   }
 
+  /** Keep the session's goal equal to what the transcript's `/goal` rows say. */
+  private adoptTranscriptGoal(goal: SessionGoal | undefined): void {
+    if (this.transcript.state !== 'ok' || JSON.stringify(goal) === JSON.stringify(this.host.getSession(this.session.id).goal)) return;
+    this.emit({ type: 'session', session: this.host.updateSession(this.session.id, { goal }) });
+  }
+
   /** Adopt the title Claude Code recorded in its transcript; it replaces the first message once. */
   private adoptTranscriptTitle(title: string, firstPrompt?: string): void {
     const patch = generatedTitlePatch(this.host.getSession(this.session.id), title, firstPrompt);
@@ -2401,6 +2408,7 @@ class ClaudeSessionRuntime {
       if (humanMessage) this.nameFromMessage(humanMessage);
       if (this.transcript.title) this.adoptTranscriptTitle(this.transcript.title, humanMessage);
     }
+    this.adoptTranscriptGoal(this.transcript.goal);
     for (const frame of result.subagents) if (frame.running !== undefined) this.emit({ type: 'subagent', toolCallId: frame.toolCallId, agentId: frame.agentId, running: frame.running });
     if (this.transcript.state !== previousTranscriptState) this.setStatus({ ...this.status, transcript: this.transcript.state });
     // Activities change with the rows (and with what the files add to them): the summary on the status follows.

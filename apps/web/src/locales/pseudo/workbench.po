@@ -233,6 +233,10 @@ msgstr ""
 msgid "全部会话"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "全部标为已读"
+msgstr ""
+
 #: src/app/tabs/TabBar.tsx
 msgid "全部标签"
 msgstr ""
@@ -467,6 +471,10 @@ msgstr ""
 #: src/app/Header.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "只看未读"
 msgstr ""
 
 #: src/app/ProjectHome.tsx
@@ -1327,6 +1335,10 @@ msgstr ""
 #: src/app/ProjectHome.tsx
 #: src/app/Sidebar.tsx
 msgid "未关联项目"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "未读"
 msgstr ""
 
 #: src/app/Sidebar.tsx

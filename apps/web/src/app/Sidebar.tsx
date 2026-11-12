@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconTriangleAlert, IconX } from '@/components/icons';
-import type { NativeBackendCatalogEntry, Session } from '@contracts';
+import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner, StatusDot } from '@/components/ui/controls';
@@ -13,7 +13,9 @@ import { AgentLogo } from '@/components/AgentLogo';
 import { ThemeSwatch } from '@/components/theme-swatch';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
-import type { ProjectRecord } from '@/lib/api';
+import { api, type ProjectRecord } from '@/lib/api';
+import { errorMessage } from '@/lib/errors';
+import { toast } from '@/lib/toast';
 import { copyWithToast } from '@/lib/files';
 import { palettesOf, selectAppearanceItem, useAppearance } from '@/lib/appearance';
 import { localizedText } from '@/lib/plugins';
@@ -105,18 +107,22 @@ function offlineLabel(savedAt: number): string {
   return isJustNow(new Date(savedAt).toISOString()) ? i18n._(msg`离线 · 显示刚刚保存的列表`) : i18n._(msg`离线 · 显示 ${age} 前保存的列表`);
 }
 
-function SessionIndicator({ session, mobile }: { session: Session; mobile: boolean }) {
+function SessionIndicator({ session, mobile, selected }: { session: Session; mobile: boolean; selected: boolean }) {
   const { t } = useLingui();
+  // Finished while nobody looked; the open conversation is being read.
+  const unread = !selected && isDoneUnseen(session);
   if (session.terminalHold) return <span role="img" aria-label={t`在终端中`} title={t`在终端中`} className="inline-flex text-fg-3"><IconSquareTerminal className="size-3.5" /></span>;
   if (mobile) {
     if (session.state === 'running' || session.state === 'starting') return <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>;
     if (session.state === 'waiting') return <StatusDot tone="warning" shape="ring" pulse label={t`等待处理`} className="size-2" />;
     if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-2" />;
+    if (unread) return <StatusDot tone="accent" label={t`未读`} className="size-2" />;
     return null;
   }
   if (session.state === 'running' || session.state === 'starting') return <StatusDot tone="accent" pulse label={t`运行中`} />;
   if (session.state === 'waiting') return <StatusDot tone="warning" label={t`等待处理`} />;
   if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
+  if (unread) return <StatusDot tone="accent" label={t`未读`} />;
   return null;
 }
 
@@ -187,7 +193,7 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
         session.archivedAt && 'opacity-60',
       )}
     >
-      <span className="grid size-4 shrink-0 place-items-center"><SessionIndicator session={session} mobile={mobile} /></span>
+      <span className="grid size-4 shrink-0 place-items-center"><SessionIndicator session={session} mobile={mobile} selected={selected} /></span>
       <span className="min-w-0 flex-1 truncate">{session.title}</span>
       {marked && <span role="img" aria-label={t`已收藏`} title={t`已收藏`} className="inline-flex shrink-0 text-accent"><IconBookmarkFilled className="size-3.5" /></span>}
       {/* Idle, a row is a title and its time: which agent ran it and which directory it belongs to
@@ -271,6 +277,7 @@ export function Sidebar(props: Props) {
   // The phone drawer keeps its own established look; the desktop restyle stops at the breakpoint.
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const [showArchived, setShowArchived] = useState(false);
+  const [unreadOnly, setUnreadOnly] = useState(false);
   const [filterTag, setFilterTag] = useState('');
   const [layout, setLayoutState] = useState<SidebarLayout>(() => readStored(LAYOUT_KEY) === 'time' ? 'time' : 'project');
   const setLayout = (value: string) => {
@@ -316,7 +323,7 @@ export function Sidebar(props: Props) {
     if (layout !== 'project') return [];
     const byProject = new Map<string, Session[]>();
     for (const session of listedSessions) {
-      if ((!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag))) continue;
+      if ((!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag)) || (unreadOnly && session.id !== selectedSessionId && !isDoneUnseen(session))) continue;
       const projectId = visibleProjects.get(session.projectId)?.id;
       if (!projectId) continue;
       const bucket = byProject.get(projectId) ?? [];
@@ -326,14 +333,14 @@ export function Sidebar(props: Props) {
     for (const [projectId, bucket] of byProject) byProject.set(projectId, sortSessionsByActivity(bucket, { pinned: pinnedOrder }));
     return [...new Set(visibleProjects.values())]
       .map((project) => ({ project, sessions: byProject.get(project.id) ?? [] }))
-      .filter((group) => (!filterTag || group.sessions.length) && (!group.project.system || group.sessions.length));
-  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, pinnedOrder]);
+      .filter((group) => ((!filterTag && !unreadOnly) || group.sessions.length) && (!group.project.system || group.sessions.length));
+  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, pinnedOrder]);
 
   const timeline = useMemo(() => {
     if (layout !== 'time') return [];
     const matches = listedSessions.filter((session) => {
       const project = visibleProjects.get(session.projectId);
-      if (!project || (!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag))) return false;
+      if (!project || (!showArchived && session.archivedAt) || (filterTag && !session.tags?.includes(filterTag)) || (unreadOnly && session.id !== selectedSessionId && !isDoneUnseen(session))) return false;
       return true;
     });
     const now = new Date();
@@ -345,7 +352,7 @@ export function Sidebar(props: Props) {
       bucket.items.push({ session, project: visibleProjects.get(session.projectId)! });
     }
     return buckets;
-  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, locale, pinnedOrder]);
+  }, [layout, visibleProjects, listedSessions, showArchived, filterTag, unreadOnly, selectedSessionId, locale, pinnedOrder]);
 
   const renderSession = (session: Session, project?: ProjectRecord) => (
     <SessionRow
@@ -495,6 +502,8 @@ export function Sidebar(props: Props) {
                 </>}
                 <DropdownMenuSeparator />
                 <DropdownMenuCheckboxItem checked={showArchived} onCheckedChange={(value) => setShowArchived(value === true)}><Trans>显示已归档</Trans></DropdownMenuCheckboxItem>
+                <DropdownMenuCheckboxItem checked={unreadOnly} onCheckedChange={(value) => setUnreadOnly(value === true)}><Trans>只看未读</Trans></DropdownMenuCheckboxItem>
+                <DropdownMenuItem onSelect={() => void api.markAllSessionsSeen().catch((error) => toast.error(errorMessage(error)))}><Trans>全部标为已读</Trans></DropdownMenuItem>
                 {tags.length > 0 && <>
                   <DropdownMenuSeparator />
                   <DropdownMenuLabel><Trans>按标签筛选</Trans></DropdownMenuLabel>

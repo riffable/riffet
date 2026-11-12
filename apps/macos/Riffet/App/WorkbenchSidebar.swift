@@ -56,6 +56,10 @@ final class WorkbenchSidebar {
     var showArchived: Bool = UserDefaults.standard.bool(forKey: "riffet.show-archived") {
         didSet { UserDefaults.standard.set(showArchived, forKey: "riffet.show-archived"); rebuild() }
     }
+    /// Only what finished while nobody looked (`isDoneUnseen`), and the conversation on screen.
+    var unreadOnly = false {
+        didSet { rebuild() }
+    }
     /// Only sessions carrying this tag are listed; empty lists everything.
     var tag = "" {
         didSet { rebuild() }
@@ -146,13 +150,16 @@ final class WorkbenchSidebar {
         guard let list else { return }
         let projects = list.projects.filter { !$0.isBuiltInQuickChat }
         // Quick chats have their own page and are in no sidebar list.
-        let sessions = list.sessions.filter { $0.backendId != .chat && (tag.isEmpty || $0.tags.contains(tag)) }
+        let open = workbench?.selected?.id
+        let sessions = list.sessions.filter {
+            $0.backendId != .chat && (tag.isEmpty || $0.tags.contains(tag)) && (!unreadOnly || $0.id == open || SidebarModelKt.isDoneUnseen(session: $0))
+        }
         if layout == "TIME" {
             let dayStart = Int64(Calendar.current.startOfDay(for: .now).timeIntervalSince1970 * 1000)
             buckets = timeBuckets(projects: projects, sessions: sessions, query: "", showArchived: showArchived, dayStartMillis: dayStart)
         } else {
             let groups = visibleGroups(projects: projects, sessions: sessions, query: "", showArchived: showArchived)
-            self.groups = tag.isEmpty ? groups : groups.filter { !$0.sessions.isEmpty }
+            self.groups = tag.isEmpty && !unreadOnly ? groups : groups.filter { !$0.sessions.isEmpty }
         }
         if pinsInTabOrder, tabsShown { orderPinsAsTabs() }
     }
