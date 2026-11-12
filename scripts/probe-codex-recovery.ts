@@ -51,6 +51,7 @@ try {
       executable: process.env.CODEX_CLI ?? 'codex',
       args: ['-c', `model_reasoning_effort="${effort}"`],
       cwd: workspace,
+      requiredHumanApproval: true,
       // Isolated configuration intentionally excludes user authentication and plugins.
       env: { PATH: process.env.PATH, HOME: process.env.HOME, TMPDIR: process.env.TMPDIR, CODEX_HOME: probeHome },
       ...(remoteAddress ? { remoteAddress } : {}),

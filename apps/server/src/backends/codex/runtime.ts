@@ -625,6 +625,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       cwd: this.project.cwd,
       env: providerEnv(this.profile, this.flavor),
       credentialDir: credentialDirFor(this.flavor),
+      requiredHumanApproval: this.flavor.id === 'codex',
       onNotification: (method, params) => runtime?.onNotification(method, params),
       onServerRequest: request => runtime?.onServerRequest(request) ?? Promise.reject(new Error(`${this.label} runtime is not ready`)),
       onExit: error => runtime?.onExit(error),
@@ -1292,7 +1293,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (!this.attached || !this.transport?.isOnline || this.bindingScopeMismatch || this.endpointWriteConflict ||
       !this.nativeSessionId || !this.activeTurnId || this.settledTurns.has(this.activeTurnId) ||
       this.status.connection?.state !== 'connected' || this.status.phase !== 'busy' || this.currentInteraction) return undefined;
-    if (this.flavor.id === 'traex' && !supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)) return undefined;
+    if (!supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)) return undefined;
     const ownerRunId = this.turnRuns.get(this.activeTurnId)?.runId;
     return { nativeSessionId: this.nativeSessionId, turnId: this.activeTurnId, ...(ownerRunId ? { ownerRunId } : {}) };
   }
@@ -1311,9 +1312,9 @@ export class CodexSessionRuntime implements CodexThreadReader {
     commitDispatchFence(binding?: NativeDispatchBinding): unknown;
   }): Promise<void> {
     // Updating the CLI symlink does not upgrade an already running app-server. Never advertise or
-    // write steering to an unverified TRAE process, and never restart its task to obtain support.
-    if (this.flavor.id === 'traex' && !supportsSteerVersion(this.transport?.serverUserAgent, this.flavor.id)) {
-      throw new AppError('STEER_UNSUPPORTED', `This TRAE app-server requires version ${STEER_MIN_VERSIONS.traex} or newer with verified steering receipts.`, 409);
+    // write steering to an unverified process, and never restart its task to obtain support.
+    if (!supportsSteerVersion(this.transport?.serverUserAgent, this.flavor.id)) {
+      throw new AppError('STEER_UNSUPPORTED', `This ${this.label} app-server requires version ${STEER_MIN_VERSIONS[this.flavor.id]} or newer with verified steering receipts.`, 409);
     }
     this.assertSteerTarget(input.target);
     const terminal = this.terminalId ? await this.host.terminal.get(this.terminalId).catch(() => undefined) : undefined;
@@ -4094,7 +4095,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       ...(turnId ? { activeTurnId: this.turnRuns.get(turnId)?.runId ?? turnId } : {}),
       ...(turnId && this.attached && this.transport?.isOnline && !this.bindingScopeMismatch && !this.endpointWriteConflict &&
         (requested.connection ?? this.status.connection)?.state === 'connected' && requested.phase === 'busy' && !this.currentInteraction && this.nativeSessionId
-        && (this.flavor.id !== 'traex' || supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id))
+        && supportsSteerVersion(this.transport.serverUserAgent, this.flavor.id)
         ? { activeTurn: { nativeSessionId: this.nativeSessionId, turnId, ...(this.turnRuns.get(turnId)?.runId ? { ownerRunId: this.turnRuns.get(turnId)!.runId } : {}) } } : {}),
       ...(requested.connection === undefined && this.status.connection ? { connection: this.status.connection } : {}),
       ...(requested.history === undefined && this.status.history ? { history: this.status.history } : {}),

@@ -1913,6 +1913,38 @@ describe('Codex native protocol controls', () => {
     await h.adapter.dispose(h.host, h.session.id);
   });
 
+  it('requires a fresh one-time human command decision and rejects session or remembered grants', async () => {
+    const h = makeHarness();
+    try {
+      await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+      expect(h.factoryCalls[0]?.requiredHumanApproval).toBe(true);
+      await h.send('human-command');
+      const remembered = { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['pnpm', 'publish'] } };
+      for (const [index, availableDecisions] of [undefined, ['acceptForSession', remembered, 'accept', 'decline', 'cancel'], []].entries()) {
+        const id = `human-${index}`;
+        const pending = h.transport!.resolveNativeRequest({ id, method: 'item/commandExecution/requestApproval', params: {
+          threadId: 'native-thread', turnId: 'turn-1', itemId: id, kind: 'humanCommand', command: 'pnpm publish', availableDecisions,
+        } });
+        const interaction = await waitFor(() => h.adapter.interaction(h.host, h.session));
+        const response = { interactionId: interaction!.id, revision: interaction!.revision, requestId: `reply-${id}`, action: 'approve' };
+        expect(interaction!.actions.map(action => action.id)).toEqual(index === 2 ? [] : ['approve', 'deny', 'cancel']);
+        expect(h.transport!.responses.has(id)).toBe(false);
+        for (const action of index === 2 ? ['approve'] : ['approveForSession', 'decision:1']) {
+          await expect(h.adapter.respond(h.host, h.session, h.profile, { ...response, requestId: `invalid-${id}-${action}`, action }))
+            .rejects.toMatchObject({ code: 'INVALID_NATIVE_INTERACTION' });
+          expect(h.getReceipt(`invalid-${id}-${action}`)).toBeUndefined();
+          expect(h.transport!.responses.has(id)).toBe(false);
+        }
+        if (index === 2) h.transport!.notifyResolved(id);
+        else {
+          expect((await h.adapter.respond(h.host, h.session, h.profile, response)).status).toBe('completed');
+          expect(h.transport!.responses.get(id)).toEqual({ decision: 'accept' });
+        }
+        await pending;
+      }
+    } finally { await h.adapter.dispose(h.host, h.session.id); }
+  });
+
   it('grants the requested permission scope with absent optional profiles omitted, never null or unrequested rights', async () => {
     const h = makeHarness({ flavor: traexFlavor });
     await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
@@ -4722,6 +4754,20 @@ describe('explicit in-flight steering', () => {
         expect(h.fences).toHaveLength(0);
         expect(h.transport!.requestParams.some(entry => entry.method === 'turn/steer')).toBe(false);
       }
+    } finally { await h.cleanup(); }
+  });
+
+  it.each(['riffet/0.159.9 (old process)', undefined])('refuses steering to an old or unidentified Codex process despite a new installed CLI (%s)', async serverUserAgent => {
+    const h = await start();
+    try {
+      vi.mocked(codexConfig.probeAppServer).mockResolvedValue({ ...fakeProbe, version: 'codex-cli 0.167.2' });
+      h.transport!.serverUserAgent = serverUserAgent;
+      h.transport!.emitNativeNotification('thread/status/changed', { threadId: 'native-thread', status: { type: 'active' } });
+      expect(h.adapter.status(h.host, h.session).activeTurn).toBeUndefined();
+      await expect(h.steer('old-process')).rejects.toMatchObject({ code: 'STEER_UNSUPPORTED' });
+      expect(h.fences).toHaveLength(0);
+      expect(h.transport!.requestParams.some(entry => entry.method === 'turn/steer')).toBe(false);
+      expect(h.transport!.disposed).toBe(false);
     } finally { await h.cleanup(); }
   });
 

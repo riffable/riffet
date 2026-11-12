@@ -13,6 +13,24 @@ afterEach(async () => {
 });
 
 describe.skipIf(!processGroupsSupported)('Codex app-server process group cleanup', () => {
+  it.each([false, true])('negotiates human approvals only for an interactive client (%s) and retains the server identity', async requiredHumanApproval => {
+    const fixture = await createFixture('normal');
+    try {
+      const client = await startFixture(fixture, requiredHumanApproval);
+      expect(client.serverUserAgent).toBe('riffet/0.167.2 (protocol fixture)');
+      await expect(client.request('fixture/initialize')).resolves.toMatchObject({
+        capabilities: {
+          experimentalApi: true, requestAttestation: false,
+          ...(requiredHumanApproval ? { requiredHumanApproval: true } : {}),
+        },
+      });
+      const initialized = await client.request<{ capabilities: Record<string, unknown> }>('fixture/initialize');
+      expect(initialized.capabilities.requiredHumanApproval).toBe(requiredHumanApproval ? true : undefined);
+    } finally {
+      await fixture.cleanup();
+    }
+  });
+
   it('disposes both the Node wrapper and its inherited child process', async () => {
     const fixture = await createFixture('normal');
     try {
@@ -198,7 +216,7 @@ async function createFixture(mode: 'normal' | 'ignore-term' | 'startup-fail'): P
   return fixture;
 }
 
-async function startFixture(fixture: Fixture): Promise<CodexAppServer> {
+async function startFixture(fixture: Fixture, requiredHumanApproval = false): Promise<CodexAppServer> {
   const client = await CodexAppServer.start({
     executable: process.execPath,
     args: [
@@ -210,6 +228,7 @@ async function startFixture(fixture: Fixture): Promise<CodexAppServer> {
       join(fixture.directory, 'child.cjs'),
     ],
     cwd: process.cwd(),
+    requiredHumanApproval,
     onNotification: () => undefined,
     onServerRequest: async () => NO_SERVER_RESPONSE,
     onExit: () => undefined,
@@ -239,9 +258,13 @@ const server = http.createServer();
 const daemonSocketPath = socketPath + '.daemon';
 fs.symlinkSync(daemonSocketPath, socketPath);
 const wss = new WebSocketServer({ server });
+let initialized;
 wss.on('connection', socket => socket.on('message', data => {
   const request = JSON.parse(data.toString());
-  if (request.id !== undefined) socket.send(JSON.stringify({ id: request.id, result: { method: request.method } }));
+  if (request.method === 'initialize') initialized = request.params;
+  const result = request.method === 'initialize' ? { userAgent: 'riffet/0.167.2 (protocol fixture)' }
+    : request.method === 'fixture/initialize' ? initialized : { method: request.method };
+  if (request.id !== undefined) socket.send(JSON.stringify({ id: request.id, result }));
 }));
 server.listen(daemonSocketPath);
 `;

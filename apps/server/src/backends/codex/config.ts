@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -170,7 +171,15 @@ export function supportsSteerVersion(version: string | undefined, flavor: CodexF
 }
 
 export async function probeAppServer(executable: string): Promise<AppServerProbe> {
-  const cached = probes.get(executable);
+  // Global npm installs replace the launcher at the same path, sometimes with a preserved mtime.
+  // As with Claude's probe, cache the installed file identity, never the command path alone.
+  let key = executable;
+  try {
+    const path = await realpath(executable);
+    const file = await stat(path);
+    key = `${path}:${file.dev}:${file.ino}:${file.size}:${file.mtimeMs}:${file.ctimeMs}`;
+  } catch { /* Unresolved commands are retried after a failed probe. */ }
+  const cached = probes.get(key);
   if (cached) return await cached;
   const task = (async () => {
     try {
@@ -185,9 +194,10 @@ export async function probeAppServer(executable: string): Promise<AppServerProbe
         `${tuiResult.stdout}\n${tuiResult.stderr}`,
       );
     } catch {
+      probes.delete(key);
       return { appServer: false, unixSocket: false, wsAuth: false, remoteUnix: false, remoteWs: false, noAltScreen: false };
     }
   })();
-  probes.set(executable, task);
+  probes.set(key, task);
   return await task;
 }

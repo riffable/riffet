@@ -1,8 +1,11 @@
 import { createHash } from 'node:crypto';
+import { chmod, mkdtemp, readFile, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Project } from '../../../../../packages/contracts/src/index.js';
 import type { NativeBackendProfileConfig } from '../types.js';
-import { executableOf, matchesRuntimeFingerprint, reportedTraePermission, runtimeFingerprintFor } from './config.js';
+import { executableOf, matchesRuntimeFingerprint, probeAppServer, reportedTraePermission, runtimeFingerprintFor } from './config.js';
 import { codexFlavor, traexFlavor, type CodexFlavor } from './flavors.js';
 
 const project = { cwd: '/workspace/profile-test' } as Project;
@@ -76,4 +79,27 @@ it('tracks the effective configuration home inherited by Codex', () => {
   const saved = runtimeFingerprintFor(project, builtin, codexFlavor);
   vi.stubEnv('CODEX_HOME', '/second/config-home');
   expect(matchesRuntimeFingerprint(saved, project, builtin, codexFlavor)).toBe(false);
+});
+
+it('refreshes the CLI probe after installation at the same path and retries a previously missing CLI', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'riffet-codex-version-'));
+  const executable = join(directory, 'codex');
+  const calls = join(directory, 'calls');
+  const launcher = (version: string) => `#!/usr/bin/env node\nrequire('node:fs').appendFileSync(${JSON.stringify(calls)}, 'call\\n');\nconsole.log(process.argv.includes('--version') ? 'codex-cli ${version}' : '--listen unix:// --remote <ADDR> --no-alt-screen');\n`;
+  try {
+    expect((await probeAppServer(executable)).version).toBeUndefined();
+    await writeFile(executable, launcher('0.166.0'));
+    await chmod(executable, 0o755);
+    expect((await probeAppServer(executable)).version).toBe('codex-cli 0.166.0');
+    expect((await probeAppServer(executable)).version).toBe('codex-cli 0.166.0');
+    expect((await readFile(calls, 'utf8')).trim().split('\n')).toHaveLength(3);
+    const previous = await stat(executable);
+    const replacement = join(directory, 'replacement');
+    await writeFile(replacement, launcher('0.167.2'));
+    await chmod(replacement, 0o755);
+    await utimes(replacement, previous.atime, previous.mtime);
+    await rename(replacement, executable);
+    expect((await probeAppServer(executable)).version).toBe('codex-cli 0.167.2');
+    expect((await readFile(calls, 'utf8')).trim().split('\n')).toHaveLength(6);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });

@@ -99,8 +99,14 @@ function commandApprovalChoices(request: JsonRpcServerRequest): Array<{ id: stri
   // A supplied empty or invalid list must never widen to the legacy defaults. Null means absent
   // in the published optional/nullable protocol, just as an omitted field does.
   const available = request.params.availableDecisions;
-  const decisions = available == null ? ['accept', 'acceptForSession', 'decline'] : asArray<unknown>(available);
+  const humanCommand = request.params.kind === 'humanCommand';
+  const decisions = available == null
+    ? humanCommand ? ['accept', 'decline', 'cancel'] : ['accept', 'acceptForSession', 'decline']
+    : asArray<unknown>(available);
+  // Managed command checkpoints require a fresh human decision for each execution, even if a
+  // server includes a session grant or a remembered rule in its advertised choices.
   return decisions.flatMap((decision, index) => isCommandApprovalDecision(decision)
+    && (!humanCommand || decision === 'accept' || decision === 'decline' || decision === 'cancel')
     ? [{ id: typeof decision === 'string' ? commandActionIds[decision] : `decision:${index}`, decision }] : []);
 }
 

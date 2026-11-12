@@ -70,7 +70,7 @@ export const codexFlavor: CodexFlavor = {
   command: 'codex',
   // No release is known to break the adapter; the help probe gates what it needs. Newest verified:
   // docs/STEER.md.
-  cliVersions: { testedThrough: '0.160.0' },
+  cliVersions: { testedThrough: '0.167.2' },
   messageTag: { request: 'clientUserMessageId', echo: 'clientId' },
   modes: [],
   contextUsage: false,

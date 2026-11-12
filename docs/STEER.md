@@ -204,11 +204,17 @@ Codex 请求固定携带 `threadId`、`expectedTurnId`、`input` 和 `clientUser
 
 TRAE 的 `turn/steer` 不接受 `userMessageId`，但原生通知、历史和 rollout 都保留 `UserInput.text_elements`。专用引导路径在原文上附加零长度 `byteRange: { start: 0, end: 0 }` 元素，其 placeholder 为唯一 `riffet-steer:<commandId>`。零长度元素不改变正文或原生 TUI 的编辑区域。只有同一 native session、同一 turn、同一 commandId、完全相同正文及元数据均匹配已持久化的 dispatch fence 时，才认领原生 user item；未越过 fence 或已明确拒绝、取消的提交不能被标记认领。此路径不进入旧普通发送的正文匹配队列。冷回放使用原 Run 及 fence 恢复关联，无须增加数据表或客户端字段。
 
-TRAE 的最低验证版本为 0.210.1。`--version` 可能在版本之后输出 `installation: internal`，能力探测选择版本行；真正写入之前再次验证 `initialize.userAgent` 中实际 app-server 的版本。更新 CLI 文件或 symlink 不代表活动进程已经升级，不能为满足版本条件重启用户当前任务。
+Codex 与 TRAE 在真正写入之前都核对 `initialize.userAgent` 中实际 app-server 的版本，最低分别为 0.160.0、0.210.1。TRAE 的 `--version` 可能在版本之后输出 `installation: internal`，安装能力探测只取版本行。Codex 系列探测按安装文件的真实路径和文件身份缓存，同一路径更新 CLI 后重新探测；更新文件或 symlink 不代表活动进程已经升级，不能为满足版本条件重启用户当前任务。
 
 `turnRuns` 保持稳定的原始 owner，另维护同一 turn 的 commands 集合。该集合由已持久化的 Run 目标关联及历史消息重建，不依赖完成事件是否带 items。原始输入、引导输入、助手和工具都带相同的 `nativeTurnId`；各输入自己的 commandId/nativeMessageId 不变。
 
 Codex 官方定义 steer 会追加到活动 turn，不产生新的 `turn/started`，并拒绝不匹配的目标。2026-10-16 使用本机 0.160.0 完成 HTTP 到真实模型的验证：在 `sleep 15` 工具执行期间发送引导，原始 Run 与引导 Run 最终完成，原生 turn 只有一个，引导输入回执一次，最终回复包含引导指定的标记。能力门控复用已有只读 CLI 探测；低于 0.160.0 或版本未知时关闭，不能向用户活动任务试发探测消息。
+
+2026-11-12 将 Codex 适配验证上限更新为 0.167.2，保留原 steer 最低版本。对比两个 CLI 实际生成的 0.166.0 / 0.167.2 协议定义，thread/turn 核心请求未变；隔离会话的三轮真实模型验证覆盖文本、shell 工具调用、最后回复交付及服务重启后的序号/增量恢复，9 项检查通过。子代理 schema 与独占 writer/只读历史恢复探针通过。
+
+同日通过 Riffet HTTP 在 `sleep 15` 工具执行期间投递引导，8 项检查通过：原 turn 与 owner 保持不变，原始 Run 和引导 Run 均完成，输入回执一次，同 command 重试返回原 Run，已完成目标返回 409；原生 `thread/read` 确认最终回复采用引导指定的标记。实际连接握手为 `riffet/0.167.2`，未把磁盘 CLI 版本当作运行版本。
+
+新增 `requiredHumanApproval` 仅由可处理人工交互的 Codex runtime 声明；`humanCommand` 只允许单次接受、拒绝或取消，即使服务端提供会话级或记住规则选项也不转发。审批限制由协议契约测试验证，组织托管规则的实际触发未作为本次真实模型验收项。
 
 2026-10-16 对本机 TRAE CLI 0.210.1 的验证分三层，均使用独立项目和新会话：
 

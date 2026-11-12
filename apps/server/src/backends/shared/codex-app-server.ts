@@ -48,6 +48,8 @@ export interface CodexAppServerOptions {
   listen?: 'unix' | 'ws';
   /** Where loopback listeners keep their token files; required for `listen: 'ws'` and ws addresses. */
   credentialDir?: string;
+  /** The client can present humanCommand approvals and return only a person's one-time decision. */
+  requiredHumanApproval?: boolean;
   onNotification(method: string, params: Record<string, unknown>): void;
   onServerRequest(request: JsonRpcServerRequest): Promise<unknown>;
   onExit(error: Error): void;
@@ -255,7 +257,10 @@ export class CodexAppServer implements CodexAppServerClient {
     try {
       const initialized = await this.request<{ userAgent?: unknown }>('initialize', {
         clientInfo: { name: 'riffet', title: 'Riffet', version: SERVER_VERSION },
-        capabilities: { experimentalApi: true, requestAttestation: false },
+        capabilities: {
+          experimentalApi: true, requestAttestation: false,
+          ...(this.options.requiredHumanApproval ? { requiredHumanApproval: true } : {}),
+        },
       });
       if (typeof initialized?.userAgent === 'string') this.initializedServerUserAgent = initialized.userAgent;
       this.notify('initialized');
