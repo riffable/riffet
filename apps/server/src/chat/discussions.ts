@@ -41,7 +41,7 @@ async function inheritedModel(deps: RouteDeps, parent: IdentifiedSession, reques
     selection = parseNativeModelSelection(value);
   } else {
     if (!gatewayProtocol(backendId)) throw unavailable();
-    const profile = deps.nativeBackends.validateProfile(backendId, parent.backendProfileId);
+    const profile = deps.nativeBackends.catalog.validateProfile(backendId, parent.backendProfileId);
     const defaults = deps.settings.getSettings().nativeBackendDefaults?.[backendId];
     const defaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
     const appliesDefaults = defaults?.profileId ? defaults.profileId === profile.id : profile.isDefault;
@@ -53,7 +53,7 @@ async function inheritedModel(deps: RouteDeps, parent: IdentifiedSession, reques
   }
   if (!ref) throw unavailable();
   const inheritedProfileId = ref.profileId;
-  const profile = deps.nativeBackends.validateProfile(ref.backendId, inheritedProfileId);
+  const profile = deps.nativeBackends.catalog.validateProfile(ref.backendId, inheritedProfileId);
   if (requested !== undefined) {
     const requestedRef = chatModelRef(requested);
     if (!requestedRef || requestedRef.backendId !== ref.backendId || requestedRef.profileId !== ref.profileId) throw unavailable();
@@ -206,7 +206,7 @@ export function registerDiscussionRoutes(app: FastifyInstance, deps: RouteDeps):
     requireSessionVisibleToClient(request.headers, session, id => deps.store.getProject(id));
     const model = await inheritedModel(deps, session, undefined, false);
     const ref = chatModelRef(model)!;
-    const profile = deps.nativeBackends.validateProfile(ref.backendId, ref.profileId);
+    const profile = deps.nativeBackends.catalog.validateProfile(ref.backendId, ref.profileId);
     try {
       const models = await profileChatModels(ref, profile, { effort: ref.effort });
       return { model, models, providerName: profile.name };

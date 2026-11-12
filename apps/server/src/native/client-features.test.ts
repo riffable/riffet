@@ -42,17 +42,19 @@ async function boot(savedSettings?: Record<string, unknown>) {
   const settings = new SettingsService({ stateDir, cliPath: '/nonexistent/cursor-agent' });
   const nativeBackends = {
     offeredBackendIds: () => ['cursor', 'pi', 'chat'],
-    listBackends: async () => ['cursor', 'pi', 'chat'].map(backendId => ({ backendId, label: backendId, available: true, profiles: [profile], capabilities, models: [] })),
-    validateProfile: (_backendId: string, profileId?: string) => profileId && profileId !== 'default' ? undefined : profile,
-    capabilitiesFor: async (backendId: string) => backendId === 'pi' ? { ...capabilities, supportsPermissionSelection: true, permissions: [{ id: 'read-only' }] } : capabilities,
-    validateNativeSessionId: () => undefined,
-    normalizeModel: (_backendId: string, _profileId: string, model: string) => model,
-    profileSettings: () => ({ profiles: [profile] }),
-    gatewayProfiles: () => [],
+    catalog: {
+      listBackends: async () => ['cursor', 'pi', 'chat'].map(backendId => ({ backendId, label: backendId, available: true, profiles: [profile], capabilities, models: [] })),
+      validateProfile: (_backendId: string, profileId?: string) => profileId && profileId !== 'default' ? undefined : profile,
+      capabilitiesFor: async (backendId: string) => backendId === 'pi' ? { ...capabilities, supportsPermissionSelection: true, permissions: [{ id: 'read-only' }] } : capabilities,
+      validateNativeSessionId: () => undefined,
+      normalizeModel: (_backendId: string, _profileId: string, model: string) => model,
+      profileSettings: () => ({ profiles: [profile] }),
+      gatewayProfiles: () => [],
+      entry: async (_id: string, project: unknown) => ({ models: [{value: project ? 'project-model' : 'global-model'}] }),
+      usage: async (_id: string, project: unknown) => ({ models: {}, scope: project ? 'project' : 'global' }),
+      slashCatalog: async (_id: string, project: unknown) => ({ items: [{name: project ? 'project-skill' : 'global-skill',kind:'skill'}] }),
+    },
     readOnlyTranscriptBackendIds: () => ['cursor', 'pi'],
-    catalog: async (_id: string, project: unknown) => ({ models: [{value: project ? 'project-model' : 'global-model'}] }),
-    usage: async (_id: string, project: unknown) => ({ models: {}, scope: project ? 'project' : 'global' }),
-    slashCatalog: async (_id: string, project: unknown) => ({ items: [{name: project ? 'project-skill' : 'global-skill',kind:'skill'}] }),
     indexableTranscript: async () => [],
   } as unknown as NativeBackendService;
 

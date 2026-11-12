@@ -237,7 +237,7 @@ export class ChannelService {
     while (this.modelNames.size > MODEL_NAMES_CAP) this.modelNames.delete(this.modelNames.keys().next().value!);
     entry.loading = (async () => {
       try {
-        const { models } = await this.deps.nativeBackends.catalog(session.backendId!, this.projectOf(session.projectId), undefined, session, { allModels: true });
+        const { models } = await this.deps.nativeBackends.catalog.entry(session.backendId!, this.projectOf(session.projectId), undefined, session, { allModels: true });
         const names = new Map<string, string>();
         for (const model of models) for (const id of [model.value, ...(model.aliases ?? []), ...(model.nativeVariants ?? []).map(variant => variant.value)]) if (model.name) names.set(id, model.name);
         entry.names = names; entry.models = models;
@@ -619,7 +619,7 @@ export class ChannelService {
     return this.readCatalog(key, backendId, profileId, project, session);
   }
   private readCatalog(key: string, backendId: string, profileId: string | undefined, project: Project | undefined, session: Session | undefined): Promise<NativeBackendCatalogEntry> {
-    const value = this.deps.nativeBackends.catalog(backendId, project, profileId, session, { allModels: true });
+    const value = this.deps.nativeBackends.catalog.entry(backendId, project, profileId, session, { allModels: true });
     this.catalogs.delete(key);
     this.catalogs.set(key, { at: Date.now(), value });
     // Oldest first: past a few dozen open cards the least recent read is dropped.
@@ -633,7 +633,7 @@ export class ChannelService {
     const hit = this.backendList.value;
     if (hit && (stale || Date.now() - this.backendList.at <= CATALOG_TTL_MS)) return hit;
     const offered = new Set<string>(this.deps.nativeBackends.offeredBackendIds());
-    const value = this.deps.nativeBackends.listBackends().then(entries => entries.filter(entry => offered.has(entry.backendId) && entry.backendId !== 'chat' && entry.available).map(entry => ({ id: entry.backendId as string, name: entry.label })));
+    const value = this.deps.nativeBackends.catalog.listBackends().then(entries => entries.filter(entry => offered.has(entry.backendId) && entry.backendId !== 'chat' && entry.available).map(entry => ({ id: entry.backendId as string, name: entry.label })));
     this.backendList.value = value; this.backendList.at = Date.now();
     value.catch(() => { if (this.backendList.value === value) this.backendList.value = undefined; });
     return value;

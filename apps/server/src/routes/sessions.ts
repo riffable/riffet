@@ -52,8 +52,8 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         // Validate the saved provider while keeping every resolved option pinned to the receipt.
         const backendId=sessionInput.backendId!;
         requireBackendVisibleToClient(request.headers,backendId);
-        const profile=nativeBackends.validateProfile(backendId,sessionInput.backendProfileId);
-        const capabilities=await nativeBackends.capabilitiesFor(backendId,profile.id);
+        const profile=nativeBackends.catalog.validateProfile(backendId,sessionInput.backendProfileId);
+        const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,profile.id);
         if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===sessionInput.mode):sessionInput.mode!=='agent')throw new AppError('INVALID_MODE','The saved task mode is no longer available');
         if(sessionInput.approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===sessionInput.approval)))throw new AppError('INVALID_APPROVAL_MODE','The saved task permission is no longer available');
       },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);return store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);}));
@@ -249,7 +249,7 @@ export async function patchSession(deps: RouteDeps, id: string, body: SessionPat
     const target=store.getSession(id);
     if(off.length&&target.backendId==='chat')throw new AppError('INVALID_EXTENSIONS_OFF','A quick chat has no extensions to switch off');
     // Kinds the backend cannot switch off are dropped, so the stored list is what a launch applies.
-    const applicable=off.length?applicableExtensionsOff(off,(await nativeBackends.capabilitiesFor(target.backendId??'cursor',target.backendProfileId)).extensionToggles):[];
+    const applicable=off.length?applicableExtensionsOff(off,(await nativeBackends.catalog.capabilitiesFor(target.backendId??'cursor',target.backendProfileId)).extensionToggles):[];
     patch.extensionsOff=applicable.length?applicable:undefined;
   }
   // The tools and extensions of a conversation are read when its CLI launches. A backend that relaunches an idle CLI for a

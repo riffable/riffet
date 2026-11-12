@@ -28,8 +28,8 @@ describe('extension runtime observation', () => {
     const profile = { id: 'local', backendId: 'codex', name: 'Codex', config: {} } as NativeBackendProfileConfig;
     const host = {} as NativeBackendHost;
     const project = { id: 'p', cwd: '/tmp' } as Project;
-    expect((await adapter.extensionRuntime(host, project, profile)).entries).toEqual([]);
-    expect(await adapter.reloadExtensions(host, project, profile)).toBe(0);
+    expect((await adapter.extensions.runtime!(host, project, profile)).entries).toEqual([]);
+    expect(await adapter.extensions.reload!(host, project, profile)).toBe(0);
     expect(start).not.toHaveBeenCalled();
   });
   it.each([
@@ -43,7 +43,7 @@ describe('extension runtime observation', () => {
     const dispose = vi.fn();
     const start = vi.fn().mockResolvedValue({ request, dispose });
     const adapter = new CodexBackendAdapter(start, flavor);
-    expect(await adapter.skillStates({} as NativeBackendHost, project, { id: 'read', backendId: flavor.id, name: 'Read', config })).toEqual([
+    expect(await adapter.extensions.skillStates!({} as NativeBackendHost, project, { id: 'read', backendId: flavor.id, name: 'Read', config })).toEqual([
       { path: '/native/skill/../skill/SKILL.md', enabled: false }, { path: '/native/enabled/SKILL.md', enabled: true },
     ]);
     expect(request).toHaveBeenCalledExactlyOnceWith('skills/list', { cwds: [project?.cwd ?? homedir()], forceReload: true }, 15_000);
@@ -61,7 +61,7 @@ describe('extension runtime observation', () => {
     const dispose = vi.fn();
     const request = vi.fn().mockRejectedValue(new Error('unsupported skills/list'));
     const adapter = new CodexBackendAdapter(vi.fn().mockResolvedValue({ request, dispose }));
-    await expect(adapter.skillStates({} as NativeBackendHost, undefined, { id: 'local', backendId: 'codex', name: 'Codex', config: {} })).rejects.toThrow('unsupported skills/list');
+    await expect(adapter.extensions.skillStates!({} as NativeBackendHost, undefined, { id: 'local', backendId: 'codex', name: 'Codex', config: {} })).rejects.toThrow('unsupported skills/list');
     expect(dispose).toHaveBeenCalledOnce();
   });
   it('uses only the skill config RPC and closes the management connection on failure', async () => {
@@ -69,7 +69,7 @@ describe('extension runtime observation', () => {
     const dispose = vi.fn();
     const start = vi.fn().mockResolvedValue({ request, dispose });
     const adapter = new CodexBackendAdapter(start);
-    await expect(adapter.setSkillEnabled({} as NativeBackendHost, undefined, { id: 'local', backendId: 'codex', name: 'Codex', config: {} }, '/tmp/skill/SKILL.md', false)).rejects.toThrow('unsupported');
+    await expect(adapter.extensions.setSkillEnabled!({} as NativeBackendHost, undefined, { id: 'local', backendId: 'codex', name: 'Codex', config: {} }, '/tmp/skill/SKILL.md', false)).rejects.toThrow('unsupported');
     expect(request).toHaveBeenCalledExactlyOnceWith('skills/config/write', { path: '/tmp/skill/SKILL.md', enabled: false }, 15_000);
     expect(dispose).toHaveBeenCalledOnce();
     expect(start.mock.calls[0]![0].args).not.toContain('--dangerously-bypass-hook-trust');
@@ -77,7 +77,7 @@ describe('extension runtime observation', () => {
   it('does not inject a model gateway credential into skill management', async () => {
     const start = vi.fn().mockResolvedValue({ request: vi.fn(), dispose: vi.fn() });
     const adapter = new CodexBackendAdapter(start);
-    await adapter.setSkillEnabled({} as NativeBackendHost, undefined, { id: 'work', backendId: 'codex', name: 'Work', config: { configDir: '/tmp/work-codex', apiEndpoint: 'https://gateway.example', apiKey: 'profile-private-value' } }, '/tmp/work-codex/skills/a/SKILL.md', true);
+    await adapter.extensions.setSkillEnabled!({} as NativeBackendHost, undefined, { id: 'work', backendId: 'codex', name: 'Work', config: { configDir: '/tmp/work-codex', apiEndpoint: 'https://gateway.example', apiKey: 'profile-private-value' } }, '/tmp/work-codex/skills/a/SKILL.md', true);
     const spec = start.mock.calls[0]![0];
     expect(spec.env.CODEX_HOME).toBe('/tmp/work-codex');
     expect(JSON.stringify(spec)).not.toContain('profile-private-value');

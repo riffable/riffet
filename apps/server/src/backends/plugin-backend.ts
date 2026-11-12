@@ -12,7 +12,7 @@ import { launchSource, modelSourceOf, modelSourceProvider, sourceEndpoint } from
 import { isWarmupTerminal, warmupOf, type WarmupTerminalInfo } from '../terminal/service.js';
 import type {
   NativeBackendAvailability, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendProfileConfig, NativeBackendSendRequest,
-  NativeControlMessage, NativeDispatchBinding, NativeShareReadOptions, NativeShareTranscript,
+  NativeControlMessage, NativeDispatchBinding, NativeDriverAdmin, NativeDriverExtensions, NativeDriverStored, NativeShareReadOptions, NativeShareTranscript,
 } from './types.js';
 
 /*
@@ -184,7 +184,6 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly label: string;
   readonly traits: NativeBackendDriver['traits'];
   readonly cliVersions: NativeBackendDriver['cliVersions'];
-  readonly readOnlyTranscript: boolean | undefined;
   readonly sendsNow: boolean | undefined;
   readonly steer: NativeBackendDriver['steer'];
   readonly requestInterrupt: NativeBackendDriver['requestInterrupt'];
@@ -193,15 +192,12 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly validateProfileConfig: NativeBackendDriver['validateProfileConfig'];
   readonly describeProfile: NativeBackendDriver['describeProfile'];
   readonly slashItems: NativeBackendDriver['slashItems'];
-  readonly readShareTranscript: NativeBackendDriver['readShareTranscript'];
   readonly dispose: NativeBackendDriver['dispose'];
   readonly close: NativeBackendDriver['close'];
   readonly terminal: NativeBackendDriver['terminal'];
   readonly launchEnv: NativeBackendDriver['launchEnv'];
   readonly prewarm: NativeBackendDriver['prewarm'];
-  readonly loginLaunch: NativeBackendDriver['loginLaunch'];
   readonly usage: NativeBackendDriver['usage'];
-  readonly usageTranscript: NativeBackendDriver['usageTranscript'];
   readonly canReleaseInput: NativeBackendDriver['canReleaseInput'];
   readonly runtimeAction: NativeBackendDriver['runtimeAction'];
   readonly stopActivity: NativeBackendDriver['stopActivity'];
@@ -210,18 +206,10 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly rename: NativeBackendDriver['rename'];
   readonly invalidateModels: NativeBackendDriver['invalidateModels'];
   readonly endorsesScreenDialog: NativeBackendDriver['endorsesScreenDialog'];
-  readonly extensionLayout: NativeBackendDriver['extensionLayout'];
-  readonly extensionRuntime: NativeBackendDriver['extensionRuntime'];
-  readonly skillStates: NativeBackendDriver['skillStates'];
-  readonly setSkillEnabled: NativeBackendDriver['setSkillEnabled'];
-  readonly reloadExtensions: NativeBackendDriver['reloadExtensions'];
-  readonly authorizeMcp: NativeBackendDriver['authorizeMcp'];
-  readonly extensionManagementCapabilities: NativeBackendDriver['extensionManagementCapabilities'];
-  readonly manageExtension: NativeBackendDriver['manageExtension'];
-  readonly capabilityReport: NativeBackendDriver['capabilityReport'];
-  readonly runCommand: NativeBackendDriver['runCommand'];
-  readonly runtimeStats: NativeBackendDriver['runtimeStats'];
   readonly projectConfigs: NativeBackendDriver['projectConfigs'];
+  readonly extensions: NativeBackendDriver['extensions'];
+  readonly stored: NativeBackendDriver['stored'];
+  readonly admin: NativeBackendDriver['admin'];
   readonly start: NativeBackendDriver['start'];
 
   /** Sessions the plugin has been asked to open or observe: what `detach` has to release. */
@@ -248,7 +236,6 @@ export class PluginBackendDriver implements NativeBackendDriver {
     this.label = backend.label;
     this.traits = backend.traits;
     this.cliVersions = backend.cliVersions;
-    this.readOnlyTranscript = backend.readOnlyHistory;
     this.sendsNow = backend.sendsNow;
     // An optional member that is absent must stay absent: the service decides what to offer by its presence.
     if (backend.steer) {
@@ -263,16 +250,6 @@ export class PluginBackendDriver implements NativeBackendDriver {
     if (backend.validateProfileConfig) this.validateProfileConfig = config => backend.validateProfileConfig!(config);
     if (backend.describeProfile) this.describeProfile = profile => backend.describeProfile!(profileView(profile));
     if (backend.slashItems) this.slashItems = (host, project, profile) => backend.slashItems!(this.hostFor(host), project && projectView(project), profileView(profile));
-    if (backend.readHistory) {
-      this.readShareTranscript = async (host, session, profile, options) => {
-        const history = await backend.readHistory!(this.hostFor(host), this.context(host, session, profile), options as NativeShareReadOptions | undefined);
-        return {
-          ...history,
-          events: history.events.map((event, index) => stamped(session.id, event, index + 1)),
-          subagents: history.subagents.map(child => ({ ...child, events: child.events.map((event, index) => stamped(session.id, event, index + 1)) })),
-        } satisfies NativeShareTranscript;
-      };
-    }
     if (backend.stop) {
       this.dispose = async (host, sessionId) => {
         this.forget(sessionId);
@@ -285,9 +262,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
     this.launchEnv = backend.launchEnv;
     // Optional members map one to one: the context is built from the host's records at the call, and an absent member stays absent.
     if (backend.prewarm) this.prewarm = (host, project, profile, request) => backend.prewarm!(this.hostFor(host), projectView(project), profileView(profile), request);
-    if (backend.loginLaunch) this.loginLaunch = (host, project, profile) => backend.loginLaunch!(this.hostFor(host), projectView(project), profileView(profile));
     if (backend.usage) this.usage = (host, project, profile, session) => backend.usage!(this.hostFor(host), this.query(project, profile, session));
-    if (backend.usageTranscript) this.usageTranscript = (host, session, profile, known) => backend.usageTranscript!(this.hostFor(host), this.context(host, session, profile), known);
     if (backend.canReleaseInput) this.canReleaseInput = (host, session, profile, run) => backend.canReleaseInput!(this.hostFor(host), this.context(host, session, profile), runRef(run));
     if (backend.runtimeAction) this.runtimeAction = (host, session, profile, request) => backend.runtimeAction!(this.hostFor(host), this.context(host, session, profile), request);
     if (backend.stopActivity) this.stopActivity = (host, session, profile, activityId) => backend.stopActivity!(this.hostFor(host), this.context(host, session, profile), activityId);
@@ -301,17 +276,36 @@ export class PluginBackendDriver implements NativeBackendDriver {
         return profile ? backend.endorsesScreenDialog!(this.hostFor(host), this.context(host, session, profile), dialog) : true;
       };
     }
-    if (backend.extensionLayout) this.extensionLayout = profile => backend.extensionLayout!(profileView(profile));
-    if (backend.extensionRuntime) this.extensionRuntime = (host, project, profile) => backend.extensionRuntime!(this.hostFor(host), project && projectView(project), profileView(profile));
-    if (backend.skillStates) this.skillStates = (host, project, profile) => backend.skillStates!(this.hostFor(host), project && projectView(project), profileView(profile));
-    if (backend.setSkillEnabled) this.setSkillEnabled = (host, project, profile, path, enabled) => backend.setSkillEnabled!(this.hostFor(host), project && projectView(project), profileView(profile), path, enabled);
-    if (backend.reloadExtensions) this.reloadExtensions = (host, project, profile) => backend.reloadExtensions!(this.hostFor(host), project && projectView(project), profileView(profile));
-    if (backend.authorizeMcp) this.authorizeMcp = (host, project, profile, name) => backend.authorizeMcp!(this.hostFor(host), project && projectView(project), profileView(profile), name);
-    if (backend.extensionManagementCapabilities) this.extensionManagementCapabilities = (host, profile) => backend.extensionManagementCapabilities!(this.hostFor(host), profileView(profile));
-    if (backend.manageExtension) this.manageExtension = (host, profile, input, item) => backend.manageExtension!(this.hostFor(host), profileView(profile), input, item);
-    if (backend.capabilityReport) this.capabilityReport = (host, profile) => backend.capabilityReport!(this.hostFor(host), profileView(profile));
-    if (backend.runCommand) this.runCommand = (host, profile, request) => backend.runCommand!(this.hostFor(host), profileView(profile), request);
-    if (backend.runtimeStats) this.runtimeStats = host => backend.runtimeStats!(this.hostFor(host));
+    const extensions: NativeDriverExtensions = {};
+    if (backend.extensionLayout) extensions.layout = profile => backend.extensionLayout!(profileView(profile));
+    if (backend.extensionRuntime) extensions.runtime = (host, project, profile) => backend.extensionRuntime!(this.hostFor(host), project && projectView(project), profileView(profile));
+    if (backend.skillStates) extensions.skillStates = (host, project, profile) => backend.skillStates!(this.hostFor(host), project && projectView(project), profileView(profile));
+    if (backend.setSkillEnabled) extensions.setSkillEnabled = (host, project, profile, path, enabled) => backend.setSkillEnabled!(this.hostFor(host), project && projectView(project), profileView(profile), path, enabled);
+    if (backend.reloadExtensions) extensions.reload = (host, project, profile) => backend.reloadExtensions!(this.hostFor(host), project && projectView(project), profileView(profile));
+    if (backend.authorizeMcp) extensions.authorizeMcp = (host, project, profile, name) => backend.authorizeMcp!(this.hostFor(host), project && projectView(project), profileView(profile), name);
+    if (backend.extensionManagementCapabilities) extensions.managementCapabilities = (host, profile) => backend.extensionManagementCapabilities!(this.hostFor(host), profileView(profile));
+    if (backend.manageExtension) extensions.manage = (host, profile, input, item) => backend.manageExtension!(this.hostFor(host), profileView(profile), input, item);
+    if (Object.keys(extensions).length) this.extensions = extensions;
+    const stored: NativeDriverStored = {};
+    if (backend.readOnlyHistory !== undefined) (stored as { readOnly?: boolean }).readOnly = backend.readOnlyHistory;
+    if (backend.usageTranscript) stored.usage = (host, session, profile, known) => backend.usageTranscript!(this.hostFor(host), this.context(host, session, profile), known);
+    if (backend.readHistory) {
+      stored.share = async (host, session, profile, options) => {
+        const history = await backend.readHistory!(this.hostFor(host), this.context(host, session, profile), options as NativeShareReadOptions | undefined);
+        return {
+          ...history,
+          events: history.events.map((event, index) => stamped(session.id, event, index + 1)),
+          subagents: history.subagents.map(child => ({ ...child, events: child.events.map((event, index) => stamped(session.id, event, index + 1)) })),
+        } satisfies NativeShareTranscript;
+      };
+    }
+    if (Object.keys(stored).length) this.stored = stored;
+    const admin: NativeDriverAdmin = {};
+    if (backend.loginLaunch) admin.loginLaunch = (host, project, profile) => backend.loginLaunch!(this.hostFor(host), projectView(project), profileView(profile));
+    if (backend.capabilityReport) admin.capabilityReport = (host, profile) => backend.capabilityReport!(this.hostFor(host), profileView(profile));
+    if (backend.runCommand) admin.runCommand = (host, profile, request) => backend.runCommand!(this.hostFor(host), profileView(profile), request);
+    if (backend.runtimeStats) admin.runtimeStats = host => backend.runtimeStats!(this.hostFor(host));
+    if (Object.keys(admin).length) this.admin = admin;
     if (backend.projectConfigs) {
       const configs = backend.projectConfigs;
       this.projectConfigs = {

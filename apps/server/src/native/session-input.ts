@@ -43,16 +43,16 @@ export async function resolveNativeSessionInput(deps: { store: Store; settings: 
   if(quickChat!==(backendId==='chat'))throw new AppError('INVALID_BACKEND',quickChat?'Only a quick chat runs here':'A quick chat has no project');
   const defaults=savedSettings.nativeBackendDefaults?.[backendId];
   const requestedProfileId=body.backendProfileId===undefined?defaults?.profileId:requireString(body.backendProfileId,'backendProfileId',200);
-  const selectedProfile=nativeBackends.validateProfile(backendId,requestedProfileId);
+  const selectedProfile=nativeBackends.catalog.validateProfile(backendId,requestedProfileId);
   const applyBackendDefaults=defaults?.profileId?defaults.profileId===selectedProfile.id:(!body.backendProfileId||selectedProfile.isDefault===true);
-  const capabilities=await nativeBackends.capabilitiesFor(backendId,selectedProfile.id);
+  const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,selectedProfile.id);
   const profileModel=typeof selectedProfile.config.defaultModel==='string'?selectedProfile.config.defaultModel:undefined;
   const nativeSessionIdValue=requestedNativeSessionId(body);
   const nativeSessionId=nativeSessionIdValue===undefined?undefined:requireString(nativeSessionIdValue,'nativeSessionId',200);
   if(nativeSessionId!==undefined&&/[\0\r\n]/.test(nativeSessionId))throw new AppError('INVALID_NATIVE_SESSION_ID','Native session id contains invalid characters');
-  if(nativeSessionId!==undefined)nativeBackends.validateNativeSessionId(backendId,nativeSessionId);
+  if(nativeSessionId!==undefined)nativeBackends.catalog.validateNativeSessionId(backendId,nativeSessionId);
   const requestedModel=body.model===undefined?((applyBackendDefaults?defaults?.model:undefined)||profileModel||legacyDefaults(backendId,savedSettings).model||undefined):requireString(body.model,'model',200);
-  const model=requestedModel===undefined?undefined:nativeBackends.normalizeModel(backendId,selectedProfile.id,requestedModel);
+  const model=requestedModel===undefined?undefined:nativeBackends.catalog.normalizeModel(backendId,selectedProfile.id,requestedModel);
   // A backend whose modes do not include `agent` (TRAE CLI calls it `default`) starts in its first one.
   const fallbackMode=capabilities.supportsModeSelection&&!capabilities.modes.some(item=>item.id==='agent')?capabilities.modes[0]?.id??'agent':'agent';
   const mode=body.mode===undefined?(applyBackendDefaults?defaults?.mode:undefined)??legacyDefaults(backendId,savedSettings).mode??fallbackMode:requireString(body.mode,'mode',100);

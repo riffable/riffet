@@ -28,7 +28,7 @@ export class PluginBackends {
   constructor(private readonly options: {
     plugins: Pick<PluginRegistry, 'agentBackends' | 'declaredAgentBackends' | 'agentBackendPending' | 'onChange' | 'onEnded'>;
     registry: NativeBackendRegistry;
-    service: Pick<NativeBackendService, 'host' | 'detachBackend' | 'attachBackend' | 'validateProfile'>;
+    service: Pick<NativeBackendService, 'host' | 'detachBackend' | 'attachBackend' | 'catalog'>;
   }) {}
 
   /** Mounts what is enabled now and follows changes until `close`. */
@@ -83,7 +83,7 @@ export class PluginBackends {
       catch (error) { console.warn(`[riffet] agent backend ${id}: readers were not re-attached: ${describe(error)}`); }
       if (driver.start) {
         void Promise.resolve()
-          .then(() => driver.start!(service.host, service.validateProfile(id)))
+          .then(() => driver.start!(service.host, service.catalog.validateProfile(id)))
           .catch((error: unknown) => console.warn(`[riffet] agent backend ${id} did not start: ${describe(error)}`));
       }
     }

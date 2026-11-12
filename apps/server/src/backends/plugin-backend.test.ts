@@ -164,18 +164,18 @@ describe('an Agent backend from a plugin', () => {
 
     const consuming = await build(memoryPlugin({ consumesProtocols: ['openai-responses'] }).plugin);
     await consuming.plugins.update('test.agent', { enablement: 'on' });
-    expect((await consuming.service.capabilitiesFor('test.agent')).consumesProtocols).toEqual(['openai-responses']);
-    expect(consuming.service.consumesProtocols('test.agent')).toEqual(['openai-responses']);
+    expect((await consuming.service.catalog.capabilitiesFor('test.agent')).consumesProtocols).toEqual(['openai-responses']);
+    expect(consuming.service.catalog.consumesProtocols('test.agent')).toEqual(['openai-responses']);
     // A source that serves the protocol answers, one that declares only the older `backends` included; one that serves another does not.
-    expect((await consuming.service.probeModels('test.agent', { modelSource: 'responses-gw' })).map(model => model.value)).toEqual(['m1']);
-    expect((await consuming.service.probeModels('test.agent', { modelSource: 'older-gw' })).map(model => model.value)).toEqual(['m1']);
-    await expect(consuming.service.probeModels('test.agent', { modelSource: 'messages-gw' })).rejects.toMatchObject({ code: 'NATIVE_MODEL_PROBE_FAILED' });
+    expect((await consuming.service.catalog.probeModels('test.agent', { modelSource: 'responses-gw' })).map(model => model.value)).toEqual(['m1']);
+    expect((await consuming.service.catalog.probeModels('test.agent', { modelSource: 'older-gw' })).map(model => model.value)).toEqual(['m1']);
+    await expect(consuming.service.catalog.probeModels('test.agent', { modelSource: 'messages-gw' })).rejects.toMatchObject({ code: 'NATIVE_MODEL_PROBE_FAILED' });
     expect(asked).toEqual(['responses-gw:codex', 'older-gw:codex']);
 
     const bare = await build(memoryPlugin().plugin);
     await bare.plugins.update('test.agent', { enablement: 'on' });
-    expect((await bare.service.capabilitiesFor('test.agent')).consumesProtocols).toEqual([]);
-    await expect(bare.service.probeModels('test.agent', { modelSource: 'responses-gw' })).rejects.toMatchObject({ code: 'INVALID_BACKEND_PROFILE' });
+    expect((await bare.service.catalog.capabilitiesFor('test.agent')).consumesProtocols).toEqual([]);
+    await expect(bare.service.catalog.probeModels('test.agent', { modelSource: 'responses-gw' })).rejects.toMatchObject({ code: 'INVALID_BACKEND_PROFILE' });
   });
 
   it('hands a plugin Agent the wire address of the model source on its own profile, over a protocol the source serves, and no more', async () => {

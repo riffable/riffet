@@ -34,7 +34,7 @@ function setup(settings: { idleReclaimMinutes?: number; maxLiveAgents?: number }
       stop: async (id: string) => { stopped.push(id); store.updateTerminal(id, { state: 'exited' }); },
     } as unknown as AgentReclaimDeps['terminal'],
     nativeBackends: {
-      traits: (id: string) => ({ resumesByNativeId: id === 'claude' }),
+      catalog: { traits: (id: string) => ({ resumesByNativeId: id === 'claude' }) },
       hasListeners: () => false,
       status: (id: string) => statuses.get(id) ?? { phase: 'offline' },
       dispose: async (id: string) => { disposed.push(id); },

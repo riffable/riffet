@@ -155,7 +155,7 @@ describe('file downloads', () => {
     const profileSettings = vi.fn(() => ({ profiles: [{ configDir: home }] }));
     const app = Fastify();
     try {
-      registerWorkspaceRoutes(app, { workspace, store: { getProject: () => project }, nativeBackends: { profileSettings }, allowOutsideRead: () => outside } as unknown as RouteDeps);
+      registerWorkspaceRoutes(app, { workspace, store: { getProject: () => project }, nativeBackends: { catalog: { profileSettings } }, allowOutsideRead: () => outside } as unknown as RouteDeps);
       const url = `/api/projects/test/file/image?path=${encodeURIComponent(object)}`;
       expect((await app.inject({ method: 'GET', url })).statusCode).toBe(200);
       expect(profileSettings).toHaveBeenCalledWith('dsh');
@@ -171,7 +171,7 @@ describe('file downloads', () => {
     const attachment = await workspace.upload(project, { name: 'image.png', mimeType: 'image/png', dataBase64: image.toString('base64') });
     const app = Fastify();
     try {
-      registerWorkspaceRoutes(app, { workspace, store: { getProject: () => project }, nativeBackends: { profileSettings: () => ({ profiles: [] }) }, allowOutsideRead: () => false } as unknown as RouteDeps);
+      registerWorkspaceRoutes(app, { workspace, store: { getProject: () => project }, nativeBackends: { catalog: { profileSettings: () => ({ profiles: [] }) } }, allowOutsideRead: () => false } as unknown as RouteDeps);
       const response = await app.inject({ method: 'GET', url: `/api/projects/test/file/image?path=${encodeURIComponent(attachment.path)}` });
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toBe('image/png');

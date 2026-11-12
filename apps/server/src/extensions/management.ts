@@ -86,11 +86,11 @@ export class ExtensionManagement {
 
   /** Coalesce native reads across list/detail requests; never start a conversation. */
   async skillStates(context: ExtensionContext, driver: NativeBackendDriver, host: NativeBackendHost) {
-    if (!driver.skillStates) return { states: [], diagnostics: [] };
+    if (!driver.extensions?.skillStates) return { states: [], diagnostics: [] };
     const key = JSON.stringify([this.key(context), context.project?.cwd ?? '']);
     const cached = this.skillReads.get(key);
     if (cached && Date.now() - cached.at < 30_000) return cached.value;
-    const value = driver.skillStates(host, context.project, context.profile)
+    const value = driver.extensions.skillStates(host, context.project, context.profile)
       .then(states => ({ states, diagnostics: [] as string[] }))
       .catch(() => ({ states: [], diagnostics: ['未能读取原生 Skill 开关状态；保留文件目录，可稍后刷新重试。'] }));
     if (this.skillReads.size >= 32) this.skillReads.clear();
@@ -134,14 +134,14 @@ export class ExtensionManagement {
     return value;
   }
   async capabilities(context: ExtensionContext, driver: NativeBackendDriver, host?: NativeBackendHost): Promise<ExtensionManagementCapabilities> {
-    if (host && driver.extensionManagementCapabilities) return driver.extensionManagementCapabilities(host, context.profile);
+    if (host && driver.extensions?.managementCapabilities) return driver.extensions.managementCapabilities(host, context.profile);
     const key = this.key(context);
     const cached = this.probes.get(key);
     if (cached && Date.now() - cached.at < 60_000) return cached.capabilities;
     const capabilities: ExtensionManagementCapabilities = { actions: [], kinds: {} };
-    if (driver.setSkillEnabled) capabilities.kinds.skill = ['enable', 'disable'];
-    if (driver.authorizeMcp) capabilities.kinds.mcp = ['login'];
-    if (driver.reloadExtensions) capabilities.actions.push('reload');
+    if (driver.extensions?.setSkillEnabled) capabilities.kinds.skill = ['enable', 'disable'];
+    if (driver.extensions?.authorizeMcp) capabilities.kinds.mcp = ['login'];
+    if (driver.extensions?.reload) capabilities.actions.push('reload');
     let help = '';
     if (commandVerbs[context.backendId]) {
       const result = await this.command(context, ['plugin', '--help']).catch(() => undefined);
@@ -167,7 +167,7 @@ export class ExtensionManagement {
     if (!request || !['enable', 'disable', 'install', 'update', 'uninstall', 'reload', 'login'].includes(request.action)) throw new AppError('INVALID_EXTENSION_ACTION', 'Choose a supported extension action');
     const scope = request.scope ?? (item?.scope === 'project' ? 'project' : 'user');
     if (!['user', 'project'].includes(scope) || (scope === 'project' && !context.project)) throw new AppError('INVALID_EXTENSION_SCOPE', 'Choose a project for a project-level action');
-    const nativeSkillToggle = item?.kind === 'skill' && ['enable', 'disable'].includes(request.action) && item.actions?.includes(request.action) && driver.setSkillEnabled;
+    const nativeSkillToggle = item?.kind === 'skill' && ['enable', 'disable'].includes(request.action) && item.actions?.includes(request.action) && driver.extensions?.setSkillEnabled;
     if (item && !nativeSkillToggle && (item.scope === 'managed' || item.scope === 'builtin' || item.ownerPluginId)) throw new AppError('EXTENSION_READ_ONLY', 'Manage this extension through its plugin or managed configuration', 403, undefined, { subject: 'managed' });
     if (item && request.scope && item.scope !== request.scope) throw new AppError('EXTENSION_SCOPE_MISMATCH', 'The scope does not match where the extension comes from', 409);
     // Native tools own their config locks; this fence also avoids overlapping browser operations.
@@ -175,19 +175,19 @@ export class ExtensionManagement {
     if (this.pending.has(key)) throw new AppError('EXTENSION_ACTION_BUSY', 'Another management action is running on this configuration', 409);
     this.pending.add(key);
     try {
-      if (driver.manageExtension) return await driver.manageExtension(host, context.profile, request, item);
-      if (request.action === 'login' && driver.authorizeMcp) {
+      if (driver.extensions?.manage) return await driver.extensions.manage(host, context.profile, request, item);
+      if (request.action === 'login' && driver.extensions?.authorizeMcp) {
         const name = item?.kind === 'mcp' ? item.nativeId : request.target;
         if (!name || typeof name !== 'string' || name.length > 200 || /[\r\n\0]/.test(name)) throw new AppError('INVALID_EXTENSION_TARGET', 'Choose an MCP server from the current runtime', 400, undefined, { subject: 'mcp' });
-        const authorizationUrl = await driver.authorizeMcp(host, context.project, context.profile, name);
+        const authorizationUrl = await driver.extensions.authorizeMcp(host, context.project, context.profile, name);
         return { success: true, authorizationUrl, applyEffect: '授权链接已生成，请在运行 Agent 的电脑上完成授权，然后刷新运行状态。' };
       }
-      if (request.action === 'reload' && driver.reloadExtensions) {
-        const count = await driver.reloadExtensions(host, context.project, context.profile);
+      if (request.action === 'reload' && driver.extensions?.reload) {
+        const count = await driver.extensions.reload(host, context.project, context.profile);
         return { success: true, applyEffect: count ? `已通知 ${count} 个在线连接重载 MCP 配置；请刷新运行状态。` : '没有匹配的在线连接；下次启动会话时加载配置。' };
       }
-      if (nativeSkillToggle && item?.sourcePath && driver.setSkillEnabled) {
-        await driver.setSkillEnabled(host, context.project, context.profile, item.sourcePath, request.action === 'enable');
+      if (nativeSkillToggle && item?.sourcePath && driver.extensions?.setSkillEnabled) {
+        await driver.extensions.setSkillEnabled(host, context.project, context.profile, item.sourcePath, request.action === 'enable');
         return { success: true, applyEffect: '已更新用户级原生 Skill 开关；引用该技能的其他项目也可能受影响。现有会话的加载时机由 Agent 决定。' };
       }
       if (request.action !== 'install' && (!item || item.kind !== 'plugin')) throw new AppError('EXTENSION_ACTION_UNSUPPORTED', 'This resource does not support this native action', 409, undefined, { subject: 'resource' });

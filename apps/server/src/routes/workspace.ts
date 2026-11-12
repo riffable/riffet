@@ -80,7 +80,7 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
   });
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/projects/:id/file',async(request)=>workspace.preview(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers)}));
   app.get<{Params:{id:string};Querystring:{path:string}}>('/api/projects/:id/file/image',async(request,reply)=>{
-    const harnessImageHomes=nativeBackends.profileSettings('dsh').profiles.map(profile=>profile.configDir?.trim()?path.resolve(profile.configDir.trim()):DEFAULT_DSH_CONFIG_DIR);
+    const harnessImageHomes=nativeBackends.catalog.profileSettings('dsh').profiles.map(profile=>profile.configDir?.trim()?path.resolve(profile.configDir.trim()):DEFAULT_DSH_CONFIG_DIR);
     const {mimeType,data}=await workspace.readPreviewImage(store.getProject(request.params.id),requireString(request.query.path,'path',8192),{allowOutside:allowOutsideRead(request.headers),harnessImageHomes});
     reply.header('Content-Type',mimeType).header('Content-Disposition','inline').header('X-Content-Type-Options','nosniff');
     // SVG is inert as an image, but a direct document navigation must remain isolated too.

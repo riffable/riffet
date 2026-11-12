@@ -1,32 +1,28 @@
 import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
-import { createHash } from 'node:crypto';
 import type {
-  CapabilityReport, CommandResult, ConfigFile, GatewayProtocol, LoadedExtensions, ModelInfo, NativeActivity, NativeBackendCatalogEntry, NativeBackendId, NativeBackendUsage,
+  ModelInfo, NativeActivity, NativeBackendId,
   NativeContext, NativeInteraction, NativeJob, NativeInteractionResponse, NativeInteractionResult, NativeStopRequest, NativeWorkbenchEvent,
-  NativeBackendProfileSettings, NativeBackendProfilesResponse, NativeModelApiProtocol, NativeModelSource, NativeProfileContinuation, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeSlashCatalog, NativeSlashItem, NativeStatus, Project, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
+  NativeBackendProfilesResponse, NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, Run, Session, SessionState, TerminalInfo, WorkbenchEvent,
 } from '../../../../packages/contracts/src/index.js';
 import { AppError, sessionInTerminal } from '../errors.js';
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
 import type { SessionLockHandle } from '../agent-host/session-lock.js';
-import type { TerminalBehaviour, TerminalLaunchEnv, TerminalService } from '../terminal/service.js';
-import { validateNativeModelApiProtocol, validateNativeModelSource, validateNativeProfileEndpoint } from '../settings/index.js';
-import { piProviderModels } from './pi/provider.js';
-import { fetchGatewayModels } from './shared/gateway-models.js';
-import { modelSourceOf, modelSourceProvider, prepareSource, sourceCatalog } from './shared/model-source.js';
-import { modelFamily, parseNativeModelSelection } from './shared/model-selection.js';
+import type { TerminalBehaviour, TerminalService } from '../terminal/service.js';
+import { prepareSource } from './shared/model-source.js';
+import { modelFamily } from './shared/model-selection.js';
 export { modelFamily } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { TerminalDialogObserver } from './shared/terminal-dialogs.js';
-import { FreshCache } from './shared/fresh-cache.js';
-import { cliVersionReport } from './shared/cli-version.js';
+import { BackendCatalog, curateModels, modelNormalizer, profileDefaultModel, safeBackendReason } from './catalog.js';
+import { BackendAdmin } from './admin.js';
 import type { StatsSink, UsageTranscript } from '../stats/types.js';
 import { servingKey, type TranscriptSource } from '../journal/ingest.js';
 import { backendIdOf } from '../session-identity.js';
 import { activityOfEvent, summarizeActivities } from '../journal/activity.js';
 import type { TranscriptIngest } from '../sync/ingest.js';
 import type { JournalFeed } from '../journal/feed.js';
-import type { ExternalSessionEntry, ExternalSessionScan, NativeBackendAvailability, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendTraits, NativeControlMessage, NativeDispatchBinding, NativePrewarmRequest, NativePrewarmResult, NativePtyLaunchSpec, NativeRiffetMcpHost } from './types.js';
+import type { ExternalSessionEntry, ExternalSessionScan, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding, NativePtyLaunchSpec, NativeRiffetMcpHost } from './types.js';
 import { stopWorkbenchAppServerAt } from './shared/app-server-daemons.js';
 import { appServerCredentialDirs } from './codex/config.js';
 import { OutputRateTracker } from '../metrics/output-rate.js';
@@ -64,33 +60,7 @@ const listened = (watch: BackendWatch): boolean => watch.controlListeners.size >
 const WATCH_IDLE_MS = 60_000;
 const OUTPUT_RATE_RETENTION_MS = 300_000;
 const EMPTY_OUTPUT_RATE = new OutputRateTracker().sample();
-const MODEL_LIST_FRESH_MS = 5 * 60_000;
-const MAX_MODEL_LISTINGS = 64;
-/** Load moves by the minute, so a usage read is only reused briefly; it still spares a CLI spawn per open picker. */
-const USAGE_FRESH_MS = 30_000;
-/** Availability probes spawn a CLI; this is short enough to notice an install and long enough to poll. */
-const AVAILABILITY_FRESH_MS = 30_000;
-const MAX_AVAILABILITY_ENTRIES = 32;
 
-/** Skills change when someone edits a file, so a listing is short-lived; a stale one still answers at once. */
-const SLASH_LIST_FRESH_MS = 60_000;
-/** A probe of what a launch loads may start a CLI; the extension management drops it when it writes. */
-const LOADED_EXTENSIONS_FRESH_MS = 5 * 60_000;
-const LOADED_EXTENSIONS_DEADLINE_MS = 20_000;
-
-/** `work`, or a rejection after `ms`; the work itself is not cancelled. */
-function withDeadline<T>(work: Promise<T>, ms: number, message: string): Promise<T> {
-  let timer: NodeJS.Timeout;
-  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); timer.unref?.(); });
-  return Promise.race([work, late]).finally(() => clearTimeout(timer));
-}
-
-
-/**
- * One entry per name. A discovered entry replaces a static built-in of the same name, since the
- * provider describes its own command better; among discovered entries the first wins, which is
- * the provider's own precedence order.
- */
 /** What is known about a native session right now; `deriveSessionState` is the only reader of it. */
 export interface SessionStateFacts {
   current: SessionState;
@@ -133,96 +103,6 @@ export function sessionStatePatch(session: Session, state: SessionState, error?:
   return { state, ...(session.error ? { error: undefined } : {}) };
 }
 
-export function mergeSlashItems(builtins: NativeSlashItem[], discovered: NativeSlashItem[]): NativeSlashItem[] {
-  const byName = new Map<string, NativeSlashItem>();
-  for (const item of discovered) if (item.name && !byName.has(item.name)) byName.set(item.name, item);
-  const result = builtins.filter(item => !byName.has(item.name));
-  return [...result, ...byName.values()];
-}
-interface AvailabilityEntry { result: NativeBackendAvailability; checkedAt: number }
-
-/** Rated from the version the availability probe already read; nothing is spawned for it. */
-function cliVersionOf(driver: NativeBackendDriver, availability: NativeBackendAvailability): Pick<NativeBackendCatalogEntry, 'cliVersion'> {
-  return driver.cliVersions ? { cliVersion: cliVersionReport(driver.cliVersions, availability.version) } : {};
-}
-
-function safeBackendReason(reason: string, profile: NativeBackendProfileConfig): string {
-  let safe = reason;
-  for (const [key, value] of Object.entries(profile.config)) {
-    if (!/(?:secret|token|password|credential|api[_-]?key)/i.test(key) || typeof value !== 'string' || !value) continue;
-    safe = safe.split(value).join('[REDACTED]');
-  }
-  return safe
-    .replace(/(\b(?:secret|token|password|credential|api[_-]?key|authorization)\b\s*[:=]\s*)([^\s,;}]+)/gi, '$1[REDACTED]')
-    .replace(/\bBearer\s+[^\s,;}]+/gi, 'Bearer [REDACTED]')
-    .slice(0, 1000);
-}
-
-/**
- * Narrows a backend's catalog to the models a profile exposes. An absent list means the profile
- * has not been curated, so everything shows; an empty one is an explicit choice and is kept
- * empty. The session's current model always survives, otherwise narrowing the list would leave
- * an active conversation pointing at a model its own picker no longer offers.
- *
- * The list also carries ids the catalog does not mention. A gateway that cannot be interrogated
- * is still usable that way: the user types the ids by hand and they become the catalog.
- */
-function curateModels(models: ModelInfo[], profile: NativeBackendProfileConfig, session?: Session, normalize: (id: string) => string = id => id): ModelInfo[] {
-  const enabled = profile.config.enabledModels;
-  if (!Array.isArray(enabled)) return models;
-  const known = new Map(models.map(model => [model.value, model]));
-  // A canonical value always wins over another entry's alias, so only register aliases the
-  // catalog itself does not already name.
-  const aliases = new Map<string, string>();
-  for (const model of models) for (const alias of model.aliases ?? []) {
-    if (!known.has(alias) && !aliases.has(alias)) aliases.set(alias, model.value);
-  }
-  const catalogId = (value: string) => {
-    const normalized = normalize(value);
-    if (known.has(normalized)) return normalized;
-    // Session parameters select controls on the same catalog entry, not a separate model with
-    // no capabilities. Keep an unknown spelling intact so manually configured ids still work.
-    const base = parseNativeModelSelection(normalized).model;
-    return known.has(base) ? base : aliases.get(base) ?? normalized;
-  };
-  const chosen = [...new Set(enabled.filter((value): value is string => typeof value === 'string').map(catalogId))];
-  if (session?.model) {
-    const current = catalogId(session.model);
-    if (!chosen.includes(current)) chosen.push(current);
-  }
-  return chosen.map(value => known.get(value) ?? { value, name: value, configOptions: [] });
-}
-
-function str(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-/** A probe failure can echo the request; never let the key travel back out in the message. */
-function redactSecret(message: string, secret?: string): string {
-  return (secret ? message.split(secret).join('[REDACTED]') : message).slice(0, 500);
-}
-
-/**
- * A driver's canonical spelling of a model id. Ids saved from a gateway probe are the gateway's
- * own (`deepseek-v4.1-flash`), while a backend such as DSH names the same model differently.
- */
-function modelNormalizer(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): (id: string) => string {
-  return id => {
-    try { return driver.normalizeModel?.(id, profile) ?? id; } catch { return id; }
-  };
-}
-
-/**
- * How long a conversation's catalog waits for another provider's model list. A slower gateway is
- * left out of this answer, while its read goes on and fills the cache for the next one.
- */
-const CONTINUATION_LISTING_WAIT_MS = 2_000;
-
-function profileDefaultModel(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): string | undefined {
-  const raw = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
-  return raw ? driver.normalizeModel?.(raw, profile) ?? raw : undefined;
-}
-
 function sameProfileConfig(left: NativeBackendProfileConfig, right: NativeBackendProfileConfig): boolean {
   return left.backendId === right.backendId && left.id === right.id
     && JSON.stringify(left.config) === JSON.stringify(right.config);
@@ -256,16 +136,10 @@ export interface NativeBackendServiceOptions {
 
 /** Routes native operations to provider adapters and owns their watches and run write fence. */
 export class NativeBackendService {
-  /** User roots can be shared by profiles and backends, so invalidate every derived slash view. */
-  invalidateSlashCatalogs(): void { this.slashListings.clear(); this.loadedListings.clear(); }
-  /** A source login changes credentials without changing its saved profile. */
-  invalidateModelCatalogs(): void {
-    this.modelListings.clear();
-    this.availability.clear();
-    for (const driver of this.registry.list()) driver.invalidateModels?.();
-  }
   readonly registry: NativeBackendRegistry;
   readonly host: NativeBackendHost;
+  readonly catalog: BackendCatalog;
+  readonly admin: BackendAdmin;
   private readonly watches = new Map<string, BackendWatch>();
   /**
    * The control path's readers by conversation (`watchControl`). They belong to whoever opened them, not to a watch: a
@@ -279,12 +153,6 @@ export class NativeBackendService {
   }>();
   private outputRateTimer?: NodeJS.Timeout;
   private readonly sessionProfiles = new Map<string, { driver: NativeBackendDriver; profile: NativeBackendProfileConfig }>();
-  private readonly modelListings = new FreshCache<ModelInfo[]>(MODEL_LIST_FRESH_MS, MAX_MODEL_LISTINGS);
-  private readonly slashListings = new FreshCache<NativeSlashItem[]>(SLASH_LIST_FRESH_MS, MAX_MODEL_LISTINGS);
-  /** What a launch loads per backend, profile and directory (`loadedExtensions`); a probe can start a CLI, so a read is kept for a while. */
-  private readonly loadedListings = new Map<string, { at: number; value?: LoadedExtensions; request?: Promise<LoadedExtensions> }>();
-  private readonly usageReads = new Map<string, { freshUntil: number; value?: NativeBackendUsage; request?: Promise<NativeBackendUsage> }>();
-  private readonly availability = new Map<string, AvailabilityEntry>();
   /**
    * Startup screens of the protocol-first backends. Cursor parses its own screen inside its driver,
    * so this only ever serves Claude Code and Codex terminals (DSH runs without one).
@@ -303,7 +171,7 @@ export class NativeBackendService {
   constructor(private readonly options: NativeBackendServiceOptions) {
     this.registry = options.registry;
     this.terminalDialogs = new TerminalDialogObserver(options.terminal, (session, dialog) => {
-      session = this.currentSession(session);
+      session = this.catalog.currentSession(session);
       return this.resolveSync(session).driver.endorsesScreenDialog?.(this.host, session, dialog) ?? true;
     });
     const stats = options.stats ?? noopStats;
@@ -367,18 +235,14 @@ export class NativeBackendService {
       ...(options.riffetMcp ? { riffetMcp: options.riffetMcp } : {}),
       withDetachedSessionLock: (sessionId, operation) => options.runtime.withDetachedSession(sessionId, () => Promise.resolve(operation())),
     };
+    this.catalog = new BackendCatalog(options.registry, this.host, { profiles: options.profiles, defaultProfileId: options.defaultProfileId }, session => this.resolveSync(session).profile);
+    this.admin = new BackendAdmin(options.registry, this.host, this.catalog);
   }
 
   backendId(session: Session): NativeBackendId { return backendIdOf(session); }
 
   /** New input is refused with `NATIVE_BACKEND_UNAVAILABLE` (503, with the reason) when the session's backend has no driver, instead of queuing a run that cannot start. */
   assertAvailable(session: Session): void { this.registry.require(backendIdOf(session)); }
-
-  /** The installed driver's `NativeBackendTraits`; none for a backend that is not installed. */
-  traits(backendId: string): NativeBackendTraits {
-    if (!isNativeBackendId(backendId)) return {};
-    try { return this.registry.require(backendId).traits ?? {}; } catch { return {}; }
-  }
 
   /**
    * How the terminal service reads the panes of the backend behind a terminal: found through its
@@ -390,144 +254,6 @@ export class NativeBackendService {
       try { backendId = this.options.store.getSession(target.sessionId).backendId; } catch { return undefined; }
     }
     return backendId ? this.registry.get(backendId)?.terminal : undefined;
-  }
-
-  /** The environment names every installed backend's launches handle specially (`NativeBackendDriver.launchEnv`). */
-  terminalLaunchEnv(): TerminalLaunchEnv {
-    const drivers = this.registry.list();
-    return {
-      managed: drivers.flatMap(driver => driver.launchEnv?.managed ?? []),
-      secrets: drivers.flatMap(driver => driver.launchEnv?.secrets ?? []),
-    };
-  }
-
-  /**
-   * Whether a prewarm is not even attempted: `skipped` with the reason for a backend that has no driver now (its plugin is
-   * off) or keeps no warm process, or for a profile it cannot do it for. Asked before anything of the project's workspace is
-   * touched, so such a backend never answers `workspace_busy` or fails for the workspace's sake.
-   */
-  prewarmSkip(backendId: NativeBackendId, backendProfileId?: string): NativePrewarmResult | undefined {
-    if (!this.registry.get(backendId)?.prewarm) return { state: 'skipped', reason: 'backend_unsupported' };
-    try { this.validateProfile(backendId, backendProfileId); }
-    catch (error) {
-      if (error instanceof AppError && error.code === 'NATIVE_PROFILE_NOT_FOUND') return { state: 'skipped', reason: 'profile_unsupported' };
-      throw error;
-    }
-    return undefined;
-  }
-
-  /**
-   * Starts the backend's unused process for the project's next session, when it keeps one. Says
-   * `skipped` with the reason for a backend that does not, or for a profile it cannot do it for.
-   */
-  async prewarm(backendId: NativeBackendId, request: NativePrewarmRequest): Promise<NativePrewarmResult> {
-    const driver = this.registry.require(backendId);
-    if (!driver.prewarm) return { state: 'skipped', reason: 'backend_unsupported' };
-    let profile: NativeBackendProfileConfig;
-    try { profile = this.validateProfile(backendId, request.backendProfileId); }
-    catch (error) {
-      if (error instanceof AppError && error.code === 'NATIVE_PROFILE_NOT_FOUND') return { state: 'skipped', reason: 'profile_unsupported' };
-      throw error;
-    }
-    const { project, backendProfileId: _profile, ...rest } = request;
-    await prepareSource(profile.config);
-    return await driver.prewarm(this.host, project, profile, rest);
-  }
-
-  /** The launch of the backend's own login, to be run as a `login` terminal in the project. */
-  async loginLaunchSpec(backendId: NativeBackendId, project: Project): Promise<NativePtyLaunchSpec> {
-    const driver = this.registry.require(backendId);
-    if (!driver.loginLaunch) throw new AppError('NATIVE_LOGIN_UNSUPPORTED', `${driver.label} has no terminal login`, 409, { backendId });
-    return await driver.loginLaunch(this.host, project, this.validateProfile(backendId));
-  }
-
-  /** The gateway protocols a backend's profiles can be pointed at; none for a backend that is not registered. */
-  consumesProtocols(backendId: NativeBackendId): readonly GatewayProtocol[] {
-    return this.registry.get(backendId)?.traits?.consumesProtocols ?? [];
-  }
-
-  /** A driver's check of a profile config before the settings store it; a backend without a driver is `NATIVE_BACKEND_UNAVAILABLE`. */
-  validateProfileConfig(backendId: NativeBackendId, config: Record<string, unknown>): void {
-    this.registry.require(backendId).validateProfileConfig?.(config);
-  }
-
-  // The legacy `/api/cursor/*` and `/api/native/runtime/stats` endpoints forward to the backend that had them
-  // first, for its default profile. A backend without a driver is `NATIVE_BACKEND_UNAVAILABLE`, one without the operation 409.
-  private forwarded(backendId: NativeBackendId, operation: string, has: (driver: NativeBackendDriver) => boolean): NativeBackendDriver {
-    const driver = this.registry.require(backendId);
-    if (!has(driver)) throw new AppError('NATIVE_OPERATION_UNSUPPORTED', `${driver.label} has no ${operation}`, 409, { backendId });
-    return driver;
-  }
-
-  async capabilityReport(backendId: NativeBackendId): Promise<CapabilityReport> {
-    const driver = this.forwarded(backendId, 'capability report', item => Boolean(item.capabilityReport));
-    return await driver.capabilityReport!(this.host, this.validateProfile(backendId));
-  }
-
-  async runCommand(backendId: NativeBackendId, request: { operation: string; args?: string[]; cwd?: string }): Promise<CommandResult> {
-    const driver = this.forwarded(backendId, 'management commands', item => Boolean(item.runCommand));
-    return await driver.runCommand!(this.host, this.validateProfile(backendId), request);
-  }
-
-  async runtimeStats(backendId: NativeBackendId): Promise<Record<string, unknown>> {
-    const driver = this.forwarded(backendId, 'runtime statistics', item => Boolean(item.runtimeStats));
-    return await driver.runtimeStats!(this.host);
-  }
-
-  /** The driver's own model listing, without this service's cache; the CLI runs in `cwd`, which stands in for a project. */
-  async driverModels(backendId: NativeBackendId, cwd: string): Promise<ModelInfo[]> {
-    const driver = this.registry.require(backendId);
-    const project: Project = { id: '', name: '', cwd, createdAt: '', updatedAt: '' };
-    return await driver.listModels(this.host, project, this.validateProfile(backendId));
-  }
-
-  // Project config files belong to the backends that keep them (today the first one). An id is the driver's own
-  // token, so a read or write is offered to each in turn until one knows it.
-  private configDrivers(): Array<{ driver: NativeBackendDriver; configs: NonNullable<NativeBackendDriver['projectConfigs']> }> {
-    return this.registry.list().flatMap(driver => driver.projectConfigs ? [{ driver, configs: driver.projectConfigs }] : []);
-  }
-
-  async projectConfigs(project: Project): Promise<ConfigFile[]> {
-    // The core's own rule for a project directory, whichever backend reads it (a plugin has no way to ask).
-    await assertTaskWorkspaceAvailable(project);
-    const lists = await Promise.all(this.configDrivers().map(({ driver, configs }) => configs.list(this.host, project, this.validateProfile(driver.id))));
-    return lists.flat();
-  }
-
-  /** What a read, write or create is answered while no installed backend keeps project configs: the list is then empty, and the rest are unavailable with the reason a plugin is off. */
-  private noConfigKeeper(): AppError {
-    const reason = this.registry.unavailable().map(item => item.reason).join('; ');
-    return new AppError('NATIVE_BACKEND_UNAVAILABLE', reason ? `No installed backend keeps project config files: ${reason}` : 'No installed backend keeps project config files', 503, reason ? { backendId: this.registry.unavailable()[0]!.id, reason } : undefined);
-  }
-
-  private async withProjectConfig(operation: (entry: ReturnType<NativeBackendService['configDrivers']>[number], profile: NativeBackendProfileConfig) => Promise<ConfigFile>): Promise<ConfigFile> {
-    let missing: AppError | undefined;
-    if (!this.configDrivers().length) throw this.noConfigKeeper();
-    for (const entry of this.configDrivers()) {
-      try { return await operation(entry, this.validateProfile(entry.driver.id)); }
-      catch (error) {
-        if (!(error instanceof AppError) || error.code !== 'CONFIG_NOT_FOUND') throw error;
-        missing ??= error;
-      }
-    }
-    throw missing ?? new AppError('CONFIG_NOT_FOUND', 'Config does not exist', 404);
-  }
-
-  async readProjectConfig(project: Project, id: string): Promise<ConfigFile> {
-    await assertTaskWorkspaceAvailable(project);
-    return this.withProjectConfig(({ configs }, profile) => configs.read(this.host, project, profile, id));
-  }
-
-  async writeProjectConfig(project: Project, id: string, content: string, expectedHash: string): Promise<ConfigFile> {
-    await assertTaskWorkspaceAvailable(project);
-    return this.withProjectConfig(({ configs }, profile) => configs.write(this.host, project, profile, id, content, expectedHash));
-  }
-
-  async createProjectConfig(project: Project, input: { kind: ConfigFile['kind']; path: string; content: string }): Promise<ConfigFile> {
-    await assertTaskWorkspaceAvailable(project);
-    const entry = this.configDrivers()[0];
-    if (!entry) throw this.noConfigKeeper();
-    return await entry.configs.create(this.host, project, this.validateProfile(entry.driver.id), input);
   }
 
   /**
@@ -593,7 +319,7 @@ export class NativeBackendService {
 
   /** The watch a reader needs, with the terminal pump when the conversation's dialogs can only be read from its screen. */
   private armControl(session: Session): { driver: NativeBackendDriver; profile: NativeBackendProfileConfig } {
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const selected = this.resolveSync(session);
     this.ensureWatch(session, selected.driver, selected.profile);
     this.scheduleWatchRelease(session.id);
@@ -603,113 +329,14 @@ export class NativeBackendService {
     return selected;
   }
 
-  validateProfile(backendId: NativeBackendId, profileId?: string): NativeBackendProfileConfig {
-    const driver = this.registry.require(backendId);
-    const profiles = this.profiles(driver);
-    const selected = (profileId ? profiles.find(item => item.id === profileId) : undefined)
-      ?? profiles.find(item => item.isDefault)
-      ?? profiles[0];
-    if (!selected || (profileId && selected.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'Native backend profile does not exist', 404, { backendId });
-    return selected;
-  }
-
-  /** A driver's capabilities, with whether its launches carry the Riffet MCP server. */
-  private async driverCapabilities(driver: NativeBackendDriver, profile: NativeBackendProfileConfig) {
-    const capabilities = await driver.capabilities(this.host, profile);
-    return { ...capabilities, supportsRecovery: true, supportsTargetedStop: true,
-      ...(driver.traits?.riffetTools ? { supportsRiffetTools: true } : {}),
-      ...(driver.traits?.extensionToggles ? { extensionToggles: { ...driver.traits.extensionToggles } } : {}),
-      consumesProtocols: [...(driver.traits?.consumesProtocols ?? [])] };
-  }
-
-  async capabilitiesFor(backendId: NativeBackendId, profileId?: string) {
-    const driver = this.registry.require(backendId);
-    const profile = this.validateProfile(backendId, profileId);
-    return this.driverCapabilities(driver, profile);
-  }
-
   async assertSessionReferences(session: Pick<Session, 'backendId' | 'backendProfileId'>): Promise<void> {
-    const capabilities = await this.capabilitiesFor(session.backendId ?? 'cursor', session.backendProfileId);
+    const capabilities = await this.catalog.capabilitiesFor(session.backendId ?? 'cursor', session.backendProfileId);
     if (!capabilities.supportsSessionReferences) throw new AppError('SESSION_REFERENCES_UNSUPPORTED', 'This agent cannot read session references', 409);
   }
 
-  normalizeModel(backendId: NativeBackendId, profileId: string | undefined, model: string): string {
-    const driver = this.registry.require(backendId);
-    const profile = this.validateProfile(backendId, profileId);
-    return driver.normalizeModel?.(model, profile) ?? model;
-  }
-
-  validateNativeSessionId(backendId: NativeBackendId, nativeSessionId: string): void {
-    this.registry.require(backendId).validateNativeSessionId?.(nativeSessionId);
-  }
-
-  private profiles(driver: NativeBackendDriver): NativeBackendProfileConfig[] {
-    const builtins = driver.profiles(this.host);
-    const saved = this.options.profiles?.get(driver.id);
-    const defaultProfileId = saved?.defaultProfileId ?? this.options.defaultProfileId?.(driver.id);
-    const configured = saved?.profiles ?? [];
-    const profiles = builtins.map(profile => {
-      const settings = configured.find(item => item.id === profile.id);
-      const secretConfig = this.options.profiles?.getConfig(driver.id, profile.id) ?? {};
-      const { hasApiKey: _hasApiKey, ...safeConfig } = settings ?? {};
-      return {
-        ...profile,
-        ...(settings ? { name: settings.name, description: settings.description } : {}),
-        isDefault: profile.id === defaultProfileId || (!defaultProfileId && profile.isDefault),
-        config: { ...profile.config, ...safeConfig, ...secretConfig },
-      };
-    });
-    for (const settings of configured) {
-      if (profiles.some(item => item.id === settings.id)) continue;
-      const { hasApiKey: _hasApiKey, isDefault: _isDefault, ...safeConfig } = settings;
-      profiles.push({
-        id: settings.id, backendId: driver.id, name: settings.name, description: settings.description,
-        isDefault: settings.id === defaultProfileId,
-        config: { ...safeConfig, ...(this.options.profiles?.getConfig(driver.id, settings.id) ?? {}) },
-      });
-    }
-    return profiles;
-  }
-
-  /**
-   * Profiles that point at a gateway of their own, credentials included. Server-side only.
-   *
-   * The title service consumes explicit HTTP gateways; CLI-managed model sources use their own
-   * catalog and authentication protocols and are selected by the agent model picker instead.
-   */
-  gatewayProfiles(backendId: NativeBackendId): NativeBackendProfileConfig[] {
-    return this.profiles(this.registry.require(backendId))
-      .filter(profile => Boolean(str(profile.config.apiEndpoint)) && !modelSourceOf(profile.config));
-  }
-
-  /** Tells the provider the conversation's current title, if it keeps names and is running. Best effort. */
   async rename(session: Session): Promise<void> {
     const { driver, profile } = await this.resolve(session);
     await driver.rename?.(this.host, session, profile);
-  }
-
-  profileSettings(backendId: NativeBackendId): NativeBackendProfilesResponse {
-    const driver = this.registry.require(backendId);
-    const safe = this.options.profiles?.get(backendId) ?? { profiles: [] };
-    const configured = safe.profiles;
-    const profiles: NativeBackendProfileSettings[] = this.profiles(driver).map(profile => {
-      const saved = configured.find(item => item.id === profile.id);
-      const settings = saved ?? { id: profile.id, backendId, name: profile.name, description: profile.description };
-      // A driver that resolves its launch (executable on PATH, default directory) shows what it resolved when nothing is stored.
-      const values = driver.describeProfile?.(profile) ?? profile.config;
-      const resolved: NativeBackendProfileSettings = { ...settings, isDefault: profile.isDefault };
-      for (const key of ['executable', 'configDir', 'sourceDir', 'apiEndpoint', 'agentEndpoint', 'defaultModel'] as const) {
-        if (typeof values[key] === 'string' && resolved[key] === undefined) resolved[key] = values[key] as string;
-      }
-      // A source is never inherited from a builtin's config; only a saved profile can
-      // carry one, so this reads `settings` rather than `values`.
-      if (typeof settings.modelSource === 'string' && resolved.modelSource === undefined) resolved.modelSource = settings.modelSource;
-      if (typeof values.disableAutoUpdate === 'boolean' && resolved.disableAutoUpdate === undefined) resolved.disableAutoUpdate = values.disableAutoUpdate;
-      resolved.hasApiKey = settings.hasApiKey ?? typeof profile.config.apiKey === 'string';
-      if (resolved.enabledModels) resolved.enabledModels = [...new Set(resolved.enabledModels.map(modelNormalizer(driver, profile)))];
-      return resolved;
-    });
-    return { profiles, ...(safe.defaultProfileId ? { defaultProfileId: safe.defaultProfileId } : {}) };
   }
 
   private async resolve(session: Session, requestedProfileId?: string): Promise<{ driver: NativeBackendDriver; profile: NativeBackendProfileConfig }> {
@@ -718,7 +345,7 @@ export class NativeBackendService {
     const selectedProfileId = requestedProfileId ?? session.backendProfileId;
     if (backendId !== 'pi' && cached && cached.driver.id === backendId && (!selectedProfileId || cached.profile.id === selectedProfileId)) return cached;
     const driver = this.registry.require(backendId);
-    const all = this.profiles(driver);
+    const all = this.catalog.profiles(driver);
     const wanted = requestedProfileId ?? session.backendProfileId ?? this.options.defaultProfileId?.(backendId);
     const profile = (wanted ? all.find(item => item.id === wanted) : undefined)
       ?? all.find(item => item.isDefault)
@@ -735,7 +362,7 @@ export class NativeBackendService {
     const selectedProfileId = session.backendProfileId;
     if (backendId !== 'pi' && cached && cached.driver.id === backendId && (!selectedProfileId || cached.profile.id === selectedProfileId)) return cached;
     const driver = this.registry.require(backendId);
-    const all = this.profiles(driver);
+    const all = this.catalog.profiles(driver);
     const wanted = session.backendProfileId ?? this.options.defaultProfileId?.(backendId);
     const profile = (wanted ? all.find(item => item.id === wanted) : undefined) ?? all.find(item => item.isDefault) ?? all[0];
     if (!profile) throw new AppError('NATIVE_PROFILE_UNAVAILABLE', 'No profile is configured for ' + driver.label, 503, { backendId });
@@ -743,23 +370,11 @@ export class NativeBackendService {
     return { driver, profile };
   }
 
-  /** A deleted pending choice must not hide controls for a writer whose profile still exists. */
-  private currentSession(session: Session): Session {
-    const actual = session.nativeRuntime?.profileId;
-    if (!session.configPending || !actual || !session.backendProfileId || actual === session.backendProfileId) return session;
-    let driver: NativeBackendDriver;
-    try { driver = this.registry.require(this.backendId(session)); } catch { return session; }
-    const profiles = this.profiles(driver);
-    return profiles.some(profile => profile.id === actual) && !profiles.some(profile => profile.id === session.backendProfileId)
-      ? { ...session, backendProfileId: actual }
-      : session;
-  }
-
   private bindProfile(session: Session, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): void {
     // An in-flight open/configure can finish after settings were saved. Its old snapshot must not
     // overwrite the desired settings; Codex keeps the actual launch snapshot inside its runtime.
     if (driver.id === 'codex' || driver.id === 'traex') {
-      profile = this.profiles(driver).find(item => item.id === profile.id) ?? profile;
+      profile = this.catalog.profiles(driver).find(item => item.id === profile.id) ?? profile;
     }
     this.sessionProfiles.set(session.id, { driver, profile });
   }
@@ -778,7 +393,7 @@ export class NativeBackendService {
   refreshProfile(backendId: NativeBackendId, profileId: string): void {
     if (backendId !== 'codex' && backendId !== 'traex') return;
     const driver = this.registry.require(backendId);
-    const profile = this.profiles(driver).find(item => item.id === profileId);
+    const profile = this.catalog.profiles(driver).find(item => item.id === profileId);
     if (!profile) return;
     for (const [sessionId, selected] of this.sessionProfiles) {
       if (selected.driver.id !== backendId || selected.profile.id !== profileId) continue;
@@ -789,271 +404,13 @@ export class NativeBackendService {
       if (watch) watch.profile = profile;
       this.publishStatus(sessionId, driver, profile);
     }
-    this.invalidateModelCatalogs();
-  }
-
-  /**
-   * Listing models means spawning a CLI or calling a gateway, which takes seconds. A listing is
-   * reused while fresh and, once stale, still answered at once while a refresh runs behind it.
-   * The key covers the whole profile config, so editing a provider never serves its old list.
-   * A driver that keeps its own provider catalog (`cachesModels`) is asked directly.
-   */
-  private listModels(driver: NativeBackendDriver, project: Project | undefined, profile: NativeBackendProfileConfig, session?: Session): Promise<ModelInfo[]> {
-    if (driver.traits?.cachesModels) return driver.listModels(this.host, project, profile, session);
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null, session?.model ?? ''])).digest('hex');
-    return this.modelListings.get(key, () => driver.listModels(this.host, project, profile, session));
-  }
-
-  /**
-   * The availability a backend list reports. A probe spawns a CLI, so the answer is cached briefly:
-   * this route is polled by every open page, and `available: true` used to be hardcoded here — which
-   * is why a backend whose executable could not be found still showed up as healthy until a
-   * conversation tried to start it.
-   */
-  private async backendAvailability(driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
-    const key = `${driver.id}:${profile.id}`;
-    const cached = this.availability.get(key);
-    if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached.result;
-    const result = await driver.available(this.host, profile)
-      .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
-    this.availability.set(key, { result, checkedAt: Date.now() });
-    for (const oldest of this.availability.keys()) {
-      if (this.availability.size <= MAX_AVAILABILITY_ENTRIES) break;
-      this.availability.delete(oldest);
-    }
-    return result;
-  }
-
-  async listBackends(): Promise<NativeBackendCatalogEntry[]> {
-    const result: NativeBackendCatalogEntry[] = [];
-    for (const driver of this.registry.list()) {
-      const profiles = this.profiles(driver);
-      const profile = profiles.find(item => item.isDefault) ?? profiles[0];
-      if (!profile) continue;
-      const capabilities = await this.driverCapabilities(driver, profile);
-      const availability = await this.backendAvailability(driver, profile);
-      const reason = availability.reason ? safeBackendReason(availability.reason, profile) : undefined;
-      const rawDefaultModel = typeof profile.config.defaultModel === 'string' ? profile.config.defaultModel : undefined;
-      const defaultModel = rawDefaultModel ? driver.normalizeModel?.(rawDefaultModel, profile) ?? rawDefaultModel : undefined;
-      result.push({ backendId: driver.id, label: driver.label, available: availability.available, ...(availability.needsLogin ? { needsLogin: true } : {}), profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models: [], ...(reason ? { reason } : {}), ...(defaultModel ? { defaultModel } : {}), ...cliVersionOf(driver, availability) });
-    }
-    return result;
-  }
-
-  async catalog(backendId: string, project: Project | undefined, profileId?: string, session?: Session, options: { allModels?: boolean } = {}): Promise<NativeBackendCatalogEntry> {
-    if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    const driver = this.registry.require(backendId);
-    const profiles = this.profiles(driver);
-    const requestedSession = session;
-    if (session) session = this.currentSession(session);
-    const selected = session ? this.resolveSync(session).profile : (profileId ? profiles.find(item => item.id === profileId) : undefined)
-      ?? profiles.find(item => item.isDefault)
-      ?? profiles[0];
-    const pendingChoiceRemoved = session !== requestedSession;
-    if (!selected || (profileId && selected.id !== profileId && !(pendingChoiceRemoved && profileId === requestedSession?.backendProfileId))) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
-    await prepareSource(selected.config);
-    const capabilities = await this.driverCapabilities(driver, selected);
-    const availability: NativeBackendAvailability = await driver.available(this.host, selected).catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
-    let reason = availability.reason ? safeBackendReason(availability.reason, selected) : undefined;
-    let models: ModelInfo[] = [];
-    if (availability.available && capabilities.supportsModelSelection) {
-      try {
-        const listed = await this.listModels(driver, project, selected, session);
-        models = options.allModels ? listed : curateModels(listed, selected, session, modelNormalizer(driver, selected));
-      }
-      catch (error) { reason = safeBackendReason(error instanceof Error ? error.message : 'Could not load the model catalog', selected); }
-    }
-    const defaultModel = profileDefaultModel(driver, selected);
-    const continuations = session && capabilities.supportsModelSelection ? await this.continuations(driver, selected, profiles, project, session) : [];
-    if (pendingChoiceRemoved && capabilities.supportsModelSelection) {
-      // The client still shows the deleted choice as current. Offer the actual writer explicitly
-      // so picking its model sends a profile cancellation, rather than another write to that choice.
-      const { config: _config, ...publicProfile } = selected;
-      continuations.unshift({ profile: publicProfile, models });
-      models = [];
-    }
-    return {
-      backendId, label: driver.label, available: availability.available,
-      ...(availability.needsLogin ? { needsLogin: true } : {}),
-      ...(reason ? { reason } : {}),
-      profiles: profiles.map(({ config: _config, ...item }) => item), capabilities, models,
-      ...(defaultModel ? { defaultModel } : {}),
-      ...cliVersionOf(driver, availability),
-      ...(continuations.length ? { continuations } : {}),
-    };
-  }
-
-  /**
-   * The profiles a conversation on `current` can move to without a new session, each with its
-   * models of the line it runs on (`modelFamily`): those keeping conversations where `current` does
-   * and serving that line. Sharing a store only says the transcript can be resumed there; the line is
-   * what says the next request accepts its turns (signed reasoning among them). Moving to another line
-   * is a handoff. A profile whose catalog cannot be read in time is left out rather than offered empty.
-   */
-  private async continuations(driver: NativeBackendDriver, current: NativeBackendProfileConfig, profiles: NativeBackendProfileConfig[], project: Project | undefined, session: Session): Promise<NativeProfileContinuation[]> {
-    const key = driver.continuationKey?.(current);
-    const running = session.model ?? profileDefaultModel(driver, current);
-    if (key === undefined || !running) return [];
-    const family = modelFamily(modelNormalizer(driver, current)(running));
-    const candidates = profiles.filter(item => item.id !== current.id && driver.continuationKey!(item) === key);
-    const listed = await Promise.all(candidates.map(async profile => {
-      const normalize = modelNormalizer(driver, profile);
-      const listing = (async () => {
-        await prepareSource(profile.config);
-        if (driver.canContinueProfile && !driver.canContinueProfile(current, profile, session)) return undefined;
-        return curateModels(await this.listModels(driver, project, profile), profile, undefined, normalize);
-      })();
-      listing.catch(() => undefined);
-      let late!: () => void;
-      const waited = new Promise<undefined>(resolve => { late = () => resolve(undefined); });
-      const timer = setTimeout(late, CONTINUATION_LISTING_WAIT_MS);
-      timer.unref?.();
-      const models = await Promise.race([listing, waited]).catch(() => undefined).finally(() => clearTimeout(timer));
-      const same = models?.filter(model => modelFamily(normalize(model.value)) === family);
-      if (!same?.length) return undefined;
-      const { config: _config, ...publicProfile } = profile;
-      return { profile: publicProfile, models: same };
-    }));
-    return listed.filter((item): item is NativeProfileContinuation => item !== undefined);
-  }
-
-  /**
-   * Account quota and per-model load for one backend profile, or nothing when its CLI reports
-   * neither. Read live from the provider and reused for a short while.
-   */
-  async usage(backendId: string, project: Project | undefined, profileId?: string, session?: Session): Promise<NativeBackendUsage | undefined> {
-    if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    const driver = this.registry.require(backendId);
-    if (!driver.usage) return undefined;
-    const profiles = this.profiles(driver);
-    const profile = session ? this.resolveSync(session).profile : (profileId ? profiles.find(item => item.id === profileId) : undefined) ?? profiles.find(item => item.isDefault) ?? profiles[0];
-    if (!profile || (profileId && profile.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
-    let read = this.usageReads.get(key);
-    if (read?.value && read.freshUntil > Date.now()) return read.value;
-    if (!read) {
-      read = { freshUntil: 0 };
-      this.usageReads.set(key, read);
-      if (this.usageReads.size > MAX_MODEL_LISTINGS) this.usageReads.delete(this.usageReads.keys().next().value!);
-    }
-    const entry = read;
-    entry.request ??= driver.usage(this.host, project, profile, session)
-      .then(value => { entry.value = value; entry.freshUntil = Date.now() + USAGE_FRESH_MS; return value; })
-      .finally(() => { entry.request = undefined; });
-    return await entry.request;
-  }
-
-  /**
-   * The composer's `/` menu for one backend profile in one project: static built-ins first, then
-   * whatever the provider discovers. Discovery spawns a CLI on some backends, so a listing is
-   * reused while fresh and, once stale, answered at once while a refresh runs behind it. A failed
-   * discovery still answers with the built-ins.
-   */
-  async slashCatalog(backendId: string, project: Project | undefined, profileId?: string, session?: Session, options: { refresh?: boolean } = {}): Promise<NativeSlashCatalog> {
-    if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    const driver = this.registry.require(backendId);
-    const profiles = this.profiles(driver);
-    const profile = session ? this.resolveSync(session).profile : (profileId ? profiles.find(item => item.id === profileId) : undefined) ?? profiles.find(item => item.isDefault) ?? profiles[0];
-    if (!profile || (profileId && profile.id !== profileId)) throw new AppError('NATIVE_PROFILE_NOT_FOUND', 'The selected native profile does not exist', 404);
-    const capabilities = await this.driverCapabilities(driver, profile);
-    const builtins: NativeSlashItem[] = (capabilities.slashCommands ?? []).map(command => ({ ...command, name: command.name.replace(/^\//, ''), kind: 'command' }));
-    let discovered: NativeSlashItem[] = [];
-    let reason: string | undefined;
-    if (driver.slashItems) {
-      try { discovered = await this.discoverSlashItems(driver, project, profile, options.refresh === true); }
-      catch (error) { reason = safeBackendReason(error instanceof Error ? error.message : 'Could not list skills', profile); }
-    }
-    return { items: mergeSlashItems(builtins, discovered), inlineSkills: capabilities.inlineSkills === true, ...(reason ? { reason } : {}) };
-  }
-
-  /** The MCP servers and skills a launch of this backend profile in `project` loads; kept for five minutes. */
-  async loadedExtensions(backendId: string, project: Project, profileId?: string): Promise<LoadedExtensions> {
-    if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    const driver = this.registry.require(backendId);
-    const profile = this.validateProfile(backendId, profileId);
-    if (!driver.loadedExtensions || !driver.traits?.extensionToggles) throw new AppError('EXTENSION_TOGGLES_UNSUPPORTED', 'This agent cannot switch extensions off per conversation', 409);
-    // Hashed with the profile's config, as the slash cache is: an edited profile is a new key, and no secret is kept in one.
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project.cwd])).digest('hex');
-    const entry = this.loadedListings.get(key) ?? { at: 0 };
-    this.loadedListings.delete(key);
-    this.loadedListings.set(key, entry);
-    if (this.loadedListings.size > MAX_MODEL_LISTINGS) this.loadedListings.delete(this.loadedListings.keys().next().value!);
-    if (entry.value && Date.now() - entry.at < LOADED_EXTENSIONS_FRESH_MS) return entry.value;
-    entry.request ??= withDeadline(driver.loadedExtensions(this.host, project, profile), LOADED_EXTENSIONS_DEADLINE_MS, 'Reading the loaded extensions took too long')
-      .then(value => { const result = { ...value, checkedAt: new Date().toISOString() }; entry.value = result; entry.at = Date.now(); return result; })
-      .finally(() => { entry.request = undefined; });
-    try { return await entry.request; }
-    catch (error) {
-      if (error instanceof AppError) throw error;
-      throw new AppError('EXTENSIONS_PROBE_FAILED', safeBackendReason(error instanceof Error ? error.message : 'Could not read the loaded extensions', profile), 502);
-    }
-  }
-
-  private discoverSlashItems(driver: NativeBackendDriver, project: Project | undefined, profile: NativeBackendProfileConfig, refresh: boolean): Promise<NativeSlashItem[]> {
-    const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
-    return this.slashListings.get(key, () => driver.slashItems!(this.host, project, profile), { refresh });
-  }
-
-  /**
-   * Asks a gateway what it serves using the values a settings form currently holds, including a
-   * key typed but not yet saved, so adding a provider is one pass instead of save-then-return.
-   * Nothing here is persisted; the answer is a list of candidates the user picks from.
-   */
-  async probeModels(backendId: string, input: { apiEndpoint?: string; apiKey?: string; profileId?: string; modelSource?: NativeModelSource; apiProtocol?: NativeModelApiProtocol }): Promise<ModelInfo[]> {
-    if (!isNativeBackendId(backendId)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    const driver = this.registry.require(backendId);
-    const profiles = this.profiles(driver);
-    const profile = profiles.find(item => item.id === input.profileId) ?? profiles.find(item => item.isDefault) ?? profiles[0];
-    const normalize = profile ? modelNormalizer(driver, profile) : (id: string) => id;
-    // A blank key means "reuse what is already saved" so re-fetching does not force a retype.
-    const storedConfig = input.profileId ? this.options.profiles?.getConfig(backendId, input.profileId) : undefined;
-    const stored = input.apiKey === undefined && input.modelSource === modelSourceOf(storedConfig ?? {})
-      ? str(storedConfig?.apiKey)
-      : undefined;
-    const apiKey = input.apiKey?.trim() || stored;
-    // A source answers for itself, with its own endpoint and credential; the form only has to say
-    // which one, which is what lets a source with no typed address be probed at all.
-    if (input.modelSource) {
-      const source = validateNativeModelSource(input.modelSource);
-      await prepareSource({ modelSource: source, ...(apiKey ? { apiKey } : {}), ...(input.apiEndpoint ? { apiEndpoint: input.apiEndpoint } : {}) });
-      if (!modelSourceProvider(source)) throw new AppError('INVALID_BACKEND_PROFILE', 'This model source is not available on this server');
-      const consumes = driver.traits?.consumesProtocols ?? [];
-      if (!consumes.length) throw new AppError('INVALID_BACKEND_PROFILE', 'This backend does not support a model source');
-      const config: Record<string, unknown> = { modelSource: source, ...(apiKey ? { apiKey } : {}), ...(input.apiEndpoint ? { apiEndpoint: validateNativeProfileEndpoint(input.apiEndpoint, 'apiEndpoint') } : {}) };
-      try {
-        const models = await sourceCatalog(source, consumes, config);
-        return models.map(model => ({ ...model, value: normalize(model.value) }));
-      } catch (error) {
-        const message = redactSecret(error instanceof Error ? error.message : 'The model catalog could not be read', apiKey);
-        throw new AppError('NATIVE_MODEL_PROBE_FAILED', message, 400, undefined, { message });
-      }
-    }
-    if (backendId === 'pi') {
-      const endpoint = validateNativeProfileEndpoint(input.apiEndpoint, 'apiEndpoint');
-      const apiProtocol = validateNativeModelApiProtocol(input.apiProtocol ?? storedConfig?.apiProtocol ?? 'openai-completions');
-      try {
-        return await piProviderModels({ id: profile?.id ?? 'probe', backendId: 'pi', name: 'pi', config: { apiEndpoint: endpoint, apiProtocol, ...(apiKey ? { apiKey } : {}) } });
-      } catch (error) {
-        const message = redactSecret(error instanceof Error ? error.message : 'The model catalog could not be read', apiKey);
-        throw new AppError('NATIVE_MODEL_PROBE_FAILED', message, 400, undefined, { message });
-      }
-    }
-    const endpoint = validateNativeProfileEndpoint(input.apiEndpoint, 'apiEndpoint');
-    try {
-      const models = await fetchGatewayModels({ baseUrl: endpoint, ...(apiKey ? { apiKey } : {}) });
-      return models.map(model => ({ ...model, value: normalize(model.value) }));
-    } catch (error) {
-      // 4xx so the reason survives the error handler: an unreachable gateway or a rejected key
-      // is about the address the user just typed, not a fault in this service.
-      const message = redactSecret(error instanceof Error ? error.message : 'The model catalog could not be read', apiKey);
-      throw new AppError('NATIVE_MODEL_PROBE_FAILED', message, 400, undefined, { message });
-    }
+    this.catalog.invalidateModelCatalogs();
   }
 
   /** Whether this session's backend accepts the first user message as a launch argument. */
   async supportsInitialPromptArgs(session: Session): Promise<boolean> {
     const { driver, profile } = await this.resolve(session);
-    return (await this.driverCapabilities(driver, profile)).supportsInitialPromptArgs === true;
+    return (await this.catalog.driverCapabilities(driver, profile)).supportsInitialPromptArgs === true;
   }
 
   /** Whether this session's backend replaces its running turn with a new message on its own (`sendRun` with `now`). */
@@ -1064,7 +421,7 @@ export class NativeBackendService {
 
   async supportsSteer(session: Session): Promise<boolean> {
     const { driver, profile } = await this.resolve(session);
-    return Boolean(driver.steer && (await this.driverCapabilities(driver, profile)).supportsSteer);
+    return Boolean(driver.steer && (await this.catalog.driverCapabilities(driver, profile)).supportsSteer);
   }
 
   async ensure(session: Session, options: NativeBackendOpenOptions = {}): Promise<NativeBackendOpenResult & { session: Session; terminal?: TerminalInfo }> {
@@ -1185,7 +542,7 @@ export class NativeBackendService {
       // session running. This is independent of streams, unfinished parent runs or a TUI.
       if (this.watches.get(sessionId)?.runningSubagents.size) return true;
       if (['starting', 'running', 'waiting', 'cancelling'].includes(session.state)) return true;
-      if (this.traits(this.backendId(session)).ownsSessionObservation || !session.terminalId) return false;
+      if (this.catalog.traits(this.backendId(session)).ownsSessionObservation || !session.terminalId) return false;
       return this.options.store.getTerminal(session.terminalId).state === 'running';
     } catch { return false; }
   }
@@ -1298,7 +655,7 @@ export class NativeBackendService {
       // Resolved at every call: the driver behind a conversation can be replaced while this reader is open.
       status: () => {
         const stored = this.options.store.getSession(sessionId);
-        const current = this.currentSession(stored);
+        const current = this.catalog.currentSession(stored);
         const missing = this.unavailable(this.backendId(current));
         if (missing) return this.withOutputRate(sessionId, { phase: 'offline', connection: { state: 'failed', message: missing.message } });
         let selected: { driver: NativeBackendDriver; profile: NativeBackendProfileConfig } | undefined;
@@ -1347,7 +704,7 @@ export class NativeBackendService {
   /** Republish the full driver status when a terminal dialog or recent output sample changes. */
   private publishStatus(sessionId: string, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): void {
     const stored = this.options.store.getSession(sessionId);
-    const session = this.currentSession(stored);
+    const session = this.catalog.currentSession(stored);
     if (session !== stored) profile = this.resolveSync(session).profile;
     if (session.archivedAt) return;
     let status: NativeStatus;
@@ -1397,7 +754,7 @@ export class NativeBackendService {
       : watch && loaded ? watch.status ?? watch.driver.status(this.host, loaded, watch.profile) : undefined;
     let delivered: NativeControlMessage = message;
     let statusSession: Session | undefined;
-    if (rawStatus && loaded && !this.traits(this.backendId(loaded)).ownsSessionObservation) {
+    if (rawStatus && loaded && !this.catalog.traits(this.backendId(loaded)).ownsSessionObservation) {
       const current = loaded;
       // A dialog lifted from the CLI's own screen rides the driver's status; a protocol request
       // the driver already reported always wins (see TerminalDialogObserver.merge).
@@ -1462,7 +819,7 @@ export class NativeBackendService {
       if (!calls.length) return;
       try {
         const driver = this.watches.get(batch.sessionId)?.driver;
-        const traits = driver ? driver.traits ?? {} : this.traits(this.backendId(this.options.store.getSession(batch.sessionId)));
+        const traits = driver ? driver.traits ?? {} : this.catalog.traits(this.backendId(this.options.store.getSession(batch.sessionId)));
         if (!traits.ownsSessionObservation) this.host.stats.observeEvents(batch.sessionId, calls);
       } catch { /* statistics are best-effort */ }
     });
@@ -1534,15 +891,15 @@ export class NativeBackendService {
   async contextTranscript(sessionId: string, maxBytes: number, signal: AbortSignal): Promise<NativeWorkbenchEvent[] | undefined> {
     const session = this.options.store.getSession(sessionId);
     const { driver, profile } = this.resolveSync(session);
-    return driver.readContextTranscript?.(this.host, session, profile, { maxBytes, signal });
+    return driver.stored?.context?.(this.host, session, profile, { maxBytes, signal });
   }
 
   async indexableTranscript(sessionId: string): Promise<WorkbenchEvent[]> {
     const session = this.options.store.getSession(sessionId);
     if (this.unavailable(this.backendId(session))) return [];
     const { driver, profile } = await this.resolve(session);
-    if (!driver.readOnlyTranscript || !driver.readShareTranscript) return [];
-    return (await driver.readShareTranscript(this.host, session, profile, { messagesOnly: true })).events;
+    if (!driver.stored?.readOnly || !driver.stored?.share) return [];
+    return (await driver.stored.share(this.host, session, profile, { messagesOnly: true })).events;
   }
 
   /** Settled usage from the provider's stored transcript; `null` when the backend cannot backfill. */
@@ -1550,12 +907,12 @@ export class NativeBackendService {
     const session = this.options.store.getSession(sessionId);
     if (this.unavailable(this.backendId(session))) return null;
     const { driver, profile } = await this.resolve(session);
-    if (!driver.usageTranscript) return null;
-    return driver.usageTranscript(this.host, session, profile, known);
+    if (!driver.stored?.usage) return null;
+    return driver.stored.usage(this.host, session, profile, known);
   }
 
   usageTranscriptBackendIds(): NativeBackendId[] {
-    return this.registry.list().filter((driver) => driver.usageTranscript).map((driver) => driver.id);
+    return this.registry.list().filter((driver) => driver.stored?.usage).map((driver) => driver.id);
   }
 
   /**
@@ -1565,15 +922,15 @@ export class NativeBackendService {
   externalSessionSources(): Array<{ backendId: NativeBackendId; profileId: string; list(options: ExternalSessionScan): Promise<ExternalSessionEntry[]> }> {
     const sources: Array<{ backendId: NativeBackendId; profileId: string; list(options: ExternalSessionScan): Promise<ExternalSessionEntry[]> }> = [];
     for (const driver of this.registry.list()) {
-      if (!driver.listExternalSessions) continue;
+      if (!driver.external?.list) continue;
       const seen = new Set<string>();
-      const profiles = this.profiles(driver);
+      const profiles = this.catalog.profiles(driver);
       // The default profile first: a conversation both could continue is imported under it.
       for (const profile of [...profiles.filter(item => item.isDefault), ...profiles.filter(item => !item.isDefault)]) {
         const key = driver.continuationKey?.(profile) ?? profile.id;
         if (seen.has(key)) continue;
         seen.add(key);
-        sources.push({ backendId: driver.id, profileId: profile.id, list: options => driver.listExternalSessions!(this.host, profile, options) });
+        sources.push({ backendId: driver.id, profileId: profile.id, list: options => driver.external!.list!(this.host, profile, options) });
       }
     }
     return sources;
@@ -1586,9 +943,9 @@ export class NativeBackendService {
    * (a shell there, an orphan), is a second writer.
    */
   private async assertNotHeldElsewhere(session: Session, driver: NativeBackendDriver, profile: NativeBackendProfileConfig): Promise<void> {
-    if (!session.nativeSessionId || !driver.externalHolder) return;
+    if (!session.nativeSessionId || !driver.external?.holder) return;
     if (this.liveTerminalOf(session)) return;
-    const holder = await driver.externalHolder(this.host, profile, session.nativeSessionId).catch(() => undefined);
+    const holder = await driver.external.holder(this.host, profile, session.nativeSessionId).catch(() => undefined);
     if (holder) {
       throw new AppError('NATIVE_SESSION_HELD_EXTERNALLY', 'This conversation is open in a terminal outside Riffet; exit it there first', 409, { pid: holder.pid, ...(holder.status ? { status: holder.status } : {}) });
     }
@@ -1597,9 +954,9 @@ export class NativeBackendService {
   /** The command that continues this conversation in a terminal of the reader's own; starts nothing. */
   async resumeCommand(session: Session): Promise<{ nativeSessionId: string; command: string; credentialsOmitted: boolean }> {
     const { driver, profile } = await this.resolve(session);
-    if (!driver.resumeCommand) throw new AppError('TERMINAL_RESUME_UNSUPPORTED', driver.label + ' cannot be continued in a terminal', 409);
+    if (!driver.external?.resumeCommand) throw new AppError('TERMINAL_RESUME_UNSUPPORTED', driver.label + ' cannot be continued in a terminal', 409);
     if (!session.nativeSessionId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
-    const { argv, env, credentialsOmitted } = driver.resumeCommand(session, profile);
+    const { argv, env, credentialsOmitted } = driver.external.resumeCommand(session, profile);
     const project = this.options.store.getProject(session.projectId);
     const assignments = Object.entries(env).map(([name, value]) => `${name}=${shellWord(value)}`);
     return {
@@ -1625,11 +982,11 @@ export class NativeBackendService {
    */
   async releaseToTerminal(session: Session): Promise<NativePtyLaunchSpec> {
     const { driver, profile } = await this.resolve(session);
-    if (!driver.terminalLaunch) throw new AppError('TERMINAL_RESUME_UNSUPPORTED', driver.label + ' cannot be continued in a terminal', 409);
+    if (!driver.external?.terminalLaunch) throw new AppError('TERMINAL_RESUME_UNSUPPORTED', driver.label + ' cannot be continued in a terminal', 409);
     if (!session.nativeSessionId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'Send a message first; this conversation has nothing to continue yet', 409);
     await this.assertNotHeldElsewhere(session, driver, profile);
     const project = this.options.store.getProject(session.projectId);
-    const { spec, keepsRuntime } = await driver.terminalLaunch(this.host, session, project, profile);
+    const { spec, keepsRuntime } = await driver.external.terminalLaunch(this.host, session, project, profile);
     if (!keepsRuntime) await this.dispose(session.id);
     const current = this.options.store.getSession(session.id);
     const terminal = this.liveTerminalOf(current);
@@ -1648,7 +1005,7 @@ export class NativeBackendService {
   /** Keeps the timeline following a terminal that holds the conversation; a no-op for a backend whose runtime stays live. */
   followExternal(session: Session): () => void {
     const { driver, profile } = this.resolveSync(session);
-    return driver.followExternal?.(this.host, session, profile) ?? (() => undefined);
+    return driver.external?.follow?.(this.host, session, profile) ?? (() => undefined);
   }
 
   /** The backends a request can reach now (enabled plugins' included), in registry order. */
@@ -1658,7 +1015,7 @@ export class NativeBackendService {
 
   /** Providers whose transcripts may be read speculatively, for the index to fill in the background. */
   readOnlyTranscriptBackendIds(): NativeBackendId[] {
-    return this.registry.list().filter((driver) => driver.readOnlyTranscript).map((driver) => driver.id);
+    return this.registry.list().filter((driver) => driver.stored?.readOnly).map((driver) => driver.id);
   }
 
   async sendRun(session: Session, run: Run, commitDispatchFence: (binding?: NativeDispatchBinding) => Run, options: { now?: boolean } = {}): Promise<void> {
@@ -1694,7 +1051,7 @@ export class NativeBackendService {
     }
     await assertTaskWorkspaceAvailable(this.options.store.getProject(session.projectId));
     const { driver, profile } = await this.resolve(session);
-    if (!driver.steer || !(await this.driverCapabilities(driver, profile)).supportsSteer) throw new AppError('STEER_UNSUPPORTED', 'This backend does not support steering an active turn.', 409);
+    if (!driver.steer || !(await this.catalog.driverCapabilities(driver, profile)).supportsSteer) throw new AppError('STEER_UNSUPPORTED', 'This backend does not support steering an active turn.', 409);
     if (session.nativeSessionId !== run.native.nativeSessionId) throw new AppError('STEER_TARGET_CHANGED', 'The target conversation changed before delivery.', 409);
     // The driver records the actual target turn configuration, never the next-turn selection.
     if (run.native.input.references?.length) await this.assertSessionReferences(session);
@@ -1759,8 +1116,8 @@ export class NativeBackendService {
   async readShareTranscript(sessionId: string, options?: import('./types.js').NativeShareReadOptions) {
     const session = this.options.store.getSession(sessionId);
     const { driver, profile } = await this.resolve(session);
-    if (!driver.readShareTranscript) throw new AppError('SHARE_HISTORY_UNAVAILABLE', `${driver.label} does not provide a complete read-only transcript`, 409);
-    return await driver.readShareTranscript(this.host, session, profile, options);
+    if (!driver.stored?.share) throw new AppError('SHARE_HISTORY_UNAVAILABLE', `${driver.label} does not provide a complete read-only transcript`, 409);
+    return await driver.stored.share(this.host, session, profile, options);
   }
 
   /** A driver is bound to the session in this process (`status` has something to read). */
@@ -1768,22 +1125,22 @@ export class NativeBackendService {
 
   status(sessionId: string): NativeStatus {
     const stored = this.options.store.getSession(sessionId);
-    const session = this.currentSession(stored);
+    const session = this.catalog.currentSession(stored);
     const selected = session !== stored ? this.resolveSync(session) : this.sessionProfiles.get(sessionId);
     if (!selected) return this.withOutputRate(sessionId, { phase: 'offline' });
     return this.withOutputRate(sessionId, this.terminalDialogs.merge(session, selected.driver.status(this.host, session, selected.profile)));
   }
 
   async capabilities(session: Session) {
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const { driver, profile } = await this.resolve(session);
-    return this.driverCapabilities(driver, profile);
+    return this.catalog.driverCapabilities(driver, profile);
   }
 
   async interaction(session: Session): Promise<NativeInteraction | undefined> {
     // Polled by every open page, so a withdrawn backend simply has nothing waiting.
     if (this.unavailable(this.backendId(session))) return undefined;
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     const driverInteraction = await driver.interaction(this.host, session, profile);
     if (driverInteraction || !this.usesTerminalDialogs(session)) return driverInteraction;
@@ -1793,11 +1150,11 @@ export class NativeBackendService {
   }
 
   async respondInteraction(session: Session, response: NativeInteractionResponse): Promise<NativeInteractionResult> {
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     let terminalAnswer = false;
     const result = await this.options.runtime.withSession(session.id, async () => {
-      const current = this.currentSession(this.options.store.getSession(session.id));
+      const current = this.catalog.currentSession(this.options.store.getSession(session.id));
       // Receipts outlive their screen. Retrying a terminal answer must not fall through to the
       // protocol driver or drive the CLI a second time after the dialog has disappeared.
       const replay = this.terminalDialogs.replay(current, response);
@@ -1816,13 +1173,13 @@ export class NativeBackendService {
         }
         terminalAnswer = true;
         return this.terminalDialogs.respond(current, response, async observed => {
-          const before = this.currentSession(this.options.store.getSession(session.id));
+          const before = this.catalog.currentSession(this.options.store.getSession(session.id));
           if (!this.usesTerminalDialogs(before) || before.terminalId !== observed.terminalId) return false;
           const selected = this.resolveSync(before);
           if (await selected.driver.interaction(this.host, before, selected.profile)) return false;
           // The driver's read may itself await. Check the binding and synchronous status again
           // after it, at the key/paste boundary, not only before terminal acquisition.
-          const latest = this.currentSession(this.options.store.getSession(session.id));
+          const latest = this.catalog.currentSession(this.options.store.getSession(session.id));
           if (!this.usesTerminalDialogs(latest) || latest.terminalId !== observed.terminalId) return false;
           if (this.backendId(latest) !== selected.driver.id || latest.backendProfileId !== before.backendProfileId) return false;
           if (selected.driver.status(this.host, latest, selected.profile).interaction) return false;
@@ -1831,7 +1188,7 @@ export class NativeBackendService {
       }
       return driver.respond(this.host, current, profile, response);
     });
-    const current = this.currentSession(this.options.store.getSession(session.id));
+    const current = this.catalog.currentSession(this.options.store.getSession(session.id));
     if (current.nativeSessionId || current.terminalId) this.bindProfile(current, driver, profile);
     if (terminalAnswer) {
       await this.terminalDialogs.refresh(current).catch(() => undefined);
@@ -1843,7 +1200,7 @@ export class NativeBackendService {
   }
 
   async extendInteraction(session: Session, interactionId: string): Promise<NativeInteraction> {
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     if (!driver.extendInteraction) throw new AppError('NATIVE_INTERACTION_NOT_EXTENDABLE', 'This backend does not time out its requests', 409);
     return await driver.extendInteraction(this.host, session, profile, interactionId);
@@ -1854,7 +1211,7 @@ export class NativeBackendService {
    * backend with no way to stop anything says so, rather than the request silently doing nothing.
    */
   async stopActivity(session: Session, activityId: string): Promise<NativeActivity> {
-    session = this.currentSession(session);
+    session = this.catalog.currentSession(session);
     const { driver, profile } = await this.resolve(session);
     if (!driver.stopActivity) throw new AppError('ACTIVITY_STOP_UNSUPPORTED', 'This backend cannot stop its background tasks from here', 409);
     return await driver.stopActivity(this.host, session, profile, activityId);
@@ -1870,7 +1227,7 @@ export class NativeBackendService {
 
   /** The same question without the terminal binding, for deciding whether to keep reading at all. */
   private watchesTerminalDialogs(session: Session): boolean {
-    return !this.traits(this.backendId(session)).ownsSessionObservation && !session.archivedAt;
+    return !this.catalog.traits(this.backendId(session)).ownsSessionObservation && !session.archivedAt;
   }
 
   /** Release a provider's pending receipt wait before Stop queues for its session lock. */
@@ -1880,13 +1237,13 @@ export class NativeBackendService {
   }
 
   async interrupt(sessionId: string, options?: { clearPrompt?: boolean; expectedStop?: NativeStopRequest }): Promise<void> {
-    const session = this.currentSession(this.options.store.getSession(sessionId));
+    const session = this.catalog.currentSession(this.options.store.getSession(sessionId));
     const { driver, profile } = await this.resolve(session);
     await this.options.runtime.withSession(session.id, () => {
       const expected = options?.expectedStop;
       const beforeWrite = (allowEnded = false) => {
         if (!expected) return;
-        const current = this.currentSession(this.options.store.getSession(sessionId));
+        const current = this.catalog.currentSession(this.options.store.getSession(sessionId));
         const status = driver.status(this.host, current, profile);
         if ((current.nativeSessionId ?? '') !== expected.nativeSessionId
           || status.activeTurn?.turnId !== expected.turnId && !(allowEnded && !status.activeTurn)
@@ -1897,13 +1254,13 @@ export class NativeBackendService {
         }
       };
       beforeWrite();
-      return driver.interrupt(this.host, this.currentSession(this.options.store.getSession(sessionId)), profile, expected ? { ...options, beforeWrite } : options);
+      return driver.interrupt(this.host, this.catalog.currentSession(this.options.store.getSession(sessionId)), profile, expected ? { ...options, beforeWrite } : options);
     });
     if (session.nativeSessionId || session.terminalId) this.bindProfile(session, driver, profile);
   }
 
   async runtimeAction(sessionId: string, request: NativeRuntimeActionRequest): Promise<void> {
-    const session = this.currentSession(this.options.store.getSession(sessionId));
+    const session = this.catalog.currentSession(this.options.store.getSession(sessionId));
     if (session.kind !== 'native' || session.archivedAt) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'This conversation has no runtime control', 409);
     const { driver, profile } = await this.resolve(session);
     if (!driver.runtimeAction) throw new AppError('RUNTIME_CONTROL_UNAVAILABLE', 'This backend has no runtime control', 409);
@@ -1922,7 +1279,7 @@ export class NativeBackendService {
 
   async configure(session: Session, request: { model?: string; mode?: string; approval?: string; backendProfileId?: string }): Promise<Session> {
     const { backendProfileId, ...patch } = request;
-    const source = backendProfileId === session.nativeRuntime?.profileId ? this.currentSession(session) : session;
+    const source = backendProfileId === session.nativeRuntime?.profileId ? this.catalog.currentSession(session) : session;
     const { driver, profile: from } = await this.resolve(source);
     const switching = backendProfileId !== undefined && backendProfileId !== (session.backendProfileId ?? from.id);
     const profile = switching ? (await this.resolve(session, backendProfileId)).profile : from;
@@ -1974,7 +1331,7 @@ export class NativeBackendService {
 
   async models(session: Session): Promise<ModelInfo[]> {
     const { driver, profile } = await this.resolve(session);
-    return curateModels(await this.listModels(driver, this.options.store.getProject(session.projectId), profile, session), profile, session, modelNormalizer(driver, profile));
+    return curateModels(await this.catalog.listModels(driver, this.options.store.getProject(session.projectId), profile, session), profile, session, modelNormalizer(driver, profile));
   }
 
   async dispose(sessionId: string): Promise<void> {

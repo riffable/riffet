@@ -230,7 +230,7 @@ export class AgentReclaimer {
 
   /** Whether relaunching continues the same provider thread rather than starting over or asking; a backend that is not installed does not. */
   private resumable(session: Session): boolean {
-    return Boolean(session.nativeSessionId && session.backendId && this.deps.nativeBackends.traits(session.backendId).resumesByNativeId);
+    return Boolean(session.nativeSessionId && session.backendId && this.deps.nativeBackends.catalog.traits(session.backendId).resumesByNativeId);
   }
 
   private viewed(session: Session, terminal: TerminalInfo | undefined): boolean {

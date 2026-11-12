@@ -16,6 +16,7 @@ import { firstMessageTitlePatch } from '../../session-title.js';
 import type {
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost,
   NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareTranscript,
+  NativeDriverStored,
 } from '../types.js';
 import { answerEvent, answerEventId, appendRecord, contextOf, contextStart, readRecords, recordEvents, turnsSince, type ChatAttachment, type ChatRecord, type ChatTurnStatus } from './history.js';
 
@@ -114,10 +115,14 @@ export const CHAT_TRAITS: NativeBackendTraits = {
 };
 
 export class ChatBackendAdapter implements NativeBackendDriver {
+  readonly stored: NativeDriverStored = {
+    readOnly: true,
+    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
+    share: (host, session) => this.readShareTranscript(host, session),
+  };
   readonly id = BACKEND_ID;
   readonly label = '快速对话';
   readonly traits = CHAT_TRAITS;
-  readonly readOnlyTranscript = true;
   private readonly live = new Map<string, Live>();
   private readonly drafts = new Map<string, NodeJS.Timeout>();
 
@@ -406,13 +411,13 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     return new ChatTranscriptSource(session.id, () => host.getSession(session.id).nativeSessionId ?? session.id, this.file(session.id), this.live);
   }
 
-  async readContextTranscript(_host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
+  private async readContextTranscript(_host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
     const content = await readContextFile(this.file(session.id), options.maxBytes, options.signal);
     return content.split('\n').filter(line => line.trim()).flatMap(line => recordEvents(session.id, JSON.parse(line) as ChatRecord))
       .filter(event => event.type === 'user_message_chunk' || event.type === 'agent_message_chunk');
   }
 
-  async readShareTranscript(_host: NativeBackendHost, session: Session): Promise<NativeShareTranscript> {
+  private async readShareTranscript(_host: NativeBackendHost, session: Session): Promise<NativeShareTranscript> {
     return { events: readRecords(this.file(session.id)).flatMap(record => recordEvents(session.id, record)), subagents: [] };
   }
 

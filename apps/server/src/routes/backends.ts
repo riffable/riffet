@@ -24,7 +24,7 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
     return { project, session };
   };
   // Quick chat is not an agent to pick or configure; a client reaches it through its own project.
-  app.get('/api/backends',async(request)=>visibleBackendsForClient(request.headers,(await nativeBackends.listBackends()).filter(entry=>entry.backendId!=='chat')));
+  app.get('/api/backends',async(request)=>visibleBackendsForClient(request.headers,(await nativeBackends.catalog.listBackends()).filter(entry=>entry.backendId!=='chat')));
   /**
    * Why a machine behaves the way it does: which PATH the daemon resolved and from where, which
    * variables were scrubbed, and the toolchain a terminal would inherit. `riffet doctor` prints the
@@ -32,45 +32,45 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
    */
   app.get('/api/doctor',async(request)=>{
     const environment=currentEnvironmentReport()??await applyProcessEnvironment({stateDir});
-    return {environment:{...environment,terminal:terminalEnvironment(environment)},backends:visibleBackendsForClient(request.headers,(await nativeBackends.listBackends()).filter(entry=>entry.backendId!=='chat')),eventLoop:loopHealth()};
+    return {environment:{...environment,terminal:terminalEnvironment(environment)},backends:visibleBackendsForClient(request.headers,(await nativeBackends.catalog.listBackends()).filter(entry=>entry.backendId!=='chat')),eventLoop:loopHealth()};
   });
   app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string;allModels?:string}}>('/api/backends/:id/catalog',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const {project,session}=queryContext(request);
     // The settings page curates the list and so needs every model the backend reports; pickers
     // get the curated subset.
-    return nativeBackends.catalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{allModels:request.query.allModels==='1'});
+    return nativeBackends.catalog.entry(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{allModels:request.query.allModels==='1'});
   });
   app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string}}>('/api/backends/:id/usage',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const {project,session}=queryContext(request);
-    const usage=await nativeBackends.usage(request.params.id,project,session?.backendProfileId??request.query.profileId,session);
+    const usage=await nativeBackends.catalog.usage(request.params.id,project,session?.backendProfileId??request.query.profileId,session);
     return usage??{models:{},fetchedAt:new Date().toISOString()};
   });
   app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string;refresh?:string}}>('/api/backends/:id/slash',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const {project,session}=queryContext(request);
-    return nativeBackends.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
+    return nativeBackends.catalog.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
   });
   app.get<{Params:{id:string}}>('/api/backends/:id/profiles',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     if(!isNativeBackendId(request.params.id)||request.params.id==='chat')throw new AppError('INVALID_BACKEND','Choose a supported native backend');
-    return nativeBackends.profileSettings(request.params.id);
+    return nativeBackends.catalog.profileSettings(request.params.id);
   });
   app.post<{Params:{id:string};Body:NativeBackendProfileSettingsUpdate & {id?:string}}>('/api/backends/:id/profiles',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     if(!isNativeBackendId(request.params.id)||request.params.id==='chat')throw new AppError('INVALID_BACKEND','Choose a supported native backend');
     const id=requireString(request.body?.id,'id',100);
     const {id:_id,...profile}=request.body;
-    const defaultProfileId=nativeBackends.validateProfile(request.params.id).id;
+    const defaultProfileId=nativeBackends.catalog.validateProfile(request.params.id).id;
     return settings.saveNativeBackendProfile(request.params.id,id,profile,true,false,defaultProfileId);
   });
   app.patch<{Params:{id:string;profileId:string};Body:NativeBackendProfileSettingsUpdate}>('/api/backends/:id/profiles/:profileId',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     if(!isNativeBackendId(request.params.id)||request.params.id==='chat')throw new AppError('INVALID_BACKEND','Choose a supported native backend');
-    const known=nativeBackends.profileSettings(request.params.id).profiles.some(profile=>profile.id===request.params.profileId);
+    const known=nativeBackends.catalog.profileSettings(request.params.id).profiles.some(profile=>profile.id===request.params.profileId);
     if(!known)throw new AppError('NATIVE_PROFILE_NOT_FOUND','Native backend profile does not exist',404);
-    const defaultProfileId=nativeBackends.validateProfile(request.params.id).id;
+    const defaultProfileId=nativeBackends.catalog.validateProfile(request.params.id).id;
     const result=settings.saveNativeBackendProfile(request.params.id,request.params.profileId,request.body,false,true,defaultProfileId);
     nativeBackends.refreshProfile(request.params.id,request.params.profileId);
     return result;
@@ -92,7 +92,7 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
   app.post<{Params:{id:string};Body:{apiEndpoint?:string;apiKey?:string;profileId?:string;modelSource?:string;apiProtocol?:NativeModelApiProtocol}}>('/api/backends/:id/model-probe',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const source=request.body?.modelSource;
-    return {models:await nativeBackends.probeModels(request.params.id,{
+    return {models:await nativeBackends.catalog.probeModels(request.params.id,{
       ...(request.body?.apiProtocol!==undefined?{apiProtocol:request.body.apiProtocol}:{}),
       ...(source!==undefined?{modelSource:requireString(source,'modelSource',64) as NativeModelSource}:{}),
       // Without a source the address is the whole question, so it stays required; with one it is

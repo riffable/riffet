@@ -171,7 +171,7 @@ describe('NativeBackendService.configure', () => {
     const applied: string[] = [];
     h.driver.configure = async (_host, _session, profile, patch) => { applied.push(profile.id); return patch; };
     const current = h.service.host.getSession('session-a');
-    const catalog = await h.service.catalog('dsh', project as never, undefined, current);
+    const catalog = await h.service.catalog.entry('dsh', project as never, undefined, current);
     expect(catalog.continuations?.map(item => item.profile.id)).toEqual(['b']);
     expect(listed).toEqual(['a', 'b']);
     await expect(h.service.configure(current, { backendProfileId: 'c', model: 'gpt-6-astra' })).rejects.toMatchObject({ code: 'NATIVE_PROFILE_SWITCH_UNSUPPORTED' });
@@ -252,7 +252,7 @@ describe('NativeBackendService controls after a pending provider is deleted', ()
     expect((await h.service.stopActivity(current, 'background-a')).status).toBe('stopping');
     await h.service.runtimeAction(current.id, { action: 'control-a', revision: '1' });
     expect((await h.service.capabilities(current)).supportsModelSelection).toBe(true);
-    const catalog = await h.service.catalog('dsh', project as never, 'b', current);
+    const catalog = await h.service.catalog.entry('dsh', project as never, 'b', current);
     expect(catalog.models).toEqual([]);
     expect(catalog.continuations).toMatchObject([{ profile: { id: 'a' }, models: [{ value: 'gpt-6-astra' }] }]);
     expect(h.service.host.getSession(current.id)).toMatchObject({ backendProfileId: 'b', configPending: true });
@@ -314,18 +314,18 @@ describe('NativeBackendService.slashCatalog', () => {
       calls += 1;
       return [{ name: 'model', kind: 'command', description: 'discovered' }, { name: 'dataviz', kind: 'skill' }, { name: 'dataviz', kind: 'skill', description: 'shadowed' }];
     });
-    const catalog = await service.slashCatalog('claude', project as never);
+    const catalog = await service.catalog.slashCatalog('claude', project as never);
     expect(catalog).toEqual({
       inlineSkills: true,
       items: [{ name: 'permissions', kind: 'command' }, { name: 'model', kind: 'command', description: 'discovered' }, { name: 'dataviz', kind: 'skill' }],
     });
-    await service.slashCatalog('claude', project as never);
+    await service.catalog.slashCatalog('claude', project as never);
     expect(calls).toBe(1);
   });
 
   it('answers with the built-ins and a reason when discovery fails', async () => {
     const service = catalogService(async () => { throw new Error('probe failed'); });
-    expect(await service.slashCatalog('claude', project as never)).toEqual({
+    expect(await service.catalog.slashCatalog('claude', project as never)).toEqual({
       inlineSkills: true,
       reason: 'probe failed',
       items: [{ name: 'model', description: 'static', kind: 'command' }, { name: 'permissions', kind: 'command' }],
@@ -425,12 +425,12 @@ it('keeps global model, usage and skill queries separate from project caches wit
   driver.usage=async(_host,context)=>({models:{},fetchedAt:context?'project':'global'});
   driver.slashItems=async(_host,context)=>[{name:context?'project-skill':'global-skill',kind:'skill'}];
   driver.openOrResume=async()=>{throw new Error('A management query must not open a session');};
-  expect((await service.catalog('dsh',undefined)).models[0]?.value).toBe('global-model');
-  expect((await service.catalog('dsh',project as never)).models[0]?.value).toBe('project-model');
-  expect((await service.catalog('dsh',undefined)).models[0]?.value).toBe('global-model');
+  expect((await service.catalog.entry('dsh',undefined)).models[0]?.value).toBe('global-model');
+  expect((await service.catalog.entry('dsh',project as never)).models[0]?.value).toBe('project-model');
+  expect((await service.catalog.entry('dsh',undefined)).models[0]?.value).toBe('global-model');
   expect(scopes).toEqual([undefined,project]);
-  expect((await service.usage('dsh',undefined))?.fetchedAt).toBe('global');
-  expect((await service.usage('dsh',project as never))?.fetchedAt).toBe('project');
-  expect((await service.slashCatalog('dsh',undefined)).items[0]?.name).toBe('global-skill');
-  expect((await service.slashCatalog('dsh',project as never)).items[0]?.name).toBe('project-skill');
+  expect((await service.catalog.usage('dsh',undefined))?.fetchedAt).toBe('global');
+  expect((await service.catalog.usage('dsh',project as never))?.fetchedAt).toBe('project');
+  expect((await service.catalog.slashCatalog('dsh',undefined)).items[0]?.name).toBe('global-skill');
+  expect((await service.catalog.slashCatalog('dsh',project as never)).items[0]?.name).toBe('project-skill');
 });

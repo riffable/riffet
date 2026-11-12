@@ -83,7 +83,7 @@ try {
     await complete(afterStop.id);
     console.log(JSON.stringify({ stopThenSendPassed: true }));
   }
-  console.log(JSON.stringify({ passed: true, noBrowserSubscriber: true, stats: await services.nativeBackends.runtimeStats('cursor') }));
+  console.log(JSON.stringify({ passed: true, noBrowserSubscriber: true, stats: await services.nativeBackends.admin.runtimeStats('cursor') }));
 } catch (error) {
   for (const session of store.listSessions()) {
     console.error(JSON.stringify({ diagnostics: { runs: store.listRuns(session.id).map(run => ({ id: run.id, state: run.state, native: run.native })), status: services.nativeBackends.status(session.id) } }));

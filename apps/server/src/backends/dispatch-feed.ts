@@ -42,7 +42,7 @@ export class DispatchFeed {
   backend(): NativeDispatcherBackend {
     const { service } = this.deps;
     return {
-      traits: backendId => service.traits(backendId),
+      traits: backendId => service.catalog.traits(backendId),
       pending: backendId => service.backendPending(backendId),
       subscribe: (sessionId, listener) => this.subscribe(sessionId, listener),
       subscribeCorrections: listener => this.subscribeCorrections(listener),

@@ -45,7 +45,7 @@ describe('Claude usage ledger', () => {
       saveRunMetrics: (runId: string, metrics: RunMetrics) => { saved.push({ runId, metrics }); },
     } as unknown as NativeBackendHost;
     const profile = { id: 'local', name: 'Claude', backendId: 'claude', config: { configDir: dir } } as NativeBackendProfileConfig;
-    const result = await new ClaudeBackendAdapter().usageTranscript(host, session, profile);
+    const result = await new ClaudeBackendAdapter().stored.usage!(host, session, profile);
     expect(saved.at(-1)).toMatchObject({ runId: 'run-first', metrics: { outputTokens: 90, durationMs: 2000, steps: 1, window: 'transcript' } });
     expect(result?.entries.map(entry => [entry.usage.stepId, entry.runId])).toEqual([['m1', 'run-first'], ['m2', undefined]]);
     expect(result?.entries[1]?.usage.nativeMessageId).toBe(`claude:${nativeSessionId}:u2:0`);

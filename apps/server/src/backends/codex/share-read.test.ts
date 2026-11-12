@@ -65,7 +65,7 @@ describe('complete Codex share reads', () => {
     expect(messages.events.filter(event => event.type === 'agent_message_chunk')).toMatchObject([{ nativeId: resultId, data: { phase: 'final_answer', content: { text } } }]);
     expect(messages.events.every(event => ['agent_message_chunk', 'share_process'].includes(event.type))).toBe(true);
     const adapter = new CodexBackendAdapter(() => { throw new Error('Cold reads must not start a provider'); });
-    const context = await adapter.readContextTranscript({} as never, session, { config: { configDir: root } } as never,
+    const context = await adapter.stored.context!({} as never, session, { config: { configDir: root } } as never,
       { maxBytes: 1024 * 1024, signal: new AbortController().signal });
     expect(context.filter(event => event.type === 'agent_message_chunk')).toMatchObject([{ nativeId: resultId, data: { phase: 'final_answer', content: { text } } }]);
   });

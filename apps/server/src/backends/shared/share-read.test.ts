@@ -41,7 +41,7 @@ describe('strict static Droid history', () => {
       { type: 'user', uuid: 'summary', isCompactSummary: true, message: { role: 'user', content: 'Synthetic compaction summary' } },
       { type: 'user', uuid: 'output', message: { role: 'user', content: '<local-command-stdout>Local output</local-command-stdout>' } },
     ].map(row => JSON.stringify({ ...row, timestamp: '2026-10-23T10:01:00Z' })).join('\n') + '\n');
-    const reference = await adapter.readContextTranscript({} as never, { id: 'session', nativeSessionId: 'native-session' } as never,
+    const reference = await adapter.stored.context!({} as never, { id: 'session', nativeSessionId: 'native-session' } as never,
       { config: {} } as never, { maxBytes: 1024 * 1024, signal: new AbortController().signal });
     expect(reference.filter(event => event.type === 'user_message_chunk').map(event => (event.data.content as { text: string }).text)).toEqual(['Question 0', 'Question 1']);
   });

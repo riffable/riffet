@@ -138,7 +138,7 @@ export async function createApp(options: AppOptions = {}) {
   await applyProcessEnvironment({stateDir});
   const legacyCliPath=options.cliPath??process.env.RIFFET_CLI??'cursor-agent';
   // A config that is about to be saved is checked by the driver of the backend it belongs to.
-  const settings:SettingsService=new SettingsService({cliPath:legacyCliPath,stateDir,validateProfileConfig:(backendId,config)=>nativeBackends.validateProfileConfig(backendId,config),consumesModelSources:backendId=>nativeBackends.consumesProtocols(backendId).length>0});
+  const settings:SettingsService=new SettingsService({cliPath:legacyCliPath,stateDir,validateProfileConfig:(backendId,config)=>nativeBackends.catalog.validateProfileConfig(backendId,config),consumesModelSources:backendId=>nativeBackends.catalog.consumesProtocols(backendId).length>0});
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
   const store=new Store(join(stateDir,'workbench.db')); store.recoverInterruptedRuns();
@@ -147,7 +147,7 @@ export async function createApp(options: AppOptions = {}) {
   const contextReferences:SessionReferenceService=new SessionReferenceService(store,stateDir,(id,maxBytes,signal):Promise<import('../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]|undefined>=>nativeBackends.contextTranscript(id,maxBytes,signal));
   const taskWorkspaces=new TaskWorkspaceService({store,settings,stateDir,defaultRoot:options.taskWorkspaceDefaultRoot??process.env.RIFFET_TASK_WORKSPACE_ROOT,
     deniedRoots:()=>[
-      ...backendRegistry.list().flatMap(driver=>nativeBackends.profileSettings(driver.id).profiles.flatMap(profile=>profile.configDir?[resolve(expandHome(profile.configDir))]:[])),
+      ...backendRegistry.list().flatMap(driver=>nativeBackends.catalog.profileSettings(driver.id).profiles.flatMap(profile=>profile.configDir?[resolve(expandHome(profile.configDir))]:[])),
       ...['CODEX_HOME','TRAE_HOME','TRAECLI_HOME','CURSOR_CONFIG_DIR','RIFFET_CONFIG_DIR'].flatMap(key=>process.env[key]?.trim()?[resolve(expandHome(process.env[key]!.trim()))]:[]),
     ]});
   // Spaces were removed in 0.6.0; the database migration drops their tables, and these files have no reader left.
@@ -169,11 +169,11 @@ export async function createApp(options: AppOptions = {}) {
   const devices=new DeviceChannel({store,auth,workspace,pendingWakeups:()=>orchestrationRef?.pendingWakeups()??[]});
   const adb=new DeviceAdb(options.adbRunner?{runner:options.adbRunner,locate:()=>'adb'}:{});
   const riffetMcp=new RiffetMcpService({store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;}});
-  const terminal:TerminalService=new TerminalService(store,{stateDir,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.terminalLaunchEnv()}});
+  const terminal:TerminalService=new TerminalService(store,{stateDir,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;
-  const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>nativeBackends.invalidateModelCatalogs(),savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input)});
+  const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>nativeBackends.catalog.invalidateModelCatalogs(),savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input)});
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
   const backendRegistry=new NativeBackendRegistry()
@@ -183,7 +183,7 @@ export async function createApp(options: AppOptions = {}) {
     .register(new DroidBackendAdapter())
     .register(new PiBackendAdapter({stateDir}))
     .register(new CodexBackendAdapter(undefined, traexFlavor, plugins))
-    .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS}));
+    .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS}));
   const nativeBackends=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
     profiles:{get:backendId=>settings.getNativeBackendProfiles(backendId),getConfig:(backendId,profileId)=>settings.getNativeBackendProfileConfig(backendId,profileId)},
@@ -214,7 +214,7 @@ export async function createApp(options: AppOptions = {}) {
   const dispatch=new NativeDispatcher(store,new DispatchFeed({service:nativeBackends,feed:journalFeed,store}).backend(),dispatchRuntime,workspace,{beforeTurn});
   // A provider that keeps names of its own (Codex) is told whenever the workbench or the reader names a conversation.
   const renameNative=(session:import('../../../packages/contracts/src/index.js').Session)=>{void nativeBackends.rename(session).catch(()=>undefined);};
-  const titles=new TitleService({store,titleModel:()=>settings.getSettings().auxiliaryModels?.title,gatewayProfiles:backendId=>nativeBackends.gatewayProfiles(backendId),onTitled:renameNative});
+  const titles=new TitleService({store,titleModel:()=>settings.getSettings().auxiliaryModels?.title,gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),onTitled:renameNative});
   /**
    * A plan is mirrored to Markdown beside Claude Code's own plans, so it can be read and grepped
    * without the workbench running. The transcript stays the authority; this copy is a cache that
@@ -293,7 +293,7 @@ export async function createApp(options: AppOptions = {}) {
     listJobs:id=>nativeBackends.listJobs(id),onJobChanged:listener=>nativeBackends.onJobChanged(listener),
     nativeChatId:id=>{try{const session=store.getSession(id);return session.nativeSessionId;}catch{return undefined;}},deleted:id=>store.isSessionDeleted(id)});
   // Canvas summaries are written on request, one turn at a time (docs/PLUGIN_ARCHITECTURE.md, canvas).
-  const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>settings.getSettings().auxiliaryModels?.summary,gatewayProfiles:backendId=>nativeBackends.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);}});
+  const turnSummaries=new TurnSummaryService({db:store.db,deleted:id=>store.isSessionDeleted(id),summaryModel:()=>settings.getSettings().auxiliaryModels?.summary,gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),source:async(sessionId,turn)=>{await timeline.ready(sessionId,'main');return timeline.turnText(sessionId,turn);}});
   const sessionMedia=new SessionMedia(sessionId=>timeline.namedPaths(sessionId),sessionId=>timeline.revision(sessionId),sessionId=>timeline.ready(sessionId,'main'),
     (sessionId,path,allowOutside)=>workspace.readPreviewImage(store.getProject(store.getSession(sessionId).projectId),path,{allowOutside}));
   const sync=new SyncService({timeline,ingest,getSession:id=>store.getSession(id),getRun:id=>store.getRun(id),runs:nativeRuns,subscribe:(id,listener)=>store.subscribe(id,listener),control:(id,listener)=>nativeBackends.watchControl(id,listener),queue:(id,status)=>dispatch.queue(id,status),metrics:id=>stats.sessionMetrics(id)});

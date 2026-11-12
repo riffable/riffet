@@ -27,6 +27,7 @@ import type {
   ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec,
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig,
   NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
+  NativeDriverExtensions, NativeDriverExternal, NativeDriverStored,
 } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
@@ -80,6 +81,25 @@ interface CodexSessionListeners {
 export const CODEX_TRAITS: NativeBackendTraits = { completesOnTurnEvent: true, survivesRestart: true, offlineMayBeRunning: true, closesSessionsItself: true, resumesByNativeId: true, riffetTools: true, extensionToggles: { mcp: true, skills: false }, consumesProtocols: ['openai-responses'] };
 
 export class CodexBackendAdapter implements NativeBackendDriver {
+  readonly extensions: NativeDriverExtensions = {
+    loaded: (host, project, profile) => this.loadedExtensions(host, project, profile),
+    runtime: (host, project, profile) => this.extensionRuntime(host, project, profile),
+    skillStates: (host, project, profile) => this.skillStates(host, project, profile),
+    setSkillEnabled: (host, project, profile, path, enabled) => this.setSkillEnabled(host, project, profile, path, enabled),
+    reload: (host, project, profile) => this.reloadExtensions(host, project, profile),
+    authorizeMcp: (host, project, profile, name) => this.authorizeMcp(host, project, profile, name),
+  };
+  readonly external: NativeDriverExternal = {
+    list: (host, profile, options) => this.listExternalSessions(host, profile, options),
+    holder: (host, profile, id) => this.externalHolder(host, profile, id),
+    terminalLaunch: (host, session, project, profile) => this.terminalLaunch(host, session, project, profile),
+    resumeCommand: (session, profile) => this.resumeCommand(session, profile),
+  };
+  readonly stored: NativeDriverStored = {
+    usage: (host, session, profile, known) => this.usageTranscript(host, session, profile, known),
+    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
+    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+  };
   readonly id: CodexFlavor['id'];
   readonly label: string;
   readonly traits: NativeBackendTraits;
@@ -591,7 +611,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return items;
   }
 
-  async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
+  private async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
     const cwd = await queryDirectory(project, profile);
     return await this.withTransport(project, profile, undefined, async transport => {
       const [servers, configured, skills] = await Promise.all([readMcpServers(transport), readConfiguredMcpNames(transport, cwd), listSkills(transport, cwd)]);
@@ -603,7 +623,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     });
   }
 
-  async extensionRuntime(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport> {
+  private async extensionRuntime(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport> {
     const report: import('../../../../../packages/contracts/src/index.js').ExtensionRuntimeReport = { entries: [], diagnostics: [], checkedAt: new Date().toISOString() };
     if (!project) { report.diagnostics.push('选择项目以查看已运行会话的 MCP 状态。'); return report; }
     const matching = [...this.runtimes].filter(([, runtime]) => runtime.transport?.isOnline && runtime.matches(project, profile));
@@ -622,7 +642,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return report;
   }
 
-  async skillStates(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<Array<{ path: string; enabled: boolean }>> {
+  private async skillStates(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<Array<{ path: string; enabled: boolean }>> {
     return await this.withManagementTransport(project, profile, async transport => {
       const response = await transport.request<unknown>('skills/list', { cwds: [project?.cwd ?? homedir()], forceReload: true }, 15_000);
       const states: Array<{ path: string; enabled: boolean }> = [];
@@ -638,13 +658,13 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     });
   }
 
-  async setSkillEnabled(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, path: string, enabled: boolean): Promise<void> {
+  private async setSkillEnabled(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, path: string, enabled: boolean): Promise<void> {
     await this.withManagementTransport(project, profile, async transport => {
       await transport.request('skills/config/write', { path, enabled }, 15_000);
     });
   }
 
-  async listExternalSessions(host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]> {
+  private async listExternalSessions(host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]> {
     const key = `${profile.id}:${options.includeNonInteractive}:${options.limit}`;
     let cached = this.externalScans.get(key);
     if (!cached || Date.now() - cached.at > EXTERNAL_CACHE_MS) {
@@ -668,7 +688,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     });
   }
 
-  async externalHolder(_host: NativeBackendHost, profile: NativeBackendProfileConfig, threadId: string): Promise<ExternalHolder | undefined> {
+  private async externalHolder(_host: NativeBackendHost, profile: NativeBackendProfileConfig, threadId: string): Promise<ExternalHolder | undefined> {
     return this.holderIn(await scanProcesses(), profile, threadId);
   }
 
@@ -679,7 +699,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return holderOf(rows, threadId, executables, own);
   }
 
-  async terminalLaunch(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec; keepsRuntime?: boolean }> {
+  private async terminalLaunch(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec; keepsRuntime?: boolean }> {
     const threadId = host.getSession(session.id).nativeSessionId;
     if (!threadId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet, so there is nothing to continue in a terminal.', 409);
     assertSupportedProfile(profile, this.flavor);
@@ -709,7 +729,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     };
   }
 
-  resumeCommand(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean } {
+  private resumeCommand(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean } {
     if (!session.nativeSessionId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
     const command = typeof profile.config.executable === 'string' && profile.config.executable.trim() || this.flavor.command;
     const configDir = typeof profile.config.configDir === 'string' && profile.config.configDir.trim();
@@ -735,7 +755,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     finally { await transport.dispose(); }
   }
 
-  async reloadExtensions(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<number> {
+  private async reloadExtensions(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<number> {
     if (!project) return 0;
     const visited = new Set<string>();
     for (const runtime of this.runtimes.values()) {
@@ -747,7 +767,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return visited.size;
   }
 
-  async authorizeMcp(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string> {
+  private async authorizeMcp(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string> {
     if (project) for (const [sessionId, runtime] of this.runtimes) {
       if (!runtime.transport?.isOnline || !runtime.matches(project, profile)) continue;
       const servers = await readMcpRuntime(runtime.transport, sessionId, runtime.nativeSessionId);
@@ -881,7 +901,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   /** Reads the thread's rollout file directly; the app-server is not involved. */
-  async usageTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
+  private async usageTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
     const threadId = session.nativeSessionId;
     const file = threadId ? await findCodexRollout(this.flavor.stateHome(profile.config), threadId) : undefined;
     if (!threadId || !file) return known === 'none' ? undefined : { generation: 'none', entries: [] };
@@ -894,7 +914,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return { generation, entries };
   }
 
-  async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<import('../../../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]> {
+  private async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<import('../../../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]> {
     if (!session.nativeSessionId) return [];
     const file = await findCodexRollout(this.flavor.stateHome(profile.config), session.nativeSessionId);
     if (!file) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'The native history file is unavailable', 409);
@@ -904,7 +924,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return projectShareRollout(content, session.id, session.nativeSessionId, true).events;
   }
 
-  readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: import('../types.js').NativeShareReadOptions) {
+  private readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: import('../types.js').NativeShareReadOptions) {
     return readCodexShare(host, session, this.flavor.stateHome(profile.config), options);
   }
 

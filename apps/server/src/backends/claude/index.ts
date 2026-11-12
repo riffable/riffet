@@ -35,6 +35,7 @@ import { nativeModelEffort, parseNativeModelSelection } from '../shared/model-se
 import type {
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver,
   NativeBackendHost, NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareReadOptions,
+  NativeDriverExtensions, NativeDriverExternal, NativeDriverStored,
 } from '../types.js';
 import {
   CLAUDE_CODE_BUSY_PATTERN, claudeAgentRows, claudeBackgroundScreen, claudeComposer, claudeComposerHoldsPrompt, claudeComposerText, claudeComposerVisible, claudeDialogClosable, claudeFooterFocused, claudeTasksEntryFocused, claudeTasksEntryShown, claudeViewsSubagent,
@@ -929,6 +930,21 @@ export const CLAUDE_TRAITS: NativeBackendTraits = {
 };
 
 export class ClaudeBackendAdapter implements NativeBackendDriver {
+  readonly extensions: NativeDriverExtensions = {
+    loaded: (host, project, profile) => this.loadedExtensions(host, project, profile),
+  };
+  readonly external: NativeDriverExternal = {
+    list: (host, profile, options) => this.listExternalSessions(host, profile, options),
+    holder: (host, profile, id) => this.externalHolder(host, profile, id),
+    terminalLaunch: (host, session, project, profile) => this.terminalLaunch(host, session, project, profile),
+    resumeCommand: (session, profile) => this.resumeCommand(session, profile),
+    follow: (host, session, profile) => this.followExternal(host, session, profile),
+  };
+  readonly stored: NativeDriverStored = {
+    usage: (host, session, profile, known) => this.usageTranscript(host, session, profile, known),
+    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
+    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+  };
   readonly id = backendId;
   readonly label = 'Claude';
   readonly traits = CLAUDE_TRAITS;
@@ -977,15 +993,15 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   /** Profiles sharing a config directory resume each other's conversations: `--resume` reads the same transcript. */
   continuationKey(profile: NativeBackendProfileConfig): string { return configDirOf(profile); }
 
-  listExternalSessions(_host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]> {
+  private listExternalSessions(_host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]> {
     return scanClaudeSessions(configDirOf(profile), options);
   }
 
-  async externalHolder(_host: NativeBackendHost, profile: NativeBackendProfileConfig, nativeSessionId: string): Promise<ExternalHolder | undefined> {
+  private async externalHolder(_host: NativeBackendHost, profile: NativeBackendProfileConfig, nativeSessionId: string): Promise<ExternalHolder | undefined> {
     return (await claudeHolders(configDirOf(profile))).get(nativeSessionId);
   }
 
-  async terminalLaunch(_host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec }> {
+  private async terminalLaunch(_host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec }> {
     const configDir = configDirOf(profile);
     const id = session.nativeSessionId;
     if (!id || !await findClaudeTranscript(configDir, id)) throw new AppError('CLAUDE_SESSION_NOT_FOUND', 'The saved Claude session could not be found in this profile', 404);
@@ -997,7 +1013,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return { spec: { command: executableOf(profile), args: ['--resume', id], env: { ...profileEnv(profile), ...provider }, ...(secretEnv ? { secretEnv } : {}), cwd: project.cwd, title: 'Claude Agent' } };
   }
 
-  resumeCommand(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean } {
+  private resumeCommand(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean } {
     if (!session.nativeSessionId) throw new AppError('NATIVE_SESSION_NOT_STARTED', 'This conversation has not started yet', 409);
     // The name the reader would type; the launch resolves it to a path only because the daemon's PATH may lack it.
     const command = string(profile.config.executable)?.trim() || process.env.CLAUDE_CLI?.trim() || 'claude';
@@ -1010,7 +1026,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     };
   }
 
-  followExternal(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): () => void {
+  private followExternal(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): () => void {
     const configDir = configDirOf(profile);
     let file: string | undefined;
     let located: string | undefined;
@@ -1066,7 +1082,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return await claudeSlashItems(profile, await queryDirectory(project, profile), 0);
   }
 
-  async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {
+  private async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {
     return await probeClaudeLoadedExtensions(executableOf(profile), await queryDirectory(project, profile), profileEnv(profile));
   }
 
@@ -1240,7 +1256,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return claudeModels(configured, gateway, probe, modelSourceOf(profile.config) !== undefined, profile);
   }
 
-  async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<NativeWorkbenchEvent[]> {
+  private async readContextTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<NativeWorkbenchEvent[]> {
     if (!session.nativeSessionId) return [];
     const events: NativeWorkbenchEvent[] = [];
     let remaining = options.maxBytes, sequence = 0;
@@ -1264,7 +1280,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return events;
   }
 
-  readShareTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
+  private readShareTranscript(_host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
     return readClaudeShare(session, configDirOf(profile), options);
   }
 
@@ -1307,7 +1323,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
    * the stream's emission state. The trailing response counts only once the file has gone quiet:
    * until a later row supersedes it, it may still be streaming.
    */
-  async usageTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
+  private async usageTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
     // A watched conversation hands every settled response to the ledger as it reads the file; a second
     // full parse here (hundreds of ms for a long one) would only find the same rows. Reported as
     // unchanged, it is read once the runtime is gone and the generation has moved on.

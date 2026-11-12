@@ -22,10 +22,10 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
     if (session && session.backendId !== backend) throw new AppError('NATIVE_BACKEND_MISMATCH', 'The conversation uses a different native backend', 409);
     if (session && query.profileId && session.backendProfileId && query.profileId !== session.backendProfileId) throw new AppError('NATIVE_BACKEND_MISMATCH', 'The conversation uses a different profile', 409);
     if (session && query.projectId && query.projectId !== session.projectId) throw new AppError('NATIVE_BACKEND_MISMATCH', 'The conversation belongs to a different project', 409);
-    const profile = deps.nativeBackends.validateProfile(backend, session ? session.backendProfileId : query.profileId);
+    const profile = deps.nativeBackends.catalog.validateProfile(backend, session ? session.backendProfileId : query.profileId);
     if (session && query.profileId && query.profileId !== profile.id) throw new AppError('NATIVE_BACKEND_MISMATCH', 'The conversation uses a different profile', 409);
     const projectId = session?.projectId ?? query.projectId;
-    const layout = deps.nativeBackends.registry.require(backend).extensionLayout?.(profile);
+    const layout = deps.nativeBackends.registry.require(backend).extensions?.layout?.(profile);
     return { backendId: backend, profile, ...(layout ? { layout } : {}), ...(projectId ? { project: deps.store.getProject(requireString(projectId, 'projectId', 100)) } : {}) };
   };
   const skillStates = async (ctx: ReturnType<typeof context>, items: ExtensionItem[]) => {
@@ -55,7 +55,7 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/loaded-extensions', request => {
     const ctx = context(request.params.id, request.query, request.headers);
     if (!ctx.project) throw new AppError('INVALID_PROJECT', 'projectId is required');
-    return deps.nativeBackends.loadedExtensions(ctx.backendId, ctx.project, ctx.profile.id);
+    return deps.nativeBackends.catalog.loadedExtensions(ctx.backendId, ctx.project, ctx.profile.id);
   });
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/extensions/capabilities', request => {
     const ctx = context(request.params.id, request.query, request.headers);
@@ -64,7 +64,7 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/extensions/runtime', async request => {
     const ctx = context(request.params.id, request.query, request.headers);
     const driver = deps.nativeBackends.registry.require(ctx.backendId);
-    const report = await driver.extensionRuntime?.(deps.nativeBackends.host, ctx.project, ctx.profile) ?? { entries: [], diagnostics: ['当前适配器未提供运行时查询；磁盘配置不代表当前会话已加载。'], checkedAt: new Date().toISOString() } satisfies ExtensionRuntimeReport;
+    const report = await driver.extensions?.runtime?.(deps.nativeBackends.host, ctx.project, ctx.profile) ?? { entries: [], diagnostics: ['当前适配器未提供运行时查询；磁盘配置不代表当前会话已加载。'], checkedAt: new Date().toISOString() } satisfies ExtensionRuntimeReport;
     try { return await service.normalizeRuntimeReport(ctx, report); }
     catch { return { ...report, diagnostics: [...report.diagnostics, '未能将运行时路径对应到扩展目录；保留原始会话报告。'] }; }
   });
@@ -80,9 +80,9 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
           const reason = item.managementNote ?? item.readOnlyReason;
           throw new AppError('EXTENSION_READ_ONLY', reason ?? 'This skill does not support this action', 403, undefined, reason ? { subject: 'reason', reason } : { subject: 'action' });
         }
-        if (body.action === 'uninstall' || !driver.setSkillEnabled || item.sourcePath?.endsWith('.riffet-disabled')) {
+        if (body.action === 'uninstall' || !driver.extensions?.setSkillEnabled || item.sourcePath?.endsWith('.riffet-disabled')) {
           const result = await service.manageSkillFiles(ctx, body, body.action !== 'uninstall' && await management.supportsSkillSettings(ctx));
-          if (body.action !== 'enable' || !driver.setSkillEnabled || !result.success) return result;
+          if (body.action !== 'enable' || !driver.extensions?.setSkillEnabled || !result.success) return result;
           // A shared file may have been disabled through another Agent. Restore its
           // entry point before asking the native provider to enable the same Skill.
           service.invalidate(ctx);
@@ -97,7 +97,7 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
       // Shared Skill files and name-based settings can affect several profiles/agents.
       service.invalidate();
       management.invalidateSkillStates();
-      deps.nativeBackends.invalidateSlashCatalogs();
+      deps.nativeBackends.catalog.invalidateSlashCatalogs();
     }
   });
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/extensions/:itemId', request => detail(context(request.params.id, request.query, request.headers), request.params.itemId));
@@ -106,12 +106,12 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
     const result = await service.writeDocument(context(request.params.id, request.query, request.headers), request.params.documentId, request.body);
     service.invalidate();
     management.invalidateSkillStates();
-    deps.nativeBackends.invalidateSlashCatalogs();
+    deps.nativeBackends.catalog.invalidateSlashCatalogs();
     return result;
   });
   app.post<{ Params: Params; Querystring: Selection; Body: { targetId: string; path: string; content: string } }>('/api/backends/:id/extensions/documents', async request => {
     const result = await service.createDocument(context(request.params.id, request.query, request.headers), request.body);
-    deps.nativeBackends.invalidateSlashCatalogs();
+    deps.nativeBackends.catalog.invalidateSlashCatalogs();
     return result;
   });
 }

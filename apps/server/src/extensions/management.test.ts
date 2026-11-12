@@ -25,7 +25,7 @@ describe('extension management boundaries', () => {
   it('keeps native capabilities available when the optional plugin CLI is missing', async () => {
     const run = vi.fn().mockRejectedValue(new Error('ENOENT'));
     const context: ExtensionContext = { backendId: 'codex', profile: { id: 'local', backendId: 'codex', name: 'Codex', config: {} } };
-    const caps = await new ExtensionManagement(run).capabilities(context, { setSkillEnabled: vi.fn(), reloadExtensions: vi.fn() } as unknown as NativeBackendDriver);
+    const caps = await new ExtensionManagement(run).capabilities(context, { extensions: { setSkillEnabled: vi.fn(), reload: vi.fn() } } as unknown as NativeBackendDriver);
     expect(caps.kinds.skill).toEqual(['enable', 'disable']);
     expect(caps.actions).toEqual(['reload']);
     expect(caps.reason).toBeTruthy();
@@ -77,7 +77,7 @@ describe('extension management boundaries', () => {
   it('coalesces native state reads and invalidates them after management', async () => {
     const skillStates = vi.fn().mockResolvedValue([{ path: '/profile/skills/a/SKILL.md', enabled: true }]);
     const setSkillEnabled = vi.fn().mockResolvedValue(undefined);
-    const driver = { skillStates, setSkillEnabled } as unknown as NativeBackendDriver;
+    const driver = { extensions: { skillStates, setSkillEnabled } } as unknown as NativeBackendDriver;
     const context: ExtensionContext = { backendId: 'codex', profile: { id: 'local', backendId: 'codex', name: 'Codex', config: {} } };
     const management = new ExtensionManagement(vi.fn());
     await Promise.all([management.skillStates(context, driver, {} as NativeBackendHost), management.skillStates(context, driver, {} as NativeBackendHost)]);

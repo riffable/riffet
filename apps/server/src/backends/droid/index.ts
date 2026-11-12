@@ -10,6 +10,7 @@ import { readDroidShare } from '../shared/share-read.js';
 import type {
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost,
   NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage, NativeShareReadOptions,
+  NativeDriverStored,
 } from '../types.js';
 import { findDroidTranscript, parseDroidTranscript, projectDroidChain, validateDroidSessionId } from './history.js';
 import { closeDroidRuntime, DROID_AUTONOMY_LEVELS, DROID_MODES, getDroidRuntime, listDroidModels, listDroidSlashItems, probeDroidCli } from './runtime.js';
@@ -41,11 +42,15 @@ export const DROID_TRAITS: NativeBackendTraits = { offlineMayBeRunning: true, ri
 export const DROID_CLI_VERSIONS: CliVersionRange = { testedThrough: '0.243.0' };
 
 export class DroidBackendAdapter implements NativeBackendDriver {
+  readonly stored: NativeDriverStored = {
+    readOnly: true,
+    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
+    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+  };
   readonly id = BACKEND_ID;
   readonly label = 'Droid';
   readonly traits = DROID_TRAITS;
   readonly cliVersions = DROID_CLI_VERSIONS;
-  readonly readOnlyTranscript = true;
 
   profiles(_host: NativeBackendHost): NativeBackendProfileConfig[] { return [defaultProfile()]; }
 
@@ -154,7 +159,7 @@ export class DroidBackendAdapter implements NativeBackendDriver {
     return getDroidRuntime(host).transcriptSource(session, profile);
   }
 
-  async readContextTranscript(host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
+  private async readContextTranscript(host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
     if (!session.nativeSessionId) return [];
     const file = await findDroidTranscript(session.nativeSessionId, host.getProject(session.projectId).cwd);
     if (!file) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'The native history file is unavailable', 409);
@@ -165,7 +170,7 @@ export class DroidBackendAdapter implements NativeBackendDriver {
     }).filter(event => event.type === 'user_message_chunk' || event.type === 'agent_message_chunk');
   }
 
-  readShareTranscript(host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
+  private readShareTranscript(host: NativeBackendHost, session: Session, _profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
     return readDroidShare(host, session, options);
   }
 

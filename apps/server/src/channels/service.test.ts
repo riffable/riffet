@@ -110,7 +110,7 @@ describe('channel core', () => {
     await vi.waitFor(() => expect(store.listSessions()).toHaveLength(1));
     const effort = { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select' as const, currentValue: 'low', options: [{ value: 'low', name: 'Low' }, { value: 'high', name: 'High' }] };
     const models = [{ value: 'opus', name: 'Opus', configOptions: [effort] }, { value: 'haiku', name: 'Haiku', configOptions: [] }];
-    vi.spyOn(nativeBackends, 'catalog').mockResolvedValue({ backendId: 'cursor', label: 'Cursor', available: true, models, profiles: [], capabilities: {} } as never);
+    vi.spyOn(nativeBackends.catalog, 'entry').mockResolvedValue({ backendId: 'cursor', label: 'Cursor', available: true, models, profiles: [], capabilities: {} } as never);
     vi.spyOn(nativeBackends, 'capabilities').mockResolvedValue({ supportsModelSelection: true } as never);
     const configure = vi.spyOn(nativeBackends, 'configure').mockImplementation(async session => session);
     const sessionId = store.listSessions()[0]!.id;

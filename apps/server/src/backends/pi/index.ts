@@ -11,6 +11,7 @@ import type {
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost,
   NativeBackendOpenResult, NativeBackendProfileConfig, NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
   NativeShareReadOptions, NativeShareTranscript,
+  NativeDriverStored,
 } from '../types.js';
 import { findPiTranscript, piEntryUsage, parsePiTranscript, readPiTranscript, validatePiSessionId, type PiEntry } from './history.js';
 import { invalidatePiModels, listPiModels, listPiSlashItems, probePiCli, PI_MINIMUM_VERSION } from './models.js';
@@ -60,11 +61,16 @@ function modelOf(entry: PiEntry): string | undefined {
 
 /** The pi coding agent, driven through `pi --mode rpc` with one process per conversation. */
 export class PiBackendAdapter implements NativeBackendDriver {
+  readonly stored: NativeDriverStored = {
+    readOnly: true,
+    usage: (host, session, profile, known) => this.usageTranscript(host, session, profile, known),
+    context: (host, session, profile, options) => this.readContextTranscript(host, session, profile, options),
+    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+  };
   readonly id = BACKEND_ID;
   readonly label = 'pi';
   readonly traits = PI_TRAITS;
   readonly cliVersions = PI_CLI_VERSIONS;
-  readonly readOnlyTranscript = true;
 
   private readonly stateDir?: string;
 
@@ -176,7 +182,7 @@ export class PiBackendAdapter implements NativeBackendDriver {
     return getPiRuntime(host, this.stateDir).transcriptSource(session, profile);
   }
 
-  async readContextTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
+  private async readContextTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }) {
     if (!session.nativeSessionId) return [];
     const file = await findPiTranscript(session.nativeSessionId, host.getProject(session.projectId).cwd, typeof profile.config.configDir === 'string' ? profile.config.configDir : undefined);
     if (!file) throw new AppError('SESSION_REFERENCE_UNAVAILABLE', 'The native history file is unavailable', 409);
@@ -188,7 +194,7 @@ export class PiBackendAdapter implements NativeBackendDriver {
   }
 
   /** A frozen export reads pi's own file only; it never starts the conversation. */
-  async readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: NativeShareReadOptions = {}): Promise<NativeShareTranscript> {
+  private async readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: NativeShareReadOptions = {}): Promise<NativeShareTranscript> {
     options.signal?.throwIfAborted();
     if (!session.nativeSessionId) return { events: [], subagents: [] };
     const cwd = host.getProject(session.projectId).cwd;
@@ -205,7 +211,7 @@ export class PiBackendAdapter implements NativeBackendDriver {
   }
 
   /** Settled provider requests from pi's stored transcript, for the statistics backfill. */
-  async usageTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
+  private async usageTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined> {
     if (!session.nativeSessionId) return known === 'none' ? undefined : { generation: 'none', entries: [] };
     const file = await findPiTranscript(session.nativeSessionId, host.getProject(session.projectId).cwd, typeof profile.config.configDir === 'string' ? profile.config.configDir : undefined);
     if (!file) return known === 'none' ? undefined : { generation: 'none', entries: [] };

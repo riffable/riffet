@@ -14,6 +14,7 @@ import type {
   NativeBackendAvailability, NativeBackendDriver, NativeBackendHost, NativeBackendProfileConfig, NativeShareReadOptions,
   NativeBackendSendRequest, NativeBackendConfigurePatch, NativeBackendConfigureResult,
   NativeBackendOpenResult, NativeBackendTraits, NativeControlMessage,
+  NativeDriverExtensions, NativeDriverStored,
 } from '../types.js';
 import { canonicalDshModelValue, closeDshProfileRuntimes, disposeDshSession, dshPermission, getDshProfileRuntime, nativeDshSessionId, probeDshCli, validateDshNativeSessionId } from './runtime.js';
 import { DSH_CLI_VERSIONS } from './settings.js';
@@ -87,6 +88,14 @@ async function materializePrompt(host: NativeBackendHost, input: NativeBackendSe
 export const DSH_TRAITS: NativeBackendTraits = { acceptsInputWhileBusy: true, offlineMayBeRunning: true };
 
 export class DshBackendAdapter implements NativeBackendDriver {
+  readonly extensions: NativeDriverExtensions = {
+    runtime: (host, project, profile) => this.extensionRuntime(host, project, profile),
+    managementCapabilities: () => this.extensionManagementCapabilities(),
+    manage: (host, profile, input, item) => this.manageExtension(host, profile, input, item),
+  };
+  readonly stored: NativeDriverStored = {
+    share: (host, session, profile, options) => this.readShareTranscript(host, session, profile, options),
+  };
   readonly id = BACKEND_ID;
   readonly label = 'DeepSeek Harness';
   readonly traits = DSH_TRAITS;
@@ -94,15 +103,15 @@ export class DshBackendAdapter implements NativeBackendDriver {
 
   profiles(_host: NativeBackendHost): NativeBackendProfileConfig[] { return [defaultProfile()]; }
 
-  extensionManagementCapabilities(): import('../../../../../packages/contracts/src/index.js').ExtensionManagementCapabilities {
+  private extensionManagementCapabilities(): import('../../../../../packages/contracts/src/index.js').ExtensionManagementCapabilities {
     return { actions: ['install'], installScopes: ['user'], kinds: { plugin: ['install', 'enable', 'disable', 'uninstall'] }, reason: '插件操作使用 DSH profile 的原生管理服务；必要时启动管理连接。' };
   }
 
-  async extensionRuntime(host: NativeBackendHost, _project: Project | undefined, profile: NativeBackendProfileConfig) {
+  private async extensionRuntime(host: NativeBackendHost, _project: Project | undefined, profile: NativeBackendProfileConfig) {
     return getDshProfileRuntime(profile, host).extensionRuntime();
   }
 
-  async manageExtension(host: NativeBackendHost, profile: NativeBackendProfileConfig, input: import('../../../../../packages/contracts/src/index.js').ExtensionActionRequest, item?: import('../../../../../packages/contracts/src/index.js').ExtensionItem) {
+  private async manageExtension(host: NativeBackendHost, profile: NativeBackendProfileConfig, input: import('../../../../../packages/contracts/src/index.js').ExtensionActionRequest, item?: import('../../../../../packages/contracts/src/index.js').ExtensionItem) {
     if (input.scope === 'project') throw new AppError('EXTENSION_SCOPE_UNSUPPORTED', 'DSH plugins belong to a backend profile and cannot be installed per project', 409, undefined, { subject: 'dsh' });
     const target = item?.nativeId ?? input.target;
     if (!target || !/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*(?:@[a-zA-Z0-9._-]+)?$/.test(target)) throw new AppError('INVALID_EXTENSION_TARGET', 'Use a DSH npm bundle name, optionally with a fixed version', 400, undefined, { subject: 'dsh' });
@@ -266,7 +275,7 @@ export class DshBackendAdapter implements NativeBackendDriver {
     });
   }
 
-  readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
+  private readShareTranscript(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions) {
     return readDshShare(host, session, profile, options);
   }
 

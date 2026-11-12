@@ -32,7 +32,7 @@ export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): v
       // Clients that predate several backends send no backend: the login they mean is the first one's.
       const backendId=body.backendId===undefined?LEGACY_DEFAULT_BACKEND_ID:isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
       requireBackendVisibleToClient(request.headers,backendId);
-      const launchSpec=await nativeBackends.loginLaunchSpec(backendId,project);
+      const launchSpec=await nativeBackends.admin.loginLaunchSpec(backendId,project);
       return terminal.create(project,{kind:'login',...(body.sessionId?{sessionId:body.sessionId}:{}),title:body.title??launchSpec.title,appearance,launchSpec});
     }
     return terminal.create(project,{kind:body.kind,...(body.sessionId?{sessionId:body.sessionId}:{}),...(body.title!==undefined?{title:body.title}:{}),...(body.args!==undefined?{args:body.args}:{}),appearance});

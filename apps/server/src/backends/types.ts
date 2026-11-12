@@ -371,6 +371,95 @@ export interface NativePrewarmResult {
   expiresAt?: number;
 }
 
+/** How the provider's own skills, MCP servers and plugins are found and managed (docs/EXTENSIONS.md). */
+export interface NativeDriverExtensions {
+  /** Where the provider keeps its skills, rules, MCP and hook files and plugins, and the command that manages them; read by the extension inventory (`extensions/discovery.ts`). */
+  layout?(profile: NativeBackendProfileConfig): AgentExtensionLayout;
+  /**
+   * The MCP servers and skills a launch in `project` would load, as the CLI reports them (Riffet's own server left out).
+   * May start a short-lived probe process; it must send no model request and run no user hook. Behind `/api/backends/:id/loaded-extensions`.
+   */
+  loaded?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>>;
+  /** Inspect existing connections only. Must not launch a provider, thread, MCP or hook. */
+  runtime?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<ExtensionRuntimeReport>;
+  /** Read native skill configuration through a short-lived management connection, without opening a conversation. */
+  skillStates?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<Array<{ path: string; enabled: boolean }>>;
+  /** Explicit user actions; unlike discovery these may open a short-lived management connection. */
+  setSkillEnabled?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, path: string, enabled: boolean): Promise<void>;
+  reload?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<number>;
+  authorizeMcp?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string>;
+  managementCapabilities?(host: NativeBackendHost, profile: NativeBackendProfileConfig): ExtensionManagementCapabilities;
+  manage?(host: NativeBackendHost, profile: NativeBackendProfileConfig, input: ExtensionActionRequest, item?: ExtensionItem): Promise<ExtensionActionResult>;
+}
+
+/** Conversations and CLI processes the workbench did not start: the import picker and the hand-off to a terminal (docs/TERMINAL-SESSIONS.md). */
+export interface NativeDriverExternal {
+  /**
+   * The provider's conversations stored for this profile, newest first, for the import picker
+   * (docs/TERMINAL-SESSIONS.md). Reads the provider's own files or index only: it must not launch a
+   * conversation, a model request or a hook. Subagent threads are left out, and so are non-interactive
+   * runs (`-p`, SDK, `exec`) unless `includeNonInteractive`. Bounded by `limit`.
+   */
+  list?(host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]>;
+  /**
+   * A live CLI process holding this provider conversation, whoever started it; `undefined` when none
+   * is known. Read-only and cheap: the core asks before every launch of a conversation it has no live CLI for.
+   */
+  holder?(host: NativeBackendHost, profile: NativeBackendProfileConfig, nativeSessionId: string): Promise<ExternalHolder | undefined>;
+  /**
+   * How a terminal continues this conversation as its only writer (`riffet resume`). `keepsRuntime`:
+   * the command joins the runtime Riffet keeps (a shared app-server), so only Riffet's own terminal
+   * client is stopped and the conversation stays live here; otherwise the core disposes the runtime first.
+   */
+  terminalLaunch?(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec; keepsRuntime?: boolean }>;
+  /**
+   * The command a reader types to continue this conversation in a terminal of their own: the provider's
+   * CLI and its resume argument, with the environment that finds the same stored conversation. Nothing
+   * secret: credentials Riffet supplies (a gateway key, its headers) are left out and `credentialsOmitted` says so.
+   * Pure; it starts nothing.
+   */
+  resumeCommand?(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean };
+  /**
+   * While a terminal holds the conversation, wakes its transcript reader when the CLI there writes,
+   * so the timeline follows it. Returns how to stop. Not needed by a backend whose runtime stays live.
+   */
+  follow?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): () => void;
+}
+
+/** Reads of the provider's stored transcript that neither start nor observe a runtime. */
+export interface NativeDriverStored {
+  /**
+   * Declares that `share` only reads the provider's own stored files, so the search index
+   * may read the provider's conversations speculatively. Any other backend's conversations are indexed
+   * only from the journal, as they are read for a client: reading one could start the agent process,
+   * which a search must never do.
+   */
+  readonly readOnly?: boolean;
+  /**
+   * Settled usage parsed from the provider's own stored transcript, for the statistics backfill.
+   * It may only read files — never start the agent or its server. A transcript whose generation
+   * equals `known` returns `undefined` unparsed; a missing one is an empty result, and a failed
+   * read throws so the caller retries later.
+   */
+  usage?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined>;
+  /** Bounded cold history used by explicit references; must not start a runtime or follow children. */
+  context?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<NativeWorkbenchEvent[]>;
+  /** A complete read of the stored transcript; must never launch a process or change live emission state. */
+  share?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions): Promise<NativeShareTranscript>;
+}
+
+/** Management of the CLI on this machine, outside any conversation. */
+export interface NativeDriverAdmin {
+  /** The launch of the backend's own login in a terminal; `cwd` is the project's directory. */
+  loginLaunch?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): NativePtyLaunchSpec | Promise<NativePtyLaunchSpec>;
+  /** What this machine can do for the backend, behind `/api/cursor/capabilities`. */
+  capabilityReport?(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<CapabilityReport>;
+  /** One of the CLI's named management operations, behind `/api/cursor/command`. */
+  runCommand?(host: NativeBackendHost, profile: NativeBackendProfileConfig, request: { operation: string; args?: string[]; cwd?: string }): Promise<CommandResult>;
+  /** Counters of the driver's own runtime, behind `/api/native/runtime/stats`. */
+  runtimeStats?(host: NativeBackendHost): Record<string, unknown> | Promise<Record<string, unknown>>;
+}
+
 export interface NativeBackendDriver {
   readonly id: NativeBackendId;
   readonly label: string;
@@ -409,13 +498,6 @@ export interface NativeBackendDriver {
   /** Additional protocol compatibility for profiles sharing a continuation key; sources are prepared before this check. */
   canContinueProfile?(from: NativeBackendProfileConfig, to: NativeBackendProfileConfig, session: Session): boolean;
   /**
-   * Declares that `readShareTranscript` only reads the provider's own stored files, so the search index
-   * may read the provider's conversations speculatively. Any other backend's conversations are indexed
-   * only from the journal, as they are read for a client: reading one could start the agent process,
-   * which a search must never do.
-   */
-  readonly readOnlyTranscript?: boolean;
-  /**
    * The conversation's transcript as the journal reads it (`journal/ingest.ts`): the service pulls it
    * into the session's lanes, and the timeline and every reader are served from those.
    */
@@ -425,18 +507,9 @@ export interface NativeBackendDriver {
    * with `now`), so "send now" does not have to interrupt and then send as two separate actions.
    */
   readonly sendsNow?: boolean;
-  /**
-   * Settled usage parsed from the provider's own stored transcript, for the statistics backfill.
-   * It may only read files — never start the agent or its server. A transcript whose generation
-   * equals `known` returns `undefined` unparsed; a missing one is an empty result, and a failed
-   * read throws so the caller retries later.
-   */
-  usageTranscript?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, known?: string): Promise<UsageTranscript | undefined>;
 
   /** `initialPrompt` is only supplied to backends whose capabilities declare `supportsInitialPromptArgs`. */
   openOrResume(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, options?: NativeBackendOpenOptions): Promise<NativeBackendOpenResult>;
-  /** Bounded cold history used by explicit references; must not start a runtime or follow children. */
-  readContextTranscript?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options: { maxBytes: number; signal: AbortSignal }): Promise<NativeWorkbenchEvent[]>;
   send(host: NativeBackendHost, request: NativeBackendSendRequest): Promise<void>;
   /** Append to exactly this active turn; never starts a turn or falls back to a queued send. */
   steer?(host: NativeBackendHost, request: NativeBackendSendRequest & { target: NativeTurnTarget }): Promise<void | { deferred: true }>;
@@ -494,65 +567,16 @@ export interface NativeBackendDriver {
   start?(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<void>;
   /** Starts an unused process held for the next session of this project; `skipped` with the reason when it cannot. */
   prewarm?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig, request: Omit<NativePrewarmRequest, 'project' | 'backendProfileId'>): Promise<NativePrewarmResult>;
-  /**
-   * The provider's conversations stored for this profile, newest first, for the import picker
-   * (docs/TERMINAL-SESSIONS.md). Reads the provider's own files or index only: it must not launch a
-   * conversation, a model request or a hook. Subagent threads are left out, and so are non-interactive
-   * runs (`-p`, SDK, `exec`) unless `includeNonInteractive`. Bounded by `limit`.
-   */
-  listExternalSessions?(host: NativeBackendHost, profile: NativeBackendProfileConfig, options: ExternalSessionScan): Promise<ExternalSessionEntry[]>;
-  /**
-   * A live CLI process holding this provider conversation, whoever started it; `undefined` when none
-   * is known. Read-only and cheap: the core asks before every launch of a conversation it has no live CLI for.
-   */
-  externalHolder?(host: NativeBackendHost, profile: NativeBackendProfileConfig, nativeSessionId: string): Promise<ExternalHolder | undefined>;
-  /**
-   * How a terminal continues this conversation as its only writer (`riffet resume`). `keepsRuntime`:
-   * the command joins the runtime Riffet keeps (a shared app-server), so only Riffet's own terminal
-   * client is stopped and the conversation stays live here; otherwise the core disposes the runtime first.
-   */
-  terminalLaunch?(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig): Promise<{ spec: NativePtyLaunchSpec; keepsRuntime?: boolean }>;
-  /**
-   * The command a reader types to continue this conversation in a terminal of their own: the provider's
-   * CLI and its resume argument, with the environment that finds the same stored conversation. Nothing
-   * secret: credentials Riffet supplies (a gateway key, its headers) are left out and `credentialsOmitted` says so.
-   * Pure; it starts nothing.
-   */
-  resumeCommand?(session: Session, profile: NativeBackendProfileConfig): { argv: string[]; env: Record<string, string>; credentialsOmitted?: boolean };
-  /**
-   * While a terminal holds the conversation, wakes its transcript reader when the CLI there writes,
-   * so the timeline follows it. Returns how to stop. Not needed by a backend whose runtime stays live.
-   */
-  followExternal?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): () => void;
-  /** The launch of the backend's own login in a terminal; `cwd` is the project's directory. */
-  loginLaunch?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): NativePtyLaunchSpec | Promise<NativePtyLaunchSpec>;
-  /** What this machine can do for the backend, behind `/api/cursor/capabilities`. */
-  capabilityReport?(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<CapabilityReport>;
-  /** One of the CLI's named management operations, behind `/api/cursor/command`. */
-  runCommand?(host: NativeBackendHost, profile: NativeBackendProfileConfig, request: { operation: string; args?: string[]; cwd?: string }): Promise<CommandResult>;
-  /** Counters of the driver's own runtime, behind `/api/native/runtime/stats`. */
-  runtimeStats?(host: NativeBackendHost): Record<string, unknown> | Promise<Record<string, unknown>>;
   /** The project files the backend's CLI reads its configuration from, behind `/api/projects/:id/configs`. */
   readonly projectConfigs?: NativeProjectConfigs;
-  /** Where the provider keeps its skills, rules, MCP and hook files and plugins, and the command that manages them; read by the extension inventory (`extensions/discovery.ts`). */
-  extensionLayout?(profile: NativeBackendProfileConfig): AgentExtensionLayout;
-  /**
-   * The MCP servers and skills a launch in `project` would load, as the CLI reports them (Riffet's own server left out).
-   * May start a short-lived probe process; it must send no model request and run no user hook. Behind `/api/backends/:id/loaded-extensions`.
-   */
-  loadedExtensions?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig): Promise<Omit<LoadedExtensions, 'checkedAt'>>;
-  /** Inspect existing connections only. Must not launch a provider, thread, MCP or hook. */
-  extensionRuntime?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<ExtensionRuntimeReport>;
-  /** Read native skill configuration through a short-lived management connection, without opening a conversation. */
-  skillStates?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<Array<{ path: string; enabled: boolean }>>;
-  /** Explicit user actions; unlike discovery these may open a short-lived management connection. */
-  setSkillEnabled?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, path: string, enabled: boolean): Promise<void>;
-  reloadExtensions?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<number>;
-  authorizeMcp?(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig, name: string): Promise<string>;
-  extensionManagementCapabilities?(host: NativeBackendHost, profile: NativeBackendProfileConfig): ExtensionManagementCapabilities;
-  manageExtension?(host: NativeBackendHost, profile: NativeBackendProfileConfig, input: ExtensionActionRequest, item?: ExtensionItem): Promise<ExtensionActionResult>;
-  /** A complete read of the stored transcript; must never launch a process or change live emission state. */
-  readShareTranscript?(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig, options?: NativeShareReadOptions): Promise<NativeShareTranscript>;
+  /** Skills, MCP servers and plugins of the provider. */
+  readonly extensions?: NativeDriverExtensions;
+  /** Conversations and CLI processes started outside the workbench. */
+  readonly external?: NativeDriverExternal;
+  /** Reads of the provider's stored transcript. */
+  readonly stored?: NativeDriverStored;
+  /** Management of the CLI on this machine. */
+  readonly admin?: NativeDriverAdmin;
   interaction(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): Promise<NativeInteraction | undefined> | NativeInteraction | undefined;
   /**
    * Whether a dialog recognized on the CLI's screen is backed by something the driver knows the CLI waits on.

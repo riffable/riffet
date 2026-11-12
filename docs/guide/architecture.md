@@ -23,7 +23,9 @@ base、kernel、kit、root 层内的模块可以互相导入；驱动、功能�
 
 `pnpm check:layers`（CI 运行）按模块对统计越层导入了对方多少个文件，与 `scripts/layers-baseline.json` 比较：已有的只许减少，不许出现新的模块对。按文件而不是按 import 语句计数，所以把一个文件拆成两个不会被算作新增依赖。`--list` 列出每一处，`--update` 在清理后下调基线。层的归属写在 `scripts/check-layers.mjs` 的 `LAYERS` 里，新模块必须先登记。
 
-`apps/web` 提供 React 工作台。`packages/contracts` 是共享契约；服务接口见 `apps/server/src/` 下各路由与契约。
+`apps/web` 提供 React 工作台。`packages/contracts` 是共享契约，`src/index.ts` 只做导出，类型按领域放在 `session.ts`、`run.ts`、`native.ts`、`backends.ts`、`git.ts`、`settings.ts` 等文件里，新类型加到所属领域的文件。`src/schema/` 是其中进入兼容性快照和客户端 fixture 的那部分的 zod 定义；`schema/parity.ts` 在类型层面把每个 schema 与同名 interface 绑在一起，两边不一致时 `pnpm typecheck` 报出契约名和字段路径。服务接口见 `apps/server/src/` 下各路由与契约。
+
+驱动接口（`backends/types.ts` 的 `NativeBackendDriver`）里成组的可选能力放在可选对象上：`extensions`（厂商自己的 Skill、MCP、插件）、`external`（导入与交还终端）、`stored`（不启动运行时的存档读取）、`admin`（会话之外的 CLI 管理）、`projectConfigs`。后端不提供某一组就不设这个属性。`NativeBackendService` 只管与具体会话有关的事；与会话无关的后端、档案与模型目录在 `backends/catalog.ts`（`nativeBackends.catalog`），登录、能力报告与项目配置在 `backends/admin.ts`（`nativeBackends.admin`）。
 
 `apps/mobile` 是移动客户端：Android 界面用 Compose（`shared`），iPhone 界面是 `iosApp` 里的 SwiftUI / UIKit（见 `docs/IOS.md`），两端共用 `client` 模块的会话状态、缓存、网络与时间线规则；`docs/MOBILE.md` 是它的设计契约：设备令牌与配对、mDNS 发现、时间线第二实现、分期与验收标准。手机自己就能添加目录并发起会话：首页的目录菜单里有「选择其他目录…」，在服务端的文件系统里浏览并绑定（`POST /api/browse` + `POST /api/projects`，都已注册的目录按路径幂等返回原项目），不必先在电脑上建好项目。与 web 一致，Agent 的待办列表和排队中的消息都只显示在输入框上方的 dock 里（待办默认收起，排队消息执行时才进入正文），转录里的文字可以长按选中复制，文件浏览页搜索框右侧的 ✕ 直接退出整个页面。`contracts/` 与 `core/` 两个模块不依赖任何平台 API，可以只用 JDK 编译与测试（`./gradlew :contracts:jvmTest :core:jvmTest`），不需要 Android SDK。设计变量由 `pnpm gen:theme` 从 `apps/web/src/styles/index.css` 生成，不手工誊抄。
 

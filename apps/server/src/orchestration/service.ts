@@ -275,7 +275,7 @@ export class OrchestrationService {
       // provider was removed must land on the backend's default, not fail on the dangling id.
       const sourceBackend = source.backendId;
       const inheritProfile = source.backendProfileId
-        && this.deps.nativeBackends.profileSettings(sourceBackend).profiles.some(profile => profile.id === source.backendProfileId)
+        && this.deps.nativeBackends.catalog.profileSettings(sourceBackend).profiles.some(profile => profile.id === source.backendProfileId)
         ? source.backendProfileId : undefined;
       const target = options.target ?? { backendId: sourceBackend, ...(inheritProfile ? { backendProfileId: inheritProfile } : {}), ...(source.model ? { model: source.model } : {}), mode: source.mode, ...(source.approval ? { approval: source.approval } : {}) };
       const input = await resolveNativeSessionInput(this.deps, { ...target, projectId: origin.id, title: `${source.title} · 新会话` });
@@ -301,7 +301,7 @@ export class OrchestrationService {
     const ref = settings.getSettings().auxiliaryModels?.handoff;
     if (!ref) return { text: `${writeBrief(material)}${next}` };
     try {
-      const { profileName, ...endpoint } = auxiliaryEndpoint(ref, backendId => nativeBackends.gatewayProfiles(backendId));
+      const { profileName, ...endpoint } = auxiliaryEndpoint(ref, backendId => nativeBackends.catalog.gatewayProfiles(backendId));
       const note = await requestHandoffSummary(endpoint, writeMaterial(material), { ...(options.goal?.trim() ? { goal: options.goal.trim() } : {}), ...(options.signal ? { signal: options.signal } : {}) });
       return { text: `${summaryHeading(source)}\n\n${note}${next}`, generatedBy: { ...ref, profileName } };
     } catch (error) {

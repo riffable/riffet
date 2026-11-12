@@ -173,7 +173,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);
     const backendId=body.backendId===undefined?defaultBackendForClient(request.headers,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
     // A backend that is off, keeps no warm process or has no such profile answers before the workspace is looked at.
-    const skipped=nativeBackends.prewarmSkip(backendId,body.backendProfileId);
+    const skipped=nativeBackends.catalog.prewarmSkip(backendId,body.backendProfileId);
     if(skipped)return skipped;
     await assertTaskWorkspaceAvailable(project);
     if(store.listSessions().some(session=>session.projectId===project.id&&['starting','running','waiting','cancelling'].includes(session.state)))return {state:'skipped',reason:'workspace_busy'};
@@ -181,7 +181,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     try{release=dispatch.reserveWorkspace([project.id]);}
     catch(error){if(error instanceof AppError&&error.code==='PROJECT_BUSY')return {state:'skipped',reason:'workspace_busy'};throw error;}
     // The backend answers for itself: `skipped` with why when it keeps no warm CLI or not for this profile.
-    try{return await nativeBackends.prewarm(backendId,{project,...(body.backendProfileId?{backendProfileId:body.backendProfileId}:{}),appearance:readTerminalAppearance(request.headers),model:body.model,mode:body.mode??'agent',...(body.approval!==undefined?{approval:requireString(body.approval,'approval',100)}:{})});}
+    try{return await nativeBackends.catalog.prewarm(backendId,{project,...(body.backendProfileId?{backendProfileId:body.backendProfileId}:{}),appearance:readTerminalAppearance(request.headers),model:body.model,mode:body.mode??'agent',...(body.approval!==undefined?{approval:requireString(body.approval,'approval',100)}:{})});}
     finally{release();}
   });
   const nativeKeys=new Set(['Escape','Enter','Up','Down','Left','Right','Tab','BTab','Space','C-c']);
@@ -193,7 +193,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
   app.get<{Params:{id:string}}>('/api/sessions/:id/native/catalog',async(request)=>{
     const session=store.getSession(request.params.id);
     if(session.kind!=='native')throw new AppError('NOT_NATIVE','Only native conversations have a backend catalog',409);
-    return nativeBackends.catalog(session.backendId,store.getProject(session.projectId),session.backendProfileId,session);
+    return nativeBackends.catalog.entry(session.backendId,store.getProject(session.projectId),session.backendProfileId,session);
   });
   app.post<{Params:{id:string};Body:import('../../../../packages/contracts/src/index.js').NativeInteractionResponse}>('/api/sessions/:id/native/interaction',async(request)=>{
     return sessionLock.withSession(request.params.id,()=>nativeBackends.respondInteraction(store.getSession(request.params.id),request.body));

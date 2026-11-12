@@ -23,7 +23,7 @@ async function harness(backend: 'claude' | 'traex' = 'claude', driver: Partial<N
   const profile = { id: 'local', backendId: backend, name: 'Fixture', config: { configDir: user, executable: join(root, 'unavailable-agent') } };
   const app = Fastify();
   app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'ERROR', message: error.message }));
-  registerExtensionRoutes(app, { stateDir: root, store: { getProject: () => project, getSession: () => ({ projectId: 'project', backendId: 'codex', backendProfileId: 'local' }) }, nativeBackends: { validateProfile: (_backend: string, id?: string) => { if (id && id !== 'local') throw new AppError('NOT_FOUND', 'profile', 404); return profile; }, invalidateSlashCatalogs: invalidate, registry: { require: () => driver }, host: {} } } as unknown as RouteDeps);
+  registerExtensionRoutes(app, { stateDir: root, store: { getProject: () => project, getSession: () => ({ projectId: 'project', backendId: 'codex', backendProfileId: 'local' }) }, nativeBackends: { catalog: { validateProfile: (_backend: string, id?: string) => { if (id && id !== 'local') throw new AppError('NOT_FOUND', 'profile', 404); return profile; }, invalidateSlashCatalogs: invalidate }, registry: { require: () => driver }, host: {} } } as unknown as RouteDeps);
   cleanups.push(() => app.close());
   return { app, user, invalidate };
 }
@@ -56,7 +56,7 @@ describe('extension routes', () => {
     let release!: (states: Array<{ path: string; enabled: boolean }>) => void;
     const pending = new Promise<Array<{ path: string; enabled: boolean }>>(resolve => { release = resolve; });
     const skillStates = vi.fn().mockReturnValue(pending);
-    const { app, user } = await harness('traex', { skillStates });
+    const { app, user } = await harness('traex', { extensions: { skillStates } });
     let scanned = 0;
     let bothScanned!: () => void;
     const ready = new Promise<void>(resolve => { bothScanned = resolve; });
