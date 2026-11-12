@@ -838,12 +838,14 @@ describe('Claude per-session Fast and gateway compatibility', () => {
     expect(await h.adapter.available(h.host, h.profile)).toEqual({ available: false, reason: '模型源「acme-missing」当前不可用：提供它的集成未开启' });
   });
 
-  it('keeps declared source reasoning levels and leaves undeclared levels unavailable', async () => {
+  it('keeps declared source reasoning levels and native Claude effort when metadata is absent', async () => {
     provideModelSources(() => sources);
     const h = await makeHarness();
     Object.assign(h.profile.config, { modelSource: 'acme-gateway', apiEndpoint: 'https://declared-source.example/v1', apiKey: 'declared-test-key' });
     const request = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ data: [
       { id: 'declared-model', available_agents: ['claude-code'], supported_reasoning_levels: ['low', 'medium', 'high', 'xhigh'], default_reasoning_level: 'medium' },
+      { id: 'claude-sonnet-5-5', supported_reasoning_levels: ['low', 'high'], default_reasoning_level: 'high' },
+      { id: 'claude-fable-5-2', object: 'model', created: 0, owned_by: 'gateway' },
       { id: 'undeclared-model', available_agents: ['claude-code'] },
     ] }), { status: 200 }));
     try {
@@ -851,7 +853,19 @@ describe('Claude per-session Fast and gateway compatibility', () => {
       const effort = models.find(model => model.value === 'declared-model')!.configOptions.find(option => option.id === 'effort')!;
       expect(effort.options.map(option => option.value)).toEqual(['low', 'medium', 'high', 'xhigh']);
       expect(effort.currentValue).toBe('medium');
+      const nativeDeclared = models.find(model => model.value === 'claude-sonnet-5-5')!.configOptions.find(option => option.id === 'effort')!;
+      expect(nativeDeclared.options.map(option => option.value)).toEqual(['low', 'high']);
+      expect(nativeDeclared.currentValue).toBe('high');
+      const fallback = models.find(model => model.value === 'claude-fable-5-2')!.configOptions.find(option => option.id === 'effort')!;
+      expect(fallback.options.map(option => option.value)).toEqual(['default', 'low', 'medium', 'high', 'xhigh', 'max']);
+      expect(fallback.currentValue).toBe('default');
       expect(models.find(model => model.value === 'undeclared-model')!.configOptions.some(option => option.id === 'effort')).toBe(false);
+      h.store.update({ model: 'claude-fable-5-2[effort=xhigh]' });
+      await h.open();
+      expect(flagValue(h.launches.at(-1)!.args, '--model')).toBe('claude-fable-5-2');
+      expect(flagValue(h.launches.at(-1)!.args, '--effort')).toBe('xhigh');
+      const selected = await h.adapter.listModels(h.host, h.host.getProject(h.getSession().projectId), h.profile, h.getSession());
+      expect(selected.find(model => model.value === 'claude-fable-5-2')!.configOptions.find(option => option.id === 'effort')!.currentValue).toBe('xhigh');
     } finally { request.mockRestore(); provideModelSources(() => []); }
   });
 });

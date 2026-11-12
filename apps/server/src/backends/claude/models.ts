@@ -174,13 +174,13 @@ export async function declaredLongContext(profile: NativeBackendProfileConfig, v
   return probe !== undefined && versionAtLeast(probe.parsed, MODEL_OPTIONS_MIN_VERSION);
 }
 
-export function claudeModels(configured?: string, catalog?: ModelInfo[], probe?: ClaudeCliProbe, declaredEffort = false, profile?: NativeBackendProfileConfig): ModelInfo[] {
+export function claudeModels(configured?: string, catalog?: ModelInfo[], probe?: ClaudeCliProbe, namedSource = false, profile?: NativeBackendProfileConfig): ModelInfo[] {
   const selection = parseNativeModelSelection(configured);
   const currentModel = claudeModelBase(selection.model);
   const currentEffort = nativeModelEffort(selection) ?? 'default';
   const currentContext = selection.params.context ?? (/\[1m\]$/i.test(selection.model) ? '1m' : 'default');
   // Named sources own their model membership; an empty directory must not invent native aliases.
-  const listed = declaredEffort ? catalog ?? [] : catalog?.length ? catalog : CLAUDE_MODELS;
+  const listed = namedSource ? catalog ?? [] : catalog?.length ? catalog : CLAUDE_MODELS;
   const models = [...new Map(listed.map(model => {
     const value = claudeModelBase(model.value);
     // The suffix the gateway listed the model under is its own declaration of the long-context variant.
@@ -188,27 +188,33 @@ export function claudeModels(configured?: string, catalog?: ModelInfo[], probe?:
     return [value, { ...model, value, longContext, name: model.name === model.value ? claudeModelName(value) : model.name.replace(/\s*\[1m\]$/i, '') }];
   })).values()];
   if (currentModel && !models.some(model => model.value === currentModel)) models.unshift({ value: currentModel, name: currentModel, longContext: false, configOptions: [] });
-  return models.map(model => ({
-    ...model,
-    name: model.name === model.value ? claudeModelName(model.value) : model.name,
-    configOptions: [...(declaredEffort ? model.configOptions.filter(option => option.id === 'effort').map(option => ({
-      ...option,
-      currentValue: model.value === currentModel && option.options.some(level => level.value === currentEffort) ? currentEffort : option.currentValue,
-    })) : [{
+  return models.map(model => {
+    const declared = model.configOptions.filter(option => option.id === 'effort');
+    // A source may list native Claude ids without capability metadata. Missing metadata must not
+    // hide the CLI's effort control; explicit source levels still win, and unknown ids need them.
+    const efforts = namedSource && (declared.length || !claudeNativeModel(model.value)) ? declared : [{
       id: 'effort', name: 'Effort', category: 'thought_level', type: 'select' as const,
-      currentValue: model.value === currentModel ? currentEffort : 'default', options: CLAUDE_EFFORTS,
-    }]), ...(claudeFastModel(model.value, probe) ? [{
-      id: 'fast', name: 'Fast', category: 'model_config', type: 'select' as const,
-      currentValue: model.value === currentModel ? selection.params.fast ?? 'default' : 'default',
-      description: 'Default follows Claude Code. On requests Fast; whether it applies depends on the model, account, organization policy and upstream service. Fast may cost more; a change applies once the session is idle.',
-      options: [{ value: 'default', name: 'Default' }, { value: 'true', name: 'On' }, { value: 'false', name: 'Off' }],
-    }] : []), ...(claudeLongContextModel(model.value, probe, model.contextWindow, model.longContext) ? [{
-      id: 'context', name: 'Context', category: 'model_config', type: 'select' as const,
-      currentValue: model.value === currentModel ? currentContext : 'default',
-      description: `Requests a 1M context window; whether it applies depends on the account, organization policy and upstream model, and it may cost more. ${(!claudeNativeModel(model.value) && model.contextWindow !== undefined) || (profile && declaresLongContext(profile, model.value)) ? 'Default uses the window the provider declares' : 'Default follows Claude Code'}; a change applies once the session is idle.`,
-      options: [{ value: 'default', name: 'Default' }, { value: '1m', name: '1M' }],
-    }] : [])],
-  }));
+      currentValue: 'default', options: CLAUDE_EFFORTS,
+    }];
+    return {
+      ...model,
+      name: model.name === model.value ? claudeModelName(model.value) : model.name,
+      configOptions: [...efforts.map(option => ({
+        ...option,
+        currentValue: model.value === currentModel && option.options.some(level => level.value === currentEffort) ? currentEffort : option.currentValue,
+      })), ...(claudeFastModel(model.value, probe) ? [{
+        id: 'fast', name: 'Fast', category: 'model_config', type: 'select' as const,
+        currentValue: model.value === currentModel ? selection.params.fast ?? 'default' : 'default',
+        description: 'Default follows Claude Code. On requests Fast; whether it applies depends on the model, account, organization policy and upstream service. Fast may cost more; a change applies once the session is idle.',
+        options: [{ value: 'default', name: 'Default' }, { value: 'true', name: 'On' }, { value: 'false', name: 'Off' }],
+      }] : []), ...(claudeLongContextModel(model.value, probe, model.contextWindow, model.longContext) ? [{
+        id: 'context', name: 'Context', category: 'model_config', type: 'select' as const,
+        currentValue: model.value === currentModel ? currentContext : 'default',
+        description: `Requests a 1M context window; whether it applies depends on the account, organization policy and upstream model, and it may cost more. ${(!claudeNativeModel(model.value) && model.contextWindow !== undefined) || (profile && declaresLongContext(profile, model.value)) ? 'Default uses the window the provider declares' : 'Default follows Claude Code'}; a change applies once the session is idle.`,
+        options: [{ value: 'default', name: 'Default' }, { value: '1m', name: '1M' }],
+      }] : [])],
+    };
+  });
 }
 
 export function selectedModel(session: Session, profile: NativeBackendProfileConfig): string | undefined {
