@@ -49,6 +49,15 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
+      # The Debug build's "Bundle server payload" phase runs `pnpm build` in this checkout.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
