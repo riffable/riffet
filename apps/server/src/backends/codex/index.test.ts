@@ -1490,6 +1490,30 @@ describe('Codex native protocol controls', () => {
     await h.adapter.close(h.host);
   });
 
+  it.each([codexFlavor, traexFlavor])('waits for a $label terminal verification within the shared lookup deadline before writing', async flavor => {
+    const h = makeHarness({ flavor });
+    await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);
+    const current = h.transport!;
+    const factoryCalls = h.factoryCalls.length;
+    h.setTerminalEndpoint(current.remoteAddress);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const lookup = vi.fn<NonNullable<NativeBackendHost['terminal']['inspectPane']>>().mockImplementation(() =>
+      new Promise(resolve => { setTimeout(() => resolve(h.paneFor(current.remoteAddress)), 4_750); }));
+    h.host.terminal.inspectPane = lookup;
+    const sending = h.send('cmd-slow-verification').catch(error => error);
+    try {
+      await vi.advanceTimersByTimeAsync(4_500);
+      expect(current.requestParams.some(request => request.method === 'turn/start')).toBe(false);
+      await vi.advanceTimersByTimeAsync(5_500);
+      expect(await sending).toBeUndefined();
+      expect(lookup).toHaveBeenCalledTimes(1);
+      expect(h.factoryCalls).toHaveLength(factoryCalls);
+      expect(h.transport).toBe(current);
+      expect(current.requestParams.filter(request => request.method === 'turn/start')).toHaveLength(1);
+      expect(h.adapter.status(h.host, h.session).connection?.state).toBe('connected');
+    } finally { vi.useRealTimers(); await h.adapter.close(h.host); }
+  });
+
   it('rechecks an unverified read-only lookup when a send joins its in-flight runtime check', async () => {
     const h = makeHarness({ flavor: traexFlavor });
     await h.adapter.openOrResume(h.host, h.session, h.project, h.profile);

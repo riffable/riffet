@@ -53,8 +53,8 @@ export function codexInvocationFingerprint(invocation: CodexInvocation): string 
   return createHash('sha256').update(JSON.stringify({ version: 1, ...invocation })).digest('hex');
 }
 
-/** Overall budget for one lookup; the terminal caps each command inside it. */
-const LOOKUP_BUDGET_MS = 4000;
+/** One deadline covers the process tree and its argv/cwd verification. */
+const LOOKUP_BUDGET_MS = 5000;
 
 /**
  * Finds the app-server endpoint used by the Codex TUI inside this conversation's own linked
@@ -68,6 +68,7 @@ export async function codexTerminalEndpoint(
   const deadline = Date.now() + LOOKUP_BUDGET_MS;
   const inspect = host.terminal.inspectPane;
   if (!inspect) return undefined;
+  let timer: NodeJS.Timeout | undefined;
   try {
     const linked = () => {
       const session = host.getSession(sessionId);
@@ -75,20 +76,28 @@ export async function codexTerminalEndpoint(
         && session.nativeSessionId === threadId && session.terminalId === terminalId;
     };
     if (!linked() || resolve(cwd) !== resolve(host.getProject(host.getSession(sessionId).projectId).cwd)) return undefined;
-    const processes = await inspect.call(host.terminal, terminalId, sessionId, {
-      deadline,
-      select: (argv, marker) => {
-        const invocation = codexInvocation(argv, cwd, threadId);
-        return Boolean(invocation && (!marker || marker === codexInvocationFingerprint(invocation)));
-      },
-    });
-    if (!processes || !linked()) return undefined;
+    const processes = await Promise.race([
+      inspect.call(host.terminal, terminalId, sessionId, {
+        deadline,
+        select: (argv, marker) => {
+          const invocation = codexInvocation(argv, cwd, threadId);
+          return Boolean(invocation && (!marker || marker === codexInvocationFingerprint(invocation)));
+        },
+      }),
+      new Promise<undefined>(resolveTimeout => {
+        timer = setTimeout(() => resolveTimeout(undefined), Math.max(1, deadline - Date.now()));
+        timer.unref();
+      }),
+    ]);
+    if (!processes || Date.now() >= deadline || !linked()) return undefined;
     const endpoints = new Set(processes.map(({ argv }) => codexInvocation(argv, cwd, threadId)?.endpoint).filter(Boolean));
     return endpoints.size === 1 ? [...endpoints][0] : undefined;
   } catch {
     // This is an advisory recovery hint. Permission errors, races, and stale tmux metadata
     // must not interfere with the session's normal recovery path.
     return undefined;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

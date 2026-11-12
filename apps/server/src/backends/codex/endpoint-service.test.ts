@@ -151,6 +151,7 @@ describe('codexTerminalEndpoint', () => {
   }, sessionId, terminalId, thread, directory);
 
   afterEach(() => {
+    vi.useRealTimers();
     store.close();
     rmSync(directory, { recursive: true, force: true });
     vi.restoreAllMocks();
@@ -230,5 +231,19 @@ describe('codexTerminalEndpoint', () => {
 
     expect(await lookup(threadId, cwd)).toBeUndefined();
     expect(state.calls.some(({ command }) => command === 'pgrep' || command === 'ps' || command === 'lsof')).toBe(false);
+  });
+
+  it('ends a hung lookup at its deadline and allows the next lookup to recover', async () => {
+    const endpoint = 'unix:///tmp/recovered-codex.sock';
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    vi.spyOn(service, 'inspectPane').mockImplementationOnce(async () => await new Promise(() => undefined))
+      .mockResolvedValue([{ pid: candidatePid, argv: commandFor(endpoint, cwd) }]);
+
+    const result = lookup(threadId, cwd);
+    await vi.advanceTimersByTimeAsync(5000);
+
+    expect(await result).toBeUndefined();
+    expect(await lookup(threadId, cwd)).toBe(endpoint);
+    expect(vi.getTimerCount()).toBe(0);
   });
 });

@@ -215,12 +215,9 @@ const MAX_PANE_PROCESSES = 32;
  * and blocks writes to a terminal that was never wrong.
  */
 const LOOKUP_STEP_MS = 1000;
-/** How far past its deadline a pane scan may go to read the processes of a tree it already read in full. */
-const PANE_READ_GRACE_MS = 1000;
 
 function lookupStepTimeout(deadline: number): number {
-  // The floor keeps a command that starts just before the deadline (or right after an event-loop stall) from timing out on its first tick.
-  return Math.max(250, Math.min(LOOKUP_STEP_MS, deadline - Date.now()));
+  return Math.max(1, Math.min(LOOKUP_STEP_MS, deadline - Date.now()));
 }
 
 /** A process found in a native terminal's pane, running in the terminal's own project directory. */
@@ -1160,12 +1157,13 @@ export class TerminalService {
    * own CLI there. Only the session's own linked terminal is read, and only processes whose working
    * directory is its project. `select` sees each argv with the launch marker the driver left
    * (`launchMarker`) and picks those worth a directory lookup. Read-only: it never attaches a client,
-   * starts or signals anything. Answers undefined when the link does not hold or the whole tree could
-   * not be read before `deadline`.
+   * starts or signals anything. Answers undefined when the link does not hold or the complete
+   * tree, argv and working directories could not be verified before `deadline`.
    */
   async inspectPane(terminalId: string, sessionId: string, options: { deadline: number; select: (argv: string[], launchMarker: string | undefined) => boolean }): Promise<PaneProcess[] | undefined> {
     const { deadline, select } = options;
     await this.ready;
+    if (Date.now() >= deadline) return undefined;
     const linked = () => {
       const terminal = this.store.getTerminal(terminalId);
       const session = this.store.getSession(sessionId);
@@ -1175,31 +1173,31 @@ export class TerminalService {
     const session = linked();
     if (!session) return undefined;
     const expectedCwd = await realpath(this.store.getProject(session.projectId).cwd);
-    if (!linked()) return undefined;
+    if (!linked() || Date.now() >= deadline) return undefined;
 
     // Check the persistent tmux session directly. This is read-only and does not attach a
     // terminal client or change saved running/detached state as a side effect.
     await this.runTmux(['has-session', '-t', terminalName(terminalId)], lookupStepTimeout(deadline));
+    if (Date.now() >= deadline) return undefined;
     const panePid = await this.livePanePid(terminalId, lookupStepTimeout(deadline));
-    if (!panePid) return undefined;
+    if (!panePid || Date.now() >= deadline) return undefined;
     const pids = await this.paneProcessTree(panePid, deadline);
-    if (!pids.length) return undefined;
+    if (!pids.length || Date.now() >= deadline) return undefined;
 
-    // A tree read in full is worth finishing even if a stall pushed it past the deadline; the overrun is bounded.
-    const finishBy = Math.max(deadline, Date.now()) + PANE_READ_GRACE_MS;
-    const marker = await this.readLaunchMarker(terminalId, lookupStepTimeout(finishBy));
+    const marker = await this.readLaunchMarker(terminalId, lookupStepTimeout(deadline));
     const found: PaneProcess[] = [];
     for (const pid of pids) {
-      if (Date.now() >= finishBy) return undefined;
-      const argv = await processArgv(pid, lookupStepTimeout(finishBy));
+      if (Date.now() >= deadline) return undefined;
+      const argv = await processArgv(pid, lookupStepTimeout(deadline));
       if (!argv || !select(argv, marker)) continue;
-      const processCwd = await processWorkingDirectory(pid, lookupStepTimeout(finishBy));
+      if (Date.now() >= deadline) return undefined;
+      const processCwd = await processWorkingDirectory(pid, lookupStepTimeout(deadline));
       if (!processCwd) continue;
       const canonicalProcessCwd = await realpath(processCwd).catch(() => undefined);
       if (canonicalProcessCwd !== expectedCwd) continue;
       found.push({ pid, argv });
     }
-    return found;
+    return Date.now() < deadline && linked() ? found : undefined;
   }
 
   private async paneProcessTree(rootPid: number, deadline: number): Promise<number[]> {
@@ -1224,8 +1222,7 @@ export class TerminalService {
         if (Number.isSafeInteger(child) && child > 0 && !seen.has(child)) pending.push(child);
       }
     }
-    // A partial tree cannot prove that the selected endpoint is unique. A complete one is used even if the deadline
-    // passed while it was read: the deadline stops new commands from starting, it does not discard finished work.
+    // A partial tree cannot prove that the selected endpoint is unique.
     return pending.some(pid => !seen.has(pid)) ? [] : [...seen];
   }
 

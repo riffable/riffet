@@ -548,17 +548,26 @@ export class CodexSessionRuntime implements CodexThreadReader {
     this.deferForEndpointConflict();
     return {
       code: 'NATIVE_ENDPOINT_CONFLICT',
-      message: `A running ${this.label} terminal is attached to a different or unverified endpoint.`,
+      message: this.endpointConflictMessage(),
     };
   }
 
   private assertWritable(): void {
     if (this.bindingScopeMismatch) throw new AppError('NATIVE_PROFILE_CHANGED', `The previous ${this.label} profile must be restored or its backend explicitly ended before this thread can be resumed.`, 409);
-    if (this.endpointWriteConflict) throw new AppError('NATIVE_ENDPOINT_CONFLICT', `The running ${this.label} terminal endpoint could not be verified; this action was not sent.`, 409);
+    if (this.endpointWriteConflict) throw new AppError('NATIVE_ENDPOINT_CONFLICT', this.endpointConflictMessage(), 409);
+  }
+
+  private endpointConflictMessage(): string {
+    return this.terminalEndpointStateValue === 'changed'
+      ? `This ${this.label} terminal is connected to a different backend.`
+      : `This ${this.label} terminal's backend connection could not be verified.`;
   }
 
   private deferForEndpointConflict(): void {
-    const message = `A running ${this.label} terminal is attached to a different or unverified endpoint. It was left untouched.`;
+    const message = this.endpointConflictMessage();
+    if (!this.endpointWriteConflict || this.status.connection?.message !== message) {
+      this.logRecovery('terminal', this.transport?.remoteAddress ?? 'unknown', 'verify', this.terminalEndpointStateValue === 'changed' ? 'changed' : 'unverified', false);
+    }
     this.endpointWriteConflict = true;
     this.setConnection({ state: 'conflict', message }, 'endpoint');
   }
@@ -720,7 +729,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // cold history reader remains offline until it explicitly resumes a confirmed loaded owner.
       phase: this.turnPhase('offline'),
       connection: this.endpointWriteConflict
-        ? { state: 'conflict', message: `A running ${this.label} terminal endpoint could not be verified; history is read only.` }
+        ? { state: 'conflict', message: this.endpointConflictMessage() }
         : this.bindingScopeMismatch
         ? { state: 'conflict', message: `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.` }
         : { state: 'disconnected' },
@@ -1052,7 +1061,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // an in-memory transport identity or a profile change; the terminal worker verifies the
       // actual endpoint when it can.
       this.deferForEndpointConflict();
-      throw new AppError('NATIVE_ENDPOINT_CONFLICT', `A running ${this.label} terminal is attached to a different or unverified endpoint.`, 409);
+      throw new AppError('NATIVE_ENDPOINT_CONFLICT', this.endpointConflictMessage(), 409);
     }
     if (existing && existing.state !== 'exited') {
       this.deferForEndpointConflict();
@@ -1170,17 +1179,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private async terminalEndpoint(terminalId: string, threadId: string): Promise<string | undefined> {
-    if (!this.host.terminal.inspectPane) return undefined;
-    const lookup = codexTerminalEndpoint(this.host, this.session.id, terminalId, threadId, this.project.cwd);
-    let timer: NodeJS.Timeout | undefined;
-    try {
-      return await Promise.race([
-        lookup,
-        new Promise<undefined>(resolve => { timer = setTimeout(() => resolve(undefined), 4_500); timer.unref(); }),
-      ]);
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
+    return await codexTerminalEndpoint(this.host, this.session.id, terminalId, threadId, this.project.cwd);
   }
 
   private async loadedThread(threadId: string, fresh = false): Promise<boolean | undefined> {
