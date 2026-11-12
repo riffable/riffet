@@ -196,7 +196,8 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
   const { t } = useLingui();
   const entries = useMemo(() => todoEntries(todos ?? []), [todos]);
   return (
-    <aside aria-label={t`会话概览`} className="flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto pt-5 pr-4 pb-6 pl-1 scrollbar-none animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]">
+    // 14px + half the 16px heading line centres the first heading on the subagent page's 44px header.
+    <aside aria-label={t`会话概览`} className="flex w-[248px] shrink-0 flex-col gap-7 overflow-y-auto pt-3.5 pr-4 pb-6 pl-1 scrollbar-none animate-in fade-in-0 duration-[var(--duration-slow)] ease-[var(--ease-decelerate)]">
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} />
