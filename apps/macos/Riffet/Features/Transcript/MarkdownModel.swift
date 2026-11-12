@@ -436,9 +436,10 @@ func nativeDeliveryLabel(_ run: Run) -> String {
     TimelineFormatKt.deliveryLabel(run: run) ?? ""
 }
 
-/// Running and failed process blocks open by default; completed and interrupted work folds.
-/// Explicit choices and the completed-process preference take priority. A block the reader is
-/// looking at when it ends (scrolled up to it) stays open, as if they had opened it.
+/// Running, failed and interrupted process blocks open by default; only work that completed
+/// normally folds, as on the web (`TurnProcess`). Explicit choices and the completed-process
+/// preference take priority. A block the reader is looking at when it ends (scrolled up to it)
+/// stays open, as if they had opened it.
 /// Not thread-safe; the transcript reads and writes it under its own lock.
 final class ProcessFolds {
     /// Subagent detail views can show completed tool work by default, while the main transcript
@@ -459,6 +460,7 @@ final class ProcessFolds {
         var manual: Bool
         var running: Bool
         var issues: Int
+        var interrupted = false
     }
 
     private var folds: [String: Fold] = [:]
@@ -478,10 +480,11 @@ final class ProcessFolds {
         for state in states {
             guard var fold = folds[state.key] else {
                 folds[state.key] = Fold(
-                    open: state.running || state.issues > 0 || completedProcessesOpen,
+                    open: opens(state.running, state.issues, state.interrupted),
                     manual: false,
                     running: state.running,
-                    issues: state.issues
+                    issues: state.issues,
+                    interrupted: state.interrupted
                 )
                 continue
             }
@@ -490,12 +493,15 @@ final class ProcessFolds {
                 if !state.running && reading(state.key) && fold.open {
                     fold.manual = true
                 } else {
-                    fold.open = state.running || state.issues > 0 || completedProcessesOpen
+                    fold.open = opens(state.running, state.issues, state.interrupted)
                 }
             }
             if state.issues != fold.issues && state.issues > 0 && !fold.manual { fold.open = true }
+            // The stop can be recorded after the block stopped running.
+            if state.interrupted && !fold.interrupted && !fold.manual { fold.open = true }
             fold.running = state.running
             fold.issues = state.issues
+            fold.interrupted = state.interrupted
             if fold != before {
                 folds[state.key] = fold
                 if fold.open != before.open { changed.insert(state.key) }
@@ -509,7 +515,11 @@ final class ProcessFolds {
     }
 
     func isOpen(key: String, running: Bool, issues: Int, endsTurn: Bool = false, interrupted: Bool = false) -> Bool {
-        folds[key]?.open ?? (running || issues > 0 || completedProcessesOpen)
+        folds[key]?.open ?? opens(running, issues, interrupted)
+    }
+
+    private func opens(_ running: Bool, _ issues: Int, _ interrupted: Bool) -> Bool {
+        running || issues > 0 || interrupted || completedProcessesOpen
     }
 
     func toggle(_ row: TimelineRowProcess) {
@@ -517,7 +527,7 @@ final class ProcessFolds {
     }
 
     func toggle(key: String, running: Bool, issues: Int, endsTurn: Bool = false, interrupted: Bool = false) {
-        var fold = folds[key] ?? Fold(open: isOpen(key: key, running: running, issues: issues, endsTurn: endsTurn, interrupted: interrupted), manual: false, running: running, issues: issues)
+        var fold = folds[key] ?? Fold(open: isOpen(key: key, running: running, issues: issues, endsTurn: endsTurn, interrupted: interrupted), manual: false, running: running, issues: issues, interrupted: interrupted)
         fold.manual = true
         fold.open.toggle()
         folds[key] = fold
