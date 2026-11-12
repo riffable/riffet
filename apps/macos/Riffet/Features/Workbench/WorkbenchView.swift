@@ -287,6 +287,12 @@ struct WorkbenchView: View {
                 // A drawn header of the conversation's own column; the native window's is the toolbar.
                 if !isWindow, DisplayPreferences.shared.style.backend == .custom, DisplayPreferences.shared.style.header == .sessionTabs {
                     customHeader
+                    // Its own row under the tabs, as on the web, so the tabs keep the header's width.
+                    if homeShown {
+                        HomeModeTabs(workbench: workbench, style: DisplayPreferences.shared.style)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: DisplayPreferences.shared.style.layout.header)
+                    }
                 }
                 // Over the content, not the window: the sidebar's fixed rows would sit under it. A page
                 // that rises over the header carries it in its own bar instead (`CustomPageBar`).
@@ -479,6 +485,11 @@ struct WorkbenchView: View {
         let style = DisplayPreferences.shared.style
         guard drawn, workbench.page != nil else { return 0 }
         return style.layout.header + (style.header == .titleMenu ? 1 : 0) + bannerHeight
+    }
+
+    /// The new-conversation page fills the detail column.
+    private var homeShown: Bool {
+        workbench.page == nil && workbench.attemptGroupSelection == nil && (workbench.showingHome || workbench.selected == nil)
     }
 
     /// Something other than the conversation fills the detail column.

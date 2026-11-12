@@ -27,7 +27,7 @@ struct CustomHeader<Status: View>: View {
                 switch style.header {
                 case .sessionTabs:
                     if SessionTabsPreferences.shared.style == .titleBar {
-                        SessionTabsBar(workbench: workbench, home: home, style: style)
+                        SessionTabsBar(workbench: workbench, style: style)
                     } else {
                         title(style, conversation: conversation)
                         Spacer(minLength: Space.sm)
@@ -132,6 +132,9 @@ struct CustomHeader<Status: View>: View {
                     if let conversation { SessionInfoButton(workbench: workbench, session: conversation, size: CustomChrome.control(style)) }
                     inspectorButton(style)
                 }
+            } else if workbench.page == nil, home, style.header != .titleMenu {
+                // The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tabs.
+                inspectorButton(style).disabled(true)
             }
             // The title menu's own title opens this menu; one instance, one set of its sheets and reads.
             if let conversation, style.header != .titleMenu {
@@ -299,7 +302,6 @@ struct MenuLabelButton: View {
 /// when the tabs do not all fit, the rest are in the trailing menu.
 private struct SessionTabsBar: View {
     let workbench: Workbench
-    let home: Bool
     let style: StyleSpec
     @Environment(\.palette) private var palette
     @State private var model: SessionTabs
@@ -310,9 +312,8 @@ private struct SessionTabsBar: View {
     /// The narrowest a tab gets before the next one goes to the menu.
     private static let minimumTabWidth: CGFloat = 96
 
-    init(workbench: Workbench, home: Bool, style: StyleSpec) {
+    init(workbench: Workbench, style: StyleSpec) {
         self.workbench = workbench
-        self.home = home
         self.style = style
         let model = SessionTabs.model(for: workbench.baseURL)
         model.workbench = workbench
@@ -360,12 +361,6 @@ private struct SessionTabsBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { available = $0 }
-            if home {
-                HomeModeTabs(workbench: workbench, style: style)
-                    .fixedSize()
-                // The same flexible width on both sides keeps the switch near the middle.
-                Color.clear.frame(maxWidth: .infinity)
-            }
         }
         .onChange(of: current, initial: true) { _, _ in model.sync() }
         .onChange(of: ObjectIdentifier(workbench.list), initial: true) { _, _ in model.sync() }
@@ -528,8 +523,9 @@ private struct CappedWidth: Layout {
     }
 }
 
-/// 新建任务 | 快速对话 on the home page's tab bar: the toolbar's segmented switch, as text tabs.
-private struct HomeModeTabs: View {
+/// 新建任务 | 快速对话 under the session tabs on the home page, as on the web: the toolbar's
+/// segmented switch, as text tabs.
+struct HomeModeTabs: View {
     let workbench: Workbench
     let style: StyleSpec
     @Environment(\.palette) private var palette

@@ -197,9 +197,10 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
           </PopoverContent>
         </Popover>
       )}
-      {project && (
-        <Tip label={panelTab ? t`收起侧板` : t`变更与文件`}>
-          <Button size="icon-sm" variant="quiet" aria-label={panelTab ? t`收起侧板` : t`变更与文件`} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
+      {/* The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tab bar. */}
+      {(project || (quickChat && center)) && (
+        <Tip label={panelTab ? t`收起侧板` : t`变更与文件`} disabled={!project}>
+          <Button size="icon-sm" variant="quiet" disabled={!project} aria-label={panelTab ? t`收起侧板` : t`变更与文件`} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
         </Tip>
       )}
       {desktopGroups.length > 0 && (
