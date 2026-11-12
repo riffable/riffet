@@ -430,11 +430,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         project={project && !project.system ? project : undefined}
         sessions={sessions}
         backends={backends}
+        enterBehavior={settings.composerEnterBehavior}
         sidebarCollapsed={desktop && sidebarCollapsed}
         onClose={() => nav.set({ tasksOpen: false })}
         onOpenSidebar={openMobileSidebar}
         onExpandSidebar={expandSidebar}
-        onLaunched={openLaunched}
         onOpenSession={openSessionById}
         onError={pushError}
       />
@@ -466,6 +466,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         notificationsEnabled={settings.notifications === true}
         enterBehavior={settings.composerEnterBehavior}
         runningBehavior={settings.composerRunningBehavior}
+        sendLaterEnabled={settings.composerSendLater === true}
         sessionReferences={sessionReferences}
         referenceSessions={sessions}
         referenceProjects={projects}

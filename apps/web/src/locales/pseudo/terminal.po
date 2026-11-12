@@ -181,7 +181,7 @@ msgid "在终端中"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx
-msgid "存为任务模板…"
+msgid "存为定时任务…"
 msgstr ""
 
 #: src/app/terminal/NativeSession.tsx

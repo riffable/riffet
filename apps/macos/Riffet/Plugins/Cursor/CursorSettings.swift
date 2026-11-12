@@ -177,7 +177,7 @@ struct CursorConnectionSheet: View {
             try await SettingsStore.save(workbench, AppSettingsUpdate(
                 taskWorkspaceRoot: nil, editorCommand: nil, defaultModel: nil, defaultMode: nil, notifications: nil,
                 allowOutsideRead: nil, defaultBackendId: nil, nativeBackendDefaults: nil, cursorCli: patch,
-                composerEnterBehavior: nil, composerRunningBehavior: nil, idleReclaimMinutes: nil, maxLiveAgents: nil,
+                composerEnterBehavior: nil, composerRunningBehavior: nil, composerSendLater: nil, idleReclaimMinutes: nil, maxLiveAgents: nil,
                 quickChat: nil, defaultAgentId: nil, agentDefaults: nil
             ))
             dismiss()

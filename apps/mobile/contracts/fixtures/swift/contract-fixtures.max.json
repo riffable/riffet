@@ -1654,6 +1654,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1748,6 +1749,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1842,6 +1844,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -1936,6 +1939,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2030,6 +2034,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2124,6 +2129,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2218,6 +2224,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2312,6 +2319,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2406,6 +2414,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2500,6 +2509,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2594,6 +2604,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2688,6 +2699,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2782,6 +2794,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2876,6 +2889,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -2970,6 +2984,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3064,6 +3079,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3158,6 +3174,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -3252,6 +3269,7 @@
       "sessionId": "text",
       "runId": "text",
       "groupId": "text",
+      "automationId": "text",
       "templateId": "text",
       "scheduleId": "text",
       "channel": {
@@ -4126,6 +4144,7 @@
         "sessionId": "text",
         "runId": "text",
         "groupId": "text",
+        "automationId": "text",
         "templateId": "text",
         "scheduleId": "text",
         "channel": {
@@ -5183,6 +5202,7 @@
         "sessionId": "text",
         "runId": "text",
         "groupId": "text",
+        "automationId": "text",
         "templateId": "text",
         "scheduleId": "text",
         "channel": {

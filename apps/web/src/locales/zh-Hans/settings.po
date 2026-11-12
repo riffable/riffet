@@ -962,6 +962,10 @@ msgstr "尚未检测"
 msgid "尚未检测到运行环境。"
 msgstr "尚未检测到运行环境。"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "展示稍后发送按钮"
+msgstr "展示稍后发送按钮"
+
 #: src/app/settings/SupportSections.tsx
 msgid "工作台备份"
 msgstr "工作台备份"

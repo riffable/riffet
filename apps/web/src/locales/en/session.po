@@ -264,10 +264,6 @@ msgstr "Download image"
 msgid "下载文件"
 msgstr "Download file"
 
-#: src/app/session/SessionHandoff.tsx
-msgid "不碰项目当前的工作区"
-msgstr "Your project's current workspace is left untouched"
-
 #: src/app/session/DirectoryMenu.tsx
 msgid "不选择项目"
 msgstr "No project"
@@ -334,10 +330,6 @@ msgstr "From sending the request to the end of the answer (includes first-token 
 msgid "从此处另开会话"
 msgstr "Start another conversation from here"
 
-#: src/app/session/SessionHandoff.tsx
-msgid "任务"
-msgstr "Task"
-
 #. placeholder {0}: index + 1
 #: src/app/session/Timeline.tsx
 msgid "任务 {0}"
@@ -401,10 +393,6 @@ msgstr "Your messages"
 #: src/app/session/SideDiscussion.tsx
 msgid "侧边聊天"
 msgstr "Side chat"
-
-#: src/app/session/SessionHandoff.tsx
-msgid "保存"
-msgstr "Save"
 
 #: src/app/session/Attempts.tsx
 msgid "保留"
@@ -617,7 +605,6 @@ msgid "发送失败"
 msgstr "Send failed"
 
 #: src/app/session/nativeRunCommands.ts
-#: src/app/session/Timeline.tsx
 msgid "发送失败，可恢复内容后重试"
 msgstr "Send failed. Restore the content and try again."
 
@@ -630,6 +617,7 @@ msgid "发送设置"
 msgstr "Send settings"
 
 #: src/app/session/NativeInteractionCard.tsx
+#: src/app/session/Timeline.tsx
 msgid "取消"
 msgstr "Cancel"
 
@@ -678,10 +666,6 @@ msgstr "Same agent, compare models"
 #: src/app/session/SubagentSession.tsx
 msgid "同步中"
 msgstr "Syncing"
-
-#: src/app/session/SessionHandoff.tsx
-msgid "名称"
-msgstr "Name"
 
 #: src/app/session/SessionAside.tsx
 msgid "后台"
@@ -873,10 +857,6 @@ msgstr "Subagent definitions"
 msgid "子 Agent 正在启动…"
 msgstr "Subagent is starting…"
 
-#: src/app/session/SessionHandoff.tsx
-msgid "存为任务模板"
-msgstr "Save as task template"
-
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
 msgstr "Actual size"
@@ -959,10 +939,9 @@ msgstr "Interrupted"
 msgid "已交接给 {0}"
 msgstr "Handed off to {0}"
 
-#. placeholder {0}: name.trim()
 #: src/app/session/SessionHandoff.tsx
-msgid "已保存模板「{0}」"
-msgstr "Saved template “{0}”"
+msgid "已保存"
+msgstr "Saved"
 
 #: src/app/session/Timeline.tsx
 msgid "已停止"
@@ -1343,10 +1322,6 @@ msgstr "Couldn't hand off the session"
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr "Couldn't save the outgoing message. Check the browser's storage space."
 
-#: src/app/session/SessionHandoff.tsx
-msgid "无法保存模板"
-msgstr "Couldn't save the template"
-
 #: src/app/session/Attempts.tsx
 #: src/app/session/nativeRunCommands.ts
 msgctxt "session-stop-failed"
@@ -1675,10 +1650,6 @@ msgstr "Reading HTML file…"
 msgid "正在载入预览…"
 msgstr "Loading preview…"
 
-#: src/app/session/SessionHandoff.tsx
-msgid "每次在新的 Worktree 中运行"
-msgstr "Run in a new Worktree each time"
-
 #: src/app/session/Composer.tsx
 msgid "没有匹配的会话"
 msgstr "No matching sessions"
@@ -1711,10 +1682,6 @@ msgstr "Couldn't read this subagent's transcript."
 #: src/app/session/Timeline.tsx
 msgid "没有输出"
 msgstr "No output"
-
-#: src/app/session/SessionHandoff.tsx
-msgid "沿用这个会话的 Agent、模型与权限。"
-msgstr "Use this session's agent, model and permissions."
 
 #: src/app/session/nativeRunCommands.ts
 msgid "消息可能已执行，无法恢复为新消息"
@@ -1913,10 +1880,6 @@ msgstr "Zoom out · {0}scroll"
 
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
-#: src/app/session/Timeline.tsx
-msgid "补充"
-msgstr "Follow-up"
-
 msgstr "Reads and writes files and runs commands on its own"
 
 #: src/app/session/Composer.tsx
@@ -1946,6 +1909,10 @@ msgstr "The draft can't be saved in the browser and will be lost on refresh"
 msgid "蓝色"
 msgstr "Blue"
 
+#: src/app/session/Timeline.tsx
+msgid "补充"
+msgstr "Follow-up"
+
 #: src/app/session/Composer.tsx
 #: src/app/session/ComposerDock.tsx
 msgid "补充到当前任务"
@@ -1970,10 +1937,6 @@ msgstr "Rules"
 #: src/app/session/SessionAside.tsx
 msgid "计划"
 msgstr "Plan"
-
-#: src/app/session/SessionHandoff.tsx
-msgid "让 Agent 做什么"
-msgstr "What should the agent do?"
 
 #: src/app/session/toolView.ts
 msgid "访问网页"
@@ -2086,10 +2049,6 @@ msgstr "Running"
 msgctxt "tool-action"
 msgid "运行命令"
 msgstr "Run commands"
-
-#: src/app/session/SessionHandoff.tsx
-msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
-msgstr "At run time, <0>{dateToken}</0> is replaced with today's date and <1>{projectToken}</1> with the project name."
 
 #. placeholder {0}: sample.windowSeconds
 #. placeholder {1}: sample.windowSeconds

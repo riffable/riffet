@@ -23,6 +23,7 @@ enum SettingsPatch {
         agentDefaults: [String: NativeBackendDefaults]? = nil,
         composerEnterBehavior: String? = nil,
         composerRunningBehavior: String? = nil,
+        composerSendLater: Bool? = nil,
         idleReclaimMinutes: Int? = nil,
         maxLiveAgents: Int? = nil,
         quickChat: QuickChatSettings? = nil
@@ -39,6 +40,7 @@ enum SettingsPatch {
             cursorCli: nil,
             composerEnterBehavior: composerEnterBehavior,
             composerRunningBehavior: composerRunningBehavior,
+            composerSendLater: composerSendLater.map { KotlinBoolean(bool: $0) },
             idleReclaimMinutes: idleReclaimMinutes.map { KotlinInt(int: Int32($0)) },
             maxLiveAgents: maxLiveAgents.map { KotlinInt(int: Int32($0)) },
             quickChat: quickChat,

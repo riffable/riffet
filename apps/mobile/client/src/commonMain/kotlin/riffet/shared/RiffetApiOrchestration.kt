@@ -2,16 +2,17 @@ package riffet.shared
 
 import io.ktor.http.HttpMethod
 import riffet.contracts.Attachment
+import riffet.contracts.Automation
+import riffet.contracts.AutomationRun
+import riffet.contracts.AutomationTrigger
 import riffet.contracts.AttemptGroup
 import riffet.contracts.Checkpoint
 import riffet.contracts.HandoffDraft
 import riffet.contracts.LaunchTarget
 import riffet.contracts.ReviewComment
 import riffet.contracts.Run
-import riffet.contracts.Schedule
-import riffet.contracts.TaskTemplate
 
-// RiffetApi endpoints — orchestration: review, fork, handoff, attempts, templates and schedules. Transport and auth rules: see RiffetApi.kt.
+// RiffetApi endpoints — orchestration: review, fork, handoff, attempts and automations. Transport and auth rules: see RiffetApi.kt.
 
 /** Sends review remarks back to the agent as a message; [commandId] is the idempotency key. */
 @Throws(Exception::class)
@@ -112,67 +113,84 @@ suspend fun RiffetApi.addAttempt(groupId: String, target: LaunchTarget): AddAtte
 suspend fun RiffetApi.discardAttempt(groupId: String, sessionId: String, removeWorktree: Boolean = false): DiscardAttemptResult =
     post("/api/attempts/${groupId.enc()}/discard", wireBody(DiscardAttemptBody(sessionId, removeWorktree))).decode()
 
+/** Every automation the client can see, follow-ups included. */
 @Throws(Exception::class)
-suspend fun RiffetApi.templates(): List<TaskTemplate> = get("/api/templates").decode()
+suspend fun RiffetApi.automations(): List<Automation> = get("/api/automations").decode()
 
+/** [delivery] is `new` or `same`; [catchUp] is `latest` or `skip`. A null [projectId] is chosen at each run. */
 @Throws(Exception::class)
-suspend fun RiffetApi.createTemplate(name: String, prompt: String, target: LaunchTarget = LaunchTarget(), isolate: Boolean = false): TaskTemplate =
-    post("/api/templates", wireBody(TemplateBody(name, prompt, target, isolate))).decode()
+suspend fun RiffetApi.createAutomation(
+    name: String,
+    prompt: String,
+    target: LaunchTarget = LaunchTarget(),
+    projectId: String? = null,
+    isolate: Boolean = false,
+    triggers: List<AutomationTrigger> = emptyList(),
+    delivery: String = "new",
+    catchUp: String = "latest",
+    enabled: Boolean = true,
+): Automation =
+    post(
+        "/api/automations",
+        wireBody(AutomationBody(name, prompt, target, projectId, isolate, triggers, delivery, catchUp, enabled)),
+    ).decode()
 
-/** Only the non-null arguments change; a null [target] keeps the template's own. */
+/** Only the non-null arguments change; [triggers] replaces the whole list. */
 @Throws(Exception::class)
-suspend fun RiffetApi.updateTemplate(
+suspend fun RiffetApi.updateAutomation(
     id: String,
     name: String? = null,
     prompt: String? = null,
     target: LaunchTarget? = null,
-    isolate: Boolean? = null,
-): TaskTemplate =
-    patch("/api/templates/${id.enc()}", wireBody(TemplateBody(name, prompt, target, isolate))).decode()
-
-@Throws(Exception::class)
-suspend fun RiffetApi.deleteTemplate(id: String) {
-    delete("/api/templates/${id.enc()}").discard()
-}
-
-@Throws(Exception::class)
-suspend fun RiffetApi.runTemplate(id: String, projectId: String, clientSessionId: String, commandId: String): NativeSessionCreateResult =
-    post("/api/templates/${id.enc()}/run", wireBody(RunTemplateBody(projectId, clientSessionId, commandId))).decode()
-
-@Throws(Exception::class)
-suspend fun RiffetApi.schedules(): List<Schedule> = get("/api/schedules").decode()
-
-/** [target] is `new` (a conversation per run) or `same` (one ongoing conversation). */
-@Throws(Exception::class)
-suspend fun RiffetApi.createSchedule(
-    name: String,
-    templateId: String,
-    projectId: String,
-    cron: String,
-    enabled: Boolean = true,
-    target: String = "new",
-): Schedule =
-    post("/api/schedules", wireBody(ScheduleBody(name, templateId, projectId, cron, enabled, target))).decode()
-
-/** Only the non-null arguments change. */
-@Throws(Exception::class)
-suspend fun RiffetApi.updateSchedule(
-    id: String,
-    name: String? = null,
-    templateId: String? = null,
     projectId: String? = null,
-    cron: String? = null,
+    isolate: Boolean? = null,
+    triggers: List<AutomationTrigger>? = null,
+    delivery: String? = null,
+    catchUp: String? = null,
     enabled: Boolean? = null,
-    target: String? = null,
-): Schedule =
-    patch("/api/schedules/${id.enc()}", wireBody(ScheduleBody(name, templateId, projectId, cron, enabled, target))).decode()
+): Automation =
+    patch(
+        "/api/automations/${id.enc()}",
+        wireBody(AutomationBody(name, prompt, target, projectId, isolate, triggers, delivery, catchUp, enabled)),
+    ).decode()
 
 @Throws(Exception::class)
-suspend fun RiffetApi.deleteSchedule(id: String) {
-    delete("/api/schedules/${id.enc()}").discard()
+suspend fun RiffetApi.deleteAutomation(id: String) {
+    delete("/api/automations/${id.enc()}").discard()
 }
 
-/** Runs a schedule now, under the same skip-while-busy rule as its timer; the outcome is in `lastResult`. */
+/** Runs once now without moving the next time; [projectId] is required when the automation has none. */
 @Throws(Exception::class)
-suspend fun RiffetApi.runSchedule(id: String): Schedule =
-    post("/api/schedules/${id.enc()}/run").decode()
+suspend fun RiffetApi.runAutomation(id: String, projectId: String? = null, clientSessionId: String? = null, commandId: String? = null): AutomationRun =
+    post("/api/automations/${id.enc()}/run", wireBody(RunAutomationBody(projectId, clientSessionId, commandId))).decode()
+
+/** One automation's runs, newest first. */
+@Throws(Exception::class)
+suspend fun RiffetApi.automationRuns(id: String): List<AutomationRun> =
+    get("/api/automations/${id.enc()}/runs").decode()
+
+/** The runs of every visible automation, newest first. */
+@Throws(Exception::class)
+suspend fun RiffetApi.recentAutomationRuns(limit: Int = 20): List<AutomationRun> =
+    get("/api/automation-runs?limit=$limit").decode()
+
+/** Sends [prompt] as a turn of [sessionId] at [at] (ISO time, read in [timeZone]): the composer's send later. */
+@Throws(Exception::class)
+suspend fun RiffetApi.createFollowUp(
+    sessionId: String,
+    prompt: String,
+    at: String,
+    timeZone: String? = null,
+    attachments: List<Attachment> = emptyList(),
+    context: List<PromptContextReference> = emptyList(),
+    id: String? = null,
+): Automation =
+    post(
+        "/api/automations",
+        wireBody(AutomationBody(id = id, prompt = prompt, followUp = FollowUpRef(sessionId),
+            triggers = listOf(AutomationTrigger(kind = "once", at = at, timeZone = timeZone)),
+            attachments = attachments.takeIf { it.isNotEmpty() }?.map { AttachmentRef(it.id) },
+            context = context.fileReferences(),
+            references = context.sessionReferences(),
+        )),
+    ).decode()

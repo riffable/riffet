@@ -962,6 +962,10 @@ msgstr "Not checked yet"
 msgid "尚未检测到运行环境。"
 msgstr "No runtime environment detected yet."
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "展示稍后发送按钮"
+msgstr "Show Send Later button"
+
 #: src/app/settings/SupportSections.tsx
 msgid "工作台备份"
 msgstr "Workbench backup"

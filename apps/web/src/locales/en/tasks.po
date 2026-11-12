@@ -7,95 +7,103 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: en\n"
 
-#: src/app/tasks/TasksPage.tsx
-msgid " · 同一会话"
-msgstr " · Same session"
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "（不可用）"
 msgstr " (Unavailable)"
 
-#. placeholder {0}: schedule.name
-#. placeholder {0}: template.name
+#. placeholder {0}: item.name
 #: src/app/tasks/TasksPage.tsx
 msgid "{0} 的操作"
 msgstr "Actions for {0}"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "Agent 能看到之前几次的结果；会话归档后会重新开一段。"
-msgstr "The agent sees the earlier results; a new session starts after this one is archived."
+#: src/app/tasks/automation.ts
+msgid "1 小时后"
+msgstr "In 1 hour"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
+msgid "10 分钟后"
+msgstr "In 10 minutes"
+
+#: src/app/tasks/AutomationEditor.tsx
 msgid "Cron 表达式"
 msgstr "Cron expression"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "上一次运行的会话还在进行，这次已跳过"
-msgstr "The previous run's session is still active; skipped this time"
+msgid "Riffet 未运行"
+msgstr "Riffet was not running"
 
-#. placeholder {0}: formatDateTime(schedule.lastRunAt)
-#: src/app/tasks/TasksPage.tsx
-msgid "上次 {0}"
-msgstr "Last run {0}"
+#: src/app/tasks/automation.ts
+#: src/app/tasks/AutomationEditor.tsx
+msgid "一次"
+msgstr "Once"
 
-#. placeholder {0}: formatDateTime(schedule.nextRunAt)
 #: src/app/tasks/TasksPage.tsx
+msgid "上一轮仍在运行"
+msgstr "Previous run still in progress"
+
+#. placeholder {0}: formatWhen(next.toISOString())
+#: src/app/tasks/AutomationEditor.tsx
 msgid "下次 {0}"
 msgstr "Next run {0}"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "不会再运行"
-msgstr "Won't run again"
+#: src/app/tasks/automation.ts
+msgid "今天 {time}"
+msgstr "Today {time}"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "不碰项目当前的工作区。"
-msgstr "Your project's current workspace is left untouched."
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "任务"
 msgstr "Task"
 
 #: src/app/tasks/TasksPage.tsx
+msgid "会话不可用"
+msgstr "Conversation unavailable"
+
+#: src/app/tasks/AutomationEditor.tsx
+msgid "何时运行"
+msgstr "When"
+
+#: src/app/tasks/AutomationEditor.tsx
 msgid "保存"
 msgstr "Save"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "先选择一个项目"
-msgstr "Choose a project first"
+msgid "最近运行"
+msgstr "Recent runs"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "分 时 日 月 周，本地时间；也可以用 @daily、@hourly"
 msgstr "Minute hour day month weekday, local time; @daily and @hourly also work"
+
+#: src/app/tasks/QuickCreate.tsx
+msgid "创建"
+msgstr "Create"
 
 #: src/app/tasks/TasksPage.tsx
 msgctxt "tasks-delete-action"
 msgid "删除"
 msgstr "Delete"
 
-#. placeholder {0}: schedule.name
+#. placeholder {0}: item.name
 #: src/app/tasks/TasksPage.tsx
 msgid "删除定时任务「{0}」？"
 msgstr "Delete schedule \"{0}\"?"
 
-#. placeholder {0}: template.name
 #: src/app/tasks/TasksPage.tsx
-msgid "删除模板「{0}」？"
-msgstr "Delete template \"{0}\"?"
+msgid "即将运行"
+msgstr "Upcoming"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "发到同一会话"
-msgstr "Send to same session"
+#: src/app/tasks/SendLater.tsx
+msgid "取消"
+msgstr "Cancel"
 
+#: src/app/tasks/AutomationEditor.tsx
+#: src/app/tasks/SendLater.tsx
 #: src/app/tasks/TasksPage.tsx
 msgctxt "tasks-cancel-action"
 msgid "取消"
 msgstr "Cancel"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "可在任意项目运行，或按计划自动运行。"
-msgstr "Run it in any project, or on a schedule."
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "名称"
 msgstr "Name"
 
@@ -103,47 +111,27 @@ msgstr "Name"
 msgid "启用"
 msgstr "Enable"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "周末 {time}"
 msgstr "Weekends at {time}"
 
-#. placeholder {0}: project.name
-#: src/app/tasks/TasksPage.tsx
-msgid "在「{0}」中运行"
-msgstr "Run in \"{0}\""
-
-#: src/app/tasks/TasksPage.tsx
-msgid "失败"
-msgstr "Failed"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "完成时会照常通知。"
-msgstr "You'll be notified as usual when it finishes."
+#: src/app/tasks/AutomationEditor.tsx
+msgid "在同一会话继续"
+msgstr "Continue in the same conversation"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "定时任务"
 msgstr "Schedules"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "定时运行"
-msgstr "Scheduled runs"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "定时运行…"
-msgstr "Schedule…"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "工作日 {time}"
-msgstr "Workdays at {time}"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "工作日 9:00"
-msgstr "Workdays at 9:00"
+msgid "已删除的任务"
+msgstr "Deleted task"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "已暂停"
 msgstr "Paused"
 
+#: src/app/tasks/AutomationEditor.tsx
 #: src/app/tasks/TasksPage.tsx
 msgid "已移除的项目"
 msgstr "Removed project"
@@ -153,21 +141,23 @@ msgid "已经运行出的会话会保留。"
 msgstr "Sessions it already started are kept."
 
 #: src/app/tasks/TasksPage.tsx
-msgid "已跳过"
-msgstr "Skipped"
+msgctxt "tasks-schedule-ended"
+msgid "已结束"
+msgstr "Ended"
 
-#. placeholder {0}: next.name
+#. placeholder {0}: item.name
 #: src/app/tasks/TasksPage.tsx
 msgid "已运行「{0}」"
 msgstr "Started \"{0}\""
 
-#: src/app/tasks/TasksPage.tsx
-msgid "已错过"
-msgstr "Missed"
+#: src/app/tasks/QuickCreate.tsx
+msgid "总结昨天的提交"
+msgstr "Summarize yesterday's commits"
 
+#: src/app/tasks/AutomationEditor.tsx
 #: src/app/tasks/TasksPage.tsx
-msgid "开新会话"
-msgstr "New session"
+msgid "手动"
+msgstr "Manual"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "打开"
@@ -178,50 +168,50 @@ msgid "打开上次的会话"
 msgstr "Open last session"
 
 #: src/app/tasks/TasksPage.tsx
+msgid "打开会话"
+msgstr "Open conversation"
+
+#: src/app/tasks/TasksPage.tsx
 msgid "打开侧边栏"
 msgstr "Open sidebar"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "把常做的事存成任务"
-msgstr "Save recurring work as a task"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "按本机时间运行；Riffet 需保持开启，重叠运行会跳过，错过超过一小时不补跑。"
-msgstr "Runs on this machine's local time. Riffet must stay open; overlapping runs are skipped, and runs missed by more than an hour are not made up."
 
 #: src/app/tasks/TasksPage.tsx
 msgid "新建"
 msgstr "New"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "新建任务模板"
-msgstr "New task template"
+#: src/app/tasks/AutomationEditor.tsx
+msgid "新建定时任务"
+msgstr "New scheduled task"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "无法保存定时任务"
 msgstr "Couldn't save the schedule"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "无法保存模板"
-msgstr "Couldn't save the template"
+#: src/app/tasks/QuickCreate.tsx
+msgid "无法创建定时任务"
+msgstr "Could not create the task"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "无法删除定时任务"
 msgstr "Couldn't delete the schedule"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "无法删除模板"
-msgstr "Couldn't delete the template"
-
-#: src/app/tasks/TasksPage.tsx
 msgid "无法加载任务"
 msgstr "Couldn't load tasks"
+
+#: src/app/tasks/SendLater.tsx
+msgid "无法取消"
+msgstr "Could not cancel"
+
+#: src/app/tasks/SendLater.tsx
+msgid "无法安排发送"
+msgstr "Could not schedule the message"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "无法更新定时任务"
 msgstr "Couldn't update the schedule"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "无法识别这个时间表达式"
 msgstr "Couldn't read this time expression"
 
@@ -229,109 +219,101 @@ msgstr "Couldn't read this time expression"
 msgid "无法运行定时任务"
 msgstr "Couldn't run the schedule"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "无法运行模板"
-msgstr "Couldn't run the template"
+#: src/app/tasks/AutomationEditor.tsx
+msgid "日期时间"
+msgstr "Date and time"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "时间"
-msgstr "Time"
+#: src/app/tasks/automation.ts
+msgid "明天 {time}"
+msgstr "Tomorrow {time}"
+
+#: src/app/tasks/automation.ts
+msgid "明天 9:00"
+msgstr "Tomorrow 9:00"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "暂停"
 msgstr "Pause"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "模板"
-msgstr "Template"
+#: src/app/tasks/QuickCreate.tsx
+msgid "检查依赖更新"
+msgstr "Check for dependency updates"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "模板不属于某个项目，运行时才决定在哪里做。"
-msgstr "Templates don't belong to a project; you choose where each run happens."
+#: src/app/tasks/automation.ts
+msgid "每个工作日 {time}"
+msgstr "Weekdays {time}"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "模板已删除"
-msgstr "Template deleted"
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周一 {time}"
 msgstr "Mondays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "每周一 9:00"
-msgstr "Mondays at 9:00"
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周三 {time}"
 msgstr "Wednesdays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周二 {time}"
 msgstr "Tuesdays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周五 {time}"
 msgstr "Fridays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周六 {time}"
 msgstr "Saturdays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周四 {time}"
 msgstr "Thursdays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周日 {time}"
 msgstr "Sundays at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每周日 0:00"
 msgstr "Sundays at 0:00"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每天 {time}"
 msgstr "Every day at {time}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每天 0:00"
 msgstr "Every day at 0:00"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "每天 9:00"
-msgstr "Every day at 9:00"
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每小时"
 msgstr "Every hour"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每小时第 {minute} 分"
 msgstr "Every hour at minute {minute}"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/automation.ts
 msgid "每月 1 日 0:00"
 msgstr "The 1st of each month at 0:00"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "每次在新的 Worktree 中运行"
 msgstr "Run in a new Worktree each time"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "每次是一段独立的会话。"
-msgstr "Each run is its own session."
+#: src/app/tasks/AutomationEditor.tsx
+msgid "每次开新会话"
+msgstr "New conversation each time"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "每次运行"
-msgstr "Each run"
+msgid "添加计划"
+msgstr "Add schedule"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "比如：晨间依赖检查"
-msgstr "For example: morning dependency check"
+#: src/app/tasks/SendLater.tsx
+msgid "确定"
+msgstr "Confirm"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "独立 Worktree"
-msgstr "Isolated Worktree"
+#: src/app/tasks/SendLater.tsx
+msgid "稍后发送"
+msgstr "Send later"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "立即运行"
@@ -341,25 +323,33 @@ msgstr "Run now"
 msgid "编辑"
 msgstr "Edit"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "编辑任务模板"
-msgstr "Edit task template"
-
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "编辑定时任务"
 msgstr "Edit schedule"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
 msgid "自定义"
 msgstr "Custom"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/QuickCreate.tsx
+msgid "自定义…"
+msgstr "Custom…"
+
+#: src/app/tasks/SendLater.tsx
+msgid "自定义时间…"
+msgstr "Custom time…"
+
+#: src/app/tasks/QuickCreate.tsx
+msgid "要做什么…"
+msgstr "What should be done…"
+
+#: src/app/tasks/AutomationEditor.tsx
 msgid "让 Agent 做什么"
 msgstr "What should the agent do?"
 
-#: src/app/tasks/TasksPage.tsx
-msgid "让一个模板按计划自动运行"
-msgstr "Put a template on a schedule"
+#: src/app/tasks/QuickCreate.tsx
+msgid "跑一遍测试并汇报失败"
+msgstr "Run the tests and report failures"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "运行"
@@ -369,26 +359,49 @@ msgstr "Run"
 msgid "运行失败"
 msgstr "Run failed"
 
-#: src/app/tasks/TasksPage.tsx
+#: src/app/tasks/AutomationEditor.tsx
+msgid "运行方式"
+msgstr "How it runs"
+
+#: src/app/tasks/AutomationEditor.tsx
 msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
 msgstr "At run time, <0>{dateToken}</0> is replaced with today's date and <1>{projectToken}</1> with the project name."
 
-#: src/app/tasks/TasksPage.tsx
-msgid "还有定时任务在用这个模板，先删除它们"
-msgstr "Schedules still use this template; delete those first"
+#: src/app/tasks/AutomationEditor.tsx
+msgid "运行时选择"
+msgstr "Choose when running"
+
+#: src/app/tasks/QuickCreate.tsx
+#: src/app/tasks/SendLater.tsx
+msgid "选择时间"
+msgstr "Choose a time"
+
+#: src/app/tasks/AutomationEditor.tsx
+#: src/app/tasks/QuickCreate.tsx
+msgid "选择项目"
+msgstr "Choose a project"
+
+#: src/app/tasks/AutomationEditor.tsx
+msgid "重复"
+msgstr "Repeat"
 
 #: src/app/tasks/TasksPage.tsx
 msgid "重试"
 msgstr "Retry"
 
+#: src/app/tasks/AutomationEditor.tsx
+msgid "错过后补跑"
+msgstr "Run if missed"
+
+#: src/app/tasks/AutomationEditor.tsx
 #: src/app/tasks/TasksPage.tsx
 msgid "项目"
 msgstr "Project"
 
 #: src/app/tasks/TasksPage.tsx
+msgid "项目不可用"
+msgstr "Project unavailable"
+
+#: src/app/tasks/AutomationEditor.tsx
 msgid "默认 Agent"
 msgstr "Default Agent"
-
-#: src/app/tasks/TasksPage.tsx
-msgid "默认使用模板名"
-msgstr "Template name by default"

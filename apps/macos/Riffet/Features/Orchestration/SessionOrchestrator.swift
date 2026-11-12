@@ -3,10 +3,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 import RiffetKit
 
-/// A template the editor opens with its fields already filled in.
+/// A scheduled task the editor opens with its fields already filled in.
 struct TemplatePrefill: Identifiable {
     let id = UUID()
-    let draft: TemplateDraft
+    let draft: AutomationDraft
     /// Shown above the editor when the draft could not be filled in completely.
     var notice: String?
 }
@@ -22,7 +22,7 @@ struct RewindPlan: Identifiable {
 
 /// The orchestration actions of one conversation (`NativeSession.tsx`'s `turnAction` and header
 /// menu): fork from a turn, rewind the code to before it, hand the conversation to a chosen Agent,
-/// keep it as a task template, export it. The owner (the transcript, the session menu) attaches
+/// keep it as a scheduled task, export it. The owner (the transcript, the session menu) attaches
 /// `.sessionOrchestration` to present what an action needs.
 @MainActor
 @Observable
@@ -117,10 +117,10 @@ final class SessionOrchestrator {
         sheet = .handoff
     }
 
-    /// Opens the template editor with the conversation's name, opening request and target. The
+    /// Opens the scheduled-task editor with the conversation's name, opening request, target and project. The
     /// opening request is what a repeat of this conversation would start from; follow-ups that
     /// steered a running turn only make sense inside it.
-    func saveAsTemplate(session: Session, workbench: Workbench) {
+    func saveAsAutomation(session: Session, workbench: Workbench) {
         guard !busy else { return }
         busy = true
         Task {
@@ -132,7 +132,7 @@ final class SessionOrchestrator {
             guard workbench.selected?.id == session.id else { return }
             let first = runs.first { $0.native?.intent != "steer" && !$0.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             let target = LaunchChoice(agent: session.agent, profileId: session.backendProfileId, model: session.model, mode: session.mode, approval: session.approval)
-            let draft = TemplateDraft(name: session.title, prompt: first?.prompt ?? "", target: target, isolate: false)
+            let draft = AutomationDraft(name: session.title, prompt: first?.prompt ?? "", target: target, projectId: session.projectId)
             sheet = .template(TemplatePrefill(draft: draft, notice: failed ? String(localized: "没能读取首条提问，可手动填写") : nil))
         }
     }
@@ -183,7 +183,7 @@ private struct SessionOrchestrationModifier: ViewModifier {
                 case .handoff:
                     HandoffSheet(workbench: workbench, session: session)
                 case let .template(prefill):
-                    TemplateEditorSheet(workbench: workbench, template: nil, prefill: prefill.draft, projectId: session.projectId)
+                    AutomationEditorSheet(workbench: workbench, prefill: prefill.draft)
                         .safeAreaInset(edge: .top, spacing: 0) {
                             if let notice = prefill.notice {
                                 NoticeBar(tone: .warning, symbol: "exclamationmark.triangle", text: notice) {}.padding([.horizontal, .top], Space.md)

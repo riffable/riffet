@@ -1209,6 +1209,7 @@
                   "fork",
                   "handoff",
                   "attempt",
+                  "automation",
                   "template",
                   "schedule",
                   "discussion",
@@ -1222,6 +1223,9 @@
                 "type": "string"
               },
               "groupId": {
+                "type": "string"
+              },
+              "automationId": {
                 "type": "string"
               },
               "templateId": {
@@ -2631,6 +2635,7 @@
                           "fork",
                           "handoff",
                           "attempt",
+                          "automation",
                           "template",
                           "schedule",
                           "discussion",
@@ -2644,6 +2649,9 @@
                         "type": "string"
                       },
                       "groupId": {
+                        "type": "string"
+                      },
+                      "automationId": {
                         "type": "string"
                       },
                       "templateId": {
@@ -9478,6 +9486,7 @@
                           "fork",
                           "handoff",
                           "attempt",
+                          "automation",
                           "template",
                           "schedule",
                           "discussion",
@@ -9491,6 +9500,9 @@
                         "type": "string"
                       },
                       "groupId": {
+                        "type": "string"
+                      },
+                      "automationId": {
                         "type": "string"
                       },
                       "templateId": {

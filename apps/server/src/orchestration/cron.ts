@@ -1,8 +1,8 @@
 import { AppError } from '../errors.js';
 
 /**
- * A five-field cron expression (minute hour day-of-month month day-of-week) in the server's local
- * time, plus the common `@hourly`/`@daily`/`@weekly`/`@monthly` shorthands. Each field takes `*`,
+ * A five-field cron expression (minute hour day-of-month month day-of-week) read in an IANA time
+ * zone (the zone of whoever set it, not the server's), plus the common `@hourly`/`@daily`/`@weekly`/`@monthly` shorthands. Each field takes `*`,
  * numbers, ranges, lists and `/step`. As in Vixie cron, when both day fields are restricted a day
  * matching either one runs. Written here rather than added as a dependency: this is all a local
  * scheduler needs, and the parser is smaller than any package that offers it.
@@ -39,26 +39,68 @@ export function parseCron(expression: string): Cron {
   };
 }
 
+const formatters = new Map<string, Intl.DateTimeFormat>();
+function formatter(timeZone: string): Intl.DateTimeFormat {
+  let item = formatters.get(timeZone);
+  if (!item) {
+    try { item = new Intl.DateTimeFormat('en-US', { timeZone, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' }); }
+    catch { throw new AppError('INVALID_TIME_ZONE', `Unknown time zone: ${timeZone}`); }
+    formatters.set(timeZone, item);
+  }
+  return item;
+}
+
+export function validTimeZone(timeZone: unknown): timeZone is string {
+  if (typeof timeZone !== 'string' || !timeZone || timeZone.length > 100) return false;
+  try { formatter(timeZone); return true; } catch { return false; }
+}
+
+/** The wall clock of `instant` in `timeZone`, as the same fields read in UTC: a calendar the zone's offsets cannot disturb. */
+export function wallClock(instant: number, timeZone: string): number {
+  const fields: Record<string, number> = {};
+  for (const part of formatter(timeZone).formatToParts(instant)) if (part.type !== 'literal') fields[part.type] = Number(part.value);
+  return Date.UTC(fields.year!, fields.month! - 1, fields.day!, fields.hour! === 24 ? 0 : fields.hour!, fields.minute!, fields.second!);
+}
+
+const offsetAt = (instant: number, timeZone: string) => wallClock(instant, timeZone) - Math.floor(instant / 1000) * 1000;
+
+/**
+ * The earliest instant whose wall clock in `timeZone` reads `wall`. A time the zone skips (the
+ * spring-forward hour) has none, and one it repeats (the fall-back hour) is its first occurrence.
+ */
+function instantOf(wall: number, timeZone: string): number | undefined {
+  const found: number[] = [];
+  for (const offset of new Set([offsetAt(wall - 86_400_000, timeZone), offsetAt(wall + 86_400_000, timeZone)])) {
+    const instant = wall - offset;
+    if (wallClock(instant, timeZone) === wall) found.push(instant);
+  }
+  return found.length ? Math.min(...found) : undefined;
+}
+
 function dayMatches(cron: Cron, date: Date): boolean {
-  const day = cron.days.has(date.getDate()), weekday = cron.weekdays.has(date.getDay());
+  const day = cron.days.has(date.getUTCDate()), weekday = cron.weekdays.has(date.getUTCDay());
   // Vixie marks a leading wildcard even when it has a step, so `*/2` still constrains
   // the other day field instead of turning it into an extra set of execution days.
   if (cron.anyDay || cron.anyWeekday) return day && weekday;
   return day || weekday;
 }
 
-/** The first matching minute strictly after [after], or undefined when none falls within about four years. */
-export function nextCronTime(cron: Cron, after: Date): Date | undefined {
-  const date = new Date(after.getTime());
-  date.setSeconds(0, 0);
-  date.setMinutes(date.getMinutes() + 1);
-  const limit = after.getTime() + 4 * 366 * 24 * 60 * 60 * 1000;
+/**
+ * The first matching minute strictly after [after] in [timeZone], or undefined when none falls
+ * within about four years. The search walks the zone's wall clock with field-level skips, then maps
+ * each candidate back to an instant, so a skipped DST time never matches and a repeated one runs once.
+ */
+export function nextCronTime(cron: Cron, after: Date, timeZone: string): Date | undefined {
+  const date = new Date(Math.floor(wallClock(after.getTime(), timeZone) / 60_000) * 60_000 + 60_000);
+  const limit = date.getTime() + 4 * 366 * 24 * 60 * 60 * 1000;
   while (date.getTime() <= limit) {
-    if (!cron.months.has(date.getMonth() + 1)) { date.setMonth(date.getMonth() + 1, 1); date.setHours(0, 0, 0, 0); continue; }
-    if (!dayMatches(cron, date)) { date.setDate(date.getDate() + 1); date.setHours(0, 0, 0, 0); continue; }
-    if (!cron.hours.has(date.getHours())) { date.setHours(date.getHours() + 1, 0, 0, 0); continue; }
-    if (!cron.minutes.has(date.getMinutes())) { date.setMinutes(date.getMinutes() + 1, 0, 0); continue; }
-    return date;
+    if (!cron.months.has(date.getUTCMonth() + 1)) { date.setUTCMonth(date.getUTCMonth() + 1, 1); date.setUTCHours(0, 0, 0, 0); continue; }
+    if (!dayMatches(cron, date)) { date.setUTCDate(date.getUTCDate() + 1); date.setUTCHours(0, 0, 0, 0); continue; }
+    if (!cron.hours.has(date.getUTCHours())) { date.setUTCHours(date.getUTCHours() + 1, 0, 0, 0); continue; }
+    if (!cron.minutes.has(date.getUTCMinutes())) { date.setUTCMinutes(date.getUTCMinutes() + 1, 0, 0); continue; }
+    const instant = instantOf(date.getTime(), timeZone);
+    if (instant !== undefined && instant > after.getTime()) return new Date(instant);
+    date.setUTCMinutes(date.getUTCMinutes() + 1, 0, 0);
   }
   return undefined;
 }

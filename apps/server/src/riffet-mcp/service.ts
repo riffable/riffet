@@ -5,6 +5,7 @@ import type { Auth } from '../auth.js';
 import { materializeAttachment } from '../backends/attachments.js';
 import type { NativeRiffetMcpHost, RiffetMcpServerSpec } from '../backends/types.js';
 import { AppError } from '../errors.js';
+import { parseTriggers } from '../orchestration/automation.js';
 import type { OrchestrationService } from '../orchestration/service.js';
 import type { Store } from '../store.js';
 import type { WorkspaceService } from '../workspace/index.js';
@@ -53,6 +54,18 @@ const TOOLS: readonly ToolDefinition[] = [
     name: 'list_wakeups',
     description: "List this conversation's wake-ups (pending ones and those settled in the last week).",
     inputSchema: object(),
+  },
+  {
+    name: 'schedule_task',
+    description: "Create a scheduled task in this conversation's project: Riffet runs `prompt` at the given time, or repeatedly on a cron schedule, with this conversation's backend, profile and model. Unlike schedule_wakeup it does not continue this conversation unless delivery is `same` (then each run continues the conversation of the previous run). Give exactly one of `at` (once) or `cron` with `timeZone` (repeating). The user has to agree to what runs and when: before calling, tell the user the task, the time and the time zone, and wait for their confirmation. At most 10 tasks per conversation; the user can see, pause and delete them in Riffet.",
+    inputSchema: object({
+      name: { type: 'string', description: 'A short title for the task.' },
+      prompt: { type: 'string', description: 'What to do on each run; `{{date}}` and `{{project}}` are filled in. It starts without this conversation\'s context, so make it self-contained.' },
+      at: { type: 'string', description: 'Run once, as an ISO 8601 date-time with a time zone, e.g. 2026-11-04T15:30:00+08:00.' },
+      cron: { type: 'string', description: 'Repeat on five fields (minute hour day month weekday), e.g. `0 9 * * 1-5`, read in `timeZone`.' },
+      timeZone: { type: 'string', description: 'IANA time zone for `cron`, e.g. Asia/Shanghai. Required with `cron`.' },
+      delivery: { type: 'string', enum: ['new', 'same'], description: 'new (default) opens a conversation per run.' },
+    }, ['name', 'prompt']),
   },
   {
     name: 'notify_user',
@@ -269,6 +282,17 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
         if (!Number.isFinite(dueAt.getTime())) throw new AppError('INVALID_ARGUMENT', 'at is not a valid date-time');
         const wakeup = orchestration.scheduleWakeup(session.id, { dueAt, note });
         return textResult({ scheduled: wakeupView(wakeup), serverTime: new Date().toISOString() });
+      }
+      case 'schedule_task': {
+        const at = stringArg(args, 'at', 100, false), cron = stringArg(args, 'cron', 200, false), timeZone = stringArg(args, 'timeZone', 100, false);
+        if ((at === undefined) === (cron === undefined)) throw new AppError('INVALID_ARGUMENT', 'Give exactly one of at or cron');
+        if (cron !== undefined && timeZone === undefined) throw new AppError('INVALID_ARGUMENT', 'timeZone is required with cron');
+        if (at !== undefined && timeZone !== undefined) throw new AppError('INVALID_ARGUMENT', 'timeZone goes with cron; at carries its own offset');
+        const delivery = args.delivery ?? 'new';
+        if (delivery !== 'new' && delivery !== 'same') throw new AppError('INVALID_ARGUMENT', 'delivery must be new or same');
+        const [trigger] = parseTriggers([at !== undefined ? { kind: 'once', at } : { kind: 'cron', cron, timeZone }]);
+        const task = orchestration.scheduleTask(session.id, { name: stringArg(args, 'name', 100, true)!.trim(), prompt: stringArg(args, 'prompt', 100_000, true)!, trigger: trigger!, delivery });
+        return textResult({ scheduled: { id: task.id, name: task.name, triggers: task.triggers, delivery: task.delivery, ...(task.nextRunAt ? { nextRunAt: task.nextRunAt } : {}) }, serverTime: new Date().toISOString() });
       }
       case 'cancel_wakeup':
         return textResult({ cancelled: wakeupView(orchestration.cancelWakeup(stringArg(args, 'id', 100, true)!, session.id)) });

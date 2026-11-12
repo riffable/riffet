@@ -593,40 +593,44 @@ data class CommandBody(
 )
 
 /*
- * Orchestration, publishing and search. The response shapes (TaskTemplate, Schedule, AttemptGroup,
+ * Orchestration, publishing and search. The response shapes (Automation, AutomationRun, AttemptGroup,
  * BranchInfo, PullRequestStatus, MergeResult, ...) are in contracts; these are the request bodies and
  * the envelopes api.ts declares locally.
  */
 
 /**
- * `POST /api/templates` and `PATCH /api/templates/:id`. A create needs [name] and [prompt]; an
- * update sends only what changes, and an absent [target] keeps the template's own.
+ * `POST /api/automations` and `PATCH /api/automations/:id`. A create needs [name] and [prompt] (a
+ * follow-up needs [prompt], [followUp] and a `once` trigger); an update sends only what changes, and
+ * an absent [target] keeps the automation's own. [triggers] replaces the whole list.
  */
 @Serializable
-data class TemplateBody(
+data class AutomationBody(
     val name: String? = null,
     val prompt: String? = null,
     val target: riffet.contracts.LaunchTarget? = null,
+    val projectId: String? = null,
     val isolate: Boolean? = null,
+    val triggers: List<riffet.contracts.AutomationTrigger>? = null,
+    val delivery: String? = null,
+    val catchUp: String? = null,
+    val enabled: Boolean? = null,
+    val followUp: FollowUpRef? = null,
+    val attachments: List<AttachmentRef>? = null,
+    val context: List<PromptContextReference>? = null,
+    val references: List<riffet.contracts.SessionReferenceInput>? = null,
+    /** A client-made id a retried create is deduplicated by. */
+    val id: String? = null,
 )
 
-/** `POST /api/schedules` and `PATCH /api/schedules/:id`; [target] is `new` or `same`. */
 @Serializable
-data class ScheduleBody(
-    val name: String? = null,
-    val templateId: String? = null,
-    val projectId: String? = null,
-    val cron: String? = null,
-    val enabled: Boolean? = null,
-    val target: String? = null,
-)
+data class FollowUpRef(val sessionId: String)
 
 /**
- * `POST /api/templates/:id/run`. [clientSessionId] and [commandId] are the idempotency pair: a retry
- * with the same pair returns what the first request created.
+ * `POST /api/automations/:id/run`. [clientSessionId] and [commandId] are the idempotency pair: a retry
+ * with the same pair returns what the first request did.
  */
 @Serializable
-data class RunTemplateBody(val projectId: String, val clientSessionId: String, val commandId: String)
+data class RunAutomationBody(val projectId: String? = null, val clientSessionId: String? = null, val commandId: String? = null)
 
 @Serializable
 data class ForkSessionBody(

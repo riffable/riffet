@@ -1,6 +1,236 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "1 小时后": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In 1 hour"
+          }
+        }
+      }
+    },
+    "10 分钟后": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In 10 minutes"
+          }
+        }
+      }
+    },
+    "Agent 唤醒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Agent wake-up"
+          }
+        }
+      }
+    },
+    "Riffet 未运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Riffet was not running"
+          }
+        }
+      }
+    },
+    "一次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once"
+          }
+        }
+      }
+    },
+    "上一轮仍在运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous run still in progress"
+          }
+        }
+      }
+    },
+    "会话不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversation unavailable"
+          }
+        }
+      }
+    },
+    "何时运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When"
+          }
+        }
+      }
+    },
+    "分 时 日 月 周；也可以用 @daily、@hourly": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Minute hour day month weekday; @daily and @hourly also work"
+          }
+        }
+      }
+    },
+    "创建 (⌘↩)": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create (⌘↩)"
+          }
+        }
+      }
+    },
+    "即将运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upcoming"
+          }
+        }
+      }
+    },
+    "存为定时任务…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as scheduled task…"
+          }
+        }
+      }
+    },
+    "安排": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schedule"
+          }
+        }
+      }
+    },
+    "已删除的任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted task"
+          }
+        }
+      }
+    },
+    "总结昨天的提交": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Summarize yesterday’s commits"
+          }
+        }
+      }
+    },
+    "手动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual"
+          }
+        }
+      }
+    },
+    "无法创建定时任务：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot create scheduled task: %@"
+          }
+        }
+      }
+    },
+    "无法安排稍后发送：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot schedule send later: %@"
+          }
+        }
+      }
+    },
+    "明天 9:00": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tomorrow 9:00"
+          }
+        }
+      }
+    },
+    "最近运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent runs"
+          }
+        }
+      }
+    },
+    "检查依赖更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check for dependency updates"
+          }
+        }
+      }
+    },
+    "每个工作日 9:00": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every weekday 9:00"
+          }
+        }
+      }
+    },
+    "每天 22:00": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every day 22:00"
+          }
+        }
+      }
+    },
     "浏览": {
       "localizations": {
         "en": {
@@ -127,6 +357,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Not staged"
+          }
+        }
+      }
+    },
+    "稍后发送": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send later"
+          }
+        }
+      }
+    },
+    "展示稍后发送按钮": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Send Later button"
           }
         }
       }
@@ -513,12 +763,102 @@
         }
       }
     },
+    "自定义…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom…"
+          }
+        }
+      }
+    },
+    "自定义时间…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom time…"
+          }
+        }
+      }
+    },
+    "要做什么…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "What should it do…"
+          }
+        }
+      }
+    },
+    "跑一遍测试并汇报失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run the tests and report failures"
+          }
+        }
+      }
+    },
+    "运行时选择": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose when running"
+          }
+        }
+      }
+    },
+    "这次已跳过": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped this time"
+          }
+        }
+      }
+    },
     "部分暂存": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Partly staged"
+          }
+        }
+      }
+    },
+    "重复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeat"
+          }
+        }
+      }
+    },
+    "错过后补跑": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Catch up if missed"
+          }
+        }
+      }
+    },
+    "项目不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project unavailable"
           }
         }
       }
@@ -2825,16 +3165,6 @@
         }
       }
     },
-    "上一次运行的会话还在进行，这次已跳过": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The previous run's session is still in progress; this one was skipped"
-          }
-        }
-      }
-    },
     "上一页": {
       "localizations": {
         "en": {
@@ -3015,16 +3345,6 @@
         }
       }
     },
-    "不会再运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Won't run again"
-          }
-        }
-      }
-    },
     "不使用": {
       "localizations": {
         "en": {
@@ -3061,16 +3381,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "No wrap"
-          }
-        }
-      }
-    },
-    "不碰项目当前的工作区。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Leaves the project's current workspace untouched."
           }
         }
       }
@@ -3685,16 +3995,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Task file location"
-          }
-        }
-      }
-    },
-    "任务模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Task templates"
           }
         }
       }
@@ -4679,16 +4979,6 @@
         }
       }
     },
-    "分 时 日 月 周，本地时间；也可以用 @daily、@hourly": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Minute hour day month weekday, local time; @daily and @hourly also work"
-          }
-        }
-      }
-    },
     "分享会话": {
       "localizations": {
         "en": {
@@ -5039,16 +5329,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Deleted marker"
-          }
-        }
-      }
-    },
-    "删除模板「%@」？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Delete template “%@”?"
           }
         }
       }
@@ -7252,16 +7532,6 @@
         }
       }
     },
-    "存为任务模板…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save as task template…"
-          }
-        }
-      }
-    },
     "存储…": {
       "localizations": {
         "en": {
@@ -7359,26 +7629,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scheduled tasks"
-          }
-        }
-      }
-    },
-    "定时运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scheduled run"
-          }
-        }
-      }
-    },
-    "定时运行…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run on schedule…"
           }
         }
       }
@@ -9816,16 +10066,6 @@
         }
       }
     },
-    "把常做的事存成任务": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save frequent work as tasks"
-          }
-        }
-      }
-    },
     "把这个尝试的改动合并回原项目": {
       "localizations": {
         "en": {
@@ -9922,16 +10162,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatic compaction threshold: %@ tokens · measured from the latest response"
-          }
-        }
-      }
-    },
-    "按本机时间运行；Riffet 需保持开启，重叠运行会跳过，错过超过一小时不补跑。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Runs on local time; Riffet must stay open, overlapping runs are skipped, and runs missed by more than an hour aren't made up."
           }
         }
       }
@@ -11210,16 +11440,6 @@
         }
       }
     },
-    "新建任务模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New task template"
-          }
-        }
-      }
-    },
     "新建会话": {
       "localizations": {
         "en": {
@@ -11236,16 +11456,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "New scheduled task"
-          }
-        }
-      }
-    },
-    "新建定时任务或任务模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New scheduled task or task template"
           }
         }
       }
@@ -11360,16 +11570,6 @@
         }
       }
     },
-    "无法保存模板：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot save template: %@"
-          }
-        }
-      }
-    },
     "无法保存资源回收设置：%@": {
       "localizations": {
         "en": {
@@ -11456,16 +11656,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cannot delete scheduled task: %@"
-          }
-        }
-      }
-    },
-    "无法删除模板：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't delete template: %@"
           }
         }
       }
@@ -11976,16 +12166,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cannot run scheduled task: %@"
-          }
-        }
-      }
-    },
-    "无法运行模板：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot run template: %@"
           }
         }
       }
@@ -13594,26 +13774,6 @@
         }
       }
     },
-    "模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Template"
-          }
-        }
-      }
-    },
-    "模板已删除": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Template deleted"
-          }
-        }
-      }
-    },
     "橙色": {
       "localizations": {
         "en": {
@@ -14156,16 +14316,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Each run"
-          }
-        }
-      }
-    },
-    "比如：晨间依赖检查": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "For example: morning dependency check"
           }
         }
       }
@@ -14882,16 +15032,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unknown status"
-          }
-        }
-      }
-    },
-    "独立 Worktree": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Isolated Worktree"
           }
         }
       }
@@ -16038,16 +16178,6 @@
         }
       }
     },
-    "编辑任务模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Edit task template"
-          }
-        }
-      }
-    },
     "编辑会话标签": {
       "localizations": {
         "en": {
@@ -16415,26 +16545,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Have Agent fix"
-          }
-        }
-      }
-    },
-    "让 Agent 做什么": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "What should the Agent do"
-          }
-        }
-      }
-    },
-    "让一个模板按计划自动运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Run a template automatically on a schedule"
           }
         }
       }
@@ -17215,16 +17325,6 @@
         }
       }
     },
-    "运行时 {{date}} 会替换为当天日期，{{project}} 替换为项目名。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At runtime, {{date}} is replaced with today's date and {{project}} with the project name."
-          }
-        }
-      }
-    },
     "运行时长": {
       "localizations": {
         "en": {
@@ -17423,16 +17523,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "还有定时任务在用这个模板，先删除它们": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scheduled tasks still use this template; delete them first"
           }
         }
       }
@@ -18215,32 +18305,12 @@
         }
       }
     },
-    "选择模板": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Choose template"
-          }
-        }
-      }
-    },
     "选择项目": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Select project"
-          }
-        }
-      }
-    },
-    "选择项目后运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Select a project to run"
           }
         }
       }
@@ -18291,16 +18361,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Speed window: %@"
-          }
-        }
-      }
-    },
-    "那段会话归档后会重新开一段。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "A new session will start once that one is archived."
           }
         }
       }
@@ -19295,12 +19355,12 @@
         }
       }
     },
-    "默认使用模板名": {
+    "默认取提示词首行": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use the template name by default"
+            "value": "Defaults to the first line of the prompt"
           }
         }
       }

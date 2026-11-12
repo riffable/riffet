@@ -2,7 +2,7 @@
 
 日期：2026-10-17。状态：服务端能力、API 与 Web 界面已接入。交互探索稿保留在 [design/orchestration-demo.html](design/orchestration-demo.html)，实际行为以本文和当前界面为准。
 
-这一组能力补齐「agent 写完之后」的工作流：把审阅意见交回 agent、发布改动、按回合回退、分叉或交接会话、多个后端并行尝试同一任务，以及模板与定时任务。实现复用已有的 Git 服务、worktree 项目、检查点、原生提交（`createNativeSubmission` / `acceptNativeRun`）与调度器，没有新增依赖和数据库表；编排数据保存在设置存储的三个键里（`orchestration:attempt-groups`、`orchestration:templates`、`orchestration:schedules`）。
+这一组能力补齐「agent 写完之后」的工作流：把审阅意见交回 agent、发布改动、按回合回退、分叉或交接会话、多个后端并行尝试同一任务，以及模板与定时任务。实现复用已有的 Git 服务、worktree 项目、检查点、原生提交（`createNativeSubmission` / `acceptNativeRun`）与调度器，没有新增依赖；并行尝试保存在设置键 `orchestration:attempt-groups`，定时任务与运行记录存在 SQLite（见 §5）。
 
 ## 1. 审阅与发布
 
@@ -59,17 +59,33 @@
 - 来源本身是交接或分叉出来的会话时，它第一条消息里的上一份简报单独保留（首尾各留一部分），不会因为是最早的一轮被先丢掉。简报中每轮的回复保留结尾，并列出该轮动过的文件和命令。
 - 来源会话必须空闲（两个 agent 同时改一棵树正是要避免的情况），草稿和交接时都检查。交接后来源会话记录 `handedOffTo`，新会话记录 `origin: {kind: 'handoff', sessionId}`，客户端可以据此互相跳转。
 
-## 5. 任务模板与定时任务
+## 5. 定时任务（Automation）
 
-- 模板：`GET/POST /api/templates`、`PATCH/DELETE /api/templates/:id`、`POST /api/templates/:id/run`（`{projectId, clientSessionId, commandId}`）。模板包含名称、提示词、`LaunchTarget` 与 `isolate`；提示词支持 `{{date}}`、`{{project}}`。`isolate` 每次运行切出新 worktree。被定时任务引用的模板不能删除。
-- 定时任务：`GET/POST /api/schedules`、`PATCH/DELETE /api/schedules/:id`、`POST /api/schedules/:id/run`（立即运行一次，不改变下次时间）。字段为模板、项目、cron、`enabled` 与 `target`（`new` 每次新会话，`same` 在上次的会话里继续）。
-- cron 为五段格式（分 时 日 月 周），支持 `*`、范围、列表、步长和 `@hourly`/`@daily`/`@weekly`/`@monthly`，按服务器本地时间计算。日与周都不以 `*` 开头时任一匹配即运行；任一以 `*` 开头（包括 `*/2`）时两者都需匹配，遵循 [Cronie 的 Vixie cron 兼容规则](https://github.com/cronie-crond/cronie/blob/master/src/cron.c)。解析器在本地实现，没有新增依赖。
-- 调度器每 30 秒检查一次。到期任务先写入下一次时间再启动，崩溃重启后同一时间点最多运行一次；上一次仍在运行时本次记为 `skipped`，不排队；服务停机错过超过 1 小时的时间点记为 `missed`，不补跑。结果记录在 `lastRunAt`、`lastResult`、`lastSessionId`、`lastError`。
+模板、定时计划和 agent 的一次性唤醒是同一种记录 `Automation`（`packages/contracts`）：做什么（提示词、`LaunchTarget`、项目、`isolate`）、何时自己运行（`triggers`）、每次运行去哪（`delivery` 或 `followUp`）。没有触发器的就是过去的模板，只能手动运行。
+
+- 触发器：`{kind: 'once', at, timeZone?}` 只运行一次；`{kind: 'cron', cron, timeZone}` 按创建者的 IANA 时区重复，与服务器所在时区无关（Riffet 可以部署在任意服务器上）。每条最多 4 个触发器，下次时间取最早的一个。有触发器时必须有 `projectId`。
+- cron 为五段格式（分 时 日 月 周），支持 `*`、范围、列表、步长和 `@hourly`/`@daily`/`@weekly`/`@monthly`。日与周都不以 `*` 开头时任一匹配即运行；任一以 `*` 开头（包括 `*/2`）时两者都需匹配，遵循 [Cronie 的 Vixie cron 兼容规则](https://github.com/cronie-crond/cronie/blob/master/src/cron.c)。夏令时跳过的时刻不运行，重复的时刻只运行一次。解析器在本地实现，没有新增依赖。
+- `delivery`：`new` 每次开新会话（`origin: {kind: 'automation', automationId}`）；`same` 在上次运行的会话里继续，那个会话归档、交接或删除后再开新会话。`{{date}}`、`{{project}}` 在运行时按触发器的时区填入，没有时区时用服务器时区。
+- `followUp: {sessionId, by}` 是某个会话的后续：只有一个 `once` 触发器，不能编辑或手动运行，运行时是该会话里的一轮，不会开新会话，会话不可用时记为失败。`by: 'agent'` 来自 `schedule_wakeup`，消息带唤醒说明，`commandId` 为 `wakeup-<id>`；`by: 'user'` 是输入框的「稍后发送」（设置 `composerSendLater` 打开后才显示），原样发送 `prompt` 与 `input` 里的附件、文件引用和会话引用，`commandId` 为 `follow-up-<id>`；会话引用在安排时冻结，附件在运行前不会被清理。运行过或取消的后续不再出现在列表里，保留 7 天供 `list_wakeups` 查看后删除；删除 agent 后续等同取消。上限沿用唤醒：每会话 20 个待运行、全部 500 个、agent 最远 30 天。其他定时任务最多 250 个。
+- 调度：到期记录先写入下一次时间再启动，同一时间点最多运行一次。上一次的会话仍在运行时本次记为 `skipped`（`reason: 'busy'`），不排队。停机错过的时间点：`catchUp: 'latest'`（定时任务默认）在 7 天内补跑最近一次，`skip`（后续默认）超过 1 小时记为 `missed`。项目不可用记为 `skipped`（`reason: 'project-unavailable'`）；后续的会话不可用记为 `failed`（`reason: 'session-unavailable'`）。已经到点的用户后续不能再取消（409）。
+- 运行记录 `AutomationRun` 存在 SQLite，每条定时任务保留最近 50 次；`lastRunAt`、`lastResult`、`lastSessionId`、`lastError` 是最近一次的摘要。后续失败或错过时仍写入会话通知（`NoticeLog`）。
+- 0.7 之前保存在设置键 `orchestration:templates`、`orchestration:schedules`、`orchestration:wakeups` 的数据在启动时迁移一次：未被计划引用的模板成为手动定时任务；每个计划连同它的模板内容成为一条定时任务，时区取服务器本地时区；唤醒保留原 id 成为 agent 后续。
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/automations` | 当前客户端可见的全部定时任务，包括后续。项目不存在时照常返回 |
+| `POST /api/automations` | `{name, prompt, target?, projectId?, isolate?, triggers?, delivery?, catchUp?, enabled?}`；或 `{id?, prompt, followUp: {sessionId}, triggers: [{kind: 'once', at}], attachments?, context?, references?}` 建一条用户后续，后三项与发送消息的请求相同；`id` 由客户端生成，同一 `id` 重试返回第一次建的那条，内容不同返回 409 |
+| `PATCH /api/automations/:id` / `DELETE /api/automations/:id` | 部分更新 / 删除 |
+| `POST /api/automations/:id/run` | `{projectId?, clientSessionId?, commandId?}` 立即运行一次，不改变下次时间；没有 `projectId` 的定时任务必须给出。返回 `AutomationRun` |
+| `GET /api/automations/:id/runs`、`GET /api/automation-runs?limit=` | 一条 / 全部可见定时任务的运行记录，新的在前 |
+| `GET /api/sessions/:id/wakeups`、`POST .../wakeups/:wakeupId/cancel` | agent 后续的 `RiffetWakeup` 视图，供 MCP 与设备预约 |
+
+Agent 通过 Riffet MCP 的 `schedule_wakeup` 给当前会话安排后续，通过 `schedule_task` 在当前项目建定时任务（沿用当前会话的后端、模型、模式与审批，记录 `createdBySessionId`；重复间隔至少 15 分钟，每个会话最多 10 条，由定时任务开出的会话不能再建）。工具说明要求先向用户复述时间。
 
 ## 会话来源
 
-由编排创建的会话带 `origin`：`{kind: 'fork' | 'handoff' | 'attempt' | 'template' | 'schedule', sessionId?, runId?, groupId?, templateId?, scheduleId?}`。所有启动接口以 `clientSessionId + commandId` 幂等，重试返回第一次创建的会话与 run。
+由编排创建的会话带 `origin`：`{kind: 'fork' | 'handoff' | 'attempt' | 'automation', sessionId?, runId?, groupId?, automationId?}`；0.7 之前的会话可能带 `template` / `schedule` 与对应 id。所有启动接口以 `clientSessionId + commandId` 幂等，重试返回第一次创建的会话与 run。
 
 ## 验证
 
-核心测试覆盖本地 bare remote 的推送范围、worktree 合并与冲突恢复、文件操作的工作区预留、同回合检查点幂等、启动取消、编排并发重试、交接与分叉摘要、cron 触发及错过时间点的处理。其余能力以类型检查和现有 app/store/dispatch 测试回归为主。真实 GitHub 发布和原生 CLI 交互仍需在对应环境中验证。
+核心测试覆盖本地 bare remote 的推送范围、worktree 合并与冲突恢复、文件操作的工作区预留、同回合检查点幂等、启动取消、编排并发重试、交接与分叉摘要；定时任务覆盖旧数据迁移（含唤醒 id）、带时区与夏令时的 cron、错过后补跑与跳过、后续只发送一次。其余能力以类型检查和现有 app/store/dispatch 测试回归为主。真实 GitHub 发布和原生 CLI 交互仍需在对应环境中验证。

@@ -293,13 +293,15 @@ export interface ExternalSessionDirectory {
 }
 /**
  * Why a conversation exists. `sessionId`/`runId` name the conversation (and turn) it continues;
- * `groupId`, `templateId` and `scheduleId` name what launched it.
+ * `groupId` and `automationId` name what launched it.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'template' | 'schedule' | 'discussion' | 'channel';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
-  sessionId?: string; runId?: string; groupId?: string; templateId?: string; scheduleId?: string;
+  sessionId?: string; runId?: string; groupId?: string; automationId?: string;
+  /** Set on conversations opened before templates and schedules became automations (0.7). */
+  templateId?: string; scheduleId?: string;
   /** A discussion keeps its source separately from its own visible messages. */
   discussion?: DiscussionOrigin;
 }
@@ -762,25 +764,60 @@ export interface AttemptComparison {
   sessionId: string; projectId: string; branch: string; target: LaunchTarget;
   state?: SessionState; title?: string; comparison?: WorktreeComparison; error?: string;
 }
-/** A reusable task. `{{date}}` and `{{project}}` in the prompt are filled in when it runs. */
-export interface TaskTemplate extends LaunchTarget {
+/**
+ * When an automation runs by itself. `once` fires a single time; `cron` repeats (five fields, see
+ * docs/ORCHESTRATION.md §5). `timeZone` is the IANA zone of whoever set it, not the server's: cron
+ * is read in it, and `{{date}}` is filled in by it.
+ */
+export type AutomationTrigger =
+  | { kind: 'once'; at: string; timeZone?: string }
+  | { kind: 'cron'; cron: string; timeZone: string };
+export type AutomationRunResult = 'started' | 'skipped' | 'missed' | 'failed';
+/**
+ * Saved work: what to run (prompt, backend, project), when it runs by itself (`triggers`; none means
+ * by hand only, what used to be a template) and where each run goes. `{{date}}` and `{{project}}`
+ * in the prompt are filled in when it runs. A run whose previous conversation is still working is
+ * skipped, not queued.
+ */
+export interface Automation extends LaunchTarget {
   id: string; name: string; prompt: string;
+  /** Where runs start. Unset: chosen at each run by hand; a trigger needs one. */
+  projectId?: string;
   /** Run each time in a fresh worktree of the project instead of its own checkout. */
   isolate?: boolean;
+  triggers: AutomationTrigger[];
+  /** `new` opens a conversation per run; `same` continues the conversation of the last run. */
+  delivery: 'new' | 'same';
+  /** A time passed while the server was off: `latest` runs the most recent one once (up to 7 days late), `skip` records it missed. */
+  catchUp: 'latest' | 'skip';
+  enabled: boolean;
+  /**
+   * A follow-up of one conversation: a single `once` trigger whose run is a turn in `sessionId`, never a new conversation.
+   * `agent` ones come from `schedule_wakeup` and are framed as the agent's own wake-up; `user` ones
+   * (send later) send `prompt` as typed. Settled follow-ups are removed after a week.
+   */
+  followUp?: { sessionId: string; by: 'agent' | 'user' };
+  /** What a user follow-up sends besides `prompt`, as the composer gave it; references are frozen when it is scheduled. */
+  input?: Omit<NativeRunInput, 'text'>;
+  /** The conversation whose agent set this up (`schedule_task`). */
+  createdBySessionId?: string;
+  nextRunAt?: string;
+  lastRunAt?: string; lastResult?: AutomationRunResult; lastError?: string; lastSessionId?: string;
   createdAt: string; updatedAt: string;
 }
-/**
- * Runs a template on a cron schedule (local time). A run whose previous conversation is still
- * working is skipped rather than queued behind it, and one missed by more than an hour while the
- * workbench was off is recorded as missed instead of fired late.
- */
-export interface Schedule {
-  id: string; name: string; templateId: string; projectId: string; cron: string; enabled: boolean;
-  /** `new` opens a conversation per run; `same` sends each run into one ongoing conversation. */
-  target: 'new' | 'same';
-  nextRunAt?: string; lastRunAt?: string; lastSessionId?: string;
-  lastResult?: 'started' | 'skipped' | 'missed' | 'failed'; lastError?: string;
-  createdAt: string; updatedAt: string;
+/** One firing of an automation; the latest 50 of each are kept. */
+export interface AutomationRun {
+  id: string; automationId: string;
+  cause: 'schedule' | 'catch-up' | 'manual';
+  /** The trigger time this run stands for; absent for a run by hand. */
+  scheduledFor?: string;
+  at: string;
+  result: AutomationRunResult;
+  /** Why it was skipped or missed: the last conversation was busy, the server was off, or the project or conversation is gone or archived. */
+  reason?: 'busy' | 'offline' | 'project-unavailable' | 'session-unavailable';
+  /** What a failed run failed with. */
+  error?: string;
+  sessionId?: string; runId?: string;
 }
 /** One review remark on a diff line or range, sent back to the agent as a message. */
 export interface ReviewComment { path: string; line?: number; endLine?: number; body: string; quote?: string; }
@@ -1059,6 +1096,8 @@ export interface AppSettings {
    * otherwise the message follows the normal queue path.
    */
   composerRunningBehavior?: 'queue' | 'steer';
+  /** Shows send later beside the composer's send button. Off unless set. */
+  composerSendLater?: boolean;
   /**
    * Models the workbench calls itself, one per purpose, each picked from a gateway a backend profile
    * already holds credentials for, so no second key is stored. `title` names a conversation whose CLI

@@ -960,6 +960,20 @@ final class Workbench {
         } catch { return false }
     }
 
+    /// Schedules the message, with its attachments and the cited references, as a later turn of the open conversation.
+    struct SendLaterError: LocalizedError {
+        static let notConnected = SendLaterError()
+        var errorDescription: String? { String(localized: "尚未连接") }
+    }
+
+    /// [id] is made once per attempt so a retry is the same request.
+    func sendLater(_ text: String, attachments: [Attachment], at date: Date, id: String) async throws {
+        guard let api = host.api, let session = selected else { throw SendLaterError.notConnected }
+        let cited = session.backendId == .chat || referencesProjectId != session.projectId ? [] : references
+        _ = try await api.createFollowUp(sessionId: session.id, prompt: text, at: TimePreset.iso(date), timeZone: TimeZone.current.identifier, attachments: attachments, context: cited, id: id)
+        clearSubmittedReferences(cited, sessionId: session.id, projectId: session.projectId)
+    }
+
     /// Starts the CLI again for a conversation whose process is gone (`POST /api/sessions/:id/start`).
     func reopen(_ session: Session, restartBinding: SessionNativeRuntime? = nil) async -> String? {
         guard let api = host.api, !reopeningSessionIds.contains(session.id) else { return nil }

@@ -56,22 +56,19 @@ async function boot(savedSettings?: Record<string, unknown>) {
     indexableTranscript: async () => [],
   } as unknown as NativeBackendService;
 
-  const templates = [
-    { id: 'plain', name: 'Plain', prompt: 'Do the task', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
-    { id: 'pi-template', name: 'Pi', prompt: 'Do the task', backendId: 'pi', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' },
-  ];
+  const stamps = { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' };
+  const base = { prompt: 'Do the task', triggers: [], delivery: 'new' as const, catchUp: 'latest' as const, enabled: true, ...stamps };
   const runs: Array<unknown> = [];
-  const schedules = [{
-    id: 'scheduled', name: 'Scheduled', templateId: 'plain', projectId: 'pending', cron: '0 0 * * *',
-    enabled: false, target: 'new' as const, lastSessionId: 'pending',
-    createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
-  }];
+  const automations: Array<Record<string, unknown>> = [
+    { id: 'plain', name: 'Plain', ...base },
+    { id: 'pi-template', name: 'Pi', backendId: 'pi', ...base },
+    { id: 'scheduled', name: 'Scheduled', ...base, projectId: 'pending', enabled: false, lastSessionId: 'pending' },
+  ];
   const orchestration = {
-    templates: () => templates,
-    schedules: () => schedules,
-    saveSchedule: (_id: string | undefined, body: Record<string, unknown>) => ({ ...schedules[0]!, templateId: body.templateId ?? 'plain' }),
-    runTemplate: async (_id: string, _projectId: string, _ids: unknown, _origin?: unknown, target?: unknown) => { runs.push(target); return { session: { id: 'created', backendId: 'cursor' }, run: { id: 'run' } }; },
-    fire: async (_id: string, target?: unknown) => { runs.push(target); return schedules[0]!; },
+    automations: () => automations,
+    automation: (id: string) => automations.find(item => item.id === id)!,
+    saveAutomation: (_id: string | undefined, body: Record<string, unknown>) => ({ ...automations[2]!, ...body }),
+    fire: async (id: string, options: { target?: unknown }) => { runs.push(options.target); return { id: 'run', automationId: id, cause: 'manual', at: stamps.createdAt, result: 'started', sessionId: automations[2]!.lastSessionId }; },
     compareAttempts: async (): Promise<unknown> => ({
       group: { id: 'group', projectId: 'pending', prompt: 'p', base: 'b', createdAt: 'c', attempts: [] },
       attempts: [],
@@ -119,7 +116,7 @@ async function boot(savedSettings?: Record<string, unknown>) {
     headers: features ? { [CLIENT_FEATURES_HEADER]: features } : {},
     ...(payload === undefined ? {} : { payload: payload as object }),
   });
-  return { app, ask, store, settings, nativeBackends, projectDir, stateDir, orchestration, runs, templates, schedules };
+  return { app, ask, store, settings, nativeBackends, projectDir, stateDir, orchestration, runs, automations };
 }
 
 describe('pi client compatibility', () => {
@@ -278,13 +275,13 @@ describe('pi client compatibility', () => {
     expect(auxiliary.json().error.code).toBe('INVALID_BACKEND');
   });
 
-  it('falls back before running an unset template target and filters hidden orchestration members', async () => {
-    const { ask, store, projectDir, orchestration, runs, schedules } = await boot({ defaultBackendId: 'pi' });
+  it('falls back before running an unset automation target and filters hidden orchestration members', async () => {
+    const { ask, store, projectDir, orchestration, runs, automations } = await boot({ defaultBackendId: 'pi' });
     const project = store.createProject(projectDir, 'template-compat');
     const piSession = store.createSession({ projectId: project.id, kind: 'native', backendId: 'pi', title: 'Pi attempt' });
     const cursorSession = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor', title: 'Cursor attempt' });
-    schedules[0]!.projectId = project.id;
-    schedules[0]!.lastSessionId = piSession.id;
+    automations[2]!.projectId = project.id;
+    automations[2]!.lastSessionId = piSession.id;
     const piAttempt = { sessionId: piSession.id, projectId: project.id, branch: 'pi', target: { backendId: 'pi' } };
     const cursorAttempt = { sessionId: cursorSession.id, projectId: project.id, branch: 'cursor', target: { backendId: 'cursor' } };
     orchestration.compareAttempts = async () => ({
@@ -293,22 +290,25 @@ describe('pi client compatibility', () => {
     });
 
     const body = { projectId: project.id, clientSessionId: 'client', commandId: 'command' };
-    expect((await ask('POST', '/api/templates/plain/run', body)).statusCode).toBe(202);
+    expect((await ask('POST', '/api/automations/plain/run', body)).statusCode).toBe(202);
     expect(runs.at(-1)).toEqual({ backendId: 'cursor' });
-    expect((await ask('POST', '/api/templates/plain/run', { ...body, clientSessionId: 'negotiated', commandId: 'negotiated' }, 'pi-agent')).statusCode).toBe(202);
+    expect((await ask('POST', '/api/automations/plain/run', { ...body, clientSessionId: 'negotiated', commandId: 'negotiated' }, 'pi-agent')).statusCode).toBe(202);
     expect(runs.at(-1)).toEqual({ backendId: 'pi' });
-    expect((await ask('POST', '/api/templates/pi-template/run', body)).json().error.code).toBe('INVALID_BACKEND');
+    expect((await ask('POST', '/api/automations/pi-template/run', body)).json().error.code).toBe('INVALID_BACKEND');
 
-    expect((await ask('POST', '/api/schedules', { name: 'Hidden template', templateId: 'pi-template', projectId: project.id, cron: '0 0 * * *' })).json().error.code).toBe('INVALID_BACKEND');
-    const patched = await ask('PATCH', '/api/schedules/scheduled', { enabled: false });
+    expect((await ask('POST', '/api/automations', { name: 'Hidden target', prompt: 'x', projectId: project.id, target: { backendId: 'pi' } })).json().error.code).toBe('INVALID_BACKEND');
+    const patched = await ask('PATCH', '/api/automations/scheduled', { enabled: false });
     expect(patched.statusCode).toBe(200);
     expect(patched.json()).not.toHaveProperty('lastSessionId');
-    const listed = await ask('GET', '/api/schedules');
-    expect(listed.json()).toHaveLength(1);
-    expect(listed.json()[0]).not.toHaveProperty('lastSessionId');
-    const fired = await ask('POST', '/api/schedules/scheduled/run');
-    expect(fired.statusCode).toBe(200);
-    expect(fired.json()).not.toHaveProperty('lastSessionId');
+    const listed = await ask('GET', '/api/automations');
+    expect(listed.json().map((item: { id: string }) => item.id)).toEqual(['plain', 'scheduled']);
+    expect(listed.json()[1]).not.toHaveProperty('lastSessionId');
+    // A project deleted since does not fail the whole list.
+    automations[2]!.projectId = 'deleted-project';
+    expect((await ask('GET', '/api/automations')).json()).toHaveLength(2);
+    const fired = await ask('POST', '/api/automations/scheduled/run');
+    expect(fired.statusCode).toBe(202);
+    expect(fired.json()).not.toHaveProperty('sessionId');
     expect(runs.at(-1)).toEqual({ backendId: 'cursor' });
 
     const compared = await ask('GET', '/api/attempts/group');
@@ -337,7 +337,7 @@ describe('projectless client compatibility', () => {
     expect((await ask('GET',`/api/projects/${managed.id}/files`)).statusCode).toBe(404);
     expect((await ask('GET',`/api/sessions/${task.id}/events`)).statusCode).toBe(404);
     expect((await ask('GET',`/api/backends/cursor/catalog?projectId=${managed.id}`)).statusCode).toBe(404);
-    expect((await ask('POST','/api/templates/plain/run',{projectId:managed.id,clientSessionId:'new-task',commandId:'new-command'})).statusCode).toBe(404);
+    expect((await ask('POST','/api/automations/plain/run',{projectId:managed.id,clientSessionId:'new-task',commandId:'new-command'})).statusCode).toBe(404);
     expect((await ask('GET',`/api/sessions/${task.id}/events?features=projectless-tasks`)).statusCode).toBe(200);
     const negotiated=(await ask('GET','/api/bootstrap',undefined,'projectless-tasks')).json();
     expect(negotiated.projects).toHaveLength(2);

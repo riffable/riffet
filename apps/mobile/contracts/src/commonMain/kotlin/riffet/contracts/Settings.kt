@@ -546,6 +546,7 @@ data class AppSettingsUpdate(
     val cursorCli: CursorCliSettingsUpdate? = null,
     val composerEnterBehavior: String? = null,
     val composerRunningBehavior: String? = null,
+    val composerSendLater: Boolean? = null,
     val idleReclaimMinutes: Int? = null,
     val maxLiveAgents: Int? = null,
     val quickChat: QuickChatSettings? = null,

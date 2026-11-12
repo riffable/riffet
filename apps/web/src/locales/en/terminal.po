@@ -181,8 +181,8 @@ msgid "在终端中"
 msgstr "In terminal"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "存为任务模板…"
-msgstr "Save as task template…"
+msgid "存为定时任务…"
+msgstr "Save as scheduled task…"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "导出为 PDF…"

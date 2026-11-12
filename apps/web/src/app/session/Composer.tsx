@@ -23,6 +23,7 @@ import { ModelPicker, type ModelProviderChoices } from './ModelPicker';
 import { clipboardFiles, readUploadData, uploadName } from './image-upload';
 import { classifyEnterGesture, isComposingKey, primaryEnterHint, readEnterKeyBehavior, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
 import { ComposerFullscreen } from './ComposerFullscreen';
+import { SendLaterMenu } from '../tasks/SendLater';
 import { useComposerAutosize } from './useComposerAutosize';
 import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { Collapse } from '@/components/ui/collapse';
@@ -310,6 +311,8 @@ export interface ComposerProps {
   /** Lets the host react to an unsent draft without receiving its contents. */
   onDraftChange?: (hasContent: boolean) => void;
   onSubmit: (prompt: string, attachments: Attachment[], context: PromptContextReference[], onStored?: () => boolean) => Promise<boolean>;
+  /** Queue the message for a later time instead of sending it; shows a clock beside Send. */
+  onSendLater?: (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => Promise<boolean>;
   onError: (message: string) => void;
 }
 
@@ -1199,9 +1202,10 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   }, [disabled, projectId, storageKey, props.windowDrop, props.attachmentsAllowed]);
 
   const canSubmit = Boolean(text.trim()) && !disabled && !props.submitDisabled && !submitting && !uploading;
-  const submit = async () => {
+  const submit = async (later?: Date) => {
     const prompt = textRef.current;
     if (!prompt.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0) return;
+    if (later && !props.onSendLater) return;
     const submittedTextRevision = textRevisionRef.current;
     const submittedAttachments = [...attachmentsRef.current];
     const submittedReferences = referencesEnabled ? [...referencesRef.current] : [];
@@ -1254,7 +1258,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     submittingRef.current = true;
     setSubmitting(true);
     try {
-      const ok = await props.onSubmit(prompt, submittedAttachments, submittedReferences, onStored);
+      const ok = later
+        ? await props.onSendLater!(prompt, submittedAttachments, submittedReferences, later)
+        : await props.onSubmit(prompt, submittedAttachments, submittedReferences, onStored);
       // Hosts without an Outbox retain their existing acknowledgement-after-success behavior.
       if (ok && !stored) onStored();
     } finally {
@@ -1548,6 +1554,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 <IconPlus className="size-[18px]" />
               </button>
             </Tip>}</>}
+            {props.onSendLater && !compact && <SendLaterMenu disabled={!canSubmit} onPick={(at) => void submit(at)} />}
             <Dialog open={mobileSettingsOpen} onOpenChange={setMobileSettingsOpen}>
               {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
                   model and send controls off the row instead of truncating itself. */}

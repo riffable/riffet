@@ -329,7 +329,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'cursorCli', 'taskWorkspaceRoot']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'cursorCli', 'taskWorkspaceRoot']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -380,6 +380,10 @@ export class SettingsService {
     if (values.composerRunningBehavior !== undefined) {
       if (values.composerRunningBehavior !== 'queue' && values.composerRunningBehavior !== 'steer') throw new AppError('INVALID_SETTINGS', 'composerRunningBehavior must be queue or steer');
       result.composerRunningBehavior = values.composerRunningBehavior;
+    }
+    if (values.composerSendLater !== undefined) {
+      if (typeof values.composerSendLater !== 'boolean') throw new AppError('INVALID_SETTINGS', 'composerSendLater must be a boolean');
+      result.composerSendLater = values.composerSendLater;
     }
     for (const [key, max] of [['idleReclaimMinutes', 7 * 24 * 60], ['maxLiveAgents', 500]] as const) {
       const value = values[key];

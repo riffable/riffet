@@ -304,7 +304,7 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
   const [busy, setBusy] = useState(false);
   const behavior = readEnterKeyBehavior(settings.composerEnterBehavior);
   const runningBehavior = readComposerRunningBehavior(settings.composerRunningBehavior);
-  const persist = async (patch: Pick<AppSettings, 'composerEnterBehavior' | 'composerRunningBehavior'>) => {
+  const persist = async (patch: Pick<AppSettings, 'composerEnterBehavior' | 'composerRunningBehavior' | 'composerSendLater'>) => {
     if (busy) return;
     setBusy(true);
     try { onSaved(await api.updateSettings(patch), patch); }
@@ -321,6 +321,9 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
       <div className={busy ? 'pointer-events-none opacity-50' : ''} aria-busy={busy}>
         <Segmented<ComposerRunningBehavior> size="xs" value={runningBehavior} onChange={(next) => { if (next !== runningBehavior) void persist({ composerRunningBehavior: next }); }} ariaLabel={t`运行中发送的消息`} options={[{ value: 'queue', label: t({ message: '排队', context: 'settings-composer-queue' }), disabled: busy }, { value: 'steer', label: t`补充到当前任务`, disabled: busy }]} />
       </div>
+    </Row>
+    <Row title={t`展示稍后发送按钮`}>
+      <Switch aria-label={t`展示稍后发送按钮`} checked={settings.composerSendLater === true} disabled={busy} onCheckedChange={(value) => void persist({ composerSendLater: value })} />
     </Row>
   </Group>;
 }

@@ -179,6 +179,8 @@ data class AppSettings(
     val composerEnterBehavior: String? = null,
     /** `queue` (default) or `steer` for ordinary sends while a task runs. Account-wide. */
     val composerRunningBehavior: String? = null,
+    /** Shows send later beside the composer's send button. Off unless set. */
+    val composerSendLater: Boolean? = null,
     /** The gateway model for each side job (titles, handoff summaries); a missing purpose uses none. */
     val auxiliaryModels: AuxiliaryModels? = null,
     /** Minutes an unused conversation CLI may sit idle before the server stops it; null is 360, 0 never. */

@@ -53,6 +53,8 @@ struct LaunchTargetPicker: View {
     var projectId: String?
     /// Offer "默认 Agent" (leave the backend unset). Off where a target is mandatory, e.g. a handoff.
     var allowsDefault = true
+    /// Only the Agent chip, for a bar with no room for the model and mode rows.
+    var compact = false
     @Environment(\.palette) private var palette
     @State private var catalog: NativeBackendCatalogEntry?
     @State private var loadedKey: String?
@@ -63,16 +65,21 @@ struct LaunchTargetPicker: View {
     private var catalogKey: String { "\(contextKey)|\(workbench.backendRevision)|\(workbench.catalogs.connectionRevision)" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            row("Agent") {
-                NativeChipMenu(text: agentLabel, symbol: "sparkle") { agentEntries }
+        if compact {
+            NativeChipMenu(text: agentLabel, symbol: "sparkle") { agentEntries }
+                .task { if workbench.backends.isEmpty { await workbench.loadBackends() } }
+        } else {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                row("Agent") {
+                    NativeChipMenu(text: agentLabel, symbol: "sparkle") { agentEntries }
+                }
+                if choice.agent != nil { details }
+                hint
             }
-            if choice.agent != nil { details }
-            hint
-        }
-        .task(id: catalogKey) {
-            if workbench.backends.isEmpty { await workbench.loadBackends() }
-            await load(reload: false)
+            .task(id: catalogKey) {
+                if workbench.backends.isEmpty { await workbench.loadBackends() }
+                await load(reload: false)
+            }
         }
     }
 

@@ -25,6 +25,7 @@ import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
 import { ComposerDock } from '../session/ComposerDock';
+import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../tasks/SendLater';
 import { pickerBlockReason } from '../session/pickers';
 import { useSessionTranscript } from '../session/useSessionTranscript';
 import { timelineItemTime, type Choice, type SlashCommand } from '../session/model';
@@ -51,7 +52,7 @@ import type { MessageFocus } from '../session/focus-message';
 import { NativeInteractionCard } from '../session/NativeInteractionCard';
 import { useSessionSync } from '../session/useSessionSync';
 import { useSlashCatalog } from '../session/useSlashCatalog';
-import { HandoffDialog, SaveTemplateDialog } from '../session/SessionHandoff';
+import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
 import { ShareSessionContext, type ShareSession } from '../marks/ShareImage';
 import { useLists } from '../state/stores';
@@ -261,6 +262,8 @@ interface Props {
   /** Account-level Enter behavior for the composer; see `AppSettings.composerEnterBehavior`. */
   enterBehavior?: string;
   runningBehavior?: string;
+  /** `AppSettings.composerSendLater`: shows the clock in the input box. */
+  sendLaterEnabled?: boolean;
   /** A conversation this one started (a fork) was created; the workbench opens it. */
   onLaunched?: (result: NativeSessionCreateResult) => void;
   /** The handoff dialog offers every other backend, with why an unavailable one cannot be picked. */
@@ -343,7 +346,7 @@ function SessionComposerSlot({ autoFocus, className, onSent }: ComposerSlotProps
  * subagent behaves exactly as in a terminal, while the transcript is read back from the CLI's
  * chat store and rendered with the shared conversation timeline.
  */
-export function NativeSession({ session, initialRun, catalog, continuations, backendCapabilities, catalogLoading, catalogError, onRetryCatalog, terminal, root, reopening, sendingInitial, onReopen, onTerminalChanged, onSessionChanged, onRememberModel, onError, notificationsEnabled, references, sessionReferences, referenceSessions, referenceProjects, onReferencesChange, onOpenPath, onOpenInEditor, renderHeader, focus, enterBehavior, runningBehavior, onLaunched, backends = [], findSession, onOpenSession, onAttemptAdopted, onOpenAttemptGroup, initialView, onViewChange, quickChat = false }: Props) {
+export function NativeSession({ session, initialRun, catalog, continuations, backendCapabilities, catalogLoading, catalogError, onRetryCatalog, terminal, root, reopening, sendingInitial, onReopen, onTerminalChanged, onSessionChanged, onRememberModel, onError, notificationsEnabled, references, sessionReferences, referenceSessions, referenceProjects, onReferencesChange, onOpenPath, onOpenInEditor, renderHeader, focus, enterBehavior, runningBehavior, sendLaterEnabled, onLaunched, backends = [], findSession, onOpenSession, onAttemptAdopted, onOpenAttemptGroup, initialView, onViewChange, quickChat = false }: Props) {
   const { t } = useLingui();
   const mobileViewport = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const tabChrome = useContext(TabChromeContext);
@@ -423,7 +426,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [repairingNativeModel, setRepairingNativeModel] = useState(false);
   const [runtimeActionPendingSession, setRuntimeActionPendingSession] = useState<string>();
   const runtimeActionPending = runtimeActionPendingSession === session.id;
-  const [dialog, setDialog] = useState<'handoff' | 'template' | 'share' | 'pdf'>();
+  const [dialog, setDialog] = useState<'handoff' | 'automation' | 'share' | 'pdf'>();
   const autoOpened = useRef(false);
   const phase = native.status.phase;
   const connectionState = native.status.connection?.state;
@@ -805,6 +808,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const revealUnconfirmed = useCallback(() => { if (unconfirmedRunId) transcriptScrollRef.current?.revealRun(unconfirmedRunId); }, [unconfirmedRunId]);
   /** The queue card is on screen, closing included: the composer card keeps its seam until the card has gone. */
   const [queueShown, setQueueShown] = useState(false);
+  const followUps = useSessionFollowUps(session.id);
+  const followUpList = useMemo(() => followUps.items.length ? <FollowUpList items={followUps.items} onCancel={(id) => void followUps.cancel(id)} /> : undefined, [followUps.items, followUps.cancel]);
+  const sendLater = useCallback(async (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => {
+    const ok = await scheduleFollowUp(session.id, prompt, attachments, context, at);
+    if (ok) void followUps.refresh();
+    return ok;
+  }, [session.id, followUps.refresh]);
   const dock = useMemo(() => (
     <ComposerDock
       planInAside={layout.plan === 'aside'}
@@ -821,8 +831,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       onEditQueued={editQueued}
       onRemoveQueued={removeQueued}
       onQueueShown={setQueueShown}
+      followUps={followUpList}
     />
-  ), [layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
+  ), [followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
   const approvalIcon = useMemo(() => <ApprovalIcon mode={approval} />, [approval]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (
     <ApprovalPicker
@@ -964,7 +975,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       }),
       ...(quickChat || archived ? [] : [
         ...(session.handedOffTo ? [] : [{ id: 'handoff', icon: <IconArrowRightLeft />, label: t`交接会话…`, onSelect: () => setDialog('handoff') }]),
-        { id: 'template', icon: <IconBookmarkPlus />, label: t`存为任务模板…`, onSelect: () => setDialog('template') },
+        { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为定时任务…`, onSelect: () => setDialog('automation') },
       ]),
     ],
   }), [working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, t]);
@@ -972,7 +983,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
       <HandoffDialog open={dialog === 'handoff'} onOpenChange={(open) => setDialog(open ? 'handoff' : undefined)} session={session} backends={backends} working={working} onLaunched={(result) => onLaunched?.(result)} onError={onError} />
-      <SaveTemplateDialog open={dialog === 'template'} onOpenChange={(open) => setDialog(open ? 'template' : undefined)} session={session} onError={onError} />
+      <SaveAutomationDialog open={dialog === 'automation'} onOpenChange={(open) => setDialog(open ? 'automation' : undefined)} session={session} backends={backends} onError={onError} />
     </>
   );
 
@@ -1056,6 +1067,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     stopDisabled: archived || !live || !backendCapabilities?.supportsInterrupt || starting || native.sending || native.interrupting,
     submitIntent: submitIntent,
     onSubmit: submit,
+    ...(sendLaterEnabled && !quickChat && !archived ? { onSendLater: sendLater } : {}),
     onError: onError,
   };
 

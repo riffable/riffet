@@ -69,6 +69,9 @@ final class ComposerModel {
         items.compactMap { if case let .uploaded(attachment) = $0.state { attachment } else { nil } }
     }
 
+    /// A send-later request is in flight: send and the clock wait for it.
+    var schedulingLater = false
+
     var uploading: Bool { items.contains { if case .uploading = $0.state { true } else { false } } }
 
     var canSend: Bool { !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !uploading }

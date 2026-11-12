@@ -77,10 +77,12 @@ import type {
   NativeInteractionResult as ContractNativeInteractionResult,
   NativeHistoryState as ContractNativeHistoryState,
   PullRequestStatus,
+  Automation,
+  AutomationRun,
+  AutomationTrigger,
   PushResult,
   ReviewComment,
   Run,
-  Schedule,
   SearchHit,
   CodeDefinitions,
   CodeReferences,
@@ -89,7 +91,6 @@ import type {
   ExternalSessionPage,
   SessionDeletionPreview,
   SessionDeletionReceipt,
-  TaskTemplate,
   ToolGroupId,
   TerminalInfo,
   TerminalAppearance,
@@ -347,8 +348,15 @@ export function submitNativeSendRequest(entry: NativeSendOutboxEntry): Promise<R
 
 export interface MergeOptions { strategy?: 'merge' | 'squash'; message?: string; commitPending?: string; removeWorktree?: boolean; cleanup?: 'keep' | 'archive' | 'remove' }
 export interface LaunchIds { clientSessionId: string; commandId: string }
-export type TemplateInput = { name: string; prompt: string; target: LaunchTarget; isolate?: boolean };
-export type ScheduleInput = Pick<Schedule, 'name' | 'templateId' | 'projectId' | 'cron' | 'enabled' | 'target'>;
+/** What a new automation is made of; the server fills the rest (delivery `new`, catch-up `latest`, enabled). */
+export type AutomationInput = {
+  name: string; prompt: string; target?: LaunchTarget; projectId?: string | null; isolate?: boolean;
+  triggers?: AutomationTrigger[]; delivery?: Automation['delivery']; catchUp?: Automation['catchUp']; enabled?: boolean;
+  /** A follow-up of one conversation instead of a standalone task. */
+  followUp?: { sessionId: string };
+  /** A follow-up's id, chosen by the client so a retried request finds the first one. */
+  id?: string;
+} & Pick<NativeMessageInput, 'attachments' | 'context' | 'references'>;
 
 export interface AuthStatus { authenticated: boolean; tokenRequired: boolean; csrfToken?: string; }
 export type AuthLogin = { code: string; name?: string } | { token: string };
@@ -661,16 +669,12 @@ export const api = {
   adoptAttempt: (groupId: string, body: MergeOptions & { sessionId: string }) => request<{ group: AttemptGroup; merge: MergeResult; warnings: string[] }>(`/api/attempts/${encodeURIComponent(groupId)}/adopt`, json('POST', body)),
   addAttempt: (groupId: string, target: LaunchTarget) => request<{ group: AttemptGroup }>(`/api/attempts/${encodeURIComponent(groupId)}/attempts`, json('POST', { target })),
   discardAttempt: (groupId: string, sessionId: string, removeWorktree = false) => request<{ group: AttemptGroup; warnings: string[] }>(`/api/attempts/${encodeURIComponent(groupId)}/discard`, json('POST', { sessionId, removeWorktree })),
-  templates: () => request<TaskTemplate[]>('/api/templates'),
-  createTemplate: (body: TemplateInput) => request<TaskTemplate>('/api/templates', json('POST', body)),
-  updateTemplate: (id: string, body: Partial<TemplateInput>) => request<TaskTemplate>(`/api/templates/${encodeURIComponent(id)}`, json('PATCH', body)),
-  deleteTemplate: (id: string) => request<void>(`/api/templates/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  runTemplate: (id: string, body: LaunchIds & { projectId: string }) => request<NativeSessionCreateResult>(`/api/templates/${encodeURIComponent(id)}/run`, json('POST', body)),
-  schedules: () => request<Schedule[]>('/api/schedules'),
-  createSchedule: (body: ScheduleInput) => request<Schedule>('/api/schedules', json('POST', body)),
-  updateSchedule: (id: string, body: Partial<ScheduleInput>) => request<Schedule>(`/api/schedules/${encodeURIComponent(id)}`, json('PATCH', body)),
-  deleteSchedule: (id: string) => request<void>(`/api/schedules/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  runSchedule: (id: string) => request<Schedule>(`/api/schedules/${encodeURIComponent(id)}/run`, json('POST')),
+  automations: () => request<Automation[]>('/api/automations'),
+  createAutomation: (body: AutomationInput) => request<Automation>('/api/automations', json('POST', body)),
+  updateAutomation: (id: string, body: Partial<AutomationInput>) => request<Automation>(`/api/automations/${encodeURIComponent(id)}`, json('PATCH', body)),
+  deleteAutomation: (id: string) => request<void>(`/api/automations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  runAutomation: (id: string, body: Partial<LaunchIds> & { projectId?: string } = {}) => request<AutomationRun>(`/api/automations/${encodeURIComponent(id)}/run`, json('POST', body)),
+  automationRuns: (limit = 20) => request<AutomationRun[]>(`/api/automation-runs?limit=${limit}`),
   worktrees: (projectId: string) => request<WorktreeInfo[]>(`/api/projects/${encodeURIComponent(projectId)}/worktrees`),
   createWorktree: (projectId: string, body: { branch: string; path?: string; base?: string }) => request<WorktreeInfo>(`/api/projects/${encodeURIComponent(projectId)}/worktrees`, json('POST', body)),
   removeWorktree: (projectId: string, path: string) => request<void>(`/api/projects/${encodeURIComponent(projectId)}/worktrees`, json('DELETE', { path })),

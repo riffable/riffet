@@ -1,212 +1,240 @@
 import SwiftUI
 import RiffetKit
 
-/// What the template editor starts from when it is not editing a saved template, so "save this
-/// conversation as a template" can open it with the prompt and target already filled in.
-struct TemplateDraft: Equatable {
+/// What the editor starts from when it is not editing a saved task, so "save this conversation as a
+/// scheduled task" and the quick bar's custom time can open it already filled in.
+struct AutomationDraft: Equatable {
     var name = ""
     var prompt = ""
     var target = LaunchChoice()
-    var isolate = false
-}
-
-/// Creates a template, or edits [template]. Saves on its own and reports the saved template through
-/// [onSaved]; present it with `.sheet`. [prefill] fills a new one (ignored when editing), and
-/// [projectId] is the project whose model catalog the target picker reads.
-struct TemplateEditorSheet: View {
-    let workbench: Workbench
-    let template: TaskTemplate?
     var projectId: String?
-    var onSaved: (TaskTemplate) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.palette) private var palette
-    @State private var draft: TemplateDraft
-    @State private var busy = false
-    @State private var error: String?
+    var isolate = false
+    var trigger: AutomationTrigger?
 
-    init(workbench: Workbench, template: TaskTemplate? = nil, prefill: TemplateDraft? = nil, projectId: String? = nil, onSaved: @escaping (TaskTemplate) -> Void = { _ in }) {
-        self.workbench = workbench
-        self.template = template
-        self.projectId = projectId
-        self.onSaved = onSaved
-        let initial = template.map {
-            TemplateDraft(name: $0.name, prompt: $0.prompt, target: LaunchChoice($0.target), isolate: $0.isolate?.boolValue ?? false)
-        }
-        _draft = State(initialValue: initial ?? prefill ?? TemplateDraft())
-    }
-
-    private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var prompt: String { draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
-
-    var body: some View {
-        EditorSheet(
-            title: template == nil ? String(localized: "新建任务模板") : String(localized: "编辑任务模板"),
-            subtitle: "",
-            canSave: !name.isEmpty && !prompt.isEmpty,
-            busy: busy,
-            error: error,
-            save: { Task { await save() } }
-        ) {
-            EditorField(label: String(localized: "名称")) {
-                GitField(placeholder: String(localized: "比如：晨间依赖检查"), text: $draft.name)
-            }
-            EditorField(label: String(localized: "任务"), hint: String(localized: "运行时 {{date}} 会替换为当天日期，{{project}} 替换为项目名。")) {
-                PromptEditor(text: $draft.prompt, placeholder: String(localized: "让 Agent 做什么"))
-            }
-            EditorField(label: "Agent") {
-                LaunchTargetPicker(workbench: workbench, choice: $draft.target, projectId: projectId)
-            }
-            HStack(spacing: Space.md) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("每次在新的 Worktree 中运行").font(.riffet(size: S(13)))
-                    Text("不碰项目当前的工作区。").font(.riffet(size: S(11.5))).foregroundStyle(palette.fg3)
-                }
-                Spacer(minLength: 0)
-                Toggle("每次在新的 Worktree 中运行", isOn: $draft.isolate)
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-            }
-        }
-    }
-
-    private func save() async {
-        guard !busy, !name.isEmpty, !prompt.isEmpty, let api = workbench.host.api else { return }
-        busy = true
-        error = nil
-        defer { busy = false }
-        do {
-            // The whole target is sent, so clearing a field clears it on the server.
-            let target = draft.target.target
-            let saved: TaskTemplate
-            if let template {
-                saved = try await api.updateTemplate(id: template.id, name: name, prompt: prompt, target: target, isolate: KotlinBoolean(bool: draft.isolate))
-            } else {
-                saved = try await api.createTemplate(name: name, prompt: prompt, target: target, isolate: draft.isolate)
-            }
-            onSaved(saved)
-            dismiss()
-        } catch {
-            self.error = String(localized: "无法保存模板：\(error.riffetMessage)")
-        }
+    static func == (lhs: AutomationDraft, rhs: AutomationDraft) -> Bool {
+        lhs.name == rhs.name && lhs.prompt == rhs.prompt && lhs.target == rhs.target && lhs.projectId == rhs.projectId
+            && lhs.isolate == rhs.isolate && lhs.trigger?.kind == rhs.trigger?.kind && lhs.trigger?.at == rhs.trigger?.at && lhs.trigger?.cron == rhs.trigger?.cron
     }
 }
 
-/// Creates a schedule, or edits [schedule]: a template run in a project at a cron time. [templateId]
-/// is the template a new one starts from.
-struct ScheduleEditorSheet: View {
+/// Creates an automation, or edits [automation]: what to do, when it runs and how each run goes.
+/// Only the first trigger is edited; the others are kept as they are. Saves on its own and calls
+/// [onSaved]; present it with `.sheet`.
+struct AutomationEditorSheet: View {
+    private enum When: String { case manual, once, cron, other }
+    private static let customCron = "custom"
+
     let workbench: Workbench
-    let schedule: Schedule?
-    let templates: [TaskTemplate]
+    let automation: Automation?
     var onSaved: () -> Void
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
-    @State private var name: String
-    @State private var templateId: String
-    @State private var projectId: String
-    /// A preset's cron expression, or `custom`.
-    @State private var preset: String
-    @State private var custom: String
-    @State private var target: String
+    @State private var draft: AutomationDraft
+    @State private var when: When
+    @State private var at: Date
+    /// A cron preset's expression, or `customCron`.
+    @State private var cronPreset: String
+    @State private var customText: String
+    @State private var delivery: String
+    @State private var catchUp: Bool
     @State private var busy = false
     @State private var error: String?
     @State private var cronError: String?
 
-    private static let customPreset = "custom"
-
-    init(workbench: Workbench, schedule: Schedule? = nil, templates: [TaskTemplate], templateId: String? = nil, onSaved: @escaping () -> Void = {}) {
+    init(workbench: Workbench, automation: Automation? = nil, prefill: AutomationDraft? = nil, onSaved: @escaping () -> Void = {}) {
         self.workbench = workbench
-        self.schedule = schedule
-        self.templates = templates
+        self.automation = automation
         self.onSaved = onSaved
-        let cron = schedule?.cron ?? CronPreset.all[0].cron
+        let initial = automation.map {
+            AutomationDraft(name: $0.name, prompt: $0.prompt, target: LaunchChoice($0.target), projectId: $0.projectId, isolate: $0.isolate?.boolValue ?? false, trigger: $0.triggers.first)
+        } ?? prefill ?? AutomationDraft()
+        var draft = initial
+        if automation == nil, draft.projectId == nil {
+            draft.projectId = workbench.currentProjectId ?? workbench.projects.first?.id
+        }
+        var when = When.manual
+        var at = Date.now.addingTimeInterval(3600)
+        var cron = CronPreset.all[0].cron
+        switch initial.trigger?.kind {
+        case nil: break
+        case "once":
+            when = .once
+            if let date = ServerTime.date(initial.trigger?.at) { at = date }
+        case "cron":
+            when = .cron
+            cron = initial.trigger?.cron ?? cron
+        default: when = .other
+        }
         let known = CronPreset.all.contains { $0.cron == cron }
-        let projects = workbench.projects
-        let defaultProject = projects.first { $0.id == workbench.currentProjectId } ?? projects.first
-        _name = State(initialValue: schedule?.name ?? "")
-        _templateId = State(initialValue: schedule?.templateId ?? templateId ?? templates.first?.id ?? "")
-        _projectId = State(initialValue: schedule?.projectId ?? defaultProject?.id ?? "")
-        _preset = State(initialValue: known ? cron : Self.customPreset)
-        _custom = State(initialValue: known ? "" : cron)
-        _target = State(initialValue: schedule?.target ?? "new")
+        _draft = State(initialValue: draft)
+        _when = State(initialValue: when)
+        _at = State(initialValue: at)
+        _cronPreset = State(initialValue: known ? cron : Self.customCron)
+        _customText = State(initialValue: known ? "" : cron)
+        _delivery = State(initialValue: automation?.delivery ?? "new")
+        _catchUp = State(initialValue: (automation?.catchUp ?? "latest") == "latest")
     }
 
-    private var cron: String { preset == Self.customPreset ? custom.trimmingCharacters(in: .whitespacesAndNewlines) : preset }
-    private var templateName: String { templates.first { $0.id == templateId }?.name ?? "" }
-    private var project: Project? { workbench.project(projectId) }
+    private var name: String { draft.name.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var prompt: String { draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var cron: String { cronPreset == Self.customCron ? customText.trimmingCharacters(in: .whitespacesAndNewlines) : cronPreset }
+    private var project: Project? { workbench.project(draft.projectId) }
+    private var scheduled: Bool { when == .once || when == .cron || when == .other }
+    private var canSave: Bool {
+        guard !prompt.isEmpty else { return false }
+        if scheduled && draft.projectId == nil { return false }
+        return when != .cron || !cron.isEmpty
+    }
 
     var body: some View {
         EditorSheet(
-            title: schedule == nil ? String(localized: "定时运行") : String(localized: "编辑定时任务"),
+            title: automation == nil ? String(localized: "新建定时任务") : String(localized: "编辑定时任务"),
             subtitle: "",
-            canSave: !templateId.isEmpty && !projectId.isEmpty && !cron.isEmpty,
+            canSave: canSave,
             busy: busy,
             error: error,
             save: { Task { await save() } }
         ) {
-            HStack(alignment: .top, spacing: Space.lg) {
-                EditorField(label: String(localized: "模板")) {
-                    NativeChipMenu(text: templateName.isEmpty ? String(localized: "选择模板") : templateName, symbol: "doc.text") { templateEntries }
-                }
-                EditorField(label: String(localized: "项目")) {
-                    NativeChipMenu(text: project.map { $0.worktree?.branch ?? $0.name } ?? String(localized: "选择项目"), symbol: project?.worktree == nil ? "folder" : "arrow.triangle.branch") {
-                        projectMenuEntries(workbench.projects, selected: projectId, title: String(localized: "在哪个项目运行？")) { projectId = $0.id }
+            EditorField(label: String(localized: "名称")) {
+                GitField(placeholder: String(localized: "默认取提示词首行"), text: $draft.name)
+            }
+            EditorField(label: String(localized: "提示词")) {
+                PromptEditor(text: $draft.prompt, placeholder: String(localized: "要做什么…"))
+            }
+            EditorField(label: "Agent") {
+                LaunchTargetPicker(workbench: workbench, choice: $draft.target, projectId: draft.projectId)
+            }
+            EditorField(label: String(localized: "项目")) {
+                NativeChipMenu(text: project.map { $0.worktree?.branch ?? $0.name } ?? String(localized: "运行时选择"), symbol: project?.worktree == nil ? "folder" : "arrow.triangle.branch") { projectEntries }
+            }
+            toggleRow(String(localized: "每次在新的 Worktree 中运行"), isOn: $draft.isolate)
+            if when != .other {
+                EditorField(label: String(localized: "何时运行")) {
+                    VStack(alignment: .leading, spacing: Space.sm) {
+                        SegmentedTrack(selection: $when) {
+                            Text("手动").tag(When.manual)
+                            Text("一次").tag(When.once)
+                            Text("重复").tag(When.cron)
+                        }
+                        whenDetail
                     }
                 }
             }
-            EditorField(label: String(localized: "时间")) { timePicker }
-            EditorField(label: String(localized: "每次运行"), hint: target == "new" ? nil : String(localized: "那段会话归档后会重新开一段。")) {
-                SegmentedTrack(selection: $target) {
+            EditorField(label: String(localized: "每次运行")) {
+                SegmentedTrack(selection: $delivery) {
                     Text("开新会话").tag("new")
                     Text("发到同一会话").tag("same")
                 }
             }
-            EditorField(label: String(localized: "名称")) {
-                GitField(placeholder: templateName.isEmpty ? String(localized: "默认使用模板名") : templateName, text: $name)
-            }
+            if scheduled { toggleRow(String(localized: "错过后补跑"), isOn: $catchUp) }
         }
     }
 
-    private var timePicker: some View {
-        VStack(alignment: .leading, spacing: Space.xs) {
+    @ViewBuilder
+    private var whenDetail: some View {
+        switch when {
+        case .once:
+            DatePicker("", selection: $at, displayedComponents: [.date, .hourAndMinute])
+                .labelsHidden()
+                .datePickerStyle(.compact)
+        case .cron:
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: Space.xs, alignment: .leading)], alignment: .leading, spacing: Space.xs) {
                 ForEach(CronPreset.all) { item in
-                    Button(item.label) { preset = item.cron; cronError = nil }
-                        .buttonStyle(ChipButtonStyle(active: preset == item.cron))
+                    Button(item.label) { cronPreset = item.cron; cronError = nil }
+                        .buttonStyle(ChipButtonStyle(active: cronPreset == item.cron))
                 }
-                Button("自定义") { preset = Self.customPreset }
-                    .buttonStyle(ChipButtonStyle(active: preset == Self.customPreset))
+                Button("自定义") { cronPreset = Self.customCron }
+                    .buttonStyle(ChipButtonStyle(active: cronPreset == Self.customCron))
             }
-            if preset == Self.customPreset {
-                GitField(placeholder: "30 8 * * 1-5", text: Binding(get: { custom }, set: { custom = $0; cronError = nil }))
-                let described = describeCron(custom)
-                Text(cronError ?? (!cron.isEmpty && described != cron ? described : String(localized: "分 时 日 月 周，本地时间；也可以用 @daily、@hourly")))
-                    .font(.riffet(size: S(11.5)))
-                    .foregroundStyle(cronError == nil ? palette.fg3 : palette.danger)
+            if cronPreset == Self.customCron {
+                GitField(placeholder: "30 8 * * 1-5", text: Binding(get: { customText }, set: { customText = $0; cronError = nil }))
             }
+            if let line = cronNote {
+                Text(line).font(.riffet(size: S(11.5))).foregroundStyle(cronError == nil ? palette.fg3 : palette.danger).monospacedDigit()
+            }
+        default:
+            EmptyView()
         }
     }
 
-    private var templateEntries: [NativeMenuEntry] {
-        [NativeMenuEntry.header(String(localized: "模板"))] + templates.map { item -> NativeMenuEntry in
-            let id = item.id
-            return .item(item.name, checked: id == templateId) { templateId = id }
+    /// The error, or the words for a custom expression and when it fires next.
+    private var cronNote: String? {
+        if let cronError { return cronError }
+        guard !cron.isEmpty else { return nil }
+        var parts: [String] = []
+        if cronPreset == Self.customCron {
+            let described = describeCron(cron)
+            parts.append(described != cron ? described : String(localized: "分 时 日 月 周；也可以用 @daily、@hourly"))
         }
+        let unchanged = automation?.triggers.first?.cron == cron
+        if unchanged, let next = automation?.nextRunAt, let text = formatDateTime(value: next) {
+            parts.append(String(localized: "下次 \(text)"))
+        } else if let next = nextCronRun(cron), let text = formatDateTime(value: TimePreset.iso(next)) {
+            parts.append(String(localized: "下次 \(text)"))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    private func toggleRow(_ title: String, isOn: Binding<Bool>) -> some View {
+        HStack(spacing: Space.md) {
+            Text(title).font(.riffet(size: S(13)))
+            Spacer(minLength: 0)
+            Toggle(title, isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+        }
+    }
+
+    private var projectEntries: [NativeMenuEntry] {
+        var entries: [NativeMenuEntry] = []
+        // A saved project cannot be cleared again (an update leaves an absent field as it was).
+        if automation?.projectId == nil && !scheduled {
+            entries.append(.item(String(localized: "运行时选择"), checked: draft.projectId == nil) { draft.projectId = nil })
+        }
+        return entries + projectMenuEntries(workbench.projects, selected: draft.projectId, title: String(localized: "在哪个项目运行？")) { draft.projectId = $0.id }
     }
 
     private func save() async {
-        guard !busy, !templateId.isEmpty, !projectId.isEmpty, !cron.isEmpty, let api = workbench.host.api else { return }
+        guard !busy, canSave, let api = workbench.host.api else { return }
         busy = true
         error = nil
         cronError = nil
         defer { busy = false }
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let finalName = trimmed.isEmpty ? templateName : trimmed
-        do {
-            if let schedule {
-                _ = try await api.updateSchedule(id: schedule.id, name: finalName, templateId: templateId, projectId: projectId, cron: cron, enabled: nil, target: target)
+        let finalName = name.isEmpty ? TasksModel.name(of: prompt) : name
+        let existing = automation?.triggers ?? []
+        var triggers: [AutomationTrigger]?
+        switch when {
+        case .manual: triggers = []
+        case .once:
+            // A time left as it was keeps the saved trigger as the server sent it.
+            if let first = existing.first, first.kind == "once", ServerTime.date(first.at) == at {
+                triggers = existing
             } else {
-                _ = try await api.createSchedule(name: finalName, templateId: templateId, projectId: projectId, cron: cron, enabled: true, target: target)
+                triggers = [AutomationTrigger(kind: "once", at: TimePreset.iso(at), cron: nil, timeZone: TimeZone.current.identifier)] + existing.dropFirst()
+            }
+        case .cron:
+            // An expression left as it was keeps the zone it was saved with.
+            let first = existing.first
+            let zone = first?.kind == "cron" && first?.cron == cron ? first?.timeZone : nil
+            triggers = first?.kind == "cron" && first?.cron == cron ? existing : [AutomationTrigger(kind: "cron", at: nil, cron: cron, timeZone: zone ?? TimeZone.current.identifier)] + existing.dropFirst()
+        case .other: triggers = nil
+        }
+        do {
+            // The whole target is sent, so clearing a field clears it on the server.
+            let target = draft.target.target
+            let mode = delivery
+            let catchUpValue = catchUp ? "latest" : "skip"
+            if let automation {
+                _ = try await api.updateAutomation(
+                    id: automation.id, name: finalName, prompt: prompt, target: target, projectId: draft.projectId,
+                    isolate: KotlinBoolean(bool: draft.isolate), triggers: triggers, delivery: mode, catchUp: catchUpValue, enabled: nil
+                )
+            } else {
+                _ = try await api.createAutomation(
+                    name: finalName, prompt: prompt, target: target, projectId: draft.projectId, isolate: draft.isolate,
+                    triggers: triggers ?? [], delivery: mode, catchUp: catchUpValue, enabled: true
+                )
             }
             onSaved()
             dismiss()
@@ -315,9 +343,10 @@ private struct EditorField<Content: View>: View {
 }
 
 /// A multi-line field in the look of `GitField`.
-private struct PromptEditor: View {
+struct PromptEditor: View {
     @Binding var text: String
     let placeholder: String
+    var minHeight: CGFloat = 112
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -326,7 +355,7 @@ private struct PromptEditor: View {
             .scrollContentBackground(.hidden)
             .padding(.horizontal, Space.sm)
             .padding(.vertical, Space.xs + 2)
-            .frame(minHeight: 112, maxHeight: 240)
+            .frame(minHeight: minHeight, maxHeight: 240)
             .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
             .overlay(alignment: .topLeading) {
                 if text.isEmpty {

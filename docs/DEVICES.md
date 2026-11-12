@@ -30,7 +30,7 @@ Riffet MCP **只在每次启动 CLI 时注入**，不写入各后端的全局配
 
 ### 工具组：按对话选择
 
-Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（快速对话除外）：`read_context`（会话引用）、`schedule_wakeup` / `cancel_wakeup` / `list_wakeups`、`notify_user`、`list_devices`（只列本对话可用的设备）。它们很小，不让用户选。
+Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（快速对话除外）：`read_context`（会话引用）、`schedule_wakeup` / `cancel_wakeup` / `list_wakeups`、`schedule_task`、`notify_user`、`list_devices`（只列本对话可用的设备）。它们很小，不让用户选。
 
 要选的只有设备：**每个对话自己选**，在输入框的「技能与工具」里勾「控制 <设备名>」（工具组 `device:<设备>`，能力见 §4）。只列出在线且设备侧已允许被操作的设备；已选上但离线的仍列出并标「离线」，以便取消。新对话沿用上次的选择，但只带上此刻在线的那些。一台都没有、对话里也没选过时，这个入口不出现。想让它不出现，就在手机上关掉「允许 Agent 操作这台设备」，或在「设置 › 设备管理」里移除那台设备。2026-11-10 起；此前的按端配置与 `riffet.core` 组已删除（旧客户端发来的 `riffet.core` 直接忽略）。
 
@@ -94,7 +94,7 @@ Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（
 
 不做 `ask_user`：普通提问用各 CLI 自带的提问工具，已走 Riffet 的等待确认、通知与通知内回答；定时执行前的授权由 `device_authorize` 在手机上确认（§3「协议（R3，T1）」）。
 
-**一次性唤醒**：`RiffetWakeup {id, sessionId, dueAt, note, createdAt, status: pending | fired | cancelled | failed | missed, firedAt?, runId?, error?}` 存在设置表 `orchestration:wakeups`。调度器除 30 秒一次的检查外，按最近的到期时间另设定时器。到期先写 `fired` 再发送，回合的 `commandId` 为 `wakeup-<id>`，即使重试也只有一个回合。会话忙时与输入框发送相同，排在当前回合之后。会话已归档或已交接记为 `failed`，错过超过 1 小时记为 `missed`，二者都写一条 `source: 'wakeup'` 的通知。已结束的唤醒保留 7 天。
+**一次性唤醒**：`RiffetWakeup {id, sessionId, dueAt, note, createdAt, status: pending | fired | cancelled | failed | missed, firedAt?, runId?, error?}` 是 agent 后续（`Automation.followUp.by = 'agent'`，id 即唤醒 id，存在 SQLite `automations` 表，docs/ORCHESTRATION.md §5）的视图：待运行为 `pending`，成功为 `fired`，被取消为 `cancelled`（未运行过就停用），会话不可用等为 `failed`。调度器除 30 秒一次的检查外，按最近的到期时间另设定时器。到期先写下一次时间（后续随即停用）再发送，回合的 `commandId` 为 `wakeup-<id>`，即使重试也只有一个回合。会话忙时与输入框发送相同，排在当前回合之后。会话已归档或已交接记为 `failed`，错过超过 1 小时记为 `missed`，二者都写一条 `source: 'wakeup'` 的通知。已结束的唤醒保留 7 天。
 
 **通知事件**：`/api/lists/stream` 增加 SSE 事件 `event: notice`，`data` 为 `RiffetNotice {id, sessionId, title?, body, createdAt, source: 'agent' | 'wakeup'}`，按会话可见性过滤；只监听 `changed` 的旧客户端不受影响。服务端保留最近 200 条。客户端展示是后续任务。
 

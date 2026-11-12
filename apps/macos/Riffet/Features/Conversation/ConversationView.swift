@@ -223,7 +223,7 @@ struct ConversationView: View {
                         }
                         .modifier(AssemblyEntrance(workbench: workbench, sessionId: session.id))
                     }
-                    ComposerDocks(workbench: workbench, composer: composer, supportsSteer: catalog?.capabilities.supportsSteer == true, supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true, recoveryOnly: fullscreen)
+                    ComposerDocks(workbench: workbench, composer: composer, sessionId: session.id, supportsSteer: catalog?.capabilities.supportsSteer == true, supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true, recoveryOnly: fullscreen)
                     FeedbackRegion(value: workbench.configurationError ?? workbench.recoveryError?.text, active: feedbackActive) { error, live in
                         HStack {
                             Text(error).font(.riffet(size: S(12))).foregroundStyle(live ? palette.danger : palette.fg3)
@@ -308,7 +308,8 @@ struct ConversationView: View {
             openSessionReference: { workbench.open(sessionId: $0) },
             enterSends: workbench.settings?.composerEnterBehavior == "send",
             steersWhileRunning: quickChat ? false : defaultSendSteers,
-            enqueue: defaultSendSteers ? { Task { await send(interrupt: false, state: state, enqueue: true) } } : nil
+            enqueue: defaultSendSteers ? { Task { await send(interrupt: false, state: state, enqueue: true) } } : nil,
+            sendLater: quickChat || workbench.settings?.composerSendLater?.boolValue != true ? nil : { date in Task { await sendLater(date) } }
         )
     }
 
@@ -567,6 +568,23 @@ struct ConversationView: View {
         } catch {
             guard request.isCurrent, isCurrentSession else { return }
             catalogError = error.riffetMessage
+        }
+    }
+
+    /// Schedules the draft as a later turn of this conversation; the draft is cleared once the server has it.
+    private func sendLater(_ date: Date) async {
+        let composer = composer
+        guard composer.canSend, !composer.schedulingLater else { return }
+        composer.schedulingLater = true
+        defer { composer.schedulingLater = false }
+        let submission = composer.submission()
+        do {
+            try await workbench.sendLater(submission.text, attachments: submission.attachments, at: date, id: UUID().uuidString)
+            composer.clear(sent: submission)
+            composer.flushDraft()
+            workbench.pageModels.tasks.reload()
+        } catch {
+            composer.notice = String(localized: "无法安排稍后发送：\(error.riffetMessage)")
         }
     }
 
@@ -865,6 +883,7 @@ struct SubagentTarget: Identifiable {
 struct ComposerDocks: View {
     let workbench: Workbench
     let composer: ComposerModel
+    let sessionId: String
     var supportsSteer = false
     var supportsTargetedStop = false
     var recoveryOnly = false
@@ -872,10 +891,27 @@ struct ComposerDocks: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
+        let tasks = workbench.pageModels.tasks
         VStack(spacing: 6) {
             if !recoveryOnly {
                 if let goal = workbench.goal { GoalDockView(goal: goal).transition(ComposerMotion.insert) }
                 if !workbench.todos.isEmpty { TodoDockView(entries: workbench.todos).transition(ComposerMotion.insert) }
+            }
+            ForEach(recoveryOnly ? [] : tasks.followUps(for: sessionId), id: \.id) { followUp in
+                DockCard {
+                    Image(icon: "clock").font(.riffet(size: S(12))).foregroundStyle(palette.fg4)
+                    Text("\(formatDateTime(value: followUp.nextRunAt) ?? "") · \(TasksModel.name(of: followUp.prompt))")
+                        .lineLimit(1).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).monospacedDigit()
+                    if followUp.input?.attachmentIds.isEmpty == false {
+                        Image(icon: "paperclip").font(.riffet(size: S(12))).foregroundStyle(palette.fg4).layoutPriority(1)
+                    }
+                    Spacer(minLength: Space.sm)
+                    Button { Task { await tasks.delete(followUp) } } label: { Image(icon: "xmark").font(.riffet(size: S(11), weight: .semibold)) }
+                        .buttonStyle(IconButtonStyle(size: 26))
+                        .help("取消")
+                        .accessibilityLabel("取消")
+                }
+                .transition(ComposerMotion.insert)
             }
             ForEach(recoveryOnly ? [] : workbench.queued, id: \.id) { run in
                 // A send still submitting has no run on the server to act on yet.
@@ -911,6 +947,12 @@ struct ComposerDocks: View {
                     .fixedSize()
                 }
                 .transition(ComposerMotion.insert)
+            }
+        }
+        .task(id: sessionId) {
+            while !Task.isCancelled {
+                await tasks.load()
+                try? await Task.sleep(for: .seconds(30))
             }
         }
     }

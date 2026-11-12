@@ -264,10 +264,6 @@ msgstr ""
 msgid "下载文件"
 msgstr ""
 
-#: src/app/session/SessionHandoff.tsx
-msgid "不碰项目当前的工作区"
-msgstr ""
-
 #: src/app/session/DirectoryMenu.tsx
 msgid "不选择项目"
 msgstr ""
@@ -334,10 +330,6 @@ msgstr ""
 msgid "从此处另开会话"
 msgstr ""
 
-#: src/app/session/SessionHandoff.tsx
-msgid "任务"
-msgstr ""
-
 #. placeholder {0}: index + 1
 #: src/app/session/Timeline.tsx
 msgid "任务 {0}"
@@ -400,10 +392,6 @@ msgstr ""
 #: src/app/session/MarkLayer.tsx
 #: src/app/session/SideDiscussion.tsx
 msgid "侧边聊天"
-msgstr ""
-
-#: src/app/session/SessionHandoff.tsx
-msgid "保存"
 msgstr ""
 
 #: src/app/session/Attempts.tsx
@@ -617,7 +605,6 @@ msgid "发送失败"
 msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
-#: src/app/session/Timeline.tsx
 msgid "发送失败，可恢复内容后重试"
 msgstr ""
 
@@ -630,6 +617,7 @@ msgid "发送设置"
 msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
+#: src/app/session/Timeline.tsx
 msgid "取消"
 msgstr ""
 
@@ -677,10 +665,6 @@ msgstr ""
 
 #: src/app/session/SubagentSession.tsx
 msgid "同步中"
-msgstr ""
-
-#: src/app/session/SessionHandoff.tsx
-msgid "名称"
 msgstr ""
 
 #: src/app/session/SessionAside.tsx
@@ -873,10 +857,6 @@ msgstr ""
 msgid "子 Agent 正在启动…"
 msgstr ""
 
-#: src/app/session/SessionHandoff.tsx
-msgid "存为任务模板"
-msgstr ""
-
 #: src/app/session/ZoomPanImage.tsx
 msgid "实际大小"
 msgstr ""
@@ -959,9 +939,8 @@ msgstr ""
 msgid "已交接给 {0}"
 msgstr ""
 
-#. placeholder {0}: name.trim()
 #: src/app/session/SessionHandoff.tsx
-msgid "已保存模板「{0}」"
+msgid "已保存"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
@@ -1343,10 +1322,6 @@ msgstr ""
 msgid "无法保存待发送消息，请检查浏览器存储空间"
 msgstr ""
 
-#: src/app/session/SessionHandoff.tsx
-msgid "无法保存模板"
-msgstr ""
-
 #: src/app/session/Attempts.tsx
 #: src/app/session/nativeRunCommands.ts
 msgctxt "session-stop-failed"
@@ -1675,10 +1650,6 @@ msgstr ""
 msgid "正在载入预览…"
 msgstr ""
 
-#: src/app/session/SessionHandoff.tsx
-msgid "每次在新的 Worktree 中运行"
-msgstr ""
-
 #: src/app/session/Composer.tsx
 msgid "没有匹配的会话"
 msgstr ""
@@ -1710,10 +1681,6 @@ msgstr ""
 
 #: src/app/session/Timeline.tsx
 msgid "没有输出"
-msgstr ""
-
-#: src/app/session/SessionHandoff.tsx
-msgid "沿用这个会话的 Agent、模型与权限。"
 msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
@@ -1913,10 +1880,6 @@ msgstr ""
 
 #: src/app/session/Composer.tsx
 msgid "自主读写文件、执行命令"
-#: src/app/session/Timeline.tsx
-msgid "补充"
-msgstr ""
-
 msgstr ""
 
 #: src/app/session/Composer.tsx
@@ -1946,6 +1909,10 @@ msgstr ""
 msgid "蓝色"
 msgstr ""
 
+#: src/app/session/Timeline.tsx
+msgid "补充"
+msgstr ""
+
 #: src/app/session/Composer.tsx
 #: src/app/session/ComposerDock.tsx
 msgid "补充到当前任务"
@@ -1969,10 +1936,6 @@ msgstr ""
 
 #: src/app/session/SessionAside.tsx
 msgid "计划"
-msgstr ""
-
-#: src/app/session/SessionHandoff.tsx
-msgid "让 Agent 做什么"
 msgstr ""
 
 #: src/app/session/toolView.ts
@@ -2085,10 +2048,6 @@ msgstr ""
 #: src/app/session/toolView.ts
 msgctxt "tool-action"
 msgid "运行命令"
-msgstr ""
-
-#: src/app/session/SessionHandoff.tsx
-msgid "运行时 <0>{dateToken}</0> 会替换为当天日期，<1>{projectToken}</1> 替换为项目名。"
 msgstr ""
 
 #. placeholder {0}: sample.windowSeconds

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowRightLeft, IconBookmarkPlus, IconCheck, IconRotateCw, IconSparkles } from '@/components/icons';
+import { IconArrowRightLeft, IconCheck, IconRotateCw, IconSparkles } from '@/components/icons';
 import type { HandoffDraft, NativeBackendCatalogEntry, NativeBackendId, Session } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Spinner, Switch, Textarea } from '@/components/ui/controls';
+import { Field, Spinner, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, HttpError, type NativeSessionCreateResult } from '@/lib/api';
 import { sessionBackend, useBackendLabel } from '@/lib/backends';
@@ -11,7 +11,7 @@ import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { useLists } from '../state/stores';
-import { useGitStatus } from '../state/gitStatusStore';
+import { AutomationEditor, type AutomationEditorState } from '../tasks/AutomationEditor';
 import { LaunchTargetBar, launchTargetOf, useBackendCatalogs, type LaunchTargetShape } from './LaunchTargetBar';
 
 /**
@@ -183,69 +183,36 @@ export function HandoffDialog({ open, onOpenChange, session, backends, working, 
   );
 }
 
-export function SaveTemplateDialog({ open, onOpenChange, session, onError }: {
-  open: boolean; onOpenChange: (open: boolean) => void; session: Session; onError: (message: string) => void;
+/** "Save as scheduled task": the full editor, opened with this conversation's opening request, agent and project. */
+export function SaveAutomationDialog({ open, onOpenChange, session, backends, onError }: {
+  open: boolean; onOpenChange: (open: boolean) => void; session: Session; backends: NativeBackendCatalogEntry[]; onError: (message: string) => void;
 }) {
   const { t } = useLingui();
-  const git = useGitStatus(session.projectId)?.status;
-  const managedWorkspace = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'task-workspace');
-  // Literal braces must be values, not message text: ICU would read `{{date}}` as an argument.
-  const dateToken = '{{date}}';
-  const projectToken = '{{project}}';
-  const [name, setName] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [isolate, setIsolate] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const projects = useLists((state) => state.projects);
+  const [state, setState] = useState<AutomationEditorState>();
   useEffect(() => {
-    if (!open) return;
-    setName(session.title);
-    setPrompt('');
-    setIsolate(false);
+    if (!open) { setState(undefined); return; }
     let current = true;
+    const seed: NonNullable<AutomationEditorState['seed']> = {
+      name: session.title, projectId: session.projectId,
+      target: { backendId: sessionBackend(session), ...(session.backendProfileId ? { backendProfileId: session.backendProfileId } : {}), ...(session.model ? { model: session.model } : {}), mode: session.mode, ...(session.approval ? { approval: session.approval } : {}) },
+    };
     // The opening request is what a repeat of this conversation would start from; follow-ups that
-    // steered a running turn only make sense inside it.
-    void api.runs(session.id).then((runs) => {
-      const first = runs.find((run) => run.native?.intent !== 'steer' && run.prompt.trim());
-      if (current && first) setPrompt((value) => value || first.prompt);
-    }).catch(() => undefined);
+    // steered a running turn only make sense inside it. The editor opens once, with it filled in.
+    void api.runs(session.id)
+      .then((runs) => runs.find((run) => run.native?.intent !== 'steer' && run.prompt.trim())?.prompt)
+      .catch(() => undefined)
+      .then((prompt) => { if (current) setState({ seed: { ...seed, ...(prompt ? { prompt } : {}) } }); });
     return () => { current = false; };
-  }, [open, session.id, session.title]);
-  const submit = async () => {
-    if (busy || !name.trim() || !prompt.trim()) return;
-    setBusy(true);
-    try {
-      await api.createTemplate({
-        name: name.trim(), prompt: prompt.trim(), isolate: isolate && Boolean(git) && !managedWorkspace,
-        target: { backendId: sessionBackend(session), ...(session.backendProfileId ? { backendProfileId: session.backendProfileId } : {}), ...(session.model ? { model: session.model } : {}), mode: session.mode, ...(session.approval ? { approval: session.approval } : {}) },
-      });
-      onOpenChange(false);
-      toast.success(t`已保存模板「${name.trim()}」`);
-    } catch (error) {
-      onError(errorMessage(error, t`无法保存模板`));
-    } finally { setBusy(false); }
-  };
+  }, [open, session.id]);
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle><Trans>存为任务模板</Trans></DialogTitle>
-          <DialogDescription><Trans>沿用这个会话的 Agent、模型与权限。</Trans></DialogDescription>
-        </DialogHeader>
-        <DialogBody className="flex flex-col gap-3">
-          <Field label={t`名称`}><Input autoFocus value={name} onChange={(event) => setName(event.target.value)} /></Field>
-          <Field label={t`任务`} hint={<Trans>运行时 <code className="font-mono">{dateToken}</code> 会替换为当天日期，<code className="font-mono">{projectToken}</code> 替换为项目名。</Trans>}>
-            <Textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} className="min-h-32" placeholder={t`让 Agent 做什么`} />
-          </Field>
-          {!managedWorkspace && <label className="flex items-center justify-between gap-3 text-sm text-fg-2">
-            <span className="flex flex-col"><span className="text-fg"><Trans>每次在新的 Worktree 中运行</Trans></span><span className="text-xs text-fg-3"><Trans>不碰项目当前的工作区</Trans></span></span>
-            <Switch checked={isolate && Boolean(git)} disabled={!git} onCheckedChange={setIsolate} aria-label={t`每次在新的 Worktree 中运行`} />
-          </label>}
-        </DialogBody>
-        <DialogFooter>
-          <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="session-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={busy || !name.trim() || !prompt.trim()} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconBookmarkPlus />}<Trans>保存</Trans></Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <AutomationEditor
+      state={state}
+      projects={projects.filter((project) => !project.archivedAt && !project.system)}
+      backends={backends}
+      onClose={() => onOpenChange(false)}
+      onSaved={() => toast.success(t`已保存`)}
+      onError={onError}
+    />
   );
 }

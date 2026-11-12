@@ -32,6 +32,8 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     @Environment(\.covered) private var covered
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var textHeight: CGFloat = 0
+    @State private var pickingLater = false
+    @State private var laterDate = Date.now
     /// The draft this view last showed: a change of draft (another conversation's) is not animated.
     @State private var shownDraft: ObjectIdentifier?
     @State private var highlight = 0
@@ -181,6 +183,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             HStack(alignment: .bottom, spacing: line ? 4 : 0) {
                 if line {
                     attachButton(line: true).padding(.bottom, rowInset)
+                    sendLaterButton(line: true).padding(.bottom, rowInset)
                 }
                 ZStack(alignment: .topLeading) {
                     if model.text.isEmpty && !composing {
@@ -199,7 +202,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                         enterSends: features.enterSends,
                         fontSize: S(line ? 15 : 14),
                         resize: motion,
-                        onSubmit: { interrupt in if sendEnabled { onSend(interrupt) } },
+                        onSubmit: { interrupt in if sendEnabled && !model.schedulingLater { onSend(interrupt) } },
                         onPasteFiles: { _ in model.paste(upload: upload) },
                         onKey: handle,
                         onComposing: { composing = $0 }
@@ -242,6 +245,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             if !line {
                 HStack(spacing: Space.xxs) {
                     attachButton(line: false)
+                    sendLaterButton(line: false)
                     barView(line: false)
                     actionButton.padding(.leading, Space.xs)
                 }
@@ -284,6 +288,41 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             .environment(\.chipMetrics, .row)
             .padding(.horizontal, 4)
             .frame(height: 40)
+    }
+
+    /// The clock beside the attach button: the draft, with its attachments and references, goes to this conversation at a later time.
+    @ViewBuilder
+    private func sendLaterButton(line: Bool) -> some View {
+        if let sendLater = features.sendLater {
+            NativeMenuButton(entries: {
+                var entries: [NativeMenuEntry] = TimePreset.moments.compactMap { preset in
+                    preset.date().map { date in .item(preset.label) { sendLater(date) } }
+                }
+                entries.append(.separator)
+                entries.append(.item(String(localized: "自定义时间…")) { laterDate = Date.now.addingTimeInterval(3600); pickingLater = true })
+                return entries
+            }) {
+                if line {
+                    Image(icon: "clock").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
+                } else {
+                    Image(icon: "clock")
+                }
+            }
+            .buttonStyle(IconButtonStyle(size: line ? 32 : 26))
+            .disabled(!sendEnabled || !model.canSend || model.schedulingLater)
+            .help("稍后发送")
+            .accessibilityLabel("稍后发送")
+            .popover(isPresented: $pickingLater, arrowEdge: .top) {
+                VStack(alignment: .trailing, spacing: Space.md) {
+                    DatePicker("", selection: $laterDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
+                        .labelsHidden()
+                        .datePickerStyle(.graphical)
+                    Button("安排") { pickingLater = false; sendLater(laterDate) }
+                        .buttonStyle(SolidButtonStyle(kind: .primary))
+                }
+                .padding(Space.md)
+            }
+        }
     }
 
     private func attachButton(line: Bool) -> some View {
@@ -458,7 +497,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         .buttonStyle(ComposerActionButtonStyle(line: line))
         .disabled(stopping
             ? sendState?.sending == true || interrupting
-            : !sendEnabled || !model.canSend || sendState?.sending == true || interrupting)
+            : !sendEnabled || !model.canSend || model.schedulingLater || sendState?.sending == true || interrupting)
         .help(stopping
             ? (interrupting ? String(localized: "停止中") : working ? String(localized: "停止当前任务 (⌘.)") : String(localized: "停止后台任务 (⌘.)"))
             : working && onStop != nil ? String(localized: "\(features.steersWhileRunning ? String(localized: "补充到当前任务") : String(localized: "排队发送")) (\(sendKey))；⇧⌘↩ 停止并发送") : String(localized: "发送 (\(sendKey))"))

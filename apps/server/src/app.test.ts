@@ -1388,21 +1388,21 @@ describe('worktree projects', () => {
     await run('commit', '-qm', 'seed');
   }
 
-  it('creates one isolated template session on concurrent retries, rejecting a different launch before making another worktree', async () => {
+  it('creates one isolated automation session on concurrent retries, rejecting a different launch before making another worktree', async () => {
     const { projectDir, call, dispatch, git, store } = await boot();
     await dispatch.close();
     await repo(projectDir);
     const project = (await call('POST', '/api/projects', { cwd: projectDir })).json() as { id: string };
-    const template = (await call('POST', '/api/templates', { name: 'check', prompt: 'inspect', isolate: true })).json() as { id: string };
-    const body = { projectId: project.id, clientSessionId: 'template-retry', commandId: 'template-command' };
-    const responses = await Promise.all([call('POST', `/api/templates/${template.id}/run`, body), call('POST', `/api/templates/${template.id}/run`, body)]);
+    const automation = (await call('POST', '/api/automations', { name: 'check', prompt: 'inspect', isolate: true })).json() as { id: string };
+    const body = { projectId: project.id, clientSessionId: 'automation-retry', commandId: 'automation-command' };
+    const responses = await Promise.all([call('POST', `/api/automations/${automation.id}/run`, body), call('POST', `/api/automations/${automation.id}/run`, body)]);
     expect(responses.map(response => response.statusCode)).toEqual([202, 202]);
-    expect(responses[0].json().run.id).toBe(responses[1].json().run.id);
+    expect(responses[0].json().runId).toBe(responses[1].json().runId);
     expect(await git.worktrees(store.getProject(project.id))).toHaveLength(2);
-    const other = (await call('POST', '/api/templates', { name: 'other', prompt: 'different' })).json() as { id: string };
-    expect((await call('POST', `/api/templates/${other.id}/run`, body)).statusCode).toBe(409);
-    const invalid = (await call('POST', '/api/templates', { name: 'invalid', prompt: 'inspect', isolate: true, target: { backendId: 'cursor', mode: 'unsupported-mode' } })).json() as { id: string };
-    expect((await call('POST', `/api/templates/${invalid.id}/run`, { ...body, clientSessionId: 'invalid-launch' })).statusCode).toBe(400);
+    const other = (await call('POST', '/api/automations', { name: 'other', prompt: 'different' })).json() as { id: string };
+    expect((await call('POST', `/api/automations/${other.id}/run`, body)).statusCode).toBe(409);
+    const invalid = (await call('POST', '/api/automations', { name: 'invalid', prompt: 'inspect', isolate: true, target: { backendId: 'cursor', mode: 'unsupported-mode' } })).json() as { id: string };
+    expect((await call('POST', `/api/automations/${invalid.id}/run`, { ...body, clientSessionId: 'invalid-launch' })).statusCode).toBe(400);
     expect(await git.worktrees(store.getProject(project.id))).toHaveLength(2);
   });
 
@@ -1716,80 +1716,126 @@ describe('orchestration submissions', () => {
   });
 });
 
-describe('schedules', () => {
+describe('automations', () => {
   it('applies both day constraints when a cron day field uses a wildcard step', () => {
-    const next = nextCronTime(parseCron('0 9 */2 * 1'), new Date(2026, 0, 5, 10));
+    const next = nextCronTime(parseCron('0 9 */2 * 1'), new Date(Date.UTC(2026, 0, 5, 10)), 'UTC');
     // The 12th is a Monday but not an odd day; odd weekdays before the 19th are not Mondays.
-    expect(next?.getTime()).toBe(new Date(2026, 0, 19, 9).getTime());
+    expect(next?.getTime()).toBe(Date.UTC(2026, 0, 19, 9));
   });
 
-  it('coalesces concurrent fires and keeps the previous busy session when a new-session schedule is edited', async () => {
-    const { projectDir, store, orchestration, dispatch } = await boot();
+  it('reads cron in its own time zone, skips a time the clock jumps over and runs a repeated one once', () => {
+    const zone = 'America/New_York';
+    const at = (cron: string, after: string) => nextCronTime(parseCron(cron), new Date(after), zone)?.toISOString();
+    expect(at('0 9 * * *', '2026-01-10T00:00:00Z')).toBe('2026-01-10T14:00:00.000Z');
+    // 02:30 does not exist on 8 March 2026; the next run is the following day.
+    expect(at('30 2 * * *', '2026-03-07T12:00:00Z')).toBe('2026-03-09T06:30:00.000Z');
+    // 01:30 happens twice on 1 November 2026 and runs at the first.
+    expect(at('30 1 * * *', '2026-10-31T12:00:00Z')).toBe('2026-11-01T05:30:00.000Z');
+    expect(at('30 1 * * *', '2026-11-01T05:30:00Z')).toBe('2026-11-02T06:30:00.000Z');
+  });
+
+  it('coalesces concurrent runs and keeps the previous busy session when a new-session automation is edited', async () => {
+    const { projectDir, orchestration, store, dispatch } = await boot();
     await dispatch.close();
     const project = store.createProject(projectDir, 'scheduled');
-    const template = orchestration.saveTemplate(undefined, { name: 'check', prompt: 'inspect' });
-    const schedule = orchestration.saveSchedule(undefined, { name: 'check', projectId: project.id, templateId: template.id, cron: '* * * * *' });
-    const due = new Date(Date.now() - 60_000).toISOString();
-    store.setSetting('orchestration:schedules', { [schedule.id]: { ...schedule, nextRunAt: due } });
-    expect(orchestration.saveSchedule(schedule.id, { name: 'renamed' }).nextRunAt).toBe(due);
-    const [first, second] = await Promise.all([orchestration.fire(schedule.id), orchestration.fire(schedule.id)]);
-    expect(first.lastResult).toBe('started');
-    expect(second.lastSessionId).toBe(first.lastSessionId);
+    const automation = orchestration.saveAutomation(undefined, { name: 'check', prompt: 'inspect', projectId: project.id });
+    const [first, second] = await Promise.all([orchestration.fire(automation.id), orchestration.fire(automation.id)]);
+    expect(first.result).toBe('started');
+    expect(second.sessionId).toBe(first.sessionId);
     expect(store.listSessions()).toHaveLength(1);
-    expect(orchestration.saveSchedule(schedule.id, { name: 'renamed again' }).lastSessionId).toBe(first.lastSessionId);
-    expect((await orchestration.fire(schedule.id)).lastResult).toBe('skipped');
+    expect(orchestration.saveAutomation(automation.id, { name: 'renamed' }).lastSessionId).toBe(first.sessionId);
+    expect((await orchestration.fire(automation.id)).result).toBe('skipped');
     expect(store.listSessions()).toHaveLength(1);
+    expect(orchestration.runs(automation.id).map(run => run.result)).toEqual(['skipped', 'started']);
   });
 
-  it('does not restore a stale lastSessionId when a schedule changes project during a launch', async () => {
+  it('does not restore a stale lastSessionId when an automation changes project during a launch', async () => {
     const { projectDir, stateDir, store, orchestration, dispatch } = await boot();
     await dispatch.close();
     const first = store.createProject(projectDir, 'first');
     const second = store.createProject(stateDir, 'second');
-    const template = orchestration.saveTemplate(undefined, { name: 'check', prompt: 'inspect' });
-    const schedule = orchestration.saveSchedule(undefined, { name: 'check', projectId: first.id, templateId: template.id, cron: '* * * * *', target: 'same' });
-    const run = orchestration.runTemplate.bind(orchestration);
+    const automation = orchestration.saveAutomation(undefined, { name: 'check', prompt: 'inspect', projectId: first.id, delivery: 'same' });
+    const internals = orchestration as unknown as { launchAutomation: (...args: unknown[]) => Promise<unknown> };
+    const launch = internals.launchAutomation.bind(orchestration);
     let release!: () => void;
     let launched!: () => void;
     const ready = new Promise<void>(resolve => { launched = resolve; });
     const gate = new Promise<void>(resolve => { release = resolve; });
-    vi.spyOn(orchestration, 'runTemplate').mockImplementationOnce(async (...args) => {
-      const result = await run(...args);
+    vi.spyOn(internals, 'launchAutomation').mockImplementationOnce(async (...args) => {
+      const result = await launch(...args);
       launched();
       await gate;
       return result;
     });
-    const firing = orchestration.fire(schedule.id);
+    const firing = orchestration.fire(automation.id);
     await ready;
-    orchestration.saveSchedule(schedule.id, { projectId: second.id });
+    orchestration.saveAutomation(automation.id, { projectId: second.id });
     release();
     await firing;
-    expect(orchestration.schedule(schedule.id).lastSessionId).toBeUndefined();
-    const next = await orchestration.fire(schedule.id);
-    expect(store.getSession(next.lastSessionId!).projectId).toBe(second.id);
+    expect(orchestration.automation(automation.id).lastSessionId).toBeUndefined();
+    const next = await orchestration.fire(automation.id);
+    expect(store.getSession(next.sessionId!).projectId).toBe(second.id);
   });
 
   // A timer that fires twice for one slot, or catches up on a slot missed while the server slept,
   // starts unattended agent runs nobody asked for.
-  it('fires a due slot once, and records a long-overdue slot as missed without running it', async () => {
+  it('runs a due slot once, records a long-overdue one as missed under skip and catches up once under latest', async () => {
     const { projectDir, orchestration, call } = await boot();
     const project = (await call('POST', '/api/projects', { cwd: projectDir })).json() as { id: string };
-    const template = (await call('POST', '/api/templates', { name: 'nightly', prompt: 'check {{project}} on {{date}}' })).json() as { id: string };
-    const created = await call('POST', '/api/schedules', { name: 'nightly', templateId: template.id, projectId: project.id, cron: '0 9 * * *' });
-    const schedule = created.json() as { id: string; nextRunAt: string };
-    const scheduled = () => call('GET', '/api/sessions').then(response => (response.json() as Array<{ origin?: { scheduleId?: string } }>).filter(item => item.origin?.scheduleId === schedule.id));
+    const trigger = { kind: 'cron', cron: '0 9 * * *', timeZone: 'Asia/Shanghai' };
+    const create = async (catchUp: string) => (await call('POST', '/api/automations', { name: catchUp, prompt: 'check {{project}} on {{date}}', projectId: project.id, triggers: [trigger], catchUp })).json() as { id: string; nextRunAt: string };
+    const started = async (id: string) => (await call('GET', '/api/sessions')).json().filter((item: { origin?: { automationId?: string } }) => item.origin?.automationId === id);
 
-    const due = new Date(Date.parse(schedule.nextRunAt) + 60_000);
+    const skipping = await create('skip');
+    const due = new Date(Date.parse(skipping.nextRunAt) + 60_000);
     await orchestration.tick(due);
     await orchestration.tick(due);
-    expect(await scheduled()).toHaveLength(1);
-    const fired = orchestration.schedule(schedule.id);
+    expect(await started(skipping.id)).toHaveLength(1);
+    const fired = orchestration.automation(skipping.id);
     expect(fired.lastResult).toBe('started');
     expect(Date.parse(fired.nextRunAt!)).toBeGreaterThan(due.getTime());
-
     await orchestration.tick(new Date(Date.parse(fired.nextRunAt!) + 2 * 60 * 60_000));
-    expect(orchestration.schedule(schedule.id).lastResult).toBe('missed');
-    expect(await scheduled()).toHaveLength(1);
+    expect(orchestration.automation(skipping.id)).toMatchObject({ lastResult: 'missed' });
+    expect(orchestration.runs(skipping.id)[0]).toMatchObject({ result: 'missed', reason: 'offline' });
+    expect(await started(skipping.id)).toHaveLength(1);
+
+    // Ten daily slots passed while the server was off; the latest (yesterday's) runs once.
+    const catching = await create('latest');
+    const back = new Date(Date.parse(catching.nextRunAt) + 10 * 24 * 60 * 60_000 + 60_000);
+    await orchestration.tick(back);
+    expect(await started(catching.id)).toHaveLength(1);
+    const [caught] = orchestration.runs(catching.id);
+    expect(caught).toMatchObject({ cause: 'catch-up', result: 'started' });
+    expect(back.getTime() - Date.parse(caught!.scheduledFor!)).toBeLessThan(24 * 60 * 60_000);
+  });
+
+  it('sends a user follow-up once and never lets the request set who made it', async () => {
+    const { projectDir, store, dispatch, orchestration, call } = await boot();
+    await dispatch.close();
+    const project = store.createProject(projectDir, 'later');
+    const session = store.createSession({ projectId: project.id, kind: 'native' });
+    const at = new Date(Date.now() + 60_000).toISOString();
+    expect((await call('POST', '/api/automations', { prompt: 'ping', followUp: { sessionId: session.id, by: 'agent' }, triggers: [{ kind: 'once', at }] })).statusCode).toBe(400);
+    const attachment = (await call('POST', `/api/projects/${project.id}/attachments`, { name: 'note.txt', mimeType: 'text/plain', dataBase64: Buffer.from('later').toString('base64') })).json() as { id: string };
+    const created = (await call('POST', '/api/automations', { id: 'follow-up-client-id', prompt: 'ping', attachments: [{ id: attachment.id }], followUp: { sessionId: session.id }, triggers: [{ kind: 'once', at }] })).json() as { id: string; followUp: { by: string } };
+    // A retry with the same id and content is the same follow-up; other content under the id is refused.
+    expect((await call('POST', '/api/automations', { id: 'follow-up-client-id', prompt: 'ping', attachments: [{ id: attachment.id }], followUp: { sessionId: session.id }, triggers: [{ kind: 'once', at }] })).json()).toMatchObject({ id: created.id });
+    expect((await call('POST', '/api/automations', { id: 'follow-up-client-id', prompt: 'other', followUp: { sessionId: session.id }, triggers: [{ kind: 'once', at }] })).statusCode).toBe(409);
+    expect(created.followUp.by).toBe('user');
+    // Waiting for its time, the follow-up still holds the attachment.
+    expect(store.referencedAttachmentIds(new Date(Date.now() + 3_600_000).toISOString())).toContain(attachment.id);
+    const due = new Date(Date.parse(at) + 1_000);
+    await Promise.all([orchestration.tick(due), orchestration.tick(due)]);
+    await orchestration.tick(new Date(due.getTime() + 60_000));
+    const runs = store.listRuns(session.id);
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({ commandId: `follow-up-${created.id}`, prompt: 'ping', native: { input: { attachmentIds: [attachment.id] } } });
+    expect(orchestration.automation(created.id)).toMatchObject({ enabled: false, lastResult: 'started' });
+    expect((await call('DELETE', `/api/automations/${created.id}`)).statusCode).toBe(409);
+    // A finished one-time task stays finished when a client re-encodes its time.
+    const once = orchestration.saveAutomation(undefined, { name: 'once', prompt: 'x', projectId: project.id, triggers: [{ kind: 'once', at, timeZone: 'UTC' }] });
+    await orchestration.tick(due);
+    expect(orchestration.saveAutomation(once.id, { triggers: [{ kind: 'once', at: new Date(Date.now() - 7_200_000).toISOString(), timeZone: 'Asia/Shanghai' }] }).nextRunAt).toBeUndefined();
   });
 });
 
@@ -1830,7 +1876,7 @@ describe('Riffet MCP tools', () => {
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const token = await credentialOf(file);
     const rpc = (bearer: string, method: string, params?: unknown) => app.inject({ method: 'POST', url: '/api/riffet-mcp', headers: { host: '127.0.0.1:4317', authorization: `Bearer ${bearer}` }, payload: { method, params } });
-    expect(((await rpc(token, 'tools/list')).json() as { result: { tools: Array<{ name: string }> } }).result.tools.map(tool => tool.name)).toEqual(['read_context', 'schedule_wakeup', 'cancel_wakeup', 'list_wakeups', 'notify_user', 'list_devices']);
+    expect(((await rpc(token, 'tools/list')).json() as { result: { tools: Array<{ name: string }> } }).result.tools.map(tool => tool.name)).toEqual(['read_context', 'schedule_wakeup', 'cancel_wakeup', 'list_wakeups', 'schedule_task', 'notify_user', 'list_devices']);
     // No device was given, so none is listed.
     expect(((await rpc(token, 'tools/call', { name: 'list_devices', arguments: {} })).json() as { result: { structuredContent: { devices: unknown[] } } }).result.structuredContent.devices).toEqual([]);
     // The credential is not a device token, and a forged one is refused.
@@ -1876,7 +1922,7 @@ describe('Riffet MCP tools', () => {
     expect(orchestration.wakeups(archived.id)).toEqual([expect.objectContaining({ id: lost.id, status: 'failed' })]);
     expect(store.listRuns(archived.id)).toHaveLength(0);
     // Persisted: a restarted scheduler reads the settled record and starts nothing.
-    expect(store.getSetting<Record<string, { status: string }>>('orchestration:wakeups', {})[wakeup.id]!.status).toBe('fired');
+    expect(orchestration.runs(wakeup.id)).toEqual([expect.objectContaining({ result: 'started', runId: runs[0]!.id })]);
   });
 });
 

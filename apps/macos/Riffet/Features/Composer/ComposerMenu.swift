@@ -25,6 +25,8 @@ struct ComposerFeatures {
     /// Presentation only; SessionComposer chooses and preserves the actual send intent.
     var steersWhileRunning = false
     var enqueue: (() -> Void)?
+    /// Sends the draft as a turn of this conversation at a later time (the clock button beside send); nil where it does not apply.
+    var sendLater: ((Date) -> Void)?
     /// The menu opens below the card (the home page's hero composer) instead of above it.
     var menuBelow = false
 }

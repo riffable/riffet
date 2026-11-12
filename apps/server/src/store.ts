@@ -1080,7 +1080,11 @@ export class Store {
       WHERE json_extract(r.json,'$.createdAt')>=? OR json_extract(r.json,'$.state') NOT IN ('completed','failed','cancelled','interrupted')`).all(since) as Array<{ id: unknown }>;
     const terminalRows = this.sql(`SELECT DISTINCT a.value AS id FROM settings s, json_each(s.json,'$.attachmentIds') a
       WHERE s.key LIKE 'terminal-paste:%'`).all() as Array<{ id: unknown }>;
-    return new Set([...rows, ...terminalRows].flatMap(row => typeof row.id === 'string' ? [row.id] : []));
+    // A user's follow-up keeps its attachments until it is removed, whether it is still waiting or has just settled.
+    const followUpRows = this.sql("SELECT 1 AS found FROM sqlite_master WHERE type='table' AND name='automations'").get()
+      ? this.sql(`SELECT DISTINCT a.value AS id FROM automations f, json_each(f.json,'$.input.attachmentIds') a
+        WHERE f.follow_up_session IS NOT NULL AND json_extract(f.json,'$.followUp.by')='user'`).all() as Array<{ id: unknown }> : [];
+    return new Set([...rows, ...terminalRows, ...followUpRows].flatMap(row => typeof row.id === 'string' ? [row.id] : []));
   }
 
   /**

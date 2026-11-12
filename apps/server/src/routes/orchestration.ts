@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
 import { launchTarget, reviewComments } from '../orchestration/service.js';
 import { backendVisibleToClient, defaultBackendForClient, projectVisibleToClient, requireProjectVisibleToClient, requireSessionVisibleToClient, sessionVisibleToClient, visibleLaunchTargetForClient } from '../native/client-features.js';
-import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
+import type { Automation } from '../../../../packages/contracts/src/index.js';
 import { savedDefaultBackendId } from '../session-identity.js';
 import type { RouteDeps } from './deps.js';
 
@@ -16,18 +16,13 @@ const mergeOptions=(body:Body)=>{
     ...(optionalText(body.commitPending,'commitPending',5_000)?{commitPending:body.commitPending as string}:{}),removeWorktree:body.removeWorktree===true};
 };
 
-/** Review feedback, turn checkpoints, forks, handoffs, parallel attempts, templates and schedules (docs/ORCHESTRATION.md). */
+/** Review feedback, turn checkpoints, forks, handoffs, parallel attempts and automations (docs/ORCHESTRATION.md). */
 export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDeps): void {
-  const {store,git,settings,orchestration,readNativeInput}=deps;
+  const {store,git,settings,orchestration,readNativeInput,contextReferences,nativeBackends}=deps;
   const visibleTarget = (request: { headers: import('node:http').IncomingHttpHeaders }, target: { backendId?: string }) => backendVisibleToClient(request.headers, target.backendId);
   const visibleGroup = <T extends { attempts: Array<{ target: { backendId?: string } }> }>(request: { headers: import('node:http').IncomingHttpHeaders }, group: T): T =>
     ({ ...group, attempts: group.attempts.filter(attempt => visibleTarget(request, attempt.target)) });
   const fallbackTarget = (request: { headers: import('node:http').IncomingHttpHeaders }) => defaultBackendForClient(request.headers, savedDefaultBackendId(settings.getSettings()), deps.nativeBackends.offeredBackendIds());
-  const templateForClient = (request: { headers: import('node:http').IncomingHttpHeaders }, id: string) => {
-    const template = orchestration.templates().find(item => item.id === id);
-    if (template && !visibleTarget(request, template)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
-    return template;
-  };
   app.post<{Params:{id:string};Body:Body}>('/api/sessions/:id/review',async(request,reply)=>{
     const body=request.body??{};
     reply.code(202);return orchestration.review(request.params.id,requireString(body.commandId,'commandId',100),reviewComments(body.comments),optionalText(body.note,'note',5_000));
@@ -105,62 +100,93 @@ export function registerOrchestrationRoutes(app: FastifyInstance, deps: RouteDep
     return orchestration.adoptAttempt(request.params.id,requireString(body.sessionId,'sessionId',100),{...mergeOptions(body),...(body.cleanup?{cleanup:body.cleanup as 'keep'|'archive'|'remove'}:{})});
   });
 
-  app.get('/api/templates',async(request)=>orchestration.templates().filter(template=>visibleTarget(request,template)));
-  app.post<{Body:Body}>('/api/templates',async(request)=>{
-    const body=request.body??{};
-    if(body.target!==undefined)visibleLaunchTargetForClient(request.headers,launchTarget(body.target));
-    return orchestration.saveTemplate(undefined,body);
-  });
-  app.patch<{Params:{id:string};Body:Body}>('/api/templates/:id',async(request)=>{
-    const body=request.body??{};
-    templateForClient(request,request.params.id);
-    if(body.target!==undefined)visibleLaunchTargetForClient(request.headers,launchTarget(body.target));
-    return orchestration.saveTemplate(request.params.id,body);
-  });
-  app.delete<{Params:{id:string}}>('/api/templates/:id',async(request,reply)=>{templateForClient(request,request.params.id);orchestration.deleteTemplate(request.params.id);reply.code(204);});
-  app.post<{Params:{id:string};Body:Body}>('/api/templates/:id/run',async(request,reply)=>{
-    const body=request.body??{};
-    const template=templateForClient(request,request.params.id);
-    // An unset template target would resolve the saved default inside the service; an old client
-    // gets the compatible default instead of a conversation it cannot decode.
-    const target=template&&template.backendId===undefined?{backendId:fallbackTarget(request)}:undefined;
-    reply.code(202);return orchestration.runTemplate(request.params.id,requireString(body.projectId,'projectId',100),ids(body),undefined,target);
-  });
-
-  const scheduleForClient=(request:{headers:import('node:http').IncomingHttpHeaders},id:string)=>{
-    const schedule=orchestration.schedules().find(item=>item.id===id);
-    if(schedule){requireProjectVisibleToClient(request.headers,store.getProject(schedule.projectId));templateForClient(request,schedule.templateId);}
-    return schedule;
+  /*
+   * Automations. An old client cannot decode a hidden backend, a hidden project or the conversation
+   * of a hidden backend: those are filtered or replaced here, the way the template and schedule
+   * routes did.
+   */
+  type Headers = { headers: import('node:http').IncomingHttpHeaders };
+  const projectOf = (id: string | undefined) => { if (!id) return undefined; try { return store.getProject(id); } catch { return undefined; } };
+  /** A project that no longer exists is not a reason to hide the automation or fail the list. */
+  const automationVisible = (request: Headers, item: Automation): boolean => {
+    if (!visibleTarget(request, item)) return false;
+    const project = projectOf(item.projectId);
+    if (project && !projectVisibleToClient(request.headers, project)) return false;
+    if (item.followUp) { try { return sessionVisibleToClient(request.headers, store.getSession(item.followUp.sessionId), id => store.getProject(id)); } catch { return false; } }
+    return true;
   };
-  /** A schedule keeps its visible template and history; a hidden conversation id is dropped. */
-  const withoutHiddenScheduleSession=<T extends {lastSessionId?:string}>(request:{headers:import('node:http').IncomingHttpHeaders},schedule:T):T=>{
-    if(!schedule.lastSessionId)return schedule;
-    try{if(sessionVisibleToClient(request.headers,store.getSession(schedule.lastSessionId),id=>store.getProject(id)))return schedule;}catch{return schedule;}
-    const {lastSessionId:_hidden,...rest}=schedule;
+  /** A hidden conversation id is dropped; the automation and its history stay. */
+  const withoutHiddenSession = <T extends { lastSessionId?: string; sessionId?: string }>(request: Headers, item: T): T => {
+    const id = item.lastSessionId ?? item.sessionId;
+    if (!id) return item;
+    try { if (sessionVisibleToClient(request.headers, store.getSession(id), project => store.getProject(project))) return item; } catch { return item; }
+    const { lastSessionId: _last, sessionId: _session, ...rest } = item;
     return rest as T;
   };
-  app.get('/api/schedules',async(request)=>orchestration.schedules()
-    .filter(schedule=>projectVisibleToClient(request.headers,store.getProject(schedule.projectId)))
-    .filter(schedule=>visibleTarget(request,orchestration.templates().find(template=>template.id===schedule.templateId)??{}))
-    .map(schedule=>withoutHiddenScheduleSession(request,schedule)));
-  app.post<{Body:Body}>('/api/schedules',async(request)=>{
-    const body=request.body??{};
-    templateForClient(request,requireString(body.templateId,'templateId',100));
-    return orchestration.saveSchedule(undefined,body);
+  const visibleAutomation = (request: Headers, id: string): Automation => {
+    const item = orchestration.automation(id);
+    if (!visibleTarget(request, item)) throw new AppError('INVALID_BACKEND', 'Choose a supported native backend');
+    if (!automationVisible(request, item)) throw new AppError('AUTOMATION_NOT_FOUND', 'Automation does not exist', 404);
+    return item;
+  };
+  const checkBody = (request: Headers, body: Body) => {
+    if (body.target !== undefined) visibleLaunchTargetForClient(request.headers, launchTarget(body.target));
+    if (typeof body.projectId === 'string' && body.projectId) requireProjectVisibleToClient(request.headers, store.getProject(body.projectId));
+    if (body.followUp !== undefined) {
+      const followUp = (body.followUp && typeof body.followUp === 'object' ? body.followUp : {}) as Body;
+      requireSessionVisibleToClient(request.headers, store.getSession(requireString(followUp.sessionId, 'sessionId', 100)), id => store.getProject(id));
+    }
+  };
+  app.get('/api/automations', async request => orchestration.automations().filter(item => !item.followUp || (item.enabled && item.nextRunAt)).filter(item => automationVisible(request, item)).map(item => withoutHiddenSession(request, item)));
+  // The REST caller is the user: a follow-up made here is `by: 'user'` whatever the body says.
+  app.post<{ Body: Body }>('/api/automations', async request => {
+    const body = request.body ?? {};
+    checkBody(request, body);
+    if (body.followUp === undefined || (body.id === undefined && body.attachments === undefined && body.context === undefined && body.references === undefined)) return withoutHiddenSession(request, orchestration.saveAutomation(undefined, body));
+    // A user's follow-up carries the composer's whole input; its session references are captured now, as a queued message's are.
+    const sessionId = requireString((body.followUp as Body).sessionId, 'sessionId', 100);
+    const input = await readNativeInput({ text: body.prompt as string, attachments: body.attachments as Array<{ id: string }> | undefined, context: body.context as Array<{ path: string; line?: number }> | undefined, references: body.references as never });
+    if (body.id !== undefined && !(typeof body.id === 'string' && /^[A-Za-z0-9_-]{8,100}$/.test(body.id))) throw new AppError('INVALID_INPUT', 'id must be a client-made UUID');
+    // A retry of a request that was accepted returns that follow-up without capturing the references again.
+    const replay = typeof body.id === 'string' ? orchestration.existingFollowUp(body.id, body, input) : undefined;
+    if (replay) return withoutHiddenSession(request, replay);
+    contextReferences.requireFeature(request.headers, input);
+    if (input.references?.length) await nativeBackends.assertSessionReferences(store.getSession(sessionId));
+    const prepared = await contextReferences.prepare(sessionId, input, request.headers);
+    const created = contextReferences.commit(sessionId, prepared, snapshots => {
+      contextReferences.validateSources(sessionId, input, request.headers);
+      return orchestration.saveAutomation(undefined, body, {}, { input, snapshots });
+    });
+    return withoutHiddenSession(request, created);
   });
-  app.patch<{Params:{id:string};Body:Body}>('/api/schedules/:id',async(request)=>{
-    scheduleForClient(request,request.params.id);
-    const body=request.body??{};
-    if(body.templateId!==undefined)templateForClient(request,requireString(body.templateId,'templateId',100));
-    return withoutHiddenScheduleSession(request,orchestration.saveSchedule(request.params.id,body));
+  app.patch<{ Params: { id: string }; Body: Body }>('/api/automations/:id', async request => {
+    const body = request.body ?? {};
+    visibleAutomation(request, request.params.id);
+    checkBody(request, body);
+    return withoutHiddenSession(request, orchestration.saveAutomation(request.params.id, body));
   });
-  app.delete<{Params:{id:string}}>('/api/schedules/:id',async(request,reply)=>{scheduleForClient(request,request.params.id);orchestration.deleteSchedule(request.params.id);reply.code(204);});
-  /** Runs a schedule now, under the same skip-while-busy rule as its timer; the next timed run is unchanged. */
-  app.post<{Params:{id:string}}>('/api/schedules/:id/run',async(request)=>{
-    const schedule=scheduleForClient(request,request.params.id);
-    // A new conversation from an unset template target must not resolve a hidden saved default.
-    const template=schedule?orchestration.templates().find(item=>item.id===schedule.templateId):undefined;
-    const target=template&&template.backendId===undefined?{backendId:fallbackTarget(request)}:undefined;
-    return withoutHiddenScheduleSession(request,await orchestration.fire(request.params.id,target));
+  app.delete<{ Params: { id: string } }>('/api/automations/:id', async (request, reply) => { visibleAutomation(request, request.params.id); orchestration.deleteAutomation(request.params.id); reply.code(204); });
+  /** Runs one now, under the same skip-while-busy rule as its timer; the next timed run is unchanged. */
+  app.post<{ Params: { id: string }; Body: Body }>('/api/automations/:id/run', async (request, reply) => {
+    const body = request.body ?? {};
+    const item = visibleAutomation(request, request.params.id);
+    const projectId = optionalText(body.projectId, 'projectId', 100);
+    if (projectId) requireProjectVisibleToClient(request.headers, store.getProject(projectId));
+    // An unset backend would resolve the saved default inside the service; an old client gets the compatible default instead of a conversation it cannot decode.
+    const target = !item.followUp && item.backendId === undefined ? { backendId: fallbackTarget(request) } : undefined;
+    const sessionId = optionalText(body.clientSessionId, 'clientSessionId', 100), commandId = optionalText(body.commandId, 'commandId', 100);
+    reply.code(202);
+    return withoutHiddenSession(request, await orchestration.fire(item.id, {
+      cause: 'manual', ...(projectId ? { projectId } : {}), ...(target ? { target } : {}),
+      ids: { ...(sessionId ? { sessionId } : {}), ...(commandId ? { commandId } : {}) },
+    }));
+  });
+  app.get<{ Params: { id: string } }>('/api/automations/:id/runs', async request => {
+    visibleAutomation(request, request.params.id);
+    return orchestration.runs(request.params.id).map(run => withoutHiddenSession(request, run));
+  });
+  app.get<{ Querystring: { limit?: string } }>('/api/automation-runs', async request => {
+    const visible = orchestration.automations().filter(item => automationVisible(request, item)).map(item => item.id);
+    return orchestration.runs(undefined, Number(request.query.limit) || 100, visible).map(run => withoutHiddenSession(request, run));
   });
 }

@@ -50,6 +50,13 @@ struct InputSettings: View {
                     .accessibilityIdentifier("composerRunningBehavior")
                 }
 
+                SettingsRow(String(localized: "展示稍后发送按钮")) {
+                    Toggle("展示稍后发送按钮", isOn: sendLaterBinding(workbench, current: settings?.composerSendLater?.boolValue == true))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .disabled(busy)
+                }
+
                 SettingsErrorText(message: error)
             }
 
@@ -72,6 +79,13 @@ struct InputSettings: View {
         Binding(get: { current }, set: { next in
             guard next != current else { return }
             Task { await save(workbench, SettingsPatch.make(composerRunningBehavior: next)) }
+        })
+    }
+
+    private func sendLaterBinding(_ workbench: Workbench, current: Bool) -> Binding<Bool> {
+        Binding(get: { current }, set: { next in
+            guard next != current else { return }
+            Task { await save(workbench, SettingsPatch.make(composerSendLater: next)) }
         })
     }
 
