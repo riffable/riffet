@@ -20,6 +20,11 @@ const PROFILE_STALL_MS = 1_000;
 const PROFILE_REPEAT = 3;
 const PROFILE_REPEAT_WINDOW_MS = 60_000;
 const PROFILE_MS = 30_000;
+/**
+ * Microseconds between samples. V8's default of 1000 makes stopping a half-minute profile hold the loop for most of
+ * a second (it showed in the profiles themselves); a stall worth profiling is hundreds of samples long at this rate too.
+ */
+const PROFILE_SAMPLE_US = 4_000;
 const PROFILE_EVERY_MS = 60 * 60_000;
 const PROFILE_KEEP = 3;
 /** Where the program's own files sit: `dist/cli.js` when built, `apps/server/src/*.ts` under tsx. */
@@ -126,6 +131,7 @@ function profileStalls(state: Monitor, dir: string, log: Log, trigger: { blocked
     session = new inspector.Session();
     session.connect();
     await session.post('Profiler.enable');
+    await session.post('Profiler.setSamplingInterval', { interval: PROFILE_SAMPLE_US });
     await session.post('Profiler.start');
     await sleep(PROFILE_MS, undefined, { signal: abort.signal, ref: false });
     const { profile } = await session.post('Profiler.stop');

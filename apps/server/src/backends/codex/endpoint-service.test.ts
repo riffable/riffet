@@ -23,6 +23,20 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, execFile: state.execFile as unknown as typeof actual.execFile };
 });
 
+// The terminal service runs its commands through `exec` (a worker thread, which a module mock does not reach): hand them to the same fake.
+vi.mock('../../exec.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../exec.js')>();
+  return {
+    ...actual,
+    exec: (command: string, args: string[], options: unknown) => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
+      state.execFile(command, args, options, (error: ExecFileException | null, stdout: string, stderr: string) => {
+        if (error) reject(new actual.ExecError({ message: error.message, code: error.code ?? undefined, killed: Boolean(error.killed) }, stdout, stderr));
+        else resolve({ stdout, stderr });
+      });
+    }),
+  };
+});
+
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof import('node:fs/promises')>();
   return {

@@ -103,6 +103,24 @@
 
 目标：p99 阻塞 < 250 ms，单次阻塞 < 1 s。手段：大事务分批执行；进程表扫描（`ps`、`lsof`、`pgrep`）去重并缓存；大文件解析分片让出主线程；数据库按保留策略压缩。`loop-health.ts` 的阻塞计数作为验收指标。
 
+2026-11-12 的三份阻塞 profile（各 30 s）按主线程自耗时排序：
+
+| 来源 | 每 30 s 自耗时 | 说明 |
+| --- | --- | --- |
+| `execFile` 超时后的 `kill` | 最高 7.6 s，单次最长 2.2 s | 循环一旦被堵，到期的超时定时器逐个执行 `kill`，越堵越久 |
+| 创建子进程（`spawn`） | 0.8～3.5 s，200～430 次 | 几乎全部来自终端服务：读屏、`inspectPane` 的 `tmux`、`pgrep`、`ps`、`lsof` |
+| SQLite 提交 | 一次 1.0 s | 时间线折叠的提交越过 WAL 页数上限，在提交内做检查点 |
+| 停止 CPU profile | 0.8 s | 诊断自身；每小时至多一次 |
+| SQLite 读、转录解析 | 各 0.4～0.9 s | 分散，单次不长 |
+
+已处理：
+
+- 一次性命令经 `exec.ts` 在 worker 线程里执行，创建和杀进程不再占用事件循环。终端服务的 `tmux`、`pgrep`、`ps`、`lsof` 都走这里；新增这类调用时不要直接用 `execFile`。
+- WAL 检查点由 `wal-checkpoint.ts` 的 worker 线程用自己的连接做（PASSIVE，不等待读写方）；服务连接的自动检查点上限调到 20000 页作为兜底，worker 退出时恢复默认值。
+- 阻塞 profile 的采样间隔改为 4 ms。
+
+未处理：`store.listSessions()` 每次解析全部会话；折叠与转录解析仍在主线程。部署上面三项后以 `loop-health` 的数字决定是否需要把它们移出主线程。
+
 ## 8. 重启
 
 服务重启只结束随服务一起退出的进程。Claude、Cursor 跑在 Riffet 自己的 tmux 里，Codex、Traex 跑在脱离服务的 app-server 守护进程里，重启后回合照常进行（后端特征 `survivesRestart`）；Droid、Pi、DSH（子进程、桥接）和 chat（进程内）随服务结束。

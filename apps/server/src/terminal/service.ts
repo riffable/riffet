@@ -1,13 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { readFile, readlink, realpath } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
 import { constants as osConstants, homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type TerminalAppearance, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
 import { normalizeWarmup } from '../session-identity.js';
 import { terminalEnvironment } from '../environment.js';
 import { AppError, requireString } from '../errors.js';
+import { exec, ExecError } from '../exec.js';
 import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
 import { Store } from '../store.js';
 import { deriveSessionState, sessionStatePatch } from '../backends/service.js';
@@ -232,18 +232,14 @@ function validDimension(value: number | undefined, fallback: number): number {
   return value;
 }
 
-function run(command: string, args: string[], timeout = 5000, env:NodeJS.ProcessEnv=process.env, maxBuffer = 1024 * 1024): Promise<string> {
-  return new Promise((resolveOutput, reject) => {
-    execFile(command, args, { encoding: 'utf8', timeout, maxBuffer, env }, (error, stdout, stderr) => {
-      if (error) {
-        // Only tmux's own answer that the target is gone means gone; a timeout or any other failure says nothing.
-        const missing = !error.killed && TMUX_TARGET_MISSING.test(stderr);
-        reject(new AppError('TMUX_COMMAND_FAILED', 'tmux could not complete the terminal operation', 503, missing ? { missing } : undefined));
-        return;
-      }
-      resolveOutput(stdout);
-    });
-  });
+/** `env` absent is the server's current environment. */
+async function run(command: string, args: string[], timeout = 5000, env?: NodeJS.ProcessEnv, maxBuffer = 1024 * 1024): Promise<string> {
+  try { return (await exec(command, args, { timeout, maxBuffer, ...(env ? { env } : {}) })).stdout; }
+  catch (error) {
+    // Only tmux's own answer that the target is gone means gone; a timeout or any other failure says nothing.
+    const missing = error instanceof ExecError && !error.killed && TMUX_TARGET_MISSING.test(error.stderr);
+    throw new AppError('TMUX_COMMAND_FAILED', 'tmux could not complete the terminal operation', 503, missing ? { missing } : undefined);
+  }
 }
 
 function defaultShell(): string {
@@ -979,13 +975,8 @@ export class TerminalService {
     this.pasteBuffers.add(id);
     try {
       if (text) {
-        await new Promise<void>((resolveLoad, reject) => {
-          const child = execFile('tmux', ['-S', this.socketPath, 'load-buffer', '-b', buffer, '-'], { timeout: 5000 }, (error) => {
-            if (error) reject(new AppError('TMUX_COMMAND_FAILED', 'tmux could not complete the terminal operation', 503));
-            else resolveLoad();
-          });
-          child.stdin?.end(text);
-        });
+        await exec('tmux', ['-S', this.socketPath, 'load-buffer', '-b', buffer, '-'], { timeout: 5000, input: text })
+          .catch(() => { throw new AppError('TMUX_COMMAND_FAILED', 'tmux could not complete the terminal operation', 503); });
         loaded = true;
         if (transaction) this.beforeInteractionWrite(id, transaction);
         await this.tmux(['paste-buffer', '-p', '-d', '-b', buffer, '-t', terminalName(id)]);
@@ -1209,13 +1200,9 @@ export class TerminalService {
       seen.add(pid);
       let output: string;
       try {
-        output = await new Promise<string>((resolveOutput, reject) => {
-          execFile('pgrep', ['-P', String(pid)], { encoding: 'utf8', timeout: lookupStepTimeout(deadline), maxBuffer: 1024 * 1024 }, (error, stdout) => {
-            // pgrep uses exit 1 for no children. Other failures leave this subtree unknown.
-            if (error && error.code !== 1) reject(error);
-            else resolveOutput(error ? '' : stdout);
-          });
-        });
+        output = (await exec('pgrep', ['-P', String(pid)], { timeout: lookupStepTimeout(deadline), maxBuffer: 1024 * 1024 })
+          // pgrep uses exit 1 for no children. Other failures leave this subtree unknown.
+          .catch(error => { if (error instanceof ExecError && error.code === 1) return { stdout: '' }; throw error; })).stdout;
       } catch { return []; }
       for (const line of output.split(/\r?\n/)) {
         const child = Number(line.trim());

@@ -14,6 +14,7 @@ import { registerDiagramAssets } from './diagram-assets.js';
 import { registerContentPreview } from './previews/content.js';
 import { applyProcessEnvironment, expandHome } from './environment.js';
 import { Store } from './store.js';
+import { startWalCheckpoints } from './wal-checkpoint.js';
 import { Auth, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
 import { PlanFileWriter } from './native/plan-files.js';
@@ -141,6 +142,8 @@ export async function createApp(options: AppOptions = {}) {
   const themes=new ThemeService({stateDir});
   const owner=new OwnerService({stateDir,avatarStyles:()=>plugins});
   const store=new Store(join(stateDir,'workbench.db')); store.recoverInterruptedRuns();
+  // Checkpoints of the write-ahead log run on a thread of their own, not inside whichever commit crosses the limit.
+  const stopWalCheckpoints=startWalCheckpoints(store.db,store.path);
   const contextReferences:SessionReferenceService=new SessionReferenceService(store,stateDir,(id,maxBytes,signal):Promise<import('../../../packages/contracts/src/index.js').NativeWorkbenchEvent[]|undefined>=>nativeBackends.contextTranscript(id,maxBytes,signal));
   const taskWorkspaces=new TaskWorkspaceService({store,settings,stateDir,defaultRoot:options.taskWorkspaceDefaultRoot??process.env.RIFFET_TASK_WORKSPACE_ROOT,
     deniedRoots:()=>[
@@ -393,7 +396,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
