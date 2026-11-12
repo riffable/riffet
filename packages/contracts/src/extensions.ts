@@ -119,3 +119,13 @@ export interface ExtensionInventory {
   createTargets: ExtensionCreateTarget[];
   checkedAt: string;
 }
+
+/**
+ * `GET /api/backends/:id/loaded-extensions?profileId&projectId`: the MCP servers and skills a launch of
+ * that backend profile in that project loads, as the CLI reports them. Riffet's own server is left out.
+ */
+export interface LoadedExtensions {
+  mcp: Array<{ name: string; tools?: number }>;
+  skills: Array<{ name: string; description?: string }>;
+  checkedAt: string;
+}
