@@ -11,14 +11,14 @@ enum NativeConfigurationSummary {
     }
     static func model(catalog: NativeBackendCatalogEntry?, selection: String?) -> String {
         let value = selection ?? catalog?.defaultModel
-        guard let value, !value.isEmpty else { return String(localized: "选择模型", bundle: .riffet) }
+        guard let value, !value.isEmpty else { return "Select model" }
         guard let catalog, !catalog.models.isEmpty else { return value }
         return modelSelectionSummary(catalog: catalog.models, selection: value)
     }
     /// The input's model entry names only the family; parameters remain in its settings sheet.
     static func shortModel(catalog: NativeBackendCatalogEntry?, selection: String?) -> String {
         let label = modelLabel(catalog: catalog?.models ?? [], value: selection ?? catalog?.defaultModel)
-        return label.isEmpty ? String(localized: "选择模型", bundle: .riffet) : label
+        return label.isEmpty ? "Select model" : label
     }
     static func profile(catalog: NativeBackendCatalogEntry?, profileID: String?) -> String? {
         guard let catalog else { return nil }
@@ -79,7 +79,7 @@ struct NewTaskOptions: View {
                     if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red); Button("重新读取", action: { retry?() }) } }
                 }
             } else { optionsForm }
-        }.navigationTitle(focus == .model || quickChat ? String(localized: "选择模型", bundle: .riffet) : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(focus == .model || quickChat ? "Select model" : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
     /// Whether the MCP and Skill lists have anything to switch; nil while they are unknown or failed to read.
     private func hasSwitches(_ pick: ExtensionsPick) -> Bool? {
@@ -181,15 +181,15 @@ private struct NewTaskModelPicker: View {
     private var keys: [String] { profiles.isEmpty ? [""] : profiles.map(\.id) }
     var body: some View {
         List {
-            if loading { Section { ProgressView("正在读取服务商模型…") } }
+            if loading { Section { ProgressView { Text(verbatim: "Loading…") } } }
             if let selected = catalogs[effectiveProfile] {
                 ModelParameterSection(catalog: selected.models, selection: selection ?? selected.defaultModel) { value in choose(selected, effectiveProfile.isEmpty ? nil : effectiveProfile, value) }
             }
             ForEach(keys, id: \.self) { key in
                 Section {
-                    if let error = failures[key] { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.red); Button("重试读取") { retry += 1 } }
+                    if let error = failures[key] { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.red); Button { retry += 1 } label: { Text(verbatim: "Retry") } }
                     if let catalog = catalogs[key] {
-                        if !catalog.available { Label(catalog.reason ?? String(localized: "当前配置不可用", bundle: .riffet), systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
+                        if !catalog.available { Label(catalog.reason ?? "Unavailable", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
                         let models = catalog.models.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }
                         ForEach(models, id: \.value) { model in
                             Button {
@@ -199,13 +199,13 @@ private struct NewTaskModelPicker: View {
                                 ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value)
                             }.foregroundStyle(.primary).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
                         }
-                        if models.isEmpty { Text(query.isEmpty ? "此配置未提供可选择的模型" : "没有匹配的模型").foregroundStyle(.secondary) }
+                        if models.isEmpty { Text(verbatim: query.isEmpty ? "No models available" : "No matching models").foregroundStyle(.secondary) }
                     }
                 } header: { if let profile = profiles.first(where: { $0.id == key }) { Text(profile.name) } }
             }
         }.accessibilityIdentifier("newTaskModelList")
-            .navigationTitle(String(localized: "选择模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: String(localized: "搜索模型或型号", bundle: .riffet))
+            .navigationTitle("Models").navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: "Search models")
             .task(id: retry) { await load() }
     }
     @MainActor private func load() async {
@@ -555,21 +555,21 @@ private struct ModelOptions: View {
         if inlineList { ModelParameterSection(catalog: catalog, selection: selection, choose: choose) }
         Section("模型") {
             if inlineList && providers.isEmpty {
-                TextField("搜索模型或型号", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("搜索模型")
+                TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
                 ForEach(catalog.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
                     Button { choose(selectionForModel(catalog: catalog, model: model.value)) } label: {
                         ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value)
                     }.foregroundStyle(.primary).accessibilityIdentifier("sessionModelChoice.\(model.value)")
                 }
             } else if inlineList {
-                TextField("搜索模型或型号", text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("搜索模型")
+                TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
             } else { NavigationLink {
                 ModelSelectionList(catalog: catalog, selection: selection, providers: providers, switchTo: switchTo, choose: choose)
-            } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : String(localized: "选择模型", bundle: .riffet)).fixedSize(horizontal: false, vertical: true) }
+            } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : "Select model").fixedSize(horizontal: false, vertical: true) }
             .disabled(catalog.isEmpty) }
-            if catalog.isEmpty { Text("Agent 尚未提供可选择的模型，请重试读取。").font(.footnote).foregroundStyle(.secondary) }
+            if catalog.isEmpty { Text(verbatim: "No models available").font(.footnote).foregroundStyle(.secondary) }
             if let selection, !selection.isEmpty, !catalog.contains(where: { $0.value == resolveModelSelection(catalog: catalog, selection: selection).model }) {
-                Text("当前保存的模型不在目录中：\(selection)").font(.footnote).foregroundStyle(.secondary)
+                Text(verbatim: "Not in the model list: \(selection)").font(.footnote).foregroundStyle(.secondary)
             }
         }
         if inlineList && !providers.isEmpty {
@@ -598,8 +598,8 @@ private struct ModelSelectionList: View {
                 Section { ProviderModelRows(provider: provider, query: query, selection: selection, switchTo: switchTo, choose: choose, dismisses: true) }
                 header: { if !providers.isEmpty { Text(provider.name) } }
             }
-            if groups.allSatisfy({ $0.models.allSatisfy { !(query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query)) } }) { ContentUnavailableView.search(text: query) }
-        }.navigationTitle(String(localized: "选择模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: String(localized: "搜索模型或型号", bundle: .riffet))
+            if groups.allSatisfy({ $0.models.allSatisfy { !(query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query)) } }) { Text(verbatim: "No matching models").foregroundStyle(.secondary) }
+        }.navigationTitle("Models").navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: "Search models")
     }
 }
 
@@ -642,18 +642,18 @@ private struct ModelParameterSection: View {
                         apply(param, toggledValue(param: param, on: on, fallback: contextFallback[resolved.model]))
                     })) {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text(parameterTitle(param))
+                            Text(verbatim: parameterTitle(param))
                             let hint = paramHint(param: param)
-                            if !hint.isEmpty { Text(parameterHint(param, hint: hint)).font(.caption).foregroundStyle(.secondary) }
+                            if !hint.isEmpty { Text(verbatim: hint).font(.caption).foregroundStyle(.secondary) }
                         }
                     }
                     .accessibilityIdentifier("modelParameter.\(param.id)")
                     if kind == .max && !isOn(param: param) && contextChoices(param: param).count > 1 {
-                        Picker("上下文窗口", selection: Binding(get: { param.value }, set: { apply(param, $0) })) { ForEach(contextChoices(param: param), id: \.value) { option in Text(option.label).tag(option.value) } }.pickerStyle(.navigationLink)
+                        Picker("Context" as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) { ForEach(contextChoices(param: param), id: \.value) { option in Text(verbatim: option.label).tag(option.value) } }.pickerStyle(.navigationLink)
                     }
                 } else {
-                    Picker(parameterTitle(param), selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
-                        ForEach(listValues(param: param), id: \.value) { option in Text(optionLabel(param: param, value: option.value)).tag(option.value) }
+                    Picker(parameterTitle(param) as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
+                        ForEach(listValues(param: param), id: \.value) { option in Text(verbatim: optionLabel(param: param, value: option.value)).tag(option.value) }
                     }.pickerStyle(.navigationLink).accessibilityIdentifier("modelParameter.\(param.id)")
                 }
             }
@@ -661,11 +661,12 @@ private struct ModelParameterSection: View {
     }
     private func apply(_ param: ModelParam_, _ value: String) { choose(selectionWithParam(catalog: catalog, currentSelection: selection ?? resolved.model, paramId: param.id, value: value)) }
     private func parameterTitle(_ param: ModelParam_) -> String {
-        switch paramKind(param: param) { case .effort: String(localized: "思考程度", bundle: .riffet); case .fast: String(localized: "快速响应", bundle: .riffet); case .max: String(localized: "MAX 模式", bundle: .riffet); case .toggle: param.id == "thinking" ? String(localized: "思考", bundle: .riffet) : paramTitle(param: param); default: paramTitle(param: param) }
-    }
-    private func parameterHint(_ param: ModelParam_, hint: String) -> String {
-        if paramKind(param: param) == .fast { return String(localized: "响应更快，用量更高", bundle: .riffet) }
-        if param.id == "thinking" { return String(localized: "回复前进行推理", bundle: .riffet) }
-        return hint
+        switch paramKind(param: param) {
+        case .effort: "Effort"
+        case .fast: "Fast"
+        case .max: "Max"
+        case .toggle: param.id == "thinking" ? "Thinking" : paramTitle(param: param)
+        default: paramTitle(param: param)
+        }
     }
 }

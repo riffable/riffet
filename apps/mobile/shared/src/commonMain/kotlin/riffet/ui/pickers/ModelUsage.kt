@@ -7,9 +7,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.resources.rememberResourceEnvironment
-import org.jetbrains.compose.resources.stringResource
-import riffet_mobile.shared.generated.resources.*
 import riffet.contracts.AccountUsage
 import riffet.contracts.ModelQuota
 import riffet.contracts.ModelStatus
@@ -27,7 +24,6 @@ import riffet.ui.timeline.platformUtcOffsetMillis
 /** A model's quota and load, as short figures after its name; nothing when neither was reported. */
 @Composable
 internal fun ModelStatusTags(status: ModelStatus?) {
-    rememberResourceEnvironment()
     val metrics = LocalInterfaceStyle.current.metrics
     if (status == null) return
     val colors = LocalRiffetColors.current
@@ -48,7 +44,7 @@ internal fun ModelStatusTags(status: ModelStatus?) {
             LoadTone.WARNING -> colors.warning
             LoadTone.MUTED -> colors.fg4
         }
-        Text(text = stringResource(Res.string.pickers_load, load) + "%", style = typography.caption, color = tone)
+        Text(text = "Load $load%", style = typography.caption, color = tone)
         Spacer(Modifier.width((metrics.controlInset / 2)))
     }
 }

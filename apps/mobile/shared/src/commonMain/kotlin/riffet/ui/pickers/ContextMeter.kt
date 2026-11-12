@@ -52,7 +52,7 @@ import riffet.ui.design.LocalRiffetSurfaces
  * nothing, and then this composable draws nothing. An empty ring at 0% would be a fabricated
  * measurement, which is the one thing the web's comment on `ContextMeter` refuses to do.
  *
- * The colours follow the web exactly: >=90% danger, >=75% warning, otherwise accent.
+ * The colours follow the web exactly: >=90% danger, >=75% warning, otherwise the neutral icon colour.
  */
 
 /** The web's `contextLabels`: the breakdown ids the server sends, in the operator's language. */
@@ -87,7 +87,7 @@ private fun titleOf(usage: NativeContext): String = if (usage.limitKind == "comp
 private fun toneFor(ratio: Float, colors: RiffetColors): Color = when {
     ratio >= 0.9f -> colors.danger
     ratio >= 0.75f -> colors.warning
-    else -> colors.accent
+    else -> colors.fg2
 }
 
 /**

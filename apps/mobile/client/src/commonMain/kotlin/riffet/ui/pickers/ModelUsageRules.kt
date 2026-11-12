@@ -5,22 +5,21 @@ import riffet.contracts.ModelDailyQuota
 import riffet.contracts.ModelQuota
 import riffet.contracts.ModelStatus
 import riffet.contracts.UsageWindow
-import riffet.i18n.L10n
 import riffet.ui.timeline.platformNowMillis
 import riffet.ui.timeline.platformUtcOffsetMillis
 
-/* Account usage, quota and load as the model pickers phrase them; shared by every client. */
+/* Account usage, quota and load as the model pickers phrase them; shared by every client. English in every locale, like the Git panel. */
 
 enum class LoadTone { DANGER, WARNING, MUTED }
 
 fun windowName(minutes: Int?): String = when {
-    minutes == null || minutes == 0 -> L10n.uiText("modelUsage.window.quota")
-    minutes == 300 -> L10n.uiText("modelUsage.window.fiveHours")
-    minutes == 1440 -> L10n.uiText("modelUsage.window.daily")
-    minutes == 10080 -> L10n.uiText("modelUsage.window.weekly")
-    minutes in 40320..44640 -> L10n.uiText("modelUsage.window.monthly")
-    minutes % 60 == 0 -> L10n.uiText("modelUsage.window.hours", minutes / 60)
-    else -> L10n.uiText("modelUsage.window.minutes", minutes)
+    minutes == null || minutes == 0 -> "Quota"
+    minutes == 300 -> "5 hours"
+    minutes == 1440 -> "Daily"
+    minutes == 10080 -> "Weekly"
+    minutes in 40320..44640 -> "Monthly"
+    minutes % 60 == 0 -> "${minutes / 60}h"
+    else -> "${minutes}m"
 }
 
 /** When a window resets: relative within a day, as a local date after that. */
@@ -28,12 +27,12 @@ fun resetLabel(iso: String?, now: Long = platformNowMillis(), offsetOf: (Long) -
     val at = iso?.let(::parseIsoMillis) ?: return null
     val left = at - now
     return when {
-        left <= 0 -> L10n.uiText("modelUsage.reset.soon")
-        left < 3_600_000 -> L10n.uiText("modelUsage.reset.inMinutes", maxOf(1L, (left + 30_000) / 60_000))
-        left < 86_400_000 -> L10n.uiText("modelUsage.reset.inHours", (left + 1_800_000) / 3_600_000)
+        left <= 0 -> "Resets soon"
+        left < 3_600_000 -> "Resets in ${maxOf(1L, (left + 30_000) / 60_000)} min"
+        left < 86_400_000 -> "Resets in ${(left + 1_800_000) / 3_600_000} hr"
         else -> {
             val (_, month, day) = civilFromDays((at + offsetOf(at)).floorDiv(86_400_000L))
-            L10n.uiText("modelUsage.reset.monthDay", month, day)
+            "Resets on $month/$day"
         }
     }
 }
@@ -46,9 +45,9 @@ fun loadTone(percent: Int): LoadTone = when {
 }
 
 fun quotaLabel(quota: ModelQuota): String = when {
-    quota.depleted -> L10n.uiText("modelUsage.quota.depleted")
-    quota.remaining != null && quota.limit != null -> L10n.uiText("modelUsage.quota.remaining", quota.remaining, quota.limit)
-    else -> L10n.uiText("modelUsage.quota.left", remainingPercent(quota.usedPercent))
+    quota.depleted -> "Quota used up"
+    quota.remaining != null && quota.limit != null -> "${quota.remaining} of ${quota.limit} left"
+    else -> "${remainingPercent(quota.usedPercent)}% left"
 }
 
 /** Quotas read as what is left, which is what decides whether to keep using a model. */
@@ -69,17 +68,17 @@ fun formatQuotaAmount(value: Double): String {
 
 /** A daily allowance reads separately from the shared weekly quota beside it. */
 fun dailyQuotaLabel(quota: ModelDailyQuota): String =
-    L10n.uiText("modelUsage.daily.remaining", formatQuotaAmount(quota.remaining), formatQuotaAmount(quota.limit))
+    "Daily ${formatQuotaAmount(quota.remaining)}/${formatQuotaAmount(quota.limit)} left"
 
 /** Exhausting the daily allowance lowers priority; the model stays usable. */
-fun dailyQuotaLowPriorityLabel(): String = L10n.uiText("modelUsage.daily.lowPriority")
+fun dailyQuotaLowPriorityLabel(): String = "Low priority"
 
 /** Why a model has no quota figure: the provider meters it but its snapshot did not arrive. */
 fun quotaUnavailable(status: ModelStatus): Boolean =
     (status.quotaLimited == true && status.quota == null) ||
         (!status.dailyQuotaKey.isNullOrBlank() && status.dailyQuota == null)
 
-fun quotaUnavailableLabel(): String = L10n.uiText("modelUsage.quota.unavailable")
+fun quotaUnavailableLabel(): String = "Quota unavailable"
 
 /** One line for the account: plan, each metered window, then credits. */
 fun accountSummary(account: AccountUsage, now: Long = platformNowMillis(), offsetOf: (Long) -> Long = ::platformUtcOffsetMillis): String {
@@ -87,8 +86,8 @@ fun accountSummary(account: AccountUsage, now: Long = platformNowMillis(), offse
     val windows = account.windows.map { windowSummary(it, now, offsetOf) }
     val balance = account.credits?.balance
     val credits = when {
-        account.credits?.unlimited == true -> L10n.uiText("modelUsage.credits.unlimited")
-        balance != null -> L10n.uiText("modelUsage.credits.balance", groupThousands(balance.toLong()))
+        account.credits?.unlimited == true -> "Unlimited credits"
+        balance != null -> "${groupThousands(balance.toLong())} credits"
         else -> null
     }
     return (listOfNotNull(plan) + windows + listOfNotNull(credits)).joinToString(" · ")
@@ -96,7 +95,7 @@ fun accountSummary(account: AccountUsage, now: Long = platformNowMillis(), offse
 
 private fun windowSummary(window: UsageWindow, now: Long, offsetOf: (Long) -> Long): String =
     listOfNotNull(
-        L10n.uiText("modelUsage.window.left", windowName(window.windowMinutes), remainingPercent(window.usedPercent)),
+        "${windowName(window.windowMinutes)}: ${remainingPercent(window.usedPercent)}% left",
         resetLabel(window.resetsAt, now, offsetOf),
     ).joinToString(" · ")
 

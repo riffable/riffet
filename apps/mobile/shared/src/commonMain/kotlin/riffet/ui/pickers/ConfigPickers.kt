@@ -9,13 +9,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.*
 import riffet.contracts.NativeBackendOption
-import riffet.ui.icons.RiffetIcons
-import riffet.ui.theme.LocalRiffetColors
 
 /*
  * ============================================================================================
@@ -54,14 +51,10 @@ private fun approvalDescription(id: String): String? = when (id) {
     else -> null
 }
 
-/** The three ids the web tints as a warning: these are the escalation modes. */
-private val ESCALATED_PERMISSIONS = setOf("unrestricted", "bypassPermissions", "danger-full-access")
+/** Modes the trigger and summaries mark with the warning colour; list rows stay plain. */
+private val RISKY_PERMISSIONS = setOf("unrestricted", "bypassPermissions", "danger-full-access", "never", "high")
 
-internal fun approvalIcon(id: String): ImageVector = when (id) {
-    "unrestricted", "bypassPermissions", "danger-full-access" -> RiffetIcons.Zap
-    "auto-review", "auto" -> RiffetIcons.ShieldHalf
-    else -> RiffetIcons.Shield
-}
+internal fun isRiskyApproval(id: String): Boolean = id in RISKY_PERMISSIONS
 
 /**
  * The mode list as one page of a sheet. Picking applies [onSelect] and then lets the sheet leave
@@ -125,7 +118,6 @@ internal fun ApprovalPickerPage(
     onBack: (() -> Unit)? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
     val host = LocalPickerHost.current
     PickerPage(
         title = stringResource(Res.string.pickers_approval_title),
@@ -133,12 +125,11 @@ internal fun ApprovalPickerPage(
         onBack = onBack,
     ) {
         if (!disabledReason.isNullOrEmpty()) SheetNotice(disabledReason, SettingsNoticeKind.INFO)
-        if (value in ESCALATED_PERMISSIONS) {
+        if (value in RISKY_PERMISSIONS) {
             SheetNotice(stringResource(Res.string.pickers_approval_escalated), SettingsNoticeKind.WARNING)
         }
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = metrics.rowPadding)) {
             options.forEach { option ->
-                val escalated = option.id in ESCALATED_PERMISSIONS
                 OptionRow(
                     label = option.label.ifEmpty { option.id },
                     description = option.description?.takeIf { it.isNotBlank() }
@@ -148,8 +139,6 @@ internal fun ApprovalPickerPage(
                         onSelect(option.id)
                         host?.dismiss?.invoke()
                     },
-                    icon = approvalIcon(option.id),
-                    tone = if (escalated) colors.warning else null,
                     disabledReason = disabledReason,
                 )
             }
@@ -178,3 +167,8 @@ internal fun ApprovalPickerSheet(
  */
 internal fun optionLabelOf(options: List<NativeBackendOption>, value: String, fallback: String): String =
     options.firstOrNull { it.id == value }?.label?.takeIf { it.isNotBlank() } ?: value.ifBlank { fallback }
+
+/** The compact name for a tight row: the option's short label, else its label. */
+internal fun approvalShortLabelOf(options: List<NativeBackendOption>, value: String, fallback: String): String =
+    options.firstOrNull { it.id == value }?.let { it.shortLabel?.takeIf(String::isNotBlank) ?: it.label.takeIf(String::isNotBlank) }
+        ?: value.ifBlank { fallback }

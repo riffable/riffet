@@ -126,7 +126,7 @@ import riffet.ui.theme.LocalRiffetTypography
  * ## Layout (the web's mobile composer)
  *
  * One rounded card: the input on top, then a footer row with the attach button, a single "发送设置"
- * chip (approval icon + the model's name; it opens the sheet with mode, permission and model), the
+ * chip (the permission's short name + the model's name; it opens the sheet with mode, permission and model), the
  * context ring, and the send button — which turns into a stop button while a turn runs and the
  * draft is empty. The agent's todo list (`TodoDock`) and queued runs sit above
  * the card, like `ComposerDock`.
@@ -160,7 +160,7 @@ import riffet.ui.theme.LocalRiffetTypography
 /** The "发送设置" chip's content; null hides the chip. */
 class ComposerSettings(
     val label: String,
-    val icon: ImageVector,
+    val icon: ImageVector?,
     val enabled: Boolean,
     val onOpen: () -> Unit,
     /** The model catalog is being read: the chevron spins. */
@@ -171,6 +171,10 @@ class ComposerSettings(
     val error: Boolean = false,
     /** `Color.Unspecified` keeps an agent mark's own colours (the Codex gradient). */
     val iconTint: Color? = null,
+    /** The permission's short name, shown before the model with a muted `·`; null shows none. */
+    val prefix: String? = null,
+    /** The permission is a risky one: the prefix takes the warning colour. */
+    val prefixRisky: Boolean = false,
 )
 
 /** A message to quote into the draft; [token] lets the same text be quoted twice. */
@@ -775,26 +779,44 @@ private fun SettingsChip(settings: ComposerSettings, modifier: Modifier = Modifi
             .padding(horizontal = metrics.controlInset / 2),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(modifier = Modifier.size(metrics.smallIconSize), contentAlignment = Alignment.Center) {
-            when {
-                settings.loading || settings.switching -> {
-                    val loadingLabel = if (settings.loading) stringResource(Res.string.pickers_catalog_loading) else stringResource(Res.string.pickers_switching)
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp).semantics { stateDescription = loadingLabel },
-                        strokeWidth = 1.5.dp,
-                        color = colors.fg3,
-                    )
+        // A chip with an icon shows the catalog's state in the icon's place; one without (the
+        // conversation's, led by the permission's name) shows it after the model, so the name
+        // never moves while the catalog loads.
+        val leading = settings.icon != null
+        val status = settings.loading || settings.switching || settings.error
+        val indicator: @Composable () -> Unit = {
+            Box(modifier = Modifier.size(metrics.smallIconSize), contentAlignment = Alignment.Center) {
+                when {
+                    settings.loading || settings.switching -> {
+                        val loadingLabel = if (settings.loading) stringResource(Res.string.pickers_catalog_loading) else stringResource(Res.string.pickers_switching)
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(14.dp).semantics { stateDescription = loadingLabel },
+                            strokeWidth = 1.5.dp,
+                            color = colors.fg3,
+                        )
+                    }
+                    settings.error -> {
+                        val failedLabel = stringResource(Res.string.session_catalog_read_failed)
+                        Icon(RiffetIcons.Warning, contentDescription = null, tint = colors.danger,
+                            modifier = Modifier.size(metrics.smallIconSize).semantics { stateDescription = failedLabel })
+                    }
+                    else -> settings.icon?.let { Icon(it, contentDescription = null, tint = settings.iconTint ?: ink, modifier = Modifier.size(metrics.smallIconSize)) }
                 }
-                settings.error -> {
-                    val failedLabel = stringResource(Res.string.session_catalog_read_failed)
-                    Icon(RiffetIcons.Warning, contentDescription = null, tint = colors.danger,
-                        modifier = Modifier.size(metrics.smallIconSize).semantics { stateDescription = failedLabel })
-                }
-                else -> Icon(settings.icon, contentDescription = null, tint = settings.iconTint ?: ink, modifier = Modifier.size(metrics.smallIconSize))
             }
         }
-        Spacer(Modifier.width(metrics.controlInset / 2))
-        Text(text = settings.label, style = typography.buttonSmall, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (leading) {
+            indicator()
+            Spacer(Modifier.width(metrics.controlInset / 2))
+        }
+        settings.prefix?.let { prefix ->
+            Text(text = prefix, style = typography.buttonSmall, color = if (settings.prefixRisky && settings.enabled) colors.warning else ink, maxLines = 1)
+            Text(text = " · ", style = typography.buttonSmall, color = if (settings.enabled) colors.fg4 else ink, maxLines = 1)
+        }
+        Text(text = settings.label, style = typography.buttonSmall, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        if (!leading && status) {
+            Spacer(Modifier.width(metrics.controlInset / 2))
+            indicator()
+        }
     }
 }
 

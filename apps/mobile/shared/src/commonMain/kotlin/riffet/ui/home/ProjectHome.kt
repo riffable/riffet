@@ -161,7 +161,6 @@ import riffet.ui.pickers.offeredPicks
 import riffet.ui.pickers.rememberToolDevices
 import riffet.ui.pickers.toolsOffered
 import riffet.ui.pickers.toolsSummary
-import riffet.ui.pickers.approvalIcon
 import riffet.ui.composer.ComposerSettings
 import riffet.ui.pickers.SendSettingsPage
 import riffet.ui.settings.SettingsNoticeKind
@@ -979,7 +978,7 @@ private fun HomeContent(
             add(SendSettingRow(label = stringResource(Res.string.session_mode), value = optionLabelOf(modes, config.mode, stringResource(Res.string.session_mode))) { sheet = HomeSheet.Mode })
         }
         if (!chat) caps?.permissions?.takeIf { it.isNotEmpty() }?.let { permissions ->
-            add(SendSettingRow(label = stringResource(Res.string.session_permission), value = optionLabelOf(permissions, config.approval, stringResource(Res.string.pickers_approval_title)), icon = approvalIcon(config.approval)) { sheet = HomeSheet.Approval })
+            add(SendSettingRow(label = stringResource(Res.string.session_permission), value = optionLabelOf(permissions, config.approval, stringResource(Res.string.pickers_approval_title))) { sheet = HomeSheet.Approval })
         }
         add(SendSettingRow(label = stringResource(Res.string.session_model), value = modelText, loading = config.catalogLoading, error = config.catalogError != null) { sheet = HomeSheet.Model })
         if (toolsShown) {

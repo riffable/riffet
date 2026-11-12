@@ -324,49 +324,60 @@ private struct RunningArc: View {
 
 // MARK: - Composer parts
 
-/// The SF Symbol for an approval policy, matching Android's `approvalIcon`.
-func riffetApprovalSymbol(_ approval: String?) -> String {
-    switch approval ?? "" {
-    case "unrestricted", "bypassPermissions", "danger-full-access": "bolt"
-    case "auto-review", "auto": "checkmark.shield"
-    default: "shield"
-    }
+/// Approval modes that run without asking: marked by the warning colour, on the trigger only.
+func riffetApprovalIsRisky(_ id: String?) -> Bool {
+    ["unrestricted", "bypassPermissions", "danger-full-access", "never", "high"].contains(id ?? "")
 }
 
-/// The composer's send-settings label: an icon and the model name, plain text with no fill or
-/// arrow, since the composer has little room. The icon is the agent's mark where the agent is still
-/// being chosen, the approval policy inside a conversation, a plain symbol for a quick chat; while the catalog loads it turns into
-/// a spinner, and into a warning when the catalog could not be read, so the name never shifts.
+/// The composer's send-settings label: an optional icon or approval name before the model name, plain
+/// text with no fill or arrow, since the composer has little room. The icon is the agent's mark where
+/// the agent is still being chosen, a plain symbol for a quick chat; inside a conversation the approval
+/// mode's short name leads instead. While the catalog loads the icon turns into a spinner, and into a
+/// warning when the catalog could not be read; without an icon those follow the model name. Either
+/// way the name never shifts.
 struct RiffetModelLabel: View {
-    enum Icon { case approval(String?), agent(String), symbol(String) }
+    enum Icon { case none, agent(String), symbol(String) }
     let title: String
-    var icon: Icon = .approval(nil)
+    var icon: Icon = .none
+    /// The approval mode's short name and whether it is a risky one, shown before the model name.
+    var approval: (name: String, risky: Bool)? = nil
     var loading = false
     var failed = false
     let action: () -> Void
     @Environment(\.palette) private var palette
+
+    private var leading: Bool { if case .none = icon { false } else { true } }
+
     var body: some View {
         Button(action: action) {
             HStack(spacing: 5) {
-                Group {
-                    if failed { Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.warning) }
-                    else if loading { ProgressView().controlSize(.mini) }
+                if leading {
+                    if failed || loading { status }
                     else {
                         switch icon {
-                        case let .approval(approval): Image(systemName: riffetApprovalSymbol(approval))
-                        case let .agent(backend): AgentMarkView(backend: backend, size: 14, color: agentMarkColor(backend, palette))
-                        case let .symbol(name): Image(systemName: name)
+                        case .none: EmptyView()
+                        case let .agent(backend): AgentMarkView(backend: backend, size: 14, color: agentMarkColor(backend, palette)).frame(width: 16, height: 16)
+                        case let .symbol(name): Image(systemName: name).font(.system(size: 13, weight: .medium)).frame(width: 16, height: 16)
                         }
                     }
                 }
-                .font(.system(size: 13, weight: .medium)).frame(width: 16, height: 16)
+                if let approval {
+                    Text(approval.name).riffetFont(.label).lineLimit(1).foregroundStyle(approval.risky ? palette.warning : palette.accent)
+                    Text(verbatim: "·").riffetFont(.label).foregroundStyle(palette.fg4)
+                }
                 Text(title).riffetFont(.label).lineLimit(1).truncationMode(.middle)
+                if !leading, failed || loading { status }
             }
             .foregroundStyle(palette.accent)
             .padding(.horizontal, 6)
             .frame(minHeight: RiffetMetrics.hitTarget)
         }
         .buttonStyle(RiffetDimPressStyle())
+    }
+
+    @ViewBuilder private var status: some View {
+        if failed { Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.warning).font(.system(size: 13, weight: .medium)).frame(width: 16, height: 16) }
+        else { ProgressView().controlSize(.mini).frame(width: 16, height: 16) }
     }
 }
 

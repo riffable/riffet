@@ -869,16 +869,6 @@
         }
       }
     },
-    "Agent 尚未提供可选择的模型，请重试读取。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The Agent has not provided any models to choose from. Try again."
-          }
-        }
-      }
-    },
     "Agent 已不再等待此请求。" : {
       "localizations" : {
         "en" : {
@@ -1025,16 +1015,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Git view"
-          }
-        }
-      }
-    },
-    "MAX 模式" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "MAX mode"
           }
         }
       }
@@ -3035,16 +3015,6 @@
         }
       }
     },
-    "响应更快，用量更高" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Faster responses, higher usage"
-          }
-        }
-      }
-    },
     "四" : {
       "localizations" : {
         "en" : {
@@ -3061,16 +3031,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Go to latest"
-          }
-        }
-      }
-    },
-    "回复前进行推理" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reason before replying"
           }
         }
       }
@@ -4391,16 +4351,6 @@
         }
       }
     },
-    "当前保存的模型不在目录中：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The saved model is not in the catalog: %@"
-          }
-        }
-      }
-    },
     "当前包含的估算输出为 %@ Token。时区：%@。更新于 %@。" : {
       "localizations" : {
         "en" : {
@@ -4447,16 +4397,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The current turn keeps running; changes apply the next time the Agent is idle."
-          }
-        }
-      }
-    },
-    "当前配置不可用" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This configuration is unavailable"
           }
         }
       }
@@ -4511,32 +4451,12 @@
         }
       }
     },
-    "快速响应" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Fast response"
-          }
-        }
-      }
-    },
     "思考" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Thinking"
-          }
-        }
-      }
-    },
-    "思考程度" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reasoning effort"
           }
         }
       }
@@ -5123,26 +5043,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Search prompts in this session"
-          }
-        }
-      }
-    },
-    "搜索模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search models"
-          }
-        }
-      }
-    },
-    "搜索模型或型号" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search models or versions"
           }
         }
       }
@@ -6847,16 +6747,6 @@
         }
       }
     },
-    "正在读取服务商模型…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Loading provider models…"
-          }
-        }
-      }
-    },
     "正在读取服务器设置…" : {
       "localizations" : {
         "en" : {
@@ -7087,16 +6977,6 @@
         }
       }
     },
-    "此配置未提供可选择的模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This configuration offers no models to choose from"
-          }
-        }
-      }
-    },
     "每日活跃" : {
       "localizations" : {
         "en" : {
@@ -7195,16 +7075,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No matching files"
-          }
-        }
-      }
-    },
-    "没有匹配的模型" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No matching models"
           }
         }
       }

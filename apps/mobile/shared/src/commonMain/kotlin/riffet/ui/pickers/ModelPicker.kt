@@ -32,9 +32,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import org.jetbrains.compose.resources.stringResource
-import org.jetbrains.compose.resources.rememberResourceEnvironment
-import riffet_mobile.shared.generated.resources.*
 import riffet.contracts.ModelInfo
 import riffet.contracts.NativeBackendProfile
 import riffet.contracts.NativeBackendUsage
@@ -197,7 +194,7 @@ internal fun ModelPickerPages(
     val parsed = remember(catalog, selection) { resolveModelSelection(catalog, selection) }
     val params = remember(catalog, selection) { catalogParams(catalog, parsed.model, parsed.params) }
     val tags = selectionTags(params)
-    val selectModel = stringResource(Res.string.pickers_select_model)
+    val selectModel = "Select model"
     val currentLabel = modelLabel(catalog, selection).ifEmpty { selection.ifEmpty { selectModel } }
     // Which parameter's options are open as their own list. Only an id, so the list re-reads the
     // live parameter (and its new value) rather than holding a stale copy.
@@ -209,8 +206,8 @@ internal fun ModelPickerPages(
     val grouped = groups.size > 1
     val providerName = if (grouped) groups.firstOrNull { it.profileId == activeProfileId }?.name?.takeIf { it.isNotBlank() } else null
 
-    val switchingText = stringResource(Res.string.pickers_switching)
-    val catalogLoadingText = stringResource(Res.string.pickers_catalog_loading)
+    val switchingText = "Switching…"
+    val catalogLoadingText = "Loading…"
     val subtitle = if (!showSubtitle) {
         ""
     } else {
@@ -268,26 +265,25 @@ internal fun ModelPickerPages(
                 }
             }
         } else {
-            PickerPage(title = stringResource(Res.string.pickers_select_model), subtitle = subtitle, fullHeight = true, onBack = onBack) {
+            PickerPage(title = "Select model", subtitle = subtitle, fullHeight = true, onBack = onBack) {
             usage?.account?.let { account ->
-                rememberResourceEnvironment()
                 Text(
-                    text = (if (account.limitReached) stringResource(Res.string.pickers_usage_limit) + " · " else "") + accountSummary(account),
+                    text = (if (account.limitReached) "Usage limit reached" + " · " else "") + accountSummary(account),
                     style = typography.caption,
                     color = if (account.limitReached) colors.danger else colors.fg3,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 4)),
                 )
             }
             if (!disabledReason.isNullOrEmpty()) SheetNotice(disabledReason, SettingsNoticeKind.INFO)
-            if (catalogError != null) SheetNotice(stringResource(Res.string.pickers_catalog_failed, catalogError), SettingsNoticeKind.ERROR, stringResource(Res.string.pickers_retry), onRetryCatalog)
+            if (catalogError != null) SheetNotice("Couldn't load models: $catalogError", SettingsNoticeKind.ERROR, "Retry", onRetryCatalog)
             if (!grouped && !catalogLoading && catalogError == null && catalog.isEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.rowPadding / 2)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = stringResource(Res.string.pickers_no_catalog), style = typography.bodySmall, color = colors.fg3, modifier = Modifier.weight(1f))
+                    Text(text = "No models available", style = typography.bodySmall, color = colors.fg3, modifier = Modifier.weight(1f))
                     riffet.ui.design.RiffetTextButton(onClick = onRetryCatalog) {
-                        Text(stringResource(Res.string.pickers_retry))
+                        Text("Retry")
                     }
                 }
             }
@@ -308,7 +304,7 @@ internal fun ModelPickerPages(
                                 when {
                                     group.loading && models.isEmpty() -> item(key = "loading:${group.profileId}") {
                                         Text(
-                                            text = stringResource(Res.string.pickers_reading_models),
+                                            text = "Loading…",
                                             style = typography.bodySmall,
                                             color = colors.fg3,
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
@@ -320,7 +316,7 @@ internal fun ModelPickerPages(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Text(
-                                                text = stringResource(Res.string.pickers_catalog_failed, group.error),
+                                                text = "Couldn't load models: ${group.error}",
                                                 style = typography.bodySmall,
                                                 color = colors.danger,
                                                 modifier = Modifier.weight(1f),
@@ -328,12 +324,12 @@ internal fun ModelPickerPages(
                                             riffet.ui.design.RiffetTextButton(onClick = {
                                                 val retryGroup = onRetryGroup
                                                 if (retryGroup != null) retryGroup(group.profileId) else onRetryCatalog()
-                                            }) { Text(stringResource(Res.string.pickers_retry)) }
+                                            }) { Text("Retry") }
                                         }
                                     }
                                     !group.available && models.isEmpty() -> item(key = "unavailable:${group.profileId}") {
                                         Text(
-                                            text = group.unavailableReason ?: stringResource(Res.string.pickers_unavailable),
+                                            text = group.unavailableReason ?: "Unavailable",
                                             style = typography.bodySmall,
                                             color = colors.fg3,
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
@@ -341,7 +337,7 @@ internal fun ModelPickerPages(
                                     }
                                     models.isEmpty() -> item(key = "none:${group.profileId}") {
                                         Text(
-                                            text = stringResource(Res.string.pickers_no_models),
+                                            text = "No models available",
                                             style = typography.bodySmall,
                                             color = colors.fg3,
                                             modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
@@ -500,7 +496,7 @@ private fun ParamControl(
             trailing = if (paramKind(param) == ParamKind.FAST && param.options.any { it.value == "default" }) {
                 {
                     riffet.ui.design.RiffetTextButton(onClick = { onChange("default") }, enabled = enabled) {
-                        Text(stringResource(Res.string.pickers_default), color = if (param.value == "default") LocalRiffetColors.current.accent else LocalRiffetColors.current.fg3)
+                        Text("Default", color = if (param.value == "default") LocalRiffetColors.current.accent else LocalRiffetColors.current.fg3)
                     }
                 }
             } else null,

@@ -32,6 +32,11 @@ struct ConversationComposer: View {
     private var approval: String? {
         NativeConfigurationSummary.approval(status: workbench.selected?.id == session.id ? workbench.status : nil, backend: session.backendId ?? .cursor, sessionApproval: session.approval)
     }
+    /// The approval mode's short name, where the catalog lists modes to choose from.
+    private var approvalName: (name: String, risky: Bool)? {
+        guard let approval, let option = catalog?.capabilities.permissions.first(where: { $0.id == approval }) else { return nil }
+        return (option.shortLabel ?? option.label, riffetApprovalIsRisky(approval))
+    }
     private var hasContent: Bool { !draft.text.isEmpty || !draft.attachments.isEmpty || !draft.references.isEmpty || !draft.pendingFiles.isEmpty }
     /// Focused or holding a draft the card grows its footer; otherwise it stays one line.
     private var expanded: Bool { focused || hasContent }
@@ -138,7 +143,7 @@ struct ConversationComposer: View {
         HStack(spacing: 0) {
             plusMenu
             Spacer(minLength: 8)
-            RiffetModelLabel(title: modelName, icon: .approval(approval), loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
+            RiffetModelLabel(title: modelName, approval: approvalName, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
                 .accessibilityLabel(String(localized: "模型：\(modelName)", bundle: .riffet))
                 .accessibilityValue(catalogLoading ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? "")
                 .accessibilityHint("查看模型、参数、模式与权限").accessibilityIdentifier("modelPicker")
