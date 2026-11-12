@@ -1059,15 +1059,19 @@ internal class RowWindow(private val cap: SyncWindow) {
 
     /** A `rows` frame; true when the window changed. */
     fun apply(upserts: List<TimelineRow>, deletes: List<String>): Boolean {
-        // A new row outside the held range belongs to rows not held: before the window's start
-        // while older rows exist, or past its end while away from the head.
+        // A row outside the held range belongs to rows not held: before the window's start while
+        // older rows exist, or past its end while away from the head. A held row that moved there
+        // leaves, so the window's edges stay the paging cursors; the page that reaches it brings it back.
         val start = if (hasBefore) firstPos else null
         val end = if (hasAfter) lastPos else null
         var reorder = false
         var any = false
         for (row in upserts) {
             val held = byKey[row.key]
-            if (held == null && ((start != null && row.pos < start) || (end != null && row.pos > end))) continue
+            if ((start != null && row.pos < start) || (end != null && row.pos > end)) {
+                if (held != null && remove(row.key)) any = true
+                continue
+            }
             if (held == null || held.pos != row.pos) reorder = true
             put(row)
             changed?.add(row.key)
