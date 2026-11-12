@@ -326,6 +326,7 @@ footer span { color: var(--ink-3); }
 </head>
 <body>
 <nav>
+  <a href="plugins/" data-t="s10">Plugins</a>
   <a href="https://github.com/riffetai/riffet/tree/main/docs" data-t="docs">Docs</a>
   <a href="https://github.com/riffetai/riffet">GitHub</a>
   <button id="lang" type="button">中文</button>
@@ -472,7 +473,7 @@ footer span { color: var(--ink-3); }
 
   <section>
     <h2 data-t="s10">Plugins</h2>
-    <p data-t="s10p">Extend model sources, views, commands and palettes with plugins. The canvas is implemented as one.</p>
+    <p><span data-t="s10p">Extend model sources, views, commands and palettes with plugins. The canvas is implemented as one.</span> <a href="plugins/" data-t="browse">Browse plugins</a></p>
 <pre class="start"><span class="p">$ </span>riffet plugin dev ./my-plugin
 <span class="p">$ </span>riffet plugin pack ./my-plugin --out my-plugin.tgz
 <span class="p">$ </span>riffet plugin install my-plugin.tgz</pre>
@@ -530,7 +531,7 @@ const ZH = {
   y2: '图标', y3: '界面风格',
   s6p: '持续增加中，当前能力表见',
   t1: '时间线', t2: '终端', t3: '插话', t4: '子 Agent',
-  s10: '插件', s10p: '通过插件扩展模型来源、视图、命令与配色。画布即以插件实现。',
+  s10: '插件', s10p: '通过插件扩展模型来源、视图、命令与配色。画布即以插件实现。', browse: '浏览插件',
   s7: '开始', pair: '# 给其他设备的配对码和二维码',
   s5p: '代码、终端与登录凭证保留在本机。无需账号，不经云端中继。',
 };

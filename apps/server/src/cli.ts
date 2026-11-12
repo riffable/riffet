@@ -4,7 +4,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { openSync, closeSync, mkdirSync, readFileSync, writeFileSync, existsSync, unlinkSync, renameSync, realpathSync, statSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { homedir } from 'node:os';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { BuildInfo, ReleaseTag } from '../../../packages/contracts/src/index.js';
@@ -102,6 +102,9 @@ export async function serve(options:CliOptions){
   rotateServerLog(join(state(options),'server.log'));
   const instanceId=randomUUID();
   const webRoot=options.dev?undefined:join(dirname(entry),'public');
+  // Development reads the plugin index `pnpm build:site` wrote, when there is one and nothing else was asked for.
+  const localIndex=fileURLToPath(new URL('../../../dist/site/plugins/index.json',import.meta.url));
+  if(options.dev&&!process.env.RIFFET_PLUGIN_INDEX?.trim()&&existsSync(localIndex))process.env.RIFFET_PLUGIN_INDEX=pathToFileURL(localIndex).href;
   let services:Awaited<ReturnType<typeof createApp>>|undefined;
   let discovery:DiscoveryHandle|undefined;
   const path=daemonPath(options);
@@ -118,6 +121,7 @@ export async function serve(options:CliOptions){
     show(record,options,options.token);
   }catch(error){await discovery?.stop();await services?.app.close();releaseState();throw error;}
   if(options.dev)console.log('Web development: run pnpm dev:web, then open http://localhost:5173');
+  if(options.dev&&process.env.RIFFET_PLUGIN_INDEX)console.log(`Plugin index: ${process.env.RIFFET_PLUGIN_INDEX}`);
   let shuttingDown=false;
   const stop=async()=>{if(shuttingDown){process.exit(1);}shuttingDown=true;const timeout=setTimeout(()=>process.exit(1),8000);timeout.unref();try{await discovery?.stop();await services!.app.close();if(readDaemon(options)?.instanceId===instanceId)unlinkSync(path);}finally{releaseState();clearTimeout(timeout);process.exit(0);}};
   process.on('SIGINT',()=>void stop());process.on('SIGTERM',()=>void stop());
@@ -457,6 +461,7 @@ export async function main(){
       if(options.format&&!['tgz','tar.gz','zip','tar'].includes(options.format))throw new Error('Format must be tgz, tar.gz, zip or tar.');
       const packed=await packSource(directory,{format:(options.format==='tar.gz'?'tgz':options.format) as ArchiveFormat|undefined,out:options.out,entries:options.entry});
       console.log(packed.file);
+      console.log(packed.integrity);
       for(const warning of packed.warnings)console.warn(warning);
     });
   plugin.command('dev [directory]').description('Build, link and watch a trusted local development plugin')
@@ -471,7 +476,7 @@ export async function main(){
       });
     });
   plugin.command('unlink <id>').description('Stop a linked development plugin and remove its persistent link').option('--state-dir <path>','Persistent workbench state',defaultState).action(async(id:string,options:{stateDir:string})=>printLines(await unlinkDevelopmentPlugin(await pluginContext(options),id)));
-  plugin.command('install <path>').description('Install a package directory or archive (.tgz, .tar.gz, .zip, .tar)').option('--state-dir <path>','Persistent workbench state',defaultState).option('--grant <capabilities>','Comma-separated capabilities to grant; must equal what the package asks for').option('--yes','Grant what the package asks for').option('--trusted','Run server code in Riffet with its full permissions; local operator only').action(async(path:string,options:{stateDir:string;grant?:string;yes?:boolean;trusted?:boolean})=>printLines(await installPlugin(await pluginContext(options),path,options)));
+  plugin.command('install <path|id>').description('Install a package directory or archive (.tgz, .tar.gz, .zip, .tar), or <id>[@version] from the plugin index').option('--state-dir <path>','Persistent workbench state',defaultState).option('--grant <capabilities>','Comma-separated capabilities to grant; must equal what the package asks for').option('--yes','Grant what the package asks for').option('--trusted','Run server code in Riffet with its full permissions; local operator only').action(async(path:string,options:{stateDir:string;grant?:string;yes?:boolean;trusted?:boolean})=>printLines(await installPlugin(await pluginContext(options),path,options)));
   plugin.command('list').description('List installed packages and their versions').option('--state-dir <path>','Persistent workbench state',defaultState).action(async(options:{stateDir:string})=>printLines(await listPlugins(await pluginContext(options))));
   plugin.command('logs <id>').description('Read recent plugin logs without activating it').option('--state-dir <path>','Persistent workbench state',defaultState).option('--limit <count>','Maximum entries (1–256)','100').action(async(id:string,options:{stateDir:string;limit:string})=>printLines(await readPluginLogs(await pluginContext(options),id,{limit:Number(options.limit)})));
   plugin.command('select <id> <version>').description('Run another installed version of a package').option('--state-dir <path>','Persistent workbench state',defaultState).action(async(id:string,version:string,options:{stateDir:string})=>printLines(await selectPlugin(await pluginContext(options),id,version)));

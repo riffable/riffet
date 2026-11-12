@@ -22,9 +22,16 @@ final class PluginManagementStore {
     var grant: PluginGrantRequired?
     var trustedInstall = false
     @ObservationIgnored private var package: (data: Data, name: String)?
+    /// A release of the plugin index being installed, or asked for by a `riffet://plugins/install` link before this page connected.
+    @ObservationIgnored private var market: (id: String, version: String?)?
     @ObservationIgnored private var api: RiffetApi?
     @ObservationIgnored private var serverKey: String?
     @ObservationIgnored private var generation = 0
+    /// The public plugin index as the server lists it; nil until first loaded.
+    var marketList: PluginMarketList?
+    var marketLoading = false
+    var marketError: String?
+    @ObservationIgnored private var marketSerial = 0
     var connected: Bool { api != nil }
     var dirty: Bool { !draft.isEmpty }
     var selected: PluginDescriptor? { items.first { Self.key($0) == selectedID || $0.id == selectedID } }
@@ -44,13 +51,44 @@ final class PluginManagementStore {
             if !busy { await refresh() }
             return
         }
-        generation += 1; busy = false; loading = false; trustedInstall = false
+        generation += 1; busy = false; loading = false; marketLoading = false; trustedInstall = false
         if let next, serverKey != next.baseUrl {
+            // A link that arrived before the first connection is for this server; one left pending on another is not.
+            if serverKey != nil { market = nil }
             serverKey = next.baseUrl
+            marketList = nil; marketError = nil
             items = []; selectedID = ""; draft = [:]; baseline = nil; grant = nil; package = nil; trustedInstall = false
         }
         api = next
         await refresh()
+        if let market, grant == nil { await offer(id: market.id, version: market.version) }
+    }
+
+    /// From the plugin market page: the release is shown for confirmation, never installed by the link alone.
+    func requestMarketInstall(id: String, version: String?) async {
+        package = nil; market = (id, version); trustedInstall = false
+        if api != nil { await offer(id: id, version: version) }
+    }
+    private func offer(id: String, version: String?) async {
+        let current = generation
+        await run { api in
+            let offer = try await api.marketPluginOffer(id: id, version: version)
+            if current == self.generation { self.market = (offer.id, offer.version); self.grant = offer }
+        }
+        if grant == nil { market = nil }
+    }
+    func loadMarket() async {
+        guard let api else { return }
+        let current = generation
+        marketSerial += 1
+        let reading = marketSerial
+        marketLoading = true; marketError = nil
+        defer { if current == generation, reading == marketSerial { marketLoading = false } }
+        do {
+            let list = try await api.marketPlugins()
+            guard current == generation, reading == marketSerial else { return }
+            marketList = list
+        } catch { if current == generation, reading == marketSerial { marketError = error.riffetMessage } }
     }
     func select(_ plugin: PluginDescriptor) { selectedID = Self.key(plugin); baseline = plugin; draft = [:]; diagnostics = []; logs = [] }
     func collapse() { selectedID = ""; baseline = nil; draft = [:]; diagnostics = []; logs = [] }
@@ -115,32 +153,37 @@ final class PluginManagementStore {
         do {
             let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
             guard size <= 32 * 1024 * 1024 else { error = String(localized: "插件包不能超过 32 MB"); return }
-            package = (try Data(contentsOf: url), url.lastPathComponent)
+            package = (try Data(contentsOf: url), url.lastPathComponent); market = nil
             trustedInstall = false
             await install(grant: [])
         } catch { self.error = error.riffetMessage }
     }
     func install(grant capabilities: [String], trusted: Bool = false) async {
-        guard let package else { return }
+        guard package != nil || market?.version != nil else { return }
+        let package = package, market = market
         let current = generation
         await run { api in
             do {
-                let result = try await api.installPluginPackage(bytes: byteArrayFromData(data: package.data), fileName: package.name, grant: capabilities, trusted: trusted)
+                let result = if let package {
+                    try await api.installPluginPackage(bytes: byteArrayFromData(data: package.data), fileName: package.name, grant: capabilities, trusted: trusted)
+                } else {
+                    try await api.installMarketPlugin(id: market!.id, version: market!.version!, grant: capabilities, trusted: trusted)
+                }
                 guard current == self.generation else { return }
                 self.grant = result.grant
                 self.trustedInstall = false
                 if let plugin = result.plugin {
-                    self.selectedID = Self.key(plugin); self.package = nil
+                    self.selectedID = Self.key(plugin); self.package = nil; self.market = nil
                     self.query = ""; self.filter = "all"
                     self.diagnostics = []; self.baseline = plugin
                 }
             } catch {
-                if current == self.generation { self.grant = nil; self.trustedInstall = false }
+                if current == self.generation { self.grant = nil; self.trustedInstall = false; self.market = nil }
                 throw error
             }
         }
     }
-    func cancelInstall() { grant = nil; package = nil; trustedInstall = false }
+    func cancelInstall() { grant = nil; package = nil; market = nil; trustedInstall = false }
     func selectVersion(_ version: String) async {
         guard let selected else { return }
         await run { api in _ = try await api.selectPluginVersion(id: selected.id, version: version) }

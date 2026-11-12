@@ -96,6 +96,10 @@ msgstr "Move down"
 msgid "下载 {0}"
 msgstr "Download {0}"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "不兼容"
+msgstr "Incompatible"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "不可用"
 msgstr "Unavailable"
@@ -124,6 +128,7 @@ msgstr "Today"
 msgid "从终端导入…"
 msgstr "Import from terminal…"
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "以服务器进程的权限运行"
@@ -536,6 +541,10 @@ msgstr "Resume in terminal"
 msgid "在终端恢复…"
 msgstr "Resume in terminal…"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "在网页中查看"
+msgstr "View on the web"
+
 #: src/app/App.tsx
 msgid "在运行服务器的 Mac 或电脑上执行"
 msgstr "On the Mac or computer running the server, run"
@@ -574,6 +583,7 @@ msgid "失败"
 msgstr "Failed"
 
 #: src/app/plugins/PluginGrantDialog.tsx
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "安装"
 msgstr "Install"
@@ -658,6 +668,7 @@ msgstr "Enabled"
 msgid "已复制地址"
 msgstr "Address copied"
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已安装"
 msgstr "Installed"
@@ -1044,6 +1055,10 @@ msgstr "New"
 msgid "新项目"
 msgstr "New project"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "无"
+msgstr "None"
+
 #: src/app/use-project-actions.ts
 msgid "无法使用该目录开始会话"
 msgstr "Couldn't start a session in this folder"
@@ -1188,6 +1203,10 @@ msgstr "Couldn't read the resume command"
 msgid "无法读取插件"
 msgstr "Could not load plugins"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "无法读取插件目录"
+msgstr "Couldn’t load the plugin directory"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "无法读取终端会话"
 msgstr "Could not read terminal sessions"
@@ -1314,6 +1333,7 @@ msgstr "No project"
 msgid "本机"
 msgstr "This machine"
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
@@ -1376,6 +1396,7 @@ msgstr "Syncing"
 msgid "此配置在当前客户端不可用"
 msgstr "This configuration is unavailable in this client"
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有匹配的插件"
 msgstr "No matching plugins"
@@ -1395,6 +1416,7 @@ msgstr "No conversations to import"
 msgid "没有可配置项"
 msgstr "No configurable options"
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有插件"
 msgstr "No plugins"
@@ -1410,6 +1432,11 @@ msgstr "No records match the filter"
 #: src/app/Sidebar.tsx
 msgid "浅色"
 msgstr "Light"
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-market"
+msgid "浏览"
+msgstr "Browse"
 
 #: src/app/AddProjectDialog.tsx
 msgid "浏览…"
@@ -1454,6 +1481,10 @@ msgstr "Clear filter"
 #: src/app/plugins/PluginsPage.tsx
 msgid "源目录、设置和数据会保留"
 msgstr "Source directory, settings and data will be kept"
+
+#: src/app/plugins/PluginMarket.tsx
+msgid "源码"
+msgstr "Source"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "版本"
@@ -1907,6 +1938,7 @@ msgid "重新读取"
 msgstr "Reload"
 
 #: src/app/plugins/PluginFlowDialog.tsx
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr "Retry"

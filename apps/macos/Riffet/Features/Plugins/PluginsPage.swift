@@ -20,6 +20,8 @@ struct PluginsPage: View {
     @State private var configurationPage = ""
     @State private var pendingDetailTab: String?
     @State private var pendingConfigurationPage: String?
+    @State private var browsing = false
+    @State private var browsed: PluginMarketEntry?
 
     init(workbench: Workbench) { self.workbench = workbench; store = workbench.pageModels.plugins }
     private var visible: [PluginDescriptor] {
@@ -32,6 +34,59 @@ struct PluginsPage: View {
     }
     var body: some View {
         Form {
+            Section {
+                SegmentedTrack(selection: $browsing) {
+                    Text("已安装").tag(false)
+                    Text("浏览").tag(true)
+                }
+                .accessibilityLabel("插件").frame(maxWidth: .infinity, alignment: .leading)
+                .listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
+            }
+            if browsing { browseContent } else { installedContent }
+        }
+        .riffetForm()
+        .scrollContentBackground(.hidden)
+        .frame(maxWidth: 720)
+        .frame(maxWidth: .infinity)
+        .navigationTitle("插件")
+        .pageChrome(.plugins, workbench: workbench, search: PageSearch(
+            text: Binding(get: { store.query }, set: { store.query = $0; store.collapse() }),
+            prompt: String(localized: "搜索插件")
+        )) {
+            PageMenuButton(symbol: store.filter == "all" ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill", help: String(localized: "筛选"), build: filterMenu)
+                .disabled(store.busy || store.dirty || browsing)
+            PageActionButton(title: String(localized: "安装"), symbol: "plus") {
+                if store.dirty { installing = true } else { Task { await store.choosePackage() } }
+            }
+            .disabled(store.busy || !store.connected)
+            PageMenuButton(symbol: "ellipsis", help: String(localized: "更多"), build: moreMenu)
+                .disabled(store.busy || store.dirty || !store.connected)
+        }
+        .task(id: workbench.host.api?.baseUrl) {
+            await store.connect(workbench.host.api)
+            if browsing { await store.loadMarket() }
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(10)) } catch { return }
+                if !store.busy { await store.refresh() }
+            }
+        }
+        .onChange(of: browsing) { _, on in
+            guard on, store.marketList == nil, !store.marketLoading else { return }
+            Task { await store.loadMarket() }
+        }
+        .sheet(isPresented: managementPresentation) {
+            if store.grant != nil { grantSheet } else { inspectorSheet }
+        }
+        .sheet(isPresented: Binding(get: { browsed != nil && store.grant == nil }, set: { if !$0 { browsed = nil } })) {
+            if let entry = browsed { marketDetail(entry) }
+        }
+        .confirmationDialog("暂停所有外部插件？", isPresented: $recoveryConfirm, titleVisibility: .visible) {
+            Button("暂停") { Task { await store.setRecovery(true) } }
+        } message: { Text("保留原启用策略，可随时恢复") }
+    }
+
+    @ViewBuilder private var installedContent: some View {
+        Group {
             if store.recovery {
                 Section {
                     HStack {
@@ -72,37 +127,6 @@ struct PluginsPage: View {
                 }
             }
         }
-        .riffetForm()
-        .scrollContentBackground(.hidden)
-        .frame(maxWidth: 720)
-        .frame(maxWidth: .infinity)
-        .navigationTitle("插件")
-        .pageChrome(.plugins, workbench: workbench, search: PageSearch(
-            text: Binding(get: { store.query }, set: { store.query = $0; store.collapse() }),
-            prompt: String(localized: "搜索插件")
-        )) {
-            PageMenuButton(symbol: store.filter == "all" ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill", help: String(localized: "筛选"), build: filterMenu)
-                .disabled(store.busy || store.dirty)
-            PageActionButton(title: String(localized: "安装"), symbol: "plus") {
-                if store.dirty { installing = true } else { Task { await store.choosePackage() } }
-            }
-            .disabled(store.busy || !store.connected)
-            PageMenuButton(symbol: "ellipsis", help: String(localized: "更多"), build: moreMenu)
-                .disabled(store.busy || store.dirty || !store.connected)
-        }
-        .task(id: workbench.host.api?.baseUrl) {
-            await store.connect(workbench.host.api)
-            while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(10)) } catch { return }
-                if !store.busy { await store.refresh() }
-            }
-        }
-        .sheet(isPresented: managementPresentation) {
-            if store.grant != nil { grantSheet } else { inspectorSheet }
-        }
-        .confirmationDialog("暂停所有外部插件？", isPresented: $recoveryConfirm, titleVisibility: .visible) {
-            Button("暂停") { Task { await store.setRecovery(true) } }
-        } message: { Text("保留原启用策略，可随时恢复") }
     }
 
     private var inspectedPlugin: PluginDescriptor? {
@@ -260,7 +284,9 @@ struct PluginsPage: View {
 
     private func moreMenu() -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(MenuAction.item(String(localized: "重新检测"), symbol: "arrow.clockwise") { Task { await store.refresh(detect: true) } })
+        menu.addItem(MenuAction.item(String(localized: "重新检测"), symbol: "arrow.clockwise") {
+            Task { await store.refresh(detect: true); if browsing { await store.loadMarket() } }
+        })
         menu.addItem(.separator())
         if store.recovery {
             menu.addItem(MenuAction.item(String(localized: "恢复原启用策略")) { Task { await store.setRecovery(false) } })
@@ -521,6 +547,113 @@ struct PluginsPage: View {
             Text("没有独立功能入口").font(.callout).foregroundStyle(palette.fg3)
         }
     }
+    private var browseEntries: [PluginMarketEntry] {
+        (store.marketList?.plugins ?? []).filter {
+            store.query.isEmpty || (marketTitle($0) + " " + $0.id + " " + $0.vendor).localizedCaseInsensitiveContains(store.query)
+        }
+    }
+
+    @ViewBuilder private var browseContent: some View {
+        if let message = store.marketError {
+            Section {
+                HStack(alignment: .center, spacing: Space.md) {
+                    VStack(alignment: .leading, spacing: Space.xs) {
+                        Text("无法读取插件目录").font(.callout).foregroundStyle(palette.fg)
+                        Text(message).font(.caption).foregroundStyle(palette.fg3).textSelection(.enabled)
+                    }
+                    Spacer()
+                    Button("重试") { Task { await store.loadMarket() } }.disabled(store.marketLoading)
+                }
+            }
+        }
+        if store.marketLoading && store.marketList == nil {
+            Section { Spinner(size: .small).frame(maxWidth: .infinity) }
+        } else if browseEntries.isEmpty && store.marketError == nil {
+            Section {
+                Text(store.connected ? String(localized: "没有匹配的插件") : String(localized: "未连接"))
+                    .foregroundStyle(palette.fg3).frame(maxWidth: .infinity)
+            }
+        }
+        if !browseEntries.isEmpty {
+            Section {
+                ForEach(browseEntries, id: \.id) { entry in
+                    MarketRow(entry: entry, title: marketTitle(entry), open: { browsed = entry }) { marketAction(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func marketAction(_ entry: PluginMarketEntry) -> some View {
+        if store.items.contains(where: { $0.id == entry.id }) {
+            Button("已安装") {}.disabled(true)
+        } else if !entry.compatible {
+            Button("不兼容") {}.disabled(true)
+        } else {
+            Button("安装") { installFromMarket(entry) }.disabled(store.busy || !store.connected)
+        }
+    }
+
+    private func installFromMarket(_ entry: PluginMarketEntry) {
+        browsed = nil
+        Task { await store.requestMarketInstall(id: entry.id, version: entry.version) }
+    }
+
+    private func marketTitle(_ entry: PluginMarketEntry) -> String {
+        localizedText(entry.title, fallback: entry.id)
+    }
+
+    private func marketDetail(_ entry: PluginMarketEntry) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: Space.md) {
+                PluginIcon(id: entry.id, title: marketTitle(entry), size: 36)
+                VStack(alignment: .leading, spacing: Space.xs) {
+                    Text(marketTitle(entry)).font(.title3.weight(.semibold)).foregroundStyle(palette.fg).lineLimit(1)
+                    Text([entry.vendor, "v" + entry.version, entry.date].compactMap { $0 }.joined(separator: " · "))
+                        .font(.caption).foregroundStyle(palette.fg3)
+                }
+                Spacer(minLength: Space.md)
+                marketAction(entry)
+                Button(action: { browsed = nil }) { Image(icon: "xmark").font(.riffet(size: S(11), weight: .semibold)) }
+                    .buttonStyle(IconButtonStyle(size: 26))
+                    .help("关闭").accessibilityLabel("关闭").keyboardShortcut(.cancelAction)
+            }.padding(Space.xl)
+            Divider().overlay(palette.line)
+            ScrollView {
+                VStack(alignment: .leading, spacing: Space.lg) {
+                    let description = localizedText(entry.description_, fallback: "")
+                    if !description.isEmpty { Text(description).font(.callout).foregroundStyle(palette.fg3).textSelection(.enabled) }
+                    if !entry.capabilities.isEmpty {
+                        VStack(alignment: .leading, spacing: Space.sm) {
+                            Text("权限").font(.callout.weight(.medium))
+                            ForEach(entry.capabilities, id: \.self) { Text(capability($0)).font(.callout) }
+                        }
+                    }
+                    if let readme = entry.readme, !readme.isEmpty,
+                       let text = try? AttributedString(markdown: readme, options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)) {
+                        Text(text).font(.callout).foregroundStyle(palette.fg2).textSelection(.enabled)
+                            // The README comes from the index: only web links open.
+                            .environment(\.openURL, OpenURLAction { url in
+                                guard ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return .discarded }
+                                return .systemAction
+                            })
+                    }
+                    HStack(spacing: Space.lg) {
+                        if let page = entry.page, let url = URL(string: page), ["https", "http"].contains(url.scheme) {
+                            Link("在网页中查看", destination: url).font(.callout)
+                        }
+                        if let source = entry.source, let url = URL(string: source), url.scheme == "https" {
+                            Link("源码", destination: url).font(.callout)
+                        }
+                    }
+                }
+                .padding(Space.xl)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(width: 560, height: 560)
+        .background(palette.bg)
+    }
+
     private var grantSheet: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             Text(store.grant?.id ?? "").font(.title3.weight(.semibold))
@@ -631,6 +764,42 @@ private struct PluginRow<Trailing: View>: View {
     }
 }
 
+/// A release in the plugin index, laid out like an installed plugin's row.
+private struct MarketRow<Trailing: View>: View {
+    let entry: PluginMarketEntry
+    let title: String
+    let open: () -> Void
+    @ViewBuilder let trailing: Trailing
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: Space.md) {
+            Button(action: open) {
+                HStack(spacing: Space.md) {
+                    PluginIcon(id: entry.id, title: title)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.riffet(size: S(13))).foregroundStyle(palette.fg).lineLimit(1)
+                        let description = localizedText(entry.description_, fallback: "")
+                        Text(description.isEmpty ? entry.vendor + " · " + entry.version : description + "  " + entry.vendor + " · " + entry.version)
+                            .font(.riffet(size: S(11.5))).foregroundStyle(palette.fg3).lineLimit(1)
+                    }
+                    Spacer(minLength: Space.md)
+                    Image(icon: "chevron.right")
+                        .font(.riffet(size: S(10), weight: .semibold))
+                        .foregroundStyle(palette.fg4)
+                        .opacity(hovering ? 1 : 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            trailing
+        }
+        .padding(.vertical, 2)
+        .onHover { on in withAnimation(.snappy(duration: 0.12)) { hovering = on } }
+    }
+}
+
 private struct PluginTag: View {
     let text: String
     let warning: Bool
@@ -649,10 +818,15 @@ private struct PluginTag: View {
 /// A plugin's own mark: the Agent it provides, the symbol its first view declares, or its initial on
 /// a tile tinted from its id, so no two plugins share one stock glyph.
 struct PluginIcon: View {
-    let item: PluginDescriptor
+    let id: String
+    let title: String
+    var item: PluginDescriptor?
     var size: CGFloat = 28
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var scheme
+
+    init(item: PluginDescriptor, size: CGFloat = 28) { id = item.id; title = item.displayTitle; self.item = item; self.size = size }
+    init(id: String, title: String, size: CGFloat = 28) { self.id = id; self.title = title; item = nil; self.size = size }
 
     var body: some View {
         mark
@@ -662,12 +836,12 @@ struct PluginIcon: View {
     }
 
     private var agent: String? {
-        item.declared?.agentBackends?.map(\.id).first { !AgentMarkGlyphs.paths(for: $0).isEmpty }
+        item?.declared?.agentBackends?.map(\.id).first { !AgentMarkGlyphs.paths(for: $0).isEmpty }
     }
 
     private var symbol: String? {
-        item.declared?.agentBackends?.compactMap(\.icon?.sfSymbol).first
-            ?? item.declared?.views?.compactMap(\.icon?.sfSymbol).first
+        item?.declared?.agentBackends?.compactMap(\.icon?.sfSymbol).first
+            ?? item?.declared?.views?.compactMap(\.icon?.sfSymbol).first
     }
 
     @ViewBuilder private var mark: some View {
@@ -681,12 +855,12 @@ struct PluginIcon: View {
     }
 
     private var initial: String {
-        item.displayTitle.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?"
+        title.trimmingCharacters(in: .whitespaces).first.map { String($0).uppercased() } ?? "?"
     }
 
     /// A stable hue from the id; low chroma, so the tiles colour the list without shouting.
     private var hue: Double {
-        Double(item.id.unicodeScalars.reduce(UInt32(5381)) { ($0 &* 33) &+ $1.value } % 360) / 360
+        Double(id.unicodeScalars.reduce(UInt32(5381)) { ($0 &* 33) &+ $1.value } % 360) / 360
     }
 
     private var tinted: Bool { agent == nil && symbol == nil }

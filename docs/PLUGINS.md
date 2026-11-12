@@ -49,7 +49,7 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 
 保存配置使用 configRevision 防止覆盖其他客户端的修改；冲突后重新读取再编辑。恢复模式暂停外部插件并保留原启用策略，重启后仍生效。服务无法正常启动时先运行 riffet plugin recovery on，再启动排查；recovery off 恢复原策略。riffet plugin diagnostics <id> 与 reload <id> 操作正在运行的服务。
 
-当前通过本地包安装；公共市场、签名来源验证和远程更新未开放。
+除本地包外，可以从公共插件市场按 ID 安装，见「插件市场」；签名来源验证和远程更新未开放。
 
 ## Manifest
 
@@ -158,6 +158,30 @@ riffet plugin install "$PWD/dist/android.tgz" --trusted --yes
 其余插件位于独立的外部插件仓库，每个目录单独持有 manifest、源码和资源。它们保留原插件/模型源/贡献 ID，因此已有配置、档案、分享和外观引用保持有效；应用不再内置这些包，需要单独安装。构建产物包含运行依赖（含插件自带的附属进程），不依赖 Riffet 的 dist 目录。
 
 Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 checkout。代码插件的 SDK 作为开发依赖，暂以各自 `vendor/` 中的固定版本归档提供；运行包不包含 vendor 和 Node 工程。纯资源插件不需要 SDK。当前 SDK 在 npm registry 不可获取，尚未发布，registry 与发布身份确定后可改用固定版本依赖。
+
+## 插件市场
+
+[插件市场](https://riffetai.github.io/riffet/plugins/)是 `site/plugins/` 的静态页面，和它旁边的 `index.json` 一起由 `pnpm build:site` 生成、随 Pages 发布。页面和每个 Riffet 读同一份索引：每个包的 manifest、说明，以及每个版本的归档地址、内容完整性摘要、要求的能力和是否需要显式信任。
+
+- 安装：`riffet plugin install <id>[@版本]`。参数不是已存在的路径时按 ID 查索引；不写版本时取索引里本机能运行（`hostApi`）的最新版本。授权与信任规则和本地包相同（`--yes`、`--grant`、`--trusted`）。
+- 校验：服务端（或服务未运行时的 CLI）下载归档，按安装时的方式解包，内容完整性必须等于索引所列，否则得 422 `PLUGIN_MARKET_MISMATCH`，什么也不安装。摘要与归档格式无关，同 `riffet plugin pack` 输出的那个；安装记录的来源为 `market:<id>@<版本>`。摘要只证明内容是索引审核时的那份，不证明发布者。
+- 接口：`GET /api/integrations/market` 列出索引里可安装的包（内置插件除外），各取本服务能运行的最新版本，`?refresh=1` 跳过一分钟的缓存；`GET /api/integrations/market/:id?version=` 返回形如授权请求的 `PluginMarketOffer`；`POST /api/integrations/install` 接受 `{ market: { id, version? }, grant, trusted? }`。任何客户端都可以请求，显式信任仍只限服务所在设备。
+- 客户端：Web 与 Mac 的插件页有「浏览」，经服务端读同一份索引，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
+- 索引地址：默认 `https://riffetai.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
+
+发布：`riffet plugin pack` 输出归档路径和它的完整性摘要。把归档放到可公开下载的 https 地址（如 GitHub Release），再提交 `site/plugins/registry/<id>.json`：
+
+```json
+{
+  "id": "acme.thing",
+  "source": "https://github.com/acme/thing",
+  "readme": "https://raw.githubusercontent.com/acme/thing/main/README.md",
+  "license": "MIT",
+  "versions": [{ "version": "1.2.0", "date": "2026-11-12", "archive": "https://github.com/acme/thing/releases/download/v1.2.0/acme.thing-1.2.0.tgz", "integrity": "sha256-…" }]
+}
+```
+
+`versions` 新版本在前，顺序不对则构建失败。构建会下载每个归档、核对 ID、版本与摘要，不符则失败；已在公共索引里的版本内容不能再变（本仓库的包改了文件就要升版本），`--published none` 跳过这项检查。说明的相对链接改为指向源码；索引同时带 Markdown 原文（客户端用自己的渲染器）和页面用的 HTML（原始 HTML 与不安全的链接协议被去掉）。本仓库里的包只写 `{ "path": "examples/plugins/echo" }`，构建时打包并由站点托管。内置插件自动列出，标为随 Riffet 提供。
 
 ## 版本、回滚与数据
 

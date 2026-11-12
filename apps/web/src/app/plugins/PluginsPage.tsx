@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginUpdate, ViewDeclaration } from '@contracts';
-import { IconBot, IconCpu, IconEllipsis, IconLayers, IconMenu, IconPuzzle, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconSun, IconTerminal, IconUpload, IconX } from '@/components/icons';
+import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
+import { IconEllipsis, IconMenu, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -21,7 +21,10 @@ import type { PluginDetailTab } from '../state/navStore';
 import { PluginGrantDialog, capabilityLabel } from './PluginGrantDialog';
 import { PluginVersionsDialog } from './PluginVersionsDialog';
 import { PluginFlowDialog } from './PluginFlowDialog';
+import { PluginMarket } from './PluginMarket';
+import { PluginMark } from './PluginMark';
 
+type InstallSource = { file: File } | { market: { id: string; version: string } };
 const keyOf = (plugin: PluginDescriptor) => (plugin.source ?? 'builtin') + ':' + plugin.id + (plugin.source === 'development' && plugin.developmentPath ? ':' + plugin.developmentPath : '');
 const removable = (plugin: PluginDescriptor) => plugin.source === 'installed' ? Boolean(plugin.installed) : plugin.source === 'development' && Boolean(plugin.developmentPath);
 // Static declarations keep a plugin in the same group when it is disabled.
@@ -30,11 +33,6 @@ function groupOf(plugin: PluginDescriptor): 'agents' | 'workbench' | 'services' 
   if (declared?.agentBackends?.length || declared?.modelSources?.length) return 'agents';
   if (declared?.appearance || declared?.tasks?.length || declared?.views?.some(view => !view.locations.includes('settings'))) return 'workbench';
   return 'services';
-}
-function PluginMark({ plugin }: { plugin: PluginDescriptor }) {
-  const declared = plugin.declared;
-  const Icon = declared?.agentBackends?.length ? IconBot : declared?.modelSources?.length ? IconCpu : declared?.appearance ? IconSun : declared?.tasks?.length ? IconTerminal : declared?.views?.length ? IconLayers : declared?.sharePublisher ? IconSquareArrowOutUpRight : IconPuzzle;
-  return <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-fg-2"><Icon className="size-5" /></span>;
 }
 
 /** Workbench-owned management. Reading this page never activates or probes a plugin. */
@@ -63,7 +61,10 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [reachable, setReachable] = useState(navigator.onLine);
-  const [grant, setGrant] = useState<{ file: File; request: PluginGrantRequired }>();
+  const [grant, setGrant] = useState<{ source: InstallSource; request: PluginGrantRequired }>();
+  const [mode, setMode] = useState<'installed' | 'market'>('installed');
+  const [market, setMarket] = useState<PluginMarketList>();
+  const [marketError, setMarketError] = useState('');
   const [versions, setVersions] = useState(false);
   const [flow, setFlow] = useState<{ pluginId: string; action: PluginDescriptor['actions'][number] }>();
   const [draft, setDraft] = useState<Record<string, string | null>>({});
@@ -145,19 +146,32 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   };
   const closeSettings = () => close(() => { setDraft({}); setCustomDirty(false); setCustomView(''); setVersions(false); onSelect(''); });
   const update = (patch: PluginUpdate, target = selected) => target && list?.some(plugin => keyOf(plugin) === keyOf(target) && !plugin.rejected) && run(async () => { replacePlugin(await api.updatePlugin(target.id, patch)); });
-  const install = async (file: File, capabilities?: string[], trusted = false) => {
+  const install = async (source: InstallSource, capabilities?: string[], trusted = false) => {
     if (operation.current || customBusy) return;
     await run(async () => {
       try {
-        const installed = await api.installPlugin(file, capabilities, trusted);
-        setGrant(undefined); setQuery(''); setFilter('all'); onSelect(keyOf(installed));
+        const installed = 'file' in source ? await api.installPlugin(source.file, capabilities, trusted) : await api.installMarketPlugin(source.market.id, source.market.version, capabilities ?? [], trusted);
+        setGrant(undefined); setQuery(''); setFilter('all'); setMode('installed'); onSelect(keyOf(installed));
       } catch (e) {
         if (e instanceof HttpError && (e.code === 'PLUGIN_GRANT_REQUIRED' || e.code === 'PLUGIN_TRUST_REQUIRED') && e.details && typeof e.details === 'object' && 'capabilities' in e.details) {
-          setGrant({ file, request: e.details as PluginGrantRequired });
+          setGrant({ source, request: e.details as PluginGrantRequired });
         } else { setGrant(undefined); throw e; }
       }
     });
   };
+  const loadMarket = async (refresh = false) => {
+    setMarketError('');
+    try { const value = await api.marketPlugins(refresh); if (alive.current) setMarket(value); }
+    catch (e) { if (alive.current) setMarketError(errorMessage(e, '')); }
+  };
+  useEffect(() => { if (mode === 'market' && !market) void loadMarket(); }, [mode]);
+  // A package that asks for nothing installs like an upload that asks for nothing; anything else is confirmed first.
+  const installFromMarket = (entry: PluginMarketEntry) => {
+    const source = { market: { id: entry.id, version: entry.version } };
+    if (!entry.capabilities.length && !entry.trustedRequired) void install(source, []);
+    else setGrant({ source, request: { id: entry.id, version: entry.version, capabilities: entry.capabilities, ...(entry.trustedRequired ? { trustedRequired: true } : {}), trustedAllowed: market?.trustedAllowed ?? false } });
+  };
+  const installedIds = useMemo(() => new Set((list ?? []).filter(plugin => plugin.source !== 'builtin').map(plugin => plugin.id)), [list]);
   const chooseInstall = async () => { if (await guard()) fileInput.current?.click(); };
   const remove = async () => {
     const target = selected;
@@ -279,17 +293,20 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       <div className="min-h-0 flex-1 overflow-y-auto">
         <main className="mx-auto flex max-w-4xl flex-col gap-7 px-4 py-6 sm:px-8 sm:py-8">
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="mr-auto text-xl font-semibold"><Trans>插件</Trans></h1>
-            <Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} onClick={() => void run(refreshPlugins)} aria-label={t({ message: '重新检测' })}><IconRefreshCw /></Button>
+            <h1 className="text-xl font-semibold"><Trans>插件</Trans></h1>
+            <Segmented className="mr-auto" value={mode} onChange={value => { if (!dirty && !working) { setMode(value); onSelect(''); } }} ariaLabel={t({ message: '插件' })} options={[{ value: 'installed' as const, label: t({ message: '已安装' }) }, { value: 'market' as const, label: t({ message: '浏览', context: 'plugin-market' }) }].map(option => ({ ...option, disabled: dirty || working }))} />
+            <Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} onClick={() => { if (mode === 'market') { setMarket(undefined); void loadMarket(true); } else void run(refreshPlugins); }} aria-label={t({ message: '重新检测' })}><IconRefreshCw /></Button>
             {!recovery && <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} aria-label={t({ message: '更多操作' })}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void confirmDialog({ title: t({ message: '暂停所有外部插件？' }), description: t({ message: '保留原启用策略，可随时恢复' }), confirmLabel: t({ message: '暂停' }) }).then(ok => { if (ok) void run(() => api.setPluginRecovery(true)); })}><Trans>暂停所有外部插件</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
             <Button size="sm" disabled={working || !reachable} onClick={() => void chooseInstall()}>{busy ? <Spinner /> : <IconUpload />}<Trans>安装</Trans></Button>
           </div>
           {recovery && <div className="flex flex-wrap items-center gap-3 text-sm"><Trans>外部插件已暂停</Trans><Button variant="secondary" size="xs" disabled={working || dirty || !reachable} onClick={() => void run(() => api.setPluginRecovery(false))}><Trans>恢复原启用策略</Trans></Button></div>}
           {!selected && errorNotice}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <UnderlineTabs className="h-9" value={filter} onChange={value => { if (!dirty && !working) { setFilter(value); onSelect(''); } }} ariaLabel={t({ message: '状态' })} options={[{ value: 'all', label: t({ message: '全部' }) }, { value: 'enabled', label: t({ message: '已启用' }) }, { value: 'disabled', label: t({ message: '已停用' }) }, { value: 'attention', label: t({ message: '异常' }) }].map(option => ({ ...option, disabled: dirty || working }))} />
+            {mode === 'installed' ? <UnderlineTabs className="h-9" value={filter} onChange={value => { if (!dirty && !working) { setFilter(value); onSelect(''); } }} ariaLabel={t({ message: '状态' })} options={[{ value: 'all', label: t({ message: '全部' }) }, { value: 'enabled', label: t({ message: '已启用' }) }, { value: 'disabled', label: t({ message: '已停用' }) }, { value: 'attention', label: t({ message: '异常' }) }].map(option => ({ ...option, disabled: dirty || working }))} /> : <span />}
             <Input className="w-full sm:w-56" disabled={dirty || working} value={query} onChange={e => { setQuery(e.target.value); onSelect(''); }} placeholder={t({ message: '搜索插件' })} aria-label={t({ message: '搜索插件' })} />
           </div>
+          {mode === 'market' && <PluginMarket market={market} error={marketError} query={query} installed={installedIds} busy={busy} onInstall={installFromMarket} onRetry={() => void loadMarket(true)} />}
+          {mode === 'installed' && <>
           {!list && !error && <div className="flex justify-center p-6"><Spinner /></div>}
           {list && visible.length === 0 && <EmptyState title={query || filter !== 'all' ? t({ message: '没有匹配的插件' }) : t({ message: '没有插件' })} />}
           {groups.map(group => {
@@ -314,6 +331,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
               )}</div>
             </section>;
           })}
+          </>}
           <p className="text-xs text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>
         </main>
       </div>
@@ -326,8 +344,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
         <PluginVersionsDialog plugin={versions ? selected : undefined} onClose={() => setVersions(false)} onChanged={() => { void changed(); }} />
         <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} />
       </Dialog>
-      <input ref={fileInput} className="sr-only" type="file" accept=".tgz,.tar.gz,.tar,.zip,application/gzip,application/x-tar,application/zip" tabIndex={-1} aria-hidden onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void install(file); }} />
-      <PluginGrantDialog request={grant?.request} busy={busy} onCancel={() => setGrant(undefined)} onConfirm={trusted => { if (grant) void install(grant.file, grant.request.capabilities, trusted); }} />
+      <input ref={fileInput} className="sr-only" type="file" accept=".tgz,.tar.gz,.tar,.zip,application/gzip,application/x-tar,application/zip" tabIndex={-1} aria-hidden onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void install({ file }); }} />
+      <PluginGrantDialog request={grant?.request} busy={busy} onCancel={() => setGrant(undefined)} onConfirm={trusted => { if (grant) void install(grant.source, grant.request.capabilities, trusted); }} />
     </section>
   );
 }

@@ -1,0 +1,835 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plugins · Riffet</title>
+<meta name="description" content="Plugins for Riffet.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<style>
+/* Tokens, rail and type are the homepage's (site/index.html); only --u differs, for the small lockup. */
+:root {
+  --paper: #f4f2ee; --raised: #faf9f6; --sunk: #eae7e1;
+  --ink: #15171a; --ink-2: #3a3d42; --ink-3: #7b7d81;
+  --line: color-mix(in srgb, var(--ink) 14%, transparent); --accent: #3867f0; --thread: var(--accent);
+  --add: #2f6b4a; --del: #9a3b33;
+  --u: 1.4px;
+  --pad: max(clamp(20px, 5vw, 64px), calc((100vw - 1120px) / 2));
+  --rail: calc(var(--pad) + 3.9 * var(--u));
+  --gap: clamp(28px, 4vw, 48px);
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Noto Sans SC", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+:root[data-theme="dark"] {
+  --paper: #15171a; --raised: #1c1f23; --sunk: #101214;
+  --ink: #f4f2ee; --ink-2: #c9c7c2; --ink-3: #8b8c8e;
+  --line: color-mix(in srgb, var(--ink) 16%, transparent); --accent: #5b8cff;
+  --add: #7fc79d; --del: #e08a80;
+}
+* { box-sizing: border-box; }
+html { transition: background-color .35s, color .35s; background: var(--paper); color: var(--ink); font: 17px/1.6 var(--sans); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; scrollbar-gutter: stable; }
+body { margin: 0; }
+body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: var(--grain, none) 0 0 / 256px; opacity: var(--grain-o, 0); pointer-events: none; }
+a { color: inherit; text-decoration: none; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+h1, h2, h3, p, figure { margin: 0; }
+code, pre, .mono { font-family: var(--mono); font-size: .82em; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+[hidden] { display: none !important; }
+mark { background: color-mix(in srgb, var(--thread) 20%, transparent); color: inherit; border-radius: 3px; }
+
+nav { display: flex; align-items: flex-start; gap: 28px; padding: 22px var(--pad) 0; font-size: 14px; color: var(--ink-2); }
+nav .brand { margin-right: auto; line-height: 0; }
+nav .brand svg { display: block; width: calc(67.5 * var(--u)); height: calc(27.4 * var(--u)); color: var(--ink); }
+nav > a:not(.brand), nav > button { margin-top: calc(12.1 * var(--u) - .8em); }
+nav > a:hover, nav > button:hover { color: var(--ink); }
+.word { stroke: var(--ink); fill: none; stroke-width: 2.8; stroke-linecap: round; }
+.word circle { fill: var(--ink); stroke: none; }
+.strand { fill: none; stroke: var(--thread); stroke-width: 2px; vector-effect: non-scaling-stroke; }
+
+main { position: relative; padding-bottom: 96px; }
+.rail { position: absolute; top: 0; left: calc(var(--rail) - 1px); width: 2px; background: color-mix(in srgb, var(--thread) 20%, transparent); pointer-events: none; }
+.rail i { display: block; height: 100%; background: var(--thread); transform-origin: top; transform: scaleY(0); }
+section { position: relative; padding: clamp(52px, 9vh, 88px) var(--pad) 0 calc(var(--rail) + var(--gap)); }
+section.top { padding-top: clamp(34px, 6vh, 60px); }
+h1, section > h2 { position: relative; }
+h1 { font-size: clamp(30px, 3.4vw, 44px); line-height: 1.1; letter-spacing: -.03em; font-weight: 640; text-wrap: balance; }
+section > h2 { font-size: clamp(21px, 2.2vw, 27px); line-height: 1.15; letter-spacing: -.02em; font-weight: 620; }
+h1::before, section > h2::before { content: ""; position: absolute; left: calc(-1 * var(--gap) - 5.5px); top: .55em; width: 11px; height: 11px; margin-top: -5.5px; border-radius: 50%; background: var(--paper); border: 2px solid color-mix(in srgb, var(--thread) 35%, var(--paper)); transition: border-color .3s, background-color .35s; }
+h1.on::before, section > h2.on::before { border-color: var(--thread); }
+section > h2 + p { margin-top: 12px; max-width: 38em; color: var(--ink-2); text-wrap: pretty; font-size: 16px; }
+section > h2 + p a, .prose a { border-bottom: 1px solid var(--line); }
+section > h2 + p a:hover, .prose a:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ── Find ── */
+.search { display: flex; align-items: center; gap: 10px; margin-top: 26px; max-width: 560px; height: 46px; padding: 0 12px 0 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); color: var(--ink-3); transition: border-color .15s, box-shadow .15s; }
+.search:focus-within { border-color: color-mix(in srgb, var(--accent) 60%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 16%, transparent); }
+.search svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: 16px; color: var(--ink); }
+.search input::placeholder { color: var(--ink-3); }
+.search input::-webkit-search-cancel-button { display: none; }
+kbd { font: 11.5px var(--mono); color: var(--ink-3); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+.search:focus-within kbd { visibility: hidden; }
+.facets { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; margin-top: 22px; }
+.kinds { display: flex; flex-wrap: wrap; gap: 4px 22px; font-size: 14.5px; color: var(--ink-2); }
+.kinds button { padding: 3px 0 2px; border-bottom: 1px solid transparent; white-space: nowrap; }
+.kinds button:hover { color: var(--ink); }
+.kinds button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink); }
+.kinds em { margin-left: 5px; font: 400 11.5px var(--mono); color: var(--ink-3); }
+.reaches { margin-left: auto; display: flex; gap: 2px; }
+.reaches button { display: flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 8px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.reaches button:hover { color: var(--ink); background: var(--sunk); }
+.reaches button[aria-pressed="true"] { color: var(--ink); background: var(--raised); box-shadow: 0 0 0 1px var(--line); }
+/* How far a package reaches into the machine: nothing runs, runs boxed in, runs as Riffet. */
+.moon { flex: none; width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px currentColor; }
+.moon.sandbox { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+.moon.trusted { background: currentColor; }
+
+/* ── The index: one ruled row per package ── */
+.rows { margin-top: 18px; border-top: 1px solid var(--line); }
+#list > .flat { padding-top: 14px; }
+.row { position: relative; display: grid; grid-template-columns: 48px minmax(0, 12.5em) minmax(0, 1fr) 10em 5.8em 2.8em; gap: 0 22px; align-items: center; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.row:hover, .row:focus-visible { --hover: color-mix(in srgb, var(--ink) 4%, transparent); background: var(--hover); box-shadow: -14px 0 0 var(--hover), 14px 0 0 var(--hover); }
+.glyph { display: block; width: 48px; height: 34px; color: var(--ink-2); fill: none; overflow: visible; }
+.glyph * { vector-effect: non-scaling-stroke; }
+.glyph .f { stroke: currentColor; stroke-width: 1.4; }
+.glyph .d { stroke: color-mix(in srgb, var(--ink) 24%, transparent); stroke-width: 1.2; }
+.glyph .s { fill: currentColor; transition: fill .15s; }
+.glyph .o { stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; transition: stroke .15s; }
+a:hover .glyph .s, a:focus-visible .glyph .s { fill: var(--thread); }
+a:hover .glyph .o, a:focus-visible .glyph .o { stroke: var(--thread); }
+.who { min-width: 0; }
+.who b { display: block; font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.id { display: block; font: 11.5px/1.5 var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.what { font-size: 15px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kindline { font: 11.5px var(--mono); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reach { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); white-space: nowrap; }
+.ver { font: 11.5px var(--mono); color: var(--ink-3); text-align: right; }
+.empty { margin-top: 44px; color: var(--ink-2); font-size: 16px; }
+.empty button { margin-left: 14px; border-bottom: 1px solid var(--line); }
+.empty button:hover { border-color: var(--ink); }
+
+/* ── Appearance is shown, not described: the workbench wearing each palette ── */
+.specs { margin-top: 26px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 36px 30px; }
+.spec { display: block; min-width: 0; }
+.spec b { display: block; margin-top: 14px; font-weight: 600; font-size: 15.5px; }
+.spec .reach { margin-top: 5px; }
+.spec .reach .kindline { margin-left: 8px; }
+.wb { position: relative; display: flex; aspect-ratio: 16 / 10; container-type: inline-size; overflow: hidden; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--ink) 24%, transparent); background: var(--p-bg); box-shadow: 0 14px 30px -22px color-mix(in srgb, var(--ink) 55%, transparent); transition: transform .2s; }
+.spec:hover .wb { transform: translateY(-2px); }
+.wb::after { content: ""; position: absolute; inset: 0; background: var(--p-grain, none) 0 0 / 128px; opacity: var(--p-grain-o, 0); pointer-events: none; }
+.wb aside { flex: none; display: flex; flex-direction: column; gap: 1.1cqw; width: 27cqw; padding: 5cqw 2.4cqw 0; background: var(--p-side); border-right: 1px solid var(--p-line); }
+.wb aside b { position: relative; display: block; flex: none; height: 4.6cqw; margin: 0; border-radius: 1.5cqw; }
+.wb aside b::after { content: ""; position: absolute; left: 2cqw; top: 1.5cqw; width: var(--w); height: 1.6cqw; border-radius: 1cqw; background: color-mix(in srgb, var(--p-fg) 24%, transparent); }
+.wb aside b.sel { background: var(--p-soft); }
+.wb aside b.sel::after { background: color-mix(in srgb, var(--p-fg) 60%, transparent); }
+.wb aside u { display: flex; gap: 1.7cqw; margin-top: auto; padding: 0 2cqw 4.4cqw; }
+.wb aside u i { width: 2.6cqw; height: 2.6cqw; border-radius: 50%; background: var(--c); }
+.wb > div { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2cqw; padding: 6cqw 5cqw 4cqw; }
+.wb .me { align-self: flex-end; flex: none; width: 46%; height: 5.6cqw; margin-bottom: 1cqw; border-radius: 2.8cqw; background: var(--p-bubble); }
+.wb .l { flex: none; height: 1.7cqw; border-radius: 1cqw; background: color-mix(in srgb, var(--p-fg) 22%, transparent); }
+.wb .l.m { width: 78%; } .wb .l.s { width: 52%; }
+.wb .df { flex: none; margin-top: 1cqw; border: 1px solid var(--p-line); border-radius: 1.8cqw; overflow: hidden; }
+.wb .df i { display: block; height: 3.6cqw; background: var(--c); }
+.wb .df i::after { content: ""; display: block; position: relative; top: 1cqw; left: 2.4cqw; width: var(--w); height: 1.6cqw; border-radius: 1cqw; background: var(--m); opacity: .7; }
+.wb .box { position: relative; flex: none; margin-top: auto; height: 8.6cqw; border: 1px solid var(--p-line); border-radius: 3cqw; background: var(--p-raised); }
+.wb .box::after { content: ""; position: absolute; right: 1.8cqw; top: 50%; width: 5cqw; height: 5cqw; margin-top: -2.5cqw; border-radius: 50%; background: var(--p-accent); }
+.wb.icons { background: var(--raised); }
+.wb.icons > span { flex: 1; display: flex; flex-wrap: wrap; align-content: center; align-items: center; justify-content: center; gap: 7cqw 8cqw; padding: 8cqw 14cqw; }
+.wb.icons svg { width: 9cqw; height: 9cqw; color: var(--ink); }
+
+/* ── One package ── */
+.back { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 22px; font-size: 14px; color: var(--ink-2); }
+.back:hover { color: var(--ink); }
+.back svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.by { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; font-size: 15px; color: var(--ink-2); }
+.by .mono { color: var(--ink-3); }
+.lede { margin-top: 18px; max-width: 34em; text-wrap: pretty; color: var(--ink-2); }
+.get { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 28px; }
+.btn { display: inline-flex; align-items: center; height: 44px; padding: 0 18px; border-radius: 10px; background: var(--ink); color: var(--paper); font-size: 15px; font-weight: 560; white-space: nowrap; }
+.btn:hover { background: var(--ink-2); }
+.cmd { display: inline-flex; align-items: center; gap: 14px; max-width: 100%; padding: 11px 12px 11px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); font: 14px var(--mono); }
+.cmd > span { overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
+.cmd .p, .cmd .o { color: var(--ink-3); } .cmd .p { user-select: none; } .cmd .o { white-space: nowrap; }
+.cmd button { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 6px; color: var(--ink-3); }
+.cmd button:hover { color: var(--ink); background: var(--sunk); }
+.cmd svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.ships { margin-top: 26px; font-size: 14.5px; color: var(--ink-2); }
+.links { margin-top: 18px; display: flex; flex-wrap: wrap; gap: 6px 22px; font-size: 14px; color: var(--ink-2); }
+.links a { border-bottom: 1px solid var(--line); }
+.links a:hover { color: var(--ink); border-color: var(--ink); }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 30px; margin-top: 22px; font: 13px var(--mono); color: var(--ink-2); }
+
+/* Where it plugs in: the strand leaves the rail and enters the workbench at the slots this package fills. */
+.fits { position: relative; display: grid; grid-template-columns: minmax(0, 380px) minmax(0, 1fr); gap: 30px clamp(28px, 5vw, 64px); align-items: start; margin-top: 30px; }
+.fits.wide { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.plug { position: absolute; left: calc(-1 * var(--gap) - 1px); top: -26px; width: calc(var(--gap) + 1px); height: 96px; border: solid color-mix(in srgb, var(--thread) 20%, var(--paper)); border-width: 0 0 2px 2px; border-radius: 0 0 0 22px; pointer-events: none; transition: border-color .3s; }
+.plug::after { content: ""; position: absolute; right: -4px; bottom: -5px; width: 8px; height: 8px; border-radius: 50%; background: var(--thread); opacity: .25; transition: opacity .3s; }
+h2.on ~ .fits .plug { border-color: var(--thread); } h2.on ~ .fits .plug::after { opacity: 1; }
+.map svg { display: block; width: 100%; height: auto; overflow: visible; fill: none; }
+.map .f { fill: var(--raised); stroke: color-mix(in srgb, var(--ink) 26%, transparent); }
+.map .nv { fill: color-mix(in srgb, var(--ink) 5%, transparent); }
+.map .ln { stroke: var(--line); }
+.map .sk, .map .bar { fill: color-mix(in srgb, var(--ink) 16%, transparent); }
+.map .sk.q { fill: color-mix(in srgb, var(--ink) 8%, transparent); }
+.map .box { fill: var(--raised); stroke: var(--line); }
+.map .ic { stroke: color-mix(in srgb, var(--ink) 30%, transparent); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.map .slot { transition: opacity .2s; }
+.map .slot .hl { fill: none; }
+.map .slot.on .hl { fill: color-mix(in srgb, var(--thread) 15%, transparent); }
+.map .slot.on .bar { fill: var(--thread); }
+.map .slot.on .sk { fill: color-mix(in srgb, var(--thread) 42%, transparent); }
+.map .slot.on .ic { stroke: var(--thread); }
+.map .slot.on .box { stroke: var(--thread); stroke-width: 1.4; }
+.map .slot.only:not(.on) { display: none; }
+.map.dim .slot.on:not(.hot) { opacity: .28; }
+.looks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; max-width: 760px; }
+.looks figcaption { margin-top: 10px; font: 12px var(--mono); color: var(--ink-3); }
+.try { display: flex; align-items: center; gap: 6px; margin-top: 20px; }
+.try button { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 8px; font-size: 14px; color: var(--ink-2); box-shadow: 0 0 0 1px var(--line); }
+.try button:hover { color: var(--ink); background: var(--sunk); }
+.try button[aria-pressed="true"] { color: var(--paper); background: var(--ink); box-shadow: none; }
+.try .mode { width: 32px; padding: 0; justify-content: center; box-shadow: none; }
+.try svg { width: 17px; height: 17px; }
+
+.ledger { display: grid; border-top: 1px solid var(--line); }
+.ledger > div { display: grid; grid-template-columns: subgrid; grid-column: 1 / -1; gap: 4px 22px; align-items: baseline; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.ledger em { font: 400 11.5px var(--mono); color: var(--ink-3); white-space: nowrap; }
+.ledger b { font-weight: 600; font-size: 15.5px; }
+.ledger span { font-size: 15px; color: var(--ink-2); min-width: 0; }
+.contrib { grid-template-columns: max-content minmax(0, 1fr) max-content; }
+.contrib > div { transition: opacity .2s; cursor: default; }
+.contrib .w { display: inline-block; margin-left: 14px; font-size: 14.5px; }
+.contrib .mono { font-size: 12px; color: var(--ink-2); }
+.swatches { display: grid; gap: 5px; margin-top: 10px; }
+.swatches div { display: flex; align-items: center; }
+.swatches em { width: 4em; }
+.swatches i { width: 18px; height: 18px; background: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 12%, transparent); }
+.swatches i:first-of-type { border-radius: 5px 0 0 5px; } .swatches i:last-of-type { border-radius: 0 5px 5px 0; }
+.swatches i.g { margin-left: 8px; border-radius: 5px 0 0 5px; }
+.ledger .type { display: block; margin-top: 8px; font-size: 26px; line-height: 1.25; letter-spacing: -.01em; color: var(--ink); }
+.tile { display: block; width: 132px; height: 60px; margin-top: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--raised); position: relative; overflow: hidden; }
+.tile::after { content: ""; position: absolute; inset: 0; background: var(--img) 0 0 / 128px; opacity: var(--o, 1); }
+.faces { grid-column: 2 / -1; align-self: start; display: grid; grid-template-columns: repeat(auto-fill, 76px); gap: 18px 14px; }
+.faces figure { text-align: center; }
+.faces span { display: block; width: 56px; height: 56px; margin: 0 auto; border-radius: 14px; overflow: hidden; background: var(--sunk); }
+.faces svg { display: block; width: 100%; height: 100%; }
+.faces figcaption { margin-top: 6px; font-size: 12px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.says { display: flex; gap: 10px; align-items: baseline; margin-top: 14px; max-width: 40em; color: var(--ink-2); font-size: 16px; text-wrap: pretty; }
+.says .moon { position: relative; top: -1px; color: var(--ink); }
+.says b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+.caps { margin-top: 22px; grid-template-columns: max-content minmax(0, 1fr); }
+.caps b { font: 500 13px var(--mono); }
+.note { margin-top: 14px; font-size: 14.5px; color: var(--ink-2); }
+.sets { margin-top: 22px; grid-template-columns: max-content max-content minmax(0, 1fr); }
+.vers { margin-top: 22px; grid-template-columns: max-content max-content max-content max-content minmax(0, 1fr) max-content; }
+.vers span, .sets .mono { font: 12px var(--mono); color: var(--ink-2); }
+.vers span.h { color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vers a { font-size: 14px; color: var(--ink-2); border-bottom: 1px solid var(--line); }
+.vers a:hover { color: var(--ink); border-color: var(--ink); }
+.prose { margin-top: 18px; max-width: 42em; font-size: 15.5px; color: var(--ink-2); overflow-wrap: break-word; }
+.prose > * { margin: 12px 0 0; }
+.prose h2, .prose h3, .prose h4 { margin-top: 24px; font-size: 16px; font-weight: 600; color: var(--ink); letter-spacing: 0; }
+.prose ul, .prose ol { padding-left: 1.25em; } .prose li + li { margin-top: 6px; }
+.prose code { padding: 1px 5px; border-radius: 5px; background: color-mix(in srgb, var(--ink) 7%, transparent); font-size: .84em; }
+.prose pre { padding: 12px 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--raised); overflow-x: auto; font-size: 13px; line-height: 1.7; }
+.prose pre code { padding: 0; background: none; font-size: inherit; }
+.prose table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
+.prose th, .prose td { padding: 8px 14px 8px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.prose th { font: 400 12px var(--mono); color: var(--ink-3); }
+
+/* ── The end of the line ── */
+pre.start { margin: 24px 0 0; width: fit-content; max-width: 100%; padding: 16px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--raised); font: 14px/1.9 var(--mono); overflow-x: auto; }
+pre.start .p { color: var(--ink-3); }
+.end { padding-top: clamp(36px, 6vh, 60px); }
+.finish { display: flex; align-items: flex-start; margin: 0 0 0 calc(-1 * var(--gap) - 1px); height: 84px; transition: opacity .3s; }
+.finish > svg:first-child { width: 150px; height: 46px; flex: none; fill: none; stroke: var(--thread); stroke-width: 2; overflow: visible; }
+.finish .brand-live { width: 68px; height: 68px; margin: 12px 0 0 -14px; --mane: var(--thread); }
+footer { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 28px; font-size: 14px; color: var(--ink-2); }
+footer a:hover { color: var(--ink); }
+footer span { color: var(--ink-3); }
+
+/* ── The mark's parts and loops (same rig as the homepage and the app's LiveBrandMark) ── */
+.brand-live { color: var(--ink); --mane: var(--thread); }
+.brand-live [data-part="tooth"] path, .brand-live .speed { fill: var(--mane); stroke: var(--mane); }
+.brand-live [data-part="speed"] { display: none; }
+.brand-live mask circle { fill: #000; }
+@keyframes brand-blink { 0%, 44%, 50%, 100% { transform: scaleY(1); } 47% { transform: scaleY(.08); } }
+@keyframes brand-flick { 0%, 66%, 78%, 100% { transform: rotate(0); } 69%, 75% { transform: rotate(-13deg); } 72% { transform: rotate(-2deg); } }
+@keyframes brand-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(3deg); } }
+.brand-live[data-style="mood"] [data-part="eye"] { animation: brand-blink 5s infinite; }
+.brand-live[data-style="mood"] [data-part="ear"] { animation: brand-flick 5s ease-out infinite; }
+.brand-live[data-style="mood"] [data-part="tooth"] { animation: brand-sway 5s ease-in-out infinite; }
+@keyframes brand-gallop { 0%, 100% { transform: translate(0, 0) rotate(-5deg); } 50% { transform: translate(.3px, -.9px) rotate(-8deg); } }
+@keyframes brand-stream { 0%, 100% { transform: rotate(14deg) scale(1.18, 1); } 50% { transform: rotate(22deg) scale(1.3, 1); } }
+@keyframes brand-dash { 0% { transform: translateX(9px); opacity: 0; } 25% { opacity: 1; } 100% { transform: translateX(-7px); opacity: 0; } }
+.brand-live[data-style="run"] [data-part="whole"] { animation: brand-gallop .46s ease-in-out infinite; }
+.brand-live[data-style="run"] [data-part="tooth"] { animation: brand-stream .23s ease-in-out infinite; }
+.brand-live[data-style="run"] g:nth-of-type(2) > [data-part="tooth"] { animation-delay: -.08s; }
+.brand-live[data-style="run"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: -.16s; }
+.brand-live[data-style="run"].lines [data-part="speed"] { display: block; animation: brand-dash .7s linear infinite; }
+.brand-live[data-style="run"].lines [data-part="speed"]:nth-child(2) { animation-delay: -.25s; }
+.brand-live[data-style="run"].lines [data-part="speed"]:nth-child(3) { animation-delay: -.5s; }
+
+@media (max-width: 1000px) {
+  .row { grid-template-columns: 48px minmax(0, 12em) minmax(0, 1fr) 6.4em; }
+  .row .kindline, .row .ver { display: none; }
+  .fits { grid-template-columns: minmax(0, 420px); }
+}
+@media (max-width: 720px) {
+  .reaches { margin-left: -10px; }
+  .row { grid-template-columns: 48px minmax(0, 1fr) auto; gap: 6px 16px; align-items: start; padding: 15px 0; }
+  .row .what { grid-column: 2 / -1; white-space: normal; }
+  .row .reach { grid-column: 3; grid-row: 1; padding-top: 3px; }
+  .looks { grid-template-columns: minmax(0, 1fr); }
+  .cmd { align-items: flex-start; }
+  .cmd > span { white-space: normal; overflow-wrap: anywhere; line-height: 1.7; }
+  .contrib { grid-template-columns: max-content minmax(0, 1fr); }
+  .contrib > div > em:last-child { grid-column: 2; }
+  .vers { grid-template-columns: max-content max-content minmax(0, 1fr); }
+  .vers span.h { grid-column: 1 / -1; }
+  .sets { grid-template-columns: max-content minmax(0, 1fr); }
+  .sets > div > span:last-child { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-live [data-part] { animation: none !important; }
+  .rail i { transform: none !important; }
+  .wb { transition: none; }
+}
+</style>
+</head>
+<body>
+<nav>
+  <a class="brand" href="../" aria-label="Riffet"><span id="brand"></span></a>
+  <a href="https://github.com/riffetai/riffet/tree/main/docs" data-t="docs">Docs</a>
+  <a href="https://github.com/riffetai/riffet">GitHub</a>
+  <button id="lang" type="button">中文</button>
+</nav>
+
+<main>
+  <div class="rail"><i></i></div>
+  <div id="index">
+    <section class="top">
+      <h1 data-t="plugins">Plugins</h1>
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/></svg>
+        <input id="q" type="search" autocomplete="off" spellcheck="false" enterkeyhint="search">
+        <kbd>/</kbd>
+      </label>
+      <div class="facets">
+        <div class="kinds" id="kinds"></div>
+        <div class="reaches" id="reaches"></div>
+      </div>
+    </section>
+    <div id="list"></div>
+    <section>
+      <h2 data-t="publish">Publish</h2>
+      <p data-h="p_publish"></p>
+<pre class="start"><span class="p">$ </span>riffet plugin dev ./my-plugin
+<span class="p">$ </span>riffet plugin pack ./my-plugin</pre>
+    </section>
+  </div>
+  <div id="detail" hidden></div>
+  <section class="end">
+    <div class="finish"><svg viewBox="0 0 150 46"><path d="M1 0V14Q1 45 32 45H150"/></svg><span id="runner"></span></div>
+    <footer>
+      <a href="../">Riffet</a>
+      <a href="https://github.com/riffetai/riffet">GitHub</a>
+      <a href="https://github.com/riffetai/riffet/tree/main/docs" data-t="docs">Docs</a>
+      <a href="https://github.com/riffetai/riffet/blob/main/docs/PLUGINS.md" data-t="guide">Plugin guide</a>
+      <span>Apache-2.0</span>
+    </footer>
+  </section>
+</main>
+
+<script type="module">
+const q = new URLSearchParams(location.search);
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const root = document.documentElement;
+root.dataset.theme = q.get('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+let lang = ['zh', 'en'].includes(q.get('lang')) ? q.get('lang') : navigator.language.startsWith('zh') ? 'zh' : 'en';
+
+/* ── Copy ── */
+const STR = {
+  en: {
+    docs: 'Docs', plugins: 'Plugins', search: 'Search', all: 'All', publish: 'Publish', guide: 'Plugin guide',
+    p_publish: 'Attach the archive that <code>pack</code> writes to a release, then add a record with its address and integrity to <a href="https://github.com/riffetai/riffet/tree/main/site/plugins/registry">site/plugins/registry</a>.',
+    k_agent: 'Agents', k_models: 'Model sources', k_views: 'Views', k_commands: 'Commands', k_tasks: 'Tasks', k_appearance: 'Appearance', k_share: 'Sharing', k_avatars: 'Avatars',
+    r_assets: 'Assets only', r_sandbox: 'Sandboxed', r_trusted: 'Full access', r_builtin: 'Built in',
+    g_agents: 'Agents and models', g_workbench: 'Workbench', g_appearance: 'Appearance', g_services: 'Services and sharing',
+    none: 'No matching plugins', clear: 'Clear filters',
+    adds: 'Adds', access: 'Access', settings: 'Settings', readme: 'Readme', versions: 'Versions',
+    copy: 'Copy', open: 'Open in Riffet', source: 'Source', ships: 'Ships with Riffet', download: 'Download',
+    c_view: 'View', c_page: 'Settings page', c_command: 'Command', c_task: 'Task', c_model: 'Model source', c_agent: 'Agent', c_palette: 'Palette', c_font: 'Font', c_background: 'Background', c_preset: 'Preset', c_icons: 'Icon pack', c_share: 'Share target', c_avatar: 'Avatar styles',
+    l_sidebar: 'Sidebar', 'l_session-view': 'Session view', l_panel: 'Panel', l_main: 'Main area', l_navigation: 'Navigation', l_settings: 'Settings',
+    s_global: 'Global', s_project: 'Project', s_session: 'Session',
+    w_type: type => `${type} projects`, w_project: 'with a project', w_session: 'with a session',
+    light: 'Light', dark: 'Dark', preview: 'Preview on this page', mode: 'Light / dark',
+    x_assets: 'Runs no code.',
+    x_server: 'Server code runs in its own process and can read and write only its own directories. For now this needs Riffet to run on macOS.',
+    x_web: 'Its interface runs in a sandboxed frame and reaches Riffet only through the message bridge.',
+    x_trusted: 'Runs inside the Riffet server process, with that machine’s files, network, credentials and processes. It can only be installed on the machine that runs Riffet.',
+    x_builtin: 'Runs inside the server process.',
+    x_leak: 'What it reads can leave the machine.',
+    cap: { 'models.provide': 'Offers model sources and refreshes their catalogs', 'tasks.run': 'Runs commands in a project as you; each new plan asks first', 'projects.read': 'Reads the project’s files while a task runs', 'sessions.read': 'Reads the conversations of its project, including tool input and output', network: 'Outbound network connections' },
+    secret: 'Secret, kept on the server',
+  },
+  zh: {
+    docs: '文档', plugins: '插件', search: '搜索', all: '全部', publish: '发布', guide: '开发指南',
+    p_publish: '把 <code>pack</code> 生成的归档放到 Release，再把它的地址和完整性摘要作为一条记录提交到 <a href="https://github.com/riffetai/riffet/tree/main/site/plugins/registry">site/plugins/registry</a>。',
+    k_agent: 'Agent', k_models: '模型源', k_views: '视图', k_commands: '命令', k_tasks: '任务', k_appearance: '外观', k_share: '分享', k_avatars: '头像',
+    r_assets: '仅资源', r_sandbox: '隔离', r_trusted: '完整权限', r_builtin: '内置',
+    g_agents: 'Agent 与模型', g_workbench: '工作台', g_appearance: '外观', g_services: '服务与分享',
+    none: '没有匹配的插件', clear: '清除筛选',
+    adds: '添加', access: '权限', settings: '设置', readme: '说明', versions: '版本',
+    copy: '复制', open: '在 Riffet 中打开', source: '源码', ships: '随 Riffet 提供', download: '下载',
+    c_view: '视图', c_page: '设置页', c_command: '命令', c_task: '任务', c_model: '模型源', c_agent: 'Agent', c_palette: '配色', c_font: '字体', c_background: '背景', c_preset: '预设', c_icons: '图标包', c_share: '分享目标', c_avatar: '头像风格',
+    l_sidebar: '侧栏', 'l_session-view': '会话视图', l_panel: '底部面板', l_main: '主内容区', l_navigation: '主导航', l_settings: '设置',
+    s_global: '全局', s_project: '项目', s_session: '会话',
+    w_type: type => `${type} 项目`, w_project: '有项目时', w_session: '有会话时',
+    light: '浅色', dark: '深色', preview: '在本页预览', mode: '浅色 / 深色',
+    x_assets: '不运行代码。',
+    x_server: '服务端代码在独立进程中运行，只能读写自己的目录；目前需要 Riffet 运行在 macOS 上。',
+    x_web: '界面在隔离框架中运行，只经消息桥访问 Riffet。',
+    x_trusted: '在 Riffet 服务进程内运行，可访问那台机器的文件、网络、凭据与进程；只能在运行 Riffet 的机器上安装。',
+    x_builtin: '在服务进程内运行。',
+    x_leak: '它读到的内容可以被送出这台机器。',
+    cap: { 'models.provide': '提供模型源，刷新模型目录', 'tasks.run': '在项目里以你的身份运行命令，每条新计划先经你确认', 'projects.read': '任务运行期间读取该项目的文件', 'sessions.read': '读取所在项目的会话，包括工具的输入与输出', network: '对外网络连接' },
+    secret: '密钥，只保存在服务端',
+  },
+};
+const t = (key, ...args) => { const value = STR[lang][key]; return typeof value === 'function' ? value(...args) : value; };
+// A manifest's LocalizedText, in the page's language with the other one as fallback.
+const loc = (text, fallback = '') => !text ? fallback : typeof text === 'string' ? text
+  : (lang === 'zh' ? text['zh-Hans'] ?? text.en : text.en ?? text['zh-Hans']) ?? Object.values(text)[0] ?? fallback;
+const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const size = (bytes) => bytes < 1000 ? `${bytes} B` : bytes < 1e6 ? `${Math.round(bytes / 1000)} kB` : `${(bytes / 1e6).toFixed(1)} MB`;
+
+/* ── The registry: every fact on this page is read from a package's manifest ── */
+const KINDS = ['agent', 'models', 'views', 'commands', 'tasks', 'appearance', 'share', 'avatars'];
+const GROUPS = ['agents', 'workbench', 'appearance', 'services'];
+const REACHES = ['assets', 'sandbox', 'trusted'];
+// The index scripts/build-site.ts writes next to this page; every Riffet installs from the same file.
+const REGISTRY = await fetch('index.json').then((response) => response.ok ? response.json() : { plugins: [] }, () => ({ plugins: [] }));
+const plugins = REGISTRY.plugins.map((entry) => {
+  const m = entry.manifest, c = m.contributes ?? {}, a = c.appearance ?? {};
+  const has = (list) => Boolean(list?.length);
+  const kinds = [
+    has(c.agentBackends) && 'agent', has(c.modelSources) && 'models',
+    c.views?.some((view) => !view.locations.includes('settings')) && 'views', has(c.commands) && 'commands', has(c.tasks) && 'tasks',
+    Object.values(a).some(has) && 'appearance', c.sharePublisher && 'share', has(c.avatarStyles) && 'avatars',
+  ].filter(Boolean);
+  // Where the code runs decides what it can reach (docs/PLUGINS.md, 信任级别); the package cannot choose.
+  // The index marks a release that installation would refuse without explicit trust, by the same check.
+  const reach = entry.origin === 'builtin' ? 'builtin' : entry.versions[0]?.trusted ? 'trusted' : !(m.entries?.server || m.entries?.web) ? 'assets' : 'sandbox';
+  const group = kinds.includes('agent') || kinds.includes('models') ? 'agents' : kinds.includes('appearance') ? 'appearance'
+    : kinds.some((kind) => ['views', 'commands', 'tasks'].includes(kind)) ? 'workbench' : 'services';
+  const slots = new Set();
+  for (const view of c.views ?? []) for (const place of view.locations) slots.add(place === 'main' ? 'navigation' : place);
+  if (has(c.commands)) slots.add('commands');
+  if (has(c.modelSources)) slots.add('model');
+  if (has(c.agentBackends)) slots.add('agent');
+  if (c.sharePublisher) slots.add('share');
+  if (has(c.avatarStyles)) slots.add('avatar');
+  if (has(c.tasks) && !slots.has('sidebar') && !slots.has('panel')) slots.add('sidebar');
+  // What the package looks like when worn: its first preset, or its first palette, font and background.
+  const preset = a.presets?.[0];
+  const palette = entry.assets[preset?.palette ?? a.palettes?.[0]?.id];
+  const font = a.fonts?.find((f) => f.id === (preset ? preset.fonts?.ui : a.fonts[0].id));
+  const background = a.backgrounds?.find((b) => b.id === (preset ? preset.background : a.backgrounds[0].id));
+  const look = palette || font || background ? { palette, font: font && { family: font.family, url: entry.assets[font.id] }, background: background && { url: entry.assets[background.id], opacity: background.opacity ?? 1 } } : null;
+  const vendor = m.vendor === 'riffet' ? 'Riffet' : m.vendor;
+  return { ...entry, m, c, a, kinds, reach, group, slots, look, vendor, latest: entry.versions[0] };
+});
+const byId = new Map(plugins.map((p) => [p.id, p]));
+const title = (p) => loc(p.m.title, p.m.name);
+const about = (p) => loc(p.m.description);
+const command = (p) => `riffet plugin install ${p.id}` + (p.reach === 'trusted' ? ' --trusted' : '') + (p.m.capabilities?.length ? ` --grant ${p.m.capabilities.join(',')}` : '');
+
+/* ── The mark, rigged (the homepage's) ── */
+const BODY = 'M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z';
+const TEETH = [
+  ['M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17L9.3 9.2L9.7 6.4Z', 8.9, 7.6],
+  ['M7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68L8.7 11.8L9.1 8.4Z', 8.2, 10.2],
+  ['M6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42L8.2 14.6L8.6 11Z', 7.6, 13],
+];
+const EAR = 'M8.8 5.8L9.4 2.6L11.2 5.4L10.6 7.2L9.2 7.2Z';
+const WORD = '<path d="M0 20V2h5a4.5 4.5 0 0 1 0 9H0M3.6 11l6.4 9"/><path d="M15.4 8v12"/><path d="M23 20V6a4 4 0 0 1 4-4M20.8 8h4.4"/><path d="M32.8 20V6a4 4 0 0 1 4-4M30.6 8h4.4"/><path d="M40.4 14h12a6 6 0 1 0-1.76 4.24"/><path d="M60 2v14a4 4 0 0 0 4 4M57.8 8h4.4"/><circle cx="15.4" cy="2.6" r="1.736"/>';
+let markId = 0;
+const part = (x, y, name, inner) => `<g transform="translate(${x} ${y})"><g data-part="${name}"><g transform="translate(${-x} ${-y})">${inner}</g></g></g>`;
+function rig(under = '') {
+  const id = `mark-${markId++}`;
+  return `<mask id="${id}" maskUnits="userSpaceOnUse" x="-4" y="-4" width="32" height="32"><rect x="-4" y="-4" width="32" height="32" fill="#fff"/>${part(12.5, 8.2, 'eye', '<circle cx="12.5" cy="8.2" r="1"/>')}</mask>`
+    + '<g class="speed" stroke-width=".7" stroke-linecap="round"><path data-part="speed" d="M1 9h3.2"/><path data-part="speed" d="M0 13.5h4"/><path data-part="speed" d="M2 17.5h2.6"/></g>'
+    + under
+    + part(9, 21, 'whole', TEETH.map(([d, x, y]) => part(x, y, 'tooth', `<path d="${d}" stroke-width=".6"/>`)).join('')
+      + `<g mask="url(#${id})" fill="currentColor" stroke="currentColor"><path data-part="head" d="${BODY}"/>${part(10, 5.9, 'ear', `<path d="${EAR}"/>`)}</g>`);
+}
+document.getElementById('brand').outerHTML = `<svg class="brand-live" id="brand" data-style="mood" viewBox="0.6 -0.2 67.5 27.4" stroke-linejoin="round" overflow="visible">`
+  + rig('<path class="strand" d="M6.2 12.6C5 15 4.4 18.4 4.5 21.6V27.2"/>') + `<g class="word" transform="translate(27.25 6.29) scale(.6125)">${WORD}</g></svg>`;
+document.getElementById('runner').outerHTML = `<svg class="brand-live lines" data-style="run" viewBox="0.6 -0.2 24 24" stroke-linejoin="round" overflow="visible" aria-hidden="true">${rig()}</svg>`;
+const brand = document.getElementById('brand');
+
+/* ── Drawings made from a manifest ── */
+const ICON = {
+  copy: '<svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.8"/><path d="M10.5 3.2v-.2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.2"/></svg>',
+  done: '<svg viewBox="0 0 16 16"><path d="m3.2 8.4 3 3 6.6-6.8"/></svg>',
+  back: '<svg viewBox="0 0 16 16"><path d="M9.8 3.5 5.3 8l4.5 4.5"/></svg>',
+  mode: '<svg viewBox="0 0 18 18"><circle cx="9" cy="9" r="6.2" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M9 2.8a6.2 6.2 0 0 1 0 12.4Z" fill="currentColor"/></svg>',
+};
+const moon = (reach) => reach === 'builtin' ? '' : `<i class="moon ${reach}"></i>`;
+const colors = (p) => p.look?.palette?.palette[root.dataset.theme];
+const packIcon = (icon) => `<svg viewBox="0 0 ${icon.width} ${icon.height}" fill="none" aria-hidden="true">${icon.paths.map((path) => `<path d="${esc(path.d)}" ${path.fill ? 'fill="currentColor"' : `stroke="currentColor" stroke-width="${+path.strokeWidth || 2}" stroke-linecap="${esc(path.lineCap ?? 'round')}"`}/>`).join('')}</svg>`;
+const firstPack = (p) => Object.values(p.assets).find((asset) => asset && typeof asset === 'object' && !asset.palette);
+
+// A package's icon is the workbench with the places it fills inked in; a palette wears its own colours.
+function glyph(p) {
+  const on = (slot) => p.slots.has(slot), c = colors(p), pack = !c && p.a.iconPacks?.length && firstPack(p);
+  const frame = '<rect class="f" x=".75" y=".75" width="46.5" height="32.5" rx="5.5"';
+  if (pack) {
+    const [one, two] = Object.values(pack);
+    const at = (icon, x) => icon ? `<g transform="translate(${x} 10.5) scale(${13 / icon.width})" class="o" fill="none">${icon.paths.map((path) => `<path d="${esc(path.d)}"/>`).join('')}</g>` : '';
+    return `<svg class="glyph" viewBox="0 0 48 34" aria-hidden="true">${frame}/>${at(one, 9)}${at(two, 26)}</svg>`;
+  }
+  if (c) {
+    return `<svg class="glyph" viewBox="0 0 48 34" aria-hidden="true">${frame} style="fill:${esc(c.bg)}"/>`
+      + `<path d="M12.5 .75H6.25a5.5 5.5 0 0 0-5.5 5.5v21.5a5.5 5.5 0 0 0 5.5 5.5H12.5z" style="fill:${esc(c['bg-sidebar'])}"/>`
+      + `<path d="M17 8.5h14M17 13h9" style="stroke:${esc(c['fg-3'])};stroke-width:1.6;stroke-linecap:round"/>`
+      + `<rect x="16.5" y="24" width="27" height="5.5" rx="2.75" style="fill:${esc(c['bg-elevated'])};stroke:${esc(c['line-strong'])}"/><circle cx="40.6" cy="26.75" r="1.7" style="fill:${esc(c.accent)}"/>`
+      + `${frame}/></svg>`;
+  }
+  return `<svg class="glyph" viewBox="0 0 48 34" aria-hidden="true">${frame}/><path class="d" d="M12.5 .75v32.5M36 .75v32.5"/>`
+    + (on('agent') ? '' : '<rect class="d" x="16.5" y="24.5" width="15.5" height="5" rx="2.5"/>')
+    + (on('navigation') ? '<path class="s" d="M12.5 .75H6.25a5.5 5.5 0 0 0-5.5 5.5v21.5a5.5 5.5 0 0 0 5.5 5.5H12.5z"/>' : '')
+    + (on('sidebar') ? '<path class="s" d="M36 .75h5.75a5.5 5.5 0 0 1 5.5 5.5v21.5a5.5 5.5 0 0 1-5.5 5.5H36z"/>' : '')
+    + (on('session-view') ? '<rect class="s" x="16" y="4.5" width="16.5" height="16" rx="2.5"/>' : '')
+    + (on('panel') ? '<rect class="s" x="16" y="14" width="16.5" height="7" rx="2"/>' : '')
+    + (on('commands') ? '<rect class="s" x="17.5" y="5" width="13.5" height="4.6" rx="2.3"/>' : '')
+    + (on('agent') ? '<rect class="s" x="16.5" y="24.5" width="15.5" height="5" rx="2.5"/>' : on('model') ? '<rect class="s" x="17.7" y="25.6" width="6.4" height="2.8" rx="1.4"/>' : '')
+    + (on('share') ? '<path class="o" d="M27 10l4.6-4.6M28.2 5.2h3.6v3.6"/>' : '')
+    + (on('avatar') ? '<circle class="s" cx="6.6" cy="27.2" r="2.9"/>' : on('settings') ? '<circle class="s" cx="6.6" cy="27.2" r="2.3"/>' : '')
+    + '</svg>';
+}
+
+// The same workbench at reading size. Slots light up for what the package declares.
+function slotMap(p) {
+  const slot = (name, body, only = false) => `<g class="slot${p.slots.has(name) ? ' on' : ''}${only ? ' only' : ''}" data-slot="${name}">${body}</g>`;
+  const bar = (x, y, w, cls = 'sk') => `<rect class="${cls}" x="${x}" y="${y}" width="${w}" height="5" rx="2.5"/>`;
+  return `<svg viewBox="0 0 360 224" aria-hidden="true">
+    <rect class="f" x="1" y="1" width="358" height="222" rx="14"/>
+    <path class="nv" d="M84 1H15A14 14 0 0 0 1 15v194a14 14 0 0 0 14 14h69z"/>
+    <path class="ln" d="M84 1v222M268 1v222M84 34h275"/>
+    ${bar(14, 16, 40)}${bar(14, 30, 48)}
+    ${slot('navigation', `<rect class="hl" x="8" y="42" width="68" height="15" rx="5"/>${bar(14, 47, 34, 'bar')}`)}
+    ${bar(14, 76, 22, 'sk q')}${bar(14, 90, 52)}${bar(14, 104, 44)}${bar(14, 118, 56)}${bar(14, 132, 38)}${bar(14, 146, 48)}
+    ${slot('avatar', '<circle class="hl" cx="22" cy="204" r="12"/><circle class="bar" cx="22" cy="204" r="7.5"/>')}
+    ${slot('settings', '<circle class="hl" cx="64" cy="204" r="10"/><circle class="bar" cx="64" cy="204" r="4.5"/>')}
+    <rect class="sk" x="96" y="11" width="30" height="13" rx="6.5"/><rect class="sk q" x="131" y="11" width="30" height="13" rx="6.5"/>
+    ${slot('session-view', '<rect class="hl" x="92" y="42" width="168" height="128" rx="8"/><rect class="bar" x="166" y="11" width="34" height="13" rx="6.5"/>', true)}
+    ${slot('share', '<circle class="hl" cx="248" cy="17.5" r="11"/><path class="ic" d="M253 18.5v3a1.5 1.5 0 0 1-1.5 1.5h-7A1.5 1.5 0 0 1 243 21.500v-7a1.5 1.5 0 0 1 1.5-1.5h3M250.500 11.500h4v4M254.500 11.500l-5.500 5.500"/>')}
+    <rect class="sk q" x="196" y="48" width="62" height="16" rx="8"/>
+    ${bar(100, 80, 140)}${bar(100, 92, 118)}${bar(100, 104, 132)}${bar(100, 116, 86)}
+    ${slot('panel', `<rect class="hl" x="84.500" y="140" width="183" height="32"/>${bar(98, 153, 70, 'bar')}`, true)}
+    <rect class="box" x="96" y="180" width="160" height="32" rx="10"/><circle class="sk" cx="242" cy="196" r="7"/>
+    ${slot('agent', '<rect class="hl" x="101" y="187" width="36" height="18" rx="9"/><rect class="bar" x="104" y="190" width="30" height="12" rx="6"/>')}
+    ${slot('model', '<rect class="hl" x="135" y="187" width="46" height="18" rx="9"/><rect class="bar" x="138" y="190" width="40" height="12" rx="6"/>')}
+    ${slot('commands', `<rect x="114" y="76" width="128" height="34" rx="9" style="fill:color-mix(in srgb, var(--ink) 10%, transparent)"/><rect class="box" x="112" y="72" width="128" height="34" rx="9"/>${bar(124, 86.500, 46, 'bar')}<rect class="sk" x="212" y="83.500" width="18" height="11" rx="3.500"/>`, true)}
+    <rect class="sk" x="278" y="11" width="13" height="13" rx="3.5"/><rect class="sk q" x="295" y="11" width="13" height="13" rx="3.5"/>
+    ${slot('sidebar', `<path class="hl" d="M268.500 34.500H359V209a14 14 0 0 1-14 14h-76.500z"/><rect class="bar" x="312" y="11" width="13" height="13" rx="3.5"/>${bar(278, 48, 64)}${bar(278, 60, 50)}${bar(278, 72, 58)}${bar(278, 84, 42)}<rect class="sk q" x="278" y="100" width="72" height="42" rx="6"/>${bar(278, 154, 60)}${bar(278, 166, 46)}`)}
+  </svg>`;
+}
+
+// The workbench wearing a palette. Every colour is a role of the package's own palette file.
+function worn(look, mode) {
+  const c = look.palette?.palette[mode];
+  if (!c) return '';
+  const vars = { bg: c.bg, side: c['bg-sidebar'], fg: c.fg, line: c['line-strong'], soft: c['bg-active'], accent: c.accent, bubble: c['bg-bubble'], raised: c['bg-elevated'] };
+  const style = Object.entries(vars).map(([key, value]) => `--p-${key}:${esc(value)}`).join(';')
+    + (look.background ? `;--p-grain:url('${esc(look.background.url)}');--p-grain-o:${+look.background.opacity}` : '');
+  return `<span class="wb" style="${style}"><aside><b style="--w:62%"></b><b class="sel" style="--w:48%"></b><b style="--w:70%"></b><b style="--w:40%"></b>`
+    + `<u>${['cursor', 'codex', 'claude', 'dsh'].map((agent) => `<i style="--c:${esc(c[`agent-${agent}`])}"></i>`).join('')}</u></aside>`
+    + `<div><span class="me"></span><i class="l"></i><i class="l m"></i><i class="l s"></i>`
+    + `<span class="df"><i style="--c:${esc(c['diff-del'])};--m:${esc(c['diff-del-marker'])};--w:44%"></i><i style="--c:${esc(c['diff-add'])};--m:${esc(c['diff-add-marker'])};--w:58%"></i></span>`
+    + `<span class="box"></span></div></span>`;
+}
+
+/* ── Wearing a look on this page itself ── */
+let wearing = null;
+const loaded = new Map();
+function wear(look) {
+  wearing = look;
+  const c = look?.palette?.palette[root.dataset.theme];
+  const vars = { '--paper': c?.bg, '--raised': c?.['bg-elevated'], '--sunk': c?.['bg-muted'], '--ink': c?.fg, '--ink-2': c?.['fg-2'], '--ink-3': c?.['fg-3'], '--accent': c?.accent, '--add': c?.success, '--del': c?.danger };
+  for (const [name, value] of Object.entries(vars)) value ? root.style.setProperty(name, value) : root.style.removeProperty(name);
+  if (look?.background) { root.style.setProperty('--grain', `url('${look.background.url}')`); root.style.setProperty('--grain-o', look.background.opacity); }
+  else { root.style.removeProperty('--grain'); root.style.removeProperty('--grain-o'); }
+  root.style.removeProperty('--sans');
+  if (look?.font) face(look.font).then((family) => { if (wearing === look) root.style.setProperty('--sans', `"${family}", ${getComputedStyle(root).getPropertyValue('--sans')}`); });
+}
+// Fonts are fetched when first shown; a package's family gets its own name so it never shadows a system font.
+function face(font) {
+  const family = `${font.family} · plugin`;
+  if (!loaded.has(font.url)) loaded.set(font.url, new FontFace(family, `url('${font.url}')`, { weight: '100 900' }).load().then((f) => { document.fonts.add(f); return family; }, () => font.family));
+  return loaded.get(font.url);
+}
+
+/* ── Index ── */
+const state = { q: '', kind: 'all', reach: '' };
+let tokens = [];
+function hi(text) {
+  if (!tokens.length) return esc(text);
+  const low = text.toLowerCase(), marks = [];
+  for (const token of tokens) for (let i = low.indexOf(token); i >= 0; i = low.indexOf(token, i + token.length)) marks.push([i, i + token.length]);
+  marks.sort((a, b) => a[0] - b[0]);
+  let out = '', at = 0;
+  for (const [from, to] of marks) { if (from < at) continue; out += `${esc(text.slice(at, from))}<mark>${esc(text.slice(from, to))}</mark>`; at = to; }
+  return out + esc(text.slice(at));
+}
+// Search reads both languages, so a query typed in either finds the package.
+const haystacks = new Map(plugins.map((p) => {
+  const texts = (text) => !text ? [] : typeof text === 'string' ? [text] : Object.values(text);
+  const c = p.c, a = p.a;
+  const declared = [c.views, c.commands, c.tasks, c.modelSources, c.agentBackends, c.avatarStyles, a.palettes, a.fonts, a.backgrounds, a.presets, a.iconPacks].flatMap((list) => list ?? []).flatMap((item) => texts(item.title));
+  const names = p.kinds.flatMap((kind) => [STR.en[`k_${kind}`], STR.zh[`k_${kind}`]]);
+  return [p, [...texts(p.m.title), p.m.name, p.id, p.vendor, ...texts(p.m.description), ...declared, ...names, ...(p.m.capabilities ?? [])].join('\n').toLowerCase()];
+}));
+const own = (p) => p.id.startsWith('riffet.');
+const fresh = (a, b) => (a.origin === 'builtin') - (b.origin === 'builtin') || b.latest.date.localeCompare(a.latest.date) || own(b) - own(a) || title(a).localeCompare(title(b));
+function matches() {
+  const found = plugins.filter((p) => (state.kind === 'all' || p.kinds.includes(state.kind)) && (!state.reach || p.reach === state.reach) && tokens.every((token) => haystacks.get(p).includes(token)));
+  if (!tokens.length) return found.sort(fresh);
+  const rank = (p) => { const name = title(p).toLowerCase(); return name.startsWith(tokens[0]) ? 0 : name.includes(tokens[0]) ? 1 : p.id.includes(tokens[0]) ? 2 : 3; };
+  return found.sort((a, b) => rank(a) - rank(b) || fresh(a, b));
+}
+const kindline = (p) => p.kinds.map((kind) => t(`k_${kind}`)).join(' · ');
+const reachOf = (p) => `<span class="reach">${moon(p.reach)}${t(`r_${p.reach}`)}</span>`;
+const row = (p) => `<a class="row" href="#/${esc(p.id)}">${glyph(p)}<span class="who"><b>${hi(title(p))}</b><span class="id">${hi(p.id)}</span></span>`
+  + `<span class="what">${hi(about(p))}</span><span class="kindline">${esc(kindline(p))}</span>${reachOf(p)}<span class="ver">${esc(p.latest.version)}</span></a>`;
+function spec(p) {
+  const pack = !p.look?.palette && firstPack(p);
+  const figure = p.look?.palette ? worn(p.look, root.dataset.theme) : pack ? `<span class="wb icons"><span>${Object.values(pack).slice(0, 12).map(packIcon).join('')}</span></span>` : '';
+  if (!figure) return '';
+  const parts = [p.a.palettes?.length && t('c_palette'), p.a.fonts?.length && t('c_font'), p.a.backgrounds?.length && t('c_background'), p.a.iconPacks?.length && t('c_icons')].filter(Boolean);
+  return `<a class="spec" href="#/${esc(p.id)}">${figure}<b>${esc(title(p))}</b><span class="reach">${moon(p.reach)}${t(`r_${p.reach}`)}<span class="kindline">${esc(parts.join(' · '))}</span></span></a>`;
+}
+function renderFacets() {
+  const count = (kind) => plugins.filter((p) => p.kinds.includes(kind)).length;
+  document.getElementById('kinds').innerHTML = [['all', t('all'), plugins.length], ...KINDS.map((kind) => [kind, t(`k_${kind}`), count(kind)]).filter(([, , n]) => n)]
+    .map(([kind, label, n]) => `<button type="button" data-kind="${kind}" aria-pressed="${state.kind === kind}">${esc(label)}<em>${n}</em></button>`).join('');
+  document.getElementById('reaches').innerHTML = REACHES.map((reach) => `<button type="button" data-reach="${reach}" aria-pressed="${state.reach === reach}" title="${esc(t({ assets: 'x_assets', sandbox: 'x_server', trusted: 'x_trusted' }[reach]))}"><i class="moon ${reach}"></i>${t(`r_${reach}`)}</button>`).join('');
+}
+function renderList() {
+  tokens = state.q.toLowerCase().split(/\s+/).filter(Boolean);
+  const found = matches(), list = document.getElementById('list');
+  if (!found.length) list.innerHTML = `<section class="top flat"><p class="empty">${t('none')}<button type="button" id="clear">${t('clear')}</button></p></section>`;
+  else if (tokens.length || state.kind !== 'all') list.innerHTML = `<section class="top flat"><div class="rows">${found.map(row).join('')}</div></section>`;
+  else list.innerHTML = GROUPS.map((group) => {
+    const members = found.filter((p) => p.group === group);
+    if (!members.length) return '';
+    const shown = group === 'appearance' ? members.filter((p) => spec(p)).sort((a, b) => Boolean(b.look?.palette) - Boolean(a.look?.palette)) : [];
+    const rest = members.filter((p) => !shown.includes(p));
+    return `<section><h2>${t(`g_${group}`)}</h2>${shown.length ? `<div class="specs">${shown.map(spec).join('')}</div>` : ''}${rest.length ? `<div class="rows">${rest.map(row).join('')}</div>` : ''}</section>`;
+  }).join('');
+  layout();
+}
+function remember() {
+  const params = new URLSearchParams();
+  if (state.q) params.set('q', state.q);
+  if (state.kind !== 'all') params.set('kind', state.kind);
+  if (state.reach) params.set('reach', state.reach);
+  history.replaceState(null, '', `${location.pathname}${location.search}#/${params.size ? `?${params}` : ''}`);
+}
+const input = document.getElementById('q');
+input.addEventListener('input', () => { state.q = input.value; renderList(); remember(); });
+document.getElementById('kinds').addEventListener('click', (event) => {
+  const button = event.target.closest('button'); if (!button) return;
+  state.kind = button.dataset.kind; renderFacets(); renderList(); remember();
+});
+document.getElementById('reaches').addEventListener('click', (event) => {
+  const button = event.target.closest('button'); if (!button) return;
+  state.reach = state.reach === button.dataset.reach ? '' : button.dataset.reach; renderFacets(); renderList(); remember();
+});
+document.getElementById('list').addEventListener('click', (event) => {
+  if (!event.target.closest('#clear')) return;
+  Object.assign(state, { q: '', kind: 'all', reach: '' }); input.value = ''; renderFacets(); renderList(); remember(); input.focus();
+});
+
+/* ── Detail ── */
+const where = (when) => [when?.projectType && t('w_type', `<span class="mono">${esc(when.projectType)}</span>`), !when?.projectType && when?.hasProject && t('w_project'), when?.hasSession && t('w_session')].filter(Boolean);
+const clients = (list) => (list ?? []).map((client) => ({ web: 'Web', macos: 'macOS' }[client] ?? client)).join(' · ');
+const AGENT_OF = { 'anthropic-messages': 'Claude Code', 'openai-responses': 'Codex' };
+function contributions(p) {
+  const c = p.c, a = p.a, out = [];
+  const line = (kind, name, detail = '', right = '', slot = '', extra = '') => out.push(`<div${slot ? ` data-slot="${slot}"` : ''}><em>${t(kind)}</em><span><b>${esc(name)}</b>${detail ? `<span class="w">${detail}</span>` : ''}${extra}</span><em>${esc(right)}</em></div>`);
+  for (const agent of c.agentBackends ?? []) line('c_agent', loc(agent.title, agent.id), '', '', 'agent');
+  for (const source of c.modelSources ?? []) line('c_model', loc(source.title, source.id), (source.protocols ?? []).map((protocol) => `<span class="mono">${esc(protocol)}</span>`).join(' · '), (source.protocols ?? []).map((protocol) => AGENT_OF[protocol]).filter(Boolean).join(' · '), 'model');
+  for (const view of c.views ?? []) {
+    const page = view.locations.includes('settings');
+    line(page ? 'c_page' : 'c_view', loc(view.title, view.id), [...(page ? [] : view.locations.map((place) => t(`l_${place}`))), ...where(view.when)].join(' · '), clients(view.clients), view.locations.map((place) => place === 'main' ? 'navigation' : place).join(' '));
+  }
+  for (const item of c.commands ?? []) line('c_command', loc(item.title, item.id), [t(`s_${item.scope ?? 'project'}`), ...where(item.when)].join(' · '), item.keybinding ?? '', 'commands');
+  for (const task of c.tasks ?? []) line('c_task', loc(task.title, task.id), task.projectType ? t('w_type', `<span class="mono">${esc(task.projectType)}</span>`) : '', '', p.slots.has('panel') ? 'panel' : 'sidebar');
+  if (c.sharePublisher) line('c_share', loc(c.sharePublisher.title), '', '', 'share');
+  for (const palette of a.palettes ?? []) {
+    const asset = p.assets[palette.id];
+    const strip = (mode) => `<div><em>${t(mode)}</em>${['bg', 'bg-sidebar', 'bg-muted', 'fg-4', 'fg-3', 'fg', 'accent', 'success', 'warning', 'danger'].map((role) => `<i style="--c:${esc(asset.palette[mode][role])}" title="${role}"></i>`).join('')}`
+      + ['cursor', 'codex', 'claude', 'dsh'].map((agent, i) => `<i${i ? '' : ' class="g"'} style="--c:${esc(asset.palette[mode][`agent-${agent}`])}" title="agent-${agent}"></i>`).join('') + '</div>';
+    const ansi = (mode) => `<div><em>ANSI</em>${(asset.ansi?.[mode] ?? []).map((color) => `<i style="--c:${esc(color)}"></i>`).join('')}</div>`;
+    line('c_palette', loc(palette.title, palette.id), '', '', '', asset ? `<span class="swatches">${strip('light')}${strip('dark')}${asset.ansi ? ansi(root.dataset.theme) : ''}</span>` : '');
+  }
+  for (const font of a.fonts ?? []) line('c_font', font.family, `<span class="mono">${esc(font.role)}</span>`, '', '', `<span class="type" data-font="${esc(font.id)}">Riffet 里菲特 0123 → {}</span>`);
+  for (const background of a.backgrounds ?? []) line('c_background', loc(background.title, background.id), (background.areas ?? []).map((area) => `<span class="mono">${esc(area)}</span>`).join(' · '), '', '', `<span class="tile" style="--img:url('${esc(p.assets[background.id])}');--o:${+(background.opacity ?? 1)}"></span>`);
+  const name = (id, list) => { const item = list?.find((one) => one.id === id); return item ? item.family ?? loc(item.title, id) : null; };
+  for (const preset of a.presets ?? []) line('c_preset', loc(preset.title, preset.id), [name(preset.palette, a.palettes), name(preset.fonts?.ui, a.fonts), name(preset.background, a.backgrounds)].filter(Boolean).map(esc).join(' + '));
+  for (const pack of a.iconPacks ?? []) line('c_icons', loc(pack.title, pack.id), '', 'Android');
+  if (c.avatarStyles?.length) out.push(`<div data-slot="avatar"><em>${t('c_avatar')}</em><div class="faces">${c.avatarStyles.map((style) => `<figure title="${esc(style.credit ?? '')}"><span>${p.assets[style.id] ?? ''}</span><figcaption>${esc(loc(style.title, style.id))}</figcaption></figure>`).join('')}</div></div>`);
+  return out.join('');
+}
+function access(p) {
+  const m = p.m, caps = m.capabilities ?? [];
+  const says = p.reach === 'assets' ? [t('x_assets')] : p.reach === 'trusted' ? [t('x_trusted')] : p.reach === 'builtin' ? [t('x_builtin')] : [m.entries.server && t('x_server'), m.entries.web && t('x_web')].filter(Boolean);
+  // A sandboxed package that can both read and send has no limit on what it sends (docs/PLUGINS.md, 隔离的限制).
+  const reads = caps.includes('sessions.read') || (caps.includes('network') && (caps.includes('projects.read') || m.settings?.some((s) => s.kind === 'secret')));
+  return `<p class="says">${moon(p.reach)}<span><b>${t(`r_${p.reach}`)}</b>　${says.join(' ')}</span></p>`
+    + (caps.length ? `<div class="ledger caps">${caps.map((cap) => `<div><b>${esc(cap)}</b><span>${esc(STR[lang].cap[cap] ?? '')}</span></div>`).join('')}</div>` : '')
+    + (p.reach === 'sandbox' && reads ? `<p class="note">${t('x_leak')}</p>` : '');
+}
+function renderDetail(p) {
+  const v = p.latest, m = p.m, looks = p.look?.palette, pack = !looks && p.a.iconPacks?.length && firstPack(p);
+  const text = command(p), shown = text.replace(/ (--\S+)/g, ' <span class="o">$1</span>');
+  // Riffet lists the same index on its Plugins page; from here the Mac app opens the release for confirmation.
+  const open = `riffet://plugins/install?id=${encodeURIComponent(p.id)}&version=${encodeURIComponent(v.version)}`;
+  const get = p.origin === 'builtin' ? `<p class="ships">${t('ships')}</p>`
+    : `<div class="get"><a class="btn" href="${esc(open)}">${t('open')}</a><div class="cmd"><span><span class="p">$ </span>${shown}</span><button type="button" data-copy="${esc(text)}" aria-label="${t('copy')}">${ICON.copy}</button></div></div>`;
+  const links = `<a href="${esc(p.source)}">${t('source')}</a>`;
+  const facts = [v.version, v.date, p.license, v.size && size(v.size)].filter(Boolean).map((fact) => `<span>${esc(fact)}</span>`).join('');
+  const figure = looks
+    ? `<div class="looks">${['light', 'dark'].map((mode) => `<figure>${worn(p.look, mode)}<figcaption>${t(mode)}</figcaption></figure>`).join('')}</div><div class="try"><button type="button" id="wear" aria-pressed="${wearing === p.look}">${t('preview')}</button><button type="button" class="mode" id="mode" aria-label="${t('mode')}">${ICON.mode}</button></div>`
+    : pack ? `<span class="wb icons"><span>${Object.values(pack).slice(0, 12).map(packIcon).join('')}</span></span>`
+    : p.slots.size ? `<figure class="map">${slotMap(p)}</figure>` : '';
+  const list = contributions(p);
+  const api = Object.entries(m.hostApi ?? {}).map(([side, range]) => `${side} ${range}`).join(' · ');
+  document.getElementById('detail').innerHTML = `
+    <section class="top">
+      <a class="back" href="#/">${ICON.back}${t('plugins')}</a>
+      <h1>${esc(title(p))}</h1>
+      <p class="by"><span>${esc(p.vendor)}</span><span class="mono">${esc(p.id)}</span></p>
+      ${about(p) ? `<p class="lede">${esc(about(p))}</p>` : ''}
+      ${get}
+      <div class="links">${links}</div>
+      <div class="facts">${facts}</div>
+    </section>
+    <section><h2>${t('adds')}</h2>
+      ${looks ? `<div class="fits wide"><i class="plug"></i>${figure}</div><div class="ledger contrib" style="margin-top:34px">${list}</div>`
+        : figure ? `<div class="fits"><i class="plug"></i>${figure}<div class="ledger contrib">${list}</div></div>`
+        : `<div class="ledger contrib" style="margin-top:22px">${list}</div>`}
+    </section>
+    <section><h2>${t('access')}</h2>${access(p)}</section>
+    ${m.settings?.length ? `<section><h2>${t('settings')}</h2><div class="ledger sets">${m.settings.map((s) => `<div><b>${esc(loc(s.label, s.key))}</b><span class="mono">${esc(s.key)}</span><span>${s.kind === 'secret' ? t('secret') : ''}</span></div>`).join('')}</div></section>` : ''}
+    ${p.readmeHtml ? `<section><h2>${t('readme')}</h2><div class="prose">${p.readmeHtml}</div></section>` : ''}
+    <section><h2>${t('versions')}</h2><div class="ledger vers">${p.versions.map((one) => `<div><b>${esc(one.version)}</b><span>${esc(one.date)}</span><span>${esc(api)}</span><span>${one.size ? size(one.size) : ''}</span><span class="h" title="${esc(one.integrity ?? '')}">${one.integrity ? `sha256 ${esc(one.integrity.replace(/^sha256-/, '').slice(0, 12))}…${esc(one.integrity.slice(-6))}` : ''}</span>${one.archive ? `<a href="${esc(new URL(one.archive, location.href))}">${t('download')}</a>` : '<span></span>'}</div>`).join('')}</div></section>`;
+  for (const sample of document.querySelectorAll('[data-font]')) {
+    const font = p.a.fonts.find((one) => one.id === sample.dataset.font);
+    face({ family: font.family, url: p.assets[font.id] }).then((family) => { sample.style.fontFamily = `"${family}", ${font.fallback?.join(', ') ?? 'sans-serif'}`; });
+  }
+}
+const detail = document.getElementById('detail');
+detail.addEventListener('click', (event) => {
+  if (event.target.closest('#wear')) { wear(wearing ? null : byId.get(current).look); event.target.closest('#wear').setAttribute('aria-pressed', Boolean(wearing)); }
+  if (event.target.closest('#mode')) { root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark'; if (wearing) wear(wearing); renderDetail(byId.get(current)); layout(); }
+});
+// Pointing at a contribution shows which slot of the workbench it fills.
+const point = (event, enter) => {
+  const line = event.target.closest?.('.contrib > [data-slot]'), map = detail.querySelector('.map');
+  if (!line || !map || line.contains(event.relatedTarget)) return;
+  map.classList.toggle('dim', enter);
+  for (const slot of map.querySelectorAll('.slot')) slot.classList.toggle('hot', enter && line.dataset.slot.split(' ').includes(slot.dataset.slot));
+};
+detail.addEventListener('mouseover', (event) => point(event, true));
+detail.addEventListener('mouseout', (event) => point(event, false));
+
+document.addEventListener('click', (event) => {
+  const button = event.target.closest('[data-copy]'); if (!button) return;
+  navigator.clipboard?.writeText(button.dataset.copy);
+  button.innerHTML = ICON.done; setTimeout(() => { button.innerHTML = ICON.copy; }, 1400);
+  if (!reduced) brand.animate([{ transform: 'none' }, { transform: 'translateY(-5px) rotate(-3deg)', offset: 0.4 }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2,.8,.3,1)' });
+});
+
+/* ── The rail: from the lockup's strand to the last horse, written as the reader scrolls ── */
+const main = document.querySelector('main'), rail = document.querySelector('.rail'), ink = rail.firstElementChild, finish = document.querySelector('.finish');
+let railHeight = 0;
+function layout() {
+  railHeight = finish.getBoundingClientRect().top - main.getBoundingClientRect().top;
+  rail.style.height = `${railHeight}px`;
+  write();
+}
+function write() {
+  // On a page shorter than the window the line is simply complete.
+  const room = root.scrollHeight - innerHeight, share = room <= 0 ? 1 : 0.62 + 0.38 * Math.min(1, scrollY / room);
+  const done = Math.max(0, Math.min(1, (scrollY + innerHeight * share - main.offsetTop) / railHeight));
+  ink.style.transform = `scaleY(${done})`;
+  const tip = main.offsetTop + done * railHeight;
+  for (const head of document.querySelectorAll('h1, section > h2')) head.classList.toggle('on', head.getBoundingClientRect().top + scrollY + 12 <= tip);
+  finish.style.opacity = done >= 1 ? 1 : 0.2;
+}
+new ResizeObserver(layout).observe(main);
+addEventListener('scroll', write, { passive: true });
+
+/* ── Routes: #/ is the index (with its filters), #/<id> one package ── */
+let current = '', indexScroll = 0;
+function route() {
+  const [path, query = ''] = location.hash.replace(/^#\/?/, '').split('?');
+  const p = byId.get(decodeURIComponent(path));
+  if (!p && current) wear(null);
+  if (p) {
+    if (!current) indexScroll = scrollY;
+    if (wearing && current !== p.id) wear(null);
+    current = p.id;
+    renderDetail(p);
+    document.title = `${title(p)} · Riffet`;
+  } else {
+    const params = new URLSearchParams(query);
+    if (!current) { state.q = params.get('q') ?? state.q; state.kind = KINDS.includes(params.get('kind')) ? params.get('kind') : state.kind; state.reach = REACHES.includes(params.get('reach')) ? params.get('reach') : state.reach; }
+    input.value = state.q;
+    renderFacets(); renderList(); remember();
+    document.title = `${t('plugins')} · Riffet`;
+  }
+  document.getElementById('index').hidden = Boolean(p);
+  detail.hidden = !p;
+  const back = !p && current;
+  if (!p) current = '';
+  layout();
+  scrollTo(0, back ? indexScroll : 0);
+}
+addEventListener('hashchange', route);
+
+addEventListener('keydown', (event) => {
+  if (event.metaKey || event.ctrlKey || event.altKey) return;
+  const typing = document.activeElement === input;
+  if (event.key === '/' && !typing && !current) { event.preventDefault(); input.focus(); input.select(); }
+  else if (event.key === 'Escape' && current) location.hash = '#/';
+  else if (event.key === 'Escape' && typing) { if (input.value) { input.value = ''; state.q = ''; renderList(); remember(); } else input.blur(); }
+  else if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && !current) {
+    const items = [...document.querySelectorAll('#list a')], at = items.indexOf(document.activeElement);
+    if (!typing && at < 0) return;
+    event.preventDefault();
+    const next = event.key === 'ArrowDown' ? items[at + 1] : at <= 0 ? input : items[at - 1];
+    next?.focus();
+  }
+});
+
+/* ── Language ── */
+const langButton = document.getElementById('lang');
+function setLang(next) {
+  lang = next; root.lang = lang;
+  document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = t(el.dataset.t); });
+  document.querySelectorAll('[data-h]').forEach((el) => { el.innerHTML = t(el.dataset.h); });
+  input.placeholder = t('search'); input.setAttribute('aria-label', t('search'));
+  langButton.textContent = lang === 'zh' ? 'English' : '中文';
+  route();
+}
+langButton.onclick = () => { const y = scrollY; setLang(lang === 'zh' ? 'en' : 'zh'); scrollTo(0, y); };
+setLang(lang);
+</script>
+</body>
+</html>

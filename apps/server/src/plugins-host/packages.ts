@@ -33,6 +33,14 @@ export interface StagedPackage {
 export type PackageInput = { archive: Buffer } | { path: string };
 
 export const DATA_VERSION_FILE = '.riffet-data-version';
+
+/** A download from the plugin index is the release the index lists, with the content it vouches for, or nothing is installed. */
+export function checkExpected(staged: StagedPackage, expected: { id: string; version: string; integrity: string }): void {
+  if (String(staged.manifest.id) !== expected.id || staged.manifest.version !== expected.version) {
+    throw new AppError('PLUGIN_MARKET_MISMATCH', `the download is ${String(staged.manifest.id)} ${staged.manifest.version}, not ${expected.id} ${expected.version}`, 422);
+  }
+  if (staged.integrity !== expected.integrity) throw new AppError('PLUGIN_MARKET_MISMATCH', `the content of ${expected.id} ${expected.version} differs from what the plugin index lists`, 422);
+}
 const MAX_BACKUPS = 2;
 /** The data directory is the package's to write: the marker in it is never followed through a link it made. */
 const MARKER_WRITE = constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW;

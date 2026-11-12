@@ -43,6 +43,14 @@ enum URLRouter {
         case "stats":
             WindowRouter.shared.showMain()
             AppModel.shared.whenReady { $0.showingStats = true }
+        case "plugins":
+            // `riffet://plugins/install?id=&version=` from the plugin market: the page asks before anything is installed.
+            WindowRouter.shared.showMain()
+            AppModel.shared.whenReady { workbench in
+                workbench.page = .plugins
+                guard url.pathComponents.dropFirst().first == "install", let id = query["id"], !id.isEmpty else { return }
+                Task { await workbench.pageModels.plugins.requestMarketInstall(id: id, version: query["version"].flatMap { $0.isEmpty ? nil : $0 }) }
+            }
         case "tasks", "extensions", "marks":
             let page = WorkbenchPage(rawValue: url.host() ?? "") ?? .extensions
             WindowRouter.shared.showMain()

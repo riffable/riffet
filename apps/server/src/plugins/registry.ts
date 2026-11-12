@@ -21,7 +21,7 @@ import { PluginStore, type PluginItem, type PluginItemPatch } from './store.js';
 import { PluginLogs } from './logs.js';
 import type { PluginActivationState, PluginLogEntry } from '../../../../packages/contracts/src/plugin-management.js';
 import { checkPackageFields, compatibility, referencedFiles, requestedCapabilities, serverIncompatibility } from '../plugins-host/compat.js';
-import { PackageStore, type PackageInput } from '../plugins-host/packages.js';
+import { PackageStore, checkExpected, type PackageInput } from '../plugins-host/packages.js';
 import { remotePlugin } from '../plugins-host/remote.js';
 import { satisfies } from '../plugins-host/semver.js';
 
@@ -48,7 +48,11 @@ const START_GRACE_MS = 45_000;
 
 type Source = NonNullable<PluginDescriptor['source']>;
 /** Where a package ends up when a version is installed or removed: the list is what clients re-read. */
-export interface InstallRequest { input: PackageInput; source: string; grant: unknown; trusted?: boolean }
+export interface InstallRequest {
+  input: PackageInput; source: string; grant: unknown; trusted?: boolean;
+  /** From the plugin index: the package must be this release with exactly this content. */
+  expected?: { id: string; version: string; integrity: string };
+}
 
 /** One activation: what `activate` opened, ended as a whole. */
 interface Activation {
@@ -762,6 +766,7 @@ export class PluginRegistry {
       if (this.closed) throw new AppError('SERVER_CLOSING', 'The server is shutting down', 503);
       const staged = await this.packages.stage(request.input, { trusted: request.trusted === true });
       try {
+        if (request.expected) checkExpected(staged, request.expected);
         const { manifest } = staged;
         const id = String(manifest.id);
         const version = manifest.version!;

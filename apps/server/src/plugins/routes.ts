@@ -1,14 +1,16 @@
 import { createReadStream } from 'node:fs';
 import { basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import type { PluginsResponse } from '../../../../packages/contracts/src/index.js';
+import type { PluginMarketList, PluginsResponse } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { proxiedRequest } from '../auth.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { MAX_ARCHIVE_BYTES } from '../plugins-host/archive.js';
 import { parseMultipart } from '../plugins-host/multipart.js';
+import { checkMarketReference, downloadMarketPackage, listMarket, marketOffer, resolveMarketPackage } from '../plugins-host/market.js';
 
 const isLoopback = (address: string) => address === '::1' || address.startsWith('127.') || address.startsWith('::ffff:127.');
+const onServiceMachine = (request: FastifyRequest) => isLoopback(request.ip) && !proxiedRequest(request.headers);
 
 /** A grant is a JSON list of capability names, or a comma-separated line of them. */
 function grantOf(text: string): string[] {
@@ -27,7 +29,7 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     try { return await plugins.install(input); }
     catch (error) {
       if (error instanceof AppError && (error.code === 'PLUGIN_GRANT_REQUIRED' || error.code === 'PLUGIN_TRUST_REQUIRED') && error.details && typeof error.details === 'object') {
-        throw new AppError(error.code, error.message, error.statusCode, { ...error.details, trustedAllowed: isLoopback(request.ip) && !proxiedRequest(request.headers) });
+        throw new AppError(error.code, error.message, error.statusCode, { ...error.details, trustedAllowed: onServiceMachine(request) });
       }
       throw error;
     }
@@ -54,6 +56,15 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     return { integrations: await plugins.unlinkDevelopment(request.params.id) };
   });
 
+  // The public plugin index (docs/PLUGINS.md「插件市场」): what can be installed, and one release before installing it.
+  app.get<{ Querystring: { refresh?: string } }>('/api/integrations/market', async (request): Promise<PluginMarketList> => ({
+    plugins: await listMarket({ fresh: request.query.refresh === '1' }), trustedAllowed: onServiceMachine(request),
+  }));
+  app.get<{ Params: { id: string }; Querystring: { version?: string } }>('/api/integrations/market/:id', async request => {
+    const found = await resolveMarketPackage(checkMarketReference({ id: request.params.id, version: request.query.version || undefined }));
+    return { ...marketOffer(found), ...(found.trustedRequired ? { trustedAllowed: onServiceMachine(request) } : {}) };
+  });
+
   app.post('/api/integrations/refresh', { bodyLimit: 4096 }, async () => { await plugins.refresh(); return list(); });
   app.patch<{ Body: unknown }>('/api/integrations', { bodyLimit: 4096 }, async request => {
     const body = request.body;
@@ -64,8 +75,9 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     return list();
   });
 
-  // Installing: a multipart upload of a .tgz (`package`, with `grant`), or `{ path, grant }` naming a
-  // directory or .tgz on this machine, which only a request from this machine may do (the CLI).
+  // Installing: a multipart upload of a .tgz (`package`, with `grant`), `{ path, grant }` naming a
+  // directory or .tgz on this machine, which only a request from this machine may do (the CLI), or
+  // `{ market: { id, version? }, grant }`, a release of the plugin index that the server downloads.
   // The parser is local to this scope so no other route accepts a multipart body.
   void app.register(async scope => {
     scope.addContentTypeParser('multipart/form-data', { parseAs: 'buffer', bodyLimit: MAX_ARCHIVE_BYTES + 1024 * 1024 }, (_request, body, done) => done(null, body));
@@ -83,9 +95,17 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
         return install(request, { input: { archive: file.data }, source: `upload:${basename(file.filename!).slice(0, 120) || 'package.tgz'}`, grant, ...(choice === 'true' ? { trusted: true } : {}) });
       }
       const body = request.body;
-      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError('INVALID_INPUT', 'Expected a multipart upload or { path, grant }');
-      const { path, grant, trusted } = body as Record<string, unknown>;
+      if (!body || typeof body !== 'object' || Array.isArray(body)) throw new AppError('INVALID_INPUT', 'Expected a multipart upload, { path, grant } or { market, grant }');
+      const { path, grant, trusted, market } = body as Record<string, unknown>;
       if (trusted !== undefined && typeof trusted !== 'boolean') throw new AppError('INVALID_INPUT', 'trusted must be a boolean');
+      // From the plugin index: any client may ask, trust stays with the service machine as for an upload.
+      if (market !== undefined) {
+        const reference = checkMarketReference(market);
+        if (trusted === true && !onServiceMachine(request)) throw new AppError('PLUGIN_TRUST_LOCAL_ONLY', 'Trusted installation is only available directly on the service machine', 403);
+        const found = await resolveMarketPackage(reference);
+        const archive = await downloadMarketPackage(found);
+        return install(request, { input: { archive }, source: `market:${found.id}@${found.version}`, grant, expected: found, ...(trusted === true ? { trusted: true } : {}) });
+      }
       if (typeof path !== 'string' || !path) throw new AppError('INVALID_INPUT', 'path must be text');
       if (!isLoopback(request.ip) || proxiedRequest(request.headers)) throw new AppError('PLUGIN_PATH_INSTALL_LOCAL_ONLY', 'Installing from a path is only available from this machine; upload the package instead', 403);
       return install(request, { input: { path }, source: `path:${path}`, grant, ...(trusted === true ? { trusted: true } : {}) });

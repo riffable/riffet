@@ -247,6 +247,38 @@ async function localPackage(id: string, version: string, body: string, extra: Re
   return { directory, archive: tarball(await readDirectory(directory)) };
 }
 
+describe('the public plugin index', () => {
+  /** An index at a loopback address that lists one release of the theme sample, served with `served` as its archive. */
+  async function index(listed: { integrity: string }, served: Buffer) {
+    const server: Server = createServer((request, response) => {
+      if (request.url === '/plugins/index.json') {
+        response.setHeader('content-type', 'application/json').end(JSON.stringify({ schemaVersion: 1, plugins: [{ id: 'example.graphite-theme', manifest: { title: { en: 'Graphite' } }, versions: [{ version: '1.0.0', archive: 'packages/graphite.tgz', integrity: listed.integrity, capabilities: [] }] }] }));
+      } else if (request.url === '/plugins/packages/graphite.tgz') response.end(served);
+      else response.writeHead(404).end();
+    }).listen(0, '127.0.0.1');
+    await new Promise(done => server.once('listening', done));
+    cleanups.push(() => new Promise(done => server.close(done)));
+    vi.stubEnv('RIFFET_PLUGIN_INDEX', `http://127.0.0.1:${(server.address() as { port: number }).port}/plugins/index.json`);
+  }
+
+  it('installs the release the index lists and refuses content it does not vouch for', async () => {
+    const packed = await packPlugin(join(examples, 'graphite-theme'));
+    await index(packed, await variant('graphite-theme', '1.0.0', { 'README.md': 'changed' }));
+    const { call, row } = await boot();
+    const offer = await call('GET', '/api/integrations/market/example.graphite-theme');
+    expect(offer.json()).toMatchObject({ id: 'example.graphite-theme', version: '1.0.0', capabilities: [] });
+    const refused = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme' }, grant: [] });
+    expect(refused.statusCode, refused.body).toBe(422);
+    expect(refused.json().error.code).toBe('PLUGIN_MARKET_MISMATCH');
+    expect(await row('example.graphite-theme')).toBeUndefined();
+
+    await index(packed, packed.archive);
+    const installed = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme', version: '1.0.0' }, grant: [] });
+    expect(installed.statusCode, installed.body).toBe(200);
+    expect((await row('example.graphite-theme')).installed?.versions[0]).toMatchObject({ version: '1.0.0', source: 'market:example.graphite-theme@1.0.0', integrity: packed.integrity });
+  });
+});
+
 describe('explicitly trusted local installations', () => {
   it('activates lazy commands, login, task discovery and views through public entry points', async () => {
     const { call, row } = await boot();

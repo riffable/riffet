@@ -42,6 +42,7 @@ import type {
   PluginDefaultsUpdate,
   PluginDescriptor,
   PluginsResponse,
+  PluginMarketList,
   PluginUpdate,
   GitDiff,
   GitStatus,
@@ -726,6 +727,10 @@ export const api = {
     if (trusted) body.set('trusted', 'true');
     return request<PluginDescriptor>('/api/integrations/install', { method: 'POST', body });
   },
+  /** The plugin index as the server reads it (docs/PLUGINS.md「插件市场」); `refresh` skips its cache. */
+  marketPlugins: (refresh = false) => request<PluginMarketList>(`/api/integrations/market${refresh ? '?refresh=1' : ''}`),
+  installMarketPlugin: (id: string, version: string, grant: string[], trusted = false) =>
+    request<PluginDescriptor>('/api/integrations/install', json('POST', { market: { id, version }, grant, ...(trusted ? { trusted: true } : {}) })),
   selectPluginVersion: (id: string, version: string) =>
     request<PluginDescriptor>(`/api/integrations/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/select`, json('POST', {})),
   uninstallPluginVersion: (id: string, version: string) =>

@@ -1,12 +1,13 @@
 import { resolve } from 'node:path';
-import { mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { validatePackage, watchPlugin, type PluginBuildResult } from '../../../packages/plugin-api/src/tooling.js';
 import { claimStateDirectory } from './compat.js';
 import { PluginStore } from './plugins/store.js';
 import type { PluginDescriptor } from '../../../packages/contracts/src/index.js';
 import { localServerUrl, type PairingDaemon } from './cli-pairing.js';
 import { AppError } from './errors.js';
-import { PackageStore } from './plugins-host/packages.js';
+import { PackageStore, checkExpected, type PackageInput } from './plugins-host/packages.js';
+import { downloadMarketPackage, parseMarketReference, resolveMarketPackage, type MarketPackage } from './plugins-host/market.js';
 import { developmentDirectories, readPackage } from './plugins/development.js';
 import { PluginLogs } from './plugins/logs.js';
 import { PLUGIN_ID } from '../../../packages/contracts/src/plugins.js';
@@ -102,26 +103,37 @@ function parseGrant(value: string | undefined): string[] | undefined {
 }
 
 /**
- * Installs the package at `path` (a directory, or a .tgz). It asks for capabilities; `grant` or `yes` must
- * accept exactly those, otherwise nothing is installed and the list is printed.
+ * Installs the package at `path` (a directory, or a .tgz), or, when no such path exists, `<id>[@version]`
+ * from the plugin index. It asks for capabilities; `grant` or `yes` must accept exactly those, otherwise
+ * nothing is installed and the list is printed.
  */
 export async function installPlugin(context: PluginCliContext, path: string, options: { grant?: string; yes?: boolean; trusted?: boolean }): Promise<string[]> {
   const source = resolve(path);
+  const market = existsSync(source) ? undefined : parseMarketReference(path);
   const given = parseGrant(options.grant);
   if (context.daemon) {
     const call = await connect(context.daemon, context.token());
-    let reply = await call('POST', '/api/integrations/install', { path: source, grant: given ?? [], trusted: options.trusted === true });
+    const target = market ? { market } : { path: source };
+    let reply = await call('POST', '/api/integrations/install', { ...target, grant: given ?? [], trusted: options.trusted === true });
     const details = reply.body.error?.details as { id?: string; version?: string; capabilities?: string[] } | undefined;
     if (reply.status === 409 && reply.body.error?.code === 'PLUGIN_GRANT_REQUIRED' && details?.capabilities) {
       if (!options.yes) return [`${details.id} ${details.version} asks for: ${details.capabilities.join(', ')}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'].map(String);
-      reply = await call('POST', '/api/integrations/install', { path: source, grant: details.capabilities, trusted: options.trusted === true });
+      // The release the user was shown, even if the index changed since.
+      const confirmed = market && details.id && details.version ? { market: { id: details.id, version: details.version } } : target;
+      reply = await call('POST', '/api/integrations/install', { ...confirmed, grant: details.capabilities, trusted: options.trusted === true });
     }
     if (reply.status !== 200) fail(reply);
     const installed = reply.body as unknown as PluginDescriptor;
     return [`Installed ${installed.id} ${installed.version ?? ''} (${installed.enabled ? 'running' : installed.status?.message ?? 'off'}).`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
   }
   const store = new PackageStore(context.stateDir);
-  const staged = await store.stage({ path: source }, { trusted: options.trusted === true });
+  let found: MarketPackage | undefined;
+  let input: PackageInput = { path: source };
+  if (market) { found = await resolveMarketPackage(market); input = { archive: await downloadMarketPackage(found) }; }
+  const staged = await store.stage(input, { trusted: options.trusted === true });
+  if (found) {
+    try { checkExpected(staged, found); } catch (error) { await store.discard(staged); throw error; }
+  }
   // The server refuses a built-in id when it installs; without one running, the same refusal is made here (`stage` has refused the reserved `riffet.` namespace).
   if ((await import('./plugins/registry.js')).isBuiltinPlugin(String(staged.manifest.id))) {
     await store.discard(staged);
@@ -138,7 +150,7 @@ export async function installPlugin(context: PluginCliContext, path: string, opt
   }
   const id = String(staged.manifest.id);
   const existing = store.record(id);
-  const { status } = await store.commit(staged, `path:${source}`, true);
+  const { status } = await store.commit(staged, found ? `market:${found.id}@${found.version}` : `path:${source}`, true);
   return [status === 'present' ? `${id} ${staged.manifest.version} is already installed.` : `Installed ${id} ${staged.manifest.version}${existing ? ' and selected it' : ''}; it takes effect when Riffet starts.`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
 }
 

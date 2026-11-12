@@ -5,6 +5,10 @@
   "apiVersion": 1,
   "version": "1.0.0",
   "defaultEnabled": true,
+  "description": {
+    "zh-Hans": "同一份声明在 Web 与 macOS 生成原生列表、表单和详情。",
+    "en": "One manifest drawn as native lists, forms and details on Web and macOS."
+  },
   "activation": [
     "view",
     "command"

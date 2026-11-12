@@ -1,6 +1,46 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "浏览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Browse"
+          }
+        }
+      }
+    },
+    "不兼容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incompatible"
+          }
+        }
+      }
+    },
+    "无法读取插件目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t load the plugin directory"
+          }
+        }
+      }
+    },
+    "在网页中查看": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View on the web"
+          }
+        }
+      }
+    },
     "p50 %@ · p90 %@ · p99 %@": {
       "localizations": {
         "en": {

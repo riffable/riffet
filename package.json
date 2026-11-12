@@ -52,7 +52,8 @@
     "version:check": "tsx scripts/version.ts --check",
     "gen:marks": "tsx scripts/gen-agent-marks.ts",
     "gen:marks:check": "tsx scripts/gen-agent-marks.ts --check",
-    "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs"
+    "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs",
+    "build:site": "tsx scripts/build-site.ts"
   },
   "dependencies": {
     "@codemirror/merge": "6.12.2",

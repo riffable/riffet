@@ -96,6 +96,10 @@ msgstr ""
 msgid "下载 {0}"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "不兼容"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "不可用"
 msgstr ""
@@ -124,6 +128,7 @@ msgstr ""
 msgid "从终端导入…"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "以服务器进程的权限运行"
@@ -536,6 +541,10 @@ msgstr ""
 msgid "在终端恢复…"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "在网页中查看"
+msgstr ""
+
 #: src/app/App.tsx
 msgid "在运行服务器的 Mac 或电脑上执行"
 msgstr ""
@@ -574,6 +583,7 @@ msgid "失败"
 msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "安装"
 msgstr ""
@@ -658,6 +668,7 @@ msgstr ""
 msgid "已复制地址"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已安装"
 msgstr ""
@@ -1044,6 +1055,10 @@ msgstr ""
 msgid "新项目"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "无"
+msgstr ""
+
 #: src/app/use-project-actions.ts
 msgid "无法使用该目录开始会话"
 msgstr ""
@@ -1188,6 +1203,10 @@ msgstr ""
 msgid "无法读取插件"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "无法读取插件目录"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 msgid "无法读取终端会话"
 msgstr ""
@@ -1314,6 +1333,7 @@ msgstr ""
 msgid "本机"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
@@ -1376,6 +1396,7 @@ msgstr ""
 msgid "此配置在当前客户端不可用"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有匹配的插件"
 msgstr ""
@@ -1395,6 +1416,7 @@ msgstr ""
 msgid "没有可配置项"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "没有插件"
 msgstr ""
@@ -1409,6 +1431,11 @@ msgstr ""
 
 #: src/app/Sidebar.tsx
 msgid "浅色"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-market"
+msgid "浏览"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
@@ -1453,6 +1480,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "源目录、设置和数据会保留"
+msgstr ""
+
+#: src/app/plugins/PluginMarket.tsx
+msgid "源码"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -1907,6 +1938,7 @@ msgid "重新读取"
 msgstr ""
 
 #: src/app/plugins/PluginFlowDialog.tsx
+#: src/app/plugins/PluginMarket.tsx
 #: src/app/Workbench.tsx
 msgid "重试"
 msgstr ""

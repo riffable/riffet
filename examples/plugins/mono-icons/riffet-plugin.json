@@ -6,6 +6,7 @@
   "version": "1.0.0",
   "defaultEnabled": true,
   "title": { "zh-Hans": "极简图标示例", "en": "Mono icon example" },
+  "description": { "zh-Hans": "单色线性图标包。", "en": "A monochrome line icon pack." },
   "contributes": {
     "appearance": {
       "iconPacks": [{ "id": "example.mono-icons/mono", "title": { "zh-Hans": "极简图标示例", "en": "Mono icon example" }, "asset": "assets/mono.json" }]

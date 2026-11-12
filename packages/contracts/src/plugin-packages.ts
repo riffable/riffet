@@ -51,3 +51,43 @@ export interface PluginGrantRequired {
   /** This request came directly from the service machine, where explicit trust is allowed. */
   trustedAllowed?: boolean;
 }
+
+/**
+ * `GET /api/integrations/market/:id?version=`: a release in the public plugin index, before it is
+ * installed. Shaped like a grant request so the same confirmation serves both; installing it is
+ * `POST /api/integrations/install` with `{ market: { id, version }, grant, trusted? }`.
+ */
+export interface PluginMarketOffer extends PluginGrantRequired {
+  title?: Record<string, string>;
+}
+
+/** One package in the plugin index, at the newest release this server can run (or the newest, when none can). */
+export interface PluginMarketEntry {
+  id: string;
+  vendor: string;
+  title?: Record<string, string>;
+  description?: Record<string, string>;
+  version: string;
+  date?: string;
+  size?: number;
+  license?: string;
+  /** Where its source is published. */
+  source?: string;
+  /** Its page on the marketplace site next to the index, when the index is served over http(s). */
+  page?: string;
+  /** The package's README as Markdown, links made absolute. */
+  readme?: string;
+  /** The manifest's `contributes` keys, such as `appearance` or `modelSources`. */
+  contributes: string[];
+  capabilities: string[];
+  trustedRequired?: boolean;
+  /** Whether some release declares a server host API this server provides. */
+  compatible: boolean;
+}
+
+/** `GET /api/integrations/market`: the plugin index as this server reads it, built-in plugins left out. */
+export interface PluginMarketList {
+  plugins: PluginMarketEntry[];
+  /** This request came directly from the service machine, where explicit trust is allowed. */
+  trustedAllowed: boolean;
+}
