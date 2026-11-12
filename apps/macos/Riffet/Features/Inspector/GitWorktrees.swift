@@ -38,19 +38,20 @@ struct GitWorktreesList: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.sm) {
-                GitField(placeholder: String(localized: "搜索 Worktree"), text: $search)
+                GitField(placeholder: "Search", text: $search)
                 Button { creating.toggle() } label: {
                     Image(icon: creating ? "xmark" : "plus").font(.riffet(size: S(12)))
                 }
                 .buttonStyle(IconButtonStyle())
-                .help(creating ? "收起创建表单" : "新建 Worktree")
+                .help(creating ? plain("Close") : plain("New Worktree"))
                 .disabled(project.isTaskWorkspace)
                 .disabled(busy)
                 Button { Task { await load() } } label: {
                     Image(icon: "arrow.clockwise").font(.riffet(size: S(12)))
                 }
                 .buttonStyle(IconButtonStyle())
-                .help("刷新")
+                .help(GitCopy.refresh)
+                .accessibilityLabel(GitCopy.refresh)
                 .disabled(loading || busy)
             }
             .padding(Space.md)
@@ -58,15 +59,15 @@ struct GitWorktreesList: View {
             if let error { GitInlineError(message: error) }
             content
         }
-        .confirmationDialog("移除 Worktree？", isPresented: removePresented, titleVisibility: .visible) {
-            Button("移除", role: .destructive) {
+        .confirmationDialog(plain("Remove worktree?"), isPresented: removePresented, titleVisibility: .visible) {
+            Button(GitCopy.remove, role: .destructive) {
                 guard let target = pendingRemove else { return }
                 pendingRemove = nil
                 Task { await remove(target) }
             }
-            Button("取消", role: .cancel) { pendingRemove = nil }
+            Button(GitCopy.cancel, role: .cancel) { pendingRemove = nil }
         } message: {
-            Text("有未提交改动时 Git 会拒绝移除。\n\(pendingRemove.map { $0.path } ?? "")")
+            Text(verbatim: pendingRemove?.path ?? "")
         }
         .task(id: project.id) {
             activeProjectId = project.id
@@ -103,10 +104,10 @@ struct GitWorktreesList: View {
 
     private var createForm: some View {
         VStack(spacing: Space.sm) {
-            GitField(placeholder: String(localized: "新分支名"), text: $branch) { Task { await create() } }
+            GitField(placeholder: "New branch name", text: $branch) { Task { await create() } }
             HStack(spacing: Space.sm) {
-                GitField(placeholder: String(localized: "基于（可选）"), text: $base) { Task { await create() } }
-                Button("创建") { Task { await create() } }
+                GitField(placeholder: "Based on (optional)", text: $base) { Task { await create() } }
+                Button(plain("Create")) { Task { await create() } }
                     .buttonStyle(SolidButtonStyle(kind: .primary))
                     .disabled(branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || busy)
             }
@@ -130,12 +131,12 @@ struct GitWorktreesList: View {
                     LazyVStack(spacing: 0) {
                         if let current, matches(current) { row(current) }
                         group("Riffet", items: managed, expanded: $managedExpanded)
-                        group(String(localized: "其他"), items: others, expanded: Binding(
+                        group("Other", items: others, expanded: Binding(
                             get: { otherExpanded ?? managed.isEmpty },
                             set: { otherExpanded = $0 }
                         ))
                         if !query.isEmpty, !worktrees.contains(where: matches) {
-                            ContentUnavailableView("没有匹配的 Worktree", icon: "magnifyingglass")
+                            ContentUnavailableView(plain("No matching worktrees"), icon: "magnifyingglass")
                         }
                     }
                     .padding(Space.xs + 2)
@@ -145,7 +146,7 @@ struct GitWorktreesList: View {
                 }
             }
         } else if error == nil {
-            ContentUnavailableView("没有 Worktree", icon: "arrow.triangle.branch")
+            ContentUnavailableView(plain("No worktrees"), icon: "arrow.triangle.branch")
         } else {
             Spacer(minLength: 0)
         }
@@ -160,7 +161,7 @@ struct GitWorktreesList: View {
                     Image(icon: expanded.wrappedValue || !query.isEmpty ? "chevron.down" : "chevron.right")
                         .font(.riffet(size: S(10), weight: .semibold))
                         .frame(width: 12)
-                    Text(title).font(.riffet(size: S(12), weight: .medium))
+                    Text(verbatim: title).font(.riffet(size: S(12), weight: .medium))
                     Text("\(visible.count)").font(.riffet(size: S(11), design: .monospaced))
                     Spacer(minLength: 0)
                 }
@@ -229,7 +230,7 @@ struct GitWorktreesList: View {
             }
         } catch {
             guard activeProjectId == projectId, loadRevision == revision, !Task.isCancelled else { return }
-            self.error = String(localized: "无法读取 Worktree：\(error.riffetMessage)")
+            self.error = "Couldn't read worktrees: \(gitMessage(error))"
             if worktrees == nil { worktrees = [] }
         }
         loading = false
@@ -256,11 +257,11 @@ struct GitWorktreesList: View {
             await load()
             guard activeProjectId == projectId, projectRevision == operationRevision else { return }
             if error == nil, !loading, worktrees?.contains(where: { trimTrailingSlash($0.path) == trimTrailingSlash(created.path) }) != true {
-                self.error = String(localized: "创建请求已返回，但列表没有出现新 Worktree；请刷新确认")
+                self.error = "The worktree was created but is not in the list. Refresh to check."
             }
         } catch {
             guard activeProjectId == projectId, projectRevision == operationRevision else { return }
-            self.error = String(localized: "无法创建 Worktree：\(error.riffetMessage)")
+            self.error = "Couldn't create the worktree: \(gitMessage(error))"
         }
         busy = false
     }
@@ -277,11 +278,11 @@ struct GitWorktreesList: View {
             await load()
             guard activeProjectId == projectId, projectRevision == operationRevision else { return }
             if error == nil, !loading, worktrees?.contains(where: { trimTrailingSlash($0.path) == trimTrailingSlash(worktree.path) }) == true {
-                self.error = String(localized: "移除请求已返回，但 Worktree 仍在列表中；请刷新确认")
+                self.error = "The worktree was removed but is still in the list. Refresh to check."
             }
         } catch {
             guard activeProjectId == projectId, projectRevision == operationRevision else { return }
-            self.error = String(localized: "无法移除 Worktree：\(error.riffetMessage)")
+            self.error = "Couldn't remove the worktree: \(gitMessage(error))"
         }
         busy = false
     }
@@ -298,7 +299,7 @@ struct GitWorktreesList: View {
             workbench.showHome(projectId: opened.id)
         } catch {
             guard activeProjectId == projectId, projectRevision == operationRevision else { return }
-            self.error = error.riffetMessage
+            self.error = gitMessage(error)
         }
         busy = false
     }
@@ -314,21 +315,21 @@ struct GitWorktreeRow: View {
     @Environment(\.palette) private var palette
 
     private var bare: Bool { worktree.bare?.boolValue == true }
-    private var detached: Bool { worktreeBranchLabel(worktree.branch) == String(localized: "分离 HEAD") }
+    private var detached: Bool { worktreeBranchLabel(worktree.branch) == GitCopy.detached }
 
     var body: some View {
         Button(action: start) {
             HStack(spacing: Space.sm) {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(alignment: .top, spacing: Space.sm) {
-                        Text(worktreeBranchLabel(worktree.branch))
+                        Text(verbatim: worktreeBranchLabel(worktree.branch))
                             .font(.riffet(size: S(12), weight: .medium, design: .monospaced))
                             .foregroundStyle(palette.fg)
                             .lineLimit(2)
                             .truncationMode(.middle)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .help("\(worktreeBranchLabel(worktree.branch))\n\(worktree.head)")
-                        if current { GitMetaBadge(text: String(localized: "当前"), tint: palette.accent).fixedSize() }
+                        if current { GitMetaBadge(text: GitCopy.current, tint: palette.accent).fixedSize() }
                         if detached {
                             Text(String(worktree.head.prefix(8)))
                                 .font(.riffet(size: S(11), design: .monospaced))
@@ -356,9 +357,9 @@ struct GitWorktreeRow: View {
         .buttonStyle(HoverRowStyle())
         .disabled(busy || bare)
         .contextMenu {
-            if !bare, !current { Button("在此开始会话", action: start).disabled(busy) }
-            Button("复制路径") { copyToPasteboard(worktree.path) }
-            if !bare, !current { Divider(); Button("移除", role: .destructive, action: remove).disabled(busy) }
+            if !bare, !current { Button(plain("Start Conversation Here"), action: start).disabled(busy) }
+            Button(GitCopy.copyPath) { copyToPasteboard(worktree.path) }
+            if !bare, !current { Divider(); Button(GitCopy.remove, role: .destructive, action: remove).disabled(busy) }
         }
     }
 }

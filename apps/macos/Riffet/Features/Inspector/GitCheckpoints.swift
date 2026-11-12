@@ -17,8 +17,8 @@ struct GitCheckpointsList: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: Space.sm) {
-                GitField(placeholder: String(localized: "检查点名称（可选）"), text: $title) { Task { await create() } }
-                Button("保存") { Task { await create() } }
+                GitField(placeholder: "Name (optional)", text: $title) { Task { await create() } }
+                Button(GitCopy.save) { Task { await create() } }
                     .buttonStyle(SolidButtonStyle(kind: .primary))
                     .disabled(busy)
             }
@@ -50,7 +50,7 @@ struct GitCheckpointsList: View {
                 .padding(Space.xs + 2)
             }
         } else if error == nil {
-            ContentUnavailableView("还没有检查点", icon: "clock.arrow.circlepath", description: Text("保存检查点后，可以把工作区文件恢复到这个状态。"))
+            ContentUnavailableView(GitCopy.noCheckpoints, icon: "clock.arrow.circlepath")
         } else {
             Spacer(minLength: 0)
         }
@@ -63,7 +63,7 @@ struct GitCheckpointsList: View {
             if checkpoints != next { checkpoints = next }
             if error != nil { error = nil }
         } catch {
-            self.error = String(localized: "无法读取检查点：\(error.riffetMessage)")
+            self.error = "Couldn't read checkpoints: \(gitMessage(error))"
             if checkpoints == nil { checkpoints = [] }
         }
     }
@@ -78,10 +78,10 @@ struct GitCheckpointsList: View {
             title = ""
             await load()
             if error == nil, checkpoints?.contains(where: { $0.id == created.id }) != true {
-                self.error = String(localized: "创建请求已返回，但列表没有出现新检查点；请刷新确认")
+                self.error = "The checkpoint was created but is not in the list. Refresh to check."
             }
         } catch {
-            self.error = String(localized: "无法创建检查点：\(error.riffetMessage)")
+            self.error = "Couldn't create the checkpoint: \(gitMessage(error))"
         }
         busy = false
     }
@@ -94,7 +94,7 @@ struct GitCheckpointRow: View {
     var body: some View {
         HStack(spacing: Space.sm) {
             VStack(alignment: .leading, spacing: 1) {
-                Text(checkpoint.title)
+                Text(verbatim: checkpoint.title)
                     .font(.riffet(size: S(13), weight: .medium))
                     .foregroundStyle(palette.fg)
                     .lineLimit(1)
@@ -128,22 +128,15 @@ struct GitCheckpointDetail: View {
     var body: some View {
         VStack(spacing: 0) {
             DetailHeader(title: checkpoint.title, subtitle: checkpointSubtitle(checkpoint), back: { if !busy { onBack() } }) {
-                Button("恢复") { confirm = true }
+                Button(GitCopy.restore) { confirm = true }
                     .buttonStyle(SolidButtonStyle(kind: .danger))
                     .disabled(changes == nil || busy)
             }
             PanelRule()
-            Text("指纹是 SHA-256 的前 12 位。恢复时服务器会再核对一次，对不上就拒绝。")
-                .font(.riffet(size: S(11)))
-                .foregroundStyle(palette.fg4)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, Space.md)
-                .padding(.vertical, Space.sm)
             if let error { GitInlineError(message: error) }
             if let changes {
                 if changes.isEmpty {
-                    ContentUnavailableView("与当前工作区相同", icon: "checkmark.circle", description: Text("没有文件差异。"))
+                    ContentUnavailableView(GitCopy.noDifferences(from: "the working tree"), icon: "checkmark.circle")
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 0) {
@@ -158,27 +151,27 @@ struct GitCheckpointDetail: View {
                 Spacer(minLength: 0)
             }
         }
-        .confirmationDialog("恢复到「\(checkpoint.title)」？", isPresented: $confirm, titleVisibility: .visible) {
-            Button("恢复", role: .destructive) {
+        .confirmationDialog(plain("Restore \"\(checkpoint.title)\"?"), isPresented: $confirm, titleVisibility: .visible) {
+            Button(GitCopy.restore, role: .destructive) {
                 let reviewed = changes ?? []
                 Task { await restore(reviewed) }
             }
-            Button("取消", role: .cancel) {}
+            Button(GitCopy.cancel, role: .cancel) {}
         } message: {
-            Text(confirmMessage)
+            Text(verbatim: confirmMessage)
         }
         .task(id: checkpoint.id) { await load() }
     }
 
     private var confirmMessage: String {
-        guard let changes else { return String(localized: "正在读取改动。") }
+        guard let changes else { return "Reading the changes." }
         if changes.isEmpty {
-            return String(localized: "没有文件差异。服务器仍会核对这份空列表，工作区若已变化会拒绝恢复。")
+            return "No file differs. The server still checks this empty list and refuses if the working tree has changed."
         }
         let lines = changes.prefix(16).map { "\(gitChangeLabel($0.kind))  \($0.path)\n    \(shortHash($0.beforeHash)) → \(shortHash($0.afterHash))" }
         var text = lines.joined(separator: "\n")
-        if changes.count > 16 { text += String(localized: "\n…还有 \(changes.count - 16) 个文件，完整列表在这个页面上。") }
-        text += String(localized: "\n\n服务器会再次核对下列文件指纹。若文件在此期间被修改，恢复会被拒绝。")
+        if changes.count > 16 { text += "\n… \(GitCopy.moreFiles(changes.count - 16))." }
+        text += "\n\nThe server checks these files again. If one changed in the meantime, the restore is refused."
         return text
     }
 
@@ -188,7 +181,7 @@ struct GitCheckpointDetail: View {
             changes = try await api.checkpointChanges(projectId: project.id, checkpointId: checkpoint.id)
             error = nil
         } catch {
-            self.error = String(localized: "无法读取检查点内容：\(error.riffetMessage)")
+            self.error = "Couldn't read the checkpoint: \(gitMessage(error))"
         }
     }
 
@@ -209,23 +202,23 @@ struct GitCheckpointDetail: View {
     private func handleRestoreFailure(_ error: Error) async {
         let http = riffetHTTP(error)
         if http?.code == "CHECKPOINT_EXCLUDED_CHANGES" {
-            self.error = String(localized: "该检查点含有无法安全恢复的文件，服务器拒绝恢复。\(error.riffetMessage)")
+            self.error = "This checkpoint holds files that can't be restored safely. \(gitMessage(error))"
             return
         }
         guard http?.status == 409 || http?.code == "CHECKPOINT_CONFLICT" else {
-            self.error = String(localized: "检查点恢复被拒绝：\(error.riffetMessage)")
+            self.error = "Restore refused: \(gitMessage(error))"
             return
         }
         guard let api = workbench.host.api else {
-            self.error = String(localized: "工作区已变化，恢复被拒绝，且当前没有连接，无法重新读取改动。")
+            self.error = "The working tree changed and the restore was refused. Not connected, so the changes can't be read again."
             return
         }
         do {
             changes = try await api.checkpointChanges(projectId: project.id, checkpointId: checkpoint.id)
-            self.error = String(localized: "工作区自上次预览后已改动，服务器拒绝了这次恢复。下面是重新读取的改动，确认后再恢复。")
+            self.error = "The working tree changed since the preview. The list below is read again; restore once you have checked it."
         } catch {
             changes = nil
-            self.error = String(localized: "工作区已变化，恢复被拒绝，且无法重新读取改动：\(error.riffetMessage)")
+            self.error = "The working tree changed and the restore was refused. Couldn't read the changes again: \(gitMessage(error))"
         }
     }
 }
@@ -236,12 +229,12 @@ struct GitCheckpointChangeRow: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
-            Text(gitChangeLabel(change.kind))
+            Text(verbatim: gitChangeLabel(change.kind))
                 .font(.riffet(size: S(11), weight: .semibold))
                 .foregroundStyle(gitChangeTint(change.kind, palette))
-                .frame(width: 28, alignment: .leading)
+                .frame(width: 56, alignment: .leading)
             VStack(alignment: .leading, spacing: 1) {
-                Text(change.path)
+                Text(verbatim: change.path)
                     .font(.riffet(size: S(12), design: .monospaced))
                     .foregroundStyle(palette.fg)
                     .lineLimit(1)
@@ -263,7 +256,7 @@ struct GitCheckpointChangeRow: View {
 func checkpointSubtitle(_ checkpoint: Checkpoint) -> String {
     var parts: [String] = []
     if let when = formatDateTime(value: checkpoint.createdAt) { parts.append(when) }
-    parts.append(String(localized: "\(checkpoint.files.formatted()) 个文件"))
-    if !checkpoint.excluded.isEmpty { parts.append(String(localized: "已排除 \(checkpoint.excluded.count)")) }
+    parts.append(GitCopy.files(Int(checkpoint.files)))
+    if !checkpoint.excluded.isEmpty { parts.append("\(checkpoint.excluded.count) excluded") }
     return parts.joined(separator: " · ")
 }

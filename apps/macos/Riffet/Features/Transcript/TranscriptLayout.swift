@@ -1611,9 +1611,9 @@ struct RowBuilder {
 
     /// A unified diff as lines; without one (a file too large to diff), before then after, each
     /// side with half of [limit] so the new text always shows. A cut ends in a line saying so.
-    static func diffLines(_ diff: LineDiff?, before: String, after: String, limit: Int = .max) -> [DiffLineSpec] {
+    static func diffLines(_ diff: LineDiff?, before: String, after: String, limit: Int = .max, english: Bool = false) -> [DiffLineSpec] {
         var lines: [DiffLineSpec] = []
-        func omitted(_ count: Int) -> DiffLineSpec { DiffLineSpec(kind: .gap, old: "", new: "", text: String(localized: "还有 \(count) 行未显示")) }
+        func omitted(_ count: Int) -> DiffLineSpec { DiffLineSpec(kind: .gap, old: "", new: "", text: english ? "\(count) more lines not shown" : String(localized: "还有 \(count) 行未显示")) }
         if let diff {
             let shown = diff.lines.count > limit ? max(0, limit - 1) : diff.lines.count
             lines.reserveCapacity(shown + 1)
@@ -1628,7 +1628,7 @@ struct RowBuilder {
             }
             if shown < diff.lines.count { lines.append(omitted(diff.lines.count - shown)) }
         } else {
-            lines.append(DiffLineSpec(kind: .gap, old: "", new: "", text: String(localized: "文件较大，未计算差异")))
+            lines.append(DiffLineSpec(kind: .gap, old: "", new: "", text: english ? "Too large to diff" : String(localized: "文件较大，未计算差异")))
             let budget = limit == .max ? Int.max : max(1, (limit - 3) / 2)
             for (text, kind) in [(before, DiffLineSpec.Kind.del), (after, .add)] {
                 let parts = text.split(separator: "\n", omittingEmptySubsequences: false)

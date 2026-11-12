@@ -321,16 +321,6 @@
         }
       }
     },
-    "已暂存": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Staged"
-          }
-        }
-      }
-    },
     "待确认": {
       "localizations": {
         "en": {
@@ -347,16 +337,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unread"
-          }
-        }
-      }
-    },
-    "未暂存": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not staged"
           }
         }
       }
@@ -441,16 +421,6 @@
         }
       }
     },
-    "取消暂存全部": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unstage all"
-          }
-        }
-      }
-    },
     "含非交互": {
       "localizations": {
         "en": {
@@ -481,62 +451,12 @@
         }
       }
     },
-    "已修改": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modified"
-          }
-        }
-      }
-    },
-    "已删除": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deleted"
-          }
-        }
-      }
-    },
-    "已复制": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Copied"
-          }
-        }
-      }
-    },
     "已恢复": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Recovered"
-          }
-        }
-      }
-    },
-    "已暂存 %lld / %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Staged %lld / %lld"
-          }
-        }
-      }
-    },
-    "已重命名": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Renamed"
           }
         }
       }
@@ -577,26 +497,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show all %lld models"
-          }
-        }
-      }
-    },
-    "暂存全部": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stage all"
-          }
-        }
-      }
-    },
-    "未跟踪": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Untracked"
           }
         }
       }
@@ -823,16 +723,6 @@
         }
       }
     },
-    "部分暂存": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Partly staged"
-          }
-        }
-      }
-    },
     "重复": {
       "localizations": {
         "en": {
@@ -901,46 +791,6 @@
           "stringUnit": {
             "state": "translated",
             "value": ""
-          }
-        }
-      }
-    },
-    "\n\n服务器会再次核对下列文件指纹。若文件在此期间被修改，恢复会被拒绝。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "\n\nThe server will verify the fingerprints of the following files again. If a file changed in the meantime, the restore will be rejected."
-          }
-        }
-      }
-    },
-    "\n…还有 %lld 个文件，完整列表在这个页面上。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "\n…and %lld more files. The full list is on this page."
-          }
-        }
-      }
-    },
-    " · %lld 失败": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · %lld failed"
-          }
-        }
-      }
-    },
-    " · %lld 运行中": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " · %lld running"
           }
         }
       }
@@ -1327,16 +1177,6 @@
         }
       }
     },
-    "%@ 个文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ files"
-          }
-        }
-      }
-    },
     "%@ 卡顿 %.1fms/s p99 %.0fms": {
       "localizations": {
         "en": {
@@ -1359,16 +1199,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Auto-reject after %@"
-          }
-        }
-      }
-    },
-    "%@ 已包含这个分支的全部提交": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ already contains all commits from this branch"
           }
         }
       }
@@ -1529,16 +1359,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ operation. Existing sessions update at the native Agent's discretion."
-          }
-        }
-      }
-    },
-    "%@标题留空时用提交记录自动填写。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%@ The title is filled from commit history when left blank."
           }
         }
       }
@@ -2101,28 +1921,6 @@
         }
       }
     },
-    "%lld 条意见": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld comment"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld comments"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld 次 · 最长 %@": {
       "localizations": {
         "en": {
@@ -2595,16 +2393,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Fast"
-          }
-        }
-      }
-    },
-    "Git 视图": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Git view"
           }
         }
       }
@@ -3425,16 +3213,6 @@
         }
       }
     },
-    "与当前工作区相同": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Same as current workspace"
-          }
-        }
-      }
-    },
     "专注模式开启时，只让 Riffet 发出选定的会话通知。": {
       "localizations": {
         "en": {
@@ -3677,16 +3455,6 @@
         }
       }
     },
-    "二进制文件": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Binary file"
-          }
-        }
-      }
-    },
     "五": {
       "localizations": {
         "en": {
@@ -3897,16 +3665,6 @@
         }
       }
     },
-    "从 %@ 发起。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Started from %@."
-          }
-        }
-      }
-    },
     "从 Riffet 移除「%@」？": {
       "localizations": {
         "en": {
@@ -3923,16 +3681,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start another session from here"
-          }
-        }
-      }
-    },
-    "仓库默认分支": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Repository default branch"
           }
         }
       }
@@ -3995,16 +3743,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Task file location"
-          }
-        }
-      }
-    },
-    "会先把 %@ 推送到远端。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Will push %@ to the remote first."
           }
         }
       }
@@ -4315,16 +4053,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Save failed: %@"
-          }
-        }
-      }
-    },
-    "保存检查点后，可以把工作区文件恢复到这个状态。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "After saving a checkpoint, you can restore workspace files to this state."
           }
         }
       }
@@ -4809,16 +4537,6 @@
         }
       }
     },
-    "其他": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Other"
-          }
-        }
-      }
-    },
     "其他 Agent": {
       "localizations": {
         "en": {
@@ -5009,16 +4727,6 @@
         }
       }
     },
-    "分支会保留；这个目录对应的项目会被归档，并回到原项目。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The branch is kept; this directory's project will be archived and you'll return to the original project."
-          }
-        }
-      }
-    },
     "分支保留。": {
       "localizations": {
         "en": {
@@ -5035,16 +4743,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Branch or commit (optional)"
-          }
-        }
-      }
-    },
-    "分离 HEAD": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Detached HEAD"
           }
         }
       }
@@ -5129,26 +4827,6 @@
         }
       }
     },
-    "创建 PR": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create PR"
-          }
-        }
-      }
-    },
-    "创建 Pull Request": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Create Pull Request"
-          }
-        }
-      }
-    },
     "创建前预览": {
       "localizations": {
         "en": {
@@ -5165,26 +4843,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Create backup"
-          }
-        }
-      }
-    },
-    "创建请求已返回，但列表没有出现新 Worktree；请刷新确认": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The create request returned, but no new Worktree appeared in the list; refresh to confirm"
-          }
-        }
-      }
-    },
-    "创建请求已返回，但列表没有出现新检查点；请刷新确认": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The create request returned, but no new checkpoint appeared in the list; refresh to confirm"
           }
         }
       }
@@ -5463,16 +5121,6 @@
         }
       }
     },
-    "刷新 PR 状态": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Refresh PR status"
-          }
-        }
-      }
-    },
     "刷新列表": {
       "localizations": {
         "en": {
@@ -5703,16 +5351,6 @@
         }
       }
     },
-    "压缩": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": " (squashed)"
-          }
-        }
-      }
-    },
     "压缩为一个提交": {
       "localizations": {
         "en": {
@@ -5749,16 +5387,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Native plugin"
-          }
-        }
-      }
-    },
-    "原项目": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Original project"
           }
         }
       }
@@ -5809,16 +5437,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Release tag %@ conflicts with the local record; update checks stopped. Verify in the terminal and don't overwrite the release tag."
-          }
-        }
-      }
-    },
-    "发布分支": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Publish branch"
           }
         }
       }
@@ -5983,16 +5601,6 @@
         }
       }
     },
-    "取消暂存": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unstage"
-          }
-        }
-      }
-    },
     "取消清除": {
       "localizations": {
         "en": {
@@ -6049,38 +5657,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Changes and Files (⌥⌘I)"
-          }
-        }
-      }
-    },
-    "另 %lld 个文件": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld more file"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld more files"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "另 %lld 项": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld more items"
           }
         }
       }
@@ -6151,16 +5727,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Paths outside the project open read-only; the file tree and search stay within the project."
-          }
-        }
-      }
-    },
-    "可以让 Agent 在 Worktree 里先合入 %@ 并解决冲突，再回来合并。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "You can have the Agent merge %@ in the Worktree, resolve conflicts, then come back to merge."
           }
         }
       }
@@ -6245,42 +5811,12 @@
         }
       }
     },
-    "合并到 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merge into %@"
-          }
-        }
-      }
-    },
     "合并后移除 Worktree": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Remove Worktree after merging"
-          }
-        }
-      }
-    },
-    "合并失败": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merge failed"
-          }
-        }
-      }
-    },
-    "合并失败，可能已提交 Worktree 中的改动。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merge failed. Worktree changes may already have been committed."
           }
         }
       }
@@ -6871,16 +6407,6 @@
         }
       }
     },
-    "在此开始会话": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Start a session here"
-          }
-        }
-      }
-    },
     "在此新建会话": {
       "localizations": {
         "en": {
@@ -6989,16 +6515,6 @@
           "stringUnit": {
             "state": "new",
             "value": "均 %1$@ · P95 %2$@"
-          }
-        }
-      }
-    },
-    "基于（可选）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Based on (optional)"
           }
         }
       }
@@ -7161,16 +6677,6 @@
           "stringUnit": {
             "state": "new",
             "value": "堆 %1$@ / %2$@"
-          }
-        }
-      }
-    },
-    "填写标题后可编辑": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enter a title to edit"
           }
         }
       }
@@ -7563,16 +7069,6 @@
         }
       }
     },
-    "安装 GitHub CLI（gh）后可创建 PR、查看 CI": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Install GitHub CLI (gh) to create PRs and view CI"
-          }
-        }
-      }
-    },
     "安装情况": {
       "localizations": {
         "en": {
@@ -7913,16 +7409,6 @@
         }
       }
     },
-    "尚未推送到远端": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not pushed to remote yet"
-          }
-        }
-      }
-    },
     "尚未连接": {
       "localizations": {
         "en": {
@@ -7995,26 +7481,6 @@
         }
       }
     },
-    "工作区已变化，恢复被拒绝，且当前没有连接，无法重新读取改动。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The workspace changed, the restore was rejected, and there is no connection to reload the changes."
-          }
-        }
-      }
-    },
-    "工作区已变化，恢复被拒绝，且无法重新读取改动：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The workspace has changed; restore was rejected, and changes could not be read again: %@"
-          }
-        }
-      }
-    },
     "工作区已变化，现在与本轮开始前一致，无需回退。": {
       "localizations": {
         "en": {
@@ -8025,32 +7491,12 @@
         }
       }
     },
-    "工作区没有改动": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No workspace changes"
-          }
-        }
-      }
-    },
     "工作区自上次预览后已改动，服务器拒绝了这次回退。下面是重新读取的改动，确认后再回退。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The workspace changed since the last preview, and the server rejected this rollback. Below are the reloaded changes; review them before rolling back."
-          }
-        }
-      }
-    },
-    "工作区自上次预览后已改动，服务器拒绝了这次恢复。下面是重新读取的改动，确认后再恢复。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The workspace has changed since the last preview, and the server rejected this restore. The re-read changes are below; confirm before restoring."
           }
         }
       }
@@ -8195,36 +7641,6 @@
         }
       }
     },
-    "已关闭": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Closed"
-          }
-        }
-      }
-    },
-    "已创建 PR": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PR created"
-          }
-        }
-      }
-    },
-    "已创建 PR #%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Created PR #%lld"
-          }
-        }
-      }
-    },
     "已创建。%@": {
       "localizations": {
         "en": {
@@ -8301,16 +7717,6 @@
         }
       }
     },
-    "已合并": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merged"
-          }
-        }
-      }
-    },
     "已合并到原项目": {
       "localizations": {
         "en": {
@@ -8327,16 +7733,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Merged, but some Worktrees could not be removed:"
-          }
-        }
-      }
-    },
-    "已同步": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Synced"
           }
         }
       }
@@ -8479,32 +7875,6 @@
         }
       }
     },
-    "已批准": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Approved"
-          }
-        }
-      }
-    },
-    "已把 %lld 个提交%@合并到 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merged %lld commits%@ into %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "new",
-            "value": "已把 %1$lld 个提交%2$@合并到 %3$@"
-          }
-        }
-      }
-    },
     "已把 %lld 条审阅意见发给 Agent": {
       "localizations": {
         "en": {
@@ -8533,26 +7903,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Rejected"
-          }
-        }
-      }
-    },
-    "已排除 %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excluded %lld"
-          }
-        }
-      }
-    },
-    "已推送到 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pushed to %@"
           }
         }
       }
@@ -8633,16 +7983,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Ended"
-          }
-        }
-      }
-    },
-    "已让 Agent 修复 CI": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Asked the Agent to fix CI"
           }
         }
       }
@@ -8915,16 +8255,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Start date"
-          }
-        }
-      }
-    },
-    "开放": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open"
           }
         }
       }
@@ -9329,16 +8659,6 @@
         }
       }
     },
-    "待审阅": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pending review"
-          }
-        }
-      }
-    },
     "待生效": {
       "localizations": {
         "en": {
@@ -9476,16 +8796,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Restore session"
-          }
-        }
-      }
-    },
-    "恢复到「%@」？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restore to “%@”?"
           }
         }
       }
@@ -9692,16 +9002,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Open"
-          }
-        }
-      }
-    },
-    "打开 #%lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open #%lld"
           }
         }
       }
@@ -9936,16 +9236,6 @@
         }
       }
     },
-    "打开这个项目的一个会话后可用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Available after opening a session for this project"
-          }
-        }
-      }
-    },
     "执行": {
       "localizations": {
         "en": {
@@ -10046,26 +9336,6 @@
         }
       }
     },
-    "把 %@ 合并进原项目。遇到冲突会整体放弃，不会在原项目里留下半合并的文件。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Merges %@ into the original project. Any conflict aborts the whole merge, leaving no half-merged files in the original project."
-          }
-        }
-      }
-    },
-    "把失败的检查发给当前会话": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Send the failed checks to the current session"
-          }
-        }
-      }
-    },
     "把这个尝试的改动合并回原项目": {
       "localizations": {
         "en": {
@@ -10112,16 +9382,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Metrics"
-          }
-        }
-      }
-    },
-    "指纹是 SHA-256 的前 12 位。恢复时服务器会再核对一次，对不上就拒绝。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fingerprints are the first 12 characters of SHA-256. The server verifies them again on restore and rejects a mismatch."
           }
         }
       }
@@ -10306,66 +9566,6 @@
         }
       }
     },
-    "推送": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push"
-          }
-        }
-      }
-    },
-    "推送、PR 与合并": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push, PR and merge"
-          }
-        }
-      }
-    },
-    "推送到…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push to…"
-          }
-        }
-      }
-    },
-    "推送失败": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push failed"
-          }
-        }
-      }
-    },
-    "推送当前分支": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Push current branch"
-          }
-        }
-      }
-    },
-    "描述": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Description"
-          }
-        }
-      }
-    },
     "描述任务，@ 引用文件，/ 使用命令或 Skill": {
       "localizations": {
         "en": {
@@ -10396,28 +9596,6 @@
         }
       }
     },
-    "提交 %lld 个文件": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Commit %lld file"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "Commit %lld files"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "提交中…": {
       "localizations": {
         "en": {
@@ -10434,28 +9612,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Commit message"
-          }
-        }
-      }
-    },
-    "提交请求已返回，但暂存区仍有 %lld 个文件；请刷新确认": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "The commit request returned, but %lld file is still staged; refresh to confirm"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "The commit request returned, but %lld files are still staged; refresh to confirm"
-                }
-              }
-            }
           }
         }
       }
@@ -10566,16 +9722,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Search"
-          }
-        }
-      }
-    },
-    "搜索 Worktree": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Search Worktrees"
           }
         }
       }
@@ -10960,16 +10106,6 @@
         }
       }
     },
-    "收起创建表单": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Collapse create form"
-          }
-        }
-      }
-    },
     "收起历史会话": {
       "localizations": {
         "en": {
@@ -11006,16 +10142,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Collapse this session's turns"
-          }
-        }
-      }
-    },
-    "改动": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changes"
           }
         }
       }
@@ -11320,26 +10446,6 @@
         }
       }
     },
-    "新分支名": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "New branch name"
-          }
-        }
-      }
-    },
-    "新增": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add"
-          }
-        }
-      }
-    },
     "新增强调": {
       "localizations": {
         "en": {
@@ -11610,42 +10716,12 @@
         }
       }
     },
-    "无法创建 PR": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unable to create PR"
-          }
-        }
-      }
-    },
     "无法创建 Worktree：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Can't create Worktree: %@"
-          }
-        }
-      }
-    },
-    "无法创建提交：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't create commit: %@"
-          }
-        }
-      }
-    },
-    "无法创建检查点：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot create checkpoint: %@"
           }
         }
       }
@@ -11720,32 +10796,12 @@
         }
       }
     },
-    "无法发送给 Agent": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot send to Agent"
-          }
-        }
-      }
-    },
     "无法取消收藏": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Can't remove from Favorites"
-          }
-        }
-      }
-    },
-    "无法取消暂存：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't unstage: %@"
           }
         }
       }
@@ -11880,16 +10936,6 @@
         }
       }
     },
-    "无法暂存改动：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot stage changes: %@"
-          }
-        }
-      }
-    },
     "无法更新定时任务：%@": {
       "localizations": {
         "en": {
@@ -11950,16 +10996,6 @@
         }
       }
     },
-    "无法移除 Worktree：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot remove Worktree: %@"
-          }
-        }
-      }
-    },
     "无法解析 %@ 的会话存储，请查看后端版本与诊断信息。": {
       "localizations": {
         "en": {
@@ -12010,16 +11046,6 @@
         }
       }
     },
-    "无法读取 PR 状态": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unable to read PR status"
-          }
-        }
-      }
-    },
     "无法读取 Skill 主文件，请刷新目录后重试。": {
       "localizations": {
         "en": {
@@ -12030,32 +11056,12 @@
         }
       }
     },
-    "无法读取 Worktree：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot read Worktree: %@"
-          }
-        }
-      }
-    },
     "无法读取完整的文件内容": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Cannot read the full file contents"
-          }
-        }
-      }
-    },
-    "无法读取差异：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't read diff: %@"
           }
         }
       }
@@ -12076,26 +11082,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cannot read server status"
-          }
-        }
-      }
-    },
-    "无法读取检查点内容：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cannot read checkpoint contents: %@"
-          }
-        }
-      }
-    },
-    "无法读取检查点：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't read checkpoint: %@"
           }
         }
       }
@@ -12460,16 +11446,6 @@
         }
       }
     },
-    "暂存": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Stage"
-          }
-        }
-      }
-    },
     "暂无 Agent 配置": {
       "localizations": {
         "en": {
@@ -12766,26 +11742,6 @@
         }
       }
     },
-    "有冲突": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Conflicts"
-          }
-        }
-      }
-    },
-    "有冲突，已放弃合并": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "There was a conflict; the merge was abandoned"
-          }
-        }
-      }
-    },
     "有冲突，已放弃合并。可以让 Agent 在 Worktree 里先合入 %@ 并解决冲突，再回来采用。": {
       "localizations": {
         "en": {
@@ -12812,16 +11768,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Valid until %@"
-          }
-        }
-      }
-    },
-    "有未提交改动时 Git 会拒绝移除。\n%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Git refuses to remove it when there are uncommitted changes.\n%@"
           }
         }
       }
@@ -12872,50 +11818,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Failed to start the server: %@"
-          }
-        }
-      }
-    },
-    "服务器返回后仍有 %lld 个文件未进入暂存区": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld file still did not enter the staging area after the server responded"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld files still did not enter the staging area after the server responded"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "服务器返回后仍有 %lld 个文件留在暂存区": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "After the server returned, %lld file remains in the staging area"
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "After the server returned, %lld files remain in the staging area"
-                }
-              }
-            }
           }
         }
       }
@@ -13467,16 +12369,6 @@
         }
       }
     },
-    "查看差异": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "View diff"
-          }
-        }
-      }
-    },
     "查看文件": {
       "localizations": {
         "en": {
@@ -13568,22 +12460,6 @@
         }
       }
     },
-    "检查 %lld/%lld 通过%@%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checks %lld/%lld passed%@%@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "new",
-            "value": "检查 %1$lld/%2$lld 通过%3$@%4$@"
-          }
-        }
-      }
-    },
     "检查中": {
       "localizations": {
         "en": {
@@ -13640,36 +12516,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check for updates…"
-          }
-        }
-      }
-    },
-    "检查点": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checkpoint"
-          }
-        }
-      }
-    },
-    "检查点名称（可选）": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checkpoint name (optional)"
-          }
-        }
-      }
-    },
-    "检查点恢复被拒绝：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checkpoint restore was denied: %@"
           }
         }
       }
@@ -14044,16 +12890,6 @@
         }
       }
     },
-    "正在读取改动。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reading changes."
-          }
-        }
-      }
-    },
     "正在读取轮次": {
       "localizations": {
         "en": {
@@ -14340,26 +13176,6 @@
         }
       }
     },
-    "没有 Worktree": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No Worktree"
-          }
-        }
-      }
-    },
-    "没有匹配的 Worktree": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No matching Worktree"
-          }
-        }
-      }
-    },
     "没有匹配的扩展": {
       "localizations": {
         "en": {
@@ -14406,16 +13222,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "No extensions found"
-          }
-        }
-      }
-    },
-    "没有可推送的提交": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No commits to push"
           }
         }
       }
@@ -14510,26 +13316,6 @@
         }
       }
     },
-    "没有文件差异。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No file differences."
-          }
-        }
-      }
-    },
-    "没有文件差异。服务器仍会核对这份空列表，工作区若已变化会拒绝恢复。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No file differences. The server will still verify this empty list and will reject the restore if the workspace has changed."
-          }
-        }
-      }
-    },
     "没有时段分布": {
       "localizations": {
         "en": {
@@ -14606,16 +13392,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "No running sessions"
-          }
-        }
-      }
-    },
-    "没有远端仓库": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No remote repository"
           }
         }
       }
@@ -15106,16 +13882,6 @@
         }
       }
     },
-    "用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign in with gh auth login, or add a GitHub remote to the repository to create a PR"
-          }
-        }
-      }
-    },
     "用户": {
       "localizations": {
         "en": {
@@ -15396,16 +14162,6 @@
         }
       }
     },
-    "目标分支": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Target branch"
-          }
-        }
-      }
-    },
     "目标目录必须为空。": {
       "localizations": {
         "en": {
@@ -15536,32 +14292,12 @@
         }
       }
     },
-    "移除 Worktree？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remove Worktree?"
-          }
-        }
-      }
-    },
     "移除收藏": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Remove favorite"
-          }
-        }
-      }
-    },
-    "移除请求已返回，但 Worktree 仍在列表中；请刷新确认": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The remove request returned, but the Worktree is still in the list; refresh to confirm"
           }
         }
       }
@@ -16339,16 +15075,6 @@
         }
       }
     },
-    "自动填写": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Auto-fill"
-          }
-        }
-      }
-    },
     "自动归档": {
       "localizations": {
         "en": {
@@ -16425,26 +15151,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Scope"
-          }
-        }
-      }
-    },
-    "草稿": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Draft"
-          }
-        }
-      }
-    },
-    "落后 %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld behind"
           }
         }
       }
@@ -16535,16 +15241,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Sign in"
-          }
-        }
-      }
-    },
-    "让 Agent 修复": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Have Agent fix"
           }
         }
       }
@@ -16729,16 +15425,6 @@
         }
       }
     },
-    "该检查点含有无法安全恢复的文件，服务器拒绝恢复。%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This checkpoint contains files that cannot be restored safely, so the server rejected the restore. %@"
-          }
-        }
-      }
-    },
     "该设备需要重新配对。": {
       "localizations": {
         "en": {
@@ -16855,16 +15541,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Can't read %@; can't sign in to the local server without pairing"
-          }
-        }
-      }
-    },
-    "读不到 Git 状态": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Can't read Git status"
           }
         }
       }
@@ -17587,16 +16263,6 @@
         }
       }
     },
-    "还没有检查点": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No checkpoints yet"
-          }
-        }
-      }
-    },
     "还没有模型数据": {
       "localizations": {
         "en": {
@@ -17979,48 +16645,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Remote server"
-          }
-        }
-      }
-    },
-    "远端": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Remote"
-          }
-        }
-      }
-    },
-    "远端有 %lld 个新提交，推送前先在终端里同步。": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "The remote has %lld new commit. Sync in the terminal before pushing."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "The remote has %lld new commits. Sync in the terminal before pushing."
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "远端有新提交，请先 pull 或 rebase。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The remote has new commits. Pull or rebase first."
           }
         }
       }
@@ -18955,16 +17579,6 @@
         }
       }
     },
-    "需要修改": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Changes requested"
-          }
-        }
-      }
-    },
     "需要回答": {
       "localizations": {
         "en": {
@@ -19181,16 +17795,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Preview and create"
-          }
-        }
-      }
-    },
-    "领先 %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ahead %lld"
           }
         }
       }

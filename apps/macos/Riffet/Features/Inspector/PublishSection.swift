@@ -12,11 +12,11 @@ private struct PublishNotice: Equatable {
 func githubSetupHint(_ error: Error) -> String? {
     switch error.riffetCode {
     case "GH_UNAVAILABLE":
-        return String(localized: "安装 GitHub CLI（gh）后可创建 PR、查看 CI")
+        return "Install the GitHub CLI (gh) to create PRs and see CI"
     case "GH_OPERATION_FAILED":
         let pattern = "auth|login|token|not a git|no git remotes|none of the git remotes"
-        if error.riffetMessage.range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
-            return String(localized: "用 gh auth login 登录，或为仓库添加 GitHub 远端后可创建 PR")
+        if gitMessage(error).range(of: pattern, options: [.regularExpression, .caseInsensitive]) != nil {
+            return "Run gh auth login, or add a GitHub remote, to create PRs"
         }
         return nil
     default:
@@ -39,7 +39,7 @@ struct PublishSection: View {
     /// The project's status; the branch's sync count follows its revision. It also keeps the branch
     /// and pull request read last, so a reopened panel shows them while it asks again.
     let git: GitStatusModel
-    /// The open conversation of this project, for "让 Agent 修复 CI".
+    /// The open conversation of this project, for "Ask Agent to Fix".
     let sessionId: String?
     /// A worktree's branch landed in the project it was cut from; `removed` when the copy is gone.
     let onMerged: (_ originProjectId: String, _ removed: Bool) -> Void
@@ -55,7 +55,7 @@ struct PublishSection: View {
     @State private var showPullRequest = false
     @State private var showMerge = false
 
-    private enum Action { case push, fix }
+    private enum Action { case push, pull, fix }
 
     private var pending: Bool { pullRequest?.checks.state == "pending" }
 
@@ -114,7 +114,7 @@ struct PublishSection: View {
                     pullUnavailable = nil
                     self.branch = result.branch
                     expanded = true
-                    notice = PublishNotice(text: result.pullRequest.map { String(localized: "已创建 PR #\($0.number)") } ?? String(localized: "已创建 PR"), failed: false)
+                    notice = PublishNotice(text: result.pullRequest.map { "Created PR #\($0.number)" } ?? "Created PR", failed: false)
                 }
             }
         }
@@ -139,7 +139,7 @@ struct PublishSection: View {
             if let branch {
                 Button { expanded.toggle() } label: { headerLabel(branch) }
                     .buttonStyle(HoverRowStyle())
-                    .help(expanded ? "收起" : "推送、PR 与合并")
+                    .help(expanded ? plain("Collapse") : plain("Push, PR and merge"))
             } else {
                 HStack(spacing: Space.sm) {
                     Image(icon: "arrow.triangle.branch").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
@@ -149,8 +149,17 @@ struct PublishSection: View {
                 .padding(.horizontal, 6)
             }
             Spacer(minLength: Space.sm)
-            if let status {
-                Text(status.entries.isEmpty ? "无改动" : "\(status.entries.count) 个文件").font(.riffet(size: S(12))).foregroundStyle(palette.fg4).lineLimit(1).fixedSize()
+            if let branch, branch.behind > 0 {
+                Button { Task { await pull() } } label: {
+                    HStack(spacing: 4) {
+                        if busy == .pull { Spinner(size: .mini) }
+                        Text(verbatim: GitCopy.pull)
+                    }
+                }
+                .buttonStyle(ChipButtonStyle())
+                .disabled(busy != nil)
+            } else if let status {
+                Text(verbatim: status.entries.isEmpty ? "No changes" : GitCopy.files(status.entries.count)).font(.riffet(size: S(12))).foregroundStyle(palette.fg4).lineLimit(1).fixedSize()
                 DiffCounts(added: status.added?.int64Value, removed: status.removed?.int64Value)
             }
         }
@@ -219,40 +228,34 @@ struct PublishSection: View {
         let remoteChoice = branch.upstream == nil && branch.remotes.count > 1 && !branch.remotes.contains("origin")
         return VStack(alignment: .leading, spacing: Space.sm) {
             HStack(spacing: Space.sm) {
-                Text(branch.upstream ?? (noRemote ? String(localized: "没有远端仓库") : String(localized: "尚未推送到远端")))
+                Text(verbatim: branch.upstream ?? (noRemote ? "No remote" : "Not published"))
                     .font(.riffet(size: S(12), design: .monospaced))
                     .foregroundStyle(palette.fg3)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Spacer(minLength: Space.xs)
                 if synced {
-                    Text("已同步").font(.riffet(size: S(12))).foregroundStyle(palette.success)
+                    Text(verbatim: "Up to date").font(.riffet(size: S(12))).foregroundStyle(palette.success)
                 } else if branch.upstream != nil {
-                    Text([branch.ahead > 0 ? String(localized: "领先 \(branch.ahead)") : "", branch.behind > 0 ? String(localized: "落后 \(branch.behind)") : ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    Text(verbatim: [branch.ahead > 0 ? "\(branch.ahead) ahead" : "", branch.behind > 0 ? "\(branch.behind) behind" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.riffet(size: S(12)))
                         .foregroundStyle(palette.fg3)
                 }
-            }
-            if branch.behind > 0 {
-                Text("远端有 \(branch.behind) 个新提交，推送前先在终端里同步。")
-                    .font(.riffet(size: S(12)))
-                    .foregroundStyle(palette.warning)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             FlowLayout(spacing: Space.xs) {
                 if !noRemote { pushControl(branch, remoteChoice: remoteChoice) }
                 if !noRemote, pullUnavailable == nil {
                     if let pr = pullRequest {
-                        Button { openLink(pr.url) } label: { actionLabel("arrow.up.right.square", String(localized: "打开 #\(pr.number)")) }
+                        Button { openLink(pr.url) } label: { actionLabel("arrow.up.right.square", "Open #\(pr.number)") }
                             .buttonStyle(SolidButtonStyle(kind: .secondary))
                     } else {
-                        Button { showPullRequest = true } label: { actionLabel("arrow.triangle.pull", String(localized: "创建 PR")) }
+                        Button { showPullRequest = true } label: { actionLabel("arrow.triangle.pull", "Create PR") }
                             .buttonStyle(SolidButtonStyle(kind: .secondary))
                             .disabled(busy != nil || pullLoading || branch.head == nil)
                     }
                 }
                 if project.worktree != nil {
-                    Button { showMerge = true } label: { actionLabel("arrow.triangle.merge", String(localized: "合并到 \(into.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "原项目"))")) }
+                    Button { showMerge = true } label: { actionLabel("arrow.triangle.merge", "Merge into \(into.flatMap { $0.isEmpty ? nil : $0 } ?? "origin")") }
                         .buttonStyle(SolidButtonStyle(kind: .secondary))
                         .disabled(busy != nil)
                 }
@@ -261,7 +264,7 @@ struct PublishSection: View {
                         if pullLoading { Spinner(size: .mini) } else { Image(icon: "arrow.clockwise").font(.riffet(size: S(12))) }
                     }
                     .buttonStyle(IconButtonStyle())
-                    .help("刷新 PR 状态")
+                    .help(plain("Refresh PR status"))
                     .disabled(pullLoading)
                 }
             }
@@ -291,7 +294,7 @@ struct PublishSection: View {
     private func actionLabel(_ symbol: String, _ title: String) -> some View {
         HStack(spacing: 5) {
             Image(icon: symbol).font(.riffet(size: S(12)))
-            Text(title).lineLimit(1)
+            Text(verbatim: title).lineLimit(1)
         }
     }
 
@@ -299,7 +302,7 @@ struct PublishSection: View {
     private func pushControl(_ branch: BranchInfo, remoteChoice: Bool) -> some View {
         if remoteChoice {
             ChoiceMenu(options: branch.remotes.map { remote in ChoiceOption(title: remote, selected: false) { Task { await push(remote) } } }) {
-                pushLabel(String(localized: "推送到…"))
+                pushLabel(GitCopy.pushTo)
                     .padding(.horizontal, 12)
                     .frame(minHeight: 28)
                     .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(palette.bgElevated))
@@ -308,17 +311,17 @@ struct PublishSection: View {
             }
             .disabled(busy != nil)
         } else {
-            Button { Task { await push(nil) } } label: { pushLabel(branch.upstream != nil ? String(localized: "推送") : String(localized: "发布分支")) }
+            Button { Task { await push(nil) } } label: { pushLabel(branch.upstream != nil ? GitCopy.push : "Publish Branch") }
                 .buttonStyle(SolidButtonStyle(kind: .secondary))
                 .disabled(busy != nil || branch.head == nil || (branch.upstream != nil && branch.ahead == 0))
-                .help(branch.upstream != nil && branch.ahead == 0 ? "没有可推送的提交" : "推送当前分支")
+                .help(branch.upstream != nil && branch.ahead == 0 ? plain("Nothing to push") : plain("Push the current branch"))
         }
     }
 
     private func pushLabel(_ title: String) -> some View {
         HStack(spacing: 5) {
             if busy == .push { Spinner(size: .mini) } else { Image(icon: "arrow.up.to.line").font(.riffet(size: S(12))) }
-            Text(title).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
+            Text(verbatim: title).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
         }
     }
 
@@ -340,14 +343,14 @@ struct PublishSection: View {
             .help(pr.url)
             FlowLayout(spacing: 5) {
                 switch pr.state {
-                case "MERGED": GitMetaBadge(text: String(localized: "已合并"), tint: palette.accent)
-                case "CLOSED": GitMetaBadge(text: String(localized: "已关闭"), tint: palette.danger)
-                default: GitMetaBadge(text: pr.isDraft ? String(localized: "草稿") : String(localized: "开放"), tint: pr.isDraft ? palette.fg3 : palette.success)
+                case "MERGED": GitMetaBadge(text: "Merged", tint: palette.accent)
+                case "CLOSED": GitMetaBadge(text: "Closed", tint: palette.danger)
+                default: GitMetaBadge(text: pr.isDraft ? "Draft" : "Open", tint: pr.isDraft ? palette.fg3 : palette.success)
                 }
                 if pr.state == "OPEN", let review = pr.reviewDecision, let label = reviewLabel(review) {
                     GitMetaBadge(text: label.text, tint: label.tint)
                 }
-                if pr.mergeable == "CONFLICTING" { GitMetaBadge(text: String(localized: "有冲突"), tint: palette.danger) }
+                if pr.mergeable == "CONFLICTING" { GitMetaBadge(text: "Conflicts", tint: palette.danger) }
             }
             Text("\(pr.baseRefName) ← \(pr.headRefName)")
                 .font(.riffet(size: S(11), design: .monospaced))
@@ -358,7 +361,7 @@ struct PublishSection: View {
                 Button { checksOpen.toggle() } label: {
                     HStack(spacing: 6) {
                         Circle().fill(checkTint(pr.checks.state)).frame(width: 6, height: 6)
-                        Text("检查 \(passed)/\(items.count) 通过\(running > 0 ? String(localized: " · \(running) 运行中") : "")\(failed > 0 ? String(localized: " · \(failed) 失败") : "")")
+                        Text(verbatim: "Checks \(passed)/\(items.count) passed\(running > 0 ? " · \(running) running" : "")\(failed > 0 ? " · \(failed) failed" : "")")
                             .font(.riffet(size: S(12)))
                             .foregroundStyle(palette.fg2)
                             .lineLimit(1)
@@ -392,7 +395,7 @@ struct PublishSection: View {
                             .padding(.horizontal, 4)
                         }
                         if items.count > 40 {
-                            Text("另 \(items.count - 40) 项").font(.riffet(size: S(11))).foregroundStyle(palette.fg4).padding(.horizontal, 4)
+                            Text(verbatim: "\(items.count - 40) more").font(.riffet(size: S(11))).foregroundStyle(palette.fg4).padding(.horizontal, 4)
                         }
                     }
                 }
@@ -401,12 +404,12 @@ struct PublishSection: View {
                 Button { Task { await fixChecks(pr) } } label: {
                     HStack(spacing: 5) {
                         if busy == .fix { Spinner(size: .mini) } else { Image(icon: "sparkles").font(.riffet(size: S(12))) }
-                        Text("让 Agent 修复")
+                        Text(verbatim: "Ask Agent to Fix")
                     }
                 }
                 .buttonStyle(ChipButtonStyle())
                 .disabled(sessionId == nil || busy != nil)
-                .help(sessionId == nil ? "打开这个项目的一个会话后可用" : "把失败的检查发给当前会话")
+                .help(sessionId == nil ? plain("Open a conversation of this project first") : plain("Send the failed checks to the current conversation"))
             }
         }
         .padding(Space.sm + 2)
@@ -436,9 +439,9 @@ struct PublishSection: View {
 
     private func reviewLabel(_ decision: String) -> (text: String, tint: Color)? {
         switch decision {
-        case "APPROVED": (String(localized: "已批准"), palette.success)
-        case "CHANGES_REQUESTED": (String(localized: "需要修改"), palette.danger)
-        case "REVIEW_REQUIRED": (String(localized: "待审阅"), palette.warning)
+        case "APPROVED": ("Approved", palette.success)
+        case "CHANGES_REQUESTED": ("Changes requested", palette.danger)
+        case "REVIEW_REQUIRED": ("Review required", palette.warning)
         default: nil
         }
     }
@@ -483,7 +486,7 @@ struct PublishSection: View {
                 pullUnavailable = hint
             } else {
                 pullUnavailable = nil
-                if expanded || explicit { notice = PublishNotice(text: String(localized: "无法读取 PR 状态"), failed: true, details: error.riffetMessage) }
+                if expanded || explicit { notice = PublishNotice(text: "Couldn't read PR status", failed: true, details: gitMessage(error)) }
             }
         }
     }
@@ -495,15 +498,34 @@ struct PublishSection: View {
         do {
             let result = try await api.gitPush(projectId: project.id, remote: remote)
             branch = result.branch
-            notice = PublishNotice(text: String(localized: "已推送到 \(result.branch.upstream ?? remote ?? String(localized: "远端"))"), failed: false)
+            notice = PublishNotice(text: "Pushed to \(result.branch.upstream ?? remote ?? "remote")", failed: false)
             busy = nil
             await refreshPull(force: true)
         } catch {
-            let message = error.riffetMessage
+            let message = gitMessage(error)
             let rejected = message.range(of: "non-fast-forward|rejected|fetch first", options: [.regularExpression, .caseInsensitive]) != nil
-            notice = PublishNotice(text: rejected ? String(localized: "远端有新提交，请先 pull 或 rebase。") : String(localized: "推送失败"), failed: true, details: message)
+            notice = PublishNotice(text: rejected ? GitCopy.pullDiverged : "Push failed", failed: true, details: message)
             busy = nil
         }
+    }
+
+    private func pull() async {
+        guard let api = workbench.host.api, busy == nil else { return }
+        busy = .pull
+        notice = nil
+        do {
+            let result = try await api.gitPull(projectId: project.id)
+            branch = result.branch
+            git.apply(result.status, force: true)
+        } catch {
+            expanded = true
+            if let message = gitErrorMessage(error) {
+                notice = PublishNotice(text: message, failed: true)
+            } else {
+                notice = PublishNotice(text: "Pull failed", failed: true, details: gitMessage(error))
+            }
+        }
+        busy = nil
     }
 
     /// The failed checks, phrased as one message to the open conversation (the web does the same).
@@ -512,18 +534,18 @@ struct PublishSection: View {
         busy = .fix
         notice = nil
         let failed = pr.checks.items.filter { $0.state == "failure" }
-        let lines = failed.map { item in "- \(item.name)\(item.url.flatMap { $0.isEmpty ? nil : "：\($0)" } ?? "")" } // i18n-ignore: 发给 Agent 的消息正文
-        let text = (["PR #\(pr.number) 的 CI 检查失败了，请定位原因并修复："] + lines + ["", "可以用 `gh pr checks` 和 `gh run view --log-failed` 读取失败日志。修好后在本地跑一遍相关检查，再告诉我结果。"]).joined(separator: "\n") // i18n-ignore: 发给 Agent 的消息正文
+        let lines = failed.map { item in "- \(item.name)\(item.url.flatMap { $0.isEmpty ? nil : ": \($0)" } ?? "")" }
+        let text = (["CI checks failed on PR #\(pr.number). Find the cause and fix it:"] + lines + ["", "You can read the failure logs with `gh pr checks` and `gh run view --log-failed`. After fixing, run the related checks locally and tell me the result."]).joined(separator: "\n")
         let sent = await workbench.send(text, attachments: [])
-        notice = PublishNotice(text: sent ? String(localized: "已让 Agent 修复 CI") : String(localized: "无法发送给 Agent"), failed: !sent)
+        notice = PublishNotice(text: sent ? "Sent to the Agent" : "Couldn't send to the Agent", failed: !sent)
         busy = nil
     }
 }
 
 func mergeSummary(_ result: MergeResult) -> String {
     result.merged
-        ? String(localized: "已把 \(result.commits) 个提交\(result.strategy == "squash" ? String(localized: "压缩") : "")合并到 \(result.into)")
-        : String(localized: "\(result.into) 已包含这个分支的全部提交")
+        ? "Merged \(result.commits == 1 ? "1 commit" : "\(result.commits) commits")\(result.strategy == "squash" ? " (squashed)" : "") into \(result.into)"
+        : "\(result.into) already has every commit of this branch"
 }
 
 // MARK: Pull request sheet
@@ -548,26 +570,26 @@ private struct PullRequestSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("创建 Pull Request").font(.riffet(size: S(15), weight: .semibold))
-                Text("\(!branch.upstream.isNilOrEmpty && branch.ahead == 0 ? String(localized: "从 \(branch.branch) 发起。") : String(localized: "会先把 \(branch.branch) 推送到远端。"))标题留空时用提交记录自动填写。")
+                Text(verbatim: "Create Pull Request").font(.riffet(size: S(15), weight: .semibold))
+                Text(verbatim: !branch.upstream.isNilOrEmpty && branch.ahead == 0 ? "From \(branch.branch)." : "\(branch.branch) is pushed first.")
                     .font(.riffet(size: S(12)))
                     .foregroundStyle(palette.fg3)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            field(String(localized: "标题")) { GitField(placeholder: String(localized: "自动填写"), text: $title) }
-            field(String(localized: "描述")) { GitTextArea(placeholder: trimmedTitle.isEmpty ? String(localized: "填写标题后可编辑") : String(localized: "可选"), text: $text, lines: 3...8).disabled(trimmedTitle.isEmpty) }
+            field("Title") { GitField(placeholder: "Filled in from the commits", text: $title) }
+            field("Description") { GitTextArea(placeholder: trimmedTitle.isEmpty ? "Add a title first" : "Optional", text: $text, lines: 3...8).disabled(trimmedTitle.isEmpty) }
             HStack(alignment: .bottom, spacing: Space.md) {
-                field(String(localized: "目标分支")) { GitField(placeholder: String(localized: "仓库默认分支"), text: $base) }
-                Toggle("草稿", isOn: $draft).toggleStyle(.switch).controlSize(.small).fixedSize().padding(.bottom, 4)
+                field("Base") { GitField(placeholder: "Default branch", text: $base) }
+                Toggle(isOn: $draft) { Text(verbatim: "Draft") }.toggleStyle(.switch).controlSize(.small).fixedSize().padding(.bottom, 4)
             }
             if let error { GitInlineError(message: error, summary: errorSummary).clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous)) }
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(SolidButtonStyle(kind: .secondary)).disabled(busy)
+                Button(GitCopy.cancel) { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(SolidButtonStyle(kind: .secondary)).disabled(busy)
                 Button { Task { await submit() } } label: {
                     HStack(spacing: 5) {
                         if busy { Spinner(size: .mini) }
-                        Text("创建")
+                        Text(verbatim: "Create")
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -606,8 +628,8 @@ private struct PullRequestSheet: View {
             dismiss()
             created(result)
         } catch {
-            errorSummary = githubSetupHint(error) ?? String(localized: "无法创建 PR")
-            self.error = error.riffetMessage
+            errorSummary = githubSetupHint(error) ?? "Couldn't create PR"
+            self.error = gitMessage(error)
         }
         busy = false
     }
@@ -639,48 +661,48 @@ private struct MergeWorktreeSheet: View {
     @State private var errorSummary: String?
     @State private var conflicts: [String]?
 
-    private var target: String { into.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "原项目的当前分支") }
+    private var target: String { into.flatMap { $0.isEmpty ? nil : $0 } ?? "the origin's current branch" }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.md) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("合并到 \(target)").font(.riffet(size: S(15), weight: .semibold))
-                Text("把 \(worktreeBranchLabel(branch)) 合并进原项目。遇到冲突会整体放弃，不会在原项目里留下半合并的文件。")
+                Text(verbatim: "Merge into \(target)").font(.riffet(size: S(15), weight: .semibold))
+                Text(verbatim: "Merges \(worktreeBranchLabel(branch)) into the origin project. A conflict abandons the whole merge.")
                     .font(.riffet(size: S(12)))
                     .foregroundStyle(palette.fg3)
                     .fixedSize(horizontal: false, vertical: true)
             }
             SegmentedTrack(selection: $strategy) {
-                Text("压缩为一个提交").tag("squash")
-                Text("保留全部提交").tag("merge")
+                Text(verbatim: "Squash into one commit").tag("squash")
+                Text(verbatim: "Keep all commits").tag("merge")
             }
             VStack(alignment: .leading, spacing: 4) {
-                Text("提交说明").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg3)
+                Text(verbatim: "Commit message").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg3)
                 GitField(placeholder: strategy == "squash" ? "Squash \(branch)" : "Merge \(branch) into \(into ?? "…")", text: $message)
             }
             if dirty {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("未提交的改动").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg3)
+                    Text(verbatim: "Uncommitted changes").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.fg3)
                     GitField(placeholder: "WIP on \(branch)", text: $pending)
-                    Text("Worktree 里还有未提交的改动，会先用这条说明提交。").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
+                    Text(verbatim: "Committed first with this message.").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
                 }
             }
             Toggle(isOn: $remove) {
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("合并后移除 Worktree").font(.riffet(size: S(13))).foregroundStyle(palette.fg)
-                    Text("分支会保留；这个目录对应的项目会被归档，并回到原项目。").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
+                    Text(verbatim: "Remove the worktree after merging").font(.riffet(size: S(13))).foregroundStyle(palette.fg)
+                    Text(verbatim: "The branch is kept; the project of this directory is archived.").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
                 }
             }
             .toggleStyle(.switch)
             .controlSize(.small)
             if let conflicts {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("有冲突，已放弃合并").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.danger)
-                    Text("可以让 Agent 在 Worktree 里先合入 \(target) 并解决冲突，再回来合并。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+                    Text(verbatim: "Conflicts, merge abandoned").font(.riffet(size: S(12), weight: .medium)).foregroundStyle(palette.danger)
+                    Text(verbatim: "Have the Agent merge \(target) into the worktree and resolve the conflicts first.").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
                     ForEach(conflicts.prefix(8), id: \.self) { path in
                         Text(path).font(.riffet(size: S(12), design: .monospaced)).foregroundStyle(palette.fg2).lineLimit(1).truncationMode(.middle)
                     }
-                    if conflicts.count > 8 { Text("另 \(conflicts.count - 8) 个文件").font(.riffet(size: S(12))).foregroundStyle(palette.fg4) }
+                    if conflicts.count > 8 { Text(verbatim: GitCopy.moreFiles(conflicts.count - 8)).font(.riffet(size: S(12))).foregroundStyle(palette.fg4) }
                 }
                 .padding(Space.md)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -689,11 +711,11 @@ private struct MergeWorktreeSheet: View {
             if let error { GitInlineError(message: error, summary: errorSummary).clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous)) }
             HStack {
                 Spacer()
-                Button("取消") { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(SolidButtonStyle(kind: .secondary)).disabled(busy)
+                Button(GitCopy.cancel) { dismiss() }.keyboardShortcut(.cancelAction).buttonStyle(SolidButtonStyle(kind: .secondary)).disabled(busy)
                 Button { Task { await submit() } } label: {
                     HStack(spacing: 5) {
                         if busy { Spinner(size: .mini) }
-                        Text("合并")
+                        Text(verbatim: "Merge")
                     }
                 }
                 .keyboardShortcut(.defaultAction)
@@ -728,11 +750,11 @@ private struct MergeWorktreeSheet: View {
             switch error.riffetCode {
             case "MERGE_CONFLICT": conflicts = Self.conflictPaths(error)
             case "MERGE_TARGET_DIRTY":
-                errorSummary = String(localized: "\(target) 有未提交的改动，先在原项目里提交或暂存它们")
-                self.error = error.riffetMessage
+                errorSummary = "\(target) has uncommitted changes. Commit or stash them in the origin project first."
+                self.error = gitMessage(error)
             default:
-                errorSummary = dirty ? String(localized: "合并失败，可能已提交 Worktree 中的改动。") : String(localized: "合并失败")
-                self.error = error.riffetMessage
+                errorSummary = dirty ? "Merge failed. The worktree's changes may have been committed." : "Merge failed"
+                self.error = gitMessage(error)
             }
         }
         busy = false

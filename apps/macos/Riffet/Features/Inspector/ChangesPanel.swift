@@ -4,15 +4,16 @@ import RiffetKit
 // MARK: Changes
 
 enum GitSection: String, CaseIterable, Identifiable {
-    case changes, checkpoints, worktrees
+    case changes, history, checkpoints, worktrees
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .changes: String(localized: "改动")
-        case .checkpoints: String(localized: "检查点")
-        case .worktrees: "Worktree"
+        case .changes: GitCopy.changes
+        case .history: GitCopy.history
+        case .checkpoints: GitCopy.checkpoints
+        case .worktrees: GitCopy.worktrees
         }
     }
 }
@@ -29,12 +30,24 @@ struct ChangesPanel: View {
     /// The commit message being typed; a new project starts it empty.
     @State private var commitMessage = ""
     @State private var openedCheckpoint: Checkpoint?
+    @State private var openedCommit: GitCommit?
+    /// A diff of a turn, a branch or a commit: read-only.
+    @State private var scopedDiff: GitDiffTarget?
+    @State private var scope: GitScope = .uncommitted
     @State private var diff: GitDiff?
     /// The file [diff] belongs to: a reload of the same file keeps the old diff on screen until the new one arrives.
     @State private var diffPath: String?
+    /// Whether [diff] is the index's (staged) one, and its runs of changed lines when they can be acted on.
+    @State private var diffStaged = false
+    @State private var chunks: [GitPatchChunk] = []
+    /// The side of a file with both staged and unstaged changes the reader asked for.
+    @State private var diffPick: Bool?
     @State private var actionError: String?
+    @State private var notice: GitNotice?
+    @State private var pendingPermanent: [String]?
     @State private var busy = false
     @State private var refreshToken = 0
+    @State private var listLimit = 300
 
     /// Remarks outlive this view (the Files tab or a closed panel), so they are kept per project.
     private var review: ReviewDrafts { ReviewDrafts.drafts(for: project.id) }
@@ -43,7 +56,13 @@ struct ChangesPanel: View {
     private var status: GitStatus? { git.status }
     private var error: String? { git.error }
 
-    private var drillToken: String { selected?.path ?? openedCheckpoint?.id ?? "" }
+    /// The stream restarts with the project, the panel showing and the connection behind the api.
+    private var followKey: String {
+        let connection = workbench.host.api.map { ObjectIdentifier($0).hashValue } ?? 0
+        return "\(project.id)|\(panelVisible)|\(connection)"
+    }
+
+    private var drilled: Bool { selected != nil || openedCheckpoint != nil || openedCommit != nil || scopedDiff != nil }
 
     /// The open session, when it belongs to this project — attached to a checkpoint the way the web does.
     private var checkpointSessionId: String? {
@@ -51,26 +70,59 @@ struct ChangesPanel: View {
         return session.id
     }
 
+    private var scopes: [GitScope] {
+        var found: [GitScope] = [.uncommitted]
+        if checkpointSessionId != nil { found.append(.turn) }
+        if status?.base != nil { found.append(.branch) }
+        return found
+    }
+
+    private var activeScope: GitScope { scopes.contains(scope) ? scope : .uncommitted }
+
     var body: some View {
         ZStack(alignment: .top) {
             // The list stays under an open diff or checkpoint, so going back keeps its scroll position.
-            root.keptAlive(hidden: selected != nil || openedCheckpoint != nil)
+            root.keptAlive(hidden: drilled)
+            if let openedCommit {
+                GitCommitPage(workbench: workbench, project: project, commit: openedCommit, onBack: { self.openedCommit = nil }, onOpenFile: { scopedDiff = $0 }, onSwitched: switched)
+                    .keptAlive(hidden: scopedDiff != nil)
+            }
             if let selected {
                 diffPage(selected)
             } else if let openedCheckpoint {
                 GitCheckpointDetail(workbench: workbench, project: project, checkpoint: openedCheckpoint, onBack: { self.openedCheckpoint = nil }) {
                     self.openedCheckpoint = nil
+                    notice = GitNotice(text: GitCopy.restored)
                     await git.load(workbench.host.api, force: true)
                 }
             }
+            if let scopedDiff {
+                GitDiffPage(workbench: workbench, project: project, target: scopedDiff, onBack: { self.scopedDiff = nil })
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let notice { GitNoticeBar(notice: notice, busy: busy) { backup in Task { await undo(backup) } } }
         }
         // Pages switch without a slide: every frame of one re-laid out the whole window.
         .onChange(of: project.id) { if !commitMessage.isEmpty { commitMessage = "" } }
         .task(id: project.id) {
             selected = nil
             openedCheckpoint = nil
+            openedCommit = nil
+            scopedDiff = nil
             actionError = nil
+            notice = nil
             await git.load(workbench.host.api)
+        }
+        // The server watches the files only while a stream is open: the status follows them while the panel shows.
+        .task(id: followKey) {
+            guard panelVisible, let api = workbench.host.api else { return }
+            await git.follow(api)
+        }
+        .task(id: notice?.id) {
+            guard notice != nil else { return }
+            try? await Task.sleep(for: .seconds(6))
+            if !Task.isCancelled { notice = nil }
         }
         .onChange(of: workbench.working) { _, working in
             if !working { Task { await git.load(workbench.host.api) } }
@@ -81,8 +133,24 @@ struct ChangesPanel: View {
         .onChange(of: git.revision) { _, _ in
             if let selected, let updated = status?.entries.first(where: { $0.path == selected.path }) {
                 self.selected = updated
+            } else if selected != nil {
+                leaveVanishedDiff()
             }
         }
+        .confirmationDialog(GitCopy.discardTitle(pendingPermanent.map(discardName) ?? ""), isPresented: Binding(get: { pendingPermanent != nil }, set: { if !$0 { pendingPermanent = nil } }), titleVisibility: .visible) {
+            Button(GitCopy.discard, role: .destructive) {
+                guard let paths = pendingPermanent else { return }
+                pendingPermanent = nil
+                Task { await discard(paths, permanent: true) }
+            }
+            Button(GitCopy.cancel, role: .cancel) { pendingPermanent = nil }
+        } message: {
+            Text(verbatim: GitCopy.discardUnrecoverable)
+        }
+    }
+
+    private func discardName(_ paths: [String]) -> String {
+        paths.count == 1 ? (trimTrailingSlash(paths[0]) as NSString).lastPathComponent : GitCopy.files(paths.count)
     }
 
     private var root: some View {
@@ -112,6 +180,8 @@ struct ChangesPanel: View {
         switch page {
         case .changes:
             changesPage
+        case .history:
+            GitHistoryView(workbench: workbench, project: project, refreshToken: refreshToken, revision: git.revision, onOpen: { openedCommit = $0 }, onSwitched: switched)
         case .checkpoints:
             GitCheckpointsList(workbench: workbench, project: project, sessionId: checkpointSessionId, refreshToken: refreshToken) { openedCheckpoint = $0 }
         case .worktrees:
@@ -119,31 +189,50 @@ struct ChangesPanel: View {
         }
     }
 
+    /// HEAD moved: the status and the history read again.
+    private func switched() {
+        refreshToken += 1
+        Task { await git.load(workbench.host.api, force: true) }
+    }
+
     private var refreshButton: some View {
         Button { Task { await refresh() } } label: { Image(icon: "arrow.clockwise").font(.riffet(size: S(12))) }
             .buttonStyle(IconButtonStyle())
-            .help("刷新")
+            .help(GitCopy.refresh)
+            .accessibilityLabel(GitCopy.refresh)
             .disabled(busy)
     }
 
-    /// One menu for the three views: a segmented control here would sit inside the inspector's segmented tabs.
+    /// One menu for the views: a segmented control here would sit inside the inspector's segmented tabs.
     private var sectionBar: some View {
         HStack(spacing: Space.sm) {
             ChoiceMenu(options: pages.map { page in ChoiceOption(title: page.title, selected: page == section) { section = page } }) {
                 HStack(spacing: Space.xs) {
-                    Text(section.title).font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
+                    Text(verbatim: section.title).font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
                     Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
                 }
                 .padding(.horizontal, Space.sm)
                 .frame(height: 28)
             }
-            .accessibilityLabel("Git 视图")
+            .accessibilityLabel(plain("Git view"))
             Spacer(minLength: 0)
             if section != .worktrees { refreshButton }
         }
         .padding(.leading, Space.sm)
         .padding(.trailing, Space.sm)
         .frame(height: InspectorMetrics.headerHeight)
+    }
+
+    private var scopeBar: some View {
+        HStack(spacing: 0) {
+            SegmentedTrack(selection: $scope, fontSize: 11.5, inset: Space.sm) {
+                ForEach(scopes) { Text(verbatim: $0.title).tag($0) }
+            }
+            .fixedSize()
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, Space.sm)
+        .padding(.top, Space.sm)
     }
 
     private var changesPage: some View {
@@ -160,18 +249,26 @@ struct ChangesPanel: View {
                 .id(project.id)
             }
             PanelRule()
-            if let error {
-                ContentUnavailableView("读不到 Git 状态", icon: "exclamationmark.triangle", description: Text(error))
+            if error == nil || git.notARepository, scopes.count > 1, !git.notARepository { scopeBar }
+            if git.notARepository {
+                ContentUnavailableView(GitCopy.notARepository, icon: "exclamationmark.triangle")
+            } else if let error {
+                GitInlineError(message: error)
+                Button(plain("Retry")) { Task { await git.load(workbench.host.api, force: true) } }.buttonStyle(ChipButtonStyle()).padding(Space.md)
+                Spacer(minLength: 0)
+            } else if activeScope != .uncommitted {
+                GitScopedChanges(workbench: workbench, project: project, scope: activeScope, sessionId: checkpointSessionId, revision: git.revision) { scopedDiff = $0 }
             } else if let status, status.entries.isEmpty {
                 if let actionError { GitInlineError(message: actionError) }
-                ContentUnavailableView("工作区没有改动", icon: "checkmark.circle")
+                ContentUnavailableView(GitCopy.workingTreeClean, icon: "checkmark.circle")
             } else if status == nil {
                 Spinner(size: .regular).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 stageAllBar
+                let entries = status?.entries ?? []
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(status?.entries ?? [], id: \.path) { entry in
+                        ForEach(entries.prefix(listLimit), id: \.path) { entry in
                             // The box sits over the row's leading inset, so it stages and the rest opens.
                             Button { open(entry) } label: { GitEntryRow(entry: entry, comments: review.count(for: entry.path)) }
                                 .buttonStyle(HoverRowStyle())
@@ -182,6 +279,7 @@ struct ChangesPanel: View {
                                 }
                                 .contextMenu { entryMenu(entry) }
                         }
+                        if entries.count > listLimit { GitMoreRow(count: entries.count - listLimit) { listLimit += 1000 } }
                     }
                     .padding(Space.xs + 2)
                 }
@@ -199,9 +297,9 @@ struct ChangesPanel: View {
         return HStack(spacing: Space.sm) {
             StageBox(state: state) { Task { await stage(entries.map(\.path), state != .on) } }
                 .disabled(busy)
-                .help(state == .on ? "取消暂存全部" : "暂存全部")
-                .accessibilityLabel(state == .on ? "取消暂存全部" : "暂存全部")
-            Text("已暂存 \(git.stagedCount) / \(entries.count)")
+                .help(state == .on ? GitCopy.unstageAll : GitCopy.stageAll)
+                .accessibilityLabel(state == .on ? GitCopy.unstageAll : GitCopy.stageAll)
+            Text(verbatim: "Staged \(git.stagedCount) / \(entries.count)")
                 .font(.riffet(size: S(11.5)))
                 .foregroundStyle(palette.fg3)
                 .monospacedDigit()
@@ -220,41 +318,73 @@ struct ChangesPanel: View {
         }
     }
 
+    /// The side of the file the diff shows: the index's when it is all there is or the reader asked for it.
+    private func effectiveStaged(_ entry: GitEntry) -> Bool {
+        gitStaged(entry: entry) && (!gitUnstaged(entry: entry) || diffPick == true)
+    }
+
     private func diffPage(_ entry: GitEntry) -> some View {
-        VStack(spacing: 0) {
+        let staged = effectiveStaged(entry)
+        return VStack(spacing: 0) {
             DetailHeader(title: (entry.path as NSString).lastPathComponent, subtitle: (entry.path as NSString).deletingLastPathComponent, back: { selected = nil; diff = nil }) {
                 let commented = review.count(for: entry.path)
-                if commented > 0 { GitMetaBadge(text: String(localized: "\(commented) 条意见"), tint: palette.accent).fixedSize() }
+                if commented > 0 { GitMetaBadge(text: commented == 1 ? "1 comment" : "\(commented) comments", tint: palette.accent).fixedSize() }
                 DiffCounts(added: entry.added?.int64Value, removed: entry.removed?.int64Value)
                 if gitUnstaged(entry: entry) {
                     Button { Task { await stage([entry.path], true) } } label: { Image(icon: "plus").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
-                        .help("暂存")
+                        .help(GitCopy.stage)
+                        .accessibilityLabel(GitCopy.stage)
                         .disabled(busy)
                 }
                 if gitStaged(entry: entry) {
                     Button { Task { await stage([entry.path], false) } } label: { Image(icon: "minus").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
-                        .help("取消暂存")
+                        .help(GitCopy.unstage)
+                        .accessibilityLabel(GitCopy.unstage)
                         .disabled(busy)
                 }
                 if workbench.local {
                     Button { FileOpener.open(path: entry.path, line: nil, projectId: project.id, workbench: workbench) } label: { Image(icon: "arrow.up.forward.app").font(.riffet(size: S(12))) }
                         .buttonStyle(IconButtonStyle())
-                        .help("在编辑器中打开")
+                        .help(plain("Open in Editor"))
+                        .accessibilityLabel(plain("Open in Editor"))
                 }
             }
             PanelRule()
+            if gitStaged(entry: entry), gitUnstaged(entry: entry) {
+                HStack(spacing: 0) {
+                    SegmentedTrack(selection: Binding(get: { staged }, set: { diffPick = $0 }), fontSize: 11.5, inset: Space.sm) {
+                        Text(verbatim: GitCopy.unstaged).tag(false)
+                        Text(verbatim: GitCopy.staged).tag(true)
+                    }
+                    .fixedSize()
+                    Spacer(minLength: 0)
+                }
+                .padding(.horizontal, Space.sm)
+                .padding(.vertical, Space.xs)
+            }
             if let actionError { GitInlineError(message: actionError) }
             if let diff {
                 if diff.binary {
-                    ContentUnavailableView("二进制文件", icon: "doc")
+                    ContentUnavailableView(GitCopy.binaryFile, icon: "doc")
+                } else if diff.truncated?.boolValue == true, diff.before.isEmpty, diff.after.isEmpty {
+                    ContentUnavailableView(GitCopy.tooLarge, icon: "doc")
                 } else {
                     // A truncated preview would number lines that are not the file's.
                     let reviewable = diff.truncated?.boolValue != true
-                    FullDiffView(before: diff.before, after: diff.after, marks: review.marks(for: entry.path), onPick: reviewable ? { line, extend, spec in
-                        review.pick(path: entry.path, line: line, extend: extend) { reviewQuote(spec, from: $0, to: $1) }
-                    } : nil)
+                    FullDiffView(
+                        before: diff.before,
+                        after: diff.after,
+                        marks: review.marks(for: entry.path),
+                        onPick: reviewable ? { line, extend, spec in
+                            review.pick(path: entry.path, line: line, extend: extend) { reviewQuote(spec, from: $0, to: $1) }
+                        } : nil,
+                        chunks: chunks,
+                        chunkKinds: diffStaged ? [.unstage] : [.stage, .discard],
+                        onChunk: { index, kind in Task { await applyChunk(index, kind, entry) } },
+                        chunksDisabled: busy
+                    )
                 }
             } else {
                 Spinner(size: .regular).frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -265,35 +395,44 @@ struct ChangesPanel: View {
             }
             ReviewBar(review: review, workbench: workbench, sessionId: checkpointSessionId)
         }
-        .task(id: "\(entry.path)\u{1}\(entry.index)\u{1}\(entry.worktree)") {
+        // A status refresh reloads the diff of the same file; its version is what a chunk action is checked against.
+        .task(id: "\(entry.path)\u{1}\(entry.index)\u{1}\(entry.worktree)\u{1}\(staged)\u{1}\(git.revision)") {
             // Staging or a status refresh reloads the same file: its diff and the review composer stay
             // until the new diff replaces them. Another file starts from the spinner.
-            if diffPath != entry.path { diff = nil }
+            if diffPath != entry.path { diff = nil; chunks = [] }
             guard let api = workbench.host.api else { return }
-            let stagedOnly = gitStaged(entry: entry) && entry.worktree == " "
             do {
-                let loaded = try await api.gitDiff(projectId: project.id, path: entry.path, staged: stagedOnly)
+                let loaded = try await api.gitDiff(projectId: project.id, path: entry.path, staged: staged, base: nil, commit: nil, from: nil)
                 guard !Task.isCancelled else { return }
                 diff = loaded
                 diffPath = entry.path
+                diffStaged = staged
+                chunks = loaded.version != nil && !loaded.binary && loaded.truncated?.boolValue != true ? gitPatchChunks(patch: loaded.patch) : []
             } catch {
-                actionError = String(localized: "无法读取差异：\(error.riffetMessage)")
+                guard !Task.isCancelled else { return }
+                actionError = "Couldn't read the diff: \(gitMessage(error))"
             }
         }
     }
 
     @ViewBuilder
     private func entryMenu(_ entry: GitEntry) -> some View {
-        Button("查看差异") { open(entry) }
-        if gitUnstaged(entry: entry) { Button("暂存") { Task { await stage([entry.path], true) } }.disabled(busy) }
-        if gitStaged(entry: entry) { Button("取消暂存") { Task { await stage([entry.path], false) } }.disabled(busy) }
+        if !entry.path.hasSuffix("/") { Button(plain("View Diff")) { open(entry) } }
+        if gitUnstaged(entry: entry) { Button(GitCopy.stage) { Task { await stage([entry.path], true) } }.disabled(busy) }
+        if gitStaged(entry: entry) { Button(GitCopy.unstage) { Task { await stage([entry.path], false) } }.disabled(busy) }
         Divider()
-        if workbench.local { Button("在编辑器中打开") { FileOpener.open(path: entry.path, line: nil, projectId: project.id, workbench: workbench) } }
-        Button("复制路径") { copyToPasteboard(entry.path) }
+        if workbench.local, !entry.path.hasSuffix("/") { Button(plain("Open in Editor")) { FileOpener.open(path: entry.path, line: nil, projectId: project.id, workbench: workbench) } }
+        Button(GitCopy.copyPath) { copyToPasteboard(entry.path) }
+        Divider()
+        Button(GitCopy.discard, role: .destructive) { Task { await discard([entry.path]) } }.disabled(busy)
     }
 
     private func open(_ entry: GitEntry) {
+        // A collapsed untracked folder has no diff.
+        guard !entry.path.hasSuffix("/") else { return }
         diff = nil
+        chunks = []
+        diffPick = nil
         actionError = nil
         selected = entry
     }
@@ -303,7 +442,8 @@ struct ChangesPanel: View {
         case .changes:
             actionError = nil
             await git.load(workbench.host.api, force: true)
-        case .checkpoints, .worktrees:
+            refreshToken += 1
+        case .history, .checkpoints, .worktrees:
             refreshToken += 1
         }
     }
@@ -320,16 +460,80 @@ struct ChangesPanel: View {
                 try await api.unstage(projectId: project.id, paths: paths)
             }
         } catch {
-            actionError = on ? String(localized: "无法暂存改动：\(error.riffetMessage)") : String(localized: "无法取消暂存：\(error.riffetMessage)")
+            actionError = on ? "Couldn't stage changes: \(gitMessage(error))" : "Couldn't unstage changes: \(gitMessage(error))"
         }
         await git.load(api, force: true)
         if actionError == nil, error == nil, let entries = status?.entries {
             if on {
                 let still = entries.filter { targets.contains($0.path) && gitUnstaged(entry: $0) }
-                if !still.isEmpty { actionError = String(localized: "服务器返回后仍有 \(still.count) 个文件未进入暂存区") }
+                if !still.isEmpty { actionError = "\(GitCopy.files(still.count)) still not staged after the server answered" }
             } else {
                 let still = entries.filter { targets.contains($0.path) && gitStaged(entry: $0) }
-                if !still.isEmpty { actionError = String(localized: "服务器返回后仍有 \(still.count) 个文件留在暂存区") }
+                if !still.isEmpty { actionError = "\(GitCopy.files(still.count)) still staged after the server answered" }
+            }
+        }
+        busy = false
+    }
+
+    /// Throws the working tree changes of [paths] away; the files are saved first, so `Undo` brings them back.
+    private func discard(_ paths: [String], permanent: Bool = false) async {
+        guard let api = workbench.host.api, !paths.isEmpty, !busy else { return }
+        busy = true
+        actionError = nil
+        do {
+            let result = try await api.gitDiscard(projectId: project.id, paths: paths, permanent: permanent)
+            git.apply(result.status, force: true)
+            notice = GitNotice(text: GitCopy.discarded, undo: result.backup)
+            leaveVanishedDiff()
+        } catch {
+            if error.riffetCode == "DISCARD_UNRECOVERABLE", !permanent {
+                pendingPermanent = paths
+            } else {
+                actionError = gitMessage(error)
+            }
+        }
+        busy = false
+    }
+
+    private func undo(_ backup: Checkpoint) async {
+        guard let api = workbench.host.api, !busy else { return }
+        busy = true
+        notice = nil
+        do {
+            let changes = try await api.checkpointChanges(projectId: project.id, checkpointId: backup.id)
+            try await api.restoreCheckpoint(projectId: project.id, checkpointId: backup.id, expectedChanges: changes)
+            notice = GitNotice(text: GitCopy.restored)
+        } catch {
+            actionError = gitMessage(error)
+        }
+        await git.load(api, force: true)
+        busy = false
+    }
+
+    /// The open file has no changes left (discarded, or all staged from the other side): back to the list.
+    private func leaveVanishedDiff() {
+        if let selected, status?.entries.contains(where: { $0.path == selected.path }) != true {
+            self.selected = nil
+            diff = nil
+        }
+    }
+
+    /// Stages, unstages or discards one run of changed lines of the open diff.
+    private func applyChunk(_ index: Int, _ kind: ChunkActionKind, _ entry: GitEntry) async {
+        guard let api = workbench.host.api, let version = diff?.version, chunks.indices.contains(index), !busy else { return }
+        busy = true
+        actionError = nil
+        do {
+            let result = try await api.gitLines(projectId: project.id, path: entry.path, action: kind.rawValue, changes: [chunks[index].change], version: version, base: nil)
+            git.apply(result.status, force: true)
+            if kind == .discard { notice = GitNotice(text: GitCopy.discarded, undo: result.backup) }
+            leaveVanishedDiff()
+        } catch {
+            if error.riffetCode == "GIT_DIFF_STALE" {
+                await git.load(api, force: true)
+                notice = GitNotice(text: GitCopy.reloaded)
+            } else {
+                actionError = gitMessage(error)
             }
         }
         busy = false
@@ -342,14 +546,16 @@ struct ChangesPanel: View {
         do {
             try await api.commit(projectId: project.id, message: text)
             committed()
+            notice = GitNotice(text: GitCopy.committed)
         } catch {
-            actionError = String(localized: "无法创建提交：\(error.riffetMessage)")
+            actionError = "Couldn't commit: \(gitMessage(error))"
         }
         await git.load(api, force: true)
         if actionError == nil, error == nil {
             let remaining = git.stagedCount
-            if remaining > 0 { actionError = String(localized: "提交请求已返回，但暂存区仍有 \(remaining) 个文件；请刷新确认") }
+            if remaining > 0 { actionError = "The commit went through, but \(GitCopy.files(remaining)) are still staged. Refresh to check." }
         }
+        refreshToken += 1
         busy = false
     }
 }
@@ -369,7 +575,7 @@ private struct CommitBar: View {
             // The button lives in the field, the way a message is sent: one quiet line until there is
             // something to commit, then the arrow fills in.
             HStack(spacing: Space.xs) {
-                TextField(String(localized: "提交说明"), text: $message)
+                TextField(plain("Commit message"), text: $message)
                     .textFieldStyle(.plain)
                     .font(.riffet(size: S(13)))
                     .onSubmit(submit)
@@ -383,8 +589,8 @@ private struct CommitBar: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!ready)
-                .help(stagedCount > 0 ? "提交 \(stagedCount) 个文件" : "提交")
-                .accessibilityLabel(stagedCount > 0 ? "提交 \(stagedCount) 个文件" : "提交")
+                .help(GitCopy.commitFiles(stagedCount))
+                .accessibilityLabel(GitCopy.commitFiles(stagedCount))
             }
             .padding(.leading, Space.sm + 2)
             .padding(.trailing, 4)
@@ -404,7 +610,7 @@ private struct CommitBar: View {
     }
 }
 
-/// A project's git status, shared by the 变更 panel and the toolbar's ⋯ menu and kept after the panel
+/// A project's git status, shared by the Changes panel and the toolbar's ⋯ menu and kept after the panel
 /// closes: what was read last shows at once while it is read again, loads that arrive together (the
 /// panel opening, a turn ending) share one request, and a reading that changed nothing changes nothing.
 @MainActor @Observable
@@ -431,6 +637,7 @@ final class GitStatusModel {
     let projectId: String
     private(set) var status: GitStatus?
     private(set) var error: String?
+    private(set) var notARepository = false
     /// Bumped by a load that brought a different status, or by a forced one; the branch's sync count follows it.
     private(set) var revision = 0
     private(set) var stagedCount = 0
@@ -464,16 +671,29 @@ final class GitStatusModel {
     private func fetch(_ api: RiffetApi, force: Bool) async {
         defer { loadedAt = .now }
         do {
-            let next = try await api.gitStatus(projectId: projectId)
-            if error != nil { error = nil }
-            guard force || next != status else { return }
-            status = next
-            stagedCount = next.entries.filter { gitStaged(entry: $0) }.count
-            unstagedCount = next.entries.filter { gitUnstaged(entry: $0) }.count
-            revision += 1
+            apply(try await api.gitStatus(projectId: projectId, fresh: force), force: force)
         } catch {
-            self.error = error.riffetMessage
+            self.error = gitMessage(error)
+            notARepository = error.riffetCode == "NOT_A_GIT_REPOSITORY"
         }
+    }
+
+    /// Takes a status the server sent: a reading that changed nothing changes nothing, unless `force`.
+    func apply(_ next: GitStatus, force: Bool = false) {
+        if error != nil { error = nil }
+        notARepository = false
+        loadedAt = .now
+        guard force || next != status else { return }
+        status = next
+        stagedCount = next.entries.filter { gitStaged(entry: $0) }.count
+        unstagedCount = next.entries.filter { gitUnstaged(entry: $0) }.count
+        revision += 1
+    }
+
+    /// Follows the server's live status until the stream ends, fails or the caller's task is cancelled; the
+    /// ordinary loads cover what happens after that.
+    func follow(_ api: RiffetApi) async {
+        for await next in api.gitStatusStream(projectId: projectId) { apply(next) }
     }
 }
 
@@ -486,12 +706,13 @@ struct GitEntryRow: View {
         HStack(spacing: Space.sm + 2) {
             // Room for the stage box laid over the row.
             Color.clear.frame(width: StageBox.size)
+            if entry.path.hasSuffix("/") { Image(icon: "folder").font(.riffet(size: S(12))).foregroundStyle(palette.fg3) }
             VStack(alignment: .leading, spacing: 1) {
-                Text((entry.path as NSString).lastPathComponent)
+                Text((trimTrailingSlash(entry.path) as NSString).lastPathComponent)
                     .font(.riffet(size: S(13)))
                     .foregroundStyle(palette.fg)
                     .lineLimit(1)
-                let directory = (entry.path as NSString).deletingLastPathComponent
+                let directory = (trimTrailingSlash(entry.path) as NSString).deletingLastPathComponent
                 if !directory.isEmpty {
                     Text(directory).font(.riffet(size: S(11))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
                 }
@@ -499,7 +720,7 @@ struct GitEntryRow: View {
             Spacer(minLength: Space.sm)
             DiffCounts(added: entry.added?.int64Value, removed: entry.removed?.int64Value)
             if comments > 0 {
-                Image(icon: "text.bubble").font(.riffet(size: S(11))).foregroundStyle(palette.fg3).help("\(comments) 条审阅意见")
+                Image(icon: "text.bubble").font(.riffet(size: S(11))).foregroundStyle(palette.fg3).help(plain(comments == 1 ? "1 review comment" : "\(comments) review comments"))
             }
             StatusLetter(code: entry.index + entry.worktree)
         }
@@ -526,12 +747,12 @@ struct StatusLetter: View {
 
     private func help(_ letter: String) -> String {
         switch letter {
-        case "A": String(localized: "新增")
-        case "U": String(localized: "未跟踪")
-        case "D": String(localized: "已删除")
-        case "R": String(localized: "已重命名")
-        case "C": String(localized: "已复制")
-        default: String(localized: "已修改")
+        case "A": "Added"
+        case "U": "Untracked"
+        case "D": "Deleted"
+        case "R": "Renamed"
+        case "C": "Copied"
+        default: "Modified"
         }
     }
 }
@@ -556,9 +777,9 @@ struct StageBox: View {
         }
         .buttonStyle(.plain)
         .opacity(enabled ? 1 : 0.5)
-        .help(state == .on ? "取消暂存" : "暂存")
-        .accessibilityLabel(state == .on ? "取消暂存" : "暂存")
-        .accessibilityValue(state == .on ? "已暂存" : state == .mixed ? "部分暂存" : "未暂存")
+        .help(state == .on ? GitCopy.unstage : GitCopy.stage)
+        .accessibilityLabel(state == .on ? GitCopy.unstage : GitCopy.stage)
+        .accessibilityValue(plain(state == .on ? "Staged" : state == .mixed ? "Partly staged" : "Not staged"))
     }
 }
 
@@ -587,24 +808,29 @@ struct FullDiffView: View {
     var marks = ReviewMarks()
     /// A click on a line number (new-file line, shift held, the diff it belongs to). Nil: no remarks.
     var onPick: ((Int, Bool, DiffSpec) -> Void)?
+    /// Runs of changed lines that can be acted on, each with `chunkKinds` at its first line.
+    var chunks: [GitPatchChunk] = []
+    var chunkKinds: [ChunkActionKind] = []
+    var onChunk: ((Int, ChunkActionKind) -> Void)?
+    var chunksDisabled = false
     @State private var spec: DiffSpec?
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Group {
             if let spec {
-                DiffDocument(spec: spec, dark: colorScheme == .dark, marks: marks, onPick: onPick)
+                DiffDocument(spec: spec, dark: colorScheme == .dark, marks: marks, onPick: onPick, chunks: chunks, chunkKinds: chunkKinds, onChunk: onChunk, disabled: chunksDisabled)
             } else {
                 Spinner(size: .regular).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .task(id: "\(before.hashValue)|\(after.hashValue)|\(colorScheme == .dark)") {
-            spec = nil
+            // The old lines stay until the new ones are ready: a reload of the same file keeps the scroll position.
             let style = TranscriptStyle.current(dark: colorScheme == .dark)
             let before = before, after = after
             let work = Task.detached(priority: .userInitiated) {
                 let diff = lineDiff(before: before, after: after, context: 3, lineOffset: 0, trailingLines: 0)
-                return RowBuilder.diffSpec(RowBuilder.diffLines(diff, before: before, after: after), style: style)
+                return RowBuilder.diffSpec(RowBuilder.diffLines(diff, before: before, after: after, english: true), style: style)
             }
             let result = await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
             // Another file may have been opened while this one was diffed.
@@ -619,6 +845,10 @@ private struct DiffDocument: NSViewRepresentable {
     let dark: Bool
     let marks: ReviewMarks
     let onPick: ((Int, Bool, DiffSpec) -> Void)?
+    let chunks: [GitPatchChunk]
+    let chunkKinds: [ChunkActionKind]
+    let onChunk: ((Int, ChunkActionKind) -> Void)?
+    let disabled: Bool
 
     final class Host: FragmentHost {
         var style: TranscriptStyle
@@ -633,6 +863,18 @@ private struct DiffDocument: NSViewRepresentable {
         let canvas = FlippedView()
         let lines = DiffView.DiffLines()
         let overlay = ReviewGutterOverlay()
+        let chunkActions = ChunkActionsLayer()
+        private var scrollObserver: NSObjectProtocol?
+
+        /// The buttons ride the viewport's right edge, so they follow a horizontal scroll.
+        func followScroll() {
+            contentView.postsBoundsChangedNotifications = true
+            scrollObserver = NotificationCenter.default.addObserver(forName: NSView.boundsDidChangeNotification, object: contentView, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.chunkActions.needsLayout = true }
+            }
+        }
+
+        deinit { if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) } }
 
         override func tile() {
             super.tile()
@@ -642,6 +884,7 @@ private struct DiffDocument: NSViewRepresentable {
                 canvas.setFrameSize(size)
                 lines.frame = NSRect(origin: .zero, size: size)
                 overlay.frame = NSRect(origin: .zero, size: size)
+                chunkActions.frame = NSRect(origin: .zero, size: size)
             }
         }
     }
@@ -657,7 +900,9 @@ private struct DiffDocument: NSViewRepresentable {
         scroller.contentView = FlippedClip()
         scroller.canvas.addSubview(scroller.lines)
         scroller.canvas.addSubview(scroller.overlay)
+        scroller.canvas.addSubview(scroller.chunkActions)
         scroller.documentView = scroller.canvas
+        scroller.followScroll()
         return scroller
     }
 
@@ -674,6 +919,7 @@ private struct DiffDocument: NSViewRepresentable {
         overlay.barTint = style.color(\.accent)
         overlay.onPick = onPick.map { pick in { (line: Int, extend: Bool) in pick(line, extend, spec) } }
         if overlay.marks != marks { overlay.marks = marks }
+        scroller.chunkActions.configure(spec: spec, chunks: chunks, kinds: chunkKinds, disabled: disabled, onAction: onChunk)
         scroller.tile()
         // The lines behind the overlay may have changed without the canvas changing size.
         overlay.needsDisplay = true
@@ -753,9 +999,9 @@ struct GitMetaBadge: View {
 }
 
 func worktreeBranchLabel(_ branch: String?) -> String {
-    guard let branch else { return String(localized: "分离 HEAD") }
+    guard let branch else { return GitCopy.detached }
     let name = branch.hasPrefix("refs/heads/") ? String(branch.dropFirst("refs/heads/".count)) : branch
-    return name.trimmingCharacters(in: .whitespaces).isEmpty ? String(localized: "分离 HEAD") : name
+    return name.trimmingCharacters(in: .whitespaces).isEmpty ? GitCopy.detached : name
 }
 
 func trimTrailingSlash(_ path: String) -> String {
@@ -766,9 +1012,9 @@ func trimTrailingSlash(_ path: String) -> String {
 
 func gitChangeLabel(_ kind: CheckpointChangeKind) -> String {
     switch kind {
-    case .added: String(localized: "新增")
-    case .modified: String(localized: "修改")
-    case .deleted: String(localized: "删除")
+    case .added: "Added"
+    case .modified: "Modified"
+    case .deleted: "Deleted"
     }
 }
 

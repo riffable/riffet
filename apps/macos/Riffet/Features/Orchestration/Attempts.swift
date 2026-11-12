@@ -372,7 +372,7 @@ struct AttemptStrip: View {
         defer { preparing = false }
         do {
             let into = try? await api.gitBranch(projectId: group.projectId).branch
-            let status = try await api.gitStatus(projectId: attempt.projectId)
+            let status = try await api.gitStatus(projectId: attempt.projectId, fresh: false)
             adopting = AdoptRequest(group: group, attempt: attempt, into: into, dirty: !status.entries.isEmpty)
         } catch {
             self.error = String(localized: "无法读取这个尝试的改动：\(error.riffetMessage)")
