@@ -3,12 +3,14 @@ package riffet.shared
 import io.ktor.client.HttpClient
 import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import riffet.i18n.L10n
 import riffet.ui.timeline.platformNowMillis
+import kotlin.coroutines.CoroutineContext
 
 /** One installed connection; saved credentials remain bound to each service's origin. */
 class RiffetConnection(
@@ -16,6 +18,7 @@ class RiffetConnection(
     private val deviceInfo: DeviceInfo = createDeviceInfo(),
     private val http: HttpClient = createRiffetHttpClient(),
     private val config: RiffetClientConfig = RiffetClientConfig(),
+    private val parseContext: CoroutineContext = Dispatchers.Default,
 ) {
     private var api: RiffetApi? = null
 
@@ -30,11 +33,11 @@ class RiffetConnection(
 
     /** Neither probing nor pairing sends any saved credential to the entered address. */
     fun probe(serverBaseUrl: String): RiffetApi =
-        RiffetApi(http = http, baseUrl = serverBaseUrl.trim().trimEnd('/'), config = config)
+        RiffetApi(http = http, baseUrl = serverBaseUrl.trim().trimEnd('/'), config = config, parseContext = parseContext)
 
     private fun authenticated(serverBaseUrl: String): RiffetApi {
         val base = serverBaseUrl.trim().trimEnd('/')
-        return RiffetApi(http = http, baseUrl = base, tokenProvider = { tokens.tokenFor(base) }, config = config)
+        return RiffetApi(http = http, baseUrl = base, tokenProvider = { tokens.tokenFor(base) }, config = config, parseContext = parseContext)
     }
 
     internal fun connect(serverBaseUrl: String): RiffetApi = install(authenticated(serverBaseUrl))

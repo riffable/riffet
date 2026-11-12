@@ -3,7 +3,6 @@ package riffet.shared
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.encodeURLParameter
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -197,7 +196,7 @@ private suspend fun RiffetApi.startSessionRequest(id: String, fingerprint: Strin
         fingerprint?.let { put("restartFingerprint", it) }
         address?.let { put("restartAddress", it) }
     }).bodyAsText()
-    return withContext(Dispatchers.Default) {
+    return withContext(parseContext) {
         val body = RiffetJson.instance.parseToJsonElement(response) as? JsonObject
             ?: return@withContext StartSessionResult(null, null)
         if (body.containsKey("session")) {

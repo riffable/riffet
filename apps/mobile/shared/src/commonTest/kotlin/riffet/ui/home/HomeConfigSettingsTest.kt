@@ -67,7 +67,7 @@ class HomeConfigSettingsTest {
                 respond(body, headers = headersOf(HttpHeaders.ContentType, "application/json"))
             }
         }))
-        val config = HomeConfig(RiffetApi(client, "http://127.0.0.1:9"), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        val config = HomeConfig(RiffetApi(client, "http://127.0.0.1:9", parseContext = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         val settings = AppSettings(defaultBackendId = NativeBackendId.CURSOR, defaultModel = "old", nativeBackendDefaults = mapOf(NativeBackendId.CURSOR to NativeBackendDefaults(mode = "plan", approval = "read-only")))
         config.load("p1", settings)
         advanceUntilIdle()
@@ -193,7 +193,7 @@ class HomeConfigSettingsTest {
                 }
             }
         }))
-        val config = HomeConfig(RiffetApi(client, "http://127.0.0.1:9"), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
+        val config = HomeConfig(RiffetApi(client, "http://127.0.0.1:9", parseContext = UnconfinedTestDispatcher(testScheduler)), CoroutineScope(UnconfinedTestDispatcher(testScheduler)))
         return StartedHome(config, client)
     }
 

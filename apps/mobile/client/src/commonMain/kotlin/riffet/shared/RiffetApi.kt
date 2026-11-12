@@ -36,6 +36,7 @@ import riffet.contracts.Session
 import riffet.contracts.TerminalInfo
 import riffet.contracts.TerminalAppearance
 import kotlin.concurrent.Volatile
+import kotlin.coroutines.CoroutineContext
 import riffet.contracts.RiffetJson
 
 /**
@@ -62,6 +63,8 @@ class RiffetApi(
     val baseUrl: String,
     internal val tokenProvider: suspend () -> String? = { null },
     internal val config: RiffetClientConfig = RiffetClientConfig(),
+    /** Where response bodies are parsed; tests substitute their scheduler's dispatcher. */
+    internal val parseContext: CoroutineContext = Dispatchers.Default,
 ) {
     /** Current app colours for the next terminal process; existing processes retain theirs. */
     @Volatile var terminalAppearance: TerminalAppearance? = null
@@ -240,7 +243,7 @@ class RiffetApi(
     private suspend fun ensureSuccess(response: HttpResponse) {
         if (response.status.isSuccess()) return
         val text = runCatching { response.bodyAsText() }.getOrNull()?.takeIf { it.isNotBlank() }
-        val error = text?.let { withContext(Dispatchers.Default) { runCatching { RiffetJson.instance.decodeFromString<ApiError>(it) }.getOrNull() } }
+        val error = text?.let { withContext(parseContext) { runCatching { RiffetJson.instance.decodeFromString<ApiError>(it) }.getOrNull() } }
         val code = error?.error?.code
         val message = error?.error?.message ?: text ?: response.status.description
         if (response.status == HttpStatusCode.Unauthorized) throw RiffetUnauthenticatedException(code, message)
@@ -249,7 +252,7 @@ class RiffetApi(
 
     internal suspend inline fun <reified T> HttpResponse.decode(): T {
         val text = bodyAsText()
-        return withContext(Dispatchers.Default) { decodeBody(text, serializer<T>()) }
+        return withContext(parseContext) { decodeBody(text, serializer<T>()) }
     }
 
     /** Whether the server may send this client Agents a plugin provides (see [AgentWire]). */

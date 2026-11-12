@@ -2,7 +2,6 @@ package riffet.shared
 
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpMethod
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.JsonNull
@@ -123,7 +122,7 @@ suspend fun RiffetApi.saveConfig(projectId: String, configId: String, content: S
 @Throws(Exception::class)
 suspend fun RiffetApi.auxiliaryModels(): List<AuxiliaryModelOption> {
     val response = get("/api/auxiliary-models").bodyAsText()
-    return withContext(Dispatchers.Default) {
+    return withContext(parseContext) {
         (RiffetJson.instance.parseToJsonElement(response) as? JsonObject)
             ?.get("models")
             ?.let { RiffetJson.instance.decodeFromJsonElement(ListSerializer(AuxiliaryModelOption.serializer()), it) }
@@ -141,7 +140,7 @@ suspend fun RiffetApi.previewTitle(ref: AuxiliaryModelRef, message: String?): St
         if (message != null) put("message", JsonPrimitive(message))
     }
     val response = post("/api/auxiliary-models/title-preview", body).bodyAsText()
-    val answer = withContext(Dispatchers.Default) { RiffetJson.instance.parseToJsonElement(response) as? JsonObject }
+    val answer = withContext(parseContext) { RiffetJson.instance.parseToJsonElement(response) as? JsonObject }
     return (answer?.get("title") as? JsonPrimitive)?.content.orEmpty()
 }
 
@@ -158,7 +157,7 @@ suspend fun RiffetApi.previewAuxiliaryModel(purpose: String, ref: AuxiliaryModel
     // Handoff generation has a two-minute model budget, longer than the ordinary API timeout.
     val response = request(HttpMethod.Post, "/api/auxiliary-models/preview", body = body, timeoutMillis = 135_000)
     val text = response.bodyAsText()
-    val answer = withContext(Dispatchers.Default) { RiffetJson.instance.parseToJsonElement(text) as? JsonObject }
+    val answer = withContext(parseContext) { RiffetJson.instance.parseToJsonElement(text) as? JsonObject }
     return (answer?.get("text") as? JsonPrimitive)?.content.orEmpty()
 }
 
@@ -206,7 +205,7 @@ suspend fun RiffetApi.setAuxiliaryModel(purpose: String, ref: AuxiliaryModelRef?
 @Throws(Exception::class)
 suspend fun RiffetApi.backup(): String {
     val text = post("/api/system/backup").bodyAsText()
-    return withContext(Dispatchers.Default) { runCatching { formatJson(RiffetJson.instance.parseToJsonElement(text)) }.getOrDefault(text) }
+    return withContext(parseContext) { runCatching { formatJson(RiffetJson.instance.parseToJsonElement(text)) }.getOrDefault(text) }
 }
 
 /** The models the Cursor CLI on the server lists, for diagnostics. */

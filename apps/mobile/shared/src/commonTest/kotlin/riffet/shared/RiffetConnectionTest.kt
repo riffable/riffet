@@ -118,7 +118,7 @@ class RiffetConnectionTest {
                 }
             }
         })
-        return RiffetConnection(store, TestDevice(), HttpClient(engine) { installRiffetClient() })
+        return RiffetConnection(store, TestDevice(), HttpClient(engine) { installRiffetClient() }, parseContext = StandardTestDispatcher(testScheduler))
     }
 
     private fun payload(host: String, port: Int = 4317) =
