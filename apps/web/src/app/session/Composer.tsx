@@ -915,7 +915,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     if (!sessionMentions || mentionQuery === undefined) return [];
     const query = mentionQuery.toLocaleLowerCase();
     const projects = new Map(props.referenceProjects?.map(item => [item.id, item.name]));
-    // An empty `@` lists this project's sessions; the others are a step away under their project.
+    // An empty `@` lists this project's latest sessions; every project, this one included, opens to its full list.
     const here = !browsing && !query && referenceCandidates.some(item => item.projectId === projectId);
     const scope = browsing ?? (here ? projectId : undefined);
     return referenceCandidates.filter(item => scope === undefined || item.projectId === scope).map(item => {
@@ -927,20 +927,20 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     }).filter(item => item.score >= 0 && (query || !item.session.archivedAt)).sort((a, b) => b.score - a.score
       || Number(Boolean(a.session.archivedAt)) - Number(Boolean(b.session.archivedAt))
       || Number(b.session.projectId === projectId) - Number(a.session.projectId === projectId)
-      || (b.session.lastActivityAt ?? b.session.updatedAt).localeCompare(a.session.lastActivityAt ?? a.session.updatedAt)).slice(0, browsing ? 50 : 10);
+      || (b.session.lastActivityAt ?? b.session.updatedAt).localeCompare(a.session.lastActivityAt ?? a.session.updatedAt)).slice(0, browsing ? undefined : 10);
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
-  /** Other projects with a live session, most recently active first; a query narrows them by name. */
+  /** Projects with a live session, this one first (its full list is one step in), then most recently active; a query narrows them by name. */
   const projectRows = useMemo(() => {
     if (!sessionMentions || mentionQuery === undefined || browsing) return [];
     const query = mentionQuery.toLocaleLowerCase();
     const latest = new Map<string, string>();
     for (const item of referenceCandidates) {
-      if (item.archivedAt || item.projectId === projectId) continue;
+      if (item.archivedAt) continue;
       const at = item.lastActivityAt ?? item.updatedAt;
       if ((latest.get(item.projectId) ?? '') < at) latest.set(item.projectId, at);
     }
     return (props.referenceProjects ?? []).filter(item => !item.system && latest.has(item.id) && (!query || item.name.toLocaleLowerCase().includes(query)))
-      .sort((a, b) => latest.get(b.id)!.localeCompare(latest.get(a.id)!)).slice(0, query ? 5 : 50);
+      .sort((a, b) => Number(b.id === projectId) - Number(a.id === projectId) || latest.get(b.id)!.localeCompare(latest.get(a.id)!)).slice(0, query ? 5 : 50);
   }, [sessionMentions, mentionQuery, browsing, referenceCandidates, props.referenceProjects, projectId]);
   const menuLength = trigger?.type === 'slash' ? slashItems.length + (unknownSlashCommand ? 1 : 0) : files.length + sessionFiles.length + projectRows.length;
   const highlightScope = `${trigger?.type}|${trigger?.query}|${browsing}|${files.length}|${sessionFiles.length}|${projectRows.length}`;
