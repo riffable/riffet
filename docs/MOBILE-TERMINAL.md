@@ -37,7 +37,7 @@
 | 历史与实时区之间有一道「缝」，字号、行高、颜色对不齐 | 两套渲染器：上面是 DOM 文本，下面是 xterm 网格，靠 `--terminal-row` 变量勉强对齐；历史和屏幕取自不同时刻，偶尔丢行或重复 | 同上 |
 | 回看只有约 2000 行 | 服务端从没设置 `history-limit`，用的是 tmux 默认值；xterm 的 `scrollback: 12000` 对 tmux 客户端无效 | `terminal/service.ts` |
 | 只读查看时画面错位 | `fit()` 总是把本地 xterm 调成容器尺寸，但只有持有控制权时才把尺寸发给服务端；只读设备拿控制者尺寸的字节流，在自己的尺寸上解释 | `TerminalView.tsx` `fit` |
-| 浅色主题下颜色发灰、偶有黑块 | Cursor CLI 按深色终端绘制面板背景，web 在字节流上改写 SGR 背景色（`terminal-palette.ts`），历史区再改一遍；切换主题必须重连才能重放 | `lib/terminal-palette.ts` |
+| 浅色主题下颜色发灰、偶有黑块 | Cursor CLI 按深色终端绘制面板背景，web 在字节流上改写 SGR 背景色（`terminal-palette.ts`，已移除），历史区再改一遍；切换主题必须重连才能重放 | <!-- doc-paths:off -->`lib/terminal-palette.ts`<!-- doc-paths:on --> |
 | 手机上输入中文、滑动都别扭 | xterm.js 用隐藏 `textarea` 接输入法，移动浏览器的组合事件不稳定；xterm.js 没有触摸处理，只能 `pointer-events: none` 把触摸让给外层滚动容器 | `TerminalView.tsx` |
 
 这些问题里只有「DOM 渲染器」一项属于 xterm.js 本身，其余都是架构问题：tmux 客户端流没有回看、
@@ -52,7 +52,7 @@
 | [JohNan/kmp-terminal-emulator](https://github.com/JohNan/kmp-terminal-emulator) | Apache-2.0 | KMP 引擎 + Compose 渲染，Maven Central `io.github.johnan:terminal-core/ui` | **不采用**：`TerminalCell` 是 `data class(val char: Char, …)`，一格一个对象、只能放一个 UTF-16 码元；核心模块（`AnsiParser`、`ScreenBuffer`、`TerminalEmulator`、`TerminalRow`）里没有任何宽字符处理（无 wcwidth、无代理对），中文按 1 格排，与 tmux 的 2 格排版必然错位；2026-07-12 创建，2 星，提交者为作者本人与 dependabot。框线有自绘（`drawBoxDrawing`），可作参考。0.3.11 的 `.module` 声明 kotlin-stdlib 2.4.20、Compose 1.11.1 |
 | [connectbot/termlib](https://github.com/connectbot/termlib) | Apache-2.0 | libvterm + JNI + Jetpack Compose，仅 Android | **工具链不兼容**（Kotlin 2.4.20、androidx Compose 1.11），且没有 iOS |
 | [termux/termux-app](https://github.com/termux/termux-app) `terminal-emulator` / `terminal-view` | 这两个模块是 Apache-2.0（仓库其余部分 GPLv3，见其 `LICENSE.md`） | 纯 Java 引擎 + Android View 渲染 | **引擎采用**（移植为 Kotlin）。引擎约 18 个文件，`TerminalEmulator.java` 175 KB；单元测试 19 个文件约 130 KB |
-| [farlume/termish](https://github.com/farlume/termish) | MIT | KMP 应用，纯 Kotlin 引擎（约 2.8k 行）+ Compose 渲染，Android/iOS 已上架 | **借设计不借引擎**。Kotlin 2.1.21、CMP 1.8.1；但每个单元格是一个对象（含 `link: String?`），不支持组合字符，`wcwidth` 是简化实现。它的 `docs/input-pipeline.md` 与 `docs/terminal-emulator.md` 是输入法与 resize 的现成规格 |
+| [farlume/termish](https://github.com/farlume/termish) | MIT | KMP 应用，纯 Kotlin 引擎（约 2.8k 行）+ Compose 渲染，Android/iOS 已上架 | **借设计不借引擎**。Kotlin 2.1.21、CMP 1.8.1；但每个单元格是一个对象（含 `link: String?`），不支持组合字符，`wcwidth` 是简化实现。它的 <!-- doc-paths:off -->`docs/input-pipeline.md` 与 `docs/terminal-emulator.md`<!-- doc-paths:on --> 是输入法与 resize 的现成规格 |
 | [befrvnk/composetty](https://github.com/befrvnk/composetty) | Apache-2.0 | CMP + `libghostty-vt` | 0 星，未发布到 Maven Central，自述「initial development」。架构参考 |
 | [xtermjs/xterm.js](https://github.com/xtermjs/xterm.js) | MIT | 浏览器终端 | 渲染参考：`addons/addon-webgl/src/customGlyphs/`（框线/块元素按像素绘制）、`TextureAtlas.ts`（字形图集） |
 | [ghostty-org/ghostty](https://github.com/ghostty-org/ghostty) | MIT | 桌面终端，`libghostty-vt` 可作 C 库 | 远期备选引擎：需要在 Gradle 构建里引入 Zig 工具链与 JNI/cinterop，第一期不值得 |
@@ -200,8 +200,8 @@ app 的文件面板；回看与实时屏用同一个渲染器，消除那道「�
 2. 文本：按样式切段。段的切分条件 = 样式变化 ∪ 光标/选择边界 ∪ 「实测宽度 ≠ wcwidth × 单格宽」
    （Termux 规则）。宽度不符的段单独绘制并横向缩放进应占格数，宽字符（CJK、emoji）逐格定位。
 3. **自绘字形**：U+2500–257F 框线、U+2580–259F 块元素、U+2800–28FF 盲文、Powerline U+E0B0–E0B3，
-   用 `drawLine`/`drawRect`/`drawPath` 按单元格像素画满，不经字体。几何定义参照 xterm.js
-   `customGlyphs/CustomGlyphDefinitions.ts`。这是框线在任意行高下连续的唯一可靠做法。
+   用 `drawLine`/`drawRect`/`drawPath` 按单元格像素画满，不经字体。几何定义参照
+   xterm.js <!-- doc-paths:off -->`customGlyphs/CustomGlyphDefinitions.ts`<!-- doc-paths:on -->。这是框线在任意行高下连续的唯一可靠做法。
 4. 装饰：下划线（含 `4:3` 波浪线）、删除线、OSC 8 链接下划线。
 5. 光标（块/下划线/竖线，DECSCUSR 2/4/6 常亮、1/3/5 按 530 ms 闪烁；块光标下字符反色重画）与选择高亮。
 
@@ -264,7 +264,7 @@ app 的文件面板；回看与实时屏用同一个渲染器，消除那道「�
 
 ### 5.6 输入
 
-**输入法通道**（规格取自 termish `docs/input-pipeline.md`）
+**输入法通道**（规格取自 termish <!-- doc-paths:off -->`docs/input-pipeline.md`<!-- doc-paths:on -->）
 
 - 一个 1 dp、透明的 `BasicTextField` 作为输入法入口，不显示任何内容，屏幕上以远端回显为准。
   `KeyboardType.Text`（保留中文候选栏）、关闭自动纠错与首字母大写、`singleLine = false`（捕获回车）。

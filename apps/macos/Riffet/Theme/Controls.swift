@@ -1,6 +1,16 @@
 import AppKit
 import SwiftUI
 
+/// The three animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.
+enum Motion {
+    /// Hover, press and other small state changes.
+    static let fast = Animation.snappy(duration: 0.12)
+    /// Expanding, switching and resizing.
+    static let standard = Animation.snappy(duration: 0.2)
+    /// An overlay's own panel and scrim.
+    static let expressive = Animation.smooth(duration: 0.3)
+}
+
 /// Spacing steps used everywhere; nothing in the app picks a free number.
 enum Space {
     static let xxs: CGFloat = 2
@@ -86,6 +96,7 @@ struct Breathing<Content: View>: NSViewRepresentable {
             animation.toValue = 0.4
             animation.duration = 0.9
             animation.autoreverses = true
+            // motion-loop: in-progress breathing, removed under Reduce Motion
             animation.repeatCount = .infinity
             animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             animation.isRemovedOnCompletion = false
@@ -234,7 +245,7 @@ struct ChipButtonStyle: ButtonStyle {
                 .overlay(shape.strokeBorder(outlined ? palette.line : .clear))
                 .contentShape(shape)
                 .onHover { hovering = $0 && enabled }
-                .animation(.easeOut(duration: 0.12), value: hovering)
+                .animation(Motion.fast, value: hovering)
         }
     }
 }

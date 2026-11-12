@@ -317,6 +317,7 @@ private struct RunningArc: View {
             .rotationEffect(.degrees(turning ? 270 : -90))
             .onAppear {
                 guard animated else { return }
+                // motion-loop: running arc, animated is false under Reduce Motion
                 withAnimation(.linear(duration: 1.05).repeatForever(autoreverses: false)) { turning = true }
             }
     }

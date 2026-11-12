@@ -283,7 +283,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 .transition(.opacity)
             }
         }
-        .animation(.easeOut(duration: 0.12), value: menuOpen)
+        .animation(Motion.fast, value: menuOpen)
     }
 
     /// The controls that sit in the card's toolbar, under the box: right-aligned, outside it.
@@ -351,7 +351,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     }
 
     private func fullscreenButton(_ fullscreen: Binding<Bool>) -> some View {
-        Button { withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { fullscreen.wrappedValue.toggle() }; model.focus() } label: {
+        Button { withAnimation(reduceMotion ? nil : Motion.standard) { fullscreen.wrappedValue.toggle() }; model.focus() } label: {
             Image(icon: isFullscreen ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                 .font(.riffet(size: S(11)))
         }
@@ -442,7 +442,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
 
     private func handle(_ key: ComposerKey) -> Bool {
         if key == .dismiss, !menuOpen, let fullscreen, fullscreen.wrappedValue {
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.22)) { fullscreen.wrappedValue = false }
+            withAnimation(reduceMotion ? nil : Motion.standard) { fullscreen.wrappedValue = false }
             return true
         }
         // Nothing of the composer's is open: Escape belongs to whoever hosts it (the canvas's next-question panel).
@@ -508,7 +508,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
                 .opacity(stopping ? 0 : 1)
                 .scaleEffect(stopping ? 0.6 : 1)
             }
-            .animation(reduceMotion ? nil : .snappy(duration: 0.12), value: stopping)
+            .animation(reduceMotion ? nil : Motion.fast, value: stopping)
         }
         .buttonStyle(ComposerActionButtonStyle(line: line))
         .disabled(stopping
@@ -567,7 +567,7 @@ private struct ComposerActionButtonStyle: ButtonStyle {
             }
             .opacity(configuration.isPressed ? 0.8 : 1)
             .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+            .animation(Motion.fast, value: configuration.isPressed)
             .contentShape(RoundedRectangle(cornerRadius: line ? Radius.container : 15))
     }
 }
@@ -575,7 +575,7 @@ private struct ComposerActionButtonStyle: ButtonStyle {
 /// The one motion for what changes size around the input: cards and docks arriving above it, rows
 /// inside it, its height after a send. Short and the same everywhere; callers drop it under Reduce Motion.
 enum ComposerMotion {
-    static let resize = Animation.snappy(duration: 0.18)
+    static let resize = Motion.standard
     /// Fades in rising a little, and leaves the same way, as the share sheet's toast does.
     static let insert = AnyTransition.opacity.combined(with: .offset(y: 8))
 }

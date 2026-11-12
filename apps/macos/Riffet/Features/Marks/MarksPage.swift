@@ -273,8 +273,8 @@ private struct MarkCard: View {
         )
         .contentShape(RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
         .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.12), value: hovering)
-        .animation(.snappy(duration: 0.12), value: chosen)
+        .animation(Motion.fast, value: hovering)
+        .animation(Motion.fast, value: chosen)
         .onTapGesture { if selecting { choose(!chosen) } else if !editing { open() } }
         .contextMenu {
             Button(mark.kind == "file" ? "打开会话并预览文件" : "打开原会话", action: mark.kind == "file" ? openFile : open)

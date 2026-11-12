@@ -36,7 +36,7 @@ Riffet 将可选产品功能组织为插件：插件可以贡献外观资源、�
 | `apps/web/src/app/session/viewPrefs.ts`、`terminal/NativeSession.tsx` | 会话视图（对话、终端、画布）的顺序、显隐与切换 | 视图来源改为注册目录；读取偏好时保留未知视图引用，当前实现会丢弃 |
 | `apps/web/src/app/state/uiStore.ts`、`WorkbenchPanels.tsx` | 响应式布局、面板开关和状态 | 布局只保存视图身份与实例状态，避免引用具体插件组件 |
 | `apps/macos/Riffet/App/InspectorPanels.swift`、`Features/Inspector/InspectorView.swift` | 原生面板状态、尺寸与导航 | `InspectorTab` 固定枚举映射到共享视图身份，解码未知值时保留引用；macOS 目前没有画布 |
-| `apps/web/src/app/session/canvas/SessionCanvas.tsx` | 现有画布交互与呈现，由 `NativeSession` 懒加载 | 对 `stores`、`api` 和时间线内部模块的依赖收敛为公共会话与视图接口，代码移入插件目录 |
+| `plugins/riffet/canvas/web/CanvasView.tsx` | 现有画布交互与呈现，由 `NativeSession` 懒加载 | 对 `stores`、`api` 和时间线内部模块的依赖收敛为公共会话与视图接口，代码移入插件目录 |
 | `apps/server/src/workspace/scope.ts`、`terminal/service.ts` | 项目路径边界、进程与终端管理 | 提供可跟踪任务；不将短命令的 stdout 聚合接口当作构建协议 |
 
 会话标签页（`docs/SESSION_TABS.md`）刚为会话视图加入排序与显隐偏好。阶段 B 在这套偏好上改为注册目录，不另建第二套。
@@ -210,7 +210,7 @@ Cursor 是 Riffet 最早的后端，实现不止 `backends/cursor/`（约 1.6k �
 
 | 类别 | 内容 | 处理 |
 | --- | --- | --- |
-| Cursor 专有逻辑 | `native/service.ts` 等运行时、`chat-store.ts`、`cursor-metrics.ts`、`cli-driver.ts`、`adapters/cli/cursor-agent.ts`、`readCursorShare`、`ResumeTitleWatcher`、设置服务中的 Cursor 段 | 迁入插件 |
+| Cursor 专有逻辑 | `native/service.ts` 等运行时、`chat-store.ts`、`cursor-metrics.ts`、`cli-driver.ts`、`cli-adapter.ts`、`readCursorShare`、`ResumeTitleWatcher`、设置服务中的 Cursor 段 | 迁入插件 |
 | 持久与线上兼容 | 缺省 `backendId` 即 Cursor、`cursorSessionId`、`cursor-cli.json`、`AppSettings.cursorCli`、`/api/cursor/*`、`cursor`/`login` 终端类型、主题角色 `agent-cursor` | 保留原值，由核心兼容层映射或转发到插件 |
 | 带 Cursor 分支的通用代码 | 派发中的 argv 提示路径、延迟 steer 与恢复的后端表、扩展发现路径、`doctor`、统计标签、Web/Mac 的审批映射、终端存活判断和登录提示 | 改为由后端能力或插件贡献驱动 |
 

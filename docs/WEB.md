@@ -394,7 +394,7 @@ Kotlin 端（`apps/mobile/core` 的 `Model.kt`）早先加入、web 缺的规则
 
 web 已经有一份本机副本（IndexedDB `riffet/transcripts`，8 个会话 / 5000 事件，`lib/transcript-store.ts:13,15`；内存热缓存 6 个，`nativeStream.ts:26`），也已经在拨号前先渲染它（`nativeStream.ts:101-115`）。但**它只被用来"先画一次"，没有被用来"少取一次"**：
 
-- **流每次都是新窗口**。`nativeStream.ts:397` 打开 `/api/sessions/:id/native/stream` 时**不带** `window` / `generation` / `after`，而服务端已经支持（`app.ts:364`，实现在 `backends/transcript-window.ts:73-116`；默认 320 KiB、上限 4 MiB）。
+- **流每次都是新窗口**。`nativeStream.ts:397` 打开 `/api/sessions/:id/native/stream` 时**不带** `window` / `generation` / `after`，而服务端已经支持（`app.ts:364`，实现在 transcript-window.ts（已随 sync v3 删除）；默认 320 KiB、上限 4 MiB）。
   于是每次刷新、每次重连、每次手机浏览器丢弃后台标签页后回来，都重新下载一个全新的 320 KiB 窗口，本机已翻过的旧页与阅读位置随之失效。移动端同样场景只取锚点之后的部分。
   **改**：有本机副本时按同一协议带上本机尾部 `generation` + `after=<nativeId>`；`reset` 到达后走已有的 `continuedBy` 判据只追加（`nativeStream.ts:215`，已正确实现）。EventSource 不能带自定义头，但参数在 URL 上，重连时重建 URL 即可。锚点认不出、代次不同时退回现状。
   **不带 `window`**：服务端命中锚点时只看自己的 4 MiB 上限，不看 `budget`；带上它只会把"锚点没认出来"时的兜底帧撑大，而浏览器有本机副本，不需要手机那样一次取 3 MiB。

@@ -149,7 +149,7 @@ struct SearchDialog: View {
         }
         .padding(.horizontal, Space.lg + Space.xs)
         .frame(height: 56)
-        .animation(.snappy(duration: 0.2), value: workbench.sidebar.searchMode)
+        .animation(Motion.standard, value: workbench.sidebar.searchMode)
     }
 
     private var composing: Bool {

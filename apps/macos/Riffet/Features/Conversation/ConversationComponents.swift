@@ -198,6 +198,7 @@ private struct Shimmer: ViewModifier {
                     .allowsHitTesting(false)
                 }
                 .onAppear {
+                    // motion-loop: loading placeholder shimmer, not composed under Reduce Motion
                     withAnimation(.linear(duration: 1.6).repeatForever(autoreverses: false)) { phase = 1 } // perf-lint: allow only on an image placeholder in the file panel, while it loads
                 }
         }

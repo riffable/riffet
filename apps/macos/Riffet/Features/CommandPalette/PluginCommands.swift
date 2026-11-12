@@ -193,7 +193,7 @@ struct PluginCommandPresenter: ViewModifier {
                 }
                 .padding(.bottom, 28)
             }
-            .animation(.easeOut(duration: 0.2), value: runner.message)
+            .animation(Motion.standard, value: runner.message)
     }
 }
 

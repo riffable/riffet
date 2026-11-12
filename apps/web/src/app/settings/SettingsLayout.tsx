@@ -62,7 +62,7 @@ export function SettingsThumbChoice<T extends string>({ label, value, options, o
 }
 
 /** The frame every layout miniature is drawn in: the workbench at 16:10, ringed when chosen. */
-export const thumbFrame = (selected: boolean) => cn('flex aspect-[16/10] w-full gap-[5px] rounded-[10px] bg-canvas p-1.5 transition-shadow', selected ? 'shadow-[0_0_0_2px_var(--accent)]' : 'shadow-[0_0_0_1px_var(--line-strong)]');
+export const thumbFrame = (selected: boolean) => cn('flex aspect-[16/10] w-full gap-[5px] rounded-lg bg-canvas p-1.5 transition-shadow', selected ? 'shadow-[0_0_0_2px_var(--accent)]' : 'shadow-[0_0_0_1px_var(--line-strong)]');
 
 /** The miniature's sidebar: a few rows down its left. */
 export function ThumbSidebar() {

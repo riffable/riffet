@@ -751,6 +751,7 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
   );
 });
 
+// motion-loop: the step in progress turns; the global reduced-motion rule stops it
 const planIcon = (status: unknown) => status === 'completed' ? <IconCircleCheck className="size-4 text-success" /> : status === 'cancelled' ? <IconX className="size-4 text-fg-4" /> : status === 'in_progress' ? <IconCircleDashed className="size-4 animate-[spin_3s_linear_infinite] text-accent" /> : <IconCircle className="size-4 text-fg-4" />;
 
 export function PlanList({ entries }: { entries: Record<string, unknown>[] }) {
@@ -891,6 +892,7 @@ export function WorkingIndicator({ startedAt, outputRate, connected = true, labe
     // The clock and the rate tick every second; `aria-live="off"` keeps a screen reader from
     // reading them out each time while the status itself is still announced once.
     <div role="status" className="flex min-h-6 flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      {/* motion-loop: liveness dot while the run is working */}
       <span className="grid size-4 shrink-0 place-items-center"><span className="size-2 rounded-full bg-accent animate-pulse-dot" /></span>
       <span className="text-shimmer font-medium">{shownLabel}</span>
       {startedAt !== undefined && Number.isFinite(startedAt) && <span aria-live="off" className="contents"><ElapsedSince startedAt={startedAt} /></span>}

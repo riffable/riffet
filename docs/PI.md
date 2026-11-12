@@ -37,7 +37,7 @@
 | --- | --- |
 | `apps/server/src/app.ts` | 注册 `PiBackendAdapter` |
 | `apps/server/src/backends/types.ts`、`service.ts` | 接入驱动；持久化下文的原生输入基线 |
-| `packages/contracts/src/index.ts`、`schema/space.ts`、`schema/run.ts` | pi ID、特性协商、可选输入基线、契约快照 |
+| `packages/contracts/src/index.ts`、`schema/run.ts` | pi ID、特性协商、可选输入基线、契约快照 |
 | `apps/server/src/settings/index.ts` | 复用共享后端枚举处理 pi profiles/defaults，无新增存储格式 |
 | `apps/server/src/native/session-input.ts` | mode 固定 `agent`；按能力拒绝 unsupported approval/mode；旧端默认后端降级 |
 | `apps/server/src/routes/`、`stats/routes.ts`、`store.ts` | 对未协商客户端完整过滤 pi 数据 |

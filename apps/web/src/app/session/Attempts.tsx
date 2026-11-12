@@ -502,7 +502,7 @@ export function AttemptGroupPage({ groupId, findSession, onOpenSession, onAdopte
               <tbody>
                 {unionFiles.map((path) => (
                   <tr key={path} className="border-t border-line">
-                    <td className="max-w-72 truncate px-3 py-1.5 font-mono text-fg-2">{path}{changers(path).length > 1 && <span className="ml-2 rounded-full bg-warning/15 px-1.5 py-0.5 font-sans text-[10px] text-warning"><Trans>重叠</Trans></span>}</td>
+                    <td className="max-w-72 truncate px-3 py-1.5 font-mono text-fg-2">{path}{changers(path).length > 1 && <span className="ml-2 rounded-full bg-warning/15 px-1.5 py-0.5 font-sans text-2xs text-warning"><Trans>重叠</Trans></span>}</td>
                     {attempts.map((attempt) => {
                       const file = attempt.comparison?.files.find((item) => item.path === path);
                       return <td key={attempt.sessionId} className="px-3 py-1.5 text-right tabular-nums">{file ? <><span className="text-success">+{file.added ?? 0}</span> <span className="text-danger">−{file.removed ?? 0}</span></> : <span className="text-fg-4">—</span>}</td>;

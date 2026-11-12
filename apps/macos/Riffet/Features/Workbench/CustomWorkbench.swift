@@ -146,7 +146,7 @@ struct CustomWorkbench<Header: View, Content: View>: View {
             .disabled(!visible)
             .accessibilityHidden(!visible)
             // A transform only, no layout per frame.
-            .transaction(value: visible) { $0.animation = .snappy(duration: reduceMotion ? 0.15 : 0.22) }
+            .transaction(value: visible) { $0.animation = reduceMotion ? Motion.fast : Motion.standard }
     }
 }
 

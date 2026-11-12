@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ChannelAccountInfo, ChannelCardOptions } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { IconArrowLeft, IconChevronDown, IconLoaderCircle, IconWrench } from '@/components/icons';
-import { Segmented, Switch } from '@/components/ui/controls';
+import { IconArrowLeft, IconChevronDown, IconWrench } from '@/components/icons';
+import { Segmented, Spinner, Switch } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { SettingsGroup, SettingsRow } from '../SettingsLayout';
@@ -42,7 +42,7 @@ export function CardSettings({ account, busy, run, onBack }: {
   const left = card.footer.model;
   const right = card.footer.changes || card.footer.context || card.footer.elapsed;
   const rightParts = [
-    card.footer.changes && <span key="c"><span className="text-[#2ea121]">+12</span> <span className="text-[#f54a45]">−3</span></span>,
+    card.footer.changes && <span key="c"><span className="text-(color:--card-add)">+12</span> <span className="text-(color:--card-del)">−3</span></span>,
     card.footer.context && <span key="x"><Trans>上下文</Trans> 42%</span>,
     card.footer.elapsed && <span key="e">17s</span>,
   ].filter(Boolean);
@@ -52,24 +52,24 @@ export function CardSettings({ account, busy, run, onBack }: {
 
     <div className="flex flex-col items-start gap-3">
       <Segmented ariaLabel={t`卡片`} value={phase} onChange={setPhase} options={[{ value: 'running', label: t`回复中` }, { value: 'done', label: t`已完成` }]} />
-      <div className="flex w-full flex-col gap-3 rounded-xl bg-muted p-4 max-md:p-3">
-        {card.process && <div className="flex flex-col gap-1 rounded-lg bg-white px-3 py-2 text-[#1f2329]">
+      <div className="card-preview flex w-full flex-col gap-3 rounded-xl bg-muted p-4 max-md:p-3">
+        {card.process && <div className="flex flex-col gap-1 rounded-lg bg-white px-3 py-2 text-(color:--card-fg)">
           {phase === 'running'
-            ? <span className="inline-flex items-center gap-1.5 text-sm"><IconLoaderCircle className="size-3.5 animate-spin text-[#646a73]" /><Trans>思考中</Trans></span>
-            : <span className="inline-flex items-center gap-1 text-sm"><Trans>定位重定向问题</Trans><IconChevronDown className="size-3.5 text-[#646a73]" /></span>}
-          <span className="inline-flex items-center gap-1.5 text-xs text-[#646a73]"><IconWrench className="size-3.5" /><Trans>已调用 2 次工具</Trans></span>
+            ? <span className="inline-flex items-center gap-1.5 text-sm"><Spinner className="text-(color:--card-fg-2)" /><Trans>思考中</Trans></span>
+            : <span className="inline-flex items-center gap-1 text-sm"><Trans>定位重定向问题</Trans><IconChevronDown className="size-3.5 text-(color:--card-fg-2)" /></span>}
+          <span className="inline-flex items-center gap-1.5 text-xs text-(color:--card-fg-2)"><IconWrench className="size-3.5" /><Trans>已调用 2 次工具</Trans></span>
         </div>}
-        <div className="flex flex-col overflow-hidden rounded-lg border border-[#dee0e3] bg-white text-[#1f2329]">
-          {card.header && <div className="border-b border-[#dee0e3] px-3 py-2 text-sm font-semibold"><Trans>示例会话</Trans></div>}
+        <div className="flex flex-col overflow-hidden rounded-lg border border-(color:--card-line) bg-white text-(color:--card-fg)">
+          {card.header && <div className="border-b border-(color:--card-line) px-3 py-2 text-sm font-semibold"><Trans>示例会话</Trans></div>}
           <p className="px-3 py-3 text-sm leading-relaxed">
             <Trans>已修复登录页的重定向问题，并补充了对应的回归用例。</Trans>
           </p>
           {phase === 'running'
-            ? <div className="flex items-center justify-between gap-3 border-t border-[#dee0e3] px-3 py-2 text-xs text-[#646a73]">
-              <span className="inline-flex items-center gap-1.5"><IconLoaderCircle className="size-3.5 animate-spin" /><Trans>处理中</Trans></span>
-              {card.stopButton && <span className="text-[#1f2329]"><Trans>中断</Trans></span>}
+            ? <div className="flex items-center justify-between gap-3 border-t border-(color:--card-line) px-3 py-2 text-xs text-(color:--card-fg-2)">
+              <span className="inline-flex items-center gap-1.5"><Spinner className="text-(color:--card-fg-2)" /><Trans>处理中</Trans></span>
+              {card.stopButton && <span className="text-(color:--card-fg)"><Trans>中断</Trans></span>}
             </div>
-            : (left || right) && <div className={cn('flex items-center justify-between gap-3 border-t border-[#dee0e3] px-3 py-2 text-xs text-[#646a73]', !left && 'justify-end')}>
+            : (left || right) && <div className={cn('flex items-center justify-between gap-3 border-t border-(color:--card-line) px-3 py-2 text-xs text-(color:--card-fg-2)', !left && 'justify-end')}>
               {left && <span className="min-w-0 truncate">Opus 5.5 · fast · high</span>}
               {right && <span className="ml-auto flex shrink-0 gap-1 text-right">{rightParts.map((part, index) => <span key={index} className="flex gap-1">{index > 0 && '·'}{part}</span>)}</span>}
             </div>}

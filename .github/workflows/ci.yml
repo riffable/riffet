@@ -18,6 +18,33 @@ jobs:
     with:
       os: ubuntu-latest
 
+  privacy-range:
+    # The commits a pull request or push adds: their messages, added lines and private words in
+    # identities. CI has no private-word list (no secret holds it), so here only the built-in patterns
+    # apply; the private-word check runs locally through the commit hooks.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No private data in the new commits
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          if [ "$EVENT" = pull_request ]; then
+            node scripts/check-privacy.mjs --range "$PR_BASE..$PR_HEAD"
+          elif [ -z "$BEFORE" ] || [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            echo "New branch: no previous push to compare with; skipped."
+          elif ! git merge-base --is-ancestor "$BEFORE" "$AFTER" 2>/dev/null; then
+            echo "Force push: $BEFORE is not an ancestor of $AFTER; skipped."
+          else
+            node scripts/check-privacy.mjs --range "$BEFORE..$AFTER"
+          fi
+
   mobile:
     # The Gradle build is independent of pnpm. Only the JVM test targets run here: the iOS targets
     # are skipped off macOS, and assembling the APK is left to a machine with the full SDK.

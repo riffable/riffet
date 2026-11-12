@@ -34,7 +34,7 @@ struct QuickOpenOverlay: ViewModifier {
                             .transition(.opacity.combined(with: .offset(y: -8)))
                     }
                 }
-                .animation(reduceMotion ? nil : .smooth(duration: 0.3), value: project?.id) // perf-lint: allow only the overlay's own panel and scrim move; the window's layout is untouched
+                .animation(reduceMotion ? nil : Motion.expressive, value: project?.id) // perf-lint: allow only the overlay's own panel and scrim move; the window's layout is untouched
             }
     }
 }

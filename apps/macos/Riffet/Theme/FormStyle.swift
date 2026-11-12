@@ -129,7 +129,7 @@ struct SegmentedTrack<Value: Hashable, Content: View>: View {
         }
         // Only the track animates: a transaction around the write would also animate whatever the
         // selection swaps elsewhere (a panel's views, a result list, a whole settings page).
-        .animation(.snappy(duration: 0.2), value: selection)
+        .animation(Motion.standard, value: selection)
         .padding(2)
         .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(palette.bgSubtle))
         .fixedSize()

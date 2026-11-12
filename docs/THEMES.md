@@ -37,9 +37,9 @@
 | 自定义主题的 revision 是内容哈希，不是计数器；并发写以 409 拒绝 | `apps/server/src/themes/index.ts` |
 | 三端内置调色板与 ANSI 表逐值一致 | 同一个生成器输出的 Kotlin / Swift / Web 表，`pnpm gen:theme:check` 防止漂移 |
 
-### 2.2 设计约定（没有自动测试）
+### 2.2 设计约定
 
-下面几条依然成立，但当前的仓库没有测试守护它们。改动主题相关代码时需要自觉维持：
+前两条对比度规则由 `scripts/check-theme-contrast.ts` 守护：`pnpm gen:theme` 与 `pnpm gen:theme:check`（CI）对每套内置主题的明暗两半逐条断言，违反即失败，没有豁免名单。校验的是 `--fg` 阶梯严格递减、`--fg`/`--fg-2`/`--fg-3` 对 `--bg` 的 4.5:1、状态色与 agent 色对 `--bg` 的 3:1、三组填充色前景与两个 toast 色；`--fg-4`（占位与禁用）只要求阶梯递减。界面风格不带颜色，不参与。`apps/web/src` 的裸色值与字号/圆角/层级字面量由 `pnpm check:design`（`scripts/check-design-rules.mjs`）拦截。其余几条没有自动校验，改动时需要自觉维持：
 
 - 文本阶梯严格递减（`--fg` > `--fg-2` > `--fg-3` > `--fg-4`），内置主题的正文与次要文本达到 WCAG AA（≥ 4.5:1），状态色与 agent 色 ≥ 3:1。
 - 填充色上的前景成对达标：`--accent-fg` / `--accent`、`--danger-fg` / `--danger`、`--primary-fg` / `--primary` ≥ 4.5:1；`--toast-success` / `--toast-danger` 在 `--toast` 上 ≥ 3:1。**自定义主题不受此约束**：编辑器只提示，不阻止保存。
@@ -226,7 +226,7 @@ manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appear
 
 ### 7.4 官方包
 
-外部插件 `riffet.appearance-paper`（安装后默认启用）：配色「纸墨」是近乎无彩的墨配低色度暖纸，明暗各一套，ANSI 取自同一组色相；字体是 Inter 的 opsz 可变子集（latin、latin-ext，SIL OFL，许可文本在 `assets/Inter-OFL.txt`）；背景是可平铺的纸纹 PNG，由 `scripts/generate-grain.mjs` 确定性生成；预设「纸墨」组合三者。
+外部插件 `riffet.appearance-paper`（安装后默认启用）：配色「纸墨」是近乎无彩的墨配低色度暖纸，明暗各一套，ANSI 取自同一组色相；字体是 Inter 的 opsz 可变子集（latin、latin-ext，SIL OFL，许可文本在 `assets/Inter-OFL.txt`）；背景是可平铺的纸纹 PNG，由插件仓库里的 scripts/generate-grain.mjs 确定性生成；预设「纸墨」组合三者。
 
 ### 7.5 Android 界面图标包
 

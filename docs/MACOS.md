@@ -939,7 +939,7 @@ cd ../macos
 | 终端：多终端切换、新建 Shell、接管 | `TerminalDock.tsx`、`TerminalView.tsx` | ✅ | — |
 | **终端历史回看**（向上滚动拉取 `/history`、回到实时） | `TerminalView.tsx:448` | ✅ 「历史输出」读 `/history` 全文，可选择复制，再点回到实时 | — |
 | 中断进程（SIGINT）、关闭终端、释放控制权、手动重连 | `TerminalView.tsx:327-400` | ✅ 中断（确认）、关闭 Shell、释放控制权、重新连接 | — |
-| 浅色主题下改写 TUI 深色背景 | `lib/terminal-palette.ts` | ✅ 移植为 `TerminalRetint.kt`（含 Web 的全部测试用例）；ANSI 色板按主题与明暗取 Web 同一套 | — |
+| 浅色主题下改写 TUI 深色背景 | （原 `lib/terminal-palette.ts`） | ✅ 移植为 `TerminalRetint.kt`（含 Web 的全部测试用例）；ANSI 色板按主题与明暗取 Web 同一套 | — |
 
 ### 设置
 

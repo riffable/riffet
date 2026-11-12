@@ -41,12 +41,20 @@ jobs:
         run: pnpm gen:timeline-fixtures:check
       - name: Contract schemas and fixtures are current
         run: pnpm gen:contracts:check
+      - name: Model prompts are current
+        run: pnpm gen:prompts:check
       - name: App versions match package.json
         run: pnpm version:check
       - name: Mac app acknowledgements list its libraries
         run: node apps/macos/scripts/check-acknowledgements.mjs
       - name: Plugins stay separate from the core
         run: pnpm check:plugins
+      - name: No private data in source
+        run: pnpm check:privacy
+      - name: Markdown paths point at files that exist
+        run: pnpm check:docs
+      - name: Case-insensitive file names do not collide
+        run: pnpm check:case
       - name: Error texts are generated for every client
         run: pnpm gen:i18n:check
       - name: Web interface text goes through the catalogs
@@ -55,6 +63,8 @@ jobs:
         run: pnpm check:mobile-strings
       - name: Compose code avoids known remount and per-frame recomposition patterns
         run: pnpm check:compose
+      - name: Loops, web literals, Mac spacing and motion follow the design rules
+        run: pnpm check:design
       - name: Tests
         run: pnpm test
       - name: Production build

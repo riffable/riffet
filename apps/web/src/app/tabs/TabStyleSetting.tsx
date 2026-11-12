@@ -13,7 +13,7 @@ function Thumb({ style, selected }: { style: TabStyle; selected: boolean }) {
       <span className="flex flex-1 flex-col">
         {style === 'strip' && (
           <span className="flex h-2 items-end gap-0.5 pl-[3px]">
-            <i className="session-tab-current h-2 w-[22px] rounded-t-[3px]" />
+            <i className="session-tab-current h-2 w-[22px] rounded-t-xs" />
             <i className="mb-0.5 h-1 w-[22px] rounded-sm bg-active" />
             <i className="mb-0.5 h-1 w-[22px] rounded-sm bg-active" />
           </span>
@@ -22,11 +22,11 @@ function Thumb({ style, selected }: { style: TabStyle; selected: boolean }) {
           {style === 'inline' && (
             <span className="flex h-[7px] gap-[3px]">
               <i className="session-tab-current w-5 rounded-sm border border-transparent" />
-              <i className="w-5 rounded-[3px] bg-active" />
-              <i className="w-5 rounded-[3px] bg-active" />
+              <i className="w-5 rounded-xs bg-active" />
+              <i className="w-5 rounded-xs bg-active" />
             </span>
           )}
-          {style === 'off' && <span className="flex h-[7px]"><i className="w-11 rounded-[3px] bg-fg-4" /></span>}
+          {style === 'off' && <span className="flex h-[7px]"><i className="w-11 rounded-xs bg-fg-4" /></span>}
           <i className="h-[3px] w-[70%] rounded-sm bg-active" />
           <i className="h-[3px] w-[45%] rounded-sm bg-active" />
         </span>

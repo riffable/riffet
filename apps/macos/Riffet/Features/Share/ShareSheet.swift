@@ -153,7 +153,7 @@ private struct ShareImageView: View {
             }
             .padding(.bottom, 28)
         }
-        .animation(.easeOut(duration: 0.2), value: toast)
+        .animation(Motion.standard, value: toast)
     }
 
     // MARK: Options

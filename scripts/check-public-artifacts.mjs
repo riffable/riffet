@@ -8,32 +8,28 @@
 //
 // Each excluded vendor's `plugins/<vendor>/` path is always a marker. Further markers are
 // comma-separated in `RIFFET_ARTIFACT_DENYLIST`, and one per line in the file named by
-// `RIFFET_ARTIFACT_DENYLIST_FILE` (keep that file out of version control). A hit means code from
+// `RIFFET_ARTIFACT_DENYLIST_FILE` (keep that file out of version control), and in
+// `~/.config/riffet/private-words.txt` when present (scripts/privacy-words.mjs). A hit means code from
 // an excluded vendor, a source map path or a copied asset still reached the artifacts.
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadMarkers, markerPattern } from './privacy-words.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const targets = (process.argv.length > 2 ? process.argv.slice(2) : [join(root, 'dist')])
   .map(target => resolve(target));
 
-const listed = process.env.RIFFET_ARTIFACT_DENYLIST_FILE;
-if (listed && !existsSync(listed)) {
-  console.error(`RIFFET_ARTIFACT_DENYLIST_FILE ${listed} does not exist.`);
+let markers;
+try { markers = loadMarkers(); } catch (error) {
+  console.error(error.message);
   process.exit(2);
 }
-const markers = [
-  // A vendor left out of the build must not leave its source path in a bundle or source map.
-  ...(process.env.RIFFET_EXCLUDED_VENDORS ?? '').split(',').map(vendor => vendor.trim()).filter(Boolean).map(vendor => `plugins/${vendor}/`),
-  ...(process.env.RIFFET_ARTIFACT_DENYLIST ?? '').split(','),
-  ...(listed ? readFileSync(listed, 'utf8').split('\n') : []),
-].map(marker => marker.trim()).filter(Boolean);
 if (!markers.length) {
   console.error('No markers: set RIFFET_EXCLUDED_VENDORS, RIFFET_ARTIFACT_DENYLIST or RIFFET_ARTIFACT_DENYLIST_FILE.');
   process.exit(2);
 }
-const patterns = markers.map(marker => ({ marker, pattern: new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i') }));
+const patterns = markers.map(marker => ({ marker, pattern: markerPattern(marker) }));
 
 function* files(directory) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {

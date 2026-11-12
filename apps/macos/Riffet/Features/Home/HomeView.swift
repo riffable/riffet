@@ -1020,7 +1020,7 @@ struct QuickAction: View {
         .buttonStyle(.plain)
         .opacity(enabled ? 1 : 0.5)
         .onHover { hovering = $0 }
-        .animation(.snappy(duration: 0.12), value: hovering)
+        .animation(Motion.fast, value: hovering)
     }
 }
 

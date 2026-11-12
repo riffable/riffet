@@ -144,8 +144,8 @@ capture-pane -p -P -C -t %P                               # 未解析完的转�
 
 - `TerminalView.tsx`：`scrollback: SEED_ROWS`，去掉外层滚动容器，xterm 自己滚动；`snapshot` 先 `resize` 到快照尺寸再
   `write`，写完回调里再 `fit` 并在持有控制权时上报尺寸（VS Code `handleReplay` 的顺序）。
-- 删除：`TerminalHistory.tsx`、`/history` 轮询与缓存、`wheelToApp`、wheel capture 分流、合成 wheel 的触摸逻辑、
-  `lib/ansi.ts` 的 `appendScrollback` 和只剩测试在用的 `parseAnsi`。滚轮归属交还 xterm：
+- 删除：`TerminalHistory.tsx`、`/history` 轮询与缓存、`wheelToApp`、wheel capture 分流、
+  合成 wheel 的触摸逻辑、<!-- doc-paths:off -->`lib/ansi.ts`<!-- doc-paths:on --> 的 `appendScrollback` 和只剩测试在用的 `parseAnsi`。滚轮归属交还 xterm：
   应用开了鼠标就上报，alt 屏发方向键，否则滚回看。
 - 渲染：Chromium 桌面加载 `@xterm/addon-webgl@0.19.0`。`onContextLoss` 时 dispose 并回落 DOM，此后整个会话
   不再尝试；Safari、WKWebView 和移动浏览器默认 DOM（xterm.js #5816）。框线字符由 WebGL 的 `customGlyphs` 画满整格。

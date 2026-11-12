@@ -143,7 +143,7 @@ struct ThemeEditorView: View {
                 }
                 Section {
                     Button {
-                        withAnimation(.snappy(duration: 0.18)) { showManual.toggle() }
+                        withAnimation(Motion.standard) { showManual.toggle() }
                     } label: {
                         HStack(spacing: Space.xs) {
                             Image(icon: "chevron.right")

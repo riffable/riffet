@@ -252,7 +252,7 @@ bridge 先完成内容 admission 等异步操作，再在同一同步处理分�
 
 官方 [工具 hooks](https://cursor.com/docs/hooks#posttooluse) 定义了工具结果后的 `additional_context`。本机实验已确认它会进入原生工具结果 `<system_reminder>`，从而可将唯一 command marker 关联到真实 blob ID。hook 自己写出的本地 receipt 仅证明返回了输出，不能代替原生记录确认。另只读检查了官方 SDK 1.0.37：活动 inline Run 有目标绑定和消费回执，detached local/cloud 句柄退回 follow-up，checkpoint store 也独立于 CLI chat-store；本轮没有用 SDK 发起模型请求。[SDK 官方说明](https://cursor.com/docs/sdk/typescript#steering-a-run-in-flight)
 
-完整证据保存在本机临时目录。其中 `probe-c-hooks/evidence/` 保存原生 marker，`probe-d-expiry/evidence/` 保存 TUI 自动转轮，`probe-e-plugin/evidence/` 保存插件加载和旧目标隔离；`REPORT.md`、`evidence/summary.json` 汇总结果。`reproduce.py` 可在新临时目录复验插件方案，已做语法检查，没有为此重复模型调用。专用 tmux server 已清理。
+完整证据保存在本机临时目录。其中 `probe-c-hooks/evidence/` 保存原生 marker，`probe-d-expiry/evidence/` 保存 TUI 自动转轮，`probe-e-plugin/evidence/` 保存插件加载和旧目标隔离；`REPORT.md`、<!-- doc-paths:off -->`evidence/summary.json`<!-- doc-paths:on --> 汇总结果。`reproduce.py` 可在新临时目录复验插件方案，已做语法检查，没有为此重复模型调用。专用 tmux server 已清理。
 
 生产 adapter 的完整 HTTP 验证也已通过：CLI `2026.10.01-e373342` / `composer-2.5` 在独立临时服务和 PTY 中完成原工具，start/done 各一次，原始 Run 与引导 Run 同一 nativeTurnId、稳定 owner、均 completed，引导 delivery 为 observed；最终答 `CURSOR_HTTP_STEER`。真实回执唯一，工具更新、引导输入、助手输出的次序正确，carrier 隐藏，旧目标的新提交返回 409。关闭自己的 PTY 后重启同一临时服务，只读冷回放仍得到相同 receipt ID、顺序和隐藏结果，没有新模型请求。脚本与结果位于 `/var/folders/bw/nhmdp1ws5_g53s2p29950xb00000gn/T/riffet-cursor-http-final-b75o56jk/{e2e.ts,result.json,trace.json,cold-replay.json}`。
 
@@ -270,7 +270,7 @@ bridge 先完成内容 admission 等异步操作，再在同一同步处理分�
 
 生产实现复用 Riffet 现有 TUI 和 loopback hook bridge，以 `nativeSessionId + prompt_id` 为原目标，并核验主线程及真实工具 ID。`claude/history.ts` 从原生 `hook_additional_context` attachment 生成 `native_input_receipt`，不伪造普通 user echo。失联或冷恢复后，存活的旧 TUI 可能仍指向旧 hook URL/token，不能仅凭终端存在就开放引导，也不能在引导路径重启它。官方 [交互说明](https://code.claude.com/docs/en/interactive-mode#queue-messages-while-claude-works) 和 [hook 上下文说明](https://code.claude.com/docs/en/hooks#add-context-for-claude) 分别支持输入边界与持久化机制。
 
-报告及全部实验保存在本机临时目录。`report.json` 区分确认项与未确认项；`hook-923babeb/native-receipts.json` 保存原生注入记录，`control-4e1984c6/summary.json` 保存无注入对照，`tail-af7ebe32/` 保存原任务单轮结束及 pending 拒绝。`run_probe.py` 与 `run_tui_probe.py` 为复验入口，各实验 `command.json` 保存实际 CLI 参数。自己的 CLI 进程均已退出，没有升级全局 CLI。
+报告及全部实验保存在本机临时目录。`report.json` 区分确认项与未确认项；<!-- doc-paths:off -->`hook-923babeb/native-receipts.json` 保存原生注入记录，`control-4e1984c6/summary.json`<!-- doc-paths:on --> 保存无注入对照，`tail-af7ebe32/` 保存原任务单轮结束及 pending 拒绝。`run_probe.py` 与 `run_tui_probe.py` 为复验入口，各实验 `command.json` 保存实际 CLI 参数。自己的 CLI 进程均已退出，没有升级全局 CLI。
 
 成功 TUI 重试位于 `tui-66718fbc/`；生产全链路脚本、结果和事件流同样只在本机临时目录。生产实验使用独立临时项目和新会话，复用本机 CLI 登录配置；CLI 实际将 transcript 保存到自身默认历史目录，未将其描述为完全隔离的配置环境。实验结束后只关闭自己的 terminal 和 App 实例。
 
@@ -436,4 +436,4 @@ iPhone 继续遵循其当前 44 点主触控区与原生无障碍规则：引导
 - [Cursor SDK 官方文档](https://cursor.com/docs/sdk/typescript#steering-a-run-in-flight) 定义 steer 接受结果和可用句柄；[Claude 官方交互文档](https://code.claude.com/docs/en/interactive-mode#queue-messages-while-claude-works) 区分工具边界消费、下一轮发送与强制发送的行为。
 - [DSH bridge](../apps/server/src/backends/dsh/bridge-runtime/index.mjs) 当前调用 followup；本机兼容目标包位于 `~/.dsh/profiles/node_modules/@deepseek-ai/`，`dsh-agent` 版本 0.2.0-rc.2。约束见 `dsh-agent/lib/types/runtime-types.d.ts` 的 send/steer 说明，以及 `dsh-agent-loop/lib/index.js` 的 `wakingAfterAbort` 分支。
 - [KMP JSON 契约](../apps/mobile/contracts/src/commonMain/kotlin/riffet/contracts/Json.kt)、[Outbox](../apps/mobile/client/src/commonMain/kotlin/riffet/ui/composer/Outbox.kt)、[SessionComposer](../apps/mobile/client/src/commonMain/kotlin/riffet/ui/state/SessionComposer.kt) 是共享兼容与恢复的主要位置。
-- [Web 时间线](../apps/web/src/app/session/buildTimeline.ts)与[回合分组](../apps/web/src/app/session/timelineTurns.ts)、[KMP 时间线](../apps/mobile/core/src/commonMain/kotlin/riffet/core/NativeTimeline.kt)、[iPhone 方案](IOS.md) 和 [移动端架构](MOBILE.md) 约束跨端接入边界。
+- [Web 时间线](../apps/web/src/app/session/buildTimeline.ts)与[回合分组](../apps/web/src/app/session/timelineTurns.ts)、[KMP 时间线](../apps/mobile/client/src/commonMain/kotlin/riffet/ui/timeline/)、[iPhone 方案](IOS.md) 和 [移动端架构](MOBILE.md) 约束跨端接入边界。

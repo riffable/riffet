@@ -119,6 +119,7 @@ struct LiveBrandMark: View {
         } else {
             let current = style ?? picked
             GeometryReader { geo in
+                // motion-loop: ambient brand mark in the logo slot, static under Reduce Motion
                 TimelineView(.animation(minimumInterval: nil, paused: !visible)) { timeline in
                     Canvas { context, size in
                         let now = timeline.date

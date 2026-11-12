@@ -85,6 +85,7 @@ internal fun WorkingIndicator(
     // A liveness pulse uses the long motion role; reduced motion leaves a steady status dot.
     val pulseDuration = motion.LONG * 3
     val pulse = if (!animate || pulseDuration == 0) rememberUpdatedState(1f) else {
+        // motion-loop: liveness pulse; animate is false under reduced motion
         rememberInfiniteTransition(label = "working").animateFloat(
             initialValue = 0.35f, targetValue = 1f,
             animationSpec = infiniteRepeatable(

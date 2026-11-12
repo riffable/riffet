@@ -159,7 +159,7 @@ struct FilesPanel: View {
             }
             HStack(spacing: Space.xxs) {
                 if searchOpen { searchField } else { breadcrumb }
-                Button { withAnimation(.snappy(duration: 0.18)) { searchOpen.toggle() } } label: { Image(icon: searchOpen ? "list.bullet" : "magnifyingglass").font(.riffet(size: S(12))) }
+                Button { withAnimation(Motion.standard) { searchOpen.toggle() } } label: { Image(icon: searchOpen ? "list.bullet" : "magnifyingglass").font(.riffet(size: S(12))) }
                     .buttonStyle(IconButtonStyle(active: searchOpen))
                     .help(searchOpen ? "返回文件列表" : "搜索文件")
                 if !searchOpen, !path.isEmpty {

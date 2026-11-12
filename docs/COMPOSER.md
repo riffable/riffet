@@ -268,7 +268,6 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 | 落点 | 内容 |
 | --- | --- |
 | `apps/web/src/app/session/composerKeyboard.ts` | `classifyEnterGesture` / `resolveEnter` / `isComposingKey` / `readEnterKeyBehavior` / `resolveEscapeLayer` / `primaryEnterHint`，纯函数 |
-| `apps/web/src/app/session/composerKeyboard.test.ts` | 19 条：手势 × 偏好矩阵、IME 两条信号、`repeat`、空草稿、Esc 分层、提示一致、取值兜底 |
 | `packages/contracts/src/index.ts` | `AppSettings.composerEnterBehavior?: 'newline' \| 'send'` |
 | `apps/server/src/settings/index.ts` | 显式登记键 + 只接受两个字面量（`:683`、`:730-735`） |
 | `apps/server/src/app.test.ts` | 缺省不发明值、`PATCH` 写入、部分更新不丢键、非法值 400、落盘可读 |
@@ -287,7 +286,6 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 | 落点 | 内容 |
 | --- | --- |
 | `apps/web/src/app/session/composerAttachmentIntake.ts` | `validateIntake`（整批拒绝，理由点名文件）、`dedupeKey` / `newCandidates`、`planIntake`（先判上限、再去重，返回数据不做事）、`isImageAttachment`、`focusIndexAfterRemoval`、上限常量与服务端一致（20 个 / 24 MiB） |
-| `apps/web/src/app/session/composerAttachmentIntake.test.ts` | 20 与 24 MiB 的边界、整批拒绝的文案、通用文件与 MIME 兜底、去重键与去重顺序、「先判上限再去重」、`planIntake` 的四种结果、删除后的焦点矩阵 |
 | `apps/web/src/app/session/ComposerAttachments.tsx` | 受控组件：64px 缩略图（点开既有 `ImageViewer`）、非图片胶囊（图标+名+体积）、上传中占位、加载失败原地重试、引用胶囊；`summary` 变体供手机折叠态 |
 | `apps/web/src/app/session/Composer.tsx` | `ingestFiles` 成为唯一入口（选择 / 粘贴 / 卡片拖放 / 整窗口拖放）；`onPaste` 同时收文件与文本；整窗口拖放（`windowDragDepth` + 5 个监听，卡片内仍由卡片处理）；删除时同步丢掉去重键 |
 
@@ -302,7 +300,6 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 | 落点 | 内容 |
 | --- | --- |
 | `apps/web/src/app/session/composerFullscreenGeometry.ts` | `fullscreenPanel`（宽 ≤920、高 = clamp(0.8·视口, 360, 720, ≤视口)）、`fullscreenTextLimit`、`shouldForwardWheel` |
-| `apps/web/src/app/session/composerFullscreenGeometry.test.ts` | 15 条：小/宽视口的夹取、文本上限恒正且小于面板、滚轮两个边界与 1px 容差、零增量不转发 |
 | `apps/web/src/app/session/ComposerFullscreen.tsx` | 常驻 portal 宿主（只移动宿主的 DOM 父节点）、遮罩、`--app-top/--app-height` 定位器、页眉与关闭、Esc 分层（面板内的 listbox 或 Radix `z-[70]` 层优先）、锁 `body` 滚动并还原 |
 | `apps/web/src/app/session/Composer.tsx` | 工具栏切换按钮（`aria-pressed`，桌面端；宿主未提供受控对时不渲染）、卡片在面板内的上限、滚轮监听、进入时把光标还给草稿、退出时焦点还给按钮 |
 | `apps/web/src/app/terminal/NativeSession.tsx` | 全屏状态的真源；打开时给会话列加 `inert` + `aria-hidden` |
@@ -317,6 +314,7 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 
 ## 11. 参考
 
+<!-- doc-paths:off -->
 - DSH 源码（`deepseek-harness` checkout，版本 `0.2.1-alpha.1`，全部为只读查阅）：
   - `packages/client/ui-conversation/src/client/input/editor/keymap.ts` —— 手势优先级、IME 守卫、`repeat` 守卫、paste 路由
   - `packages/client/ui-conversation/src/client/input/submission-policy.ts`、`src/submission-settings.ts` —— 发送策略纯函数与偏好持久化（Host settings 文档，字段 `busyEnter`）
@@ -328,6 +326,7 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
   - `packages/client/ui-primitives/src/ImageLightbox.tsx` —— portal lightbox、Esc、焦点归还
   - `packages/attachment/attachment-local/src/index.ts:34-42` —— 图片上限默认值（20 MiB / 20 张 / 200 MiB / 8192px）
   - **全屏编辑**：搜 `fullscreen|expand|maximize|modal|dialog|sheet|drawer|enlarge|zoom` 无输入框相关命中 —— DSH 没有这个能力，§4 是新增设计
+<!-- doc-paths:on -->
 - Riffet 内部：`docs/WEB.md`（体验契约与判据）、`docs/MOBILE.md`（移动端焦点与动效规则）。
 - 外部产品：VS Code [Chat interaction controls](https://code.visualstudio.com/docs/chat/chat-overview)（Enter 与按钮等价、进行中的三种发送语义）、[Add context to chat](https://code.visualstudio.com/docs/chat/copilot-chat-context)（图片作为上下文、拖放）、Cursor [Plan Mode](https://cursor.com/docs/agent/plan-mode)（编辑器内聊天默认 Enter 发送）。
 
@@ -348,4 +347,4 @@ DSH **没有**全屏或放大输入框。搜遍它的 composer 包与 `apps/`（
 
 ### 10.6 工具栏图标规格（2026-10-09）
 
-附件、权限与展开统一使用无边框按钮，桌面点击区域 28px、间距 4px、圆角 6px，悬停与键盘焦点样式一致。权限与展开图标均为 16px；加号因图形占画布比例较小，使用 18px 做视觉补偿。描边沿用全站 1.75，发送按钮保留强调样式。
+附件、权限与展开统一使用无边框按钮，桌面点击区域 28px、间距 4px、圆角 6px，悬停与键盘焦点样式一致。权限与展开图标均为 16px；加号因图形占画布比例较小，使用 18px 做视觉补偿。描边沿用 Web：任何尺寸下都是 1.25 像素，发送按钮保留强调样式。

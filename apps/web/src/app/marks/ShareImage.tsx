@@ -284,7 +284,7 @@ function ShareImageContents({ source, open }: { source: ShareSource; open: boole
   const promptHint = !message ? t`仅整条回复可用` : prompt === undefined ? t`正在查找…` : prompt === null ? t`找不到对应的提问` : t`这条回复对应的用户提问`;
   return (
     <>
-        <div ref={setStage} className={cn('min-h-0 flex-1 overflow-auto px-6 py-8 md:py-10', prefs.theme === 'ink' ? 'bg-[#2a2b2e]' : prefs.theme === 'paper' ? 'bg-[#e4e3df]' : 'bg-muted')}>
+        <div ref={setStage} className={cn('min-h-0 flex-1 overflow-auto px-6 py-8 md:py-10', prefs.theme === 'ink' ? 'share-stage-ink' : prefs.theme === 'paper' ? 'share-stage-paper' : 'bg-muted')}>
           <div className="mx-auto" style={{ width: size.width * fit, height: size.height * fit }}>
             <div className="w-max origin-top-left" style={{ transform: `scale(${fit})` }}>
               <ShareCard

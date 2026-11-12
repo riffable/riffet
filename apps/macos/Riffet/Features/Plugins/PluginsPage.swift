@@ -757,7 +757,7 @@ private struct PluginRow<Trailing: View>: View {
             trailing
         }
         .padding(.vertical, 2)
-        .onHover { on in withAnimation(.snappy(duration: 0.12)) { hovering = on } }
+        .onHover { on in withAnimation(Motion.fast) { hovering = on } }
     }
 
     /// What needs the reader: the plain states (enabled, built in, installed) are not tagged.
@@ -801,7 +801,7 @@ private struct MarketRow<Trailing: View>: View {
             trailing
         }
         .padding(.vertical, 2)
-        .onHover { on in withAnimation(.snappy(duration: 0.12)) { hovering = on } }
+        .onHover { on in withAnimation(Motion.fast) { hovering = on } }
     }
 }
 

@@ -168,6 +168,7 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
           <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t`Search worktrees`} aria-label={t`Search worktrees`} className="pl-8 max-md:h-10" />
         </div>
         <Tip label={creating ? t`Close` : t`New Worktree`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={creating ? t`Close` : t`New Worktree`} aria-expanded={creating} onClick={() => setCreating((value) => !value)}>{creating ? <IconX /> : <IconPlus />}</Button></Tip>
+        {/* motion-loop: refresh in flight */}
         <Tip label={t`Refresh`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`Refresh`} disabled={refreshing || busy} onClick={() => void refresh()}><IconRefreshCw className={cn(refreshing && 'animate-spin')} /></Button></Tip>
       </div>
       {creating && (

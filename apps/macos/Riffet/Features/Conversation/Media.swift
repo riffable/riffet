@@ -249,7 +249,7 @@ struct TimelineImageView: View {
             let loaded = await ImageLoader.shared.image(for: source, projectId: project)
             guard !Task.isCancelled else { return }
             let changes = imageSource != nil && imageSource != source
-            withAnimation(changes && !reduceMotion ? Animation.easeInOut(duration: 0.18) : nil) {
+            withAnimation(changes && !reduceMotion ? Motion.standard : nil) {
                 image = loaded
                 imageSource = source
                 failed = loaded == nil

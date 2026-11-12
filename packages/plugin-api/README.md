@@ -4,7 +4,7 @@ API v1 for Riffet product plugins. Stable entry points are the manifest, lifecyc
 
 The package ships compiled ESM, TypeScript declarations, the manifest JSON Schema and the `riffet-plugin` executable. It does not import a Riffet checkout or private host implementation.
 
-The SDK is not published to a registry yet. Inside a Riffet checkout the sources are in `packages/plugin-api`; to consume it from a separate plugin, build the archives (see below) and pin them as a dependency. `./examples/plugins` shows plugins that need no SDK at all.
+The SDK is not published to a registry yet. Inside a Riffet checkout the sources are in `packages/plugin-api`; to consume it from a separate plugin, build the archives (see below) and pin them as a dependency. [`examples/plugins`](../../examples/plugins) shows plugins that need no SDK at all.
 
 ```json
 {

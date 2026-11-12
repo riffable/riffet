@@ -191,7 +191,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 ### 安装与版本
 
-`<stateDir>/plugins/<id>/<版本>/` 存文件，`<stateDir>/plugins/installed.json`（0600，原子写入）记录 `{ id, versions: [{ version, source, integrity, installedAt, capabilities }], selected }`。安装串行执行：先解到 `plugins/.staging/` 的临时目录（路径限定在包内，链接、设备、重复条目、`..`、绝对路径一律拒绝；归档 32 MB、解包 96 MB、4000 个文件上限），再校验 manifest、入口与声明引用的资源、兼容性，对全部文件内容计算 `integrity`（`sha256-…`，只证明内容未变，不证明作者可信），然后移到版本目录并写记录。每次启动读取时重新核对 integrity，文件被改动的版本不加载并显示原因。
+`<stateDir>/plugins/<id>/<版本>/` 存文件，`<stateDir>/plugins/installed.json`（0600，原子写入）记录 `{ id, versions: [{ version, source, integrity, installedAt, capabilities }], selected }`。安装串行执行：先解到 `<stateDir>/plugins/.staging/` 的临时目录（路径限定在包内，链接、设备、重复条目、`..`、绝对路径一律拒绝；归档 32 MB、解包 96 MB、4000 个文件上限），再校验 manifest、入口与声明引用的资源、兼容性，对全部文件内容计算 `integrity`（`sha256-…`，只证明内容未变，不证明作者可信），然后移到版本目录并写记录。每次启动读取时重新核对 integrity，文件被改动的版本不加载并显示原因。
 
 - 同一版本、同样内容再次安装是幂等的；同一版本、不同内容得 409 `PLUGIN_VERSION_CONFLICT`。内置或开发包的 ID、`riffet.` 命名空间得 409，替换来源不在本阶段。
 - 授权：请求的 `grant` 必须等于包要求的 `capabilities`，否则 409 `PLUGIN_GRANT_REQUIRED`，`details` 带 `{ id, version, capabilities }`，客户端据此显示确认。授权按版本记录，新版本增加能力就需要新的授权。

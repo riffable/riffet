@@ -196,7 +196,7 @@ struct ImageViewerOverlay: View {
                     .padding(.bottom, Space.lg)
                 }
                 .opacity(viewer.closing ? 0 : 1)
-                .animation(.easeOut(duration: 0.16), value: viewer.closing)
+                .animation(Motion.fast, value: viewer.closing)
                 .transition(.opacity)
                 .onChange(of: item.id, initial: true) { _, _ in notice = nil }
                 .onDisappear { viewer.finishClose(item.id) }

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { NOT_A_COLOR_ROLE, colorRoleNames, parseStylesheet } from './theme-blocks';
 import { colorToHex, parseColor, THEME_ANSI_KEYS, THEME_ROLES } from '../packages/contracts/src/theme.js';
 import { BUILTIN_ANSI } from './theme-ansi';
+import { themeContrastFailures } from './check-theme-contrast';
 
 /**
  * Generates the Compose Multiplatform theme, and the macOS app's palette, from the web's stylesheet.
@@ -105,6 +106,11 @@ function assertRoles(label: string, palette: Map<string, string>): void {
 for (const entry of themes) {
   assertRoles(`theme "${entry.id}" light`, entry.light);
   assertRoles(`theme "${entry.id}" dark`, entry.dark);
+}
+
+const contrastFailures = themeContrastFailures(themes);
+if (contrastFailures.length) {
+  throw new Error(`Built-in themes break the contrast rules of docs/THEMES.md 2.2:\n  ${contrastFailures.join('\n  ')}`);
 }
 
 const shadowTokens = [...defaultLight.keys()].filter((name) => name.startsWith('--shadow'));

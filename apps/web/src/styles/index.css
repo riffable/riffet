@@ -2114,6 +2114,7 @@ html.dark {
     background-position: -50% 0;
   }
 }
+/* motion-loop: in-progress text shimmer */
 .text-shimmer {
   background: linear-gradient(90deg, var(--fg-3) 0%, var(--fg-3) 40%, var(--fg) 50%, var(--fg-3) 60%, var(--fg-3) 100%);
   background-size: 200% 100%;
@@ -2132,6 +2133,7 @@ html.dark {
     opacity: 0.35;
   }
 }
+/* motion-loop: liveness dot while a run is in progress */
 .animate-pulse-dot {
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
@@ -2185,6 +2187,7 @@ html.dark {
     background-position: -100% 0;
   }
 }
+/* motion-loop: loading placeholder shimmer */
 .canvas-shimmer {
   background: linear-gradient(90deg, transparent 0%, color-mix(in oklab, var(--accent) 70%, transparent) 50%, transparent 100%);
   background-size: 50% 100%;
@@ -2204,6 +2207,7 @@ html.dark {
 /* The living brand mark (`LiveBrandMark`): six loops, one per `data-style`. Every part turns about
    its own pivot, so the keyframes use the default origin. Only the mane, eye and ear move apart
    from the head; the head's outline never changes shape. */
+/* motion-loop-begin: ambient brand mark in the logo slot */
 .brand-live [data-part="speed"] { display: none; }
 .brand-live mask circle { fill: #000; }
 
@@ -2266,6 +2270,7 @@ html.dark {
 .brand-live[data-style="mood"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: -.8s; }
 .brand-live[data-style="run"] g:nth-of-type(2) > [data-part="tooth"] { animation-delay: -.08s; }
 .brand-live[data-style="run"] g:nth-of-type(3) > [data-part="tooth"] { animation-delay: -.16s; }
+/* motion-loop-end */
 @media (prefers-reduced-motion: reduce) {
   .brand-live [data-part] { animation: none !important; }
   .brand-live[data-style="draw"] [data-part="head"] { stroke-dasharray: none; }
@@ -2451,6 +2456,18 @@ html.dark {
   }
 }
 
+/* Fixed palettes of things that are not the app, so they ignore the theme: the Feishu card the channel
+   preview imitates, and the stage behind an exported share image. */
+.card-preview {
+  --card-fg: #1f2329;
+  --card-fg-2: #646a73;
+  --card-line: #dee0e3;
+  --card-add: #2ea121;
+  --card-del: #f54a45;
+}
+.share-stage-ink { background-color: #2a2b2e; }
+.share-stage-paper { background-color: #e4e3df; }
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -2513,6 +2530,7 @@ html.dark {
   }
 
   /* Still says "working", without rotation: a slow fade outranks the blanket rules above. */
+  /* motion-loop: replaces the spinner's rotation with a slow fade under reduced motion */
   .ui-spinner {
     animation: spinner-breathe 2.4s ease-in-out infinite !important;
   }
@@ -3037,6 +3055,7 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
   outline-offset: 3px;
   border-radius: 8px;
 }
+/* motion-loop: loading placeholder shimmer */
 .stats-skel {
   background: linear-gradient(100deg, var(--bg-muted) 30%, var(--bg-subtle) 50%, var(--bg-muted) 70%);
   background-size: 200% 100%;

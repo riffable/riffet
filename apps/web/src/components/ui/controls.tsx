@@ -84,6 +84,7 @@ export function Kbd({ children, className }: { children: React.ReactNode; classN
   return <kbd className={cn('inline-flex h-5 min-w-5 items-center justify-center rounded-sm bg-muted px-1 font-sans text-2xs font-medium text-fg-3', className)}>{children}</kbd>;
 }
 
+// motion-loop: in-progress spinner; a global reduced-motion rule in index.css swaps the rotation for a slow fade
 export function Spinner({ className }: { className?: string }) {
   return <IconLoaderCircle aria-hidden className={cn('ui-spinner size-3.5 animate-spin text-fg-3', className)} />;
 }
@@ -151,6 +152,7 @@ export function StatusDot({ tone, pulse, shape = 'dot', label, className }: { to
   const color = shape === 'ring'
     ? { success: 'border-success', warning: 'border-warning', danger: 'border-danger', accent: 'border-accent', idle: 'border-fg-4' }[tone]
     : { success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger', accent: 'bg-accent', idle: 'bg-fg-4' }[tone];
+  // motion-loop: `pulse` marks a live status (running, recording, reconnecting; waiting also pulses today)
   return (
     <span
       {...(label ? { role: 'img', 'aria-label': label, title: label } : { 'aria-hidden': true })}

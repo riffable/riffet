@@ -61,6 +61,7 @@ internal fun AgentAvatar(
     val visibility = rememberVisualWorkVisibility()
     val animate = visualWorkActive(visibility.visible, decorative = true)
     val turn = if (status == AvatarStatus.RUNNING && animate && motion.LONG > 0) {
+        // motion-loop: running arc; visualWorkActive(decorative = true) is false under reduced motion
         rememberInfiniteTransition(label = "avatar").animateFloat(0f, 360f, infiniteRepeatable(tween(motion.LONG * 3, easing = LinearEasing), RepeatMode.Restart), label = "turn")
     } else null
     Box(

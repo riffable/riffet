@@ -46,6 +46,7 @@ internal fun RiffetProgressIndicator(
     }
 
     // Cupertino advances the opacity trail by whole spokes instead of sweeping an arc.
+    // motion-loop: activity spinner; animated is false under reduced motion
     val step = if (animated) rememberInfiniteTransition(label = "activity").animateFloat(
         initialValue = 0f,
         targetValue = 12f,

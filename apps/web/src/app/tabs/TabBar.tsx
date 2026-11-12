@@ -110,7 +110,7 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
       onPointerDown={() => onHover(undefined, id)}
       className={cn(
         'group/tab relative flex shrink items-center gap-1.5 whitespace-nowrap pr-1 text-sm outline-none select-none transition-colors focus-visible:ring-2 focus-visible:ring-focus',
-        strip ? 'h-9 rounded-t-[10px] pl-3 focus-visible:ring-inset' : 'h-7 rounded-lg border pl-2',
+        strip ? 'h-9 rounded-t-lg pl-3 focus-visible:ring-inset' : 'h-7 rounded-lg border pl-2',
         // Like a browser's tab strip: every tab starts from the same width, which also sizes the
         // row, and gives way evenly as more arrive, the current one more slowly and never below a
         // readable width; past the minimums the row scrolls.

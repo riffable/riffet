@@ -166,6 +166,7 @@ func applyShimmer(_ layer: CALayer?, on: Bool) {
     animation.fromValue = [0, 0.0, 0.1, 0.2, 1]
     animation.toValue = [0, 0.8, 0.9, 1.0, 1]
     animation.duration = 1.6
+    // motion-loop: in-progress text shimmer, skipped under Reduce Motion
     animation.repeatCount = .infinity
     mask.add(animation, forKey: "shimmer")
     layer.mask = mask
@@ -1600,6 +1601,7 @@ final class WorkingView: FragmentView {
             pulse.toValue = 0.35
             pulse.duration = 0.9
             pulse.autoreverses = true
+            // motion-loop: running dot, skipped under Reduce Motion
             pulse.repeatCount = .infinity
             dot.layer?.add(pulse, forKey: "pulse")
         }

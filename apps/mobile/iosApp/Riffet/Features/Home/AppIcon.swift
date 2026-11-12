@@ -304,6 +304,7 @@ struct LiveBrandMark: View {
                 // The canvas is wider than the mark: speed lines and the bounce reach past its box.
                 GeometryReader { box in
                     let side = min(box.size.width, box.size.height)
+                    // motion-loop: ambient brand mark, animated is false under Reduce Motion
                     TimelineView(.animation(paused: !animated)) { timeline in
                         let elapsed = timeline.date.timeIntervalSince(started)
                         Canvas { context, size in

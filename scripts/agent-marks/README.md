@@ -9,12 +9,12 @@ by eye — update the source file here and re-run `pnpm gen:marks`.
 
 | File | Backend | Source | Fetched |
 |---|---|---|---|
-| `cursor.svg` | Cursor | Cursor logo file via openai/agents.md `public/logos/cursor.svg` (cursor.com brand assets) | 2026-10-29 |
-| `codex.svg` | Codex (OpenAI) | Codex logo via openai/agents.md `public/logos/codex.svg` | 2026-10-29 |
+| `cursor.svg` | Cursor | Cursor logo file via openai/agents.md public/logos/cursor.svg (cursor.com brand assets) | 2026-10-29 |
+| `codex.svg` | Codex (OpenAI) | Codex logo via openai/agents.md public/logos/codex.svg | 2026-10-29 |
 | `claude.svg` | Claude (Anthropic) | "Claude AI symbol" via Wikimedia Commons (CC0) | 2026-10-29 |
 | `droid.svg` | Droid (Factory) | factory.ai official favicon | 2026-10-29 |
 | `dsh.svg` | DeepSeek | DeepSeek whale via @lobehub/icons-static-svg (traced from DeepSeek's mark) | 2026-10-29 |
-| `trae.svg` | TRAE (ByteDance) | TRAE pixel mark via @lobehub/icons-static-svg (from trae.ai assets) | 2026-10-29 |
+| `trae.svg` | TRAE (ByteDance) | TRAE pixel mark via @lobehub/icons-static-svg (from trae.ai assets) | 2026-10-29 | <!-- privacy: allow public vendor attribution -->
 | `pi.svg` | pi | pi logo mark from pi.dev `logo-auto.svg` | 2026-11-01 |
 
 ## Usage rules

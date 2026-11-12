@@ -380,7 +380,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
   return (
     <div
       aria-hidden
-      className={cn('flex min-h-80 select-none overflow-hidden rounded-xl border border-line bg-sidebar text-[11px] leading-snug text-fg', mode === 'dark' && 'dark')}
+      className={cn('flex min-h-80 select-none overflow-hidden rounded-xl border border-line bg-sidebar text-2xs leading-snug text-fg', mode === 'dark' && 'dark')}
       data-theme={`preview-${draft.id}`}
     >
       <style>{css}</style>
@@ -393,6 +393,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
             <Icon className="size-3 shrink-0 text-fg-3" /><span className="truncate">{label}</span>
           </div>
         ))}
+        {/* design-rules: allow the miniature keeps one size under its 11px body */}
         <div className="mt-2.5 px-1.5 pb-1 text-[10px] text-fg-4"><Trans>项目</Trans></div>
         <div className="flex items-center gap-1.5 px-1.5 py-1 text-fg-2">
           <IconFolderOpen className="size-3 shrink-0 text-fg-3" /><span className="truncate">riffet</span>
@@ -413,6 +414,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
         <div className="flex min-h-0 flex-1 flex-col gap-2.5 px-3 py-3">
           <div className="max-w-[80%] self-end rounded-2xl bg-bubble px-2.5 py-1.5"><Trans>把配色改成画板</Trans></div>
           <p className="text-fg"><Trans>改好了，入口在 <span className="text-accent">ThemeCanvas.tsx</span>。</Trans></p>
+          {/* design-rules: allow the miniature keeps one size under its 11px body */}
           <div className="overflow-hidden rounded-md border border-line font-mono text-[10px]">
             <div className="border-b border-line-soft bg-subtle px-2 py-1 text-fg-3">theme-seed.ts</div>
             <div className="bg-[var(--diff-add)] px-2 py-0.5"><span className="text-[var(--diff-add-marker)]">+ </span>points: [surface, accent]</div>

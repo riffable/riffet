@@ -172,12 +172,12 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
       {head && (
         <div className="flex gap-3 px-4 pb-3 pt-4">
           {!quickChat && (
-            <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-subtle">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-subtle">
               <AgentLogo backend={backend} size={18} style={agentMarkStyle(backend)} />
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <div className="line-clamp-2 break-words text-[15px] font-semibold leading-[22px] text-fg" title={session.title}>{session.title}</div>
+            <div className="line-clamp-2 break-words text-(length:--text-h3) font-semibold leading-[22px] text-fg" title={session.title}>{session.title}</div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-3" role="status">
               {state?.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : state && <StatusDot tone={state.tone} pulse={state.pulse} />}
               <span className={cn('min-w-0 truncate', state?.tone === 'warning' && 'text-warning', state?.tone === 'danger' && 'text-danger')}>
@@ -194,7 +194,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
         {facts.map(([label, value]) => (
           <Fragment key={label}>
             <dt className="min-w-0 text-xs leading-5 text-fg-3 [overflow-wrap:anywhere]">{label}</dt>
-            <dd className="flex min-h-5 min-w-0 items-center text-[13px] leading-5 text-fg [overflow-wrap:anywhere]">{value}</dd>
+            <dd className="flex min-h-5 min-w-0 items-center text-sm leading-5 text-fg [overflow-wrap:anywhere]">{value}</dd>
           </Fragment>
         ))}
       </dl>

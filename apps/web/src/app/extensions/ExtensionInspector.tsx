@@ -361,7 +361,7 @@ function InspectorContent({
           {profileRuntime && <p className="mt-2 text-xs leading-5 text-fg-3"><Trans>配置级报告，尚未匹配到此条目。</Trans></p>}
           <ul className="mt-2 divide-y divide-line">{runtimeEntries.map((value, index) => <li key={`${value.sessionId}:${value.kind}:${value.name}:${index}`} className="py-3 text-xs">
             <div className="flex items-center justify-between gap-3"><span className="min-w-0 break-words text-fg-2">{value.name}</span><span className="inline-flex shrink-0 items-center gap-1.5 text-fg-3"><StatusDot tone={value.state === 'loaded' ? 'success' : value.state === 'error' ? 'danger' : value.state === 'pending' ? 'warning' : 'idle'} shape={value.state === 'unknown' ? 'ring' : 'dot'} />{stateLabels[value.state]}</span></div>
-            <p className="mt-1 break-all font-mono text-[10px] text-fg-4"><Trans>会话 {value.sessionId}</Trans></p>
+            <p className="mt-1 break-all font-mono text-2xs text-fg-4"><Trans>会话 {value.sessionId}</Trans></p>
             {value.message && <p className="mt-1 whitespace-pre-wrap break-words leading-5 text-fg-3">{value.message}</p>}
             {value.tools?.length ? <details className="mt-2 text-fg-3"><summary className="cursor-pointer"><Trans>工具 · {value.tools.length}</Trans></summary><ul className="mt-1 space-y-1 font-mono text-2xs">{value.tools.map(tool => <li key={tool} className="break-all">{tool}</li>)}</ul></details> : null}
             {value.kind === 'mcp' && profileRuntime && entry?.capabilities?.kinds.mcp?.includes('login') && <Button size="xs" variant="ghost" className="mt-2" disabled={blocked || readBusy || dirty} onClick={() => void run('login', value.name)}><Trans>认证</Trans></Button>}

@@ -230,8 +230,8 @@ function MarkCard({ mark, projectName, selecting, chosen, onChoose, onOpen, onOp
         {mark.kind === 'image' ? <SavedImage mark={mark} />
         : mark.kind === 'file' ? <SavedFile mark={mark} />
         : span ? (
-          <p className={cn('line-clamp-6 text-[15px] leading-7 text-fg', orphaned && 'text-fg-2')}>
-            <span className={cn('rounded-[3px] px-0.5 py-px box-decoration-clone', quoteClass[color])}>{mark.quote?.exact.trim()}</span>
+          <p className={cn('line-clamp-6 text-(length:--text-h3) leading-7 text-fg', orphaned && 'text-fg-2')}>
+            <span className={cn('rounded-xs px-0.5 py-px box-decoration-clone', quoteClass[color])}>{mark.quote?.exact.trim()}</span>
           </p>
         ) : (
           <div ref={overflows.ref} className={cn('relative max-h-60 overflow-hidden', (excerpt?.cut || overflows.value) && 'mark-fade', orphaned && 'opacity-80')}>
