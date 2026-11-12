@@ -6,3 +6,4 @@ export * from './timelineTurns.js';
 export * from './rows.js';
 export * from './toolTitle.js';
 export * from './lineDiff.js';
+export * from './findText.js';

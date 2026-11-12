@@ -78,6 +78,11 @@ export function outlineUrl(sessionId: string, lane: SyncLane, generation?: strin
   return `${sessionPath(sessionId)}/outline?${query.toString()}`;
 }
 
+export function findUrl(sessionId: string, lane: SyncLane, query: string, generation?: string): string {
+  const params = new URLSearchParams({ lane, q: query, ...(generation ? { generation } : {}) });
+  return `${sessionPath(sessionId)}/find?${params.toString()}`;
+}
+
 export function blobPath(sessionId: string, blobRef: string): string {
   return `/api/sessions/${encodeURIComponent(sessionId)}/blobs/${encodeURIComponent(blobRef)}`;
 }

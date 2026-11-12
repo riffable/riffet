@@ -2,6 +2,28 @@ import SwiftUI
 import UIKit
 import Observation
 
+/// Lets the page ask the list which cells are on screen (find begins at the reader's place), and the
+/// list find where find's mark is drawn.
+final class ConversationTranscriptProbe {
+    var visibleIDs: () -> [String] = { [] }
+    /// Cell id to the timeline item at its top; only cells of the timeline are listed.
+    var readingKeys: [String: String] = [:]
+    /// Timeline item key to the cell drawing it: the item's own cell over a folded run holding it.
+    var cells: [String: String] = [:]
+    func topRowKey() -> String? { visibleIDs().lazy.compactMap { self.readingKeys[$0] }.first }
+
+    /// Paragraphs drawing find's mark: the one in a cell, and any the list's sizing host measures off screen.
+    let markViews = NSHashTable<UITextView>.weakObjects()
+    /// Told when a paragraph starts drawing the mark, which it may do after the list scrolled to its cell.
+    var markChanged: () -> Void = {}
+    func report(_ view: UITextView, marked: Bool) {
+        if marked {
+            markViews.add(view)
+            DispatchQueue.main.async { [weak self] in self?.markChanged() }
+        } else { markViews.remove(view) }
+    }
+}
+
 /// UIKit owns the scrolling geometry; each SwiftUI transcript entry is one self-sizing cell.
 struct ConversationTranscriptList: UIViewControllerRepresentable {
     struct Row: Identifiable {
@@ -10,7 +32,9 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         let content: AnyView
     }
 
-    enum Anchor: Equatable { case top, center, bottom }
+    /// `find` brings find's mark into view: the line it is drawn on when the cell's paragraph reports it,
+    /// else the cell; a mark already in view is left where it is.
+    enum Anchor: Equatable { case top, center, bottom, find }
 
     struct Request: Equatable {
         let id = UUID()
@@ -26,12 +50,15 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
     /// The floating composer's height. The list runs under it (so rows pass behind it while scrolling)
     /// but ends above it: the safe area it ignores to do so no longer reserves that space.
     var bottomInset: CGFloat = 0
+    /// What floats under the top bar (the find bar): rows rest below it, and still scroll beneath it.
+    var topInset: CGFloat = 0
     /// near bottom, at bottom, approval visible, within about two screens of the oldest loaded row.
     let onPosition: (Bool, Bool, Bool, Bool) -> Void
     let onBeginDragging: () -> Void
     let onEndDragging: (Bool) -> Void
     let onReady: () -> Void
     var onFeedbackVisibility: ((Bool) -> Void)? = nil
+    var probe: ConversationTranscriptProbe? = nil
 
     func makeUIViewController(context: Context) -> Controller { Controller(configuration: self, environment: context.environment) }
     func updateUIViewController(_ controller: Controller, context: Context) { controller.update(self, environment: context.environment) }
@@ -74,6 +101,8 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         /// that land or fold above it, heights corrected late, the next streamed row. Released when
         /// they scroll or jump.
         private var heldRow: ReadingAnchor?
+        /// The cell find last landed on, until the reader scrolls: its mark may be drawn after the landing.
+        private var findCell: String?
         /// Measures rows outside the list, so a row the reader opens enters at its real height.
         private var sizingHost: UIHostingController<TranscriptHostedRow>?
         /// Rows that arrived above the reader mid-fling; applied once the scroll rests, so the fling is not cut short.
@@ -108,6 +137,17 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             self.configuration = configuration
             self.hostingEnvironment = TranscriptHostingEnvironment(values: environment)
             super.init(nibName: nil, bundle: nil)
+            configuration.probe?.visibleIDs = { [weak self] in self?.visibleIDs() ?? [] }
+            configuration.probe?.markChanged = { [weak self] in self?.findMarkChanged() }
+        }
+        /// Cell ids on screen below the top bar, in reading order.
+        private func visibleIDs() -> [String] {
+            guard let collection, let dataSource else { return [] }
+            let top = collection.contentOffset.y + collection.adjustedContentInset.top
+            return collection.indexPathsForVisibleItems.sorted().compactMap { path in
+                guard let frame = collection.layoutAttributesForItem(at: path)?.frame, frame.maxY > top else { return nil }
+                return dataSource.itemIdentifier(for: path)
+            }
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
 
@@ -314,6 +354,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
                 pendingAlignment = nil
                 readingAnchor = nil; heldRow = nil
                 detachedByUser = request.target != nil
+                findCell = request.anchor == .find ? request.target : nil
             }
             // Off-screen cells read the newest row when their provider is called.
             var nextRows: [String: Row] = [:]
@@ -326,6 +367,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             rowsByID = nextRows; orderedIDs = nextIDs
             guard isViewLoaded else { return }
             applyBottomInset(value.bottomInset)
+            applyTopInset(value.topInset)
             collection.accessibilityValue = value.accessibilityValue
             applyLatestRows()
             collection.setNeedsLayout()
@@ -353,6 +395,17 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             collection.contentInset.bottom = inset
             collection.verticalScrollIndicatorInsets.bottom = inset
             // Following the tail, the newest row stays just above the composer as it grows or shrinks.
+            collection.setNeedsLayout()
+        }
+
+        private func applyTopInset(_ inset: CGFloat) {
+            let inset = max(0, inset.rounded())
+            guard abs(collection.contentInset.top - inset) > 0.5 else { return }
+            // A reader at the top stays at the top, so the first row is not left under the bar or below a gap.
+            let atTop = collection.contentOffset.y <= minimumOffset + 1
+            collection.contentInset.top = inset
+            collection.verticalScrollIndicatorInsets.top = inset
+            if atTop { setOffset(minimumOffset) }
             collection.setNeedsLayout()
         }
 
@@ -522,10 +575,16 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         private func startAlignment(_ alignment: Alignment) {
             let target = alignment.target ?? dataSource.snapshot().itemIdentifiers.last
             guard let target, let path = dataSource.indexPath(for: target) else { align(alignment); return }
+            // A cell already drawn is placed from its own geometry, and a mark already in view not moved at all.
+            if alignment.anchor == .find, collection.cellForItem(at: path) != nil {
+                if let mark = findMarkRect(at: path), viewport.contains(mark) { holdFindCell(target, at: path) }
+                else { align(alignment) }
+                return
+            }
             pendingAlignment = alignment
             let position: UICollectionView.ScrollPosition
             if alignment.target == nil { position = .bottom }
-            else { switch alignment.anchor { case .top: position = .top; case .center: position = .centeredVertically; case .bottom: position = .bottom } }
+            else { switch alignment.anchor { case .top, .find: position = .top; case .center: position = .centeredVertically; case .bottom: position = .bottom } }
             collection.scrollToItem(at: path, at: position, animated: false)
             collection.setNeedsLayout()
         }
@@ -539,7 +598,42 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
             case .top: setOffset(frame.minY - insets.top)
             case .center: setOffset(frame.midY - insets.top - height / 2)
             case .bottom: setOffset(frame.maxY + insets.bottom - collection.bounds.height)
+            case .find:
+                // A line is centred, with what leads up to it above; a cell taller than half the view
+                // (no mark reported yet) starts a quarter of the way down.
+                let rect = findMarkRect(at: path) ?? frame
+                setOffset(rect.height <= height / 2 ? rect.midY - insets.top - height / 2 : rect.minY - insets.top - height / 4)
+                holdFindCell(target, at: path)
             }
+        }
+
+        /// The unobscured part of the list, in content coordinates: below the bars and above the composer.
+        private var viewport: CGRect {
+            let insets = collection.adjustedContentInset
+            return CGRect(x: collection.contentOffset.x, y: collection.contentOffset.y + insets.top, width: collection.bounds.width, height: max(0, collection.bounds.height - insets.top - insets.bottom))
+        }
+
+        /// Where the paragraph inside the cell at [path] draws find's mark, in content coordinates.
+        private func findMarkRect(at path: IndexPath) -> CGRect? {
+            guard let cell = collection.cellForItem(at: path), let views = configuration.probe?.markViews.allObjects else { return nil }
+            for view in views where view.window != nil && view.isDescendant(of: cell) {
+                if let rect = view.findMarkRect { return collection.convert(rect, from: view) }
+            }
+            return nil
+        }
+
+        /// Keeps the landed cell still while rows around it settle, as a tapped row is.
+        private func holdFindCell(_ id: String, at path: IndexPath) {
+            guard let frame = collection.layoutAttributesForItem(at: path)?.frame else { return }
+            heldRow = ReadingAnchor(id: id, distanceFromTop: frame.minY - collection.contentOffset.y)
+        }
+
+        /// The landed cell's paragraph drew the mark: bring it into view if the landing left it outside.
+        private func findMarkChanged() {
+            guard active, let id = findCell, !isInteracting, pendingRequest == nil, pendingAlignment == nil,
+                  let path = dataSource.indexPath(for: id), let mark = findMarkRect(at: path), !viewport.contains(mark) else { return }
+            pendingAlignment = Alignment(target: id, anchor: .find)
+            collection.setNeedsLayout()
         }
 
         /// How far above the viewport (in viewports) the oldest loaded row may be before older history is read.
@@ -618,10 +712,10 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         }
 
         func scrollViewDidScroll(_ scrollView: UIScrollView) { if !applyingSnapshot { queuePosition() } }
-        func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool { heldRow = nil; return true }
+        func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool { heldRow = nil; findCell = nil; return true }
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             detachedByUser = true
-            pendingRequest = nil; pendingAlignment = nil; readingAnchor = nil; heldRow = nil
+            pendingRequest = nil; pendingAlignment = nil; readingAnchor = nil; heldRow = nil; findCell = nil
             initiallyPositioned = true
             waitingForDeceleration = false
             interactionEvents.append(.began); scheduleCallbacks()

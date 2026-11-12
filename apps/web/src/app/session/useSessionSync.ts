@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { t } from '@lingui/core/macro';
-import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, Run, Session, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
+import type { NativeActivity, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeStatus, LaneFind, Run, Session, SyncLane, TimelineRow, TurnOutlineV3 } from '@contracts';
 import { api, listNativeSendRequests, removeNativeSendRequest } from '@/lib/api';
 import { createStore, useStore } from '@/lib/store';
 import { confirmSessionGone } from '@/lib/session-deletion';
@@ -43,6 +43,10 @@ export interface SyncExtras {
   loadTurn: (key: string, signal?: AbortSignal) => Promise<string | false>;
   /** Fetches the whole of a row the server sent cut to a preview. */
   expandRow: (key: string) => Promise<boolean>;
+  /** 会话内查找 over the whole main lane; undefined when only the held rows can be counted. */
+  findInLane: (query: string, signal?: AbortSignal) => Promise<LaneFind | undefined>;
+  /** Replaces the rows with those around [pos], for a find hit the rows do not hold. */
+  loadPlace: (pos: number, signal?: AbortSignal) => Promise<boolean>;
   /** Background tasks still running, as the server's control frames report them. */
   activities: NativeActivity[];
 }
@@ -554,6 +558,8 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
     return sync.rows().find(row => row.turn === target.turn && row.kind === 'user')?.key ?? false;
   }, []);
   const expandRow = useCallback((key: string) => engine.current?.expand(key) ?? Promise.resolve(false), []);
+  const findInLane = useCallback((query: string, signal?: AbortSignal) => engine.current?.find(query, signal) ?? Promise.resolve(undefined), []);
+  const loadPlace = useCallback(async (pos: number, signal?: AbortSignal) => (await engine.current?.jump(pos, signal)) === 'progress', []);
   const commands = useNativeRunCommands({ session, store, tracking, latest });
 
   const respondInteraction = useCallback(async (_interaction: NativeInteraction, response: NativeInteractionResponse): Promise<NativeInteractionResult> => {
@@ -591,7 +597,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   }, [session.id, tracking]);
 
   const extras: SyncExtras = {
-    hasMoreLater: synced.hasAfter, loadingLater: synced.loadingAfter, loadLater, readerAtEnd, jumpToLatest, loadTurn, expandRow, activities: synced.activities,
+    hasMoreLater: synced.hasAfter, loadingLater: synced.loadingAfter, loadLater, readerAtEnd, jumpToLatest, loadTurn, expandRow, findInLane, loadPlace, activities: synced.activities,
   };
   return {
     ...state, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion,

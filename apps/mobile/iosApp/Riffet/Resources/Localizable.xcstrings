@@ -1,6 +1,21 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "查找" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Find" } }
+      }
+    },
+    "上一个" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Previous" } }
+      }
+    },
+    "下一个" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Next" } }
+      }
+    },
     "Agent 扩展" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Agent extensions" } }

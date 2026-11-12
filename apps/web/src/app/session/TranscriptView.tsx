@@ -7,13 +7,13 @@ import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/lib/toast';
 import { isApplePlatform } from '@/lib/platform';
-import { cleanLabel, cn, isRecord, scrollBehavior, str } from '@/lib/utils';
+import { cn, scrollBehavior, str } from '@/lib/utils';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH, discardContentWidthPreview, previewContentWidth, resetContentWidth, setContentWidth } from '@/lib/content-width';
-import type { NativeRunRecovery, DiscussionSource, MarkQuote, Run, RunMetrics } from '@contracts';
+import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecovery, type DiscussionSource, type MarkQuote, type Run, type RunMetrics } from '@contracts';
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
-import { AnswerActions, AssistantMessage, ImageBlock, PlanBlock, reasoningPreview, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
+import { AnswerActions, AssistantMessage, ImageBlock, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
@@ -31,11 +31,11 @@ import { MarkLayer } from './MarkLayer';
 import { useTranscriptResources } from './transcriptResources';
 import { buildLayout, indexAt, OVERSCAN_MIN, rescaledHeight, segmentsCover, VIRTUAL_MIN_ROWS, VIRTUAL_RELEASE_ROWS, windowSegments, type RowLayout, type Segment } from './virtualRows';
 import { RememberedScope, RememberedValues, useRemembered } from './rememberedState';
-import { activeToolStates, currentToolActivity, toolDetail, toolKind, toolRunSummary, toolView } from './toolView';
+import { activeToolStates, currentToolActivity, toolKind, toolRunSummary } from './toolView';
 import { NativeJobStoreContext } from './subagents';
 import { isComposingKey } from './composerKeyboard';
-import { relaxUnderscoreEmphasis } from './cjkEmphasis';
-import { visibleText } from './markdownSource';
+import { countOccurrences, findableText, findNeedle } from '../../../../../packages/timeline/src/findText';
+import { POS_STEP } from '../../../../../packages/timeline/src/rows';
 import { truncationOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
@@ -150,6 +150,8 @@ const isFresh = (fresh: ReadonlyMap<string, Fresh> | undefined, key: string, row
   entry.row ??= row;
   return entry.row === row;
 };
+/** How long typing pauses before a find asks the server about the whole lane. */
+const FIND_DEBOUNCE_MS = 200;
 /** Pages of older history a focus request reads looking for its message before giving up. */
 const SEEK_PAGES = 30;
 /** Where a target taller than most of the viewport starts, from the top. */
@@ -175,75 +177,91 @@ function flashRange(range: Range | undefined, hold = false) {
   if (!hold) window.setTimeout(() => { if (CSS.highlights.get('mark-focus') === highlight) CSS.highlights.delete('mark-focus'); }, 1600);
 }
 
-/** What a `Markdown` body shows of [text]. */
-const markdownShown = (text: string) => visibleText(relaxUnderscoreEmphasis(text));
-
 /**
- * What 会话内查找 matches in an item: the text its row shows, lower-cased — a Markdown body without
- * its syntax, a tool's title (and its command, last, since a folded row shows it only as the
- * title), a thought's preview line, a failure's detail, which opens itself. The model holds every
- * row, mounted or not, which is what the page's own find cannot reach once the list is windowed.
- * Kept per item object, with the count for the last query, so a streamed frame only rescans the
- * rows it replaced.
+ * What 会话内查找 counts in an item (`findableText`, the server's rule too), kept per item object with
+ * the count for the last query, so a streamed frame only rescans the rows it replaced. The model holds
+ * every row, mounted or not, which is what the page's own find cannot reach once the list is windowed.
  */
 const findable = new WeakMap<TimelineItem, { text: string; root?: string; needle?: string; count?: number }>();
-function findableText(item: TimelineItem, root?: string) {
+function findableEntry(item: TimelineItem, root?: string) {
   let entry = findable.get(item);
   if (entry && entry.root === root) return entry;
-  let parts: (string | undefined)[] = [];
-  switch (item.kind) {
-    case 'user': parts = [item.text]; break;
-    case 'status': parts = [item.text, item.detail]; break;
-    case 'assistant': parts = [markdownShown(item.text)]; break;
-    case 'thought': parts = [item.channel === 'narration' ? markdownShown(item.text) : reasoningPreview(item.text)]; break;
-    case 'tool': {
-      const { job } = item;
-      if (job) { parts = [job.title, job.title.trim() === job.command.trim() ? undefined : job.command]; break; }
-      const view = toolView(item.event, root);
-      const subagent = view.kind === 'agent' && isRecord(item.event.data.subagent) ? item.event.data.subagent : undefined;
-      parts = [view.title, subagent ? str(subagent.type) : toolDetail(view), view.command && cleanLabel(view.title) !== cleanLabel(view.command) ? view.command : undefined];
-      break;
-    }
-    case 'plan': parts = item.entries.map((entry) => String(entry.content ?? entry.title ?? '')); break;
-    case 'task_notification': {
-      const detail = item.status === 'failed' ? item.detail : undefined;
-      parts = [item.command && item.title.trim() === item.command.trim() ? undefined : item.title, item.command, detail && item.taskKind === 'subagent' ? markdownShown(detail) : detail];
-      break;
-    }
-    case 'activity': {
-      const { activity } = item;
-      const command = activity.task?.command;
-      const name = activity.command?.name;
-      // A compaction shows its state and sizes, not its title.
-      if (activity.kind === 'background_task') parts = [activity.title || command, command && activity.title.trim() !== command.trim() ? command : undefined];
-      else if (activity.kind === 'local_command' && command) parts = [command, activity.detail];
-      else if (activity.kind === 'local_command') parts = [name && `/${name}`, activity.detail || (name ? undefined : activity.title)];
-      break;
-    }
-  }
-  entry = { text: parts.filter(Boolean).join('\n').toLowerCase(), root };
+  entry = { text: findableText(item, root), root };
   findable.set(item, entry);
   return entry;
 }
 
-/** An item [needle] occurs in [count] times, and the index of the row that shows it. */
-interface FindHit { key: string; row: number; count: number }
+/**
+ * A row [needle] occurs in [count] times, at its lane place [pos]; [row] is the index of the
+ * transcript row that shows it, absent for one the window does not hold, which a step loads first.
+ */
+interface FindHit { key: string; pos: number; count: number; row?: number }
+
+/** An item's lane place: its row's, which the item's sequence keeps to the step (`timelineItem`). */
+const placeOf = (item: TimelineItem) => item.event.sequence * POS_STEP;
 
 function findHits(rows: readonly TranscriptRow[], needle: string, root?: string): FindHit[] {
   const hits: FindHit[] = [];
   rows.forEach((row, index) => {
     for (const item of row.type === 'item' ? [row.item] : row.type === 'process' ? row.items : row.notices) {
-      const entry = findableText(item, root);
+      const entry = findableEntry(item, root);
       if (entry.needle !== needle) {
-        let count = 0;
-        for (let at = entry.text.indexOf(needle); at >= 0; at = entry.text.indexOf(needle, at + needle.length)) count += 1;
         entry.needle = needle;
-        entry.count = count;
+        entry.count = countOccurrences(entry.text, needle);
       }
-      if (entry.count) hits.push({ key: item.key, row: index, count: entry.count });
+      if (entry.count) hits.push({ key: item.key, pos: placeOf(item), count: entry.count, row: index });
     }
   });
   return hits;
+}
+
+/**
+ * The server's hits for the whole lane around the ones counted here: a row the window holds is
+ * counted as it shows now (a streamed or expanded row may have moved on since the server read it),
+ * and the rest stand before or after the window, which they cannot be inside of.
+ */
+function laneHits(served: readonly LaneFindHit[], held: readonly FindHit[], rows: readonly TranscriptRow[]): FindHit[] {
+  const keys = new Set<string>();
+  let low = Infinity;
+  for (const row of rows) for (const item of row.type === 'item' ? [row.item] : row.type === 'process' ? row.items : row.notices) {
+    keys.add(item.key);
+    const place = placeOf(item);
+    if (place < PENDING_ROW_POS) low = Math.min(low, place);
+  }
+  const away = served.filter((hit) => !keys.has(hit.key)).map((hit) => ({ key: hit.key, pos: hit.pos, count: hit.count }));
+  return [...away.filter((hit) => hit.pos < low), ...held, ...away.filter((hit) => hit.pos >= low)];
+}
+
+/** The occurrence a new query starts from: the first at or below [reading], else the last above it. */
+function startIndex(hits: readonly FindHit[], reading: number): number {
+  let index = 0, seen = 0;
+  for (const hit of hits) {
+    if (hit.pos >= reading) return seen;
+    seen += hit.count;
+    index = seen - 1;
+  }
+  return index;
+}
+
+/** Occurrence [index] counted across [hits]: its row and its place among the row's own. */
+function occurrenceAt(hits: readonly FindHit[], index: number): { hit: FindHit; nth: number } | undefined {
+  let rest = index;
+  for (const hit of hits) {
+    if (rest < hit.count) return { hit, nth: rest };
+    rest -= hit.count;
+  }
+  return undefined;
+}
+
+/** Where [at] stands counted across [hits], or -1 once its row no longer holds it. */
+function occurrenceIndex(hits: readonly FindHit[], at: { key: string; nth: number } | undefined): number {
+  if (!at) return -1;
+  let seen = 0;
+  for (const hit of hits) {
+    if (hit.key === at.key) return at.nth < hit.count ? seen + at.nth : -1;
+    seen += hit.count;
+  }
+  return -1;
 }
 
 /**
@@ -568,6 +586,10 @@ interface Props {
   onJumpToLatest?: (signal?: AbortSignal) => Promise<boolean>;
   /** Loads a turn the rows do not hold yet, for the turn rail and outline; see `TurnTracking.onLoadTurn`. */
   onLoadTurn?: (key: string, signal?: AbortSignal) => Promise<string | false>;
+  /** 会话内查找 over the whole lane (sync v3); without it, or when it answers nothing, the rows held are what is found. */
+  onFind?: (query: string, signal?: AbortSignal) => Promise<LaneFind | undefined>;
+  /** Replaces the rows with those around a lane place, for a find hit they do not hold. */
+  onLoadPlace?: (pos: number, signal?: AbortSignal) => Promise<boolean>;
   onExpandRow?: (key: string) => Promise<boolean>;
   onOpenTerminal?: () => void;
   onRetryNativeRun?: (run: Run) => void;
@@ -589,7 +611,7 @@ interface Props {
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, runActionPending, metricsByRun, focus, outlineTarget, progress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, runActionPending, metricsByRun, focus, outlineTarget, progress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -857,7 +879,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
 
   /**
    * Scrolls to the item with [key] and marks it: the words [rangeIn] picks inside it, or the item as
-   * a whole when it picks none; [hold] keeps the words marked until the next landing. Returns false
+   * a whole when it picks none; [hold] keeps the mark (words or ring) until the next landing. Returns false
    * while the item is not there to land on yet — windowed out (the scroll mounts it, and the new
    * window runs the caller again) or inside a folded block that is opening — so a caller retries on
    * the next change and honours a request once it returned true.
@@ -919,11 +941,14 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       const offset = box.height > view.height * 0.6 ? SETTLE_TOP : (view.height - box.height) / 2;
       return scroller.scrollTop + box.top - view.top - offset;
     });
-    window.clearTimeout(focusFlash.current);
+    clearFlash();
     flashRange(range, hold);
     if (range) return true;
-    if (item) { item.classList.add('timeline-focus-hit'); focusFlash.current = window.setTimeout(() => item.classList.remove('timeline-focus-hit'), 1600); }
-    else { setHighlight(found.dataset.rowKey ?? key); focusFlash.current = window.setTimeout(() => setHighlight(undefined), 1600); }
+    if (item) { item.classList.add('timeline-focus-hit'); flashedItem.current = item; }
+    else setHighlight(found.dataset.rowKey ?? key);
+    // Held like marked words when [hold]: a find hit the page cannot mark (a folded tool's command)
+    // stays ringed until the next step or the end of find, the same as one it can.
+    if (!hold) focusFlash.current = window.setTimeout(clearFlash, 1600);
     return true;
   };
 
@@ -965,20 +990,32 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   /** The occurrence 会话内查找 moved to; landed the same way as a focus, and once. */
   const [findTarget, setFindTarget] = useState<{ key: string; needle: string; nth: number }>();
   const findHandled = useRef<typeof findTarget>(undefined);
-  const findRequest = useRef<{ value: NonNullable<typeof findTarget>; version: number }>(undefined);
+  const findRequest = useRef<{ value: NonNullable<typeof findTarget>; version: number; scope: string }>(undefined);
   useEffect(() => {
     if (!findTarget || findHandled.current === findTarget) return;
     if (findRequest.current?.value !== findTarget) {
       scroll.release();
-      findRequest.current = { value: findTarget, version: scroll.navigationVersion.current };
+      findRequest.current = { value: findTarget, version: scroll.navigationVersion.current, scope: scrollScope };
     }
+    // The rows replaced whole (the page a step loaded lands a frame after the step) reset the
+    // scroll and move its version: that is not the reader going elsewhere, so the request stands.
+    if (findRequest.current.scope !== scrollScope) findRequest.current = { ...findRequest.current, version: scroll.navigationVersion.current, scope: scrollScope };
     if (findRequest.current.version !== scroll.navigationVersion.current) { findHandled.current = findTarget; setReveal(undefined); return; }
     if (landOn(findTarget.key, (found) => occurrenceRange(found, findTarget.needle, findTarget.nth), true)) { findHandled.current = findTarget; setReveal(undefined); }
     findRequest.current.version = scroll.navigationVersion.current;
-  }, [findTarget, timeline, timelineVersion, windowTick, reveal, landingTick, scroll]);
+  }, [findTarget, timeline, timelineVersion, windowTick, reveal, landingTick, scroll, scrollScope]);
   const focusSettle = useRef<() => void>(undefined);
   const focusFlash = useRef<number>(undefined);
-  useEffect(() => () => { focusSettle.current?.(); window.clearTimeout(focusFlash.current); }, [scrollScope]);
+  /** An item flashed inside a row; its ring is a class on the element, not state, so it is taken off by hand. */
+  const flashedItem = useRef<HTMLElement | undefined>(undefined);
+  /** Ends the current flash at once: a new landing (whose timer replaces this one's) or the end of find. */
+  const clearFlash = () => {
+    window.clearTimeout(focusFlash.current);
+    flashedItem.current?.classList.remove('timeline-focus-hit');
+    flashedItem.current = undefined;
+    setHighlight(undefined);
+  };
+  useEffect(() => () => { focusSettle.current?.(); window.clearTimeout(focusFlash.current); flashedItem.current?.classList.remove('timeline-focus-hit'); flashedItem.current = undefined; }, [scrollScope]);
 
   /**
    * A focused message older than anything loaded: pages back through the history until it is
@@ -1290,17 +1327,37 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
    * of the page, where the browser's own find cannot see it. A second press inside the bar is the
    * browser's again.
    */
-  const [find, setFind] = useState<{ query: string; index: number }>();
+  /**
+   * [at] is the occurrence on show, by row and place in it, so a list that grows around it (the
+   * server's answer, a page loaded, a streamed row) keeps it; [reading] is the lane place the query
+   * started from, and [moved] whether the reader has stepped since.
+   */
+  const [find, setFind] = useState<{ query: string; at?: { key: string; nth: number }; reading: number; moved: boolean }>();
   const findInput = useRef<HTMLInputElement>(null);
   /** Where the keyboard was before the bar took it, and goes back to when it closes. */
   const findReturn = useRef<HTMLElement | null>(null);
-  const needle = find?.query.toLowerCase() ?? '';
-  const hits = useMemo(() => (needle ? findHits(rowsAll, needle, root) : []), [rowsAll, needle, root]);
+  const needle = (find && findNeedle(find.query)) ?? '';
+  const heldHits = useMemo(() => (needle ? findHits(rowsAll, needle, root) : []), [rowsAll, needle, root]);
+  /** The server's count of the whole lane for [needle]; until it answers, or without it, the held rows are what is counted. */
+  const [served, setServed] = useState<{ needle: string; result: LaneFind }>();
+  const hits = useMemo(() => (served && served.needle === needle ? laneHits(served.result.hits, heldHits, rowsAll) : heldHits), [served, needle, heldHits, rowsAll]);
   const findTotal = hits.reduce((sum, hit) => sum + hit.count, 0);
+  const findIndex = occurrenceIndex(hits, find?.at);
   const findOpen = useRef(false);
   findOpen.current = Boolean(find);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      // Esc closes an open bar wherever the keyboard is, as a browser's own find does, except in a
+      // field of its own (the draft) or a dialog, whose Esc is theirs. The bar handles its own.
+      if (event.key === 'Escape' && findOpen.current && !event.defaultPrevented && !isComposingKey(event)) {
+        const scroller = scrollRef.current;
+        const active = document.activeElement;
+        const editable = active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea, select'));
+        if (!scroller || !scroller.getClientRects().length || scroller.closest('[inert]') || editable || active?.closest('[role="dialog"],[role="alertdialog"]')) return;
+        event.preventDefault();
+        closeFindRef.current();
+        return;
+      }
       const mod = isApplePlatform ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
       if (!mod || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f' || event.defaultPrevented || isComposingKey(event)) return;
       const scroller = scrollRef.current;
@@ -1315,52 +1372,102 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       if (active instanceof Element && (active.closest('[data-terminal]') || active.closest('[role="dialog"],[role="alertdialog"]') !== dialog)) return;
       event.preventDefault();
       if (!findOpen.current) findReturn.current = active instanceof HTMLElement && active !== document.body ? active : null;
-      flushSync(() => setFind((current) => current ?? { query: '', index: 0 }));
+      flushSync(() => setFind((current) => current ?? { query: '', reading: 0, moved: false }));
       findInput.current?.focus();
       findInput.current?.select();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
-  useEffect(() => { setFind(undefined); setFindTarget(undefined); setHighlight(undefined); }, [scrollScope]);
-  /** Lands on occurrence [index] (counted across [list]) of [lower]. */
-  const showHit = (list: readonly FindHit[], lower: string, index: number) => {
-    let rest = index;
-    for (const hit of list) {
-      if (rest < hit.count) { setFindTarget({ key: hit.key, needle: lower, nth: rest }); return; }
-      rest -= hit.count;
-    }
+  // A page or a jump replaces the rows, not the conversation: the bar and its place stay.
+  useEffect(() => { setFind(undefined); setServed(undefined); setFindTarget(undefined); }, [sessionId]);
+  useEffect(() => { setHighlight(undefined); }, [scrollScope]);
+  // The whole lane is asked once typing pauses. What streams in later is held, and counted here.
+  useEffect(() => {
+    if (!needle || !onFind || !find) return;
+    const query = find.query;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void onFind(query, controller.signal).then((result) => {
+        if (!controller.signal.aborted) setServed(result ? { needle, result } : undefined);
+      });
+    }, FIND_DEBOUNCE_MS);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+    // Asked again for a new query, not for each keystroke's object.
+  }, [needle, onFind]);
+  /** Shows occurrence [nth] of [hit]: landed on when the rows hold it, else once the rows around it are loaded. */
+  const findPage = useRef<AbortController | undefined>(undefined);
+  const showHit = (hit: FindHit, lower: string, nth: number) => {
+    findPage.current?.abort();
+    findPage.current = undefined;
+    if (hit.row !== undefined || !onLoadPlace) { setFindTarget({ key: hit.key, needle: lower, nth }); return; }
+    const request = scroll.beginRequest();
+    findPage.current = new AbortController();
+    const page = findPage.current;
+    request.signal.addEventListener('abort', () => page.abort());
+    setSeeking(true);
+    void onLoadPlace(hit.pos, page.signal).catch(() => false).then((loaded) => {
+      if (page.signal.aborted) return;
+      if (loaded) setFindTarget({ key: hit.key, needle: lower, nth });
+      else toast.error(t`无法加载这处结果所在的历史`);
+    }).finally(() => {
+      request.finish();
+      if (findPage.current === page) findPage.current = undefined;
+      // A later step that needs no page clears the request without one taking its place.
+      if (!findPage.current) setSeeking(false);
+    });
+  };
+  /** The lane place the reader is at: the row at the top of the view, else the first row held. */
+  const readingPlace = () => {
+    const scroller = scrollRef.current;
+    const anchor = scroller ? captureReadingAnchor(scroller, modelAnchor).rows[0]?.key : undefined;
+    const row = (anchor ? rowsAll.find((candidate) => candidate.key === anchor) : undefined) ?? rowsAll[0];
+    const item = row ? (row.type === 'item' ? row.item : row.type === 'process' ? row.items[0] : row.notices[0]) : undefined;
+    return item ? placeOf(item) : 0;
   };
   /** A new query starts from the reader: the first occurrence at or below the top of the view, else the last one above it. */
   const search = (query: string) => {
-    const lower = query.toLowerCase();
+    const lower = findNeedle(query) ?? '';
     const list = lower ? findHits(rowsAll, lower, root) : [];
-    const scroller = scrollRef.current;
-    const anchor = scroller ? captureReadingAnchor(scroller, modelAnchor).rows[0]?.key : undefined;
-    const reading = Math.max(0, anchor ? rowsAll.findIndex((row) => row.key === anchor) : 0);
-    let index = 0, seen = 0;
-    for (const hit of list) {
-      if (hit.row >= reading) { index = seen; break; }
-      seen += hit.count;
-      index = seen - 1;
-    }
-    setFind({ query, index });
-    if (list.length) showHit(list, lower, index);
-    else flashRange(undefined);
+    const reading = readingPlace();
+    const at = occurrenceAt(list, startIndex(list, reading));
+    setFind({ query, reading, moved: false, ...(at ? { at: { key: at.hit.key, nth: at.nth } } : {}) });
+    if (at) showHit(at.hit, lower, at.nth);
+    else { findPage.current?.abort(); flashRange(undefined); }
   };
+  // The server's answer can hold an occurrence nearer the reader than any the rows held (one above
+  // the window, say): until the reader steps, the query starts from there instead.
+  const startedFrom = useRef<typeof served>(undefined);
+  useEffect(() => {
+    if (!find || find.moved || !served || served.needle !== needle || startedFrom.current === served) return;
+    startedFrom.current = served;
+    const at = occurrenceAt(hits, startIndex(hits, find.reading));
+    if (!at || (find.at?.key === at.hit.key && find.at.nth === at.nth)) return;
+    setFind({ ...find, at: { key: at.hit.key, nth: at.nth } });
+    showHit(at.hit, needle, at.nth);
+    // Once per answer.
+  }, [served, hits]);
   const step = (delta: number) => {
     if (!find || !findTotal) return;
-    const index = (((Math.min(find.index, findTotal - 1) + delta) % findTotal) + findTotal) % findTotal;
-    setFind({ ...find, index });
-    showHit(hits, needle, index);
+    const from = findIndex < 0 ? (delta > 0 ? -1 : 0) : findIndex;
+    const at = occurrenceAt(hits, (((from + delta) % findTotal) + findTotal) % findTotal);
+    if (!at) return;
+    setFind({ ...find, at: { key: at.hit.key, nth: at.nth }, moved: true });
+    showHit(at.hit, needle, at.nth);
   };
+  const closeFindRef = useRef(() => {});
   const closeFind = () => {
     setFind(undefined);
+    setServed(undefined);
+    setFindTarget(undefined);
+    findPage.current?.abort();
+    clearFlash();
     flashRange(undefined);
     const back = findReturn.current;
     findReturn.current = null;
     if (back?.isConnected) back.focus({ preventScroll: true });
   };
+  closeFindRef.current = closeFind;
 
   return (
     <div ref={frameRef} className="relative flex min-h-0 flex-1 flex-col">
@@ -1423,7 +1530,12 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       <div role="status" className="sr-only">{announcement.text && <span key={announcement.seq}>{announcement.text}</span>}</div>
       {!resources && <MarkLayer scrollRef={scrollRef} onDiscuss={onDiscuss} />}
       {find && (
-        <div role="search" className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-xl border border-line bg-elevated/95 p-1 shadow-xs backdrop-blur max-md:left-3">
+        <div
+          role="search"
+          className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-xl border border-line bg-elevated/95 p-1 shadow-xs backdrop-blur max-md:left-3"
+          // The field and the buttons alike: a step clicked with the mouse leaves the keyboard on its button.
+          onKeyDown={(event) => { if (event.key === 'Escape' && !isComposingKey(event.nativeEvent)) { event.preventDefault(); closeFind(); } }}
+        >
           <label className="relative min-w-0 flex-1">
             <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-fg-4" />
             <Input
@@ -1436,11 +1548,10 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
               onKeyDown={(event) => {
                 if (isComposingKey(event.nativeEvent)) return;
                 if (event.key === 'Enter') { event.preventDefault(); step(event.shiftKey ? -1 : 1); }
-                else if (event.key === 'Escape') { event.preventDefault(); closeFind(); }
               }}
             />
           </label>
-          {find.query && <span role="status" className="shrink-0 px-1.5 text-xs tabular-nums text-fg-3">{findTotal ? Math.min(find.index, findTotal - 1) + 1 : 0}/{findTotal}</span>}
+          {find.query && <span role="status" className="shrink-0 px-1.5 text-xs tabular-nums text-fg-3">{findTotal ? Math.max(findIndex, 0) + 1 : 0}/{findTotal}</span>}
           <Button size="icon-sm" variant="quiet" aria-label={t`上一个`} disabled={!findTotal} onClick={() => step(-1)}><IconChevronDown className="rotate-180" /></Button>
           <Button size="icon-sm" variant="quiet" aria-label={t`下一个`} disabled={!findTotal} onClick={() => step(1)}><IconChevronDown /></Button>
           <Button size="icon-sm" variant="quiet" aria-label={t`关闭查找`} onClick={closeFind}><IconX /></Button>

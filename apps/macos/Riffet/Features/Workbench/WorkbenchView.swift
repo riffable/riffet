@@ -252,6 +252,9 @@ struct WorkbenchView: View {
             },
             search: { workbench.sidebar.searchRequested = .titles },
             searchContent: { workbench.sidebar.searchRequested = .content },
+            find: { workbench.openFind() },
+            findNext: { workbench.findNext() },
+            findPrevious: { workbench.findPrevious() },
             toggleTerminalView: { workbench.toggleTerminalPage() },
             toggleTerminal: { workbench.terminalDock.toggle() },
             openInWindow: isWindow ? nil : {
@@ -1590,6 +1593,10 @@ struct WorkbenchActions {
     /// The palette on titles (⌘K) or on message content (⇧⌘F).
     let search: () -> Void
     let searchContent: () -> Void
+    /// 会话内查找: ⌘F, ⌘G and ⇧⌘G.
+    let find: () -> Void
+    let findNext: () -> Void
+    let findPrevious: () -> Void
     let toggleTerminalView: () -> Void
     let toggleTerminal: () -> Void
     /// Opens the shown conversation in its own window; nil in a window that already is one.
@@ -1666,6 +1673,9 @@ struct RiffetCommands: Commands {
         CommandMenu("前往") {
             Button("搜索…") { actions?.search() }.keyboardShortcut("k")
             Button("搜索内容…") { actions?.searchContent() }.keyboardShortcut("f", modifiers: [.command, .shift])
+            Button("在会话中查找") { actions?.find() }.keyboardShortcut("f")
+            Button("下一个") { actions?.findNext() }.keyboardShortcut("g")
+            Button("上一个") { actions?.findPrevious() }.keyboardShortcut("g", modifiers: [.command, .shift])
             Button("命令…") { actions?.openPalette() }.keyboardShortcut("p", modifiers: [.command, .shift])
             Divider()
             Button(WorkbenchPage.marks.title) { actions?.openPage(.marks) }.keyboardShortcut("l", modifiers: [.command, .shift])

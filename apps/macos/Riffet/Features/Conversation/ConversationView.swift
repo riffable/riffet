@@ -172,6 +172,14 @@ struct ConversationView: View {
                             .id(session.id)
                             .environment(\.openSubagent) { id, title in subagents = [SubagentTarget(id: id, title: title)] }
                             .environment(\.quoteMessage) { text in composer.quote(text) }
+                            .overlay(alignment: .topTrailing) {
+                                if workbench.find?.open == true {
+                                    FindBar(workbench: workbench)
+                                        .padding(.top, Space.xs)
+                                        .padding(.trailing, Space.md)
+                                        .transition(.opacity)
+                                }
+                            }
                             // The dismissible one floats: it comes and goes without moving the transcript.
                             .overlay(alignment: .top) {
                                 VStack(spacing: Space.xs) {

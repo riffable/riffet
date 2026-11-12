@@ -43,7 +43,7 @@ describe('contract registry fixtures', () => {
   });
 
   it('registers the Session, Run and v3 sync contracts', () => {
-    for (const name of ['Session', 'SessionState', 'Run', 'RunState', 'SyncFrame', 'TimelineRow', 'TimelinePage', 'TimelineChanges'] as const) {
+    for (const name of ['Session', 'SessionState', 'Run', 'RunState', 'SyncFrame', 'TimelineRow', 'TimelinePage', 'TimelineChanges', 'LaneFind'] as const) {
       expect(CONTRACTS[name]?.direction).toBe('response');
     }
   });

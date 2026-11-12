@@ -14298,6 +14298,59 @@
         ]
       }
     },
+    "LaneFind": {
+      "direction": "response",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "generation": {
+            "type": "string"
+          },
+          "headSeq": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          },
+          "hits": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string"
+                },
+                "pos": {
+                  "type": "number"
+                },
+                "turn": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "key",
+                "pos",
+                "turn",
+                "count"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "generation",
+          "headSeq",
+          "total",
+          "hits"
+        ]
+      }
+    },
     "DeviceReport": {
       "direction": "request",
       "schema": {

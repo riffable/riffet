@@ -1,4 +1,4 @@
-import { transformProse } from './markdownSource';
+import { transformProse } from './markdownSource.js';
 
 /**
  * Han, kana, Hangul and the full-width forms beside them — the characters CommonMark's flanking

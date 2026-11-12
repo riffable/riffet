@@ -1,7 +1,7 @@
 /*
  * Sync protocol v3 wire contracts as zod v4 schemas (docs/SYNC-V3.md).
  *
- * This mirrors `SyncFrame`, `TimelineRow`, `TimelinePage` and `TimelineChanges` in
+ * This mirrors `SyncFrame`, `TimelineRow`, `TimelinePage`, `TimelineChanges` and `LaneFind` in
  * `packages/contracts/src/sync.ts`; that file stays the source callers use. The Kotlin client
  * decodes an unknown frame type or row kind as `Unknown` and every enum it can reach through a
  * frame as `UNKNOWN`, so those enums are marked open. `Session`, `Run` and their strict enums stay
@@ -342,4 +342,14 @@ export const TimelineChangesSchema = z.object({
   rows: z.array(TimelineRowSchema),
   deletes: z.array(z.string()).optional(),
   hasBefore: z.boolean().optional(),
+});
+
+export const LaneFindHitSchema = z.object({ key: z.string(), pos: z.number(), turn: z.string(), count: z.number() });
+
+export const LaneFindSchema = z.object({
+  generation: z.string(),
+  headSeq: z.number(),
+  total: z.number(),
+  hits: z.array(LaneFindHitSchema),
+  truncated: z.boolean().optional(),
 });

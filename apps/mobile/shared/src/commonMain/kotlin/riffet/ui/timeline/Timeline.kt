@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -37,6 +38,8 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -47,11 +50,14 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import riffet.core.ReasoningChannel
 import riffet.core.TimelineItem
 import riffet.ui.focus.LocalFocusCoordinator
 import riffet.ui.state.OpenTrace
@@ -114,6 +120,8 @@ internal fun Timeline(
     reachTopKey: Any? = null,
     /** A message to bring into view and flash once, e.g. a search hit; see [TimelineFocusTarget]. */
     focus: TimelineFocusTarget? = null,
+    /** The find occurrence to bring into view and mark, held until the next one or the end of find; see [FindLanding]. */
+    find: FindLanding? = null,
     /** Whether the list follows the tail; hoisted so the host can offer 回到最新 and resume on send. */
     follow: TimelineFollow = remember { TimelineFollow() },
 ) {
@@ -169,6 +177,19 @@ internal fun Timeline(
     // whose own label changed, not every row on screen.
     val speedsState = rememberUpdatedState(speeds)
 
+    suspend fun flashRow(key: String?) {
+        flashed = key
+        flashLit = true
+        try {
+            delay((motion.LONG * 4).toLong())
+            flashLit = false
+            delay(focusFadeMillis.toLong())
+        } finally {
+            flashLit = false
+            flashed = null
+        }
+    }
+
     LaunchedEffect(focus, focusFadeMillis, motion) {
         val target = focus ?: return@LaunchedEffect
         // The wait starts once the transcript has rows: a slow load is not a missing message.
@@ -198,16 +219,7 @@ internal fun Timeline(
         // Whatever arrives next must not pull the reader away from what they came to see.
         follow.following = false
         state.scrollToItem(index)
-        flashed = entries.getOrNull(index)?.key
-        flashLit = true
-        try {
-            delay((motion.LONG * 4).toLong())
-            flashLit = false
-            delay(focusFadeMillis.toLong())
-        } finally {
-            flashLit = false
-            flashed = null
-        }
+        flashRow(entries.getOrNull(index)?.key)
     }
 
     val pin = remember { TailPin() }
@@ -217,6 +229,68 @@ internal fun Timeline(
     // reports a scroll in progress, so without this the pin below takes it back every frame.
     val nestedDrag = remember { NestedDrag() }
     val readerDragging by remember { derivedStateOf { dragged.value || nestedDrag.active } }
+    // Landing on a find occurrence: wait for its row while the window around it is loaded, land once
+    // per request, and give up when the reader takes the list or a newer request arrives. A row the
+    // mark cannot be drawn in is tinted whole instead.
+    val findAnchor = remember { FindAnchor() }
+    val listPlace = remember { arrayOfNulls<LayoutCoordinates>(1) }
+    LaunchedEffect(find?.request, focusFadeMillis, motion) {
+        val landing = find ?: return@LaunchedEffect
+        var unfolded = false
+        val located = withTimeoutOrNull(FIND_WAIT_MILLIS) {
+            // The flow only reads: unfolding writes state, which a snapshot flow's read-only snapshot refuses.
+            snapshotFlow { if (readerDragging) null else entries }.map { current ->
+                if (current == null) return@map ABANDONED
+                val exact = current.indexOfFirst { it.holds(landing.key) }
+                if (exact >= 0) return@map exact
+                // An item inside a folded turn has no entry until the turn is unfolded; once.
+                if (!unfolded) {
+                    val header = current.firstOrNull { entry ->
+                        entry is TimelineEntry.ProcessHeader && !entry.open && entry.row.items.any { it.key == landing.key }
+                    } as TimelineEntry.ProcessHeader?
+                    if (header != null) {
+                        unfolded = true
+                        toggleProcess(header.row)
+                    }
+                }
+                NOT_YET
+            }.first { it != NOT_YET }
+        } ?: return@LaunchedEffect
+        if (located < 0) return@LaunchedEffect
+        follow.following = false
+        state.scrollToItem(located)
+        val entry = entries.getOrNull(located)
+        val item = when (entry) {
+            is TimelineEntry.Row -> (entry.row as? TimelineRow.Single)?.item
+            is TimelineEntry.ProcessChild -> entry.item
+            else -> null
+        }
+        if (entry == null) return@LaunchedEffect
+        // Always a mark or a tint: a row the renderer cannot mark the words in (a tool's command, code)
+        // is tinted, held as marked words are until the next step or the end of find, which cancel
+        // this effect.
+        if (!(item != null && item.key == landing.key && entry.marksFind(landing.key) && markDrawn(item, landing.highlight))) {
+            flashed = entry.key
+            flashLit = true
+            try { awaitCancellation() } finally { flashLit = false; flashed = null }
+        }
+        // The row's top is in view; in a row taller than the screen the mark may not be. The block
+        // holding it reports where it is drawn (the line, where the text knows it): a line is centred,
+        // with what leads up to it above, and a block taller than half the view starts a quarter down.
+        val place = withTimeoutOrNull(FIND_PLACE_WAIT_MILLIS) {
+            snapshotFlow { findAnchor.place }.first { it != null && it.coordinates.isAttached }
+        } ?: return@LaunchedEffect
+        val list = listPlace[0]?.takeIf { it.isAttached } ?: return@LaunchedEffect
+        if (readerDragging) return@LaunchedEffect
+        val info = state.layoutInfo
+        val origin = list.localPositionOf(place.coordinates, Offset.Zero).y
+        val (start, end) = place.span() ?: (0f to place.coordinates.size.height.toFloat())
+        val top = origin + start
+        val height = end - start
+        val view = (info.viewportSize.height - info.beforeContentPadding - info.afterContentPadding).toFloat()
+        val wanted = if (height <= view / 2) info.beforeContentPadding + (view - height) / 2 else info.beforeContentPadding + view / 4
+        state.scrollBy(top - wanted)
+    }
     LaunchedEffect(state) {
         // Only the reader's *own* gesture changes the intent to follow. Deriving it from
         // `canScrollForward` alone would be wrong in both directions: content arriving grows the
@@ -347,7 +421,8 @@ internal fun Timeline(
     LazyColumn(
         state = state,
         modifier = modifier.riffetMaterialSource(key = follow, enabled = LocalPageActive.current).nestedScroll(nestedDrag)
-            .pointerInput(nestedDrag) { with(nestedDrag) { clearOnRelease() } },
+            .pointerInput(nestedDrag) { with(nestedDrag) { clearOnRelease() } }
+            .onPlaced { listPlace[0] = it },
         contentPadding = PaddingValues(
             start = TimelineRhythm.gutter + contentPadding.calculateLeftPadding(direction),
             end = TimelineRhythm.gutter + contentPadding.calculateRightPadding(direction),
@@ -386,8 +461,12 @@ internal fun Timeline(
                 Modifier
             }
             val speed by remember(entry) { derivedStateOf { (entry as? TimelineEntry.Row)?.let { speedsState.value[it.row.key] } } }
+            // Every row provides the local, null but for the find target: the chain does not change shape.
+            val findHere = if (find != null && entry.marksFind(find.key)) find.highlight else null
             Box(itemModifier.fillMaxWidth().padding(top = entry.gap * (metrics.rowPadding / 16.dp)).then(flashModifier)) {
-                TimelineEntryView(entry, root, speed, onOpenFile, foldByReader, revealed = entry.key == flashed)
+                CompositionLocalProvider(LocalFindHighlight provides findHere, LocalFindAnchor provides findAnchor) {
+                    TimelineEntryView(entry, root, speed, onOpenFile, foldByReader, revealed = entry.key == flashed)
+                }
             }
         }
         if (footer != null) {
@@ -513,6 +592,45 @@ private fun LazyListState.rowsAboveViewport(): Float {
 
 /** A message the transcript brings into view once; [token] tells a repeated request apart. */
 data class TimelineFocusTarget(val sequence: Long, val token: Long)
+
+/**
+ * A find occurrence to land on: the [nth] (0-based) occurrence of the lower-cased [needle] in the item
+ * [key]. [request] grows with every selection, so the same occurrence selected again is landed on again.
+ */
+data class FindLanding(val key: String, val needle: String, val nth: Int, val request: Long) {
+    internal val highlight = FindHighlight(needle, nth)
+}
+
+/** How long a find waits for the row of its occurrence, which may still be loading. */
+private const val FIND_WAIT_MILLIS = 5_000L
+/** How long a landed row has to draw its mark before find settles for the row's top. */
+private const val FIND_PLACE_WAIT_MILLIS = 1_000L
+private const val NOT_YET = -1
+private const val ABANDONED = -2
+
+/** Whether this entry draws the item [key], folded in or not. */
+private fun TimelineEntry.holds(key: String): Boolean = when (this) {
+    is TimelineEntry.Row -> when (val row = row) {
+        is TimelineRow.Single -> row.item.key == key
+        is TimelineRow.Trigger -> row.notices.any { it.key == key }
+        is TimelineRow.Process -> false
+    }
+    is TimelineEntry.ProcessChild -> item.key == key
+    is TimelineEntry.ToolRun -> items.any { it.key == key }
+    is TimelineEntry.ProcessHeader, is TimelineEntry.ProcessFooter -> false
+}
+
+/** Whether the occurrence in item [key] is drawn as a mark in the text; otherwise the row is flashed. */
+private fun TimelineEntry.marksFind(key: String): Boolean {
+    val item = when (this) {
+        is TimelineEntry.Row -> (row as? TimelineRow.Single)?.item
+        is TimelineEntry.ProcessChild -> item
+        else -> null
+    } ?: return false
+    if (item.key != key) return false
+    return item is TimelineItem.User || item is TimelineItem.Assistant ||
+        (item is TimelineItem.Thought && item.channel == ReasoningChannel.NARRATION)
+}
 
 /** How long a focus waits for its message to be on screen before settling for the nearest one. */
 private const val FOCUS_WAIT_MILLIS = 2_500L

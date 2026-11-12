@@ -642,4 +642,33 @@ describe('timeline service', () => {
     expect(around.rows).toEqual(all.slice(15, 25));
     env.close();
   });
+
+  it('finds a query across the whole lane in place order, by what each row shows, and follows the lane as it changes', async () => {
+    const env = open();
+    for (let index = 1; index <= 30; index += 1) turn(env, index);
+    env.writer.turnStarted('t31', stamp(++tick));
+    commit(env, user('u31', 't31', 'Where is NEEDLE?'), answer('a31', 't31', '**Needle** one, `needle` two'),
+      tool('k31', 't31', 'call-31', 'completed', { title: 'Read /work/app/needle.ts', locations: [{ path: '/work/app/needle.ts' }] }));
+    env.writer.turnEnded('t31', 'completed', stamp(++tick));
+    const head = await env.ready();
+    const found = await env.service.find(S, 'main', 'needle', '/work/app');
+    expect(found).toMatchObject({ generation: head.generation, headSeq: head.headSeq, total: 4 });
+    expect(found.hits.map(hit => hit.count)).toEqual([1, 2, 1]);
+    expect(found.hits.map(hit => hit.pos)).toEqual([...found.hits.map(hit => hit.pos)].sort((a, b) => a - b));
+    // Markdown syntax is not what the page shows, and a path shows under the project root.
+    expect((await env.service.find(S, 'main', '**needle', '/work/app')).total).toBe(0);
+    expect((await env.service.find(S, 'main', '/work/app', '/work/app')).total).toBe(0);
+    expect((await env.service.find(S, 'main', '   ')).hits).toEqual([]);
+    // A hit far from the newest rows is reached by paging around its place.
+    const early = await env.service.find(S, 'main', 'question 2');
+    expect(early.hits.length).toBeGreaterThan(1);
+    expect(env.service.page(S, 'main', { around: early.hits[0]!.pos, rows: 10 }).rows.some(row => row.key === early.hits[0]!.key)).toBe(true);
+    // Rows added since the last find are counted on the next.
+    env.writer.turnStarted('t32', stamp(++tick));
+    commit(env, user('u32', 't32', 'needle again'));
+    env.writer.turnEnded('t32', 'completed', stamp(++tick));
+    await env.ready();
+    expect((await env.service.find(S, 'main', 'NEEDLE', '/work/app')).total).toBe(5);
+    env.close();
+  });
 });

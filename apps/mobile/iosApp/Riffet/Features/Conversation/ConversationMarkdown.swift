@@ -14,6 +14,7 @@ struct ConversationMarkdown: View {
     @State private var mathTarget: ConversationMathTarget?
     @State private var serverTarget: ConversationServerTarget?
     @Environment(\.palette) private var palette
+    @Environment(\.conversationFindHighlight) private var findHighlight
     @State private var content: ConversationMarkdownContent
 
     init(source: String, workbench: Workbench, projectID: String, compact: Bool = false, stateID: String? = nil) {
@@ -27,6 +28,34 @@ struct ConversationMarkdown: View {
         // markdown would measure as zero height off-screen and then pop to
         // its real height inside the cell.
         _content = State(initialValue: ConversationMarkdownContent.preRendered(source))
+    }
+
+    /// Where each prose block starts in the row's count of the needle, when the blocks together hold the
+    /// selected occurrence; nil otherwise (every match is marked, and the row flashes).
+    private var findOffsets: [String: Int]? {
+        guard let highlight = findHighlight, !highlight.needle.isEmpty else { return nil }
+        var offsets: [String: Int] = [:]
+        var total = 0
+        func count(_ text: AttributedString, _ path: String) { offsets[path] = total; total += highlight.ranges(in: String(text.characters)).count }
+        func visit(_ parts: [MarkdownPart], _ path: String) {
+            for (partIndex, part) in parts.enumerated() {
+                switch part {
+                case let .prose(run): for (index, block) in run.blocks.enumerated() { visit(block, path + ".part.\(partIndex).prose.\(index)") }
+                case let .block(block): visit(block, path + ".part.\(partIndex).block")
+                }
+            }
+        }
+        func visit(_ block: MarkdownBlock, _ path: String) {
+            switch block {
+            case let .paragraph(text), let .heading(_, text): count(text, path)
+            case let .quote(parts): visit(parts, path + ".quote")
+            case let .list(_, _, items):
+                for (index, item) in items.enumerated() { for (blockIndex, block) in item.blocks.enumerated() { visit(block, path + ".list.\(index).block.\(blockIndex)") } }
+            default: break
+            }
+        }
+        for (index, segment) in content.segments.enumerated() { if case let .blocks(parts) = segment { visit(parts, "segment.\(index).blocks") } }
+        return total > highlight.nth ? offsets : nil
     }
 
     var body: some View {
@@ -113,8 +142,8 @@ struct ConversationMarkdown: View {
     private func blockView(_ block: MarkdownBlock, statePath: String, muted: Bool = false) -> AnyView {
         switch block {
         // CJK prose reads best near 1.55× its size: 16pt body gets 6pt of leading (about 25pt a line), compact text 5.
-        case let .paragraph(text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, secondary: compact || muted, spacing: compact ? 5 : 6).fixedSize(horizontal: false, vertical: true))
-        case let .heading(level, text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, textStyle: level < 2 ? .title2 : level == 2 ? .title3 : .headline, bold: true, secondary: compact || muted, spacing: 3).padding(.top, compact ? 4 : 8).accessibilityAddTraits(.isHeader))
+        case let .paragraph(text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, secondary: compact || muted, spacing: compact ? 5 : 6, findOffset: findOffsets?[statePath]).fixedSize(horizontal: false, vertical: true))
+        case let .heading(level, text): return AnyView(ConversationInlineText(source: text, origin: workbench.baseURL, textStyle: level < 2 ? .title2 : level == 2 ? .title3 : .headline, bold: true, secondary: compact || muted, spacing: 3, findOffset: findOffsets?[statePath]).padding(.top, compact ? 4 : 8).accessibilityAddTraits(.isHeader))
         case let .code(language, text):
             if ["math", "latex", "tex"].contains(language?.lowercased() ?? "") { return AnyView(ConversationMath(tex: text, workbench: workbench)) }
             return AnyView(ConversationCode(text: text, language: language, workbench: workbench, projectID: projectID, stateID: stateID.map { $0 + "." + statePath + ".code" }))

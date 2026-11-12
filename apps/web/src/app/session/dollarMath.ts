@@ -1,4 +1,4 @@
-import { inLinkTarget, transformProse } from './markdownSource';
+import { inLinkTarget, transformProse } from '../../../../../packages/timeline/src/markdownSource';
 
 /**
  * `$5 到 $10` and `成本 $10/月，收益 $20/月` are prices, but micromark reads any `$…$` pair as

@@ -55,12 +55,20 @@ struct ConversationView: View {
     @State private var composerFocus = 0
     @State private var renaming = false
     @State private var renameTitle = ""
+    @State private var findState: FindState?
+    @State private var probe = ConversationTranscriptProbe()
+    /// A find target whose cell is not drawn yet, and how many passes it has waited for it.
+    @State private var pendingFind: (target: FindTarget, passes: Int)?
+    /// How far the find bar reaches below the top bar; rows rest below it.
+    @State private var findReach: CGFloat = 0
     private let ledger = ConversationInteractionLedger.shared
     private var ledgerKey: String { "\(workbench.baseURL.absoluteString)|\(sessionID)" }
     private var session: Session? { (workbench.selected?.id == sessionID ? workbench.selected : nil) ?? workbench.list.sessions.first { $0.id == sessionID } }
     private var rows: [any TimelineRow] { workbench.presentation?.sessionId == sessionID ? workbench.grouping?.rows ?? [] : [] }
     private var ready: Bool { workbench.presentation?.sessionId == sessionID && workbench.presentation?.loaded == true }
     private var lastVersion: String { guard workbench.presentation?.sessionId == sessionID, let item = workbench.grouping?.items.last else { return "" }; return "\(item.key)|\(ObjectIdentifier(item as AnyObject))" }
+    /// Changes when the rows held are replaced or grow, e.g. by the page a find step loaded.
+    private var findWindow: String { "\(workbench.grouping?.items.first?.key ?? "")|\(workbench.grouping?.items.count ?? 0)" }
     private var processVersion: [String] { rows.compactMap { $0 as? TimelineRowProcess }.map { "\($0.key)|\($0.running)|\($0.endsTurn)|\($0.issueCount)|\($0.interrupted)" } }
     private var scrollAccessibilityValue: String {
         let position = !ready ? String(localized: "正在加载", bundle: .riffet) : atBottom ? String(localized: "已到会话结尾", bundle: .riffet) : String(localized: "正在回看历史", bundle: .riffet)
@@ -70,6 +78,49 @@ struct ConversationView: View {
         }
         #endif
         return position
+    }
+    /// The row find landed on and what to mark in it; nil unless a target is selected.
+    private var findHighlight: (key: String, value: ConversationFindHighlight)? {
+        guard let state = findState, state.open, !state.needle.isEmpty, let target = state.target else { return nil }
+        return (target.key, ConversationFindHighlight(needle: state.needle, nth: Int(target.nth), request: target.request))
+    }
+    private func landFind(_ target: FindTarget) {
+        pendingFind = (target, 0)
+        resolveFind()
+    }
+    /// Lands the pending find target once its item is held: a process holding it opens first, and the
+    /// scroll waits for the cell that draws the item (the folded run holding it, if it stays folded).
+    private func resolveFind() {
+        guard let pending = pendingFind else { return }
+        let target = pending.target, passes = pending.passes
+        guard findState?.open == true, findState?.target?.request == target.request else { pendingFind = nil; return }
+        guard let grouping = workbench.grouping, let index = grouping.items.firstIndex(where: { $0.key == target.key }),
+              index < grouping.rowOfItem.size else { return } // the page around it is still loading
+        let rowIndex = Int(grouping.rowOfItem.get(index: Int32(index)))
+        guard rowIndex < grouping.rows.count else { pendingFind = nil; return }
+        let row = grouping.rows[rowIndex]
+        followsTail = false; userScrolled = true
+        focusedRow = row.key
+        if row is TimelineRowProcess, processExpansion[row.key] != true { processExpansion[row.key] = true }
+        if let cell = probe.cells[target.key] {
+            pendingFind = nil
+            scrollRequest = .init(target: cell, anchor: .find)
+        } else if passes < 3 {
+            // The opened process draws its children on the next pass.
+            pendingFind = (target, passes + 1)
+            DispatchQueue.main.async { resolveFind() }
+        } else {
+            pendingFind = nil
+            scrollRequest = .init(target: row.key, anchor: .find)
+        }
+    }
+    /// The highlight for a cell drawing the target item. The occurrence index counts within that item,
+    /// so a cell drawing several items (a folded run, a batch of notices), or one that cannot mark the
+    /// words, is tinted instead (an empty needle), held until the next step as marked words are.
+    private static func findHighlight(_ found: (key: String, value: ConversationFindHighlight), in entry: ConversationRenderPlan.Entry) -> ConversationFindHighlight? {
+        let keys = entry.itemKeys
+        guard keys.contains(found.key) else { return nil }
+        return keys.count == 1 && entry.marksFindWords ? found.value : ConversationFindHighlight(needle: "", nth: 0, request: found.value.request)
     }
     private var supportsTerminal: Bool { catalog?.capabilities.supportsTerminal?.boolValue ?? ((session?.backendId ?? .cursor) == .cursor) }
     private var interactionVersion: String { workbench.interaction.map { $0.id + "|" + $0.revision } ?? "" }
@@ -154,6 +205,7 @@ struct ConversationView: View {
                     followsTail: followsTail, accessibilityValue: scrollAccessibilityValue,
                     currentApprovalID: workbench.interaction != nil || workbench.status?.phase == .attention ? approvalID : nil,
                     bottomInset: composerHeight,
+                    topInset: findState?.open == true ? findReach : 0,
                     onPosition: { near, at, approval, top in
                         nearBottom = near; atBottom = at; approvalVisible = approval; nearTop = top
                         if near { unread = false }
@@ -161,7 +213,8 @@ struct ConversationView: View {
                     onBeginDragging: { userScrolled = true; followsTail = false },
                     onEndDragging: { followsTail = $0 },
                     onReady: { observeInteraction(); restore() },
-                    onFeedbackVisibility: { feedbackRowVisible = $0 }
+                    onFeedbackVisibility: { feedbackRowVisible = $0 },
+                    probe: probe
                 )
                 // Under the bars: the system's soft edge fades what scrolls beneath them.
                 .ignoresSafeArea(.container, edges: [.top, .bottom])
@@ -170,6 +223,7 @@ struct ConversationView: View {
                 .environment(\.conversationSelectText, { selection = ConversationSelection(text: $0) })
                 .environment(\.conversationQuote, { quote($0, into: draft) })
                 .environment(\.conversationFeedbackActive, feedbackVisible)
+                .environment(\.conversationFindProbe, probe)
             } else { ProgressView("正在读取会话…").frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
         .background(palette.bg)
@@ -183,12 +237,13 @@ struct ConversationView: View {
                 .padding(12).frame(maxWidth: .infinity, alignment: .leading)
                 .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: 12))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line, lineWidth: 0.5))
-                .padding(.horizontal, 18).padding(.top, 8)
+                .padding(.horizontal, 18).padding(.top, findState?.open == true ? findReach : 8) // below the find bar
                 .frame(maxWidth: RiffetMetrics.readingWidth)
                 .transition(.opacity)
             }
         }
         .animation(.easeOut(duration: 0.18), value: floatingFeedback.map(\.id))
+        .modifier(ConversationFindLayer(find: workbench.store.find, state: $findState, land: landFind, topRowKey: { probe.topRowKey() }, window: findWindow, retry: resolveFind, reach: $findReach))
         .onChange(of: lastVersion) { _, _ in
             guard restored else { return }
             if focusSequence != nil && !didFocusMessage { focusMessage(); return }
@@ -276,8 +331,11 @@ struct ConversationView: View {
         let entries = ConversationRenderPlan.entries(rows: rows, compactAbove: compactAbove, expanded: effectiveProcessExpansion(), focusedRow: focusedRow,
                                                      scope: workbench.baseURL.absoluteString + "|" + sessionID, readingAbove: !nearBottom)
         var result: [ConversationTranscriptList.Row] = []
-        func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, content: V) {
-            result.append(.init(id: id, revision: rowRevision(revision, colorScheme, dynamicTypeSize, locale.identifier), content: AnyView(content
+        let find = findHighlight
+        func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, highlight: ConversationFindHighlight? = nil, content: V) {
+            result.append(.init(id: id, revision: rowRevision(revision, colorScheme, dynamicTypeSize, locale.identifier, highlight ?? ConversationFindHighlight(needle: "", nth: 0)), content: AnyView(content
+                .environment(\.conversationFindHighlight, highlight)
+                .modifier(ConversationFindFlash(highlight: highlight))
                 .environment(\.colorScheme, colorScheme).environment(\.dynamicTypeSize, dynamicTypeSize).environment(\.locale, locale)
                 .environment(\.conversationReadingHistory, !nearBottom).environment(\.conversationFocusedRow, focusedRow)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, top))))
@@ -307,6 +365,13 @@ struct ConversationView: View {
             append("meta.empty", revision: 0, top: 20, content: ContentUnavailableView("还没有消息", systemImage: "bubble.left.and.text.bubble.right"))
         }
         appendRecords(byRow[nil] ?? [])
+        var readingKeys: [String: String] = [:], cells: [String: String] = [:]
+        for entry in entries {
+            if let key = entry.readingKey { readingKeys[entry.id] = key }
+            for key in entry.itemKeys where cells[key] == nil || entry.itemKeys.count == 1 { cells[key] = entry.id }
+        }
+        probe.readingKeys = readingKeys
+        probe.cells = cells
         for entry in entries {
             let speed = speeds[entry.rowKey]
             // Only a process rendered as one cell reads `readingHistory` (to
@@ -318,7 +383,7 @@ struct ConversationView: View {
             default: false
             }
             append(entry.id, revision: rowRevision(ConversationRenderPlan.revision(entry, speed: speed), historySensitive ? !nearBottom : false, focusedRow ?? ""), top: entry.topSpacing,
-                   content: transcriptEntry(entry, session: session, speed: speed))
+                   highlight: find.flatMap { found in Self.findHighlight(found, in: entry) }, content: transcriptEntry(entry, session: session, speed: speed))
             if entry.isLastInRow { appendRecords(byRow[entry.rowKey] ?? []) }
         }
         appendRecords(records.filter { $0.afterRow.map { !rowKeys.contains($0) } ?? false })
@@ -538,6 +603,7 @@ struct ConversationView: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                Button(String(localized: "查找", bundle: .riffet), systemImage: "magnifyingglass") { workbench.store.find.open(readingPos: nil) }.accessibilityIdentifier("conversationFind")
                 Button("会话目录", systemImage: "list.bullet") { outline = true }.disabled(workbench.presentation?.turns.isEmpty != false).accessibilityIdentifier("conversationOutline")
                 Divider()
                 if connectionStatus?.connectionNotice == .failed || connectionStatus?.connectionNotice == .conflict {

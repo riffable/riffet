@@ -231,6 +231,12 @@ final class Workbench {
     private(set) var quickChatPrefillToken = 0
     /// Where the open transcript scrolls next (a search hit, a saved reply).
     var focus: TranscriptFocus?
+    /// 会话内查找 of the open conversation (`SessionFind`), and a counter that moves the caret to its field.
+    private(set) var find: FindState?
+    private(set) var findFocus = 0
+    /// The topmost visible row's item key, set by the open transcript.
+    @ObservationIgnored var readingKey: () -> String? = { nil }
+    @ObservationIgnored private weak var findReturn: NSResponder?
     /// Shown above the composer while its conversation is open, until dismissed.
     var notice: SessionNotice?
     /// The attempt group comparison page, when it covers the detail column.
@@ -314,6 +320,7 @@ final class Workbench {
         subscriptions.observe(store.openSession) { [weak self] state in self?.apply(state) }
         subscriptions.observe(self.listStore.removedSessions) { [weak self] ids in self?.sessionsRemoved(ids) }
         subscriptions.observe(store.timeline) { [weak self] items in self?.applyTimeline(items) }
+        subscriptions.observe(store.find.state) { [weak self] state in self?.find = state }
         if let presenter = self.presenter {
             subscriptions.observe(presenter.presentation) { [weak self] presentation in
                 self?.applyPresentation(presentation)
@@ -921,6 +928,31 @@ final class Workbench {
     }
 
     // MARK: Conversation terminal
+
+    /// ⌘F: opens find in the shown conversation, or moves to its field when already open.
+    func openFind() {
+        guard selected != nil, page == nil, !showingHome else { return }
+        if find?.open != true {
+            findReturn = NSApp.keyWindow?.firstResponder
+            store.find.open(readingPos: nil)
+        }
+        findFocus += 1
+    }
+
+    func setFind(query: String) { store.find.setQueryFrom(query: query, readingKey: readingKey()) }
+    func findNext() { if find?.open == true { store.find.next() } }
+    func findPrevious() { if find?.open == true { store.find.previous() } }
+    func closeFind() {
+        store.find.close()
+        guard let window = NSApp.keyWindow else { return }
+        if let back = findReturn as? NSView, back.window === window { window.makeFirstResponder(back); return }
+        func composer(_ view: NSView) -> NSView? {
+            if view is SubmitTextView { return view }
+            for sub in view.subviews { if let found = composer(sub) { return found } }
+            return nil
+        }
+        if let field = window.contentView.flatMap(composer) { window.makeFirstResponder(field) }
+    }
 
     func toggleTerminalPage() {
         guard !showingHome, page == nil, let selected,

@@ -279,6 +279,25 @@ final class TranscriptCell: NSView, FragmentHost {
 
     /// Tints the row's content for a moment (a search hit or a jump).
     func flash() {
+        showTint()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+            guard let self, !self.tintHeld, let layer = self.highlight else { return }
+            CATransaction.begin()
+            CATransaction.setAnimationDuration(0.3)
+            layer.opacity = 0
+            CATransaction.commit()
+        }
+    }
+
+    private var tintHeld = false
+    /// Keeps the tint on until set off: find's target where its words cannot be marked one by one.
+    /// Set on every configure, since a reused cell shows another row.
+    func holdTint(_ on: Bool) {
+        if on { showTint() } else if tintHeld { highlight?.opacity = 0 }
+        tintHeld = on
+    }
+
+    private func showTint() {
         guard let rowLayout, let first = rowLayout.fragments.first else { return }
         let content = rowLayout.fragments.dropFirst().reduce(first.frame) { $0.union($1.frame) }
         let layer = highlight ?? CALayer()
@@ -287,14 +306,8 @@ final class TranscriptCell: NSView, FragmentHost {
         layer.cornerCurve = .continuous
         effectiveAppearance.performAsCurrentDrawingAppearance { layer.backgroundColor = style.color(\.accentSoft).cgColor }
         highlight = layer
-        self.layer?.insertSublayer(layer, at: 0)
+        if layer.superlayer !== self.layer { self.layer?.insertSublayer(layer, at: 0) }
         layer.opacity = 1
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak layer] in
-            CATransaction.begin()
-            CATransaction.setAnimationDuration(0.3)
-            layer?.opacity = 0
-            CATransaction.commit()
-        }
     }
 
     // MARK: FragmentHost

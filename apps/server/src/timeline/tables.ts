@@ -206,6 +206,19 @@ export class TimelineTables {
       .map(row => rowOf(row.payload, row.seq, row.rev));
   }
 
+  /** The lane's live rows a find reads, places and revisions only; `image` rows hold no text. */
+  findPlaces(sessionId: string, lane: SyncLane): Array<{ key: string; pos: number; turn: string; rev: number }> {
+    return this.sql("SELECT key,pos,turn,rev FROM timeline_rows WHERE session_id=? AND lane=? AND deleted=0 AND kind<>'image'").all(sessionId, lane) as Array<{ key: string; pos: number; turn: string; rev: number }>;
+  }
+
+  /** The same rows with their content after [after] in place order, [limit] at a time, for a find reading the lane for the first time. */
+  findRows(sessionId: string, lane: SyncLane, after: { pos: number; key: string } | undefined, limit: number): Array<{ key: string; pos: number; turn: string; rev: number; row: TimelineRow }> {
+    const rows = (after
+      ? this.sql("SELECT key,pos,turn,seq,rev,payload FROM timeline_rows WHERE session_id=? AND lane=? AND (pos>? OR (pos=? AND key>?)) AND deleted=0 AND kind<>'image' ORDER BY pos, key LIMIT ?").all(sessionId, lane, after.pos, after.pos, after.key, limit)
+      : this.sql("SELECT key,pos,turn,seq,rev,payload FROM timeline_rows WHERE session_id=? AND lane=? AND deleted=0 AND kind<>'image' ORDER BY pos, key LIMIT ?").all(sessionId, lane, limit)) as Array<{ key: string; pos: number; turn: string; seq: number; rev: number; payload: string }>;
+    return rows.map(row => ({ key: row.key, pos: row.pos, turn: row.turn, rev: row.rev, row: rowOf(row.payload, row.seq, row.rev) }));
+  }
+
   /** The lane's activity rows (`activity:<id>`), in order. */
   activityRows(sessionId: string, lane: SyncLane): TimelineRow[] {
     return (this.sql("SELECT seq,rev,payload FROM timeline_rows WHERE session_id=? AND lane=? AND key>='activity:' AND key<'activity;' AND deleted=0 ORDER BY pos, key").all(sessionId, lane) as Array<{ seq: number; rev: number; payload: string }>)

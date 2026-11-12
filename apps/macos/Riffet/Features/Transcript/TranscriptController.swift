@@ -241,6 +241,16 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     private var pendingFocus: TranscriptFocus?
     private var focusProvider: (@MainActor () -> TranscriptFocus?)?
     private var focusHandled: UUID?
+    /// 会话内查找: its state read inside the observation, and how a hit's key maps to a row here.
+    var findProvider: (@MainActor () -> FindState?)?
+    var findRow: ((String) -> (row: String, item: String?)?)?
+    private var findHandled: Int64 = 0
+    private var pendingFind: FindTarget?
+    /// The occurrence on show, held until the next target or the end of find.
+    private var findShown: (row: String, nth: Int, needle: String)?
+    /// The row find landed on without marking words in it (a folded tool's command, several items
+    /// in one row): tinted until the next step or the end of find, as marked words stay.
+    private var findHeld: String?
     /// Older pages read for the pending focus.
     private var focusPages = 0
     /// Holds a focused row in place while the transcript settles (`settle(on:quote:)`).
@@ -382,7 +392,10 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             }
         })
         observers.append(center.addObserver(forName: NSScrollView.willStartLiveScrollNotification, object: scrollView, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.userScrolling = true }
+            MainActor.assumeIsolated {
+                self?.userScrolling = true
+                self?.pendingFind = nil
+            }
         })
         observers.append(center.addObserver(forName: NSScrollView.didEndLiveScrollNotification, object: scrollView, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.userScrolled(after: 0.15) }
@@ -422,10 +435,11 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// Re-reads the feed whenever what it read changes, on the next turn of the main loop.
     private func observe() {
         let next = withObservationTracking {
-            (feedProvider(), focusProvider?(), Self.styleSignature(), marksProvider?() ?? [], DisplayPreferences.shared.chapterNavigation)
+            (feedProvider(), focusProvider?(), Self.styleSignature(), marksProvider?() ?? [], DisplayPreferences.shared.chapterNavigation, findProvider?())
         } onChange: { [weak self] in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.observe() } }
         }
+        applyFind(next.5)
         if next.2 != styleSignature {
             styleSignature = next.2
             restyle()
@@ -873,6 +887,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         }
         scrolled()
         applyFocusIfReady()
+        landFind()
     }
 
     // MARK: Table
@@ -916,6 +931,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         cell.setInset(inset)
         cell.configure(key: entry.key, layout: layout, style: style, visible: visiblePart(of: row).offsetBy(dx: -inset, dy: 0))
         cell.applyMarks(rowMarks(entry, layout: layout))
+        cell.holdTint(entry.key == findHeld)
         cell.footerPinned = pinsFooter(row)
         cell.rowHovered = entry.key == hoveredRow
     }
@@ -928,8 +944,99 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     }
 
     private func rowMarks(_ entry: Entry, layout: RowLayout) -> RowMarks {
-        guard !markIndex.isEmpty else { return .none }
-        return markIndex.rowMarks(key: entry.key, item: Self.assistant(entry), layout: layout)
+        var result = markIndex.isEmpty ? RowMarks.none : markIndex.rowMarks(key: entry.key, item: Self.assistant(entry), layout: layout)
+        if let shown = findShown, shown.row == entry.key {
+            let text = RowText(layout)
+            if let range = Self.occurrence(shown.nth, of: shown.needle, in: text.text) {
+                for (block, local) in text.pieces(range) {
+                    result.highlights[block.fragment, default: [:]][block.cell, default: []].append(TextHighlight(range: local, color: .yellow, markId: "", find: true))
+                }
+            }
+        }
+        return result
+    }
+
+    // MARK: Find
+
+    /// The item key of the topmost row on screen, in the key space of the hits; nil when none is shown.
+    func topItemKey() -> String? {
+        guard let row = table.rows(in: scrollView.contentView.bounds).location as Int?, row != NSNotFound, row < entries.count,
+              table.rows(in: scrollView.contentView.bounds).length > 0,
+              case let .timeline(source, _, _, _) = entries[row].source else { return nil }
+        if let process = source as? TimelineRowProcess { return process.items.first?.key }
+        if let trigger = source as? TimelineRowTrigger { return trigger.notices.first?.key }
+        return entries[row].key
+    }
+
+    private static func occurrence(_ nth: Int, of needle: String, in text: NSString) -> NSRange? {
+        guard !needle.isEmpty else { return nil }
+        var search = NSRange(location: 0, length: text.length)
+        var count = 0
+        while search.length > 0 {
+            let found = text.range(of: needle, options: [.caseInsensitive], range: search)
+            guard found.location != NSNotFound else { return nil }
+            if count == nth { return found }
+            count += 1
+            let next = NSMaxRange(found)
+            search = NSRange(location: next, length: text.length - next)
+        }
+        return nil
+    }
+
+    /// The words of the occurrence on show as a quote, so the scroll reuses [quoteRect].
+    private func findQuote(row index: Int, nth: Int, needle: String) -> MarkQuote? {
+        guard let layout = entries[index].layout else { return nil }
+        let text = RowText(layout)
+        guard let range = Self.occurrence(nth, of: needle, in: text.text) else { return nil }
+        return MarkQuote(exact: text.text.substring(with: range), prefix: "", suffix: "", start: KotlinInt(int: Int32(range.location)), end: KotlinInt(int: Int32(NSMaxRange(range))))
+    }
+
+    /// Takes what find asks of the transcript: a new target to scroll to, or the end of it.
+    private func applyFind(_ state: FindState?) {
+        guard let state, state.open, !state.needle.isEmpty else {
+            pendingFind = nil
+            if findShown != nil || findHeld != nil {
+                findShown = nil
+                findHeld = nil
+                refreshMarks()
+            }
+            return
+        }
+        if let shown = findShown, shown.needle != state.needle {
+            findShown = nil
+            findHeld = nil
+            refreshMarks()
+        }
+        guard let target = state.target, target.request != findHandled else { return }
+        findHandled = target.request
+        pendingFind = target
+        findNeedle = state.needle
+        landFind()
+    }
+
+    private var findNeedle = ""
+
+    /// Scrolls to the pending target once its row is among the rows held, then highlights it.
+    private func landFind() {
+        guard let target = pendingFind, revealed, let found = findRow?(target.key),
+              entries.contains(where: { $0.key == found.row }) else { return }
+        pendingFind = nil
+        let nth = Int(target.nth), needle = findNeedle
+        // [nth] counts within the target item. A row holding several items (a process, a batch of
+        // notices) runs their texts together, where that nth could be an earlier item's: the item
+        // flashes instead of the wrong words being marked.
+        guard found.item == nil else {
+            findShown = nil
+            findHeld = found.row
+            refreshMarks()
+            settle(on: found.row, item: found.item, quote: nil)
+            return
+        }
+        findShown = (found.row, nth, needle)
+        let index = entries.firstIndex(where: { $0.key == found.row })
+        findHeld = index.flatMap { findQuote(row: $0, nth: nth, needle: needle) } == nil ? found.row : nil
+        refreshMarks()
+        settle(on: found.row, item: nil, quote: nil, find: (nth, needle))
     }
 
     /// The marks changed: every row view the table holds shows the new ones.
@@ -938,6 +1045,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             guard row < entries.count, let layout = entries[row].layout,
                   let cell = rowView.view(atColumn: 0) as? TranscriptCell else { return }
             cell.applyMarks(rowMarks(entries[row], layout: layout))
+            cell.holdTint(entries[row].key == findHeld)
         }
     }
 
@@ -1491,7 +1599,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// around it settle: rows above are measured and older pages land after the first placement, and
     /// each moves the content under a fixed scroll offset. A short target is centred; a tall one
     /// starts near the top, so its beginning is what the reader sees. Scrolling by hand ends it.
-    private func settle(on key: String, item: String?, quote: MarkQuote?, chapter: String? = nil) {
+    private func settle(on key: String, item: String?, quote: MarkQuote?, chapter: String? = nil, find: (nth: Int, needle: String)? = nil) {
         settleTimer?.invalidate()
         settleTimer = nil
         following = false
@@ -1522,7 +1630,8 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
                 return value.rect.offsetBy(dx: 0, dy: self.table.rect(ofRow: index).minY)
             }
             if chapter != nil, chapterRect == nil { return false }
-            let rect = chapterRect ?? quote.flatMap { self.quoteRect(row: index, quote: $0) } ?? item.flatMap { self.itemRect(row: index, item: $0) } ?? self.table.rect(ofRow: index)
+            let words = quote ?? find.flatMap { self.findQuote(row: index, nth: $0.nth, needle: $0.needle) }
+            let rect = chapterRect ?? words.flatMap { self.quoteRect(row: index, quote: $0) } ?? item.flatMap { self.itemRect(row: index, item: $0) } ?? self.table.rect(ofRow: index)
             let clip = self.scrollView.contentView
             var bounds = clip.bounds
             bounds.origin.y = chapter != nil || rect.height > bounds.height * 0.6 ? rect.minY - 56 : rect.midY - bounds.height / 2
@@ -1532,7 +1641,8 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             return (still < 12 || pending) && Date() < deadline
         }
         let more = place()
-        if chapter == nil, let index = entries.firstIndex(where: { $0.key == key }) {
+        if chapter == nil, let index = entries.firstIndex(where: { $0.key == key }),
+           find == nil || findQuote(row: index, nth: find!.nth, needle: find!.needle) == nil {
             (table.view(atColumn: 0, row: index, makeIfNecessary: true) as? TranscriptCell)?.flash()
         }
         guard more else { return }

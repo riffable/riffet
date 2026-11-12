@@ -94,6 +94,8 @@ internal fun ProseBlocks(
     modifier: Modifier = Modifier,
 ) {
     val prose = TimelineTheme.prose
+    val anchor = LocalFindAnchor.current
+    val leaves = LocalFindLeaves.current
     Column(modifier) {
         var previous: ASTNode? = null
         nodes.forEach { node ->
@@ -107,7 +109,16 @@ internal fun ProseBlocks(
                 // depth (which picks the bullet) travels with them.
                 context == ProseContext.ITEM && node.type in ListTypes ->
                     ProseList(content, node, ordered = node.type == MarkdownElementTypes.ORDERED_LIST, depth = listDepth + 1)
-                else -> MarkdownElement(node = node, components = components, content = content, includeSpacer = false)
+                silent -> MarkdownElement(node = node, components = components, content = content, includeSpacer = false)
+                // The innermost block holding find's mark is where the transcript scrolls to; a list or
+                // a quote leaves that to the block inside it.
+                else -> {
+                    val marked = leaves != null && node.type !in ListTypes && node.type != MarkdownElementTypes.BLOCK_QUOTE &&
+                        leaves.any { it >= node.startOffset && it < node.endOffset }
+                    Box(Modifier.findAnchor(anchor, marked)) {
+                        MarkdownElement(node = node, components = components, content = content, includeSpacer = false)
+                    }
+                }
             }
         }
     }

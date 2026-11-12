@@ -921,6 +921,10 @@ internal fun Workbench(
                         },
                         onOpenTerminal = { id -> navigation.terminal = TerminalTarget(id, open.title) },
                         onRename = { renaming = true },
+                        onFind = {
+                            navigation.detailsOpen = false
+                            store.find.open(null)
+                        },
                         onDelete = if (list.canDeleteSessions) ({ deletion.request(open) }) else null,
                         deleteBusy = deletion.preparing != null,
                         onOpenSubagent = { entry ->

@@ -6,6 +6,8 @@ struct TextHighlight: Equatable {
     let range: NSRange
     let color: MarkColor
     let markId: String
+    /// The occurrence 会话内查找 is on, drawn in the system find colour instead of a mark's.
+    var find = false
 }
 
 /// How a row's marks show: the bookmark beside a saved answer, and the highlights of its spans by

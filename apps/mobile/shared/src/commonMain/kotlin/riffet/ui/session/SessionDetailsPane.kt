@@ -107,6 +107,7 @@ import riffet_mobile.shared.generated.resources.session_directory
 import riffet_mobile.shared.generated.resources.session_expand
 import riffet_mobile.shared.generated.resources.session_failed
 import riffet_mobile.shared.generated.resources.session_files
+import riffet_mobile.shared.generated.resources.session_find
 import riffet_mobile.shared.generated.resources.session_last_change_failed
 import riffet_mobile.shared.generated.resources.session_model
 import riffet_mobile.shared.generated.resources.session_permission
@@ -173,6 +174,8 @@ internal fun SessionDetailsPane(
     /** Opens the session's terminal; the tile is shown only when the session has one. */
     onOpenTerminal: ((terminalId: String) -> Unit)?,
     onRename: () -> Unit,
+    /** Opens 会话内查找 over the conversation; the host closes this drawer first. */
+    onFind: (() -> Unit)?,
     onOpenSubagent: ((SubagentEntry) -> Unit)?,
     /** Opens the delete confirmation; null when the server cannot delete. */
     onDelete: (() -> Unit)? = null,
@@ -296,6 +299,11 @@ internal fun SessionDetailsPane(
             }
 
             PaneGroup(title = stringResource(Res.string.session_section)) {
+                // Find reads the conversation itself, so it is here for a quick chat too, and open while archived.
+                if (onFind != null) {
+                    ActionRow(icon = RiffetIcons.Search, label = stringResource(Res.string.session_find), onClick = onFind)
+                    PaneDivider()
+                }
                 ActionRow(icon = RiffetIcons.Pencil, label = stringResource(Res.string.session_rename), enabled = writeBlocked == null && !writeBusy, onClick = onRename)
                 PaneDivider()
                 ActionRow(

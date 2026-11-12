@@ -21,6 +21,7 @@ GET /api/v3/sessions/:id/sync?lane=main|sub:<toolCallId>&generation=&after=&budg
 GET /api/v3/sessions/:id/timeline?lane&generation&(before|from|around)=<pos>&budget&rows   → TimelinePage
 GET /api/v3/sessions/:id/timeline/changes?lane&generation&after&budget                    → TimelineChanges（预取、补洞）
 GET /api/v3/sessions/:id/outline?lane&generation
+GET /api/v3/sessions/:id/find?lane&generation&q=<查询>                                   → LaneFind（会话内查找：整条车道按 pos 排序的命中行；客户端以 around=<pos> 翻到未加载的命中）
 GET /api/sessions/:id/blobs/:hash                                                          不变
 ```
 

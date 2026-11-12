@@ -1,6 +1,6 @@
-import type { SyncFrame, SyncLane, TimelinePage, TimelineRow, TurnOutlineV3 } from '@contracts';
+import type { LaneFind, SyncFrame, SyncLane, TimelinePage, TimelineRow, TurnOutlineV3 } from '@contracts';
 import { reconnectDelay } from '@/lib/utils';
-import { blobPath, outlineUrl, parseFrame, routeMissing, SYNC_PROTOCOL, syncUrl, timelineUrl, type Place, type SyncTransport } from './protocol';
+import { blobPath, findUrl, outlineUrl, parseFrame, routeMissing, SYNC_PROTOCOL, syncUrl, timelineUrl, type Place, type SyncTransport } from './protocol';
 import { isRow, LaneWindow, type PageMode, type WindowLimit } from './window';
 
 type Frame<T extends SyncFrame['type']> = Extract<SyncFrame, { type: T }>;
@@ -252,6 +252,22 @@ export class LaneSync {
       return this.outline;
     } catch (error) {
       if (routeMissing(error)) this.markOutdated();
+      return undefined;
+    }
+  }
+
+  /**
+   * The rows of the whole lane holding [query] (会话内查找), loaded or not. Undefined when the server
+   * cannot answer it (an older one, a failed request) or the lane started over meanwhile: the caller
+   * counts the rows it holds instead.
+   */
+  async find(query: string, signal?: AbortSignal): Promise<LaneFind | undefined> {
+    const epoch = this.epoch, generation = this.generation;
+    try {
+      const found = await this.options.transport.get<LaneFind>(findUrl(this.options.sessionId, this.options.lane, query, generation), signal);
+      if (epoch !== this.epoch || !found || !Array.isArray(found.hits) || (generation && found.generation !== generation)) return undefined;
+      return found;
+    } catch {
       return undefined;
     }
   }

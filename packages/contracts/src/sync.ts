@@ -57,6 +57,16 @@ export type SyncFrame =
   | { type: 'error'; code: string; message: string; retryable: boolean };
 export interface TimelinePage { generation: string; rows: TimelineRow[]; hasBefore: boolean; hasAfter: boolean }
 export interface TimelineChanges { generation: string; headSeq: number; mode: 'delta' | 'snapshot'; from?: number; to?: number; rows: TimelineRow[]; deletes?: string[]; hasBefore?: boolean }
+/** A row of the lane that holds the query `count` times, for `GET /api/v3/sessions/:id/find`. */
+export interface LaneFindHit { key: string; pos: number; turn: string; count: number }
+/**
+ * The lane's rows that hold a query, in place order, as of `headSeq`. The text matched is what a row
+ * shows folded (`findableText`), case-insensitively. `total` counts every occurrence; `truncated` says
+ * more rows held the query than `hits` lists ({@link FIND_MAX_ROWS}).
+ */
+export interface LaneFind { generation: string; headSeq: number; total: number; hits: LaneFindHit[]; truncated?: boolean }
+/** The most rows one find lists. */
+export const FIND_MAX_ROWS = 2000;
 
 /** Where a pending user row sits until its echo arrives: after every real row. */
 export const PENDING_ROW_POS = 2 ** 52;

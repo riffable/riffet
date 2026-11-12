@@ -13,7 +13,7 @@ import { cachedHighlight, highlightCode, languageForFence, languageForPath } fro
 import { useInView } from '@/lib/use-in-view';
 import { cn } from '@/lib/utils';
 import { protectBareUrls } from './bareUrls';
-import { relaxUnderscoreEmphasis } from './cjkEmphasis';
+import { relaxUnderscoreEmphasis } from '../../../../../packages/timeline/src/cjkEmphasis';
 import { escapeCurrencyDollars, normalizeSlashMath } from './dollarMath';
 import { ContentFence } from './ContentFence';
 import { codeFileMention, markdownLinkTarget, previewOnPlainClick, useFileAccess } from './fileAccess';

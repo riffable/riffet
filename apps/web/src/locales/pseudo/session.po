@@ -1340,6 +1340,10 @@ msgstr ""
 msgid "无法加载更早的历史，未能定位到这条消息"
 msgstr ""
 
+#: src/app/session/TranscriptView.tsx
+msgid "无法加载这处结果所在的历史"
+msgstr ""
+
 #: src/app/session/SideDiscussion.tsx
 msgid "无法发起侧边聊天"
 msgstr ""

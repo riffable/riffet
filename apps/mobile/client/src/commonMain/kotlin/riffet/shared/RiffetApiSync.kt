@@ -5,6 +5,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import riffet.cache.SyncWindow
 import riffet.contracts.SyncLane
+import riffet.contracts.LaneFind
 import riffet.contracts.SyncOutline
 import riffet.contracts.TimelineChanges
 import riffet.contracts.TimelinePage
@@ -113,4 +114,14 @@ suspend fun RiffetApi.syncChanges(id: String, lane: SyncLane, cursor: SyncCursor
 suspend fun RiffetApi.syncOutline(id: String, lane: SyncLane, generation: String): SyncOutline = get(
     "/api/v3/sessions/${id.enc()}/outline",
     listOf("lane" to lane, "generation" to generation),
+).decode()
+
+/**
+ * `GET /api/v3/sessions/:id/find`: the rows of [lane] holding [query] (case-insensitive), by `pos`.
+ * 409 `SYNC_GENERATION_CHANGED` when [generation] is stale; 404 from a server without the route.
+ */
+@Throws(Exception::class)
+suspend fun RiffetApi.syncFind(id: String, lane: SyncLane, generation: String, query: String): LaneFind = get(
+    "/api/v3/sessions/${id.enc()}/find",
+    listOf("lane" to lane, "generation" to generation, "q" to query),
 ).decode()

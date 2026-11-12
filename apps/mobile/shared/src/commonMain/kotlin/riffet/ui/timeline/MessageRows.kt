@@ -103,11 +103,24 @@ internal fun UserRow(item: TimelineItem.User) {
             // `SelectionContainer` is that same native long-press/handles/Copy menu. It wraps
             // the bubble's text — one row, not the `LazyColumn` — so lazy item reuse is
             // untouched and a row that scrolls off simply unregisters its own selection.
+            val find = LocalFindHighlight.current
+            val findMark = colors.warningSoft
+            val text = remember(item.text, find, findMark) { highlightedText(item.text, find, findMark) }
+            // The marked line, for find to bring it into view in a prompt taller than the screen.
+            val markedAt = text.spanStyles.firstOrNull()?.start
+            val markLine = remember { FloatArray(2) }
+            val anchor = LocalFindAnchor.current
             SelectableText {
                 Text(
-                    text = item.text,
+                    text = text,
                     style = TimelineTheme.prose.body,
                     color = colors.fg,
+                    onTextLayout = { layout ->
+                        val line = markedAt?.takeIf { it < layout.layoutInput.text.length }?.let(layout::getLineForOffset)
+                        markLine[0] = line?.let(layout::getLineTop) ?: 0f
+                        markLine[1] = line?.let(layout::getLineBottom) ?: 0f
+                    },
+                    modifier = Modifier.findAnchor(anchor, markedAt != null, remember(markLine) { { markLine[0] to markLine[1] } }),
                 )
             }
         }

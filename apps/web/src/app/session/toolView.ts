@@ -1,8 +1,9 @@
 import type { NativeActivity, WorkbenchEvent } from '@contracts';
 import { msg } from '@lingui/core/macro';
 import { i18n } from '@lingui/core';
-import { cleanLabel, isRecord, records, str } from '@/lib/utils';
+import { isRecord, records, str } from '@/lib/utils';
 import { stripRoot, toolDataKind, toolTitleOf } from '../../../../../packages/timeline/src/toolTitle';
+import { toolFoldedDetail } from '../../../../../packages/timeline/src/findText';
 import { lineDiff } from './lineDiff';
 import { contentDiffStats } from '../../../../../packages/timeline/src/lineDiff';
 import type { TimelineItem } from './model';
@@ -102,18 +103,7 @@ export function toolAction(view: ToolView): { verb: string; object: string; path
   return { verb, object: path && location && location.split('/').at(-1) === named ? location : named, path };
 }
 
-/** Titles that only name the tool (`bash`, `Script`), which say nothing about the one call. */
-const bareToolTitles = /^(?:bash|shell|sh|zsh|script|terminal|run command|command|execute)$/i;
-
-/**
- * The executable text stays in the expanded body, parsed or not: a folded row reads by its title
- * (Claude's `description` for a shell call), and a truncated command beside it is neither readable
- * nor needed to tell rows apart. A file path is the exception — it names the call's target — and so
- * is a command whose title is only the tool's name. The project root itself (`.`) says nothing.
- */
+/** What a folded tool row shows beside its title; see `toolFoldedDetail`. */
 export function toolDetail(view: ToolView): string | undefined {
-  const path = view.locations[0]?.path;
-  if (path && path !== '.' && path !== './' && !view.title.includes(path.split('/').at(-1) ?? path)) return path;
-  if (view.command && bareToolTitles.test(view.title.trim())) return cleanLabel(view.command);
-  return undefined;
+  return toolFoldedDetail(view.title, view.command, view.locations[0]?.path);
 }

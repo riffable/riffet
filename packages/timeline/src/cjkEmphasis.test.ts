@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { relaxUnderscoreEmphasis } from './cjkEmphasis';
+import { relaxUnderscoreEmphasis } from './cjkEmphasis.js';
 
 describe('underscore emphasis beside CJK', () => {
   it('reads a paired run the way asterisks are read', () => {

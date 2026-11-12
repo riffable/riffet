@@ -57,6 +57,16 @@ import riffet.ui.pickers.modelSelectionSummary
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import riffet.ui.timeline.FindLanding
+import riffet.ui.timeline.TimelineEntry
 import androidx.compose.runtime.State
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
@@ -341,6 +351,12 @@ fun SessionScreen(
     val listState = rememberLazyListState()
     // Hoisted from the transcript: 回到最新 reads it, and sending a message resumes it.
     val follow = remember(current.id) { TimelineFollow() }
+    // 会话内查找: the bar replaces the top bar; the transcript only needs where it is landing, so typing
+    // and counting do not recompose this screen.
+    val findOpen by remember(store) { store.find.state.map { it.open }.distinctUntilChanged() }.collectAsState(false)
+    val findLanding by remember(store) {
+        store.find.state.map { s -> s.target?.takeIf { s.open }?.let { FindLanding(it.key, s.needle, it.nth, it.request) } }.distinctUntilChanged()
+    }.collectAsState(null)
     // The previous frame's layout and ticks are kept so a chunk only rebuilds the rows it touched and
     // hands the list the same instances for the rest.
     val previous = remember(current.id) { PreviousTimeline() }
@@ -357,6 +373,23 @@ fun SessionScreen(
             val rows = grouping?.rows.orEmpty()
             folds.sync(rows)
             traced("riffet.timeline.layout") { layoutTimeline(rows, previous.layout, folds::isOpen) }.also { previous.layout = it }
+        }
+    }
+    // The `pos` of the row at the reader's place, where find begins; read only when find asks.
+    val layoutNow by rememberUpdatedState(layout)
+    val readingPos: () -> String? = remember(listState) {
+        {
+            when (val entry = layoutNow.entries.getOrNull(listState.firstVisibleItemIndex)) {
+                is TimelineEntry.Row -> when (val row = entry.row) {
+                    is riffet.ui.timeline.TimelineRow.Single -> row.item.key
+                    is riffet.ui.timeline.TimelineRow.Trigger -> row.notices.firstOrNull()?.key
+                    is riffet.ui.timeline.TimelineRow.Process -> row.items.firstOrNull()?.key
+                }
+                is TimelineEntry.ProcessHeader -> entry.row.items.firstOrNull()?.key
+                is TimelineEntry.ProcessChild -> entry.item.key
+                is TimelineEntry.ToolRun -> entry.items.firstOrNull()?.key
+                else -> null
+            }
         }
     }
     // Ticks name grouped rows; the list scrolls by entry, so each tick is moved to its row's first
@@ -612,6 +645,12 @@ fun SessionScreen(
         Box(
             modifier = modifier
                 .fillMaxSize()
+                // Ctrl+F from a hardware keyboard.
+                .onPreviewKeyEvent { event ->
+                    val find = event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F
+                    if (find && !findOpen) store.find.open(null)
+                    find
+                }
                 // Tapping the conversation ends the composer's focus (and a text selection), as a
                 // browser does; the composer dock keeps its own taps (`keepsFocusOnTap`).
                 .blurOnTap(),
@@ -623,7 +662,7 @@ fun SessionScreen(
                 deferBody = false,
                 topBar = {
                     Column {
-                        SessionTopBar(
+                        if (findOpen) SessionFindBar(store.find, readingKey = readingPos) else SessionTopBar(
                             session = current,
                             connection = connection,
                             cachedAt = cachedAt,
@@ -861,6 +900,7 @@ fun SessionScreen(
                                     listOf(loadingHistory, history?.hasMore, history?.cursor, historyError)
                                 },
                                 focus = focus,
+                                find = findLanding,
                                 follow = follow,
                             )
                             }

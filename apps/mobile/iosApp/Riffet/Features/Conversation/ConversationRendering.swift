@@ -245,10 +245,13 @@ struct ConversationInlineText: View {
     var bold = false
     var secondary = false
     var spacing: CGFloat = 5
+    /// Occurrences of the needle in the markdown blocks before this one; nil marks every match.
+    var findOffset: Int? = nil
     @Environment(\.colorScheme) private var scheme
     @Environment(\.palette) private var palette
     @Environment(\.openURL) private var openURL
     @Environment(\.conversationQuote) private var quote
+    @Environment(\.conversationFindHighlight) private var findHighlight
     @ScaledMetric(relativeTo: .body) private var bodySize = 16.0
     @State private var images: [String: ConversationInlineMathRenderer.Rendered] = [:]
     @State private var renderedKey: String?
@@ -269,7 +272,7 @@ struct ConversationInlineText: View {
     }
     var body: some View {
         let colors = ConversationParagraph.Colors(text: palette.uiColor(secondary ? \.fg3 : \.fg), link: palette.uiColor(\.accent), code: UIColor(palette.press))
-        ConversationParagraph(source: source, images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, open: { openURL($0) }, quote: quote)
+        ConversationParagraph(source: source.highlighting(findHighlight, only: findHighlight.flatMap { h in findOffset.map { h.nth - $0 } }, color: palette.warning.opacity(0.4)), images: renderedKey == key ? images : cachedImages, fontSize: fontSize, bold: bold, colors: colors, spacing: spacing, open: { openURL($0) }, quote: quote)
             .task(id: key) {
                     guard !formulas.isEmpty else { return }
                     var ready: [String: ConversationInlineMathRenderer.Rendered] = [:]
@@ -301,7 +304,7 @@ struct ConversationParagraph: UIViewRepresentable {
         view.textContainerInset = .zero; view.textContainer.lineFragmentPadding = 0
         view.delegate = context.coordinator
         view.widthChanged = { [weak coordinator = context.coordinator, weak view] width in
-            guard let view else { return }; coordinator?.publish(to: view, width: width)
+            guard let view else { return }; coordinator?.publish(to: view, width: width); coordinator?.reportMark(view)
         }
         view.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return view
@@ -312,6 +315,8 @@ struct ConversationParagraph: UIViewRepresentable {
         if view.tintColor != colors.link { view.tintColor = colors.link; view.linkTextAttributes = [.foregroundColor: colors.link] }
         context.coordinator.configure(self)
         context.coordinator.publish(to: view, width: view.bounds.width > 0 ? view.bounds.width : 320)
+        context.coordinator.probe = context.environment.conversationFindProbe
+        context.coordinator.reportMark(view)
     }
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: UITextView, context: Context) -> CGSize? {
         guard let width = proposal.width, width.isFinite, width > 0 else { return nil }
@@ -340,7 +345,10 @@ struct ConversationParagraph: UIViewRepresentable {
         private var presentedWidth: Int?
         var open: (URL) -> Void
         var quote: ((String) -> Void)?
+        /// The transcript's, where this paragraph reports drawing find's mark; nil outside a transcript.
+        weak var probe: ConversationTranscriptProbe?
         init(open: @escaping (URL) -> Void) { self.open = open }
+        func reportMark(_ view: UITextView) { probe?.report(view, marked: view.attributedText.findMarkRange != nil) }
         func configure(_ value: ConversationParagraph) {
             let next = ContentKey(source: value.source, images: value.images.mapValues { ImageKey(identity: ObjectIdentifier($0.image), descent: $0.descent) }, fontSize: value.fontSize, bold: value.bold, colors: value.colors, spacing: value.spacing)
             guard key != next else { return }
@@ -471,6 +479,8 @@ enum ConversationFormulaText {
             if let link = run.link { attributes[.link] = link }
             if run.strikethroughStyle != nil { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
             if run.inlinePresentationIntent?.contains(.code) == true { attributes[.backgroundColor] = codeFill }
+            // Only find sets a run's background: the run is also tagged, so the list can find where it is drawn.
+            if let mark = run.backgroundColor { attributes[.backgroundColor] = UIColor(mark); attributes[.conversationFindMark] = true }
             if let tex = run.link.flatMap(MathText.tex), let rendered = images[tex] {
                 let attachment = NSTextAttachment(); attachment.image = rendered.image
                 let ratio = min(1, max(1, maximumWidth) / max(1, rendered.image.size.width))

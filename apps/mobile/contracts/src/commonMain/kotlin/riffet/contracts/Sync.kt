@@ -279,6 +279,20 @@ sealed interface SyncFrame {
 @Serializable
 data class TimelinePage(val generation: String, val rows: List<TimelineRow>, val hasBefore: Boolean, val hasAfter: Boolean)
 
+/** A row of the lane holding the query: [count] non-overlapping, case-insensitive occurrences in what the row shows. */
+@Serializable
+data class LaneFindHit(val key: String, val pos: Long, val turn: String, val count: Long)
+
+/** `GET /api/v3/sessions/:id/find`: [total] sums every count, [hits] stop at the server's cap ([truncated]). */
+@Serializable
+data class LaneFind(
+    val generation: String,
+    val headSeq: Long,
+    val total: Long,
+    val hits: List<LaneFindHit>,
+    val truncated: Boolean? = null,
+)
+
 /** `GET /api/v3/sessions/:id/timeline/changes`. */
 @Serializable
 data class TimelineChanges(

@@ -233,7 +233,7 @@ final class TextLayoutView: NSView {
         guard glyphs.length > 0 else { return }
         manager.drawBackground(forGlyphRange: glyphs, at: .zero)
         for highlight in highlights where NSMaxRange(highlight.range) <= layout.length {
-            highlight.color.fill.setFill()
+            (highlight.find ? NSColor.findHighlightColor : highlight.color.fill).setFill()
             let marked = manager.glyphRange(forCharacterRange: highlight.range, actualCharacterRange: nil)
             layout.enumerateHighlightRects(forGlyphRange: marked) { rect in
                 NSBezierPath(roundedRect: rect, xRadius: 3, yRadius: 3).fill()
@@ -330,7 +330,7 @@ final class TextLayoutView: NSView {
     /// The saved span under the last right-click.
     var highlightAtMenu: TextHighlight? {
         guard let menuIndex else { return nil }
-        return highlights.last { NSLocationInRange(menuIndex, $0.range) || (menuIndex == NSMaxRange($0.range) && menuIndex > $0.range.location) }
+        return highlights.last { !$0.find && (NSLocationInRange(menuIndex, $0.range) || (menuIndex == NSMaxRange($0.range) && menuIndex > $0.range.location)) }
     }
 
     /// The cursor for [point]: a pointing hand over a link, an I-beam over selectable text.

@@ -1164,6 +1164,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           onReaderEnd={native.readerAtEnd}
           onJumpToLatest={native.jumpToLatest}
           onLoadTurn={native.loadTurn}
+          onFind={native.findInLane}
+          onLoadPlace={native.loadPlace}
           onExpandRow={native.expandRow}
           onOpenTerminal={supportsTerminal && terminalLive && !drawer && !archived ? () => { setSubagentStack([]); autoOpened.current = false; setDrawer(true); } : undefined}
           onRetryNativeRun={native.retryNativeRun}

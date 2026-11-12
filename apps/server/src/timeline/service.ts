@@ -1,11 +1,12 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { NativeActivity, NativeJob, Run } from '../../../../packages/contracts/src/index.js';
-import { SYNC_BUDGET, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import { SYNC_BUDGET, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { isLiveActivity } from '../journal/activity.js';
 import { laneKey, type Journal, type JournalAppend } from '../journal/journal.js';
 import { hasTurnEnded, servingKey, turnMetaId } from '../journal/ingest.js';
 import type { BlobWriter } from './budget.js';
 import { generationOf, LaneFold, rowFrames, type FoldContext, type FoldInputs, type RowEntry, type TimelineChange } from './fold.js';
+import { LaneFinder } from './find.js';
 import { rowOf, TimelineTables } from './tables.js';
 
 export { FOLD_VERSION, type ResetReason, type TimelineChange } from './fold.js';
@@ -72,6 +73,7 @@ const STEP_ROWS = 1_000;
 
 export class TimelineService {
   private readonly tables: TimelineTables;
+  private readonly finder: LaneFinder;
   private readonly context: FoldContext;
   private readonly hot = new Map<string, Hot>();
   private readonly listeners = new Map<string, Set<(change: TimelineChange) => void>>();
@@ -86,6 +88,7 @@ export class TimelineService {
 
   constructor(private readonly deps: TimelineDeps) {
     this.tables = new TimelineTables(deps.db);
+    this.finder = new LaneFinder(this.tables);
     const put = deps.putBlob ?? ((sessionId: string, bytes: Buffer, type: string) => deps.journal.putSessionBlob(sessionId, bytes, type));
     const release = deps.releaseBlobs ?? ((sessionId: string, hashes: string[]) => deps.journal.releaseSessionBlobs(sessionId, hashes));
     this.context = { journal: deps.journal, tables: this.tables, put, release, subagent: (sessionId, toolCallId) => this.summary(sessionId, toolCallId) };
@@ -192,6 +195,11 @@ export class TimelineService {
         for (const [part, range] of ranges.entries()) yield { part, final: part === ranges.length - 1, rows: tables.rowsBetween(sessionId, lane, range.from, range.to) };
       },
     };
+  }
+
+  /** The lane's rows holding [query] as last folded (`ready` first), each counted by what it shows folded; see `LaneFinder`. */
+  find(sessionId: string, lane: SyncLane, query: string, root?: string): Promise<LaneFind> {
+    return this.finder.find(sessionId, lane, this.head(sessionId, lane) ?? { generation: generationOf(undefined), headSeq: 0 }, query, root);
   }
 
   /** The lane's outline: its newest `limit` turns (all without one), oldest first. */

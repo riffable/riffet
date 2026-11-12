@@ -228,4 +228,9 @@
     <string name="session_resume_note">Copying the command stops this session\'s process in Riffet. You can\'t send here while the terminal runs it.</string>
     <string name="session_resume_credentials">The terminal won\'t use the model endpoint and keys configured in Riffet.</string>
     <string name="external_import_action">Continue terminal session</string>
+    <string name="session_find">Find</string>
+    <string name="session_find_previous">Previous</string>
+    <string name="session_find_next">Next</string>
+    <string name="session_find_close">Close find</string>
+    <string name="session_find_placeholder">Find</string>
 </resources>

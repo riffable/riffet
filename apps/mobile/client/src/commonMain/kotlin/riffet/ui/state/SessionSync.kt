@@ -91,6 +91,8 @@ internal class SyncHooks(
     val activityStamp: (String) -> String?,
     /** The server answered that the conversation is deleted (410 `SESSION_DELETED`). */
     val deleted: (String) -> Unit = {},
+    /** A different conversation was opened, or the open one was dropped: find-in-conversation ends. */
+    val conversationChanged: () -> Unit = {},
 )
 
 /** What the list's background prefetch asks of the v3 device copy (see [SessionLists]). */
@@ -145,6 +147,11 @@ internal class SessionSync(
     private val _outline = MutableStateFlow<SyncOutlineState?>(null)
     val outline: StateFlow<SyncOutlineState?> = _outline.asStateFlow()
 
+    private val _head = MutableStateFlow(0L)
+
+    /** The lane seq the main window is current to; it moves as the stream adds rows (find re-asks on it). */
+    val head: StateFlow<Long> = _head.asStateFlow()
+
     private val _truncated = MutableStateFlow<Map<String, Long>>(emptyMap())
 
     /** Rows whose text is a preview, by key, with the full row's size; [expandRow] fetches one. */
@@ -179,6 +186,7 @@ internal class SessionSync(
             val heldSynced = before.cachedAt == null
             held?.let { previous -> scope.launch { write(previous, heldSynced) } }
             main = MainLane(sessionId, window)
+            hooks.conversationChanged()
             releaseLanes()
             _outline.value = null
             _truncated.value = emptyMap()
@@ -239,6 +247,7 @@ internal class SessionSync(
         saveJob?.cancel()
         saveJob = null
         main = null
+        hooks.conversationChanged()
         releaseLanes()
         _outline.value = null
         _truncated.value = emptyMap()
@@ -449,6 +458,7 @@ internal class SessionSync(
             val runs = core.value.runs
             val built = withContext(background) { traced("riffet.sync.build") { lane.build(runs) } }
             if (_truncated.value != built.truncated) _truncated.value = built.truncated
+            _head.value = lane.rows.applied?.seq ?: 0L
             core.reduceDial(token) { state ->
                 val next = if (state.history?.generation != built.history?.generation) state.droppingHistory(built.history) else state.copy(history = built.history)
                 next.copy(
@@ -468,6 +478,12 @@ internal class SessionSync(
 
     /** The rows after the newest one held, while the window is away from the head. */
     fun loadNewer() = page(TimelineAnchor.FROM)
+
+    /** The open conversation and its window's generation, with the rows held (find's view of them), read under the lock. */
+    suspend fun <T> withHeld(block: (sessionId: String, generation: String?, rows: RowWindow) -> T): T? {
+        val lane = main ?: return null
+        return lock.withLock { if (main === lane) block(lane.sessionId, lane.rows.window.generation, lane.rows.window) else null }
+    }
 
     /** Replaces the window with the rows around [pos], e.g. a turn of the outline or a search hit. */
     fun jumpTo(pos: Long) = page(TimelineAnchor.AROUND, pos)

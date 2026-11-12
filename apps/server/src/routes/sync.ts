@@ -102,6 +102,22 @@ export function registerSyncRoutes(app: FastifyInstance, deps: RouteDeps & { syn
     return { ...changes, rows: sessionReferenceRowsForClient(changes.rows, clientSupportsFeature(request.headers, 'session-references-v1')) };
   });
 
+  /**
+   * 会话内查找: the lane's rows holding `q` (case-insensitive, by what each row shows folded), in place
+   * order, so a client steps to a hit it has not loaded by paging `around` its `pos`.
+   */
+  app.get<{ Params: { id: string }; Querystring: LaneQuery & { q?: string } }>('/api/v3/sessions/:id/find', async request => {
+    const session = store.getSession(request.params.id);
+    const lane = laneOf(request.query.lane);
+    const query = request.query.q ?? '';
+    if (query.length > 200) throw new AppError('INVALID_FIND_QUERY', 'q is at most 200 characters');
+    await timeline.ready(session.id, lane);
+    sameGeneration(session.id, lane, generationOf(request.query.generation));
+    // Paths show under the project root, as the transcript shortens them; a quick chat has none.
+    const project = store.getProject(session.projectId);
+    return timeline.find(session.id, lane, query, project.system === 'quick-chat' ? undefined : project.cwd);
+  });
+
   app.get<{ Params: { id: string }; Querystring: LaneQuery }>('/api/v3/sessions/:id/outline', async request => {
     const id = store.getSession(request.params.id).id;
     const lane = laneOf(request.query.lane);

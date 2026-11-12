@@ -30,6 +30,7 @@ import { MarkedIndicator, MarkMenuItem, markBodies, type MarkTarget } from './ma
 import { useAnswerShare } from '../marks/ShareImage';
 import { RememberedScope, useRemembered } from './rememberedState';
 import { FailureDetails } from './FailureDetails';
+import { reasoningPreview } from '../../../../../packages/timeline/src/findText';
 import { SessionReferences } from './SessionReferences';
 
 export const toolIcons: Record<string, typeof IconWrench> = {
@@ -291,31 +292,6 @@ export function Disclosure({ icon, title, detail, inline, status, open, onToggle
       )}
     </div>
   );
-}
-
-/** First sentence or line of the reasoning, as the one-line preview of a folded thinking row. */
-/**
- * While reasoning streams, the preview follows it the way DSH's own UI does: the first line of the
- * latest paragraph that has been completed, so it advances without flickering on a half line.
- */
-function streamingReasoningLine(text: string): string {
-  const paragraphs = text.split(/\r?\n[\t ]*\r?\n/);
-  for (let index = paragraphs.length - 1; index >= 0; index -= 1) {
-    const paragraph = paragraphs[index]!;
-    const newline = paragraph.indexOf('\n');
-    // The last paragraph is still being written unless a line of it has already ended.
-    if (index === paragraphs.length - 1 && newline < 0) continue;
-    const line = (newline < 0 ? paragraph : paragraph.slice(0, newline)).trim();
-    if (line) return line;
-  }
-  return '';
-}
-
-export function reasoningPreview(text: string, running = false): string {
-  const line = (running && streamingReasoningLine(text)) || (text.split('\n').map(part => part.trim()).find(Boolean) ?? '');
-  const stop = line.search(/[.。!！?？]\s|[.。!！?？]$/);
-  const sentence = (stop > 0 ? line.slice(0, stop + 1) : line).replaceAll('**', '');
-  return sentence.length > 160 ? `${sentence.slice(0, 160)}…` : sentence;
 }
 
 /**

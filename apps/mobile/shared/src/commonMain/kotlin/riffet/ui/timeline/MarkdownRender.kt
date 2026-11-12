@@ -23,6 +23,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.withStyle
+import org.intellij.markdown.ast.getTextInNode
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -207,16 +209,19 @@ internal fun PreparedMarkdownBody(
             }
         }
     }
+    // Null for every row but the find target: only that row's parsed text is marked.
+    val find = LocalFindHighlight.current
+    val marks = remember(prepared, find) { find?.let { findMarks(prepared, it) } }
     CompositionLocalProvider(LocalUriHandler provides uriHandler) {
         val only = segments.singleOrNull()
         if (only is PreparedSegment.Text) {
-            MarkdownDocument(only.text, only.state, color, style, codeStyle, modifier)
+            MarkdownDocument(only.text, only.state, color, style, codeStyle, modifier, marks?.getOrNull(0))
         } else {
             // The same rhythm the parsed blocks use: these segments are paragraphs that arrived apart.
             Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(TimelineTheme.prose.paragraph)) {
-                segments.forEach { segment ->
+                segments.forEachIndexed { index, segment ->
                     when (segment) {
-                        is PreparedSegment.Text -> MarkdownDocument(segment.text, segment.state, color, style, codeStyle, Modifier)
+                        is PreparedSegment.Text -> MarkdownDocument(segment.text, segment.state, color, style, codeStyle, Modifier, marks?.getOrNull(index))
                         is PreparedSegment.Image -> MarkdownImage(segment.alt, segment.src)
                         is PreparedSegment.Math -> MathFormula(tex = segment.tex, display = segment.display, color = color, modifier = Modifier)
                         is PreparedSegment.Visualization -> Text(
@@ -276,6 +281,8 @@ private fun MarkdownDocument(
     style: TextStyle,
     codeStyle: TextStyle,
     modifier: Modifier,
+    /** Text leaves (by source offset) to draw with the find mark, as `[start, end)` within the leaf. */
+    marks: Map<Int, Pair<Int, Int>>? = null,
 ) {
     val colors = TimelineTheme.colors
     val prose = TimelineTheme.prose
@@ -292,8 +299,17 @@ private fun MarkdownDocument(
     // settings the library builds inside `Markdown`, so `success` hands them over before any text
     // is annotated.
     val settings = remember { arrayOfNulls<AnnotatorSettings>(1) }
-    val annotator = remember {
+    val findMark = colors.warningSoft
+    val annotator = remember(marks, findMark) {
         markdownAnnotator { content, child ->
+            val marked = marks?.get(child.startOffset)
+            if (marked != null && isMarkableLeaf(child.type)) {
+                val leaf = child.getTextInNode(content).toString()
+                append(leaf.substring(0, marked.first))
+                withStyle(SpanStyle(background = findMark)) { append(leaf.substring(marked.first, marked.second)) }
+                append(leaf.substring(marked.second))
+                return@markdownAnnotator true
+            }
             val current = settings[0]
             if (child.type != MarkdownElementTypes.STRONG || current == null) return@markdownAnnotator false
             pushStyle(SpanStyle(fontWeight = FontWeight.Medium))
@@ -343,7 +359,9 @@ private fun MarkdownDocument(
         // spaces only blocks, only between two of them, by what they are.
         success = { success, successComponents, successModifier ->
             settings[0] = annotatorSettings()
-            ProseDocument(success.node, success.content, successComponents, successModifier)
+            CompositionLocalProvider(LocalFindLeaves provides marks?.keys) {
+                ProseDocument(success.node, success.content, successComponents, successModifier)
+            }
         },
         // Unreachable: `state` above is only ever a `State.Success`. Spelled out rather than left
         // to the library's empty `Box`, so a future change to the parse cannot blank the text.

@@ -180,6 +180,7 @@ struct ConversationProcessHeader: View {
 }
 
 struct ConversationTimelineItem: View {
+    @Environment(\.conversationFindHighlight) private var findHighlight
     let item: any TimelineItem
     let workbench: Workbench
     let projectID: String
@@ -216,7 +217,7 @@ struct ConversationTimelineItem: View {
                     ConversationSessionReferenceChip(workbench: workbench, recipientID: user.event.sessionId, reference: reference)
                 }
                 if !user.text.isEmpty {
-                    Text(user.text).riffetFont(.body).lineSpacing(5).foregroundStyle(palette.fg).textSelection(.enabled)
+                    Text(AttributedString(user.text).highlighting(findHighlight, only: findHighlight?.nth, color: palette.warning.opacity(0.4))).riffetFont(.body).lineSpacing(5).foregroundStyle(palette.fg).textSelection(.enabled)
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.selected, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .frame(maxWidth: 300, alignment: .trailing)

@@ -57,6 +57,7 @@ export const CONTRACTS = {
   TimelineRow: frame(sync.TimelineRowSchema),
   TimelinePage: frame(sync.TimelinePageSchema),
   TimelineChanges: frame(sync.TimelineChangesSchema),
+  LaneFind: frame(sync.LaneFindSchema),
 
   DeviceReport: request(devices.DeviceReportSchema),
   DeviceCallOutcome: request(devices.DeviceCallOutcomeSchema),

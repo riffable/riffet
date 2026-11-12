@@ -1,5 +1,5 @@
 import { insideMath, mathRanges } from './dollarMath';
-import { inLinkTarget, transformProse } from './markdownSource';
+import { inLinkTarget, transformProse } from '../../../../../packages/timeline/src/markdownSource';
 
 /**
  * Characters a URL keeps in prose: the ASCII URL syntax, plus the letters of a write-as-is path

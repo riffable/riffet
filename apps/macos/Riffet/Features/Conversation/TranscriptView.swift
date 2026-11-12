@@ -91,6 +91,16 @@ struct TranscriptHost: NSViewControllerRepresentable {
         )
         controller.actions = actions
         controller.marksProvider = { MarksStore.shared.marks(for: sessionId) }
+        workbench.readingKey = { [weak controller] in controller?.topItemKey() }
+        controller.findProvider = { [weak workbench] in workbench?.find }
+        controller.findRow = { [weak workbench] key in
+            guard let grouping = workbench?.grouping,
+                  let index = grouping.items.firstIndex(where: { $0.key == key }), index < grouping.rowOfItem.size else { return nil }
+            let row = Int(grouping.rowOfItem.get(index: Int32(index)))
+            guard row < grouping.rows.count else { return nil }
+            let rowKey = nativeString(grouping.rows[row].key)
+            return (rowKey, key == rowKey ? nil : key)
+        }
         controller.focusRowKey = { [weak workbench] focus in
             guard let workbench, workbench.selected?.id == sessionId, let grouping = workbench.grouping else { return nil }
             let match = Self.match(focus, in: grouping)

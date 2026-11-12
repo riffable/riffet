@@ -191,6 +191,37 @@ enum ConversationRenderPlan {
     }
 }
 
+extension ConversationRenderPlan.Entry {
+    /// The timeline items this cell draws, by key: one for a single row or a process child, every
+    /// member of a folded tool run or a batch of notices, none for a process header or footer.
+    var itemKeys: [String] {
+        switch content {
+        case let .row(row): (row as? TimelineRowTrigger)?.notices.map(\.key) ?? [row.key]
+        case let .item(item, _, _): [item.key]
+        case let .toolRun(run): run.open ? [] : run.items.map(\.key)
+        case .processHeader, .footer: []
+        }
+    }
+
+    /// Whether this cell marks find's words in its own text: a message, an answer or a thought.
+    /// Elsewhere (a tool, whose match may be in a command it does not show folded; a notice) it is tinted.
+    var marksFindWords: Bool {
+        let item: (any TimelineItem)?
+        switch content {
+        case let .item(value, _, _): item = value
+        case let .row(row): item = (row as? TimelineRowSingle)?.item
+        default: item = nil
+        }
+        return item is TimelineItemUser || item is TimelineItemAssistant || item is TimelineItemThought
+    }
+
+    /// The item at the top of this cell, a real timeline row key (find starts there); a header reads its first item.
+    var readingKey: String? {
+        if case let .processHeader(process, _) = content { return process.items.first?.key }
+        return itemKeys.first
+    }
+}
+
 extension ConversationRenderPlan {
     /// What can change an entry's rendering without its identity changing.
     static func revision(_ entry: Entry, speed: SpeedTag?) -> AnyHashable {

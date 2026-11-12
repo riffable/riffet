@@ -409,6 +409,8 @@ function DiscussionConversation({ session, initialRun, active, enterBehavior, on
         onReaderEnd={native.readerAtEnd}
         onJumpToLatest={native.jumpToLatest}
         onLoadTurn={native.loadTurn}
+        onFind={native.findInLane}
+        onLoadPlace={native.loadPlace}
         onExpandRow={native.expandRow}
         onRetryNativeRun={native.retryNativeRun}
         onCheckNativeRun={native.checkNativeRun}

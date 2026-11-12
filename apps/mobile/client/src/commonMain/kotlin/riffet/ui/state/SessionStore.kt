@@ -318,8 +318,12 @@ class SessionStore(
             liveMetrics = _liveMetrics,
             activityStamp = { id -> lists.list.value.sessions.firstOrNull { it.id == id }?.activityStamp() },
             deleted = { id -> lists.removeLocally(listOf(id)) },
+            conversationChanged = { find.close() },
         ),
     )
+
+    /** Find within the open conversation (shared state machine); closes when another conversation opens. */
+    val find: SessionFind = SessionFind(api, scope, sync)
 
     val subagents: StateFlow<List<StoredSubagent>> = Projection(core.state) { it.subagents }
     val loadingSubagent: StateFlow<String?> = sync.loadingLane

@@ -228,4 +228,9 @@
     <string name="session_resume_note">复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。</string>
     <string name="session_resume_credentials">终端不会带上 Riffet 中配置的模型接口和密钥。</string>
     <string name="external_import_action">继续终端会话</string>
+    <string name="session_find">查找</string>
+    <string name="session_find_previous">上一个</string>
+    <string name="session_find_next">下一个</string>
+    <string name="session_find_close">关闭查找</string>
+    <string name="session_find_placeholder">查找</string>
 </resources>

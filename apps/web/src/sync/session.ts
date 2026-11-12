@@ -1,4 +1,4 @@
-import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, Run, RunMetrics, Session, StepMetrics, SyncLane, TimelineRow } from '@contracts';
+import type { NativeActivity, NativeContext, NativeInteraction, NativeInteractionResponse, NativeStatus, LaneFind, Run, RunMetrics, Session, StepMetrics, SyncLane, TimelineRow } from '@contracts';
 import { createStore, type Store } from '@/lib/store';
 import type { SyncCache } from './cache';
 import { LaneSync, type ControlFrame, type LaneConnection, type LaneOutline, type PageResult } from './lane';
@@ -195,6 +195,7 @@ export class SessionSync {
   /** The main lane's whole outline, beyond the newest turns the hello carried; the store's `outline` follows. */
   loadOutline(): Promise<LaneOutline | undefined> { return this.main.loadOutline(); }
   latest(signal?: AbortSignal): Promise<PageResult> { return this.main.latest(signal); }
+  find(query: string, signal?: AbortSignal): Promise<LaneFind | undefined> { return this.main.find(query, signal); }
   expand(key: string, lane: SyncLane = 'main'): Promise<boolean> { return (lane === 'main' ? this.main : this.lanes.get(lane)?.lane)?.expand(key) ?? Promise.resolve(false); }
 
   /**
