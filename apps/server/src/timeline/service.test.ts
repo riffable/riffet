@@ -413,6 +413,22 @@ describe('timeline service', () => {
     env.close();
   });
 
+  it('keeps a compaction Claude logged before its `/compact` when the window moves to that command', async () => {
+    const env = open();
+    turn(env, 1);
+    // Claude 2.1.322: the compaction (its hook, boundary, summary) is logged before the command, which keeps when it was typed.
+    const typed = stamp(++tick);
+    env.writer.activities.apply({ id: 'claude:compaction:c1', kind: 'compaction', status: 'running', title: 'compact', startedAt: stamp(++tick), compaction: { trigger: 'manual' } });
+    env.writer.activities.apply({ id: 'claude:compaction:c1', kind: 'compaction', status: 'completed', title: 'compact', startedAt: stamp(tick), endedAt: stamp(++tick), compaction: { trigger: 'manual' } });
+    env.writer.turnStarted('t2', typed);
+    commit(env, { ...user('u2', 't2', '/compact'), createdAt: typed });
+    env.writer.turnEnded('t2', 'completed', stamp(++tick));
+    await env.ready();
+    const rows = env.all();
+    expect(rows.find(row => row.kind === 'activity')).toMatchObject({ turn: 'native:session-1:t2', activity: { status: 'completed' } });
+    env.close();
+  });
+
   it('changes generation only when the log is rebuilt, a scratch window is promoted, or the fold rules change', async () => {
     let env = open();
     turn(env, 1);

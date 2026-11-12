@@ -25,7 +25,7 @@ import type { RowState, TimelineTables } from './tables.js';
  */
 
 /** Bumped when a change to the fold rules must refold every lane: it changes every lane's generation. */
-export const FOLD_VERSION = 8;
+export const FOLD_VERSION = 9;
 const READ_BATCH = 2000;
 const PREVIEW_CHARS = 120;
 const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
@@ -795,8 +795,9 @@ export class LaneFold {
   /**
    * Moves the window to the start of the newest turn once the turns before it can no longer change: it
    * starts with a prompt echoed by the transcript, has an identity of its own, shares no turn with the
-   * rows before it, and nothing before it is still live (an unechoed or unfinished run, a running
-   * activity or job, a draft) or reaches into it (an entry whose sources run past its start).
+   * rows before it, holds no row logged before that prompt, and nothing before it is still live (an
+   * unechoed or unfinished run, a running activity or job, a draft) or reaches into it (an entry whose
+   * sources run past its start).
    */
   private rebase(): boolean {
     const last = this.places.findLastIndex(place => place.pos < PENDING_ROW_POS);
@@ -816,6 +817,8 @@ export class LaneFold {
       if (item.kind === 'tool' && item.job?.status === 'running') return false;
     }
     const cut = first.event.sequence;
+    // A row filed after the prompt can come from before it (Claude logs a compaction ahead of its `/compact`).
+    if (this.items.slice(start).some(item => item.event.sourceEvents.some(source => source.sequence < cut))) return false;
     for (const event of this.projected) {
       if (event.sequence >= cut) break;
       if (event.sourceEvents.some(source => source.sequence >= cut || this.drafts.has(source))) return false;
