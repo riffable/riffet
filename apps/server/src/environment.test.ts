@@ -141,7 +141,7 @@ describe('login shell capture', () => {
     const value = `${directory('a')}${delimiter}${directory('b')}`;
     const calls: string[][] = [];
     return captureLoginShellPath({
-      env: { SHELL: '/bin/zsh' },
+      env: { SHELL: fakeShell('zsh', ':') },
       run: async (_shell, args) => {
         calls.push(args);
         if (args[0] === '-ilc') throw Object.assign(new Error('boom'), { code: 'ENOENT' });
@@ -155,7 +155,7 @@ describe('login shell capture', () => {
 
   it('reports why nothing was captured instead of throwing', async () => {
     const result = await captureLoginShellPath({
-      env: { SHELL: '/bin/zsh' },
+      env: { SHELL: fakeShell('zsh', ':') },
       run: async () => { throw new Error('nope'); },
     });
     expect(result.path).toBeUndefined();
@@ -164,7 +164,7 @@ describe('login shell capture', () => {
 
   it('refuses a payload that is not a usable PATH', async () => {
     const result = await captureLoginShellPath({
-      env: { SHELL: '/bin/zsh' },
+      env: { SHELL: fakeShell('zsh', ':') },
       run: async () => `${START_MARK}Not privileged to set domain environment.${END_MARK}`,
     });
     expect(result.path).toBeUndefined();
@@ -182,7 +182,7 @@ describe('resolveEnvironmentPath', () => {
   it('takes the login shell PATH when there is no override', async () => {
     const captured = `${directory('captured')}${delimiter}${directory('captured2')}`;
     const resolution = await resolveEnvironmentPath({
-      env: { SHELL: '/bin/zsh', PATH: '/usr/bin:/bin' },
+      env: { SHELL: fakeShell('zsh', ':'), PATH: '/usr/bin:/bin' },
       home,
       run: async () => `${START_MARK}${captured}${END_MARK}`,
     });
