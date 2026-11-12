@@ -1,6 +1,28 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "%lld 项": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld phone"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld phones"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "1 小时后": {
       "localizations": {
         "en": {
@@ -51,12 +73,32 @@
         }
       }
     },
+    "MCP": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MCP"
+          }
+        }
+      }
+    },
     "Riffet 未运行": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Riffet was not running"
+          }
+        }
+      }
+    },
+    "Skills": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skills"
           }
         }
       }
@@ -107,6 +149,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Next tab"
+          }
+        }
+      }
+    },
+    "下次启动时生效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies at next launch"
           }
         }
       }
@@ -542,6 +594,16 @@
         }
       }
     },
+    "已关 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld off"
+          }
+        }
+      }
+    },
     "已删除的任务": {
       "localizations": {
         "en": {
@@ -672,6 +734,16 @@
         }
       }
     },
+    "手机": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phones"
+          }
+        }
+      }
+    },
     "打开会话时": {
       "localizations": {
         "en": {
@@ -692,6 +764,16 @@
         }
       }
     },
+    "技能与工具": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skills & Tools"
+          }
+        }
+      }
+    },
     "把事件订阅改为长连接": {
       "localizations": {
         "en": {
@@ -708,6 +790,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Authorization failed"
+          }
+        }
+      }
+    },
+    "控制 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Control %@"
           }
         }
       }
@@ -810,6 +902,26 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cannot generate QR code"
+          }
+        }
+      }
+    },
+    "添加图片或文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add images or files"
+          }
+        }
+      }
+    },
+    "无法读取技能与工具": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't load skills and tools"
           }
         }
       }
@@ -1222,6 +1334,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Add directly"
+          }
+        }
+      }
+    },
+    "离线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Offline"
           }
         }
       }

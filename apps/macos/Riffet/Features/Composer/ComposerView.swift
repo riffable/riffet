@@ -48,6 +48,9 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     @State private var trailingWidth: CGFloat?
     /// The input method holds text it has not committed yet; `model.text` does not include it.
     @State private var composing = false
+    /// Filled by a skills-and-tools picker among the controls: the + button then opens a menu.
+    @State private var toolsSlot = ComposerToolsSlot()
+    @State private var attachAnchor = MenuAnchor()
 
     private let lineHeight: CGFloat = 21
     private let fullscreenButtonSize: CGFloat = 26
@@ -326,7 +329,15 @@ struct ComposerView<Controls: View, Trailing: View>: View {
     }
 
     private func attachButton(line: Bool) -> some View {
-        Button { model.pickFiles(upload: upload) } label: {
+        Button {
+            guard let tools = toolsSlot.entries else { model.pickFiles(upload: upload); return }
+            toolsSlot.refresh?()
+            attachAnchor.popUp(entries: [
+                .item(String(localized: "添加图片或文件"), symbol: "paperclip") { model.pickFiles(upload: upload) },
+                .separator,
+                .submenu(String(localized: "技能与工具"), symbol: "puzzlepiece.extension", entries: tools()),
+            ])
+        } label: {
             if line {
                 Image(icon: "plus").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
             } else {
@@ -334,6 +345,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             }
         }
         .buttonStyle(IconButtonStyle(size: line ? 32 : 26))
+        .background(MenuAnchorView(anchor: attachAnchor))
         .help("添加附件（也可以拖入或粘贴）")
     }
 
@@ -403,6 +415,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         }
         .environment(\.compactControls, compact)
         .environment(\.composerEnvRow, line)
+        .environment(\.composerToolsSlot, toolsSlot)
         .animation(motion, value: showsFullscreenControl)
     }
 
@@ -713,6 +726,10 @@ struct SessionControls: View {
                     .equatable()
                     .help("审批")
                     .transition(.opacity)
+                }
+                if session.agentID != AgentDirectory.quickChat, session.archivedAt == nil {
+                    SessionToolsPicker(workbench: workbench, session: session, capabilities: catalog.capabilities)
+                        .transition(.opacity)
                 }
             }
         }

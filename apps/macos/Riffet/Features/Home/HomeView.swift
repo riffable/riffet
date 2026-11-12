@@ -12,6 +12,7 @@ struct HomeView: View {
     @State private var taskModel: String?
     @State private var chatModel: String?
     @State private var approval: String?
+    @State private var tools = ToolsPickerModel()
     @State private var catalog: NativeBackendCatalogEntry?
     @State private var loadedCatalogKey: String?
     @State private var catalogError: String?
@@ -47,6 +48,7 @@ struct HomeView: View {
     @State private var attempting = false
 
     private var quickChat: Bool { workbench.homeIsQuickChat }
+    private var toolsScope: String { "\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")" }
     private var taskProject: Project? { workbench.project(workbench.homeTaskProjectId) }
     private var taskGit: GitStatusModel? { taskProject.map { GitStatusModel.model(for: $0.id) } }
     private var project: Project? { quickChat ? workbench.quickChatProject : taskProject }
@@ -244,6 +246,11 @@ struct HomeView: View {
                             .equatable()
                             .disabled(!catalogCurrent)
                     }
+                    ToolsPicker(
+                        model: tools, api: workbench.host.api, capabilities: catalog.capabilities, agent: backend, profileId: resolvedProfileId, projectId: project?.id,
+                        groups: tools.groups, off: tools.offItems(scope: toolsScope),
+                        setGroups: { tools.setGroups($0) }, setOff: { tools.setOff($0, scope: toolsScope) }
+                    )
                 }
             } trailing: {
                 // A backend that cannot list models still needs a way to switch provider.
@@ -726,6 +733,7 @@ struct HomeView: View {
         let selectedMode = effectiveMode
         let selectedApproval = quickChat ? nil : approval
         let selectedReferences = quickChat ? [] : workbench.references(for: selectedProjectId)
+        let selectedTools = quickChat ? (groups: nil, off: nil) : tools.creation(capabilities: currentCatalog?.capabilities, agent: backend, projectId: selectedProjectId, scope: toolsScope)
         Task {
             do {
                 let request: PendingSessionCreation
@@ -734,7 +742,8 @@ struct HomeView: View {
                     request = try workbench.store.prepareCreation(
                         projectId: selectedProjectId, prompt: submission.text, attachments: submission.attachments,
                         backendId: nil, backendProfileId: selectedProfile, model: selectedModel, mode: selectedMode,
-                        approval: selectedApproval, context: selectedReferences, agentId: selectedBackend
+                        approval: selectedApproval, context: selectedReferences, agentId: selectedBackend,
+                        toolGroups: selectedTools.groups, extensionsOff: selectedTools.off
                     )
                     pendingCreation = request
                     UserDefaults.standard.set(request.id, forKey: pendingKey)

@@ -236,31 +236,41 @@ enum NativeMenuEntry {
     case header(String)
     case separator
     case item(String, subtitle: String? = nil, symbol: String? = nil, checked: Bool = false, enabled: Bool = true, action: () -> Void)
+    /// A row that opens [entries] beside it.
+    case submenu(String, symbol: String? = nil, entries: [NativeMenuEntry])
 }
 
 extension MenuAnchor {
     /// Shows [entries] under the anchor and runs the chosen entry's action once the menu has closed.
     @MainActor
     func popUp(entries: [NativeMenuEntry]) {
-        let menu = NSMenu()
-        menu.autoenablesItems = false
         var selected: (() -> Void)?
-        for entry in entries {
-            switch entry {
-            case .header(let title):
-                menu.addItem(.sectionHeader(title: title))
-            case .separator:
-                menu.addItem(.separator())
-            case .item(let title, let subtitle, let symbol, let checked, let enabled, let action):
-                let item = MenuAction.item(title) { selected = action }
-                item.subtitle = subtitle
-                if let symbol { item.image = NSImage.icon(symbol, accessibilityDescription: nil) }
-                item.state = checked ? .on : .off
-                item.isEnabled = enabled
-                menu.addItem(item)
+        func build(_ entries: [NativeMenuEntry]) -> NSMenu {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+            for entry in entries {
+                switch entry {
+                case .header(let title):
+                    menu.addItem(.sectionHeader(title: title))
+                case .separator:
+                    menu.addItem(.separator())
+                case .item(let title, let subtitle, let symbol, let checked, let enabled, let action):
+                    let item = MenuAction.item(title) { selected = action }
+                    item.subtitle = subtitle
+                    if let symbol { item.image = NSImage.icon(symbol, accessibilityDescription: nil) }
+                    item.state = checked ? .on : .off
+                    item.isEnabled = enabled
+                    menu.addItem(item)
+                case .submenu(let title, let symbol, let children):
+                    let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+                    if let symbol { item.image = NSImage.icon(symbol, accessibilityDescription: nil) }
+                    item.submenu = build(children)
+                    menu.addItem(item)
+                }
             }
+            return menu
         }
-        if popUp(menu) { selected?() }
+        if popUp(build(entries)) { selected?() }
     }
 }
 
