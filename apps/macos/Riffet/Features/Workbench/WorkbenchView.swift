@@ -109,7 +109,10 @@ struct WorkbenchView: View {
         .sessionDeletionDialog(workbench)
         .background { WindowBackdrop(material: DisplayPreferences.shared.material).ignoresSafeArea() }
         .background(WorkbenchWindowBinder(workbench: workbench))
-        .background(WindowTitleBarBinder(titleBar: isWindow ? .unified : DisplayPreferences.shared.style.titleBar))
+        .background(WindowTitleBarBinder(
+            titleBar: isWindow ? .unified : DisplayPreferences.shared.style.titleBar,
+            lightsDrop: drawn ? CustomChrome.trafficLightsDrop(DisplayPreferences.shared.style) : 0
+        ))
         .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         // A running benchmark labels its own pages.
         .onChange(of: perfPage, initial: true) { _, page in if !isWindow, !PerfBenchmark.shared.running { PerfMonitor.shared.page = page } }

@@ -54,8 +54,8 @@ struct CustomSidebar: View {
         .accessibilityLabel(peeking ? LocalizedStringKey("固定侧边栏") : LocalizedStringKey("收起/展开侧栏"))
     }
 
-    /// The top row runs level with the traffic lights: the header's height, and a card's gap above it.
-    private func headerHeight(_ style: StyleSpec) -> CGFloat { style.layout.header + (style.window == .insetCard ? Space.sm : 0) }
+    /// The top row runs level with the traffic lights (`CustomChrome.titleRow`).
+    private func headerHeight(_ style: StyleSpec) -> CGFloat { CustomChrome.titleRow(style) }
 
     private func treeHeader(_ style: StyleSpec) -> some View {
         HStack(spacing: Space.sm) {

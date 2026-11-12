@@ -109,20 +109,59 @@ struct WorkbenchWindowBinder: NSViewRepresentable {
 }
 
 /// Gives the window the style's title bar (`StyleSpec.TitleBar`). The scene opens every window with
-/// the unified toolbar; a compact one is shorter and, on macOS 26, rounds the window less.
+/// the unified toolbar; a compact one is shorter and, on macOS 26, rounds the window less. The
+/// traffic lights move [lightsDrop] points down from where the title bar puts them
+/// (`CustomChrome.trafficLightsDrop`).
 struct WindowTitleBarBinder: NSViewRepresentable {
     let titleBar: StyleSpec.TitleBar
+    var lightsDrop: CGFloat = 0
 
     final class Anchor: NSView {
         var toolbarStyle: NSWindow.ToolbarStyle = .unified
+        var drop: CGFloat = 0
+        /// Each button's height as AppKit last laid it out, and the one it was moved to.
+        private var heights: [ObjectIdentifier: (system: CGFloat, moved: CGFloat)] = [:]
+        private var observers: [NSObjectProtocol] = []
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            observers.forEach(NotificationCenter.default.removeObserver)
+            observers = []
+            heights = [:]
+            guard let window else { return }
+            // The title bar lays its buttons out again on resizing, full screen and key changes.
+            for button in Self.buttons(window) {
+                button.postsFrameChangedNotifications = true
+                observers.append(NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification, object: button, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.placeLights() }
+                })
+            }
             apply()
         }
 
         func apply() {
             if let window, window.toolbarStyle != toolbarStyle { window.toolbarStyle = toolbarStyle }
+            placeLights()
+        }
+
+        private static func buttons(_ window: NSWindow) -> [NSButton] {
+            [.closeButton, .miniaturizeButton, .zoomButton].compactMap { window.standardWindowButton($0) }
+        }
+
+        private func placeLights() {
+            // In full screen the lights are in the menu bar's strip, which keeps its own layout.
+            guard let window, !window.styleMask.contains(.fullScreen) else { return }
+            for button in Self.buttons(window) {
+                guard let container = button.superview else { continue }
+                let key = ObjectIdentifier(button)
+                let y = button.frame.origin.y
+                var entry = heights[key] ?? (y, y)
+                // Anywhere but where it was moved, AppKit has placed it anew.
+                if abs(y - entry.moved) > 0.5 { entry.system = y }
+                entry.moved = entry.system + (container.isFlipped ? drop : -drop)
+                heights[key] = entry
+                if abs(y - entry.moved) > 0.5 { button.setFrameOrigin(NSPoint(x: button.frame.origin.x, y: entry.moved)) }
+            }
         }
     }
 
@@ -130,6 +169,7 @@ struct WindowTitleBarBinder: NSViewRepresentable {
 
     func updateNSView(_ anchor: Anchor, context: Context) {
         anchor.toolbarStyle = titleBar == .compact ? .unifiedCompact : .unified
+        anchor.drop = lightsDrop
         anchor.apply()
     }
 }

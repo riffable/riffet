@@ -7,6 +7,19 @@ enum CustomChrome {
     /// the toolbar's title bar (52pt) the lights end at 73pt and sit 26pt down; the compact one
     /// (40pt) draws them 7pt further left and 20pt down.
     static func trafficLights(_ style: StyleSpec) -> CGFloat { style.titleBar == .compact ? 77 : 84 }
+
+    /// How far the traffic lights are moved down from the title bar's middle: beside an inset card
+    /// they sit level with the card's header, which starts a card gap below the window's top
+    /// (30pt down rather than the toolbar's 26).
+    static func trafficLightsDrop(_ style: StyleSpec) -> CGFloat {
+        style.window == .insetCard && style.titleBar == .unified ? Space.sm + style.layout.header / 2 - 26 : 0
+    }
+
+    /// The drawn sidebar's top row, level with the traffic lights: the header's height, and beside a
+    /// card the card's gap above and below it, so its middle is the card header's.
+    static func titleRow(_ style: StyleSpec) -> CGFloat {
+        style.layout.header + (style.window == .insetCard ? 2 * Space.sm : 0)
+    }
     static let sidebarWidths: ClosedRange<Double> = 210...400
     /// The sidebar's width as the reader left it; 0 until dragged, which means the style's own.
     static let sidebarWidthKey = "riffet.sidebar-width"
@@ -115,7 +128,7 @@ struct CustomWorkbench<Header: View, Content: View>: View {
             .frame(maxHeight: .infinity)
             // The sidebar's top row is title bar too: its gaps move the window.
             .background(alignment: .top) {
-                WindowDragArea().frame(height: style.layout.header + (style.window == .insetCard ? Space.sm : 0))
+                WindowDragArea().frame(height: CustomChrome.titleRow(style))
             }
             .background(canvas)
             .overlay(alignment: .trailing) {
