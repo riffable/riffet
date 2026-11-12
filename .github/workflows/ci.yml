@@ -14,62 +14,9 @@ permissions:
 
 jobs:
   verify:
-    # The environment resolution has to work on both platforms riffet serves: macOS keeps a
-    # user-local npm prefix in a place a Linux box does not, and Linux has no launchd.
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: pnpm
-      - name: Install
-        run: pnpm install --frozen-lockfile
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Generated themes are current
-        run: pnpm gen:theme:check
-      - name: Generated interface styles are current
-        run: pnpm gen:styles:check
-      # Skia's path operations are only pinned on the platform the catalog was generated on.
-      - name: Generated Mac icon packs are current
-        if: runner.os == 'macOS'
-        run: pnpm gen:mac-icons:check
-      - name: Mobile parity fixtures are current
-        run: pnpm gen:timeline-fixtures:check
-      - name: Contract schemas and fixtures are current
-        run: pnpm gen:contracts:check
-      - name: App versions match package.json
-        run: pnpm version:check
-      - name: Mac app acknowledgements list its libraries
-        run: node apps/macos/scripts/check-acknowledgements.mjs
-      - name: Plugins stay separate from the core
-        run: pnpm check:plugins
-      - name: Error texts are generated for every client
-        run: pnpm gen:i18n:check
-      - name: Web interface text goes through the catalogs
-        run: pnpm i18n:check
-      - name: Mobile string catalogs are in step
-        run: pnpm check:mobile-strings
-      - name: Compose code avoids known remount and per-frame recomposition patterns
-        run: pnpm check:compose
-      - name: Tests
-        run: pnpm test
-      - name: Production build
-        run: pnpm build
-      - name: The daemon starts with a bare PATH
-        # The regression this repository learned the hard way: a service restarted without a login
-        # shell has almost no PATH, and every backend CLI still has to resolve.
-        run: node --test scripts/environment-smoke.test.mjs
-        env:
-          RIFFET_SMOKE_BARE_PATH: '1'
+    uses: ./.github/workflows/verify.yml
+    with:
+      os: ubuntu-latest
 
   mobile:
     # The Gradle build is independent of pnpm. Only the JVM test targets run here: the iOS targets
@@ -90,27 +37,3 @@ jobs:
         # AGP still configures the Android targets of these modules. local.properties is untracked,
         # so the SDK comes from the ANDROID_HOME the hosted runner already exports.
         run: ./gradlew --no-daemon :contracts:jvmTest :core:jvmTest :terminal:jvmTest :client:jvmTest :shared:jvmTest
-
-  macos-app:
-    # The native macOS client (docs/MACOS.md): the shared Kotlin client on Kotlin/Native, then the
-    # Swift app on top of it. Kotlin/Native silently skips Apple targets on other hosts, so this has
-    # to run on macOS to mean anything.
-    runs-on: macos-26
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 21
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Shared client on Kotlin/Native
-        working-directory: apps/mobile
-        run: ./gradlew :client:macosArm64Test --console=plain
-      - name: Install XcodeGen
-        run: brew install xcodegen
-      - name: Build and test the app
-        working-directory: apps/macos
-        run: ./scripts/build.sh test
-      - name: Acknowledgements cover the resolved Swift packages
-        working-directory: apps/macos
-        run: node scripts/check-acknowledgements.mjs Riffet.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved

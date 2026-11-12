@@ -1,0 +1,67 @@
+name: Verify
+
+# The server, web and generated-file checks, called by CI on Linux and by CI (macOS) on macOS.
+# The environment resolution has to work on both platforms riffet serves: macOS keeps a
+# user-local npm prefix in a place a Linux box does not, and Linux has no launchd.
+on:
+  workflow_call:
+    inputs:
+      os:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ${{ inputs.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Generated themes are current
+        run: pnpm gen:theme:check
+      - name: Generated interface styles are current
+        run: pnpm gen:styles:check
+      # Skia's path operations are only pinned on the platform the catalog was generated on.
+      - name: Generated Mac icon packs are current
+        if: runner.os == 'macOS'
+        run: pnpm gen:mac-icons:check
+      - name: Mobile parity fixtures are current
+        run: pnpm gen:timeline-fixtures:check
+      - name: Contract schemas and fixtures are current
+        run: pnpm gen:contracts:check
+      - name: App versions match package.json
+        run: pnpm version:check
+      - name: Mac app acknowledgements list its libraries
+        run: node apps/macos/scripts/check-acknowledgements.mjs
+      - name: Plugins stay separate from the core
+        run: pnpm check:plugins
+      - name: Error texts are generated for every client
+        run: pnpm gen:i18n:check
+      - name: Web interface text goes through the catalogs
+        run: pnpm i18n:check
+      - name: Mobile string catalogs are in step
+        run: pnpm check:mobile-strings
+      - name: Compose code avoids known remount and per-frame recomposition patterns
+        run: pnpm check:compose
+      - name: Tests
+        run: pnpm test
+      - name: Production build
+        run: pnpm build
+      - name: The daemon starts with a bare PATH
+        # The regression this repository learned the hard way: a service restarted without a login
+        # shell has almost no PATH, and every backend CLI still has to resolve.
+        run: node --test scripts/environment-smoke.test.mjs
+        env:
+          RIFFET_SMOKE_BARE_PATH: '1'
