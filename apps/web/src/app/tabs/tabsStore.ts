@@ -138,6 +138,8 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   let pendingKeep = '';
   /** The conversation the workbench itself just created or launched, until it is selected. */
   let launched: { sessionId: string; at: number } | undefined;
+  /** The conversation on screen whose tab another window closed: it is not given a new one until the reader opens it again. */
+  let detached = '';
 
   const sessionMap = () => new Map(lists.get().sessions.map((session) => [session.id, session]));
   const sessionOf = (id: string) => lists.get().sessions.find((session) => session.id === id);
@@ -192,6 +194,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     const { sessionId } = nav.get();
     if (sessionId === lastSelected) return;
     lastSelected = sessionId;
+    detached = '';
     if (!sessionId || store.get().style === 'off') return;
     // A conversation Riffet just created keeps its tab, unless the reader adds tabs by hand.
     const launchedHere = takeLaunched(sessionId) && store.get().openMode !== 'manual';
@@ -249,12 +252,28 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     const known = new Map(sessions.map((session) => [session.id, session]));
     const dropped = new Set(store.get().tabs.filter((tab) => { const session = known.get(tab.sessionId); return session ? Boolean(session.archivedAt) : status === 'fresh'; }).map((tab) => tab.sessionId));
     if (dropped.size) remove(dropped);
-    if (selected && !store.get().tabs.some((tab) => tab.sessionId === selected)) select(selected, takeLaunched(selected) && store.get().openMode !== 'manual');
+    if (selected && selected !== detached && !store.get().tabs.some((tab) => tab.sessionId === selected)) select(selected, takeLaunched(selected) && store.get().openMode !== 'manual');
   };
   lists.subscribe(onLists);
   onLists();
 
   let persisted = { tabs: store.get().tabs, style: store.get().style, openMode: store.get().openMode };
+  // Every window writes the whole list, so each takes in the others' writes: a window left open since
+  // yesterday would otherwise put its old tabs back. A tab another window closed stays closed here too.
+  window.addEventListener('storage', (event) => {
+    if (event.storageArea !== window.localStorage) return;
+    const all = event.key === null;
+    const next = {
+      ...(all || event.key === TABS_STORAGE.tabs ? { tabs: readTabs() } : {}),
+      ...(all || event.key === TABS_STORAGE.style ? { style: readStyle() } : {}),
+      ...(all || event.key === TABS_STORAGE.openMode ? { openMode: readOpenMode() } : {}),
+    };
+    if (!Object.keys(next).length) return;
+    const selected = nav.get().sessionId;
+    if (next.tabs && selected && !next.tabs.some((tab) => tab.sessionId === selected)) detached = selected;
+    persisted = { ...persisted, ...next };
+    store.set(next);
+  });
   store.subscribe(() => {
     const { tabs, style, openMode } = store.get();
     if (tabs !== persisted.tabs) writeStored(TABS_STORAGE.tabs, JSON.stringify(tabs));
