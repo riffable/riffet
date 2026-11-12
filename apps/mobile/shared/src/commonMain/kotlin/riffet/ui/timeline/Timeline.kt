@@ -15,6 +15,8 @@ import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -59,6 +61,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import riffet.core.ReasoningChannel
 import riffet.core.TimelineItem
+import riffet.core.timelineItemTime
 import riffet.ui.focus.LocalFocusCoordinator
 import riffet.ui.state.OpenTrace
 import riffet.ui.state.lifecycleTrace
@@ -564,13 +567,13 @@ private val layoutShiftTracing by lazy { lifecycleTraceEnabled() }
 private fun TimelineEntry.live(): Boolean = when (this) {
     is TimelineEntry.Row -> when (val row = row) {
         is TimelineRow.Single -> !row.settled
-        is TimelineRow.Process -> !row.settled
+        is TimelineRow.Process -> row.turnActive
         is TimelineRow.Trigger -> false
     }
-    is TimelineEntry.ProcessHeader -> !row.settled
-    is TimelineEntry.ProcessChild -> !row.settled
-    is TimelineEntry.ToolRun -> !row.settled
-    is TimelineEntry.ProcessFooter -> !row.settled
+    is TimelineEntry.ProcessHeader -> row.turnActive
+    is TimelineEntry.ProcessChild -> row.turnActive
+    is TimelineEntry.ToolRun -> row.turnActive
+    is TimelineEntry.ProcessFooter -> row.turnActive
 }
 
 /** A scroll offset beyond any row: the list's measure clamps it to the end of the content. */
@@ -667,7 +670,6 @@ private fun TimelineEntryView(
         is TimelineEntry.ProcessChild -> ProcessItem(
             entry.item,
             running = entry.row.turnActive,
-            settled = entry.row.settled,
             root = root,
             onOpenFile = onOpenFile,
         )
@@ -680,10 +682,10 @@ private fun TimelineEntryView(
             root = root,
             reveal = revealed,
         ) { item ->
-            ProcessItem(item, running = entry.row.turnActive, settled = entry.row.settled, root = root, onOpenFile = onOpenFile)
+            ProcessItem(item, running = entry.row.turnActive, root = root, onOpenFile = onOpenFile)
         }
 
-        is TimelineEntry.ProcessFooter -> TurnProcessFooter(entry.row)
+        is TimelineEntry.ProcessFooter -> TurnFooterRow(entry.row.answerText, entry.row.endedAt)
 
         is TimelineEntry.Row -> when (val row = entry.row) {
             is TimelineRow.Trigger -> TriggerRow(row.notices)
@@ -707,11 +709,15 @@ private fun SingleRow(row: TimelineRow.Single, speed: SpeedTag?) {
 
         is TimelineItem.TaskNotification -> TaskNotificationRow(item)
         is TimelineItem.Activity -> ActivityRow(item)
+        is TimelineItem.Status -> Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            StatusRow(item)
+            if (row.footer == TurnFooter.SHOWN) TurnFooterRow(row.answerText, timelineItemTime(item))
+        }
         // A process kind is always folded into a Process row, so this is unreachable; it is
         // spelled out rather than using `else` so that adding a ninth variant is a compile
         // error here instead of a silently dropped row.
         is TimelineItem.Thought, is TimelineItem.Tool, is TimelineItem.Plan,
-        is TimelineItem.Image, is TimelineItem.Status,
+        is TimelineItem.Image,
         -> Unit
     }
 }
@@ -721,14 +727,11 @@ private fun SingleRow(row: TimelineRow.Single, speed: SpeedTag?) {
 private fun ProcessItem(
     item: TimelineItem,
     running: Boolean,
-    settled: Boolean,
     root: String?,
     onOpenFile: (String, Int?) -> Unit,
 ) {
     when (item) {
-        // `!settled`, not `running`: what matters to the renderer is "can this text still grow",
-        // and a turn whose block was flushed but is not yet over is still growing.
-        is TimelineItem.Thought -> ThoughtRow(item, streaming = !settled)
+        is TimelineItem.Thought -> ThoughtRow(item, streaming = running)
         is TimelineItem.Assistant -> AssistantRow(item = item, settled = false, speed = null)
         is TimelineItem.Tool -> ToolRow(item, root = root, stale = !running, onOpenFile = onOpenFile)
         is TimelineItem.Plan -> PlanRow(item)

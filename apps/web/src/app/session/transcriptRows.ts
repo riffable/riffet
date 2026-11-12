@@ -12,7 +12,7 @@ const TURN_BLOCK = 'turn-process:';
 // blocks do. Folded raw thinking is a one-liner and packs with the tool rows around it. This is
 // also the sole source of spacing inside a turn (the container no longer adds its own gap on top
 // of these margins).
-const processKinds = new Set<TimelineItem['kind']>(['thought', 'tool', 'plan', 'image', 'status']);
+const processKinds = new Set<TimelineItem['kind']>(['thought', 'tool', 'plan', 'image']);
 
 function backgroundTask(item: TimelineItem): boolean {
   return item.kind === 'activity' && item.activity.kind === 'background_task';
@@ -46,12 +46,12 @@ function gap(previous: TimelineItem | undefined, item: TimelineItem): string {
  */
 export type TranscriptRow =
   /**
-   * A message. `settled` and `metrics` only apply to an answer: its footer and its speed. `runId`
-   * is the settled answer's own turn, when that turn is one Riffet sent and can fork or rewind.
+   * A message or terminal result. A result without a final answer carries the turn's footer and
+   * latest prose as `answerText`; `runId` identifies the turn that can fork or rewind.
    */
-  | { type: 'item'; key: string; item: TimelineItem; gap: string; settled: boolean; footer: TurnFooter; metrics: RunMetrics | undefined; runId: string | undefined }
+  | { type: 'item'; key: string; item: TimelineItem; gap: string; settled: boolean; footer: TurnFooter; metrics: RunMetrics | undefined; runId: string | undefined; answerText?: string }
   /** Reasoning and structured work folded into one disclosure; `interrupted` also preserves output before steering. */
-  | { type: 'process'; key: string; items: TimelineItem[]; gaps: string[]; spaced: boolean; running: boolean; settled: boolean; footer: TurnFooter; endsTurn: boolean; followedByAnswer: boolean; interrupted: boolean; answerText: string | undefined; runId: string | undefined }
+  | { type: 'process'; key: string; items: TimelineItem[]; gaps: string[]; spaced: boolean; running: boolean; settled: boolean; footer: TurnFooter; endsTurn: boolean; followedByAnswer: boolean; interrupted: boolean; issueCount: number; answerText: string | undefined; runId: string | undefined }
   /** The notices that woke a turn. */
   | { type: 'trigger'; key: string; notices: TaskNotice[]; gap: string };
 
@@ -129,6 +129,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   timeline = withoutLinkedActivities(timeline);
   const { turnKeys, activeTurns, lastIndexByTurn } = analyzeTimelineTurns(timeline, running, activeTurnId);
   const finalAnswerIndexByTurn = new Map<string, number>();
+  const failureIndexesByTurn = new Map<string, number[]>();
   const interruptedTurns = new Set<string>();
   const lastSteerIndexByTurn = new Map<string, number>();
   const nativeMetricsByTurn = new Map<string, RunMetrics>();
@@ -137,6 +138,12 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   for (let index = 0; index < timeline.length; index += 1) {
     const item = timeline[index]!;
     if (item.kind === 'assistant' && item.phase === 'final_answer') finalAnswerIndexByTurn.set(turnKeys[index]!, index);
+    if (item.kind === 'status' && item.tone === 'danger') {
+      const turn = turnKeys[index]!;
+      const indexes = failureIndexesByTurn.get(turn) ?? [];
+      indexes.push(index);
+      failureIndexesByTurn.set(turn, indexes);
+    }
     if (metricsByRun?.size && (item.kind === 'user' || item.kind === 'task_notification')) {
       const source = [item.event, ...item.event.sourceEvents];
       const metrics = source.flatMap(nativeEventIds).map(id => metricsByRun?.get(`native:${id}`)).find(Boolean);
@@ -154,7 +161,8 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   for (let index = timeline.length - 1; index >= 0; index -= 1) {
     const item = timeline[index]!;
     if (item.kind === 'user') laterProcessTurns.clear();
-    else if (processKinds.has(item.kind) || (item.kind === 'assistant' && item.phase === 'commentary')) laterProcessTurns.add(turnKeys[index]!);
+    // A terminal result also keeps unfinished prose in the process, without itself being folded.
+    else if (processKinds.has(item.kind) || item.kind === 'status' || (item.kind === 'assistant' && item.phase === 'commentary')) laterProcessTurns.add(turnKeys[index]!);
     else if (item.kind === 'assistant') assistantBeforeProcess[index] = laterProcessTurns.has(turnKeys[index]!);
   }
   const isProcessItem = (item: TimelineItem, index: number): boolean => {
@@ -181,10 +189,18 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
   const latestOutputTurn = turnKeys[latestOutputIndex];
   const processingTurn = running && latestOutputTurn && activeTurns.has(latestOutputTurn) ? latestOutputTurn : undefined;
   const lastTurnEnd = (index: number) => lastIndexByTurn.get(turnKeys[index]!) === index;
+  const answerBefore = (index: number): string | undefined => {
+    const turnKey = turnKeys[index];
+    for (let before = index; before >= 0 && turnKeys[before] === turnKey; before -= 1) {
+      const item = timeline[before]!;
+      if (item.kind === 'assistant') return item.text;
+    }
+    return undefined;
+  };
   /** Everything a turn key's rows are derived from beyond the items themselves. */
   const contextOf = (key: string): unknown[] => [
     activeTurns.has(key), key === processingTurn, lastIndexByTurn.get(key),
-    finalAnswerIndexByTurn.get(key), interruptedTurns.has(key), lastSteerIndexByTurn.get(key), sentRunByTurn.get(key), metricsForTurn(key),
+    finalAnswerIndexByTurn.get(key), failureIndexesByTurn.get(key)?.join(','), interruptedTurns.has(key), lastSteerIndexByTurn.get(key), sentRunByTurn.get(key), metricsForTurn(key),
   ];
 
   // Where to resume: the turn holding the item before the first one that differs. The item before,
@@ -252,6 +268,8 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     groupTurnKey = undefined;
     const groupRunning = Boolean(turnKey && activeTurns.has(turnKey));
     const groupEndsTurn = Boolean(turnKey && lastIndexByTurn.get(turnKey) === groupLastIndex);
+    // Failure still opens its work by default; the result itself is always outside that fold.
+    const issueCount = (failureIndexesByTurn.get(turnKey!) ?? []).filter(index => index >= groupStart).length;
     // The final prose is outside this process's items. Its arrival closes the trailing tool run
     // just like narration inside the process, even before the turn's completion arrives.
     const answerIndex = turnKey ? finalAnswerIndexByTurn.get(turnKey) ?? lastIndexByTurn.get(turnKey) : undefined;
@@ -262,11 +280,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     const settled = carries && !groupRunning && turnKey !== processingTurn;
     // A turn that stopped on a tool, as an interrupted one does, has no answer row to carry the
     // copy action, so its footer copies the turn's latest prose — what that row would have copied.
-    let answerText: string | undefined;
-    for (let index = groupLastIndex; settled && index >= 0 && turnKeys[index] === turnKey; index -= 1) {
-      const candidate = timeline[index]!;
-      if (candidate.kind === 'assistant') { answerText = candidate.text; break; }
-    }
+    const answerText = settled ? answerBefore(groupLastIndex) : undefined;
     const first = items[0]!;
     // The first block of a lane turn is keyed by the turn rather than by its first item: older rows of
     // the same turn paging in above would otherwise remount the whole block, open tools and all.
@@ -277,7 +291,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       type: 'process', key, items, gaps: items.map((item, index) => gap(items[index - 1], item)),
       spaced: Boolean(previousItem), running: groupRunning, settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', endsTurn: groupEndsTurn, followedByAnswer,
       interrupted: Boolean(turnKey && (interruptedTurns.has(turnKey) || groupLastIndex < (lastSteerIndexByTurn.get(turnKey) ?? -1))),
-      answerText, runId: settled && turnKey ? sentRunByTurn.get(turnKey) : undefined,
+      issueCount, answerText, runId: settled && turnKey ? sentRunByTurn.get(turnKey) : undefined,
     }, first, turnKey, items[items.length - 1]!, groupStart, groupKeyBefore);
   };
 
@@ -319,9 +333,12 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
     lastTurnKey = turnKey;
     const finalAnswer = finalAnswerIndexByTurn.get(turnKey);
     // The turn's answer, or what would be it if the turn ended now.
-    const carries = item.kind === 'assistant' && (finalAnswer === undefined ? lastTurnEnd(index) : finalAnswer === index);
+    const carries = finalAnswer === undefined
+      ? (item.kind === 'assistant' || item.kind === 'status') && lastTurnEnd(index)
+      : item.kind === 'assistant' && finalAnswer === index;
     const settled = carries && !activeTurns.has(turnKey) && turnKey !== processingTurn;
-    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: settled ? metricsForTurn(turnKey) : undefined, runId: settled ? sentRunByTurn.get(turnKey) : undefined }, item, turnKey, item, rowStart, before);
+    const answerText = settled && item.kind === 'status' ? answerBefore(index) : undefined;
+    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: settled ? metricsForTurn(turnKey) : undefined, runId: settled ? sentRunByTurn.get(turnKey) : undefined, answerText }, item, turnKey, item, rowStart, before);
   }
   flushGroup();
   if (rows.length) grouped.push(rows);

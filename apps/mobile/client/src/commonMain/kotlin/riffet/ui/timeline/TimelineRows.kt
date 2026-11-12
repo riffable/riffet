@@ -23,8 +23,8 @@ import riffet.ui.composer.visibleTimeline
  * the alternative — deciding in composition what groups with what — puts three rules where nobody
  * can see them:
  *
- *  1. reasoning, tool calls, plans, images, status rows, and intermediate assistant prose fold into
- *     **one** process block per turn; the final answer and user rows stand outside the block. A
+ *  1. reasoning, tool calls, plans, images, and intermediate assistant prose fold into
+ *     **one** process block per turn; final answers, terminal results and user rows stand outside. A
  *     message's phase says which it is (`commentary` folds, `final_answer` stands outside even if
  *     later work follows it); without one, prose that precedes process work folds;
  *  2. a process block never spans two turns: a new turn key flushes it;
@@ -42,7 +42,6 @@ private val PROCESS_KINDS = setOf(
     TimelineItemKind.TOOL,
     TimelineItemKind.PLAN,
     TimelineItemKind.IMAGE,
-    TimelineItemKind.STATUS,
 )
 
 /**
@@ -83,6 +82,7 @@ sealed interface TimelineRow {
          */
         val endsTurn: Boolean,
         val toolCount: Int,
+        /** Terminal failures keep the preceding work open by default; the result itself stays outside. */
         val issueCount: Int,
         /** ISO stamps in, formatting out: this file never touches a clock. */
         val startedAt: String?,
@@ -104,15 +104,17 @@ sealed interface TimelineRow {
         override val footer: TurnFooter get() = TurnFooter.NONE
     }
 
-    /** A row that stands in the conversation body: a prompt, an answer, a lone notification. */
+    /** A row that stands in the conversation body: a prompt, an answer, a result or a lone notification. */
     data class Single(
         override val key: String,
         val item: TimelineItem,
         val turnKey: String,
         /** Whether this row closes its turn and the turn is over: the answer's footer condition. */
         val settled: Boolean,
-        /** An answer's footer: held while its turn runs, shown once it settles ([TurnFooter]). */
+        /** An answer or result's footer: held while its turn runs, shown once it settles ([TurnFooter]). */
         override val footer: TurnFooter = TurnFooter.NONE,
+        /** The latest prose copied by a terminal result that closes a turn without a final answer. */
+        val answerText: String? = null,
     ) : TimelineRow
 }
 
@@ -192,7 +194,7 @@ fun buildTimelineGrouping(
     for (index in items.indices.reversed()) {
         val item = items[index]
         if (item is TimelineItem.User) laterProcessTurns.clear()
-        else if (item.kind in PROCESS_KINDS || item.isCommentary()) laterProcessTurns.add(turnKeys[index])
+        else if (item.kind in PROCESS_KINDS || item is TimelineItem.Status || item.isCommentary()) laterProcessTurns.add(turnKeys[index])
         else if (item is TimelineItem.Assistant) assistantBeforeProcess[index] = turnKeys[index] in laterProcessTurns
     }
     val activityBeforeProcess = BooleanArray(items.size)
@@ -304,7 +306,11 @@ fun buildTimelineGrouping(
         // another tool batch or a steer input; only that turn's activity settles its footer,
         // regardless of where the live tail sits.
         val finalAnswer = finalAnswerIndexByTurn[turnKey]
-        val carries = item is TimelineItem.Assistant && (if (finalAnswer == null) endsTurn(index) else finalAnswer == index)
+        val carries = when (item) {
+            is TimelineItem.Assistant -> if (finalAnswer == null) endsTurn(index) else finalAnswer == index
+            is TimelineItem.Status -> finalAnswer == null && analysis.lastIndexByTurn[turnKey] == index
+            else -> false
+        }
         val settled = carries && turnKey !in activeTurns
         addRow(
             TimelineRow.Single(
@@ -313,6 +319,7 @@ fun buildTimelineGrouping(
                 turnKey = turnKey,
                 settled = settled,
                 footer = footerOf(carries, settled),
+                answerText = if (settled && item is TimelineItem.Status) latestAnswerText(items, turnKeys, index) else null,
             ),
             index,
             index,
@@ -343,6 +350,16 @@ private fun TimelineItem.isProcessActivity(): Boolean = this is TimelineItem.Act
 private fun footerOf(carries: Boolean, settled: Boolean): TurnFooter =
     if (!carries) TurnFooter.NONE else if (settled) TurnFooter.SHOWN else TurnFooter.HELD
 
+private fun latestAnswerText(items: List<TimelineItem>, turnKeys: List<String>, last: Int): String? {
+    var index = last
+    while (index >= 0 && turnKeys[index] == turnKeys[last]) {
+        val candidate = items[index]
+        if (candidate is TimelineItem.Assistant) return candidate.text
+        index -= 1
+    }
+    return null
+}
+
 /** One turn's process block over `items[first..last]`; shared by the full grouping and the patch. */
 private fun processRow(
     items: List<TimelineItem>,
@@ -369,18 +386,7 @@ private fun processRow(
     val settled = carries && !turnActive && turnKey != processingTurn
     // A turn that stopped on a tool, as an interrupted one does, has no answer row to carry the
     // copy action, so its footer copies the turn's latest prose — what that row would have copied.
-    var answerText: String? = null
-    if (settled) {
-        var index = last
-        while (index >= 0 && turnKeys[index] == turnKey) {
-            val candidate = items[index]
-            if (candidate is TimelineItem.Assistant) {
-                answerText = candidate.text
-                break
-            }
-            index -= 1
-        }
-    }
+    val answerText = if (settled) latestAnswerText(items, turnKeys, last) else null
     return TimelineRow.Process(
         key = "process:${grouped.first().key}",
         turnKey = turnKey,
@@ -390,7 +396,10 @@ private fun processRow(
         settled = settled,
         endsTurn = ends,
         toolCount = grouped.count { isToolRunItem(it) },
-        issueCount = grouped.count { it is TimelineItem.Status && it.tone == StatusTone.DANGER },
+        issueCount = (first..(lastIndexByTurn[turnKey] ?: last)).count {
+            val item = items[it]
+            turnKeys[it] == turnKey && item is TimelineItem.Status && item.tone == StatusTone.DANGER
+        },
         startedAt = timelineItemTime(grouped.first { it !is TimelineItem.Activity }),
         endedAt = timelineItemTime(grouped.last { it !is TimelineItem.Activity }),
         answerText = answerText,
@@ -439,10 +448,11 @@ fun updateTimelineGrouping(
         }
     }
     val changed = dirty ?: return previous.withRows(previous.rows, items)
-    // A settled block's footer copies its turn's answer, so an answer edit reaches that block too.
+    // A settled process or terminal result can copy its turn's prose, so edits reach that footer too.
     answerTurns?.let { turns ->
         previous.rows.forEachIndexed { index, row ->
-            if (row is TimelineRow.Process && row.settled && row.turnKey in turns) changed[index] = true
+            if (row is TimelineRow.Process && row.settled && row.turnKey in turns ||
+                row is TimelineRow.Single && row.item is TimelineItem.Status && row.settled && row.turnKey in turns) changed[index] = true
         }
     }
     val rows = previous.rows.toMutableList()
@@ -451,7 +461,10 @@ fun updateTimelineGrouping(
         val first = previous.rowFirstItem[index]
         val last = previous.rowFirstItem.getOrElse(index + 1) { items.size } - 1
         rows[index] = when (val row = rows[index]) {
-            is TimelineRow.Single -> row.copy(item = items[first])
+            is TimelineRow.Single -> row.copy(
+                item = items[first],
+                answerText = if (row.item is TimelineItem.Status && row.settled) latestAnswerText(items, previous.turnKeys, first) else null,
+            )
             is TimelineRow.Process -> processRow(
                 items, first, last, row.turnKey,
                 previous.activeTurns, previous.turnKeys, previous.lastIndexByTurn, previous.processingTurn, row.interrupted,

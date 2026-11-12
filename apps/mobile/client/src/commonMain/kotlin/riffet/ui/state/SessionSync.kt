@@ -863,6 +863,25 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
         val byId = runs.associateBy { it.id }
         val byCommand = runs.filter { it.commandId.isNotEmpty() }.associateBy { it.commandId }
         val window = rows.window
+        val failedRunIds = HashSet<String>()
+        val failedTurnIds = HashSet<String>()
+        for (row in window.list) {
+            if (row.body !is TimelineRow.Body.Status || row.event.type != "run_failed") continue
+            row.runId?.let(failedRunIds::add)
+            row.event.runId?.let(failedRunIds::add)
+            row.event.nativeTurnId?.let(failedTurnIds::add)
+        }
+        fun failureShown(run: Run?): Boolean {
+            if (run == null || (run.state != RunState.FAILED && run.native?.delivery != NativeDeliveryState.FAILED)) return false
+            if (run.native?.delivery == NativeDeliveryState.UNCERTAIN || run.native?.stage == "turn_outcome_unknown" || run.native?.stage == "acknowledged") return false
+            if (run.id in failedRunIds) return true
+            val native = run.native ?: return false
+            if (native.delivery != NativeDeliveryState.FAILED) return false
+            val received = native.nativeMessageId != null || native.timings?.get("observedAt") != null ||
+                native.timings?.get("providerAcceptedAt") != null || native.stage == "provider_failed"
+            // A steer can share a turn with its owner while its own delivery fails independently.
+            return received && native.nativeTurnId != null && native.nativeTurnId in failedTurnIds
+        }
         val timeline = ArrayList<TimelineItem>(window.size + 2)
         val cached = HashMap<String, CachedItem>(window.size)
         val covered = HashSet<String>()
@@ -873,7 +892,10 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             val row = full ?: held
             val run = rowRun(row, byId, byCommand)
             val previous = items[row.key]
-            val item = if (previous != null && previous.row === row && previous.run == run) previous.item else timelineItem(row, sessionId, run)
+            val shown = failureShown(run)
+            val item = if (previous != null && previous.row === row && previous.run == run &&
+                ((previous.item as? TimelineItem.User)?.failureShown ?: false) == shown) previous.item
+            else timelineItem(row, sessionId, run, shown)
             if (item != null) {
                 timeline += item
                 cached[row.key] = CachedItem(row, run, item)
@@ -908,7 +930,10 @@ private class MainLane(val sessionId: String, window: SyncWindow) {
             val key = userRowKey(run)
             if (!needsLocalRow(run) || key in covered || run.id in covered) continue
             val previous = items[key]
-            val item = if (previous != null && previous.row == null && previous.run == run) previous.item else pendingUserItem(run)
+            val shown = failureShown(run)
+            val item = if (previous != null && previous.row == null && previous.run == run &&
+                (previous.item as? TimelineItem.User)?.failureShown == shown) previous.item
+            else pendingUserItem(run).copy(failureShown = shown)
             timeline += item
             cached[key] = CachedItem(null, run, item)
         }

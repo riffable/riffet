@@ -258,6 +258,8 @@ sealed interface TimelineItem {
         val attachments: List<UserAttachment>,
         val run: Run? = null,
         val references: List<riffet.contracts.CapturedSessionReference> = emptyList(),
+        /** Its failure is already represented by a loaded timeline status, including after replay. */
+        val failureShown: Boolean = false,
     ) : TimelineItem
 
     data class Assistant(

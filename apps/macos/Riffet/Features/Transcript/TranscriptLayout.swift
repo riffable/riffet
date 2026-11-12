@@ -301,9 +301,10 @@ struct RowBuilder {
             case let .single(single):
                 live = !single.settled
                 collectsChapters = single.item is TimelineItemAssistant
-                height = singleItem(single.item, footer: single.footer, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, x: x, y: top, width: w)
+                height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, x: x, y: top, width: w)
                 if let user = single.item as? TimelineItemUser { message = user.text }
                 if let assistant = single.item as? TimelineItemAssistant { message = assistant.text }
+                if single.settled, let answer = single.answerText { message = answer }
             case let .process(process):
                 live = process.running
                 height = processBlock(process, key: key, runId: runIdFromTurnKey(turnKey: process.turnKey), speed: speed, x: x, y: top, width: w)
@@ -333,11 +334,18 @@ struct RowBuilder {
 
     // MARK: Messages
 
-    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, runId: String?, speed: SpeedTag?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, answerText: String?, runId: String?, speed: SpeedTag?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         switch onEnum(of: item) {
         case let .user(user): return userMessage(user, x: x, y: y, width: width)
         case let .assistant(assistant): return assistantMessage(assistant, footer: footer, runId: runId, speed: speed, x: x, y: y, width: width)
-        default: return processItem(item, running: false, turnActive: !stale, x: x, y: y, width: width)
+        default:
+            var height = processItem(item, running: false, turnActive: !stale, x: x, y: y, width: width)
+            if footer != .none, footer != .held || !suppressesHeldFooter {
+                height += style.rhythm.footer
+                turnFooter(footer, FooterSpec(time: timelineItemTime(item: item), speed: speed, copy: answerText ?? "", trailing: false, turnRunId: runId), x: x, y: y + height, width: width)
+                height += 20
+            }
+            return height
         }
     }
 
@@ -433,7 +441,7 @@ struct RowBuilder {
             }
         }
         var footerStatus = userStatus(item)
-        if let run = item.run, let error = TimelineFormatKt.deliveryErrorDetails(run: run) {
+        if let run = item.run, !item.failureShown, let error = TimelineFormatKt.deliveryErrorDetails(run: run) {
             let id = "delivery-error:\(item.key)"
             let open = ui.isOpen(id)
             let detailWidth = min(limit, 480)
@@ -466,6 +474,7 @@ struct RowBuilder {
     }
 
     private func userStatus(_ item: TimelineItemUser) -> (String, NSColor)? {
+        guard !item.failureShown else { return nil }
         guard let run = item.run else { return nil }
         guard run.native != nil else {
             switch run.state {

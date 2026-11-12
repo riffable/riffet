@@ -2,6 +2,7 @@ import { PENDING_ROW_POS, type Run, type TimelineRow, type WorkbenchEvent } from
 import type { TimelineItem } from '../../../../packages/timeline/src/model';
 import type { ProjectedEvent } from '../../../../packages/timeline/src/projectEvents';
 import { POS_STEP } from '../../../../packages/timeline/src/rows';
+import { nativeTaskOutcome } from '../../../../packages/timeline/src/failures';
 
 /*
  * Sync v3 rows as the transcript renders them. The server folds a lane into `TimelineRow`s with the
@@ -44,13 +45,13 @@ function eventOf(row: TimelineRow, sessionId: string): ProjectedEvent {
 }
 
 /** The item for one row, or nothing for a kind this client does not render. [run] is the Run a prompt row stands for. */
-export function timelineItem(row: TimelineRow, sessionId: string, run?: Run): TimelineItem | undefined {
+export function timelineItem(row: TimelineRow, sessionId: string, run?: Run, failureShown = false): TimelineItem | undefined {
   if (!KINDS.has(row.kind)) return undefined;
   const held = items.get(row);
-  if (held && held.sessionId === sessionId && held.run === run) return held.item;
+  if (held && held.sessionId === sessionId && held.run === run && (held.item.kind !== 'user' || Boolean(held.item.failureShown) === failureShown)) return held.item;
   const { pos: _pos, turn: _turn, seq: _seq, rev: _rev, runId: _runId, event: _event, truncated, pending: _pending, ...fields } = row as TimelineRow & { pending?: unknown; subagent?: unknown };
   const event = held?.sessionId === sessionId ? held.item.event : eventOf(row, sessionId);
-  const item = { ...fields, turn: row.turn, event, ...(row.kind === 'user' && run ? { run } : {}) } as TimelineItem;
+  const item = { ...fields, turn: row.turn, event, ...(row.kind === 'user' && run ? { run, ...(failureShown ? { failureShown } : {}) } : {}) } as TimelineItem;
   if (truncated) truncations.set(item, truncated);
   items.set(row, { sessionId, run, item });
   return item;
@@ -59,9 +60,24 @@ export function timelineItem(row: TimelineRow, sessionId: string, run?: Run): Ti
 /** The transcript's items for [rows], each prompt row with its Run; [previous] comes back when nothing changed. */
 export function timelineItems(rows: readonly TimelineRow[], sessionId: string, runs: readonly Run[], previous?: readonly TimelineItem[]): TimelineItem[] {
   const byId = new Map(runs.map((run) => [run.id, run]));
+  // A failure can arrive before or after its Run update, or leave the loaded window. Derive its
+  // owner from this frame's rows; neither text matching nor a persisted flag can handle that.
+  const failedRuns = new Set<string>();
+  const failedTurns = new Set<string>();
+  for (const row of rows) {
+    if (row.kind !== 'status' || row.event.type !== 'run_failed') continue;
+    if (row.runId) failedRuns.add(row.runId);
+    if (row.event.runId) failedRuns.add(row.event.runId);
+    if (row.event.nativeTurnId) failedTurns.add(row.event.nativeTurnId);
+  }
   const next: TimelineItem[] = [];
   for (const row of rows) {
-    const item = timelineItem(row, sessionId, row.kind === 'user' && row.runId ? byId.get(row.runId) : undefined);
+    const run = row.kind === 'user' && row.runId ? byId.get(row.runId) : undefined;
+    const outcome = run ? nativeTaskOutcome(run) : undefined;
+    const failureShown = Boolean(run && (run.state === 'failed' || run.native?.delivery === 'failed')
+      && run.native?.delivery !== 'uncertain' && run.native?.stage !== 'acknowledged' && outcome !== 'unknown'
+      && (failedRuns.has(run.id) || outcome === 'failed' && run.native?.nativeTurnId && failedTurns.has(run.native.nativeTurnId)));
+    const item = timelineItem(row, sessionId, run, failureShown);
     if (item) next.push(item);
   }
   if (previous && previous.length === next.length && next.every((item, index) => item === previous[index])) return previous as TimelineItem[];

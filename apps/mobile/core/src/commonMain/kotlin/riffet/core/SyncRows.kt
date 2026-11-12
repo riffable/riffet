@@ -17,7 +17,7 @@ import kotlinx.serialization.json.JsonObject
 const val PENDING_ROW_POS: Long = 1L shl 52
 
 /** [row] as the timeline shows it, with [run] on a user row; null for a row this build does not show. */
-fun timelineItem(row: TimelineRow, sessionId: String, run: Run? = null): TimelineItem? {
+fun timelineItem(row: TimelineRow, sessionId: String, run: Run? = null, failureShown: Boolean = false): TimelineItem? {
     val event = rowEvent(row, sessionId)
     return when (val body = row.body) {
         is TimelineRow.Body.User -> TimelineItem.User(
@@ -38,6 +38,7 @@ fun timelineItem(row: TimelineRow, sessionId: String, run: Run? = null): Timelin
             },
             run = run,
             references = body.references.orEmpty(),
+            failureShown = failureShown,
         )
         is TimelineRow.Body.Assistant -> TimelineItem.Assistant(
             key = row.key,

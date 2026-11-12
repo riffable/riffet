@@ -1079,10 +1079,9 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         if let item = Self.assistant(entry), MarksStore.markable(item) {
             return shareSource(row: key, kind: .message, text: item.text)
         }
-        // A turn that stopped on a tool keeps its prose in the process block; the footer copies it,
-        // so it can be exported too (`row.answerText` on the web).
-        if case let .timeline(row, _, _, _) = entry.source, let process = row as? TimelineRowProcess,
-           let answer = process.answerText, !answer.isEmpty {
+        // A turn without a final answer keeps its prose on the process or result carrying its footer.
+        if case let .timeline(row, _, _, _) = entry.source,
+           let answer = (row as? TimelineRowSingle)?.answerText ?? (row as? TimelineRowProcess)?.answerText, !answer.isEmpty {
             return shareSource(row: key, kind: .message, text: answer)
         }
         return nil
@@ -1879,7 +1878,7 @@ extension TranscriptController: TranscriptBenchTarget {
             end = text.index(end, offsetBy: chunk, limitedBy: text.endIndex) ?? text.endIndex
             let item = TimelineItemAssistant(key: "bench-stream", text: String(text[..<end]), event: event, phase: nil)
             let settled = end == text.endIndex
-            benchSetTail(TimelineRowSingle(key: "bench-stream", item: item, turnKey: "bench-stream", settled: settled, footer: settled ? .shown : .held))
+            benchSetTail(TimelineRowSingle(key: "bench-stream", item: item, turnKey: "bench-stream", settled: settled, footer: settled ? .shown : .held, answerText: nil))
             try? await Task.sleep(for: .seconds(interval))
         }
         try? await Task.sleep(for: .milliseconds(300))

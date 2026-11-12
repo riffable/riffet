@@ -317,7 +317,7 @@ fun presentTimeline(
             for (row in grouping.rows) {
                 // An answer row, or a process block that closes its turn with an answer.
                 val turnKey = when {
-                    row is TimelineRow.Single && row.item is TimelineItem.Assistant && row.settled -> row.turnKey
+                    row is TimelineRow.Single && row.settled && (row.item is TimelineItem.Assistant || row.answerText != null) -> row.turnKey
                     row is TimelineRow.Process && row.settled && row.answerText != null -> row.turnKey
                     else -> continue
                 }

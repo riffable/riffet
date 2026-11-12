@@ -92,11 +92,11 @@ internal fun TurnProcessHeader(
 
 /** A settled turn's copy action and end time. */
 @Composable
-internal fun TurnProcessFooter(row: TimelineRow.Process) {
+internal fun TurnFooterRow(text: String?, endedAt: String?) {
     val colors = TimelineTheme.colors
     Row(verticalAlignment = Alignment.CenterVertically) {
-        row.answerText?.let { CopyTextButton(it, stringResource(Res.string.timeline_copy_answer)) }
-        formatDateTime(row.endedAt)?.let { time ->
+        text?.let { CopyTextButton(it, stringResource(Res.string.timeline_copy_answer)) }
+        formatDateTime(endedAt)?.let { time ->
             Text(
                 text = time,
                 style = TimelineTheme.type.caption,

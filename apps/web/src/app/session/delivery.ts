@@ -1,4 +1,5 @@
 import type { NativeQueue, Run } from '@contracts';
+export { nativeTaskOutcome } from '../../../../../packages/timeline/src/failures';
 
 /**
  * Where a message sent to the CLI stands, as the client sees it. The places that ask "is it still
@@ -12,16 +13,6 @@ import type { NativeQueue, Run } from '@contracts';
  * the server preparing and dispatching it; `sent` is the CLI having it.
  */
 export type SendPhase = 'submitting' | 'queued' | 'starting' | 'sent' | 'uncertain' | 'failed' | 'cancelled';
-
-/** A confirmed input keeps its delivery success even when its task's later outcome is missing. */
-export function nativeTaskOutcome(run: Run): 'unknown' | 'failed' | undefined {
-  const native = run.native;
-  if (!native) return undefined;
-  const received = Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt)
-    || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
-  if (native.stage === 'turn_outcome_unknown' || received && (native.delivery === 'uncertain' || native.stage === 'acknowledged')) return 'unknown';
-  return received && native.delivery === 'failed' ? 'failed' : undefined;
-}
 
 export function sendPhase(run: Run): SendPhase | undefined {
   const native = run.native;

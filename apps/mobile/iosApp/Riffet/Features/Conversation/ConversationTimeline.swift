@@ -17,7 +17,13 @@ struct ConversationTimelineRow: View, Equatable {
     }
     var body: some View {
         switch onEnum(of: row) {
-        case let .single(single): ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: !single.settled, parentItems: parentItems, speed: speed)
+        case let .single(single):
+            VStack(alignment: .leading, spacing: 8) {
+                ConversationTimelineItem(item: single.item, workbench: workbench, projectID: projectID, active: !single.settled, parentItems: parentItems, speed: speed)
+                if single.item is TimelineItemStatus, single.footer == .shown {
+                    ConversationCopyActions(text: single.answerText ?? "", endedAt: ServerTime.date(timelineItemTime(item: single.item)), speed: speed)
+                }
+            }
         case let .process(process): ConversationProcess(row: process, workbench: workbench, projectID: projectID, parentItems: parentItems, speed: speed)
         case let .trigger(trigger):
             VStack(alignment: .leading, spacing: 6) {
@@ -225,7 +231,7 @@ struct ConversationTimelineItem: View {
                         Text(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4)
                     }
                 }
-                if let run = user.run, !nativeDeliveryLabel(run).isEmpty {
+                if let run = user.run, !user.failureShown, !nativeDeliveryLabel(run).isEmpty {
                     let status = Label { Text(nativeDeliveryLabel(run)) } icon: {
                         if run.native?.intent == "steer" { Image(systemName: "arrow.turn.up.right") }
                     }
@@ -448,16 +454,18 @@ struct ConversationCopyActions: View {
     @Environment(\.conversationSelectText) private var selectText
     @Environment(\.conversationQuote) private var quote
     var body: some View {
-        if !text.isEmpty {
+        if !text.isEmpty || endedAt != nil || speed != nil {
             HStack(spacing: 4) {
-                Menu {
-                    Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = text; copyFeedback.copy() }
-                    if let selectText { Button("选择文字", systemImage: "selection.pin.in.out") { selectText(text) } }
-                    if let quote { Button("引用", systemImage: "text.quote") { quote(text) } }
-                } label: {
-                    Image(systemName: copyFeedback.copied ? "checkmark" : "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.fg4)
-                        .frame(width: 32, height: 32, alignment: .leading).contentShape(Rectangle())
-                }.menuIndicator(.hidden).accessibilityLabel(copyFeedback.copied ? "已复制消息" : "更多").accessibilityIdentifier("messageCopy")
+                if !text.isEmpty {
+                    Menu {
+                        Button("复制消息", systemImage: "doc.on.doc") { UIPasteboard.general.string = text; copyFeedback.copy() }
+                        if let selectText { Button("选择文字", systemImage: "selection.pin.in.out") { selectText(text) } }
+                        if let quote { Button("引用", systemImage: "text.quote") { quote(text) } }
+                    } label: {
+                        Image(systemName: copyFeedback.copied ? "checkmark" : "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.fg4)
+                            .frame(width: 32, height: 32, alignment: .leading).contentShape(Rectangle())
+                    }.menuIndicator(.hidden).accessibilityLabel(copyFeedback.copied ? "已复制消息" : "更多").accessibilityIdentifier("messageCopy")
+                }
                 let parts = [endedAt?.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)), speed?.label].compactMap { $0 }
                 if !parts.isEmpty { Text(parts.joined(separator: " · ")).riffetFont(.caption).foregroundStyle(palette.fg4).monospacedDigit() }
             }.frame(maxWidth: .infinity, alignment: .leading)

@@ -49,7 +49,7 @@ private fun markdownSources(rows: List<TimelineRow>): List<String> {
             // `TimelineFolds.isOpen` before the reader touches it; the folded reasoning stays unparsed.
             is TimelineRow.Process -> if (row.running || row.issueCount > 0) {
                 for (item in row.items.asReversed()) when {
-                    item is TimelineItem.Thought && item.channel == ReasoningChannel.NARRATION -> add(item.text, streaming = !row.settled)
+                    item is TimelineItem.Thought && item.channel == ReasoningChannel.NARRATION -> add(item.text, streaming = row.turnActive)
                     item is TimelineItem.Assistant -> add(item.text, streaming = true)
                 }
             }

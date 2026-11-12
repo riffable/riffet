@@ -106,7 +106,7 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at }: { text?: 
 const statusRow = 'min-h-lh no-hover:min-h-11';
 const statusAction = 'no-hover:min-h-11';
 
-export const UserMessage = memo(function UserMessage({ text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
   text: string;
   attachments: UserAttachment[];
   references?: CapturedSessionReference[];
@@ -115,6 +115,7 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
   time?: string;
   footerPinned?: boolean;
   run?: Run;
+  failureShown?: boolean;
   runActionPending?: boolean;
   onOpenTerminal?: () => void;
   onRetryNativeRun?: (run: Run) => void;
@@ -128,15 +129,18 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const taskOutcome = run ? nativeTaskOutcome(run) : undefined;
-  const delivery = run?.native && !taskOutcome ? nativeDeliveryLabel(run) : '';
+  const delivery = run?.native && !taskOutcome && !failureShown ? nativeDeliveryLabel(run) : '';
   const [errorOpen, setErrorOpen] = useRemembered(`delivery-error:${run?.id ?? ''}`, false);
   // While it is on its way the status says enough; the time returns once it has arrived or settled.
   const sending = Boolean(delivery && run && ['submitting', 'queued', 'starting', 'sent'].includes(sendPhase(run) ?? ''));
   const recovery = run ? nativeRecoveries?.[run.id] : undefined;
   const diagnostic = run?.native?.diagnostic;
-  const deliveryError = run?.native && (run.native.delivery === 'failed' || run.native.delivery === 'uncertain' || run.native.stage === 'turn_outcome_unknown') ? diagnostic ? [diagnostic.message, diagnostic.code, diagnostic.stage, diagnostic.at].filter(Boolean).join('\n') : run.error : undefined;
+  const deliveryError = !failureShown && run?.native && (run.native.delivery === 'failed' || run.native.delivery === 'uncertain' || run.native.stage === 'turn_outcome_unknown') ? diagnostic ? [diagnostic.message, diagnostic.code, diagnostic.stage, diagnostic.at].filter(Boolean).join('\n') : run.error : undefined;
   const needsCheck = run?.native && (run.native.delivery === 'uncertain' || run.native.stage === 'turn_outcome_unknown' || run.native.stage === 'acknowledged');
   const openTerminal = needsCheck && onOpenTerminal && <button type="button" onClick={onOpenTerminal} className={cn(statusAction, 'text-fg underline underline-offset-2')}><Trans>打开终端</Trans></button>;
+  const continueAction = run && recovery?.canContinue && !run.native?.queueReleasedAt && onContinueNativeRun
+    ? <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>
+    : null;
   return (
     <div className="group/user flex flex-col items-end gap-1.5">
       <div className="flex max-w-[min(82%,560px)] items-start gap-1">
@@ -151,7 +155,7 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
           {!taskOutcome && openTerminal}
           {run?.native?.delivery === 'uncertain' && run.native.stage === 'http_unknown' && onRetryNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRetryNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>重试发送</Trans></button>}
           {!taskOutcome && needsCheck && run && onCheckNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCheckNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>检查状态</Trans></button>}
-          {!taskOutcome && run && recovery?.canContinue && !run.native?.queueReleasedAt && onContinueNativeRun && <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>}
+          {!taskOutcome && continueAction}
           {run && inQueue(run) && onSendQueuedNow && <button type="button" disabled={runActionPending} title={t`停止并发送`} onClick={() => onSendQueuedNow(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>停止并发送</Trans></button>}
           {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
           {run && canRestoreFailedSteer(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
@@ -160,12 +164,12 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
         </div>
       )}
       {!taskOutcome && deliveryError && <Collapse open={errorOpen} className="w-full max-w-[82%]"><FailureDetails text={deliveryError} className="rounded-lg bg-subtle p-3 text-xs text-fg-3" /></Collapse>}
-      {taskOutcome && run && <div className="flex max-w-full flex-col gap-2 self-start text-xs text-fg-3">
+      {taskOutcome && run && (!failureShown || continueAction) && <div className="flex max-w-full flex-col gap-2 self-start text-xs text-fg-3">
         <div className="flex flex-wrap items-center gap-3">
-          <span role="status">{taskOutcome === 'failed' ? <Trans>任务失败</Trans> : <Trans>暂时无法获取任务状态</Trans>}</span>
+          {!failureShown && <span role="status">{taskOutcome === 'failed' ? <Trans>任务失败</Trans> : <Trans>暂时无法获取任务状态</Trans>}</span>}
           {taskOutcome === 'unknown' && openTerminal}
           {taskOutcome === 'unknown' && onCheckNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCheckNativeRun(run)} className={cn(statusAction, 'underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>检查状态</Trans></button>}
-          {recovery?.canContinue && !run.native?.queueReleasedAt && onContinueNativeRun && <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>}
+          {continueAction}
           {deliveryError && <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'underline underline-offset-2 hover:text-fg')}><Trans>查看详情</Trans></button>}
         </div>
         {deliveryError && <Collapse open={errorOpen}><FailureDetails text={deliveryError} className="rounded-lg bg-subtle p-3 text-xs text-fg-3" /></Collapse>}
@@ -190,41 +194,42 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
    */
   progress?: ReactNode;
 }) {
-  const { t } = useLingui();
   const resources = useTranscriptResources();
-  const rate = tokensPerSecond(metrics);
   const markBody = useCallback((element: HTMLDivElement | null) => { if (element && mark) markBodies.set(element, mark); }, [mark]);
   return (
     // The copy/timestamp row sits under the answer. The turn gap above the answer is 16px, which
     // reads as ~22px of whitespace once the prose line box is accounted for; at `gap-1` the 24px
     // row plus its internal centering left only ~15px below the last line, so the timestamp looked
     // glued to the answer. `gap-2.5` lands the two optical gaps within a pixel of each other.
-    <div className="group/assistant flex flex-col gap-2.5">
+    <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
       <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters && !resources ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters && !resources} /></div>
-      {(showActions || time || progress !== undefined) && (
-        <div data-slot="message-meta" className={cn('-ml-1.5 flex min-h-6 flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', (showActions || time) && !footerPinned && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/assistant:opacity-100 can-hover:group-hover/assistant:pointer-events-auto can-hover:group-focus-within/assistant:opacity-100 can-hover:group-focus-within/assistant:pointer-events-auto can-hover:has-[[data-state=open]]:opacity-100 can-hover:has-[[data-state=open]]:pointer-events-auto')}>
-          {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
-          {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} {...(time ? { at: time } : {})} />}
-          {/* The actions live in the menu, so a saved answer still needs its own indicator. */}
-          <MarkedIndicator target={mark} />
-          {time && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
-          {/* Beside the timestamp rather than in the turn's process row: a turn that produced only
-              prose has no process row at all, and that is exactly the kind of turn whose speed you
-              would still want to read back later. */}
-          {time && metrics && rate !== undefined && (
-            <span
-              title={t`本轮 · ${speedDescription(metrics)}`}
-              className={cn('shrink-0 px-1 text-2xs tabular-nums', metrics.tokens === 'provider' ? 'text-fg-3' : 'text-fg-4')}
-            >
-              {metrics.tokens === 'provider' ? '' : '~'}{formatTokensPerSecond(rate)} tok/s
-            </span>
-          )}
-        </div>
-      )}
+      <MessageFooter text={text} showActions={showActions} time={time} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} />
     </div>
   );
 });
+
+/** The same turn actions and timestamp belong under an answer or the result that ended it. */
+export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress }: {
+  text?: string; showActions: boolean; time?: string; footerPinned?: boolean; metrics?: RunMetrics;
+  runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; progress?: ReactNode;
+}) {
+  const { t } = useLingui();
+  const resources = useTranscriptResources();
+  const rate = tokensPerSecond(metrics);
+  if (!showActions && !time && progress === undefined) return null;
+  return <div data-slot="message-meta" className={cn('-ml-1.5 flex min-h-6 flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', (showActions || time) && !footerPinned && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/message:opacity-100 can-hover:group-hover/message:pointer-events-auto can-hover:group-focus-within/message:opacity-100 can-hover:group-focus-within/message:pointer-events-auto can-hover:has-[[data-state=open]]:opacity-100 can-hover:has-[[data-state=open]]:pointer-events-auto')}>
+    {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
+    {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} {...(time ? { at: time } : {})} />}
+    <MarkedIndicator target={mark} />
+    {time && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
+    {time && metrics && rate !== undefined && (
+      <span title={t`本轮 · ${speedDescription(metrics)}`} className={cn('shrink-0 px-1 text-2xs tabular-nums', metrics.tokens === 'provider' ? 'text-fg-3' : 'text-fg-4')}>
+        {metrics.tokens === 'provider' ? '' : '~'}{formatTokensPerSecond(rate)} tok/s
+      </span>
+    )}
+  </div>;
+}
 
 export function Disclosure({ icon, title, detail, inline, status, open, onToggle, children, expandable = true, tone, opensPage, touchCompact = false }: {
   icon: ReactNode; title: ReactNode; detail?: ReactNode;
@@ -785,12 +790,15 @@ export const PlanBlock = memo(function PlanBlock({ entries }: { entries: Record<
   );
 });
 
-export const StatusRow = memo(function StatusRow({ tone, text, detail, reveal }: { tone: 'danger' | 'muted'; text: string; detail?: string; reveal?: number }) {
+export const StatusRow = memo(function StatusRow({ tone, text, detail, reveal, footer }: { tone: 'danger' | 'muted'; text: string; detail?: string; reveal?: number; footer?: ReactNode }) {
   return (
-    <FailureDetails text={text} detail={detail} reveal={reveal}
-      className={cn('text-sm', tone === 'danger' ? 'text-danger' : 'text-fg-3')}
-      leading={tone === 'danger' ? <IconCircleAlert className="size-3.5" /> : <IconX className="size-3.5" />}
-    />
+    <div className="group/message flex min-w-0 flex-col gap-2.5">
+      <FailureDetails text={text} detail={detail} reveal={reveal}
+        className={cn('text-sm', tone === 'danger' ? 'text-danger' : 'text-fg-3')}
+        leading={tone === 'danger' ? <IconCircleAlert className="size-3.5" /> : <IconX className="size-3.5" />}
+      />
+      {footer}
+    </div>
   );
 });
 

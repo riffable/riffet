@@ -73,8 +73,8 @@ internal fun UserRow(item: TimelineItem.User) {
     val colors = TimelineTheme.colors
     val type = TimelineTheme.type
     val time = formatDateTime(timelineItemTime(item))
-    val delivery = deliveryLabel(item.run)
-    val deliveryError = deliveryErrorDetails(item.run)
+    val delivery = if (item.failureShown) null else deliveryLabel(item.run)
+    val deliveryError = if (item.failureShown) null else deliveryErrorDetails(item.run)
     // While it is on its way the status says enough; the time returns once it has arrived or settled.
     val sending = delivery != null && item.run?.let { run -> run.native?.delivery in IN_FLIGHT && !messageRecovery(run).needsCheck } == true
     var errorOpen by rememberSaveable(item.key, deliveryError) { mutableStateOf(false) }

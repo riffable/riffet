@@ -10,7 +10,11 @@ import { isRecord } from './values.js';
 
 /** Sync rows retain the server's folded turn identity; source Run ids are provenance, not grouping. */
 export type TimelineItem = { turn?: string } & (
-  | { kind: 'user'; key: string; text: string; event: ProjectedEvent; attachments: UserAttachment[]; references?: CapturedSessionReference[]; run?: Run }
+  | {
+      kind: 'user'; key: string; text: string; event: ProjectedEvent; attachments: UserAttachment[]; references?: CapturedSessionReference[]; run?: Run;
+      /** A loaded status row owns this failure. Client-only; the Run retains its outcome. */
+      failureShown?: boolean;
+    }
   | { kind: 'assistant'; key: string; text: string; phase?: 'commentary' | 'final_answer'; event: ProjectedEvent }
   | { kind: 'thought'; key: string; text: string; channel: ReasoningChannel; event: ProjectedEvent }
   | { kind: 'tool'; key: string; event: ProjectedEvent; job?: NativeJob; activity?: NativeActivity; subagent?: Extract<TimelineRow, { kind: 'tool' }>['subagent'] }

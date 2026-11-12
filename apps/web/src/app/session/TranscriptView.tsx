@@ -13,7 +13,7 @@ import { PENDING_ROW_POS, type LaneFind, type LaneFindHit, type NativeRunRecover
 import type { NativeHistoryLoadState } from './transcriptLoad';
 import { transcriptLoadView } from './transcriptLoad';
 import { timelineItemTime, type TimelineItem } from './model';
-import { AnswerActions, AssistantMessage, ImageBlock, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
+import { AnswerActions, AssistantMessage, ImageBlock, MessageFooter, PlanBlock, StatusRow, TaskNotificationRow, ThoughtRow, toolIcons, ToolRow, TurnTriggerBlock, UserMessage, type TurnAction } from './Timeline';
 import { COLUMN_GUTTER_TOTAL, ContentWidthHandle, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from './ContentWidthHandle';
 import { ActivityRow, showsRunningCompaction } from './Activities';
 import { TranscriptCatchUp, TurnProcess } from './TurnProcess';
@@ -445,7 +445,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
       )}>
         <TurnProcess
           running={running}
-          issueCount={items.filter((item) => item.kind === 'status' && item.tone === 'danger').length}
+          issueCount={row.issueCount}
           interrupted={row.interrupted}
           startedAt={time(first.event.createdAt)}
           endedAt={time(lastTime)}
@@ -490,7 +490,6 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
               case 'assistant': inner = <AssistantMessage text={item.text} showActions={false} streaming={running && itemIndex === lastOutputIndex} mark={markTargetOf(item, row.runId)} />; break;
               case 'plan': inner = <PlanBlock entries={item.entries} />; break;
               case 'image': inner = <ImageBlock src={item.src} />; break;
-              case 'status': inner = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined} />; break;
               case 'activity': inner = <ActivityRow item={item} />; break;
               default: inner = null;
             }
@@ -514,10 +513,12 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   const { item, settled } = row;
   let content: ReactNode = null;
-  if (item.kind === 'user') content = <UserMessage text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
+  if (item.kind === 'user') content = <UserMessage text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
   else if (item.kind === 'assistant') content = <AssistantMessage chapters text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
   else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} />;
   else if (item.kind === 'activity') content = <ActivityRow item={item} />;
+  else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}
+    footer={<MessageFooter text={row.answerText} showActions={settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} {...footerProgress} />} />;
   return (
     <div
       ref={attach}
