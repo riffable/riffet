@@ -1,198 +1,239 @@
 import SwiftUI
 import RiffetKit
 
+private enum GitTab: CaseIterable {
+    case changes, history, checkpoints, worktrees
+    var title: String {
+        switch self {
+        case .changes: "Changes"
+        case .history: "History"
+        case .checkpoints: "Checkpoints"
+        case .worktrees: "Worktrees"
+        }
+    }
+}
+
 struct ProjectChangesView: View {
     let workbench: Workbench
     let project: Project
-    @State private var status: GitStatus?
-    @State private var error: String?
-    @State private var message = ""
-    @State private var busy = false
-    @State private var section = 0
+    @State private var model: GitPanelModel
+    @State private var tab = GitTab.changes
     @State private var refresh = 0
 
-    private var staged: [GitEntry] { status?.entries.filter { gitStaged(entry: $0) } ?? [] }
-    private var unstaged: [GitEntry] { status?.entries.filter { gitUnstaged(entry: $0) } ?? [] }
+    init(workbench: Workbench, project: Project) {
+        self.workbench = workbench
+        self.project = project
+        _model = State(initialValue: GitPanelModel(workbench: workbench, project: project))
+    }
+
+    private var tabs: [GitTab] { GitTab.allCases.filter { $0 != .history || model.status != nil } }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker("Git 视图", selection: $section) {
-                Text("改动").tag(0)
-                Text("检查点").tag(1)
-                Text("Worktree").tag(2)
+            Picker(gitText("Git"), selection: $tab) {
+                ForEach(tabs, id: \.self) { Text(verbatim: $0.title).tag($0) }
             }.pickerStyle(.segmented).padding()
-            switch section {
-            case 1: ProjectCheckpoints(workbench: workbench, project: project, refresh: refresh)
-            case 2: ProjectWorktrees(workbench: workbench, project: project, refresh: refresh)
-            default: changes
+            switch tab {
+            case .history: ProjectHistoryView(model: model, refresh: refresh)
+            case .checkpoints: ProjectCheckpoints(model: model, refresh: refresh)
+            case .worktrees: ProjectWorktrees(workbench: workbench, project: project, refresh: refresh)
+            case .changes: ProjectChangesList(model: model, refresh: refresh)
             }
         }
-        .navigationTitle(String(localized: "项目变更", bundle: .riffet))
+        .navigationTitle(gitText("Git"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("刷新", systemImage: "arrow.clockwise") { refresh += 1; Task { await load() } }.disabled(busy)
+                Button(gitText("Refresh"), systemImage: "arrow.clockwise") { refresh += 1; Task { await model.reload() } }
             }
         }
-        .task(id: project.id) { await load() }
+        .task(id: "\(project.id)|\(workbench.api != nil)") { await model.watch() }
+        .gitPanelChrome(model, scope: "panel")
+    }
+}
+
+private enum GitScope: CaseIterable {
+    case uncommitted, turn, branch
+    var title: String {
+        switch self {
+        case .uncommitted: "Uncommitted"
+        case .turn: "This Turn"
+        case .branch: "Branch"
+        }
+    }
+}
+
+/// A file of a scope other than the working tree: the turn's or the branch's changes.
+private struct ScopeFile {
+    let path: String
+    let letter: String
+    let added: KotlinLong?
+    let removed: KotlinLong?
+}
+
+private struct ScopeListing {
+    let files: [ScopeFile]
+    let total: Int?
+    let source: GitDiffSource?
+    let ref: String?
+}
+
+private struct ProjectChangesList: View {
+    let model: GitPanelModel
+    let refresh: Int
+    @State private var scope = GitScope.uncommitted
+    @State private var listing: ScopeListing?
+    @State private var listingError: String?
+    @State private var shown = 300
+    @State private var message = ""
+
+    private var status: GitStatus? { model.status }
+    private var staged: [GitEntry] { status?.entries.filter { gitStaged(entry: $0) } ?? [] }
+    private var unstaged: [GitEntry] { status?.entries.filter { gitUnstaged(entry: $0) } ?? [] }
+    private var scopes: [GitScope] {
+        var result = [GitScope.uncommitted]
+        if model.sessionID != nil { result.append(.turn) }
+        if status?.base != nil { result.append(.branch) }
+        return result
     }
 
-    private var changes: some View {
+    var body: some View {
         List {
-            if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
             if let status {
                 Section {
-                    Label(status.branch, systemImage: "arrow.triangle.branch").font(.body.monospaced())
-                    Text("\(status.entries.count) 个改动文件").foregroundStyle(.secondary)
-                }
-                if !unstaged.isEmpty {
-                    Section {
-                        Button("全部暂存") { Task { await stage(unstaged.map(\.path), on: true) } }.disabled(busy)
-                        ForEach(unstaged, id: \.path) { entry in entryRow(entry, staged: false) }
-                    } header: { Text("工作区 · \(unstaged.count)") }
-                }
-                if !staged.isEmpty {
-                    Section {
-                        Button("全部取消暂存") { Task { await stage(staged.map(\.path), on: false) } }.disabled(busy)
-                        ForEach(staged, id: \.path) { entry in entryRow(entry, staged: true) }
-                    } header: { Text("已暂存 · \(staged.count)") }
-                    Section("创建提交") {
-                        TextField("提交说明", text: $message, axis: .vertical).lineLimit(2...6)
-                        Button("提交 \(staged.count) 个文件") { Task { await commit() } }
-                            .disabled(busy || message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    HStack {
+                        Label(status.branch, systemImage: "arrow.triangle.branch").font(.body.monospaced())
+                        Spacer()
+                        if let behind = model.branch?.behind, behind > 0 { Button(gitText("Pull")) { Task { await model.pull() } } }
+                    }
+                    if scopes.count > 1 {
+                        Picker(gitText("Scope"), selection: $scope) {
+                            ForEach(scopes, id: \.self) { Text(verbatim: $0.title).tag($0) }
+                        }.pickerStyle(.segmented)
                     }
                 }
-                if status.entries.isEmpty { ContentUnavailableView("工作区没有改动", systemImage: "checkmark.circle") }
-            } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
-        }.refreshable { await load() }
+                switch scope {
+                case .uncommitted: uncommitted(status)
+                default: scoped
+                }
+            } else if let error = model.statusError {
+                ContentUnavailableView(gitText("Not a Git repository"), systemImage: "exclamationmark.triangle", description: Text(error))
+            } else { ProgressView().frame(maxWidth: .infinity) }
+        }
+        .refreshable { await model.reload() }
+        .task(id: "\(scope)|\(scopes.count)|\(status?.base ?? "")|\(refresh)|\(model.revision)") { await loadScope() }
+        .onChange(of: scopes) { if !scopes.contains(scope) { scope = .uncommitted } }
+        .gitPanelChrome(model, scope: "list", notice: false)
+    }
+
+    @ViewBuilder
+    private func uncommitted(_ status: GitStatus) -> some View {
+        let visibleUnstaged = Array(unstaged.prefix(shown))
+        let visibleStaged = Array(staged.prefix(max(0, shown - unstaged.count)))
+        let hidden = unstaged.count + staged.count - visibleUnstaged.count - visibleStaged.count
+        if !unstaged.isEmpty {
+            Section {
+                Button(gitText("Stage All")) { Task { await model.stage(unstaged.map(\.path), on: true) } }
+                ForEach(visibleUnstaged, id: \.path) { entry in entryRow(entry, staged: false) }
+            } header: { Text(verbatim: "\(gitText("Unstaged")) · \(unstaged.count)") }
+        }
+        if !staged.isEmpty {
+            Section {
+                Button(gitText("Unstage All")) { Task { await model.stage(staged.map(\.path), on: false) } }
+                ForEach(visibleStaged, id: \.path) { entry in entryRow(entry, staged: true) }
+            } header: { Text(verbatim: "\(gitText("Staged")) · \(staged.count)") }
+            Section {
+                TextField(gitText("Message"), text: $message, axis: .vertical).lineLimit(2...6)
+                Button(gitText(staged.count == 1 ? "Commit 1 File" : "Commit \(staged.count) Files")) { Task { await commit() } }
+                    .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        if hidden > 0 {
+            Button(gitText("\(hidden) more files")) { shown += 1000 }.foregroundStyle(.secondary)
+        }
+        if status.entries.isEmpty { ContentUnavailableView(gitText("Working tree clean"), systemImage: "checkmark.circle") }
+    }
+
+    @ViewBuilder
+    private var scoped: some View {
+        if let listing {
+            Section {
+                ForEach(Array(listing.files.prefix(shown)), id: \.path) { file in
+                    if let source = listing.source {
+                        NavigationLink {
+                            ProjectDiffPage(model: model, path: file.path, source: source)
+                        } label: { GitFileLabel(letter: file.letter, path: file.path, added: file.added, removed: file.removed) }
+                            .contextMenu { Button(gitText("Copy Path")) { UIPasteboard.general.string = file.path } }
+                    }
+                }
+                if listing.files.count > shown {
+                    Button(gitText("\(listing.files.count - shown) more files")) { shown += 1000 }.foregroundStyle(.secondary)
+                }
+                if let total = listing.total, total > listing.files.count {
+                    Text(verbatim: "Showing the first \(listing.files.count) of \(total) files").foregroundStyle(.secondary)
+                }
+            } header: { if let ref = listing.ref { Text(verbatim: ref).textCase(nil) } }
+            if listing.files.isEmpty {
+                ContentUnavailableView(scope == .turn ? gitText("No changes this turn") : gitText("No differences from \(listing.ref ?? status?.base ?? "base")"), systemImage: "checkmark.circle")
+            }
+        } else if let listingError { Text(listingError).foregroundStyle(.red) }
+        else { ProgressView().frame(maxWidth: .infinity) }
     }
 
     private func entryRow(_ entry: GitEntry, staged: Bool) -> some View {
-        NavigationLink {
-            ProjectDiffPage(workbench: workbench, project: project, path: entry.path, staged: staged) { await load() }
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(entry.path).font(.body.monospaced()).lineLimit(3)
-                HStack {
-                    Text(gitStatusText(entry, staged: staged)).foregroundStyle(.secondary)
-                    if let added = entry.added { Text("+\(added.int64Value)").foregroundStyle(.green) }
-                    if let removed = entry.removed { Text("−\(removed.int64Value)").foregroundStyle(.red) }
-                }.font(.caption.monospaced())
+        let folder = entry.path.hasSuffix("/")
+        let letter = gitLetter(staged ? entry.index : entry.worktree)
+        return Group {
+            if folder {
+                Label(entry.path, systemImage: "folder").font(.body.monospaced())
+            } else {
+                NavigationLink {
+                    ProjectDiffPage(model: model, path: entry.path, source: .worktree(staged: staged))
+                } label: { GitFileLabel(letter: letter, path: entry.path, added: entry.added, removed: entry.removed) }
             }
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-            Button(staged ? "取消暂存" : "暂存") { Task { await stage([entry.path], on: !staged) } }.tint(.blue).disabled(busy)
+            if !staged { Button(gitText("Discard"), role: .destructive) { Task { await model.discard([entry.path], scope: "list") } } }
+            Button(staged ? gitText("Unstage") : gitText("Stage")) { Task { await model.stage([entry.path], on: !staged) } }.tint(.blue)
         }
         .contextMenu {
-            Button(staged ? "取消暂存" : "暂存") { Task { await stage([entry.path], on: !staged) } }.disabled(busy)
-            Button("复制路径") { UIPasteboard.general.string = entry.path }
+            Button(staged ? gitText("Unstage") : gitText("Stage")) { Task { await model.stage([entry.path], on: !staged) } }
+            if !staged { Button(gitText("Discard"), role: .destructive) { Task { await model.discard([entry.path], scope: "list") } } }
+            Button(gitText("Copy Path")) { UIPasteboard.general.string = entry.path }
         }
     }
 
-    private func load() async {
+    private func loadScope() async {
+        shown = 300
+        listing = nil
+        listingError = nil
+        guard scope != .uncommitted else { return }
         do {
-            guard let api = workbench.api else { throw InspectorFailure.disconnected }
-            status = try await api.gitStatus(projectId: project.id)
-            error = nil
-        } catch { self.error = error.riffetMessage }
-    }
-
-    private func stage(_ paths: [String], on: Bool) async {
-        guard !busy else { return }
-        busy = true
-        defer { busy = false }
-        do {
-            guard let api = workbench.api else { throw InspectorFailure.disconnected }
-            if on { try await api.stage(projectId: project.id, paths: paths) }
-            else { try await api.unstage(projectId: project.id, paths: paths) }
-            await load()
-        } catch { self.error = error.riffetMessage }
+            let api = try model.api()
+            switch scope {
+            case .turn:
+                guard let sessionID = model.sessionID, let turn = try await api.sessionCheckpoints(sessionId: sessionID).first else {
+                    listing = ScopeListing(files: [], total: nil, source: nil, ref: nil)
+                    return
+                }
+                let changes = try await api.checkpointChanges(projectId: model.project.id, checkpointId: turn.id)
+                listing = ScopeListing(files: changes.map { change in
+                    ScopeFile(path: change.path, letter: change.kind == .added ? "A" : change.kind == .deleted ? "D" : "M", added: nil, removed: nil)
+                }, total: nil, source: .base("checkpoint:\(turn.id)"), ref: nil)
+            default:
+                let comparison = try await api.gitCompare(projectId: model.project.id, base: nil)
+                listing = ScopeListing(files: comparison.files.map { ScopeFile(path: $0.path, letter: gitLetter($0.status), added: $0.added, removed: $0.removed) },
+                                       total: comparison.filesTotal?.intValue, source: .base(comparison.base), ref: comparison.ref ?? comparison.base)
+            }
+        } catch { listingError = gitMessage(error) }
     }
 
     private func commit() async {
-        guard !busy, !staged.isEmpty else { return }
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        busy = true
-        defer { busy = false }
-        do {
-            guard let api = workbench.api else { throw InspectorFailure.disconnected }
-            try await api.commit(projectId: project.id, message: text)
-            message = ""
-            await load()
-        } catch { self.error = error.riffetMessage }
-    }
-}
-
-private func gitStatusText(_ entry: GitEntry, staged: Bool) -> String {
-    let code = staged ? entry.index : entry.worktree
-    switch code {
-    case "?": return String(localized: "未跟踪", bundle: .riffet)
-    case "A": return String(localized: "新增", bundle: .riffet)
-    case "D": return String(localized: "删除", bundle: .riffet)
-    case "R": return String(localized: "重命名", bundle: .riffet)
-    case "U": return String(localized: "存在冲突", bundle: .riffet)
-    default: return String(localized: "修改", bundle: .riffet)
-    }
-}
-
-private struct ProjectDiffPage: View {
-    let workbench: Workbench
-    let project: Project
-    let path: String
-    let staged: Bool
-    let changed: () async -> Void
-    @State private var diff: GitDiff?
-    @State private var error: String?
-    @State private var busy = false
-    @State private var stageComplete = false
-
-    var body: some View {
-        Group {
-            if let error { ContentUnavailableView("无法读取差异", systemImage: "exclamationmark.triangle", description: Text(error)) }
-            else if let diff {
-                if diff.binary { ContentUnavailableView("二进制文件差异", systemImage: "doc") }
-                else {
-                    UnifiedDiffView(before: diff.before, after: diff.after)
-                        .safeAreaInset(edge: .bottom) {
-                            if diff.truncated?.boolValue == true { Text("差异较大，此处显示部分内容。").font(.caption).padding().frame(maxWidth: .infinity).background(.bar) }
-                        }
-                }
-            } else { ProgressView() }
-        }
-        .navigationTitle((path as NSString).lastPathComponent)
-        .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
-            if stageComplete {
-                Label(staged ? "已取消暂存" : "已暂存", systemImage: "checkmark.circle")
-                    .font(.callout).padding().frame(maxWidth: .infinity).background(.bar)
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(staged ? "取消暂存" : "暂存") { Task { await updateStage() } }.disabled(busy || diff == nil || stageComplete)
-            }
-        }
-        .task(id: "\(path)|\(staged)") { await load() }
-    }
-    private func load() async {
-        do {
-            guard let api = workbench.api else { throw InspectorFailure.disconnected }
-            diff = try await api.gitDiff(projectId: project.id, path: path, staged: staged)
-            error = nil
-        } catch { self.error = error.riffetMessage }
-    }
-    private func updateStage() async {
-        busy = true
-        defer { busy = false }
-        do {
-            guard let api = workbench.api else { throw InspectorFailure.disconnected }
-            if staged { try await api.unstage(projectId: project.id, paths: [path]) }
-            else { try await api.stage(projectId: project.id, paths: [path]) }
-            await changed()
-            stageComplete = true
-        } catch { self.error = error.riffetMessage }
+        guard !text.isEmpty, !staged.isEmpty else { return }
+        if await model.commit(text) { message = "" }
     }
 }
 
@@ -220,15 +261,7 @@ struct UnifiedDiffView: View {
                     }.padding(.vertical)
                 }
             } else if fallback {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("文件较大，未计算行差异。以下分别显示修改前后内容。").font(.callout).foregroundStyle(.secondary)
-                        Text("修改前").font(.headline)
-                        Text(before).font(.body.monospaced()).textSelection(.enabled)
-                        Text("修改后").font(.headline)
-                        Text(after).font(.body.monospaced()).textSelection(.enabled)
-                    }.padding()
-                }
+                ContentUnavailableView(gitText("Too large to preview"), systemImage: "doc.text")
             } else { ProgressView() }
         }
         .task(id: "\(before.hashValue)|\(after.hashValue)") {

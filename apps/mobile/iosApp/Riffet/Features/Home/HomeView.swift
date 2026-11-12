@@ -478,8 +478,8 @@ struct SessionHomeView: View {
     }
     /// What the new-session page does not offer: files, changes and the terminal live there.
     @ViewBuilder private func projectLinks(_ project: Project) -> some View {
-        NavigationLink { ProjectCheckpoints(workbench: workbench, project: project, refresh: 0) } label: { Label("检查点", systemImage: "clock.arrow.circlepath") }
-        NavigationLink { ProjectWorktrees(workbench: workbench, project: project, refresh: 0) } label: { Label("工作树", systemImage: "arrow.triangle.branch") }
+        NavigationLink { ProjectCheckpoints(workbench: workbench, project: project, refresh: 0) } label: { Label(gitText("Checkpoints"), systemImage: "clock.arrow.circlepath") }
+        NavigationLink { ProjectWorktrees(workbench: workbench, project: project, refresh: 0) } label: { Label(gitText("Worktrees"), systemImage: "arrow.triangle.branch") }
     }
     /// Project, tags and draft on one quiet line; whatever does not fit is truncated.
     private func rowMeta(_ session: Session) -> String {
