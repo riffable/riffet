@@ -1,0 +1,7 @@
+# Typical flow: a message in a chat app (e.g. WeChat, com.tencent.mm)
+1. device_launch_app {name: "微信"}, then device_act {steps: [{action: "wait_stable"}], observe: true}. Some phones run a second copy of an app (应用分身 / 双开) and first ask which one to open: if the user did not say, ask rather than guess; a copy that shows a login screen is not the one in use.
+2. Open the chat: tap the contact, or the search entry, type the name, tap the result. Check the chat title is the right person.
+3. device_act {steps: [{action: "type", ref: <input>, text: <message>}, {action: "tap", ref: <send button>}], observe: true}; check type was verified and the message appears. Many chat apps show the send button only after text is typed: if there is no send button yet, type first with observe: true, then tap the new ref.
+4. The send tap is irreversible: the phone may ask the owner to confirm (the call waits), unless a grant matches.
+- Scheduled or unattended sends: while the user is still here, e.g. right when you call schedule_wakeup, call device_authorize {app: "com.tencent.mm", action: "send", summary: "微信给张三发送「晚上七点见」", content: "晚上七点见", validMinutes: <until a little after the wake-up>}. Later type exactly that content; other text does not match the grant.
+- Never pay, transfer money or send red packets: such steps return DEVICE_HANDOFF_REQUIRED and the owner has to do it. Tell the user; do not look for another way.

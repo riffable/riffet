@@ -1,4 +1,5 @@
 import { samePromptText, type GitStatus, type Run, type Session } from '../../../../packages/contracts/src/index.js';
+import { briefPart, type BriefLanguage, type BriefPart } from '../prompts/index.js';
 import type { IdentifiedSession } from '../session-identity.js';
 
 /** Upper bound on a brief, in characters: enough to carry a long thread's gist without crowding out the work. */
@@ -213,21 +214,28 @@ function keepLatest(items: string[], budget: number, size: (item: string) => num
  */
 export function writeBrief(source: BriefSource): string {
   const { inherited, turns } = collect(source);
+  const language = briefLanguage([source.session.title, inherited ?? '', ...turns.map(turn => turn.prompt)]);
+  const part = (name: BriefPart, vars?: Record<string, string | number>) => briefPart(language, name, vars);
   const rendered = turns.map((turn, index) => {
-    const parts = [`### 第 ${index + 1} 轮\n**用户：**\n${turn.continues ? '（上面的交接内容）' : clip(turn.prompt, PROMPT_LIMIT)}`];
-    if (turn.actions.length) parts.push(`**动过：** ${clip(turn.actions.join('；'), ACTIONS_LIMIT)}`);
-    if (turn.replies.length) parts.push(`**助手：**\n${clipEnd(turn.replies.join('\n\n'), ANSWER_LIMIT)}`);
+    const parts = [part('turn', { n: index + 1, prompt: turn.continues ? part('continues') : clip(turn.prompt, PROMPT_LIMIT) })];
+    if (turn.actions.length) parts.push(part('actions', { actions: clip(turn.actions.join(language === 'zh' ? '；' : '; '), ACTIONS_LIMIT) }));
+    if (turn.replies.length) parts.push(part('replies', { replies: clipEnd(turn.replies.join('\n\n'), ANSWER_LIMIT) }));
     return parts.join('\n\n');
   });
-  const head = [
-    `以下是另一段对话「${source.session.title}」（${agentOf(source.session)}）的上下文，你将接着它继续工作。`,
-    '对话记录可能不完整：较早的轮次可能被省略，助手回复只保留了结尾。以仓库里的实际文件为准。',
-  ].join('\n');
-  const earlier = inherited ? `## 更早的交接内容\n${clipMiddle(inherited, INHERITED_LIMIT)}` : '';
+  const head = part('head', { title: source.session.title, agent: agentOf(source.session) });
+  const earlier = inherited ? part('earlier', { text: clipMiddle(inherited, INHERITED_LIMIT) }) : '';
   const files = changedFiles(source.status, 80);
-  const changed = files.length ? clip(`## 当前未提交的改动（分支 ${source.status!.branch}）\n${files.join('\n')}`, 6_000) : '';
+  const changed = files.length ? clip(part('changed', { branch: source.status!.branch, files: files.join('\n') }), 6_000) : '';
   const { kept, omitted } = keepLatest(rendered, BRIEF_BUDGET - head.length - earlier.length - changed.length);
-  return [head, earlier, `## 对话记录${omitted ? `（省略了最早的 ${omitted} 轮）` : ''}`, ...(kept.length ? kept : ['（这段对话还没有可用的记录）']), changed].filter(Boolean).join('\n\n');
+  return [head, earlier, omitted ? part('transcriptOmitted', { count: omitted }) : part('transcript'), ...(kept.length ? kept : [part('empty')]), changed].filter(Boolean).join('\n\n');
+}
+
+/**
+ * The server keeps no interface language, so the brief follows the conversation: Chinese when any
+ * of its text (title, earlier handoff, prompts) holds CJK characters, English otherwise.
+ */
+function briefLanguage(texts: string[]): BriefLanguage {
+  return texts.some(text => /[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)) ? 'zh' : 'en';
 }
 
 /**

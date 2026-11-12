@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFile, execFileSync } from 'node:child_process';
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -224,9 +224,11 @@ describe('Git release protocol', () => {
   it('verifies and publishes the exact captured Server identity even if its input pin is overwritten during bundling', async () => {
     const { clone } = await fixture();
     await mkdir(join(clone, 'scripts'));
-    for (const name of ['build-info.mjs', 'build.ts', 'runtime-package.ts']) {
+    for (const name of ['build-info.mjs', 'build.ts', 'gen-prompts.ts', 'runtime-package.ts']) {
       await writeFile(join(clone, 'scripts', name), await readFile(resolve('scripts', name)));
     }
+    // build.ts regenerates the inlined prompts; a committed, current module must leave the tree clean.
+    await cp(resolve('apps/server/src/prompts'), join(clone, 'apps/server/src/prompts'), { recursive: true });
     // The server build copies Riffet's own license and notice next to its output.
     for (const name of ['LICENSE', 'NOTICE']) await writeFile(join(clone, name), await readFile(resolve(name)));
     // build.ts writes the installed version of every runtime dependency, so the fixture needs the
@@ -286,5 +288,6 @@ describe('Git release protocol', () => {
     expect(await readFile(join(clone, 'dist/build-info.json'), 'utf8')).toBe(captured);
     expect(JSON.parse(await readFile(join(state, 'embedded.json'), 'utf8'))).toEqual(JSON.parse(captured));
     expect((await readdir(state)).filter(name => name.startsWith('server-build-'))).toEqual([]);
+    expect(git(clone, 'status', '--porcelain')).toBe('');
   });
 });

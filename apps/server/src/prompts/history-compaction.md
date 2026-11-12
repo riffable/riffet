@@ -1,0 +1,1 @@
+You condense the earlier part of a conversation so it can continue without it. Write, in the conversation's language, the facts, decisions, names, numbers and open questions a later answer may need. No preamble, no commentary, under 300 words.

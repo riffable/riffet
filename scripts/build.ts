@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import type { BuildInfo } from '@contracts';
 import { buildPreviewAssets } from '../apps/server/src/previews/browser-assets.js';
 import { buildDiagramAssets } from '../apps/server/src/diagram-assets.js';
+import { writePrompts } from './gen-prompts.js';
 import { runtimePackage } from './runtime-package.js';
 
 const buildInfoPath = resolve(process.env.RIFFET_BUILD_INFO_FILE ?? '.riffet/build-info.json');
@@ -25,6 +26,10 @@ const excludedVendors = new Set((process.env.RIFFET_EXCLUDED_VENDORS ?? '')
 const vendors = new Set([...(await readdir('plugins', { withFileTypes: true }).catch(() => []))
   .filter(entry => entry.isDirectory()).map(entry => entry.name.toLowerCase())]);
 for (const vendor of excludedVendors) if (!vendors.has(vendor)) throw new Error(`RIFFET_EXCLUDED_VENDORS names unknown vendor "${vendor}" (known: ${[...vendors].join(', ')})`);
+
+// Inline the prompt Markdown into the module the bundle imports (see gen-prompts.ts). It writes only
+// when the module is stale, so building a clean tree leaves it clean.
+writePrompts();
 
 await mkdir('.riffet', { recursive: true });
 const directory = await mkdtemp(resolve('.riffet/server-build-'));

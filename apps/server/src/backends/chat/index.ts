@@ -11,6 +11,7 @@ import { parseNativeModelSelection, type NativeModelSelection } from '../shared/
 import { auxiliaryEndpoint, profileModelEndpoint, listAuxiliaryModels, type GatewayProfiles } from '../../auxiliary/models.js';
 import type { LaneWriter, TranscriptSource } from '../../journal/ingest.js';
 import { estimatedTokens, estimateTokens } from '../../metrics/tokens.js';
+import { historyCompactionPrompt, quickChatSystemPrompt } from '../../prompts/index.js';
 import { firstMessageTitlePatch } from '../../session-title.js';
 import type {
   NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost,
@@ -32,13 +33,8 @@ const CONTEXT_TOKENS = 48_000;
 const IDLE_TIMEOUT_MS = 120_000;
 /** Streamed text reaches the journal at most this often. */
 const DRAFT_INTERVAL_MS = 150;
-const INSTRUCTIONS = "You are a quick-chat assistant. Answer directly and concisely, in the user's language unless asked otherwise.";
 /** What a summary of dropped turns may be; the turns it replaces were worth far more. */
 const SUMMARY_TOKENS = 1_500;
-const SUMMARY_INSTRUCTIONS = [
-  'You condense the earlier part of a conversation so it can continue without it.',
-  "Write, in the conversation's language, the facts, decisions, names, numbers and open questions a later answer may need. No preamble, no commentary, under 300 words.",
-].join(' ');
 /** The plain conversation, without a preset. */
 export const PLAIN_MODE = 'agent';
 const PRESET_MODE = 'preset:';
@@ -238,7 +234,7 @@ export class ChatBackendAdapter implements NativeBackendDriver {
   /** The system prompt of a turn: the preset the chat is in follows the base instructions. A preset since removed leaves the plain chat. */
   private instructions(mode: string | undefined): string {
     const preset = mode?.startsWith(PRESET_MODE) ? this.options.presets().find(item => item.id === mode.slice(PRESET_MODE.length)) : undefined;
-    return preset ? `${INSTRUCTIONS}\n\n${preset.prompt}` : INSTRUCTIONS;
+    return preset ? `${quickChatSystemPrompt()}\n\n${preset.prompt}` : quickChatSystemPrompt();
   }
 
   /** Source material stays outside the chat journal and is charged against every turn's budget. */
@@ -363,7 +359,7 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     if (!older.length) return;
     const transcript = older.map(turn => `User: ${turn.user}\n\nAssistant: ${turn.assistant}`).join('\n\n---\n\n');
     const text = await complete({
-      ...await this.endpoint(model, discussion), system: SUMMARY_INSTRUCTIONS, maxOutputTokens: SUMMARY_TOKENS * 2, timeoutMs: 120_000,
+      ...await this.endpoint(model, discussion), system: historyCompactionPrompt(), maxOutputTokens: SUMMARY_TOKENS * 2, timeoutMs: 120_000,
       content: `${summary ? `<summary_so_far>\n${summary}\n</summary_so_far>\n\n` : ''}<conversation>\n${transcript.slice(-400_000)}\n</conversation>`,
       ...(this.options.fetchImpl ? { fetchImpl: this.options.fetchImpl } : {}),
     });

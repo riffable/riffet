@@ -1,4 +1,5 @@
 import { complete, type GatewayEndpoint } from '../auxiliary/gateway.js';
+import { titlePrompt } from '../prompts/index.js';
 import { cleanGeneratedTitle } from '../session-title.js';
 
 /**
@@ -6,11 +7,6 @@ import { cleanGeneratedTitle } from '../session-title.js';
  * instead of naming it, or spend the whole budget thinking. Thinking is switched off where the
  * protocol allows and the budget leaves room for models that think anyway.
  */
-const INSTRUCTIONS = [
-  'You name conversations between a user and a coding agent.',
-  "Reply with only a concise title in the same language as the user's message: no quotes, no trailing punctuation, no explanation.",
-  'Describe the task like a brief work item (verb + object). Do not count characters or answer the request.',
-].join(' ');
 const MAX_OUTPUT_TOKENS = 1_024;
 const MESSAGE_LIMIT = 2_000;
 const REPLY_LIMIT = 1_500;
@@ -35,7 +31,7 @@ function conversation(message: string, reply: string | undefined): string {
 export async function requestTitle(request: TitleRequest): Promise<string> {
   const { message, reply, timeoutMs, signal, fetchImpl, ...endpoint } = request;
   const title = cleanGeneratedTitle(await complete({
-    ...endpoint, system: INSTRUCTIONS, content: conversation(message, reply), maxOutputTokens: MAX_OUTPUT_TOKENS,
+    ...endpoint, system: titlePrompt(), content: conversation(message, reply), maxOutputTokens: MAX_OUTPUT_TOKENS,
     timeoutMs: timeoutMs ?? 30_000, ...(signal ? { signal } : {}), ...(fetchImpl ? { fetchImpl } : {}),
   }));
   if (!title) throw new Error('title model returned no title');
