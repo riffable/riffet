@@ -23,6 +23,9 @@ export const STATS_SCHEMA = `
     ended_at INTEGER,
     duration_ms REAL,
     native_message_id TEXT,
+    native_session_id TEXT,
+    observation_id TEXT,
+    suppressed_by TEXT,
     at INTEGER NOT NULL,
     input_tokens INTEGER,
     cache_read_tokens INTEGER,
@@ -38,6 +41,20 @@ export const STATS_SCHEMA = `
   CREATE INDEX IF NOT EXISTS usage_steps_project_at ON usage_steps(project_id, at);
   CREATE INDEX IF NOT EXISTS usage_steps_run ON usage_steps(run_id);
   CREATE INDEX IF NOT EXISTS usage_steps_session_agent_at ON usage_steps(session_id, agent_kind, at);
+
+  CREATE TABLE IF NOT EXISTS usage_observations (
+    id TEXT PRIMARY KEY,
+    backend_id TEXT NOT NULL,
+    native_session_id TEXT NOT NULL,
+    native_turn_id TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    run_id TEXT,
+    coverage TEXT NOT NULL,
+    observation_json TEXT NOT NULL,
+    conflicts_json TEXT NOT NULL DEFAULT '[]',
+    UNIQUE (backend_id, native_session_id, native_turn_id));
+  CREATE INDEX IF NOT EXISTS usage_observations_backend ON usage_observations(backend_id);
+  CREATE INDEX IF NOT EXISTS usage_observations_session_run ON usage_observations(session_id,run_id);
 
   CREATE TABLE IF NOT EXISTS run_facts (
     run_id TEXT PRIMARY KEY,
@@ -99,6 +116,10 @@ export function ensureStatsSchema(db: DatabaseSync): void {
   const columns = new Set((db.prepare('PRAGMA table_info(usage_steps)').all() as Array<{ name: string }>).map(column => column.name));
   if (!columns.has('duration_ms')) db.exec('ALTER TABLE usage_steps ADD COLUMN duration_ms REAL');
   if (!columns.has('native_message_id')) db.exec('ALTER TABLE usage_steps ADD COLUMN native_message_id TEXT');
+  for (const name of ['native_session_id', 'observation_id', 'suppressed_by']) {
+    if (!columns.has(name)) db.exec(`ALTER TABLE usage_steps ADD COLUMN ${name} TEXT`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS usage_steps_observation ON usage_steps(observation_id)');
   const facts = new Set((db.prepare('PRAGMA table_info(run_facts)').all() as Array<{ name: string }>).map(column => column.name));
   if (!facts.has('speed_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_output_tokens INTEGER');
   if (!facts.has('speed_estimated_output_tokens')) db.exec('ALTER TABLE run_facts ADD COLUMN speed_estimated_output_tokens INTEGER');
@@ -122,6 +143,7 @@ export interface UsageStepRow {
   agent_kind: 'main' | 'subagent'; subagent_type: string | null; parent_step_key: string | null;
   started_at: number | null; ended_at: number | null; at: number;
   duration_ms: number | null; native_message_id: string | null;
+  native_session_id: string | null; observation_id: string | null; suppressed_by: string | null;
   input_tokens: number | null; cache_read_tokens: number | null; cache_write_tokens: number | null;
   output_tokens: number | null; reasoning_tokens: number | null;
   token_source: 'provider' | 'estimated'; window: string | null; ingest: 'live' | 'backfill' | 'migration';

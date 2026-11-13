@@ -74,6 +74,10 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 
 服务端入口返回的 `Contributions`（`modelSources`、`taskProviders`、`actions`、`status`、`doctorChecks`、`agentBackends` 等）是运行时贡献，接口在 `packages/plugin-api/src/index.ts`。manifest 的 `contributes.modelSources` 可以声明协议、覆盖项与登录入口；`contributes.actions` 声明操作标签和类型，首次登录不需要先失败一次。运行时贡献和静态声明是两件事：声明让客户端知道有什么，贡献才真正提供它。
 
+`riffet.cursor` 提供 `usage` 服务（`1.0.0`）：`read(): Promise<{ records: RecordedUsageObservation[] }>` 返回已持久化的回合计量，`subscribe(listener: () => void): () => void` 提示读取方重新读取。类型从 `@riffet/plugin-api` 导出；每条记录的 ID 由 backend、原生会话和原生回合决定，`coverage` 是 `complete`、`partial` 或 `conflict`。只将 `complete` 用于准确统计；缺字段不是零，冲突记录不可相加。`inputTokens` 不含两个缓存计数，`outputTokens` 包含 `reasoningTokens`；`requestedModel` 与实际 `model` 分开。服务只含计量元数据，不含提示词、消息正文或连接凭据。
+
+Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-usage/`，写入统计账本成功才删除队列文件；启动时和后台定期补收，不依赖打开会话界面。没有结束计数的中断保持未知，旧 CLI 或未加载流采集器的进程不保证覆盖。主 Agent 和子 Agent 独立计量；回合总量覆盖同一执行归属的文本估算，不作为单次响应的速度样本。
+
 模型源的 ID 存在档案里，档案带 API Key，所以隔离安装的包只能提供 `<插件 id>.<名称>`（名称为小写字母、数字、连字符，全长至多 64 个字符），否则激活失败；不能是内置源的 ID，也不会与别的包重名。样例 `gateway-models` 用 `` `${host.id}.gateway` ``。内置包、开发包和可信安装包只需不与已有的重名，迁出的官方模型源保留旧 ID。
 
 模型源可提供 `usage(overrides): Promise<NativeBackendUsage>`，读取与该 profile 地址、凭据对应的账号额度和模型状态。宿主先激活并准备模型源，再传入与 `resolve`、`catalog` 相同的 `apiEndpoint` / `apiKey` 覆盖；插件自行实现网关的只读接口，网络请求需要 `network`。返回值复用 `@riffet/contracts` 的 `NativeBackendUsage`：账号窗口用 `account.windows`，模型专属额度按目录 ID 写入 `models`，`usedPercent` 为 0–100。已选择模型源的 profile 不回退读取 CLI 登录账号的额度；源未提供 `usage` 时不显示额度。宿主合并同时到达的读取并缓存 30 秒，插件设置、凭据或启停变化时清除缓存。隔离安装包通过同一 RPC 读取并校验返回字段；旧插件无需实现此方法。

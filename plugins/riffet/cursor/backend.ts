@@ -20,6 +20,7 @@ import { CursorProjectConfigs } from './backend/project-configs.js';
 import { readCursorShare } from './backend/share-read.js';
 import { CursorSteerBridge } from './backend/steer.js';
 import { CursorTranscriptSource, type CursorTranscriptSignals } from './backend/transcript-source.js';
+import { CursorUsageIngest } from './backend/usage.js';
 import { workspaceChatsDir } from './native/chat-store.js';
 import { CursorLive } from './native/live.js';
 import { nativeModelCatalogFromVariants } from './native/model-catalog.js';
@@ -89,6 +90,7 @@ interface CursorParts {
   titles: ResumeTitleWatcher;
   live: CursorLive;
   receipts: CursorLiveReceipts;
+  usage: CursorUsageIngest;
 }
 
 /**
@@ -142,6 +144,25 @@ export class CursorBackend implements AgentBackend {
   readonly settledScreen = promptSettled;
   private built?: CursorParts;
   private shutdown?: Promise<void>;
+  private usageHost?: AgentHost;
+  private stopUsageChanges?: () => void;
+  private readonly usageListeners = new Set<() => void>();
+  /** Metadata-only settled counters; no transcript, launch configuration or credentials. */
+  readonly usageService = {
+    version: '1.0.0',
+    read: async () => {
+      const host = this.usageHost;
+      if (this.shutdown || !host?.stats.readObservations) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
+      const records = await host.stats.readObservations();
+      if (this.shutdown || host !== this.usageHost) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
+      return { records };
+    },
+    subscribe: (listener: () => void) => {
+      if (this.shutdown) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
+      this.usageListeners.add(listener);
+      return () => { this.usageListeners.delete(listener); };
+    },
+  };
   private readonly defaultProfile: AgentProfile = { id: 'default', name: 'Cursor CLI', isDefault: true, config: {} };
   /** One per conversation somebody is subscribed to; its jobs also reach clients as background-task activities. */
   private readonly activities = new Map<string, { tracker: CursorActivities; listeners: Set<AgentReport> }>();
@@ -165,6 +186,11 @@ export class CursorBackend implements AgentBackend {
     const native = new NativeService(port, { configDir: launch.configDir, cliPath: launch.executable, profile: launch, live });
     const runtime = new NativeRuntimeManager({ port, cliPath: launch.executable, configDir: launch.configDir, profile: launch, live, prepareModel: (model, project) => native.prepareModel(model, project) });
     const steering = new CursorSteerBridge(host, port, native, this.options.stateDir, launch);
+    this.usageHost = host;
+    this.stopUsageChanges = host.stats.subscribeObservations?.(() => {
+      for (const listener of this.usageListeners) { try { listener(); } catch { /* consumers are independent */ } }
+    });
+    const usage = new CursorUsageIngest(host, live, launch.configDir);
     steering.onPreCompact = (sessionId, info) => {
       this.activityEntry(sessionId, native).tracker.compactionStarted(info);
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.preCompact(info);
@@ -174,7 +200,7 @@ export class CursorBackend implements AgentBackend {
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.changed();
     };
     runtime.useLaunchPlugin(session => steering.launchArgs(session));
-    return this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live) };
+    return this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage };
   }
 
   profiles(): AgentProfile[] { return [this.defaultProfile]; }
@@ -452,8 +478,12 @@ export class CursorBackend implements AgentBackend {
    */
   close(): Promise<void> {
     return this.shutdown ??= (async () => {
+      this.stopUsageChanges?.();
+      this.usageListeners.clear();
+      this.usageHost = undefined;
       const built = this.built;
       if (!built) return;
+      await built.usage.close();
       await built.steering.close();
       await built.runtime.close();
       built.native.closeAll();

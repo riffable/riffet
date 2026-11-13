@@ -8,6 +8,7 @@ import { SessionLock } from '../agent-host/session-lock.js';
 import { PluginRegistry } from '../plugins/registry.js';
 import { laneKey } from '../journal/journal.js';
 import { Store } from '../store.js';
+import { StatsLedger } from '../stats/ledger.js';
 import { TranscriptIngest } from '../sync/ingest.js';
 import { isWarmupTerminal } from '../terminal/service.js';
 import { PluginBackendDriver } from './plugin-backend.js';
@@ -98,6 +99,46 @@ async function build(plugin: Plugin, workspace: object = {}) {
 }
 
 describe('an Agent backend from a plugin', () => {
+  it('isolates durable observations and releases subscriptions when its host is revoked', async () => {
+    const plugin = memoryPlugin();
+    const { store, plugins, service, session } = await build(plugin.plugin);
+    const ledger = new StatsLedger(store);
+    cleanups.push(() => ledger.close());
+    service.host.stats = ledger;
+    await plugins.update('test.agent', { enablement: 'on' });
+    await service.ensure(session);
+    const host = plugin.hosts[0]!;
+    const foreign = store.createSession({ projectId: session.projectId, kind: 'native', backendId: 'codex' });
+    const otherRun = store.acceptNativeRun(foreign.id, 'foreign-stats', { text: 'x', attachmentIds: [], context: [] }, { mode: 'agent' });
+    const observation = { nativeSessionId: 'native', nativeTurnId: 'turn', requestId: 'request', scope: 'agent-turn' as const,
+      agentKind: 'main' as const, startedAt: 1_000, endedAt: 2_000, status: 'completed' as const,
+      usage: { inputTokens: 1, outputTokens: 2, cacheReadTokens: 0, cacheWriteTokens: 0 } };
+    const listener = vi.fn();
+    const unsubscribe = host.stats.subscribeObservations!(listener);
+    expect(() => host.stats.recordObservation!(foreign.id, undefined, observation)).toThrow(expect.objectContaining({ code: 'AGENT_SESSION_FOREIGN' }));
+    expect(() => host.stats.recordObservation!(session.id, otherRun.id, observation)).toThrow(expect.objectContaining({ code: 'AGENT_SESSION_FOREIGN' }));
+    ledger.recordObservation(foreign.id, otherRun.id, observation);
+    expect(listener).not.toHaveBeenCalled();
+    expect(host.stats.recordObservation!(session.id, undefined, observation)).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    const ownObservations = await host.stats.readObservations!();
+    expect(ownObservations).toHaveLength(1);
+    expect(ownObservations[0]?.backendId).toBe('test.agent');
+
+    // Disabling while a snapshot is in flight must still refuse its eventual result.
+    let finishRead!: (value: typeof ownObservations) => void;
+    vi.spyOn(ledger, 'readObservations').mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+    const pending = host.stats.readObservations!();
+    await plugins.update('test.agent', { enablement: 'off' });
+    finishRead(ownObservations);
+    await expect(pending).rejects.toMatchObject({ code: 'AGENT_HOST_REVOKED' });
+    await expect(host.stats.readObservations!()).rejects.toMatchObject({ code: 'AGENT_HOST_REVOKED' });
+    expect(() => host.stats.subscribeObservations!(listener)).toThrow(expect.objectContaining({ code: 'AGENT_HOST_REVOKED' }));
+    ledger.recordObservation(session.id, undefined, { ...observation, nativeTurnId: 'later' });
+    expect(listener).toHaveBeenCalledTimes(1);
+    unsubscribe(); // Cleanup handles remain safe after revocation.
+  });
+
   it('runs a session through the adapter and, once turned off, keeps its history readable but refuses new work', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const plugin = memoryPlugin();

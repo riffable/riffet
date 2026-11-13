@@ -1,6 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, lstatSync, mkdirSync, readFileSync, unlinkSync, watch, type FSWatcher } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CURSOR_USAGE_FILE, readCursorUsage } from './usage-observation.js';
+export type { CursorUsageCapture } from './usage-observation.js';
 
 /**
  * The step a Cursor CLI is streaming, as its live tap (`assets/live-tap.cjs`) writes it. The chat store
@@ -56,15 +58,51 @@ function parse(value: unknown): (CursorLiveStep & { pid: number }) | undefined {
 export class CursorLive {
   private watcher: FSWatcher | undefined;
   private readonly listeners = new Set<(chatId: string) => void>();
+  private usageWatcher: FSWatcher | undefined;
+  private readonly usageListeners = new Set<() => void>();
+  readonly usageDir: string;
 
-  constructor(readonly dir: string) {}
+  constructor(readonly dir: string) { this.usageDir = join(dirname(resolve(dir)), 'cursor-usage'); }
 
   /** What a Cursor terminal launch adds to the pane's environment so its CLI loads the tap; none without one. */
   launchEnv(): Record<string, string> {
     if (!CURSOR_LIVE_TAP) return {};
-    try { mkdirSync(this.dir, { recursive: true, mode: 0o700 }); } catch { return {}; }
+    try {
+      mkdirSync(this.dir, { recursive: true, mode: 0o700 });
+      mkdirSync(this.usageDir, { recursive: true, mode: 0o700 });
+    } catch { return {}; }
     // NODE_OPTIONS quotes a path with spaces; the tap takes itself back out for the CLI's own children.
-    return { RIFFET_CURSOR_LIVE: this.dir, NODE_OPTIONS: `--require "${CURSOR_LIVE_TAP.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` };
+    return { RIFFET_CURSOR_LIVE: this.dir, RIFFET_CURSOR_USAGE: this.usageDir, NODE_OPTIONS: `--require "${CURSOR_LIVE_TAP.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` };
+  }
+
+  /** Unacknowledged terminal observations, including records left by CLIs that already exited. */
+  readUsage(): ReturnType<typeof readCursorUsage> { return readCursorUsage(this.usageDir); }
+
+  /** Only acknowledge this queue's metadata files, never a path supplied by an observation. */
+  ackUsage(file: string): void {
+    const name = basename(file);
+    if (!CURSOR_USAGE_FILE.test(name) || resolve(file) !== join(this.usageDir, name)) return;
+    try { if (lstatSync(file).isFile()) unlinkSync(file); } catch { /* already acknowledged */ }
+  }
+
+  /** A change hint; readers also sweep at startup and periodically to recover missed watch events. */
+  watchUsage(listener: () => void): () => void {
+    this.usageListeners.add(listener);
+    if (!this.usageWatcher) {
+      try {
+        mkdirSync(this.usageDir, { recursive: true, mode: 0o700 });
+        this.usageWatcher = watch(this.usageDir, (_event, file) => {
+          if (!file || !CURSOR_USAGE_FILE.test(file)) return;
+          for (const each of [...this.usageListeners]) try { each(); } catch { /* independent consumers */ }
+        });
+        this.usageWatcher.on('error', () => { this.usageWatcher?.close(); this.usageWatcher = undefined; });
+        this.usageWatcher.unref();
+      } catch { this.usageWatcher = undefined; }
+    }
+    return () => {
+      this.usageListeners.delete(listener);
+      if (!this.usageListeners.size) { this.usageWatcher?.close(); this.usageWatcher = undefined; }
+    };
   }
 
   /** The step chat `chatId` is streaming, while the CLI writing it still runs. */
@@ -107,6 +145,9 @@ export class CursorLive {
   }
 
   close(): void {
+    this.usageListeners.clear();
+    this.usageWatcher?.close();
+    this.usageWatcher = undefined;
     this.listeners.clear();
     this.watcher?.close();
     this.watcher = undefined;

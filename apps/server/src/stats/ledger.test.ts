@@ -1,6 +1,12 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { UsageObservation } from './types.js';
 import { Store } from '../store.js';
 import { StatsLedger } from './ledger.js';
+import { StatsQuery, type ResolvedFilter } from './query.js';
 
 const stores: Store[] = [];
 afterEach(() => { vi.useRealTimers(); for (const store of stores.splice(0)) store.close(); });
@@ -22,6 +28,175 @@ function complete(store: Store, runId: string, timings: Record<string, number>) 
 }
 
 describe('StatsLedger', () => {
+  const observation = (patch: Partial<UsageObservation> = {}): UsageObservation => ({
+    nativeSessionId: 'native-chat', nativeTurnId: 'native-turn', requestId: 'request-1', scope: 'agent-turn', agentKind: 'main',
+    startedAt: 1_000, endedAt: 3_000, status: 'completed',
+    usage: { inputTokens: 10, outputTokens: 20, cacheReadTokens: 30, cacheWriteTokens: 0 }, ...patch,
+  });
+
+  it('durably replays native observations across sessions without duplicating totals', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'riffet-usage-observation-'));
+    let store: Store | undefined;
+    let ledger: StatsLedger | undefined;
+    try {
+      const filename = join(directory, 'state.db');
+      store = new Store(filename);
+      const project = store.createProject('/tmp/usage', 'usage');
+      const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor' });
+      ledger = new StatsLedger(store);
+      const listener = vi.fn();
+      ledger.subscribeObservations(listener, 'cursor');
+      expect(ledger.recordObservation(session.id, undefined, observation())).toBe(true);
+      const first = (await ledger.readObservations('cursor'))[0]!;
+      expect(first).toMatchObject({ coverage: 'complete', cwd: '/tmp/usage', sessionId: session.id });
+      expect(first.usage.reasoningTokens).toBeUndefined();
+      expect(steps(store)[0]).toMatchObject({ model: null, requested_model: null, observation_id: first.id });
+      ledger.close(); store.close();
+      store = new Store(filename); ledger = new StatsLedger(store);
+      const reimport = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor' });
+      const repeated = vi.fn(); ledger.subscribeObservations(repeated);
+      expect(ledger.recordObservation(reimport.id, undefined, observation())).toBe(true);
+      expect(await ledger.readObservations('cursor')).toEqual([first]);
+      expect(await ledger.readObservations('claude')).toEqual([]);
+      expect(steps(store)).toHaveLength(1);
+      expect(repeated).not.toHaveBeenCalled();
+      expect(listener).toHaveBeenCalledTimes(1);
+    } finally { ledger?.close(); store?.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('keeps partial counters out of totals, enriches missing values, and retracts conflicting facts', async () => {
+    const { store, session, run } = setup('cursor');
+    const ledger = new StatsLedger(store);
+    const partial = observation({ usage: { inputTokens: 10, outputTokens: 20 } });
+    expect(ledger.recordObservation(session.id, run.id, partial)).toBe(true);
+    expect((await ledger.readObservations('cursor'))[0]?.coverage).toBe('partial');
+    expect(steps(store)).toHaveLength(0);
+    expect(ledger.recordObservation(session.id, run.id, observation())).toBe(true);
+    expect((await ledger.readObservations('cursor'))[0]?.coverage).toBe('complete');
+    expect(steps(store)).toHaveLength(1);
+    expect(ledger.recordObservation(session.id, run.id, observation({ requestId: 'another-request' }))).toBe(true);
+    expect((await ledger.readObservations('cursor'))[0]?.coverage).toBe('conflict');
+    expect(steps(store)).toHaveLength(0);
+    ledger.recordObservation(session.id, run.id, observation());
+    expect((await ledger.readObservations('cursor'))[0]?.coverage).toBe('conflict');
+    expect(steps(store)).toHaveLength(0);
+    const evidence = store.db.prepare('SELECT conflicts_json FROM usage_observations').get() as { conflicts_json: string };
+    expect(JSON.parse(evidence.conflicts_json)).toEqual(expect.arrayContaining([expect.objectContaining({ requestId: 'another-request' })]));
+    for (const usage of [
+      { ...observation().usage, inputTokens: -1 }, { ...observation().usage, outputTokens: 1.5 },
+      { ...observation().usage, cacheReadTokens: Number.MAX_SAFE_INTEGER + 1 },
+      { ...observation().usage, reasoningTokens: 21 },
+    ]) {
+      const nativeTurnId = `invalid-${JSON.stringify(usage)}`;
+      expect(ledger.recordObservation(session.id, run.id, observation({ nativeTurnId, usage }))).toBe(true);
+    }
+    expect((await ledger.readObservations('cursor')).slice(1).every(value => value.coverage === 'partial')).toBe(true);
+    expect(steps(store)).toHaveLength(0);
+    expect(ledger.recordObservation(session.id, run.id, observation({ nativeSessionId: '' }))).toBe(false);
+    ledger.close();
+  });
+
+  it('retains captures for retry while another reader prevents a durable checkpoint', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'riffet-usage-checkpoint-'));
+    const store = new Store(join(directory, 'state.db'));
+    const reader = new DatabaseSync(store.path);
+    const project = store.createProject('/tmp/usage', 'usage');
+    const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'cursor' });
+    const ledger = new StatsLedger(store);
+    try {
+      reader.exec('BEGIN');
+      reader.prepare('SELECT COUNT(*) FROM usage_observations').get();
+      expect(ledger.recordObservation(session.id, undefined, observation())).toBe(false);
+      reader.exec('ROLLBACK');
+      expect(ledger.recordObservation(session.id, undefined, observation())).toBe(true);
+      expect(steps(store)).toHaveLength(1);
+    } finally { ledger.close(); reader.close(); store.close(); rmSync(directory, { recursive: true, force: true }); }
+  });
+
+  it('replaces only the matching owner estimates, preserves recovery, and never treats turn wall time as TPS', async () => {
+    const { store, session, run } = setup('cursor');
+    const ledger = new StatsLedger(store);
+    const estimate = { stepId: 'estimate', outputTokens: 7, tokenSource: 'estimated' as const, startedAt: 1_000, endedAt: 3_000 };
+    ledger.recordUsage(session.id, run.id, estimate);
+    ledger.recordUsage(session.id, run.id, { ...estimate, stepId: 'child-1', agentKind: 'subagent', nativeSessionId: 'child-1' });
+    ledger.recordUsage(session.id, run.id, { ...estimate, stepId: 'child-2', agentKind: 'subagent', nativeSessionId: 'child-2' });
+    ledger.recordObservation(session.id, run.id, observation());
+    ledger.recordUsage(session.id, run.id, { ...estimate, outputTokens: 9 }); // a later transcript pass
+    ledger.recordObservation(session.id, run.id, observation({ nativeSessionId: 'child-1', agentKind: 'subagent', parentNativeSessionId: 'native-chat' }));
+    complete(store, run.id, {});
+    expect(facts(store, run.id)).toMatchObject({ output_tokens: 47, estimated_output_tokens: 7, measured_ms: null, speed_output_tokens: null, steps: 0 });
+    expect(ledger.sessionMetrics(session.id)).toEqual([]);
+    const filter: ResolvedFilter = { from: 1, to: 5_000, tz: 'UTC', backends: [], models: [], projects: [], profiles: [], agentKind: 'all', includeArchived: true, includeEstimated: true };
+    const query = new StatsQuery(store.db, { projectName: () => undefined, profileLabel: () => undefined });
+    expect(query.summary(filter).current.tokens.output).toBe(47);
+    ledger.recordObservation(session.id, run.id, observation({ usage: { ...observation().usage, outputTokens: 21 } }));
+    expect(facts(store, run.id)).toMatchObject({ output_tokens: 36, estimated_output_tokens: 16, measured_ms: 2_000, speed_output_tokens: 9 });
+    ledger.close();
+  });
+
+  it('keeps another agent migration estimate when a child total arrives', () => {
+    const { store, session, run } = setup('cursor');
+    store.saveRunMetrics(run.id, { outputTokens: 7, durationMs: 2_000, tokens: 'estimated', window: 'observed', steps: 1 });
+    const ledger = new StatsLedger(store);
+    ledger.recordObservation(session.id, run.id, observation({ nativeSessionId: 'child', agentKind: 'subagent' }));
+    complete(store, run.id, {});
+    expect(facts(store, run.id)).toMatchObject({ output_tokens: 27, estimated_output_tokens: 7 });
+    expect(steps(store).find(row => row.ingest === 'migration')).toMatchObject({ suppressed_by: null, output_tokens: 7 });
+    ledger.close();
+  });
+
+  it('suppresses a live estimate when backfill later binds its exact receipt', () => {
+    const { store, session, run } = setup('cursor');
+    const ledger = new StatsLedger(store);
+    const estimate = { stepId: 'late-estimate', outputTokens: 7, tokenSource: 'estimated' as const, startedAt: 1_000 };
+    ledger.recordUsage(session.id, undefined, estimate);
+    expect(steps(store)[0]?.run_id).toBeNull();
+    ledger.recordObservation(session.id, run.id, observation());
+    store.updateRun(run.id, { native: { ...run.native!, nativeMessageId: 'late-receipt' } });
+    ledger.recordUsage(session.id, undefined, { ...estimate, nativeMessageId: 'late-receipt' }, 'backfill');
+    complete(store, run.id, {});
+    expect(steps(store).find(row => row.step_key === `cursor:${session.id}:late-estimate`)).toMatchObject({ run_id: run.id, suppressed_by: expect.any(String) });
+    expect(facts(store, run.id)).toMatchObject({ output_tokens: 20, estimated_output_tokens: 0 });
+    ledger.close();
+  });
+
+  it('binds late native receipts without assigning orphan child turns by time', async () => {
+    const { store, session, run } = setup('cursor');
+    const ledger = new StatsLedger(store);
+    ledger.recordUsage(session.id, run.id, { stepId: 'estimate', outputTokens: 7, tokenSource: 'estimated' });
+    ledger.recordObservation(session.id, undefined, observation());
+    ledger.recordObservation(session.id, undefined, observation({ nativeSessionId: 'orphan-child', agentKind: 'subagent' }));
+    expect((await ledger.readObservations('cursor')).every(value => value.runId === undefined)).toBe(true);
+    expect(steps(store).filter(row => row.observation_id).every(row => row.run_id === null)).toBe(true);
+    store.updateRun(run.id, { native: { ...run.native!, nativeSessionId: 'native-chat', nativeTurnId: 'native-turn' } });
+    const recorded = await ledger.readObservations('cursor');
+    expect(recorded.find(value => value.agentKind === 'main')?.runId).toBe(run.id);
+    expect(recorded.find(value => value.agentKind === 'subagent')?.runId).toBeUndefined();
+    expect(steps(store).find(row => row.token_source === 'estimated')?.suppressed_by).toBeTruthy();
+    ledger.recordObservation(session.id, undefined, observation({ nativeTurnId: 'bound-during-restart' }));
+    ledger.close();
+    store.updateRun(run.id, { native: { ...store.getRun(run.id).native!, nativeTurnId: 'bound-during-restart' } });
+    const recovered = new StatsLedger(store);
+    expect((await recovered.readObservations('cursor')).find(value => value.nativeTurnId === 'bound-during-restart')?.runId).toBe(run.id);
+    recovered.close();
+  });
+
+  it('acknowledges only a committed transaction and does not publish rolled-back observations', async () => {
+    const { store, session } = setup('cursor');
+    const ledger = new StatsLedger(store);
+    const listener = vi.fn(); ledger.subscribeObservations(listener);
+    expect(() => store.transaction(() => {
+      expect(ledger.recordObservation(session.id, undefined, observation())).toBe(false);
+      throw new Error('rollback');
+    })).toThrow('rollback');
+    expect(await ledger.readObservations('cursor')).toEqual([]);
+    expect(listener).not.toHaveBeenCalled();
+    expect(ledger.recordObservation(session.id, undefined, observation())).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    ledger.close();
+    expect(ledger.recordObservation(session.id, undefined, observation())).toBe(false);
+  });
+
   it('replays CLI turn metrics by exact receipt and retains independent model duration', () => {
     const { store, session, run } = setup();
     store.updateRun(run.id, { native: { ...run.native!, nativeMessageId: 'receipt-1' } });

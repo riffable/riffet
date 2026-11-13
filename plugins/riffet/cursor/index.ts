@@ -45,6 +45,7 @@ export const cursor: Plugin = {
     const backend = new CursorBackend({ stateDir: legacyStateRoot(await host.stateDir()) });
     return {
       agentBackends: [backend],
+      services: { usage: backend.usageService },
       doctorChecks: () => doctorChecks(host),
       // Reaps the unclaimed warm-ups and closes the watchers, timers and hook bridge; a session's CLI keeps running.
       dispose: () => backend.close(),

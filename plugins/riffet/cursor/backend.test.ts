@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AgentContext, AgentSessionView } from '@riffet/plugin-api';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import type { AgentContext, AgentSessionView, UsageObservation } from '@riffet/plugin-api';
 import { CursorBackend } from './backend.js';
+import { CursorUsageIngest } from './backend/usage.js';
+import { chatStorePath } from './native/chat-store.js';
+import { CursorLive, type CursorUsageCapture } from './native/live.js';
 import { cursorPort } from './host-port.js';
 import type { NativeService } from './native/service.js';
 import type { WatchMessage } from './native/watch.js';
@@ -85,5 +93,66 @@ describe('CursorBackend.start', () => {
     await closed.close();
     expect(() => closed.start(host, context.profile)).toThrow(expect.objectContaining({ code: 'AGENT_BACKEND_CLOSED' }));
     await backend.close();
+  });
+});
+
+describe('Cursor durable usage ingestion', () => {
+  it('retries storage and late child ownership without transcript subscribers, and never guesses across workspaces', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-cursor-usage-'));
+    const configDir = join(dir, 'config');
+    const nativeSessionId = 'root-chat';
+    const host = new FakeHost({ sessions: [{ ...session, nativeSessionId }], projects: [project] });
+    const saved: UsageObservation[] = [];
+    let writable = false;
+    host.stats.recordObservation = (_sessionId, _runId, value) => {
+      if (!writable) return false;
+      saved.push(value);
+      return true;
+    };
+    const live = new CursorLive(join(dir, 'cursor-live'));
+    live.launchEnv();
+    const put = (chat: string, turn: string) => {
+      const capture: CursorUsageCapture = {
+        v: 1, nativeSessionId: chat, nativeTurnId: turn, requestId: turn,
+        startedAt: 1000, endedAt: 2000, requestedModel: 'requested-model',
+        rawUsage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 60, cacheWriteTokens: 10 },
+      };
+      const bytes = JSON.stringify(capture);
+      writeFileSync(join(live.usageDir, `${createHash('sha256').update(bytes).digest('hex')}.json`), bytes);
+    };
+    put(nativeSessionId, 'turn-1');
+    put('child-chat', 'turn-2');
+    put('foreign-chat', 'turn-3');
+    const ingest = new CursorUsageIngest(host, live, configDir);
+    try {
+      await ingest.drain();
+      expect(live.readUsage()).toHaveLength(3);
+      writable = true;
+      await ingest.drain();
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ agentKind: 'main', usage: { inputTokens: 30, outputTokens: 20 }, requestedModel: 'requested-model' });
+      expect(saved[0]!.model).toBeUndefined();
+      expect(saved[0]!.usage.reasoningTokens).toBeUndefined();
+      expect(live.readUsage()).toHaveLength(2);
+
+      const meta = (cwd: string, child: string) => {
+        const path = chatStorePath(configDir, cwd, child);
+        mkdirSync(dirname(path), { recursive: true });
+        const db = new DatabaseSync(path);
+        db.exec('CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)');
+        db.prepare('INSERT INTO meta VALUES (?, ?)').run('0', JSON.stringify({ agentId: child, subagentInfo: { parentAgentId: nativeSessionId, typeName: 'explore' } }));
+        db.close();
+      };
+      meta(project.cwd, 'child-chat');
+      meta('/another-workspace', 'foreign-chat');
+      await ingest.drain();
+      expect(saved).toHaveLength(2);
+      expect(saved[1]).toMatchObject({ agentKind: 'subagent', parentNativeSessionId: nativeSessionId, subagentType: 'explore' });
+      expect(live.readUsage().map(item => item.observation.nativeSessionId)).toEqual(['foreign-chat']);
+    } finally {
+      await ingest.close();
+      live.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

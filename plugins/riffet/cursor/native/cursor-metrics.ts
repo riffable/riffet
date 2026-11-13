@@ -78,6 +78,7 @@ export class CursorTranscriptMeter {
     private readonly promptSentAt: (runId: string) => number | undefined = () => undefined,
     private readonly stats: StatsSink = noopStats,
     private readonly sessionId = '',
+    private readonly nativeSessionId: () => string | undefined = () => undefined,
   ) {}
 
   /** A new chat root means the previous turn identities are meaningless. */
@@ -234,6 +235,7 @@ export class CursorTranscriptMeter {
       this.stats.recordUsage(this.sessionId, turn.runId, {
         stepId,
         ...(turn.userNativeId ? { nativeMessageId: turn.userNativeId } : {}),
+        ...(this.nativeSessionId() ? { nativeSessionId: this.nativeSessionId() } : {}),
         startedAt,
         endedAt,
         outputTokens: Math.max(0, Math.round(estimateTokens(text))),

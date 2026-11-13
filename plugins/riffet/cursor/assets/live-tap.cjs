@@ -26,6 +26,7 @@ const { isMainThread } = require('node:worker_threads');
 const fs = require('node:fs');
 const path = require('node:path');
 const zlib = require('node:zlib');
+const { createHash, randomBytes } = require('node:crypto');
 
 const RUN = '/agent.v1.AgentService/Run';
 const RUN_SSE = '/agent.v1.AgentService/RunSSE';
@@ -53,10 +54,11 @@ function fields(buffer) {
   };
   while (at < buffer.length) {
     const key = varint(), wire = key % 8, number = Math.floor(key / 8);
+    if (!Number.isSafeInteger(key) || number < 1) throw new Error('bad field');
     if (wire === 0) out.push([number, varint()]);
     else if (wire === 2) {
       const length = varint();
-      if (at + length > buffer.length) throw new Error('truncated');
+      if (!Number.isSafeInteger(length) || at + length > buffer.length) throw new Error('truncated');
       out.push([number, buffer.subarray(at, at + length)]);
       at += length;
     } else if (wire === 1) at += 8;
@@ -81,7 +83,35 @@ function runRequest(bytes) {
   if (!conversation || !CONVERSATION_ID.test(conversation)) return undefined;
   const userMessage = message(message(message(request, 2) ?? [], 1) ?? [], 1);
   const prompt = userMessage && string(userMessage, 1);
-  return { conversation, run: string(request, 25), ...(prompt ? { prompt } : {}) };
+  const requestedModel = string(message(request, 9) ?? [], 1) || string(message(request, 3) ?? [], 1);
+  return { conversation, run: string(request, 25), ...(prompt ? { prompt } : {}), ...(requestedModel ? { requestedModel } : {}) };
+}
+
+/** Atomic, metadata-only inbox. Linking the complete temporary file never replaces an earlier event. */
+function persistUsage(dir, observation, diagnostic = false) {
+  if (!dir) return;
+  let temporary, fd;
+  try {
+    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+    const bytes = JSON.stringify(observation);
+    const hash = createHash('sha256').update(bytes).digest('hex');
+    const file = path.join(dir, `${diagnostic ? 'diagnostic-' : ''}${hash}.json`);
+    temporary = path.join(dir, `.${process.pid}.${randomBytes(8).toString('hex')}.tmp`);
+    fd = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
+    fs.writeFileSync(fd, bytes);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd); fd = undefined;
+    try { fs.linkSync(temporary, file); }
+    catch (error) { if (error.code !== 'EEXIST') throw error; }
+    fs.unlinkSync(temporary); temporary = undefined;
+    // The queue survives CLI exit; a reader acknowledges files only after recording them elsewhere.
+    fd = fs.openSync(dir, fs.constants.O_RDONLY);
+    fs.fsyncSync(fd);
+  } catch { /* capture must never interfere with the CLI */ }
+  finally {
+    if (fd !== undefined) try { fs.closeSync(fd); } catch { /* already closed */ }
+    if (temporary) try { fs.unlinkSync(temporary); } catch { /* best effort */ }
+  }
 }
 
 // ---- Connect framing ------------------------------------------------------------------------
@@ -117,12 +147,15 @@ class Envelopes {
 
 /** One run of the agent stream and the step it is in. */
 class Live {
-  constructor(dir, request, turn) {
+  constructor(dir, usageDir, request, turn) {
     this.order = ++runs;
     this.dir = dir;
+    this.usageDir = usageDir;
     this.request = request;
     this.turn = turn;
-    this.at = new Date().toISOString();
+    this.startedAt = Date.now();
+    this.at = new Date(this.startedAt).toISOString();
+    this.terminals = new Map();
     this.info = undefined;
     this.step = 0;
     this.sealed = true;
@@ -134,10 +167,11 @@ class Live {
 
   /** The run's request became known: which conversation, and the prompt that began it. */
   identify(info) {
-    if (this.info || this.closed) return;
+    if (this.info) return;
     this.info = info;
+    for (const terminal of this.terminals.values()) this.captureUsage(terminal);
     if (info.run && !this.turn) this.turn = info.run;
-    if (this.parts.length || info.prompt) this.flush();
+    if (!this.closed && (this.parts.length || info.prompt)) this.flush();
   }
 
   /** `AgentServerMessage`: 1 interaction_update, 3 conversation_checkpoint_update. */
@@ -158,8 +192,45 @@ class Live {
         if (number === 1 && field(delta, 2)) continue;
         const text = string(delta, 1);
         if (text) this.append(number === 1 ? 'text' : 'reasoning', text);
-      } else if (number === 16 || number === 17 || number === 14) this.seal();
+      } else if (number === 14) {
+        this.turnEnded(value);
+        this.seal();
+      } else if (number === 16 || number === 17) this.seal();
     }
+  }
+
+  /** TurnEnded's optional int64 counts: absence stays absent, including for terminal-only streams. */
+  turnEnded(bytes) {
+    const rawUsage = {}, invalid = [];
+    const keys = ['inputTokens', 'outputTokens', 'cacheReadTokens', 'cacheWriteTokens', 'reasoningTokens'];
+    for (const [number, value] of fields(bytes)) {
+      const key = keys[number - 1];
+      if (!key) continue;
+      if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) rawUsage[key] = value;
+      else { delete rawUsage[key]; invalid.push(key); }
+    }
+    // A repeated terminal on this stream is a replay, not another agent invocation.
+    const fingerprint = JSON.stringify([keys.map(key => rawUsage[key]), [...new Set(invalid)].sort()]);
+    if (this.terminals.has(fingerprint)) return;
+    const terminal = { endedAt: Date.now(), rawUsage };
+    this.terminals.set(fingerprint, terminal);
+    if (invalid.length) persistUsage(this.usageDir, {
+      v: 1, kind: 'invalid-usage', requestId: this.request, startedAt: this.startedAt,
+      endedAt: terminal.endedAt, fields: invalid,
+    }, true);
+    this.captureUsage(terminal);
+  }
+
+  captureUsage(terminal) {
+    const common = { requestId: this.request, startedAt: this.startedAt, endedAt: terminal.endedAt };
+    if (!this.info?.conversation || !this.info.run) {
+      persistUsage(this.usageDir, { v: 1, kind: 'unidentified-terminal', ...common }, true);
+      return;
+    }
+    persistUsage(this.usageDir, {
+      v: 1, nativeSessionId: this.info.conversation, nativeTurnId: this.info.run, ...common,
+      ...(this.info.requestedModel ? { requestedModel: this.info.requestedModel } : {}), rawUsage: terminal.rawUsage,
+    });
   }
 
   append(type, text) {
@@ -224,7 +295,9 @@ const waiting = new Map();
 function remember(request, info) {
   requests.set(request, info);
   while (requests.size > REQUEST_LIMIT) requests.delete(requests.keys().next().value);
-  waiting.get(request)?.identify(info);
+  const live = waiting.get(request);
+  live?.identify(info);
+  if (live?.closed) waiting.delete(request);
 }
 
 /** Feeds a response stream's bytes to [live] as they arrive, without consuming them. */
@@ -287,7 +360,7 @@ function header(request, name) {
   return typeof value === 'string' ? value : Array.isArray(value) ? value[0] : undefined;
 }
 
-function tapHttp1(dir, request) {
+function tapHttp1(dir, usageDir, request) {
   const url = request.path ?? '';
   if (!url.endsWith(RUN_SSE) && !url.endsWith(BIDI_APPEND)) return;
   const id = header(request, 'x-request-id');
@@ -304,24 +377,28 @@ function tapHttp1(dir, request) {
     }, false);
     return;
   }
-  const live = new Live(dir, id, header(request, 'x-original-request-id'));
+  const live = new Live(dir, usageDir, id, header(request, 'x-original-request-id'));
   waiting.set(id, live);
+  while (waiting.size > REQUEST_LIMIT) waiting.delete(waiting.keys().next().value);
   const known = requests.get(id);
   if (known) live.identify(known);
   request.once('response', response => {
     const encoding = response.headers['connect-content-encoding'];
     observe(response, live, () => (typeof encoding === 'string' ? encoding : 'gzip'));
   });
-  request.once('close', () => { if (waiting.get(id) === live) waiting.delete(id); });
+  request.once('close', () => {
+    // A terminal can arrive before BidiAppend identifies it. Keep a bounded wait for that identity.
+    if (live.info && waiting.get(id) === live) waiting.delete(id);
+  });
 }
 
 // ---- HTTP/2 ---------------------------------------------------------------------------------
 
-function tapHttp2(dir, headers, stream) {
+function tapHttp2(dir, usageDir, headers, stream) {
   if (!String(headers?.[':path'] ?? '').endsWith(RUN)) return;
   const id = String(headers['x-request-id'] ?? '') || `h2:${Date.now()}`;
   const original = headers['x-original-request-id'];
-  const live = new Live(dir, id, typeof original === 'string' ? original : undefined);
+  const live = new Live(dir, usageDir, id, typeof original === 'string' ? original : undefined);
   const sent = headers['connect-content-encoding'];
   collect(stream, body => {
     const first = new Envelopes(typeof sent === 'string' ? sent : 'gzip').push(body)[0];
@@ -335,13 +412,13 @@ function tapHttp2(dir, headers, stream) {
 
 // ---- install --------------------------------------------------------------------------------
 
-function install(dir) {
+function install(dir, usageDir) {
   for (const name of ['node:https', 'node:http']) {
     const module = require(name);
     const request = module.request;
     module.request = function (...args) {
       const made = request.apply(this, args);
-      try { tapHttp1(dir, made); } catch { /* observed nothing */ }
+      try { tapHttp1(dir, usageDir, made); } catch { /* observed nothing */ }
       return made;
     };
   }
@@ -353,7 +430,7 @@ function install(dir) {
       const request = session.request;
       session.request = function (headers, ...rest) {
         const stream = request.call(this, headers, ...rest);
-        try { tapHttp2(dir, headers, stream); } catch { /* observed nothing */ }
+        try { tapHttp2(dir, usageDir, headers, stream); } catch { /* observed nothing */ }
         return stream;
       };
     } catch { /* observed nothing */ }
@@ -367,13 +444,15 @@ function install(dir) {
 
 (() => {
   const dir = process.env.RIFFET_CURSOR_LIVE;
+  const usageDir = process.env.RIFFET_CURSOR_USAGE;
   // Only the CLI itself: its launcher exports CURSOR_INVOKED_AS and runs `index.js`. A wrapper's own
   // node process passes the environment on untouched, so the CLI it starts still gets it.
   if (!dir || !isMainThread || !process.env.CURSOR_INVOKED_AS || path.basename(process.argv[1] ?? '') !== 'index.js') return;
   // Everything the CLI runs (shell tools, MCP servers, hooks) inherits its environment.
   delete process.env.RIFFET_CURSOR_LIVE;
+  delete process.env.RIFFET_CURSOR_USAGE;
   const options = (process.env.NODE_OPTIONS ?? '').replace(/(?:^|\s)(?:--require|-r)[\s=](?:"[^"]*live-tap\.cjs"|\S*live-tap\.cjs)/g, '').trim();
   if (options) process.env.NODE_OPTIONS = options;
   else delete process.env.NODE_OPTIONS;
-  try { install(dir); } catch { /* the CLI runs as it would without this module */ }
+  try { install(dir, usageDir); } catch { /* the CLI runs as it would without this module */ }
 })();

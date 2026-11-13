@@ -27,6 +27,8 @@ import type {
   NativeRunInput, NativeRuntimeActionRequest, NativeSlashItem, NativeStatus, NativeStopRequest, NativeStreamMessage, NativeTurnTarget, NativeWorkbenchEvent, Project,
   RunMetrics, Session, ShareModelInfo, ShareSelection, ShareTurn, SyncLane, TerminalAppearance, TerminalInfo,
 } from '@riffet/contracts';
+import type { RecordedUsageObservation, UsageObservation } from './kit/stats.js';
+export type { RecordedUsageObservation, UsageObservation, UsageObservationTokens } from './kit/stats.js';
 
 export const AGENT_PROTOCOL_VERSION = 1;
 
@@ -796,6 +798,7 @@ export interface AgentUsageRecord {
   endedAt?: number;
   durationMs?: number;
   nativeMessageId?: string;
+  nativeSessionId?: string;
   /** Input that missed the cache. */
   inputTokens?: number;
   cacheReadTokens?: number;
@@ -896,6 +899,11 @@ export interface AgentHost {
 
   stats: {
     recordUsage(sessionId: string, runId: string | undefined, usage: AgentUsageRecord): void;
+    /** Durable ACK; partial/conflicting facts remain readable but do not enter accurate totals. */
+    recordObservation?(sessionId: string, runId: string | undefined, observation: UsageObservation): boolean;
+    /** Only observations belonging to this backend. */
+    readObservations?(): Promise<RecordedUsageObservation[]>;
+    subscribeObservations?(listener: (observation: RecordedUsageObservation) => void): () => void;
     /** A turn's measured output speed; later calls replace it. */
     saveRunMetrics(runId: string, metrics: RunMetrics): void;
     /** Transcript events the plugin read or wrote, for the ledger to extract tool calls from. Full events, as the lane writer takes them. */

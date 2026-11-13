@@ -434,7 +434,7 @@ export class StatsQuery {
         filter.includeEstimated ? '' : "AND u.token_source<>'estimated'",
       ].join(' ');
       return this.db.prepare(`SELECT u.*, r.mode AS run_mode FROM usage_steps u LEFT JOIN sessions s ON s.id=u.session_id LEFT JOIN run_facts r ON r.run_id=u.run_id
-        WHERE u.at>=? AND u.at<? ${where.sql} ${extra}`)
+        WHERE u.at>=? AND u.at<? AND u.suppressed_by IS NULL ${where.sql} ${extra}`)
         .all(from, to, ...where.parameters, ...(filter.agentKind === 'all' ? [] : [filter.agentKind])) as unknown as StepRow[];
     });
   }

@@ -11,6 +11,7 @@ Codex 的绝对输出时间与生成时长分别保留，工具和审批暂停�
 `usage_steps.duration_ms` 保存独立响应时长，`native_message_id` 关联原生触发消息，已测的 CLI 回合可在重连后恢复。
 速度分位数只使用有计时的主智能体响应；未计时输出和子智能体用量仍计入 token 总量，不加入该速度的分子或分母。
 Claude 按精确消息身份补录历史指标，补录保留原 run 时间；旧实时行只补缺失身份字段，既有 token 数和现场计时仍保留。
+原生后端还可上报 `agent-turn` 范围的 provider 总量；完整总量替代相同执行归属的估算，整轮耗时不作为请求测速样本。
 
 已定的决策（2026-10-08）：
 
@@ -27,8 +28,7 @@ Claude 按精确消息身份补录历史指标，补录保留原 run 时间；�
 
 1. **不把没测到说成零**：缺失的维度显示「不可用」，图上是缺口而不是 0。沿用 `RunMetrics` 的约定：
    absent means "this turn was not measured", never "zero"（`packages/contracts/src/index.ts:81-86`）。
-2. **估算永远标明**：Cursor 的 token 只能估算（`apps/server/src/metrics/tokens.ts`，平均绝对误差 17.4%），
-   界面上与 provider 上报的数字分开显示，并可一键排除。
+2. **估算永远标明**：没有完整 provider 证据时保留输出估算，与 provider 上报的数字分开显示，并可一键排除。
 3. **同一件事只算一次**：同一次 provider 请求被实时写入、补录、重读多少次，都只留一行；子 agent 不与父级重复计。
 4. **统计不能打扰会话**：采集与补录绝不启动 agent、不阻塞流、失败不影响任何会话功能。
 
@@ -85,22 +85,34 @@ Claude 按精确消息身份补录历史指标，补录保留原 run 时间；�
 ### 3.1 账本
 
 **只加表，不改 `user_version`**，与 `message_index` 同理（`apps/server/src/store.ts:118-127`）：旧版本打开数据库时忽略
-这些表，降级不受影响（`Store` 对 `user_version > 2` 直接拒绝打开，`store.ts:106`）。时间一律存 epoch 毫秒（UTC）。
+新增表，数据库仍可降级打开（`Store` 对 `user_version > 2` 直接拒绝打开，`store.ts:106`）。旧核心不识别 `suppressed_by`，降级后的统计可能同时计入保留估算和回合总量；准确统计需要使用支持观察账本的核心。时间一律存 epoch 毫秒（UTC）。
 
-**`usage_steps`**：每次 provider 请求一行，最细粒度。
+**`usage_steps`**：每次 provider 请求一行；另容纳完整原生回合总量的投影，通过 `observation_id` 区分。
 
 | 列 | 说明 |
 | --- | --- |
 | `step_key` PK | `backendId:sessionId:stepId`；重复写入即替换，语义同 `RunMetricsTracker.update` |
 | `session_id` / `run_id` / `project_id` | `run_id` 可空（补录时对不上 run 的旧轮次） |
 | `backend_id` / `profile_id` | profile 缺省表示默认 profile |
-| `model` / `requested_model` | 实际生效模型优先取每请求模型，其次 `resolvedConfig.model`，再次 `config.model` |
+| `model` / `requested_model` | 请求行依次取每请求模型、`resolvedConfig.model`、`config.model`；整轮投影的实际模型只取 provider 报告值 |
 | `agent_kind` / `subagent_type` / `parent_step_key` | `main` 或 `subagent` |
 | `started_at` / `ended_at` | 可空：起点观察不到时为空 |
 | `input_tokens` / `cache_read_tokens` / `cache_write_tokens` / `output_tokens` / `reasoning_tokens` | 全部可空，空即「不可用」 |
 | `token_source` | `provider` / `estimated` |
 | `window` | `stream` / `transcript` / `observed`，同 `MetricsWindow` |
 | `ingest` | `live` / `backfill` / `migration` |
+| `native_session_id` | 原生 agent 身份，用于区分同一 run 下的不同子 agent |
+| `observation_id` | 非空时为整轮 provider 总量投影，不计入请求数、响应速度或重连测速帧 |
+| `suppressed_by` | 覆盖该估算的完整 observation；非空行不参与统计，原行保留用于冲突恢复 |
+
+**`usage_observations`**：原生回合观察事实，与以上表共用现有 SQLite 数据库。身份为
+`(backend_id, native_session_id, native_turn_id)`，不随 Riffet 会话重新导入而改变。JSON 仅保存白名单中的
+原生身份、请求身份、时间、主/子 agent 归属、请求/实际模型、终态、归一后计数和可选原始计数，不保存 provider 响应正文。
+
+`coverage` 为 `complete`、`partial` 或 `conflict`。输入、输出、缓存读、缓存写四项均为非负安全整数才完整；
+推理数可缺失，报告时必须为非负安全整数且不超过输出。输出包含推理，合计不重复加推理数；未报告的值不补零。
+缺失字段可后补，同一身份的请求或已知数值等事实不一致时保留冲突证据并撤销准确投影，后续重复读取不自动消除冲突。
+采集队列只在事务提交且 WAL 检查点完整落盘后确认删除；读事务阻止检查点完成时保留文件并后台重试，不等待读者释放锁。
 
 **`run_facts`**：每轮一行，run 进入终态时写入。
 
@@ -137,6 +149,14 @@ Claude 按精确消息身份补录历史指标，补录保留原 run 时间；�
    留待重试。覆盖范围见 §9。
 4. **一次性迁移**。首次启动把已有 run 里的 `native.metrics` 与 `timings` 迁入，`ingest = migration`，
    用 settings 标记保证只做一次，写法同 `session-last-activity-backfill-v1`（`store.ts:134-140`）。
+
+原生回合总量通过可选的 `AgentHost.stats.recordObservation` 写入；只有数据库事务已提交才返回 `true`，
+部分或冲突事实也会持久化并确认。`readObservations` 和 `subscribeObservations` 只暴露当前后端的事实，
+沿用会话归属校验与停用后的 host 撤销规则；插件停用会释放订阅。
+
+完整回合总量只覆盖相同会话、相同 run、相同主/子 agent 范围的估算；子 agent 还必须匹配原生会话身份。
+估算后续重读仍受覆盖，完整事实发生冲突时恢复原估算。没有 run 的事实不按时间猜归属，之后可按原生回合或
+精确请求 receipt 绑定；总量仍保留，绑定前不覆盖已有 run 的估算。整轮投影不改变原有请求级计量行为。
 
 **子 agent**：Claude 的 `<usage>` 带 `subagent_tokens` 与 `duration_ms`（`claude/history.ts:150-152`），Codex/DSH 读子 agent
 transcript。一律记 `agent_kind = subagent` 挂父 run；若某 provider 的父级 usage 已包含子 agent 用量，只记子 agent 明细、
@@ -266,7 +286,7 @@ SQLite 处理不了时区。客户端在请求中带 IANA 时区 `tz`，服务�
 
 | 风险 | 应对 |
 | --- | --- |
-| Cursor 只有估算，且没有输入 token | 估算单独标识、可排除；输入列显示「不可用」 |
+| 原生回合没有完整 provider 证据 | 估算单独标识、可排除；未报告的输入列显示「不可用」 |
 | 重复计 | step 主键幂等；子 agent 与父级逐后端核对；Claude 同一回复多行取最大累计值（现有 `ClaudeStepMeter` 已这样做） |
 | 三家输入口径不同 | 写入时归一为「未命中缓存的输入」，Codex 单独换算并有测试 |
 | Claude 字段名未在仓库内验证 | 实现时用真实 JSONL 核对，补 fixture |
@@ -310,6 +330,8 @@ SQLite 处理不了时区。客户端在请求中带 IANA 时区 `tz`，服务�
 
 - 服务端单测覆盖：幂等写入、NULL 不当 0、Codex 输入归一、夏令时日桶、迁移、节流、补录不覆盖实时、
   rollout 解析、补录游标与失败重试。
+- 原生回合观察使用合成数据验证：数据库重启与跨会话去重、部分计数补齐、冲突撤销、主/子 agent 覆盖隔离、
+  估算重放与恢复、后到 run 绑定、事务与检查点确认，以及 host 后端隔离和停用时的订阅与异步读取。
 - 用本机真实数据库副本与真实 `~/.codex`、`~/.claude` 跑过：迁移约 40 ms，仪表盘接口约 10 ms；补录首轮
   写入 18 行约 30 ms，第二轮因签名未变写入 0 行约 3 ms。
 - Web 页面：第一轮没有在浏览器里看过。2026-10-09 用 Chromium headless 对真实数据副本逐屏看过一遍

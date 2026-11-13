@@ -259,6 +259,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
   private retired = false;
   /** Set once the plugin's activation has been released: its host then refuses every call. */
   private revoked = false;
+  private readonly observationSubscriptions = new Set<() => void>();
 
   constructor(private readonly backend: AgentBackend, readonly owner: string, private readonly observer?: WorkspaceObserver) {
     this.id = backend.id;
@@ -464,6 +465,8 @@ export class PluginBackendDriver implements NativeBackendDriver {
   revoke(): void {
     this.retired = true;
     this.revoked = true;
+    for (const unsubscribe of this.observationSubscriptions) unsubscribe();
+    this.observationSubscriptions.clear();
   }
 
   private forget(sessionId: string): void {
@@ -753,6 +756,31 @@ export class PluginBackendDriver implements NativeBackendDriver {
           const owner = runId === undefined ? undefined : runSession(runId);
           if (owner !== undefined && owner !== id) throw foreign('run');
           native.stats.recordUsage(id, runId, usage);
+        },
+        recordObservation: (id, runId, observation) => {
+          own(id);
+          const owner = runId === undefined ? undefined : runSession(runId);
+          if (owner !== undefined && owner !== id) throw foreign('run');
+          return native.stats.recordObservation?.(id, runId, observation) ?? false;
+        },
+        readObservations: async () => {
+          const observations = await native.stats.readObservations?.(this.id) ?? [];
+          // The await may race plugin disablement; never deliver data to a revoked host.
+          if (this.revoked) throw new AppError('AGENT_HOST_REVOKED', 'Agent is disabled', 409);
+          return observations.filter(observation => {
+            if (observation.backendId !== this.id) return false;
+            try { own(observation.sessionId); return true; } catch { return false; }
+          });
+        },
+        subscribeObservations: listener => {
+          const unsubscribe = native.stats.subscribeObservations?.(observation => {
+            if (this.revoked || observation.backendId !== this.id) return;
+            try { own(observation.sessionId); } catch { return; }
+            listener(observation);
+          }, this.id) ?? (() => {});
+          const dispose = () => { if (this.observationSubscriptions.delete(dispose)) unsubscribe(); };
+          this.observationSubscriptions.add(dispose);
+          return dispose;
         },
         saveRunMetrics: (runId, metrics) => {
           // A run that is not stored is dropped, as the core does for a turn that was pruned meanwhile.

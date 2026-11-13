@@ -137,6 +137,7 @@ export class Watch {
       runId => this.onPromptSentAt?.(runId),
       stats,
       sessionId,
+      () => this.chat?.chatId,
     );
   }
 
