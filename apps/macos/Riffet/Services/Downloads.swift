@@ -52,13 +52,13 @@ enum ProjectDownloads {
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
             var query = components?.queryItems ?? []
             query.removeAll { $0.name == "features" }
-            query.append(URLQueryItem(name: "features", value: "quick-chat,pi-agent,projectless-tasks,plugin-agents"))
+            query.append(URLQueryItem(name: "features", value: "quick-chat,pi-agent,antigravity-agent,projectless-tasks,plugin-agents"))
             components?.queryItems = query
             address = components?.url ?? url
         }
         var request = URLRequest(url: address)
         if let base = AppModel.shared.host.api?.baseUrl, allowsAuthorization(url, baseURL: base) {
-            request.setValue("quick-chat,pi-agent,projectless-tasks,plugin-agents", forHTTPHeaderField: "X-Riffet-Features")
+            request.setValue("quick-chat,pi-agent,antigravity-agent,projectless-tasks,plugin-agents", forHTTPHeaderField: "X-Riffet-Features")
         }
         if let base = AppModel.shared.host.api?.baseUrl, allowsAuthorization(url, baseURL: base),
            let token = AppSecrets.shared.read(account: tokenAccount(baseUrl: base)) {

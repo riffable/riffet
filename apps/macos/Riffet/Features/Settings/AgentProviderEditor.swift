@@ -560,7 +560,7 @@ struct AgentProviderEditor: View {
                 apiKey: apiKey.isEmpty ? (clearKey || draft.source != baseline.source ? "" : nil) : apiKey,
                 profileId: current?.id,
                 modelSource: draft.modelSource,
-                apiProtocol: backend == .pi && draft.source == "custom" ? draft.apiProtocol : nil
+                apiProtocol: backend == .antigravity && draft.source == "custom" ? "google-generative-ai" : backend == .pi && draft.source == "custom" ? draft.apiProtocol : nil
             )
             let found = try await api.probeBackendModels(backendId: backend, body: body)
             guard request == catalogToken, key == apiKey, clearingKey == clearKey else { probing = false; return }
@@ -624,7 +624,7 @@ struct AgentProviderEditor: View {
             modelContextWindows: draft.contextWindows.isEmpty ? nil : PatchValue.shared.contextWindows(value: draft.contextWindows.mapValues { KotlinLong(value: $0) }),
             apiKey: draft.source != "login" && !apiKey.isEmpty ? PatchValue.shared.key(value: apiKey) : nil,
             modelSource: draft.source == "login" || draft.source == "custom" ? nil : PatchValue.shared.key(value: draft.source),
-            apiProtocol: backend == .pi && draft.source == "custom" ? PatchValue.shared.key(value: draft.apiProtocol ?? defaultNativeModelApiProtocol) : nil
+            apiProtocol: backend == .antigravity && draft.source == "custom" ? PatchValue.shared.key(value: "google-generative-ai") : backend == .pi && draft.source == "custom" ? PatchValue.shared.key(value: draft.apiProtocol ?? defaultNativeModelApiProtocol) : nil
         )
         saving = true
         error = nil
@@ -731,7 +731,7 @@ struct AgentProviderEditor: View {
             modelContextWindows: windowsSame ? nil : PatchValue.shared.contextWindows(value: draft.contextWindows.isEmpty ? nil : draft.contextWindows.mapValues { KotlinLong(value: $0) }),
             apiKey: key,
             modelSource: draft.modelSource == baseline.modelSource ? nil : PatchValue.shared.key(value: draft.modelSource),
-            apiProtocol: backend == .pi && draft.source == "custom" && draft.apiProtocol != baseline.apiProtocol
+            apiProtocol: backend == .antigravity ? PatchValue.shared.key(value: draft.source == "custom" ? "google-generative-ai" : nil) : backend == .pi && draft.source == "custom" && draft.apiProtocol != baseline.apiProtocol
                 ? PatchValue.shared.key(value: draft.apiProtocol ?? defaultNativeModelApiProtocol)
                 : nil
         )

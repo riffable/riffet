@@ -9,6 +9,6 @@ import { NATIVE_BACKEND_IDS, PLUGIN_AGENT_ID, PLUGIN_AGENT_ID_MAX } from '../ind
  * compatibility check (`compat.ts`) reads as "not a break".
  */
 export const NativeBackendIdSchema = z.enum(NATIVE_BACKEND_IDS).meta({
-  negotiated: ['chat', 'pi'],
+  negotiated: ['chat', 'pi', 'antigravity'],
   negotiatedPattern: { feature: 'plugin-agents', pattern: PLUGIN_AGENT_ID.source, maxLength: PLUGIN_AGENT_ID_MAX },
 });

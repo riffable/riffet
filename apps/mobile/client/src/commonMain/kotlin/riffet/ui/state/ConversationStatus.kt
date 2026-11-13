@@ -46,6 +46,16 @@ fun supportsNativeTerminal(capabilities: NativeBackendCapabilities?, backend: Na
     } ?: (backend == NativeBackendId.CURSOR)
 
 /**
+ * Whether the conversation is live. One that lives in its terminal ([requiresLiveTerminal]) is live, and takes a
+ * message, only while it has a terminal that has not gone offline, as on web; starting and reconnecting still
+ * take messages, which the server queues until the terminal is ready.
+ */
+fun nativeConversationLive(session: Session, status: NativeStatus?, requiresLiveTerminal: Boolean): Boolean {
+    val live = if (status != null) status.phase != NativeStatusPhase.OFFLINE else session.state.active
+    return live && (!requiresLiveTerminal || session.terminalId != null)
+}
+
+/**
  * The open conversation's [ConversationStatus] from the store's snapshot ([status], [connection],
  * [runs], [interaction]) and what the host knows besides: a reopen in flight ([reopening]) and
  * whether the backend has a terminal ([supportsTerminal], see [supportsNativeTerminal]).
@@ -58,9 +68,10 @@ fun conversationStatus(
     interaction: NativeInteraction?,
     reopening: Boolean,
     supportsTerminal: Boolean,
+    requiresLiveTerminal: Boolean = false,
 ): ConversationStatus {
     val phase = status?.phase
-    val live = if (status != null) phase != NativeStatusPhase.OFFLINE else session.state.active
+    val live = nativeConversationLive(session, status, requiresLiveTerminal)
     val archived = session.archivedAt != null
     val syncing = !archived && (status == null || connection == RiffetConnectionState.Connecting || connection == RiffetConnectionState.Idle)
     val preparing = runs.any { it.native?.delivery in PREPARING_DELIVERIES }

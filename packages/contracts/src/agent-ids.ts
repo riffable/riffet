@@ -7,7 +7,7 @@
  * Built-in native runtimes supported by the workbench. Legacy sessions without an id are Cursor sessions.
  * `chat` is the workbench's own quick chat: no CLI, a model gateway called directly (docs/QUICK-CHAT.md).
  */
-export const NATIVE_BACKEND_IDS = ['cursor', 'codex', 'claude', 'dsh', 'droid', 'traex', 'pi', 'chat'] as const;
+export const NATIVE_BACKEND_IDS = ['cursor', 'codex', 'claude', 'dsh', 'droid', 'traex', 'pi', 'antigravity', 'chat'] as const;
 export type BuiltinBackendId = typeof NATIVE_BACKEND_IDS[number];
 
 /** `<pluginId>` or `<pluginId>.<name>`: lowercase, dotted, at most {@link PLUGIN_AGENT_ID_MAX} characters. */

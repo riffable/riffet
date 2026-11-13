@@ -3814,6 +3814,123 @@
     "updatedAt": "text",
     "futureField": 4
   },
+  "Session#$.backendId=antigravity": {
+    "id": "text",
+    "projectId": "text",
+    "kind": "native",
+    "title": "text",
+    "tags": [
+      "text"
+    ],
+    "state": "idle",
+    "titleSource": "prompt",
+    "backendId": "antigravity",
+    "backendProfileId": "text",
+    "nativeSessionId": "text",
+    "previousNativeSessionIds": [
+      "text"
+    ],
+    "quickExitCount": 1,
+    "nativeRuntime": {
+      "address": "text",
+      "fingerprint": "text",
+      "scopeFingerprint": "text",
+      "profileId": "text",
+      "attachment": {
+        "hook": "text",
+        "id": "text",
+        "futureField": 4
+      },
+      "futureField": 4
+    },
+    "cursorSessionId": "text",
+    "terminalId": "text",
+    "terminalAppearance": {
+      "foreground": "text",
+      "background": "text",
+      "futureField": 4
+    },
+    "resumePicker": true,
+    "model": "text",
+    "mode": "text",
+    "approval": "text",
+    "archivedAt": "text",
+    "error": "text",
+    "configRevision": 1,
+    "configPending": true,
+    "creationFingerprint": "text",
+    "lastActivityAt": "text",
+    "seenActivityAt": "text",
+    "activeSince": "text",
+    "pinnedAt": "text",
+    "pinRank": 1,
+    "origin": {
+      "kind": "fork",
+      "sessionId": "text",
+      "runId": "text",
+      "groupId": "text",
+      "automationId": "text",
+      "templateId": "text",
+      "scheduleId": "text",
+      "channel": {
+        "kind": "text",
+        "account": "text",
+        "chatId": "text",
+        "futureField": 4
+      },
+      "discussion": {
+        "anchor": {
+          "messageId": "text",
+          "aliases": [
+            "text"
+          ],
+          "runId": "text",
+          "nativeTurnId": "text",
+          "sequence": 1,
+          "generation": "text",
+          "futureField": 4
+        },
+        "quote": {
+          "exact": "text",
+          "prefix": "text",
+          "suffix": "text",
+          "start": 1,
+          "end": 1,
+          "futureField": 4
+        },
+        "capturedAt": "text",
+        "contextRef": "text",
+        "requestFingerprint": "text",
+        "futureField": 4
+      },
+      "futureField": 4
+    },
+    "handedOffTo": "text",
+    "toolGroups": [
+      "text"
+    ],
+    "extensionsOff": [
+      "text"
+    ],
+    "terminalHold": {
+      "since": "text",
+      "pid": 1,
+      "futureField": 4
+    },
+    "goal": {
+      "objective": "text",
+      "status": "active",
+      "reason": "text",
+      "tokensUsed": 1,
+      "tokenBudget": 1,
+      "seconds": 1,
+      "updatedAt": "text",
+      "futureField": 4
+    },
+    "createdAt": "text",
+    "updatedAt": "text",
+    "futureField": 4
+  },
   "Session#$.backendId=chat": {
     "id": "text",
     "projectId": "text",

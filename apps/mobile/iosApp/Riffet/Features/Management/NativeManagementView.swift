@@ -1,7 +1,7 @@
 import SwiftUI
 import RiffetKit
 
-let managementBackends: [NativeBackendId] = [.cursor, .codex, .claude, .dsh, .droid, .traex, .pi]
+let managementBackends: [NativeBackendId] = [.cursor, .codex, .claude, .dsh, .droid, .traex, .pi, .antigravity]
 
 struct ManagementFeedback: View {
     let error: String?

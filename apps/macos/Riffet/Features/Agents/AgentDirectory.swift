@@ -65,6 +65,7 @@ private let builtinAgentNames: [String: (title: String, label: String)] = [
     "droid": ("Droid", "Droid"),
     "traex": ("Trae", "TRAE CLI"),
     "pi": ("pi", "pi"),
+    "antigravity": ("Antigravity", "Antigravity"),
 ]
 
 /// The name of a built-in Agent, which needs no catalog: usable off the main actor.

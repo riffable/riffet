@@ -187,6 +187,8 @@ export interface NativeRiffetMcpHost {
    * undefined when the conversation has no tool groups, so nothing is injected at all.
    */
   server(sessionId: string): RiffetMcpServerSpec | undefined;
+  /** A runtime can require its native per-call identity in addition to the shim's session credential. */
+  bind?(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void;
 }
 
 /**

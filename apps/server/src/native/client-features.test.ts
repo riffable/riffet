@@ -41,9 +41,9 @@ async function boot(savedSettings?: Record<string, unknown>) {
   const store = new Store(join(stateDir, 'workbench.db'));
   const settings = new SettingsService({ stateDir, cliPath: '/nonexistent/cursor-agent' });
   const nativeBackends = {
-    offeredBackendIds: () => ['cursor', 'pi', 'chat'],
+    offeredBackendIds: () => ['cursor', 'pi', 'antigravity', 'chat'],
     catalog: {
-      listBackends: async () => ['cursor', 'pi', 'chat'].map(backendId => ({ backendId, label: backendId, available: true, profiles: [profile], capabilities, models: [] })),
+      listBackends: async () => ['cursor', 'pi', 'antigravity', 'chat'].map(backendId => ({ backendId, label: backendId, available: true, profiles: [profile], capabilities, models: [] })),
       validateProfile: (_backendId: string, profileId?: string) => profileId && profileId !== 'default' ? undefined : profile,
       capabilitiesFor: async (backendId: string) => backendId === 'pi' ? { ...capabilities, supportsPermissionSelection: true, permissions: [{ id: 'read-only' }] } : capabilities,
       validateNativeSessionId: () => undefined,
@@ -142,6 +142,27 @@ describe('pi client compatibility', () => {
     }
     expect((await app.inject({ url: '/api/sessions/pi/runs?features=pi-agent', headers: { cookie: 'paired' } })).statusCode).toBe(404);
     expect((await app.inject({ method: 'POST', url: '/api/sessions/pi/native/send?features=pi-agent', headers: { cookie: 'paired' } })).statusCode).toBe(404);
+  });
+
+  it('negotiates Antigravity separately from pi and preserves hidden settings on old-client saves', async () => {
+    const { ask, store, settings, projectDir } = await boot({
+      defaultBackendId: 'antigravity', nativeBackendDefaults: { antigravity: { model: 'gemini-model' } },
+    });
+    const project = store.createProject(projectDir, 'antigravity-compat');
+    const session = store.createSession({ projectId: project.id, kind: 'native', backendId: 'antigravity', title: 'Antigravity conversation' });
+    for (const features of [undefined, 'pi-agent', 'plugin-agents']) {
+      expect((await ask('GET', '/api/backends', undefined, features)).json().some((item: { backendId: string }) => item.backendId === 'antigravity')).toBe(false);
+      expect((await ask('GET', '/api/bootstrap', undefined, features)).json().sessions.map((item: { id: string }) => item.id)).not.toContain(session.id);
+      expect((await ask('GET', `/api/sessions/${session.id}/events`, undefined, features)).statusCode).toBe(404);
+      expect((await ask('GET', '/api/settings', undefined, features)).json()).toMatchObject({ defaultBackendId: 'cursor' });
+    }
+    expect((await ask('GET', '/api/backends', undefined, 'antigravity-agent')).json().some((item: { backendId: string }) => item.backendId === 'antigravity')).toBe(true);
+    expect((await ask('GET', '/api/bootstrap', undefined, 'antigravity-agent')).json().sessions.map((item: { id: string }) => item.id)).toContain(session.id);
+    expect((await ask('GET', `/api/sessions/${session.id}/events`, undefined, 'antigravity-agent')).statusCode).toBe(200);
+    expect((await ask('GET', '/api/settings', undefined, 'antigravity-agent')).json()).toMatchObject({ defaultBackendId: 'antigravity', nativeBackendDefaults: { antigravity: { model: 'gemini-model' } } });
+    expect((await ask('PATCH', '/api/settings', { defaultBackendId: 'cursor', nativeBackendDefaults: { cursor: { model: 'next' } } }, 'pi-agent')).statusCode).toBe(200);
+    expect(settings.getSettings()).toMatchObject({ defaultBackendId: 'antigravity', nativeBackendDefaults: { antigravity: { model: 'gemini-model' }, cursor: { model: 'next' } } });
+    expect((await ask('POST', '/api/sessions', { projectId: project.id, kind: 'native', backendId: 'antigravity' }, 'pi-agent')).statusCode).toBe(400);
   });
 
   it('hides pi from old HTTP reads and lets a negotiated client see it', async () => {

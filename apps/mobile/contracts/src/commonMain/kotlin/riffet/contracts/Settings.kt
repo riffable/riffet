@@ -264,6 +264,8 @@ data class NativeBackendCapabilities(
     val supportsModeSelection: Boolean,
     val supportsPermissionSelection: Boolean,
     val supportsTerminal: Boolean? = null,
+    /** This conversation can accept messages only while its native terminal runs. */
+    val requiresLiveTerminal: Boolean? = null,
     val supportsPrewarm: Boolean? = null,
     /** The backend can take a brand-new session's first user message as a launch argument. */
     val supportsInitialPromptArgs: Boolean? = null,

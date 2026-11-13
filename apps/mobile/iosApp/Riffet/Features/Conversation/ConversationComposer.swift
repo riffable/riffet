@@ -37,6 +37,10 @@ struct ConversationComposer: View {
         guard let approval, let option = catalog?.capabilities.permissions.first(where: { $0.id == approval }) else { return nil }
         return (option.shortLabel ?? option.label, riffetApprovalIsRisky(approval))
     }
+    private var acceptsMessages: Bool {
+        catalog?.capabilities.requiresLiveTerminal?.boolValue != true ||
+            nativeConversationLive(session: session, status: workbench.status, requiresLiveTerminal: true)
+    }
     private var hasContent: Bool { !draft.text.isEmpty || !draft.attachments.isEmpty || !draft.references.isEmpty || !draft.pendingFiles.isEmpty }
     /// Focused or holding a draft the card grows its footer; otherwise it stays one line.
     private var expanded: Bool { focused || hasContent }
@@ -104,7 +108,7 @@ struct ConversationComposer: View {
                     .navigationTitle(String(localized: "编辑消息", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) { Button("收起") { draft.save(); expandedEditor = false } }
-                        ToolbarItem(placement: .confirmationAction) { Button(defaultSendSteers ? "补充到当前任务" : workbench.working ? "加入队列" : "发送") { send(interrupt: false) }.disabled(!draft.canSend || busy).accessibilityLabel(sendLabel) }
+                        ToolbarItem(placement: .confirmationAction) { Button(defaultSendSteers ? "补充到当前任务" : workbench.working ? "加入队列" : "发送") { send(interrupt: false) }.disabled(!acceptsMessages || !draft.canSend || busy).accessibilityLabel(sendLabel) }
                     }
             }.presentationDetents([.large])
         }
@@ -151,13 +155,13 @@ struct ConversationComposer: View {
             if draft.uploading { ProgressView().frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
             else if showsStop { stopButton }
             else {
-                RiffetSendButton(enabled: draft.canSend && !busy) { send(interrupt: false) }
+                RiffetSendButton(enabled: acceptsMessages && draft.canSend && !busy) { send(interrupt: false) }
                     .accessibilityLabel(sendLabel).accessibilityIdentifier("sendMessage")
                     .contextMenu {
-                        if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!draft.canSend || busy) }
+                        if defaultSendSteers { Button("加入队列") { send(interrupt: false, enqueue: true) }.disabled(!acceptsMessages || !draft.canSend || busy) }
                         if workbench.working && supportsInterrupt {
                             Button("停止当前任务") { Task { await workbench.perform { _ = try await workbench.store.interrupt() } } }.disabled(busy)
-                            Button("停止并发送") { send(interrupt: true) }.disabled(!draft.canSend || busy)
+                            Button("停止并发送") { send(interrupt: true) }.disabled(!acceptsMessages || !draft.canSend || busy)
                         }
                     }
             }
@@ -228,6 +232,7 @@ struct ConversationComposer: View {
         }
     }
     private func send(interrupt: Bool, enqueue: Bool = false) {
+        guard acceptsMessages else { return }
         let text = draft.text, attachments = draft.attachments, references = draft.references, revision = draft.textRevision
         draft.save()
         Task {

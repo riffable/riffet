@@ -77,7 +77,7 @@ func endpointHint(_ id: NativeBackendId) -> (placeholder: String, hint: String)?
 }
 
 func profileAllowsEndpoint(_ id: NativeBackendId) -> Bool { id != .droid && id != .traex }
-func profileAllowsConfigDir(_ id: NativeBackendId) -> Bool { id != .droid }
+func profileAllowsConfigDir(_ id: NativeBackendId) -> Bool { id != .droid && id != .antigravity }
 func profileAllowsSourceDir(_ id: NativeBackendId) -> Bool { id == .dsh }
 func profileAllowsAutoUpdate(_ id: NativeBackendId) -> Bool { id == .claude }
 

@@ -305,6 +305,7 @@ struct ConversationView: View {
             background: workbench.backgroundSubagents,
             sendState: workbench.sendState,
             features: features(state),
+            sendEnabled: catalog?.capabilities.requiresLiveTerminal?.boolValue != true || state.live,
             fullscreen: fullscreen,
             onSend: { interrupt in Task { await send(interrupt: interrupt, state: state) } },
             onStop: state.canStop || workbench.sendState.interrupting ? { Task { await workbench.interrupt() } } : nil,
@@ -625,7 +626,7 @@ struct ConversationView: View {
     private func send(interrupt: Bool, state: ConversationState, enqueue: Bool = false) async {
         // This conversation's composer, even if the page has moved on by the time the send returns.
         let composer = composer
-        guard composer.canSend, !providerMissing else { return }
+        guard composer.canSend, !providerMissing, catalog?.capabilities.requiresLiveTerminal?.boolValue != true || state.live else { return }
         let submission = composer.submission()
         let text = submission.text
         // Before the message lands: once it does, the latest turn is the one being sent.
@@ -683,7 +684,8 @@ struct ConversationState {
         let native = workbench.status
         let status = conversationStatus(
             session: session, status: native, connection: workbench.connection, runs: workbench.runs,
-            interaction: workbench.interaction, reopening: workbench.reopening, supportsTerminal: supportsTerminal
+            interaction: workbench.interaction, reopening: workbench.reopening, supportsTerminal: supportsTerminal,
+            requiresLiveTerminal: capabilities?.requiresLiveTerminal?.boolValue == true
         )
         self.status = status
         canStop = !status.archived && status.live && (capabilities?.supportsInterrupt == true && capabilities?.supportsTargetedStop?.boolValue == true) && !status.starting

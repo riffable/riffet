@@ -1288,6 +1288,56 @@ describe('pi compatibility for clients that did not negotiate pi-agent', () => {
     });
   }
 
+  it('persists an Antigravity provider and probes Gemini with isolated private credentials', async () => {
+    const { app, cookie, csrf, stateDir } = await boot();
+    const ask = client(app, cookie, csrf);
+    const endpoint = 'https://agy-provider.example';
+    const saved = await ask('POST', '/api/backends/antigravity/profiles', {
+      id: 'gemini', name: 'Gemini', apiEndpoint: endpoint, apiProtocol: 'google-generative-ai', apiKey: 'agy-private-test-key',
+    }, 'antigravity-agent');
+    expect(saved.statusCode, saved.body).toBe(200);
+    expect(saved.json().profiles.find((profile: { id: string }) => profile.id === 'gemini')).toMatchObject({ apiProtocol: 'google-generative-ai', hasApiKey: true });
+    expect(saved.body).not.toContain('agy-private-test-key');
+    const persisted = JSON.parse(await readFile(join(stateDir, 'native-backend-profiles.json'), 'utf8'));
+    expect(persisted.antigravity[0]).toMatchObject({ apiProtocol: 'google-generative-ai', apiKey: 'agy-private-test-key' });
+    expect((await ask('PATCH', '/api/backends/antigravity/profiles/gemini', { name: 'Renamed' }, 'antigravity-agent')).statusCode).toBe(200);
+    for (const apiProtocol of ['openai-completions', 'openai-responses', 'anthropic-messages', 'unknown']) {
+      expect((await ask('PATCH', '/api/backends/antigravity/profiles/gemini', { apiProtocol }, 'antigravity-agent')).statusCode).toBe(400);
+    }
+    expect((await ask('PATCH', '/api/backends/antigravity/profiles/gemini', { configDir: '/tmp/arbitrary-agy-root' }, 'antigravity-agent')).statusCode).toBe(400);
+    const seen: Array<{ url: string; key: string | null; authorization: string | null }> = [];
+    const fetcher = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, options) => {
+      const headers = new Headers(options?.headers);
+      seen.push({ url: String(url), key: headers.get('x-goog-api-key'), authorization: headers.get('authorization') });
+      return new Response(JSON.stringify({ models: [
+        { name: 'models/gemini-3.8-flash', displayName: 'Flash', supportedGenerationMethods: ['generateContent'], inputTokenLimit: 1048576 },
+        { name: 'models/embedding', supportedGenerationMethods: ['embedContent'] },
+      ] }), { headers: { 'content-type': 'application/json' } });
+    });
+    try {
+      const probe = { apiEndpoint: endpoint, profileId: 'gemini' };
+      const detected = await ask('POST', '/api/backends/antigravity/model-probe', probe, 'antigravity-agent');
+      expect(detected.statusCode, detected.body).toBe(200);
+      expect(detected.json().models).toEqual([expect.objectContaining({ value: 'gemini-3.8-flash' })]);
+      expect(seen).toEqual([{ url: `${endpoint}/v1beta/models`, key: 'agy-private-test-key', authorization: null }]);
+      expect((await ask('POST', '/api/backends/antigravity/model-probe', { ...probe, apiProtocol: 'openai-completions' }, 'antigravity-agent')).statusCode).toBe(400);
+      expect(seen).toHaveLength(1);
+      expect((await ask('POST', '/api/backends/antigravity/model-probe', { ...probe, apiKey: 'replacement-key' }, 'antigravity-agent')).statusCode).toBe(200);
+      expect(seen.at(-1)?.key).toBe('replacement-key');
+      expect((await ask('POST', '/api/backends/antigravity/model-probe', { ...probe, apiKey: '' }, 'antigravity-agent')).statusCode).toBe(200);
+      expect(seen.at(-1)?.key).toBeNull();
+      fetcher.mockRejectedValueOnce(new Error('failed with agy-private-test-key'));
+      const failed = await ask('POST', '/api/backends/antigravity/model-probe', probe, 'antigravity-agent');
+      expect(failed.statusCode).toBe(400);
+      expect(failed.body).not.toContain('agy-private-test-key');
+    } finally { fetcher.mockRestore(); }
+    const cleared = await ask('PATCH', '/api/backends/antigravity/profiles/gemini', { apiProtocol: null, apiKey: null, apiEndpoint: '' }, 'antigravity-agent');
+    expect(cleared.statusCode, cleared.body).toBe(200);
+    const profile = cleared.json().profiles.find((profile: { id: string }) => profile.id === 'gemini');
+    expect(profile).not.toHaveProperty('apiProtocol');
+    expect(profile.hasApiKey).toBe(false);
+  });
+
   it('persists a pi provider protocol and private credentials, and rejects unsupported protocols', async () => {
     const { app, cookie, csrf, stateDir } = await boot();
     const ask = client(app, cookie, csrf);

@@ -899,6 +899,7 @@ internal fun backendName(id: NativeBackendId?): String = when (id) {
     NativeBackendId.DROID -> "Droid"
     NativeBackendId.TRAEX -> "TRAE"
     NativeBackendId.PI -> "pi"
+    NativeBackendId.ANTIGRAVITY -> "Antigravity"
     NativeBackendId.CHAT -> stringResource(Res.string.session_quick_chat)
     NativeBackendId.CURSOR, null -> "Cursor"
 }

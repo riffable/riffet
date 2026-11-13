@@ -38,7 +38,7 @@ const SCHEMA_VERSION = 5;
 /** A deleted conversation's id is kept here (settings key `session-deleted:<id>`), so no retried request recreates it. */
 const DELETED_PREFIX = 'session-deleted:';
 /** Settings a conversation owns outright, by key; removed with it. */
-const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:'];
+const SESSION_SETTING_PREFIXES = ['native-context:', 'native-interactions:', 'native-stops:', 'riffet-mcp:binding:', 'session-reference-creation:', 'task-workspace-creation:', 'terminal-hold:'];
 
 /** What remains of a deleted conversation: no title, message or transcript, only enough to refuse its id. */
 export interface DeletedSession {

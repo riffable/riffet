@@ -31,6 +31,7 @@ object AgentIds {
         NativeBackendId.DROID -> "droid"
         NativeBackendId.TRAEX -> "traex"
         NativeBackendId.PI -> "pi"
+        NativeBackendId.ANTIGRAVITY -> "antigravity"
         NativeBackendId.CHAT -> "chat"
     }
 }

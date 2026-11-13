@@ -2,6 +2,7 @@ import type {
   AgentBackend, AgentContext, AgentControlMessage, AgentDelivery, AgentDispatchBinding, AgentEvent, AgentHost, AgentProfile, AgentReservation, AgentRunRef,
   AgentSessionView, AgentTerminalView, AgentTranscript, AgentTranscriptBatch, AgentTranscriptSource,
 } from '@riffet/plugin-api';
+import { basename } from 'node:path';
 import { sourceProtocols } from '@riffet/plugin-api';
 import type { NativeBackendId, NativeInteractionResult, NativeStatus, NativeWorkbenchEvent, Project, Run, Session, TerminalInfo } from '../../../../packages/contracts/src/index.js';
 import { NativeInteractions } from '../agent-host/interactions.js';
@@ -45,6 +46,9 @@ const sessionView = (session: Session): AgentSessionView => ({
   ...(session.resumePicker !== undefined ? { resumePicker: session.resumePicker } : {}),
   ...(session.titleSource !== undefined ? { titleSource: session.titleSource } : {}),
   ...(session.lastActivityAt !== undefined ? { lastActivityAt: session.lastActivityAt } : {}),
+  ...(session.toolGroups !== undefined ? { toolGroups: session.toolGroups } : {}),
+  ...(session.extensionsOff !== undefined ? { extensionsOff: session.extensionsOff } : {}),
+  ...(session.terminalHold !== undefined ? { terminalHold: session.terminalHold } : {}),
 });
 
 /** A terminal record without the host's private reservation bookkeeping. */
@@ -81,6 +85,7 @@ const runRef = (run: Run): AgentRunRef => ({
   ...(run.native?.config ? { config: run.native.config } : {}),
   ...(run.native?.resolvedConfig ? { resolvedConfig: run.native.resolvedConfig } : {}),
   ...(run.native?.timings?.inputSentAt !== undefined ? { inputSentAt: run.native.timings.inputSentAt } : {}),
+  ...(run.native?.nativeInputBoundary !== undefined ? { nativeInputBoundary: run.native.nativeInputBoundary } : {}),
 });
 
 /** What the journal stores: it numbers the event and stamps the session, so the plugin supplies neither. */
@@ -652,7 +657,11 @@ export class PluginBackendDriver implements NativeBackendDriver {
       modelSources: {
         resolve: async (profileId, protocol) => {
           // Only this Agent's own profiles: another's config carries its own keys.
-          const profile = this.backend.profiles(this.hostFor(native)).find(item => item.id === profileId);
+          // A session can outlive its provider (deleting one keeps its sessions), so a profile that no longer
+          // resolves is skipped rather than failing every launch of this Agent.
+          const resolveOwn = (session: Session) => { try { return native.getProfile?.(session); } catch { return undefined; } };
+          const profile = ownSessions().filter(session => session.backendProfileId === profileId).map(resolveOwn).find(item => item?.id === profileId)
+            ?? this.backend.profiles(this.hostFor(native)).find(item => item.id === profileId);
           if (!profile) throw new AppError('AGENT_PROFILE_FOREIGN', `Profile ${profileId} does not belong to ${this.label}`, 403);
           const source = modelSourceOf(profile.config);
           const provider = source ? modelSourceProvider(source) : undefined;
@@ -681,6 +690,19 @@ export class PluginBackendDriver implements NativeBackendDriver {
           return native.terminal.observe(terminalId, observation => callback(observation.type === 'state' ? { ...observation, terminal: terminalView(observation.terminal) } : observation));
         },
         panePid: async terminalId => { ownTerminal(terminalId); return native.terminal.panePid(terminalId); },
+        inspect: async (terminalId, expected) => {
+          const terminal = ownTerminal(terminalId);
+          if (!terminal.sessionId || !/^[a-f0-9]{64}$/.test(expected.launchMarker)) return undefined;
+          const matches = await native.terminal.inspectPane?.(terminalId, terminal.sessionId, {
+            deadline: Date.now() + 3000,
+            select: (argv, marker) => marker === expected.launchMarker
+              // A launcher script that `exec`s the real binary leaves that binary's path in argv[0].
+              && basename(argv[0] ?? '') === basename(expected.command)
+              && argv.length === expected.args.length + 1
+              && expected.args.every((arg, index) => argv[index + 1] === arg),
+          });
+          return matches?.map(item => item.pid);
+        },
         reserve: async request => {
           const project = native.getProject(request.projectId);
           const { spec } = request;
@@ -727,6 +749,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
         save: async (id, requestId, receipt) => { own(id); return native.saveInteractionReceipt(id, requestId, receipt); },
       },
       riffetMcp: async id => { own(id); return native.riffetMcp?.server(id); },
+      bindRiffetMcp: (id, validate) => { own(id); return native.riffetMcp?.bind?.(id, metadata => { if (this.revoked) throw new AppError('AGENT_HOST_REVOKED', 'Agent is disabled', 409); own(id); return validate(metadata); }) ?? (() => {}); },
     };
   }
 }

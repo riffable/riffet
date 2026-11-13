@@ -54,6 +54,11 @@ class AgentWireTest {
         assertEquals(NativeBackendId.CODEX, builtIn.backendId)
         assertNull(builtIn.agentId)
         assertEquals("codex", builtIn.agent)
+        val antigravity = AgentWire.decode(session.replace("acme.gemini", "antigravity"), Session.serializer())
+        assertEquals(NativeBackendId.ANTIGRAVITY, antigravity.backendId)
+        assertNull(antigravity.agentId)
+        assertEquals("antigravity", antigravity.agent)
+        assertEquals(NativeBackendId.ANTIGRAVITY, RiffetJson.instance.decodeFromString(Session.serializer(), session.replace("acme.gemini", "antigravity")).backendId)
         assertFailsWith<Exception> { RiffetJson.instance.decodeFromString(Session.serializer(), session) }
     }
 

@@ -26,6 +26,15 @@ class SessionComposerSteerTest {
     private fun accepted(id: String, failed: Boolean = false) = Run(id = id, commandId = id, sessionId = "s", prompt = "adjust", state = if (failed) RunState.FAILED else RunState.RUNNING,
         native = NativeRunDetails(input = NativeRunInput("adjust", emptyList(), emptyList()), config = NativeRunConfig(mode = "agent"), fingerprint = "f", delivery = if (failed) NativeDeliveryState.FAILED else NativeDeliveryState.INPUT_SENT, attempt = 1, configRevision = 0, intent = "steer", nativeSessionId = target.nativeSessionId, nativeTurnId = target.turnId), createdAt = stamp, updatedAt = stamp)
 
+    @Test fun `a terminal-bound writer is live only while it has a terminal that is not offline`() {
+        val session = session().copy(terminalId = "terminal")
+        val starting = NativeStatus(NativeStatusPhase.STARTING, connection = NativeProviderConnection("reconnecting"))
+        assertTrue(nativeConversationLive(session, starting, true))
+        assertFalse(nativeConversationLive(session.copy(terminalId = null), starting, true))
+        assertFalse(nativeConversationLive(session, starting.copy(phase = NativeStatusPhase.OFFLINE), true))
+        assertTrue(nativeConversationLive(session.copy(terminalId = null), starting, false))
+    }
+
     @Test fun `stop is pending before its response refuses duplicates and releases on failure`() = runTest {
         val response = CompletableDeferred<Unit>()
         val requested = CompletableDeferred<Unit>()

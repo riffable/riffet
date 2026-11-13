@@ -1,10 +1,10 @@
 # Agent marks — source files
 
-The seven backend marks, one SVG per backend id (`cursor`, `codex`, `claude`,
-`dsh`, `droid`, `trae`, `pi`). These are the vendors' own logo files, vendored so
+The eight backend marks, one SVG per backend id (`cursor`, `codex`, `claude`,
+`dsh`, `droid`, `trae`, `pi`, `antigravity`). These are the vendors' own logo files, vendored so
 every client renders the same geometry. `scripts/gen-agent-marks.ts` converts
 them to each platform's native form (web SVG component, Compose `ImageVector`,
-SwiftUI paths); never hand-edit the generated outputs, and never redraw a mark
+SwiftUI paths, plus shared raster assets for filtered artwork); never hand-edit the generated outputs, and never redraw a mark
 by eye — update the source file here and re-run `pnpm gen:marks`.
 
 | File | Backend | Source | Fetched |
@@ -16,12 +16,16 @@ by eye — update the source file here and re-run `pnpm gen:marks`.
 | `dsh.svg` | DeepSeek | DeepSeek whale via @lobehub/icons-static-svg (traced from DeepSeek's mark) | 2026-10-29 |
 | `trae.svg` | TRAE (ByteDance) | TRAE pixel mark via @lobehub/icons-static-svg (from trae.ai assets) | 2026-10-29 | <!-- privacy: allow public vendor attribution -->
 | `pi.svg` | pi | pi logo mark from pi.dev `logo-auto.svg` | 2026-11-01 |
+| `antigravity.svg`, `antigravity.png` | Google Antigravity | [Official Press Kit](https://antigravity.google/press): [full-colour SVG](https://antigravity.google/assets/image/brand/antigravity-icon__full-color.svg), [full-colour PNG](https://antigravity.google/assets/image/brand/antigravity-icon__full-color.png) | 2026-11-13 |
 
 ## Usage rules
 
 - The marks belong to their owners. They are used only to identify which
   backend a session, picker or service row refers to — never as Riffet
   branding, never more prominently than Riffet's own mark.
+- Antigravity keeps the official full-colour artwork. Its SVG uses masked Gaussian
+  blurs, so all four clients use the same transparent PNG, fitted to the shared
+  22/24 optical box by the generator. The source files remain unchanged.
 - Codex keeps its shipped gradient; pi keeps the three colours of its shipped
   mark. Other marks render monochrome in the platform's agent colour (web
   `--agent-*`, Android/macOS palette roles); where a vendor ships only a

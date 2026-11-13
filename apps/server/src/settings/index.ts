@@ -215,7 +215,10 @@ export class SettingsService {
     // anywhere else would look saved while changing nothing.
     if(values.modelSource!==undefined&&values.modelSource!==null&&!this.consumesModelSources(backendId))
       throw new AppError('INVALID_BACKEND_PROFILE','This backend does not support a model source');
-    if(backendId!=='pi'&&values.apiProtocol!==undefined)throw new AppError('INVALID_BACKEND_PROFILE','Only pi supports selecting the model API protocol');
+    if(backendId==='antigravity'){
+      if(values.apiProtocol!==undefined&&values.apiProtocol!==null&&values.apiProtocol!=='google-generative-ai')throw new AppError('INVALID_BACKEND_PROFILE','Antigravity requires the Google Gemini model API protocol');
+      if(typeof values.configDir==='string'&&values.configDir.trim())throw new AppError('INVALID_BACKEND_PROFILE','Antigravity uses a managed configuration directory');
+    }else if(backendId!=='pi'&&values.apiProtocol!==undefined)throw new AppError('INVALID_BACKEND_PROFILE','This backend does not support selecting the model API protocol');
     const cursorUpdate=this.cursor.profileUpdate(backendId,profileId,create,values,()=>this.getSettings().cursorCli);
     if(cursorUpdate){
       this.setSettings({cursorCli:cursorUpdate.cursorCli});

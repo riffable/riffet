@@ -38,7 +38,7 @@ export type AgentBackendId = NativeBackendId;
 /** A session as the plugin may read it. No store object: a value read at the time of the call. */
 export type AgentSessionView = Pick<Session,
   'id' | 'projectId' | 'title' | 'state' | 'backendProfileId' | 'nativeSessionId' | 'terminalId' | 'model' | 'mode' | 'approval'
-  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt'>;
+  | 'configRevision' | 'configPending' | 'archivedAt' | 'error' | 'terminalAppearance' | 'resumePicker' | 'titleSource' | 'lastActivityAt' | 'toolGroups' | 'extensionsOff' | 'terminalHold'>;
 
 export type AgentProjectView = Pick<Project, 'id' | 'name' | 'cwd' | 'archivedAt'>;
 
@@ -692,6 +692,12 @@ export interface AgentTerminals {
   observe(terminalId: string, callback: (observation: AgentTerminalObservation) => void): () => void;
   /** The pid of the pane's process, for matching it against the Agent's own records; undefined when there is none. */
   panePid(terminalId: string): Promise<number | undefined>;
+  /**
+   * Verifies the linked pane, project cwd, launch marker and exact argv tokens before returning matching descendant pids.
+   * `command` is compared by file name only: a launcher script that `exec`s the real binary leaves that binary's path
+   * in argv[0], so a per-launch secret among `args` has to carry the identity. No argv or environment is exposed.
+   */
+  inspect(terminalId: string, expected: { command: string; args: string[]; launchMarker: string }): Promise<number[] | undefined>;
 
   /** Starts a process for `request.spec` and holds it as this Agent's reservation. */
   reserve(request: AgentReservationRequest): Promise<AgentReservation>;
@@ -766,6 +772,8 @@ export interface AgentRunRef {
   resolvedConfig?: NativeRunConfig;
   /** When the core finished handing the input over (epoch ms), on whichever path it took. */
   inputSentAt?: number;
+  /** Opaque native boundary saved with the input fence; needed to reconcile an interrupted handover without resending. */
+  nativeInputBoundary?: string;
 }
 
 export type AgentRunQuery =
@@ -900,4 +908,6 @@ export interface AgentHost {
   };
   /** The Riffet MCP server a launch carries (`traits.riffetTools`); undefined for an archived session or a quick chat. */
   riffetMcp(sessionId: string): Promise<{ name: string; command: string; args: string[] } | undefined>;
+  /** Installs a per-call runtime binding check. Once required, calls stay refused across restarts until a validator is registered again. Disposing removes the validator, not the requirement. */
+  bindRiffetMcp(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void;
 }

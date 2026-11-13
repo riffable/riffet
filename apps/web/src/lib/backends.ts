@@ -9,7 +9,7 @@ import { nativeCatalogSelection } from './native-models';
 import { createStore, useStore } from './store';
 
 const builtinLabels: Partial<Record<NativeBackendId, string>> = {
-  cursor: 'Cursor', codex: 'Codex', claude: 'Claude Code', dsh: 'DeepSeek Harness', droid: 'Droid', traex: 'TRAE CLI', pi: 'pi',
+  cursor: 'Cursor', codex: 'Codex', claude: 'Claude Code', dsh: 'DeepSeek Harness', droid: 'Droid', traex: 'TRAE CLI', pi: 'pi', antigravity: 'Antigravity',
   // Read through the catalog rather than frozen at import, so a locale switch renames it too.
   get chat() { return i18n._(msg`快速对话`); },
 };
@@ -46,7 +46,7 @@ export const sessionBackend = (session: Pick<Session, 'backendId'>): NativeBacke
 
 /** Droid and pi keep their own fills; TRAE uses its brand green until it has a palette variable; a plugin's Agent is neutral. */
 export function agentMarkStyle(backend: NativeBackendId): CSSProperties | undefined {
-  if (!isBuiltinBackendId(backend)) return { color: 'var(--fg-3)' };
+  if (backend === 'antigravity' || !isBuiltinBackendId(backend)) return { color: 'var(--fg-3)' };
   if (backend === 'droid' || backend === 'pi') return undefined;
   if (backend === 'traex') return { color: '#00A862' };
   return { color: `var(--agent-${backend})` };

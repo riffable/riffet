@@ -48,6 +48,18 @@ describe('plugin agent tools through Riffet MCP', () => {
       expect(((await rpc('tools/list')).tools as Array<{ name: string }>).map(tool => tool.name)).not.toContain('probe_echo');
       expect((await rpc('tools/call', { name: 'probe_echo', arguments: { text: 'x' } })).content[0].text).toMatch(/TOOL_NOT_AVAILABLE.*turned off/);
       expect(calls).toHaveLength(1);
+      await booted.plugins.update('acme.probe', { enablement: 'on' });
+      let nativeId = 'native-a';
+      const unbind = booted.riffetMcp.bind(chosen.id, async metadata => {
+        if (metadata.conversation_id !== nativeId) throw new Error('foreign native conversation');
+      });
+      expect((await rpc('tools/call', { name: 'probe_echo', arguments: { text: 'bound' } })).content[0].text).toContain('NATIVE_BINDING_MISMATCH');
+      expect((await rpc('tools/call', { name: 'probe_echo', arguments: { text: 'bound' }, _meta: { conversation_id: 'native-a' } })).content[0].text).toBe('bound');
+      nativeId = 'native-b';
+      expect((await rpc('tools/call', { name: 'probe_echo', arguments: {}, _meta: { conversation_id: 'native-a' } })).content[0].text).toContain('NATIVE_BINDING_MISMATCH');
+      unbind();
+      expect((await rpc('tools/call', { name: 'probe_echo', arguments: {}, _meta: { conversation_id: 'native-b' } })).content[0].text).toContain('NATIVE_BINDING_UNAVAILABLE');
+      expect(calls).toHaveLength(2);
     } finally { await booted.app.close(); await rm(dir, { recursive: true, force: true }); }
   });
 });

@@ -35,6 +35,7 @@ enum class NativeBackendId {
     @SerialName("droid") DROID,
     @SerialName("traex") TRAEX,
     @SerialName("pi") PI,
+    @SerialName("antigravity") ANTIGRAVITY,
     @SerialName("chat") CHAT,
 }
 

@@ -52,6 +52,7 @@ fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifi
         else -> null // Brand and Agent marks keep their own identity.
     }
     val pack = key?.let { LocalIconVectors.current[it] }
+    val brandPainter = AgentMarks.painter(imageVector)
     val density = LocalDensity.current.density
     // Lucide's own strokes keep a constant dp width; a pack's replacement glyph is drawn as its author made it.
     val fixed = remember(imageVector, density, pack != null || key == null) {
@@ -59,8 +60,9 @@ fun Icon(imageVector: ImageVector, contentDescription: String?, modifier: Modifi
     }
     // One call site: switching packs swaps the painter, not the node. A VectorPainter can only be
     // made by this composable, so it always runs; while [fixed] draws, it holds an empty vector.
-    val vectorPainter = rememberVectorPainter(if (fixed != null) BlankVector else pack ?: imageVector)
-    androidx.compose.material3.Icon(fixed ?: vectorPainter, contentDescription, modifier, tint)
+    val vectorPainter = rememberVectorPainter(if (fixed != null || brandPainter != null) BlankVector else pack ?: imageVector)
+    androidx.compose.material3.Icon(brandPainter ?: fixed ?: vectorPainter, contentDescription, modifier,
+        if (brandPainter != null) Color.Unspecified else tint)
 }
 
 private val BlankVector = ImageVector.Builder("Blank", 24.dp, 24.dp, 24f, 24f).build()

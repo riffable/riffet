@@ -198,7 +198,7 @@ class MacHost(private val secrets: SecretStore) {
         // The server withholds quick chats, pi and plugin Agents from clients that do not name the features.
         val next = RiffetConnection(
             ServerTokenStore(secrets, url),
-            config = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "projectless-tasks", AgentIds.PLUGIN_AGENTS_FEATURE)),
+            config = RiffetClientConfig(features = listOf("quick-chat", "pi-agent", "antigravity-agent", "projectless-tasks", AgentIds.PLUGIN_AGENTS_FEATURE)),
         )
         connection = next
         val api = next.connect(url)

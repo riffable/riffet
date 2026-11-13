@@ -118,7 +118,7 @@ import { readNativeOutbox, removeNativeOutbox, writeNativeOutbox } from './nativ
  * What this web client can decode. Every request names it in the features header; a stream that
  * cannot set headers (the browser's `EventSource`) carries the same value in its URL instead.
  */
-export const CLIENT_FEATURES = 'quick-chat,pi-agent,projectless-tasks,plugin-agents,session-references-v1';
+export const CLIENT_FEATURES = 'quick-chat,pi-agent,antigravity-agent,projectless-tasks,plugin-agents,session-references-v1';
 
 /** Native browser loads cannot send the feature header used by JSON requests. */
 export function withClientFeatures(path: string): string {

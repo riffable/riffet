@@ -58,6 +58,7 @@ const extras: Partial<Record<NativeBackendId, { sourceDir?: boolean; autoUpdate?
   dsh: { sourceDir: true },
   droid: { endpoint: false, configDir: false },
   traex: { endpoint: false },
+  antigravity: { configDir: false },
 };
 
 /**
@@ -302,7 +303,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
   const save = async () => {
     if (!open || busy) return;
     if (source === 'custom' && !draft.apiEndpoint?.trim()) return;
-    const patch: Draft = { ...changedFields(open, draft), ...(apiKey ? { apiKey } : clearKey || sourceChanged ? { apiKey: null } : {}) };
+    const patch: Draft = { ...changedFields(open, draft), ...(backendId === 'antigravity' ? { apiProtocol: source === 'custom' ? 'google-generative-ai' as const : null } : {}), ...(apiKey ? { apiKey } : clearKey || sourceChanged ? { apiKey: null } : {}) };
     if (!Object.keys(patch).length) return;
     setSaving(true);
     try {
@@ -339,6 +340,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
         ...(choice !== 'login' && adding.apiEndpoint.trim() ? { apiEndpoint: adding.apiEndpoint.trim() } : {}),
         ...(choice !== 'login' && adding.apiKey ? { apiKey: adding.apiKey } : {}),
         ...(backendId === 'pi' && custom ? { apiProtocol: adding.apiProtocol ?? 'openai-completions' } : {}),
+        ...(backendId === 'antigravity' && custom ? { apiProtocol: 'google-generative-ai' as const } : {}),
         ...(choice !== 'login' && !custom ? { modelSource: choice } : {}),
       });
       setProviders((current) => [...current, created]);
@@ -576,7 +578,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
                         <ProviderModelList
                           backendId={backendId}
                           profileId={provider.id}
-                          apiProtocol={backendId === 'pi' ? draft.apiProtocol ?? 'openai-completions' : undefined}
+                          apiProtocol={backendId === 'antigravity' ? 'google-generative-ai' : backendId === 'pi' ? draft.apiProtocol ?? 'openai-completions' : undefined}
                           apiEndpoint={draft.apiEndpoint ?? ''}
                           apiKey={apiKey}
                           clearKey={clearKey || sourceChanged}

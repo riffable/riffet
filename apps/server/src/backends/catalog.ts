@@ -583,11 +583,12 @@ export class BackendCatalog {
         throw new AppError('NATIVE_MODEL_PROBE_FAILED', message, 400, undefined, { message });
       }
     }
-    if (backendId === 'pi') {
+    if (backendId === 'pi' || backendId === 'antigravity') {
       const endpoint = validateNativeProfileEndpoint(input.apiEndpoint, 'apiEndpoint');
-      const apiProtocol = validateNativeModelApiProtocol(input.apiProtocol ?? storedConfig?.apiProtocol ?? 'openai-completions');
+      const apiProtocol = validateNativeModelApiProtocol(input.apiProtocol ?? storedConfig?.apiProtocol ?? (backendId === 'antigravity' ? 'google-generative-ai' : 'openai-completions'));
+      if (backendId === 'antigravity' && apiProtocol !== 'google-generative-ai') throw new AppError('INVALID_BACKEND_PROFILE', 'Antigravity requires the Google Gemini model API protocol');
       try {
-        return await piProviderModels({ id: profile?.id ?? 'probe', backendId: 'pi', name: 'pi', config: { apiEndpoint: endpoint, apiProtocol, ...(apiKey ? { apiKey } : {}) } });
+        return await piProviderModels({ id: profile?.id ?? 'probe', backendId, name: driver.label, config: { apiEndpoint: endpoint, apiProtocol, ...(apiKey ? { apiKey } : {}) } });
       } catch (error) {
         const message = redactSecret(error instanceof Error ? error.message : 'The model catalog could not be read', apiKey);
         throw new AppError('NATIVE_MODEL_PROBE_FAILED', message, 400, undefined, { message });

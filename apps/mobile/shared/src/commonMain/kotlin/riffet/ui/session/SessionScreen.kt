@@ -527,6 +527,7 @@ fun SessionScreen(
         interaction = interaction,
         reopening = resuming,
         supportsTerminal = supportsNativeTerminal(detail?.capabilities, current.backendId ?: NativeBackendId.CURSOR),
+        requiresLiveTerminal = detail?.capabilities?.requiresLiveTerminal == true,
     )
     val needsResume = conversation.statusKnown && !conversation.live && !conversation.archived &&
         !conversation.starting && !conversation.syncing && conversation.connectionNotice == null
@@ -754,6 +755,7 @@ fun SessionScreen(
                             supportsSteer = detail?.capabilities?.supportsSteer == true,
                             supportsSessionReferences = detail?.capabilities?.supportsSessionReferences == true,
                             supportsTargetedStop = detail?.capabilities?.supportsTargetedStop == true,
+                            acceptsMessages = detail?.capabilities?.requiresLiveTerminal != true || conversation.live,
                             settings = ComposerSettings(
                                 label = currentModelSummary.ifEmpty { stringResource(Res.string.session_select_model) },
                                 icon = null,

@@ -10,6 +10,7 @@
  *   Only a client that names the feature in {@link CLIENT_FEATURES_HEADER} is shown them or their
  *   project: an older phone cannot decode the backend id, and a client without the UI would list the
  *   project as an ordinary one.
+ * - `antigravity-agent`: the client can decode and operate Antigravity native sessions.
  * - `pi-agent`: the client can decode and operate pi native sessions and their backend catalog.
  * - `plugin-agents`: the client can decode an Agent id that is not built in (`PluginAgentId`: namespaced
  *   by the providing plugin). Only a client that names it is sent a session, run, catalog entry, event or
@@ -18,9 +19,9 @@
  * - `session-delete-v1`: `GET /api/sessions/:id/deletion` and `DELETE /api/sessions/:id` remove an idle
  *   conversation with its side chats (docs/design/session-deletion.md); a deleted id answers `410 SESSION_DELETED`.
  */
-export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1';
+export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1';
 export interface ProtocolInfo { version: number; features: ProtocolFeature[]; }
-export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1'] };
+export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1'] };
 /** Request header naming the features a client understands, comma-separated. */
 export const CLIENT_FEATURES_HEADER = 'x-riffet-features';
 // Shared HTTP contract. JSON request/response fields are kept stable across workers.

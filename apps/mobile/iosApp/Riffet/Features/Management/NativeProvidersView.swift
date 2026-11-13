@@ -293,7 +293,7 @@ private struct NativeProfileEditor: View {
             Section {
                 DisclosureGroup("CLI 启动参数") {
                     FieldRow(title: "CLI 路径", text: $executable, mono: true)
-                    if backend != .droid { FieldRow(title: "配置目录", text: $configDir, mono: true) }
+                    if backend != .droid && backend != .antigravity { FieldRow(title: "配置目录", text: $configDir, mono: true) }
                     if backend == .dsh { FieldRow(title: "DSH 源码目录", text: $sourceDir, mono: true) }
                     if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff) }
                 }
@@ -353,7 +353,7 @@ private struct NativeProfileEditor: View {
         busy = true; probing = probe; error = nil; defer { busy = false; probing = nil }
         do {
             let found: [ModelInfo]
-            if probe { found = try await api.probeBackendModels(backendId: backend, body: ProbeBackendModelsBody(apiEndpoint: endpoint.isEmpty ? nil : endpoint, apiKey: key.isEmpty ? (clearKey ? "" : nil) : key, profileId: profile?.id, modelSource: profile?.modelSource, apiProtocol: backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? apiProtocol : nil)) }
+            if probe { found = try await api.probeBackendModels(backendId: backend, body: ProbeBackendModelsBody(apiEndpoint: endpoint.isEmpty ? nil : endpoint, apiKey: key.isEmpty ? (clearKey ? "" : nil) : key, profileId: profile?.id, modelSource: profile?.modelSource, apiProtocol: backend == .antigravity && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "google-generative-ai" : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? apiProtocol : nil)) }
             else { guard !projectID.isEmpty else { return }; found = try await api.backendCatalog(backendId: backend, profileId: profile?.id, projectId: projectID, allModels: true, global: false).models }
             guard token == catalogToken else { return }
             models = found
@@ -361,12 +361,12 @@ private struct NativeProfileEditor: View {
     }
     private func save() async {
         guard let api = workbench.api else { return }; busy = true; error = nil; defer { busy = false }
-        let body = NativeBackendProfileSettingsUpdate(name: name.trimmingCharacters(in: .whitespaces), description: nil, executable: executable, configDir: backend == .droid ? nil : configDir,
+        let body = NativeBackendProfileSettingsUpdate(name: name.trimmingCharacters(in: .whitespaces), description: nil, executable: executable, configDir: backend == .droid || backend == .antigravity ? nil : configDir,
             sourceDir: backend == .dsh ? sourceDir : nil, apiEndpoint: allowsEndpoint ? endpoint.trimmingCharacters(in: .whitespaces) : nil, agentEndpoint: nil,
             disableAutoUpdate: backend == .claude ? KotlinBoolean(bool: autoUpdateOff) : nil, defaultModel: defaultModel,
             enabledModels: PatchValue.shared.list(value: allModels ? nil : enabled.sorted()), modelInputModalities: nil, modelContextWindows: nil,
             apiKey: key.isEmpty ? (clearKey ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: key), modelSource: nil,
-            apiProtocol: backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? PatchValue.shared.key(value: apiProtocol) : nil)
+            apiProtocol: backend == .antigravity ? PatchValue.shared.key(value: endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "google-generative-ai") : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? PatchValue.shared.key(value: apiProtocol) : nil)
         do {
             if let profile { _ = try await api.updateBackendProfile(backendId: backend, profileId: profile.id, body: body) }
             else { _ = try await api.createBackendProfile(backendId: backend, id: UUID().uuidString.lowercased(), body: body) }

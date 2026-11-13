@@ -100,6 +100,7 @@ internal fun RiffetColors.seriesColor(key: String, backendId: NativeBackendId?):
         "droid" -> NativeBackendId.DROID
         "traex" -> NativeBackendId.TRAEX
         "pi" -> NativeBackendId.PI
+        "antigravity" -> NativeBackendId.ANTIGRAVITY
         "chat" -> NativeBackendId.CHAT
         else -> null
     })?.let(::agentColor) ?: chartColor(stableChartIndex(key))
@@ -120,6 +121,7 @@ internal fun RiffetColors.agentColor(backendId: NativeBackendId): Color = when (
     NativeBackendId.TRAEX -> chart6
     NativeBackendId.CHAT -> chart7
     NativeBackendId.PI -> chart8
+    NativeBackendId.ANTIGRAVITY -> chartColor(stableChartIndex("antigravity"))
 }
 
 internal fun RiffetColors.chartColor(index: Int): Color = when (index.mod(8)) {

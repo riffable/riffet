@@ -134,6 +134,7 @@ fun defaultAgentOptions(): List<StatsKeyInfo> = listOf(
     StatsKeyInfo("droid", "Droid", NativeBackendId.DROID),
     StatsKeyInfo("traex", "TRAE", NativeBackendId.TRAEX),
     StatsKeyInfo("pi", "pi", NativeBackendId.PI),
+    StatsKeyInfo("antigravity", "Antigravity", NativeBackendId.ANTIGRAVITY),
 )
 
 /**

@@ -132,7 +132,8 @@ struct ConversationView: View {
     private var catalogKey: String { "\(sessionID)|\(session?.backendId?.name ?? "")|\(session?.backendProfileId ?? "")|\(workbench.list.backendRevision)" }
     private var connectionStatus: ConversationStatus? {
         session.map { conversationStatus(session: $0, status: workbench.status, connection: workbench.connection,
-            runs: workbench.runs, interaction: workbench.interaction, reopening: resuming, supportsTerminal: supportsTerminal) }
+            runs: workbench.runs, interaction: workbench.interaction, reopening: resuming, supportsTerminal: supportsTerminal,
+            requiresLiveTerminal: catalog?.capabilities.requiresLiveTerminal?.boolValue == true) }
     }
     private var needsResume: Bool {
         guard let state = connectionStatus else { return false }

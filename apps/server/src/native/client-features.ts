@@ -8,9 +8,9 @@ import type { TimelineRow } from '../../../../packages/contracts/src/sync.js';
 
 /*
  * Compatibility for clients that predate a negotiated backend. The server keeps every backend and
- * conversation; only what a client can decode is sent to it. `pi` is another negotiated backend
- * (quick chats already negotiate `chat`), so a request that does not name `pi-agent` must not see
- * it in lists, settings, search, statistics or nested conversation payloads. A plugin's Agent id
+ * conversation; only what a client can decode is sent to it. `pi` and `antigravity` require
+ * their corresponding Agent features (quick chats already negotiate `chat`), so an older client
+ * cannot see them in lists, settings, search, statistics or nested conversation payloads. A plugin's Agent id
  * (`PluginAgentId`, always dotted) is negotiated the same way under `plugin-agents`: the ids are not
  * known to the client's enum, so the rule is by form instead of by an id list.
  *
@@ -20,6 +20,8 @@ import type { TimelineRow } from '../../../../packages/contracts/src/sync.js';
 
 export const PI_AGENT_FEATURE = 'pi-agent';
 export const PI_BACKEND_ID = 'pi';
+export const ANTIGRAVITY_AGENT_FEATURE = 'antigravity-agent';
+export const ANTIGRAVITY_BACKEND_ID = 'antigravity';
 export const PLUGIN_AGENTS_FEATURE = 'plugin-agents';
 /** What an old client gets when the saved default is a backend it cannot decode. */
 export const COMPATIBLE_DEFAULT_BACKEND_ID = LEGACY_DEFAULT_BACKEND_ID;
@@ -52,7 +54,10 @@ export function clientSupportsPiAgent(headers?: IncomingHttpHeaders): boolean {
 
 /** Backends this client cannot name in a strict enum, listed by id. Plugin Agents are by form: see {@link hidesPluginAgents}. */
 export function hiddenBackendIds(headers?: IncomingHttpHeaders): readonly string[] {
-  return clientSupportsPiAgent(headers) ? [] : [PI_BACKEND_ID];
+  return [
+    ...(!clientSupportsPiAgent(headers) ? [PI_BACKEND_ID] : []),
+    ...(!clientSupportsFeature(headers, ANTIGRAVITY_AGENT_FEATURE) ? [ANTIGRAVITY_BACKEND_ID] : []),
+  ];
 }
 
 /** Whether this client cannot decode an Agent id that is not built in. */

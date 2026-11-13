@@ -78,6 +78,7 @@ private val backendOrder = listOf(
     NativeBackendId.DROID,
     NativeBackendId.TRAEX,
     NativeBackendId.PI,
+    NativeBackendId.ANTIGRAVITY,
 )
 
 internal fun backendLabel(id: NativeBackendId): String = when (id) {
@@ -88,13 +89,14 @@ internal fun backendLabel(id: NativeBackendId): String = when (id) {
     NativeBackendId.DROID -> "Droid"
     NativeBackendId.TRAEX -> "TRAE CLI"
     NativeBackendId.PI -> "pi"
+    NativeBackendId.ANTIGRAVITY -> "Antigravity"
     NativeBackendId.CHAT -> "Quick chat"
 }
 
 /** Droid and TRAE CLI sign in on their own, so neither has a service address. Only Droid also hides the config directory. */
 private fun hasEndpoint(id: NativeBackendId): Boolean = id != NativeBackendId.DROID && id != NativeBackendId.TRAEX
 
-private fun hasConfigDir(id: NativeBackendId): Boolean = id != NativeBackendId.DROID
+private fun hasConfigDir(id: NativeBackendId): Boolean = id != NativeBackendId.DROID && id != NativeBackendId.ANTIGRAVITY
 
 @Composable
 private fun endpointPlaceholder(id: NativeBackendId): String = when (id) {
@@ -105,6 +107,7 @@ private fun endpointPlaceholder(id: NativeBackendId): String = when (id) {
     NativeBackendId.TRAEX -> stringResource(Res.string.settings_extra_endpoint_placeholder_traex)
     NativeBackendId.CURSOR -> stringResource(Res.string.settings_extra_endpoint_placeholder_cursor)
     NativeBackendId.PI -> "https://"
+    NativeBackendId.ANTIGRAVITY -> "https://"
     NativeBackendId.CHAT -> ""
 }
 
@@ -117,6 +120,7 @@ private fun endpointHint(id: NativeBackendId): String? = when (id) {
     NativeBackendId.TRAEX -> stringResource(Res.string.settings_extra_endpoint_hint_traex)
     NativeBackendId.CURSOR -> null
     NativeBackendId.PI -> null
+    NativeBackendId.ANTIGRAVITY -> null
     NativeBackendId.CHAT -> null
 }
 
@@ -259,7 +263,7 @@ internal fun BackendProfileEditor(
     val dirty = patch != null
     fun save(after: () -> Unit = {}) {
         patch?.let { body ->
-            controller.updateProfile(backendId, profile.id, body) {
+            controller.updateProfile(backendId, profile.id, if (backendId == NativeBackendId.ANTIGRAVITY) body.copy(apiProtocol = PatchValue.key("google-generative-ai".takeIf { draft.apiEndpoint.isNotBlank() })) else body) {
                 apiKeyDraft = ""
                 clearKey = false
                 after()
@@ -361,9 +365,9 @@ internal fun BackendProfileEditor(
                     enabled = draft.enabledModels,
                     apiEndpoint = draft.apiEndpoint,
                     apiKeyDraft = apiKeyDraft,
-                    apiProtocol = if (backendId == NativeBackendId.PI) draft.apiProtocol ?: DEFAULT_API_PROTOCOL else null,
+                    apiProtocol = if (backendId == NativeBackendId.ANTIGRAVITY) "google-generative-ai" else if (backendId == NativeBackendId.PI) draft.apiProtocol ?: DEFAULT_API_PROTOCOL else null,
                     savedApiEndpoint = profile.apiEndpoint.orEmpty(),
-                    savedApiProtocol = if (backendId == NativeBackendId.PI) profile.apiProtocol ?: DEFAULT_API_PROTOCOL else null,
+                    savedApiProtocol = if (backendId == NativeBackendId.ANTIGRAVITY) "google-generative-ai" else if (backendId == NativeBackendId.PI) profile.apiProtocol ?: DEFAULT_API_PROTOCOL else null,
                     clearApiKey = clearKey,
                     controller = controller,
                     disabled = busy,
@@ -836,7 +840,7 @@ internal fun AddProfileForm(
             name = name.trim(),
             apiEndpoint = apiEndpoint.trim().takeIf { custom && it.isNotEmpty() },
             apiKey = apiKey.takeIf { custom && it.isNotEmpty() }?.let { PatchValue.key(it) },
-            apiProtocol = if (backendId == NativeBackendId.PI && custom) PatchValue.key(apiProtocol) else null,
+            apiProtocol = if (backendId == NativeBackendId.ANTIGRAVITY && custom) PatchValue.key("google-generative-ai") else if (backendId == NativeBackendId.PI && custom) PatchValue.key(apiProtocol) else null,
         )
         controller.createProfile(backendId, id, body) { created -> if (after != null) after() else onCreated(created) }
     }

@@ -42,7 +42,7 @@ struct AgentSettings: View {
     /// The Agents the server offers; before the list is read, the built-in ones that are not a plugin's.
     private func agents(_ workbench: Workbench) -> [String] {
         let listed = workbench.backends.filter(\.isPickable).map(\.agent)
-        return listed.isEmpty ? ["codex", "claude", "dsh", "droid", "traex", "pi"] : listed
+        return listed.isEmpty ? ["codex", "claude", "dsh", "droid", "traex", "pi", "antigravity"] : listed
     }
 
     private func renderer(_ workbench: Workbench) -> PluginAgentRenderer? {

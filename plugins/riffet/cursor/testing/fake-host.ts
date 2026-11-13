@@ -94,6 +94,7 @@ export class FakeHost implements AgentHost {
   /** Cursor names no model source. */
   readonly modelSources: AgentHost['modelSources'] = { resolve: async () => undefined };
   readonly terminals: AgentTerminals = {
+    inspect: async () => undefined,
     launch: async (sessionId, spec) => {
       this.launched.push({ sessionId, spec });
       const made = this.onLaunch?.(sessionId, spec) ?? {};
@@ -216,6 +217,7 @@ export class FakeHost implements AgentHost {
   checkStopTarget: AgentHost['checkStopTarget'] = async () => { /* a stop target never changes unless a test says so */ };
   async isRunCancelled(): Promise<boolean> { return false; }
   readAttachment = notScripted('readAttachment');
+  bindRiffetMcp(): () => void { return () => {}; }
   async riffetMcp(): Promise<undefined> { return undefined; }
 
   withSessionLock<T>(sessionId: string, operation: () => Promise<T> | T): Promise<T> {

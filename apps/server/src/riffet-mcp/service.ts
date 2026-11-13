@@ -199,7 +199,15 @@ const CORE_NAMES = new Set(TOOLS.map(tool => tool.name));
  * tools it sees are the conversation's tool-group snapshot, never the requesting client's settings.
  */
 export class RiffetMcpService implements NativeRiffetMcpHost {
+  private readonly bindings = new Map<string, (metadata: Record<string, unknown>) => Promise<void>>();
   constructor(private readonly deps: RiffetMcpDeps) {}
+
+  bind(sessionId: string, validate: (metadata: Record<string, unknown>) => Promise<void>): () => void {
+    this.deps.store.getSession(sessionId);
+    this.deps.store.setSetting(`riffet-mcp:binding:${sessionId}`, true);
+    this.bindings.set(sessionId, validate);
+    return () => { if (this.bindings.get(sessionId) === validate) this.bindings.delete(sessionId); };
+  }
 
   server(sessionId: string): RiffetMcpServerSpec | undefined {
     let session: Session;
@@ -209,7 +217,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   }
 
   /** Called when a conversation is archived. */
-  revoke(sessionId: string): void { this.deps.credentials.revoke(sessionId); }
+  revoke(sessionId: string): void { this.bindings.delete(sessionId); this.deps.credentials.revoke(sessionId); }
 
   /** The snapshot's devices that are still paired; a revoked device's group is dropped. */
   private devicesOf(session: Session): string[] {
@@ -259,11 +267,20 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   /** One JSON-RPC method the shim forwards, for the conversation its credential names. `signal` ends when the shim's request does. */
   async handle(authorization: string | undefined, method: unknown, params: unknown, signal?: AbortSignal): Promise<unknown> {
     const sessionId = this.deps.credentials.authenticate(authorization);
-    const session = this.deps.store.getSession(sessionId);
+    let session = this.deps.store.getSession(sessionId);
     if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
     if (method === 'tools/list') return { tools: this.tools(session) };
     if (method !== 'tools/call') throw new AppError('METHOD_NOT_FOUND', 'Unknown Riffet MCP method', 404);
-    const raw = (params && typeof params === 'object' ? params : {}) as { name?: unknown; arguments?: unknown };
+    const raw = (params && typeof params === 'object' ? params : {}) as { name?: unknown; arguments?: unknown; _meta?: unknown };
+    if (this.deps.store.getSetting(`riffet-mcp:binding:${sessionId}`, false)) {
+      const validate = this.bindings.get(sessionId);
+      if (!validate) return errorResult('NATIVE_BINDING_UNAVAILABLE', 'The native conversation binding is unavailable');
+      try { await validate(raw._meta && typeof raw._meta === 'object' && !Array.isArray(raw._meta) ? raw._meta as Record<string, unknown> : {}); }
+      catch { return errorResult('NATIVE_BINDING_MISMATCH', 'This tool call does not belong to the active native conversation'); }
+    }
+    // Native validation may await process/RPC evidence; re-read revocation and tool groups before dispatch.
+    session = this.deps.store.getSession(sessionId);
+    if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
     const args = (raw.arguments && typeof raw.arguments === 'object' && !Array.isArray(raw.arguments) ? raw.arguments : {}) as Record<string, unknown>;
     if (typeof raw.name === 'string' && !CORE_NAMES.has(raw.name)) {
       const plugin = await this.callPlugin(session, raw.name, args, signal);

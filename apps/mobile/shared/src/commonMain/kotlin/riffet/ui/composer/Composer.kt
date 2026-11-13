@@ -197,6 +197,7 @@ fun Composer(
     supportsSteer: Boolean = false,
     supportsSessionReferences: Boolean = false,
     supportsTargetedStop: Boolean = false,
+    acceptsMessages: Boolean = true,
     /** Background subagents running while the main agent is idle ([riffet.ui.timeline.TimelinePresentation.backgroundSubagents]). */
     background: Int = 0,
     /** A message is on its way: the transcript resumes following its tail. */
@@ -216,7 +217,7 @@ fun Composer(
     val uncertain by store.uncertain.collectAsState()
     val sendState by store.sendState.collectAsState()
     val connection by store.connection.collectAsState()
-    val connected = connection is RiffetConnectionState.Live || connection is RiffetConnectionState.Connecting
+    val connected = acceptsMessages && (connection is RiffetConnectionState.Live || connection is RiffetConnectionState.Connecting)
 
     val drafts = LocalComposerDrafts.current
     val draft = remember(drafts, session.id) { drafts?.draftFor(session.id) ?: ComposerDraft() }

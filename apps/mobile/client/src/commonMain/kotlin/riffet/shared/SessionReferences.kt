@@ -48,6 +48,7 @@ private fun referenceAgentName(session: Session): String = when (session.backend
     riffet.contracts.NativeBackendId.DROID -> "Droid"
     riffet.contracts.NativeBackendId.TRAEX -> "TRAE"
     riffet.contracts.NativeBackendId.PI -> "Pi"
+    riffet.contracts.NativeBackendId.ANTIGRAVITY -> "Antigravity"
     riffet.contracts.NativeBackendId.CHAT -> "Chat"
     null -> session.agent.orEmpty()
 }

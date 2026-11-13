@@ -1043,4 +1043,5 @@ private fun agentMarkTint(backendId: NativeBackendId, colors: RiffetColors): Col
     NativeBackendId.CODEX -> colors.fg2
     NativeBackendId.CHAT -> colors.fg2
     NativeBackendId.PI -> colors.fg2
+    NativeBackendId.ANTIGRAVITY -> colors.fg2
 }
