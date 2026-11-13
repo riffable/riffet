@@ -73,6 +73,10 @@ export async function buildPlugin(sourceDir = '.', options: PluginBuildOptions =
   try {
     await writeFile(join(output, 'riffet-plugin.json'), `${JSON.stringify(manifest, null, 2)}\n`);
     const resources = new Set(['assets', 'LICENSE', 'NOTICE']);
+    for (const entry of await readdir(root, { withFileTypes: true })) {
+      if ((entry.isFile() || entry.isSymbolicLink())
+        && (/^README(?:\.[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3})?\.md$/.test(entry.name) || entry.name === 'readme.md')) resources.add(entry.name);
+    }
     for (const declaration of [...(manifest.contributes?.views ?? []), ...(manifest.contributes?.agentBackends ?? [])]) if (declaration.icon?.svg) resources.add(declaration.icon.svg);
     const appearance = manifest.contributes?.appearance;
     for (const asset of [...(appearance?.palettes ?? []), ...(appearance?.iconPacks ?? []), ...(appearance?.backgrounds ?? [])]) resources.add(asset.asset);
