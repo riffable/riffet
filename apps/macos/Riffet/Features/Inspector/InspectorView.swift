@@ -6,6 +6,9 @@ struct InspectorView: View {
     @Binding var tab: InspectorTab
     /// The panel covers the whole conversation area.
     var maximized = false
+    /// The panel floats over the conversation.
+    var floating = false
+    var toggleFloating: () -> Void = {}
     let toggleMaximized: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.openSettings) private var openSettings
@@ -21,6 +24,7 @@ struct InspectorView: View {
         let shown = views.contains { $0.tab == tab } ? tab : (views.first?.tab ?? tab)
         let style = DisplayPreferences.shared.style
         let maximize = PanelMaximize(on: maximized, toggle: toggleMaximized)
+        let float = PanelFloat(on: floating, toggle: toggleFloating)
         VStack(spacing: 0) {
             // One panel per header icon has no bar of its own: the header's icons pick it, and the
             // view's own top bar carries the full-screen toggle.
@@ -28,7 +32,7 @@ struct InspectorView: View {
                 HStack(spacing: Space.sm) {
                     // The segmented views sit in the middle, balanced against the toggle.
                     if style.rightPanel == .inspector {
-                        Color.clear.frame(width: PanelMaximizeButton.width)
+                        Color.clear.frame(width: PanelMaximizeButton.width * (floating ? 1 : 2))
                         Spacer(minLength: 0)
                     }
                     if !views.isEmpty {
@@ -58,7 +62,7 @@ struct InspectorView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    PanelMaximizeButton().environment(\.panelMaximize, maximize)
+                    PanelMaximizeButton().environment(\.panelMaximize, maximize).environment(\.panelFloat, float)
                     if style.rightPanel == .outline {
                         Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(12))) }
                             .buttonStyle(IconButtonStyle())
@@ -67,8 +71,10 @@ struct InspectorView: View {
                 }
                 .padding(.horizontal, Space.md)
                 .frame(height: style.rightPanel == .outline ? style.layout.header : InspectorMetrics.headerHeight)
+                .panelDragHandle()
                 PanelRule()
             }
+            if floating && style.rightPanel == .panels { PanelGrip() }
             Group {
                 if views.isEmpty {
                     // Every view is turned off in settings.
@@ -96,6 +102,7 @@ struct InspectorView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .environment(\.conversationProjectId, project?.id)
             .environment(\.panelMaximize, style.rightPanel == .panels ? maximize : nil)
+            .environment(\.panelFloat, style.rightPanel == .panels ? float : nil)
         }
         .background(palette.page)
     }
@@ -156,15 +163,25 @@ extension EnvironmentValues {
 struct PanelMaximizeButton: View {
     static let width: CGFloat = 26
     @Environment(\.panelMaximize) private var maximize
+    @Environment(\.panelFloat) private var float
 
     var body: some View {
-        if let maximize {
-            Button(action: maximize.toggle) {
-                Image(icon: maximize.on ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .font(.riffet(size: S(12)))
+        HStack(spacing: 0) {
+            if let float {
+                Button(action: float.toggle) {
+                    Image(icon: float.on ? "sidebar.right" : "pip").font(.riffet(size: S(12)))
+                }
+                .buttonStyle(IconButtonStyle(size: Self.width))
+                .help(float.on ? "停靠到侧边" : "悬浮")
             }
-            .buttonStyle(IconButtonStyle(size: Self.width))
-            .help(maximize.on ? "退出全屏 (⌥⌘F)" : "全屏 (⌥⌘F)")
+            if let maximize, float?.on != true {
+                Button(action: maximize.toggle) {
+                    Image(icon: maximize.on ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .font(.riffet(size: S(12)))
+                }
+                .buttonStyle(IconButtonStyle(size: Self.width))
+                .help(maximize.on ? "退出全屏 (⌥⌘F)" : "全屏 (⌥⌘F)")
+            }
         }
     }
 }

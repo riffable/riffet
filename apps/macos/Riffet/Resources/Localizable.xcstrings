@@ -5760,6 +5760,26 @@
         }
       }
     },
+    "悬浮": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Float"
+          }
+        }
+      }
+    },
+    "停靠到侧边": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dock to Side"
+          }
+        }
+      }
+    },
     "全屏编辑": {
       "localizations": {
         "en": {

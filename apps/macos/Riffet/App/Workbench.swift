@@ -660,9 +660,12 @@ final class Workbench {
     /// or opening a page or terminal leaves it again, as on the web.
     func toggleInspectorMaximized() {
         guard page == nil, !quickChatContext else { return }
-        if inspectorMaximized {
+        let floating = UserDefaults.standard.bool(forKey: InspectorFloat.floatingKey)
+        if inspectorMaximized && !floating {
             exitInspectorMaximized()
         } else {
+            // Floating and full screen exclude each other.
+            if floating { UserDefaults.standard.set(false, forKey: InspectorFloat.floatingKey) }
             showsTerminalPage = false
             terminalDock.hide()
             setInspector { $0.open = true; $0.maximized = true }

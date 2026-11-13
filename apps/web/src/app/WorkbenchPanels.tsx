@@ -10,6 +10,7 @@ import type { ProjectRecord } from '@/lib/api';
 import type { PromptContextReference } from '@/lib/api';
 import { isShellTerminal } from '@/lib/backends';
 import { cn } from '@/lib/utils';
+import { FloatingPanelFrame } from './panels/FloatingPanelFrame';
 import { useLists, useNav, useStores, useUi } from './state/stores';
 import { PANEL_DEFAULT, PANEL_MAX, PANEL_MIN, paintPaneWidth, panelDockMinWidth } from './state/uiStore';
 const ContextPanel = lazy(() => import('./panels/ContextPanel').then((module) => ({ default: module.ContextPanel })));
@@ -42,6 +43,8 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
   const panelTab = useUi((state) => state.panelTab);
   const previewTarget = useUi((state) => state.previewTarget);
   const fullscreen = useUi((state) => state.panelFullscreen);
+  const floatingPref = useUi((state) => state.panelFloating);
+  const panelFrame = useUi((state) => state.panelFrame);
   const dockOpen = useUi((state) => state.dockOpen);
   const sidebarCollapsed = useUi((state) => state.sidebarCollapsed);
   const projectId = useNav((state) => state.projectId);
@@ -63,11 +66,14 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
 
   // Phones already show the panel over the whole screen, so fullscreen is a desktop affordance.
   const maximized = fullscreen && desktop;
+  // Floating is for the wide desktop layout; a narrower window shows the sheet as before.
+  const floating = floatingPref && desktop && wide;
   const panel = (current: ProjectRecord) => (
     <ErrorBoundary resetKey={`${current.id}:${panelTab}`}><Suspense fallback={loadingPanel}><ContextPanel
       project={current} sessionId={sessionId} previewTarget={previewTarget} tab={panelTab} onTabChange={(tab) => ui.set({ panelTab: tab })} onReference={onReference} onError={onError}
       onClose={() => ui.setPanelOpen(false)} onOpenWorktree={onOpenWorktree} onWorktreeMerged={onWorktreeMerged}
-      {...(desktop ? { fullscreen: maximized, onToggleFullscreen: () => ui.set((state) => ({ panelFullscreen: !state.panelFullscreen })) } : {})}
+      {...(desktop && !floating ? { fullscreen: maximized, onToggleFullscreen: () => ui.set((state) => ({ panelFullscreen: !state.panelFullscreen, panelFloating: false })) } : {})}
+      {...(desktop && wide ? { floating, onToggleFloating: () => ui.set((state) => ({ panelFloating: !state.panelFloating, panelFullscreen: false })) } : {})}
     /></Suspense></ErrorBoundary>
   );
   return (
@@ -78,8 +84,8 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
           {/* Settle the reading column in one layout pass: animating this width repeatedly
               invalidates transcript measurements and crosses the session overview breakpoint.
               The reservation stays fixed while the panel goes fullscreen. */}
-          <div className={cn('relative shrink-0', panelOpen ? 'w-[calc(var(--panel-w)+8px)]' : 'w-0')}>
-            {panelOpen && !maximized && (
+          <div className={cn('relative shrink-0', panelOpen && !floating ? 'w-[calc(var(--panel-w)+8px)]' : 'w-0')}>
+            {panelOpen && !maximized && !floating && (
               // In the gap before the panel, overlapping each side a little.
               <ResizeHandle
                 axis="x"
@@ -96,6 +102,11 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
               />
             )}
           </div>
+          {floating ? (
+            <FloatingPanelFrame frame={panelFrame} defaultWidth={panelWidth} shown={panelOpen && expanded} inert={!panelOpen} onCommit={(next) => ui.set({ panelFrame: next })}>
+              {panel(project)}
+            </FloatingPanelFrame>
+          ) : (
           <aside
             className={cn(
               'absolute bottom-2 right-2 z-(--z-panel) overflow-hidden rounded-xl transition-[translate,width] duration-[var(--duration-slow)] ease-out-soft [[data-resizing]_&]:transition-none',
@@ -111,6 +122,7 @@ export function PanelHost({ project, sessionId, desktop, wide, pageOpen, belowTa
               {panel(project)}
             </div>
           </aside>
+          )}
         </>
       )}
       {!wide && project && !pageOpen && (

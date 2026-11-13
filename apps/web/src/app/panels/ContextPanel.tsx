@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconChevronDown, IconMaximize, IconMinimize, IconPanelRight, IconX } from '@/components/icons';
+import { IconChevronDown, IconMaximize, IconMinimize, IconPanelRight, IconPictureInPicture, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner, UnderlineTabs } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -31,6 +31,9 @@ interface Props {
   /** Whether the panel currently spans the conversation area; only offered where it can. */
   fullscreen?: boolean;
   onToggleFullscreen?: () => void;
+  /** Whether the panel floats over the conversation; only offered on the wide desktop layout. */
+  floating?: boolean;
+  onToggleFloating?: () => void;
 }
 
 /**
@@ -38,7 +41,7 @@ interface Props {
  * panel's own buttons, and the shown view's body. It holds only view ids; what a view is, and
  * whether it is offered, comes from the registry, so adding a view changes nothing here.
  */
-export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChange, onReference, onError, onClose, onOpenWorktree, onWorktreeMerged, fullscreen, onToggleFullscreen }: Props) {
+export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChange, onReference, onError, onClose, onOpenWorktree, onWorktreeMerged, fullscreen, onToggleFullscreen, floating, onToggleFloating }: Props) {
   const { t } = useLingui();
   const { ui } = useStores();
   useEffect(() => watchGitStatus(project.id), [project.id]);
@@ -54,10 +57,11 @@ export function ContextPanel({ project, sessionId, previewTarget, tab, onTabChan
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-bg" aria-label={t`项目上下文`}>
-      <div className="flex h-12 shrink-0 items-stretch gap-2 edge-b px-1.5">
+      <div data-panel-drag className="flex h-12 shrink-0 items-stretch gap-2 edge-b px-1.5">
         {views.length > 0 && <ViewTabs value={current?.id ?? tab} onChange={onTabChange} options={views.map((view) => ({ value: view.id, label: view.title }))} />}
         <div className="ml-auto flex shrink-0 items-center pr-1.5">
           <div ref={setHeaderSlot} className="contents" />
+          {onToggleFloating && <Tip label={floating ? t`停靠到侧边` : t`悬浮`}><Button size="icon-xs" variant="quiet" aria-label={floating ? t`停靠到侧边` : t`悬浮`} aria-pressed={floating} onClick={onToggleFloating}>{floating ? <IconPanelRight /> : <IconPictureInPicture />}</Button></Tip>}
           {onToggleFullscreen && <Tip label={fullscreen ? t`退出全屏` : t`全屏`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={fullscreen ? t`退出全屏` : t`全屏`} aria-pressed={fullscreen} onClick={onToggleFullscreen}>{fullscreen ? <IconMinimize /> : <IconMaximize />}</Button></Tip>}
           <Tip label={t`关闭`}><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label={t`关闭面板`} onClick={onClose}><IconX /></Button></Tip>
         </div>

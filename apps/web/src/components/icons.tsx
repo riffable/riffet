@@ -6,7 +6,7 @@ import {
   GitMerge, GitPullRequest, Globe, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   KeyRound, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
-  Paperclip, Pause, PencilLine, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
+  Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
@@ -98,6 +98,7 @@ export const IconOctagonX = icon(OctagonX);
 export const IconPanelLeft = icon(PanelLeft);
 export const IconPanelRight = icon(PanelRight);
 export const IconPaperclip = icon(Paperclip);
+export const IconPictureInPicture = icon(PictureInPicture2);
 export const IconPencilLine = icon(PencilLine);
 export const IconPin = icon(Pin);
 export const IconPinOff = icon(PinOff);

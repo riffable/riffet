@@ -21,6 +21,8 @@ struct WorkbenchView: View {
     /// The side panel's width as the reader dragged it; 0 until then, when the style's own applies.
     @AppStorage("riffet.inspector-width") private var storedInspectorWidth: Double = 0
     @AppStorage("riffet.terminal-height") private var terminalHeight: Double = 240
+    /// The side panel floats over the conversation instead of taking room beside it.
+    @AppStorage(InspectorFloat.floatingKey) private var floating = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The drawn sidebar's width, which the panel's room is reckoned against there.
     @AppStorage(CustomChrome.sidebarWidthKey) private var customSidebarWidth: Double = 0
@@ -45,7 +47,7 @@ struct WorkbenchView: View {
         // A conversation window has no sidebar: its layout stays on the detail column.
         let visible = workbench.role == .main && (UserDefaults.standard.object(forKey: "riffet.sidebar-visible") as? Bool ?? true)
         _columns = State(initialValue: visible ? .all : .detailOnly)
-        _panelReserved = State(initialValue: Self.panelShown(in: workbench))
+        _panelReserved = State(initialValue: Self.panelShown(in: workbench) && !UserDefaults.standard.bool(forKey: InspectorFloat.floatingKey))
     }
 
     /// The view is a conversation window (`Workbench.Role.window`): the conversation, its panel and
@@ -71,12 +73,13 @@ struct WorkbenchView: View {
         var attempts: Bool
         var quickChat: Bool
         var key: String
+        var floating = false
     }
 
     private var panelPlacement: PanelPlacement {
         PanelPlacement(
-            shown: inspectorShown, page: workbench.page, attempts: workbench.attemptGroupSelection != nil,
-            quickChat: workbench.quickChatContext, key: workbench.inspectorKey
+            shown: inspectorShown && !floating, page: workbench.page, attempts: workbench.attemptGroupSelection != nil,
+            quickChat: workbench.quickChatContext, key: workbench.inspectorKey, floating: floating
         )
     }
 
@@ -305,6 +308,7 @@ struct WorkbenchView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     // Drawn shifted, not laid out again: an offset moves the rendered column only.
                     .offset(x: panelShift)
+                    .overlay { floatingPanel }
                 if terminalProject != nil {
                     PanelResizeHandle(size: $terminalHeight, limit: terminalHeightLimit, minimum: 140, axis: .vertical)
                     Color.clear.frame(height: terminalPanelHeight)
@@ -358,6 +362,16 @@ struct WorkbenchView: View {
     /// The conversation and the side panel are cards of their own (`StyleSpec.Window.insetCard`).
     private var cards: Bool { drawn && DisplayPreferences.shared.style.window == .insetCard }
 
+    /// The panel over the conversation, in the detail area; the conversation keeps its width.
+    @ViewBuilder
+    private var floatingPanel: some View {
+        if floating && inspectorShown {
+            FloatingPanel(defaultWidth: panelWidth) {
+                InspectorView(workbench: workbench, tab: inspectorTab, floating: true, toggleFloating: { floating = false }) { workbench.toggleInspectorMaximized() }
+            }
+        }
+    }
+
     private var sidePanel: some View {
         let animation = panelSlides ? panelAnimation : nil
         return ZStack(alignment: .trailing) {
@@ -367,7 +381,10 @@ struct WorkbenchView: View {
                         PanelResizeHandle(size: Binding(get: { inspectorWidth }, set: { storedInspectorWidth = $0 }), limit: max(300, width - 420 - (columns == .detailOnly ? 0 : sidebarColumnWidth)), drawn: !cards)
                             .frame(width: cards ? Space.sm : 1)
                     }
-                    InspectorView(workbench: workbench, tab: inspectorTab, maximized: maximized) { workbench.toggleInspectorMaximized() }
+                    InspectorView(workbench: workbench, tab: inspectorTab, maximized: maximized, toggleFloating: {
+                        floating = true
+                        workbench.exitInspectorMaximized()
+                    }) { workbench.toggleInspectorMaximized() }
                         .frame(minWidth: maximized ? 0 : panelWidth, maxWidth: maximized ? .infinity : panelWidth)
                         .modifier(CustomCard(on: cards, drawn: drawn))
                 }
@@ -411,7 +428,7 @@ struct WorkbenchView: View {
 
     private var panelAnimation: Animation { .snappy(duration: reduceMotion ? 0.15 : 0.22) }
 
-    private var maximized: Bool { workbench.inspectorMaximized }
+    private var maximized: Bool { workbench.inspectorMaximized && !floating }
 
     private var inspectorWidth: Double {
         storedInspectorWidth > 0 ? storedInspectorWidth : Double(DisplayPreferences.shared.style.layout.rightPanel)

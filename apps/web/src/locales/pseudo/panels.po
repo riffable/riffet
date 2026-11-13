@@ -903,6 +903,10 @@ msgid "二进制文件"
 msgstr ""
 
 #: src/app/panels/ContextPanel.tsx
+msgid "停靠到侧边"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
 msgid "全屏"
 msgstr ""
 
@@ -1025,6 +1029,10 @@ msgstr ""
 
 #: src/app/panels/QuickOpen.tsx
 msgid "当前"
+msgstr ""
+
+#: src/app/panels/ContextPanel.tsx
+msgid "悬浮"
 msgstr ""
 
 #. placeholder {0}: shortcutLabel('P')

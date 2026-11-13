@@ -1,7 +1,7 @@
 import type { Run } from '@contracts';
 import { sameContextReference, type PromptContextReference } from '@/lib/api';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
-import { readStored } from '@/lib/utils';
+import { readStored, writeStored } from '@/lib/utils';
 import type { PreviewTarget } from '../panels/sidebarViews';
 import type { SettingsSection } from '../settings/settingsSections';
 import { createStore, resolve } from '@/lib/store';
@@ -38,6 +38,35 @@ export function paintPaneWidth(pane: 'sidebar' | 'panel', width: number) {
   else style.setProperty('--panel-w', `${width}px`);
 }
 
+/** Where a floating context panel sits in its container, and which container edges it stays attached to. */
+export interface PanelFrame {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** An attached edge keeps its inset when the container resizes; unattached frames are only clamped. */
+  ax?: 'left' | 'right';
+  ay?: 'top' | 'bottom';
+}
+
+const PANEL_FLOAT_KEY = 'riffet.panelFloat';
+
+function storedFloat(): { panelFloating: boolean; panelFrame?: PanelFrame } {
+  try {
+    const value = JSON.parse(readStored(PANEL_FLOAT_KEY) || '{}') as { floating?: unknown; frame?: Partial<PanelFrame> };
+    const frame = value.frame;
+    const valid = frame && [frame.x, frame.y, frame.w, frame.h].every((n) => typeof n === 'number' && Number.isFinite(n));
+    return {
+      panelFloating: value.floating === true,
+      ...(valid ? { panelFrame: {
+        x: frame.x!, y: frame.y!, w: frame.w!, h: frame.h!,
+        ...(frame.ax === 'left' || frame.ax === 'right' ? { ax: frame.ax } : {}),
+        ...(frame.ay === 'top' || frame.ay === 'bottom' ? { ay: frame.ay } : {}),
+      } } : {}),
+    };
+  } catch { return { panelFloating: false }; }
+}
+
 function storedWidth(key: string, min: number, max: number, fallback: number) {
   const value = Number(readStored(key));
   return value ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
@@ -49,6 +78,10 @@ export interface UiState {
   panelOpen: boolean;
   /** The context panel spans everything right of the sidebar, over the conversation. */
   panelFullscreen: boolean;
+  /** The context panel floats over the conversation instead of docking beside it; a layout preference, not per conversation. */
+  panelFloating: boolean;
+  /** The floating panel's frame; unset until it has been moved, then it opens attached top-right. */
+  panelFrame?: PanelFrame;
   previewTarget?: PreviewTarget;
   /** The side panel's view, by id; one that is not offered for the project shows the first that is. */
   panelTab: string;
@@ -87,6 +120,7 @@ export function createUiStore() {
     mobileSidebar: false,
     panelOpen: false,
     panelFullscreen: false,
+    ...storedFloat(),
     panelTab: 'changes',
     dockOpen: false,
     sessionInfoOpen: false,
@@ -105,6 +139,14 @@ export function createUiStore() {
     creatingWorktree: false,
   });
   let previewToken = 0;
+  let floatSaved = '';
+  store.subscribe(() => {
+    const { panelFloating, panelFrame } = store.get();
+    const next = panelFloating || panelFrame ? JSON.stringify({ floating: panelFloating, frame: panelFrame }) : '';
+    if (next === floatSaved) return;
+    floatSaved = next;
+    writeStored(PANEL_FLOAT_KEY, next || undefined);
+  });
 
   // Desktop panels can coexist. Phone surfaces are mutually exclusive. These are plain functions on
   // a stable object because file links and asynchronous terminal creation retain them across resizes.
