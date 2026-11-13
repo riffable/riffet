@@ -379,6 +379,71 @@ data class PluginDeclarations(
     val commands: List<CommandDeclaration>? = null,
     val tasks: List<TaskProviderDeclaration>? = null,
     val agentBackends: List<AgentBackendDeclaration>? = null,
+    val agentTools: List<AgentToolsDeclaration>? = null,
+    /** The plugin builds a page of its own ([PluginPage]); [PluginPageDeclaration.title] names its tab. */
+    val page: PluginPageDeclaration? = null,
+)
+
+@Serializable
+data class PluginPageDeclaration(val title: Map<String, String>? = null)
+
+/*
+ * A plugin's own page (packages/contracts/src/plugin-page.ts, docs/PLUGIN_ARCHITECTURE.md「插件页」): built by the
+ * plugin while it is on, drawn by the client. [PluginPageItem.kind] stays a string and an item of an unknown kind is
+ * skipped, so a newer server cannot break the page.
+ */
+@Serializable
+data class PluginPageResponse(val page: PluginPage = PluginPage(), val message: String? = null)
+
+@Serializable
+data class PluginPage(val sections: List<PluginPageSection> = emptyList(), val refreshMs: Int? = null)
+
+@Serializable
+data class PluginPageSection(val id: String, val title: String? = null, val footer: String? = null, val items: List<PluginPageItem> = emptyList())
+
+/** One item; which fields apply depends on [kind]: `choice`, `toggle`, `text`, `list`, `row` or `buttons`. */
+@Serializable
+data class PluginPageItem(
+    val kind: String,
+    val key: String? = null,
+    val id: String? = null,
+    val label: String = "",
+    val value: String? = null,
+    val on: Boolean = false,
+    val values: List<String> = emptyList(),
+    val detail: String? = null,
+    val placeholder: String? = null,
+    val secret: Boolean = false,
+    val set: Boolean = false,
+    val options: List<PluginPageOption> = emptyList(),
+    val buttons: List<PluginPageButton> = emptyList(),
+)
+
+@Serializable
+data class PluginPageOption(val value: String, val label: String, val detail: String? = null, val disabled: Boolean = false, val button: PluginPageButton? = null)
+
+@Serializable
+data class PluginPageButton(
+    val action: String,
+    val label: String,
+    val item: String? = null,
+    val destructive: Boolean = false,
+    val confirm: String? = null,
+    val confirmDetail: String? = null,
+    val disabled: Boolean = false,
+)
+
+@Serializable
+data class PluginReadmeResponse(val readme: String? = null)
+
+/** Tools an Agent can be given through Riffet MCP (docs/BROWSER.md §2); [id] is the `ToolGroupId` a conversation keeps in `toolGroups`. */
+@Serializable
+data class AgentToolsDeclaration(
+    val id: String,
+    val title: Map<String, String> = emptyMap(),
+    val description: Map<String, String>? = null,
+    val toolPrefix: String = "",
+    val icon: ViewIcon? = null,
 )
 
 /** An Agent a plugin provides, listed while the plugin is off; [id] is the persisted backend id. */

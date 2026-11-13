@@ -148,7 +148,26 @@ export interface PluginDeclarations {
   appearance?: AppearanceDeclarations;
   /** Generated avatar styles for 个人资料 (docs/OWNER.md「随机头像」). `id` is a contribution id; `needsName` styles draw the owner's name and are offered only when there is one. */
   avatarStyles?: Array<{ id: string; title: LocalizedText; credit?: string; needsName?: boolean }>;
+  /** Tool groups an Agent can be given through Riffet MCP (docs/BROWSER.md §2). `id` is a contribution id and the `ToolGroupId` a conversation keeps in `toolGroups`. */
+  agentTools?: AgentToolsDeclaration[];
+  /** Per-session WebSockets at `PLUGIN_CHANNEL_ROUTE(pluginId, name)`, for a plugin's own live views. */
+  channels?: Array<{ id: string; scope: 'session' }>;
+  /** The plugin's own page in its details (`plugin-page.ts`), built while it is on; `title` names its tab, 设置 when absent. */
+  page?: { title?: LocalizedText };
 }
+
+export interface AgentToolsDeclaration {
+  /** `<pluginId>/<name>`. */
+  id: string;
+  title: LocalizedText;
+  description?: LocalizedText;
+  /** Every tool of the group is named `<prefix><name>`, e.g. `browser_open`; lowercase, ends with `_`. */
+  toolPrefix: string;
+  icon?: ViewDeclaration['icon'];
+}
+
+/** Where a client opens a plugin's declared channel `<pluginId>/<name>`; the session goes in `?sessionId=`. */
+export const PLUGIN_CHANNEL_ROUTE = (pluginId: string, name: string): string => `/api/integrations/${encodeURIComponent(pluginId)}/channels/${encodeURIComponent(name)}`;
 
 export interface PluginRequirement { id: string; optional?: boolean }
 

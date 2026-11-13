@@ -128,6 +128,11 @@ msgstr "主题"
 msgid "今天"
 msgstr "今天"
 
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "介绍"
+msgstr "介绍"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "从终端导入…"
 msgstr "从终端导入…"
@@ -386,11 +391,6 @@ msgstr "删除数据"
 msgid "刷新"
 msgstr "刷新"
 
-#: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
-msgid "功能"
-msgstr "功能"
-
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
@@ -496,6 +496,10 @@ msgstr "启用插件"
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可打开专用配置"
 msgstr "启用插件后可打开专用配置"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可用"
+msgstr "启用插件后可用"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用策略"
@@ -708,6 +712,7 @@ msgstr "已收藏"
 msgid "已更新，刷新后继续"
 msgstr "已更新，刷新后继续"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已设置"
 msgstr "已设置"
@@ -960,6 +965,7 @@ msgstr "撤销"
 msgid "撤销失败"
 msgstr "撤销失败"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr "操作失败"
@@ -1203,6 +1209,10 @@ msgstr "无法确认授权状态"
 msgid "无法离开扩展管理页面"
 msgstr "无法离开扩展管理页面"
 
+#: src/app/plugins/PluginPageView.tsx
+msgid "无法读取"
+msgstr "无法读取"
+
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"
 msgstr "无法读取恢复命令"
@@ -1433,10 +1443,6 @@ msgstr "没有可配置项"
 msgid "没有插件"
 msgstr "没有插件"
 
-#: src/app/plugins/PluginsPage.tsx
-msgid "没有独立功能入口"
-msgstr "没有独立功能入口"
-
 #: src/plugins/LogRecords.tsx
 msgid "没有符合筛选的记录"
 msgstr "没有符合筛选的记录"
@@ -1476,6 +1482,7 @@ msgstr "添加项目"
 msgid "清空"
 msgstr "清空"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/plugins/ModelField.tsx
 msgid "清除"
@@ -1579,6 +1586,10 @@ msgstr "离线 · 显示刚刚保存的列表"
 #: src/app/Sidebar.tsx
 msgid "移出标签栏"
 msgstr "移出标签栏"
+
+#: src/app/plugins/PluginPageView.tsx
+msgid "移除 {value}"
+msgstr "移除 {value}"
 
 #: src/app/DirectoryPicker.tsx
 msgid "移除收藏"
@@ -1720,8 +1731,14 @@ msgstr "获取配对码"
 msgid "要在 {0} 做什么？"
 msgstr "要在 {0} 做什么？"
 
+#: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
 #: src/app/WorkbenchOverlays.tsx
+msgid "设置"
+msgstr "设置"
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
 msgid "设置"
 msgstr "设置"
 
@@ -1746,12 +1763,8 @@ msgstr "访问令牌"
 msgid "访问网络"
 msgstr "访问网络"
 
-#: src/plugins/TasksView.tsx
-msgid "诊断"
-msgstr "诊断"
-
 #: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
+#: src/plugins/TasksView.tsx
 msgid "诊断"
 msgstr "诊断"
 
@@ -1903,10 +1916,6 @@ msgstr "通用"
 #: src/app/App.tsx
 msgid "配对码"
 msgstr "配对码"
-
-#: src/app/plugins/PluginsPage.tsx
-msgid "配置"
-msgstr "配置"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"

@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { AgentToolGroup } from '@riffet/plugin-api';
 import sharp from 'sharp';
 import type { DeviceCapability, Session, RiffetWakeup } from '../../../../packages/contracts/src/index.js';
 import type { SessionReferenceService } from '../context-references/service.js';
@@ -179,7 +181,17 @@ const DEVICE_TOOLS: readonly DeviceTool[] = [
 
 const wakeupView = (item: RiffetWakeup) => ({ id: item.id, dueAt: item.dueAt, note: item.note, status: item.status, ...(item.firedAt ? { firedAt: item.firedAt } : {}), ...(item.error ? { error: item.error } : {}) });
 
-export interface RiffetMcpDeps { contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService }
+/** The plugins' tool groups (`Contributions.agentTools`, docs/BROWSER.md §2), given by `app.ts`: the registry is a feature of its own. */
+export interface PluginToolSource {
+  /** Groups of the enabled plugins; `signal` aborts when the plugin is turned off. */
+  agentToolGroups(): ReadonlyArray<{ owner: string; declaration: { id: string; toolPrefix: string }; group: AgentToolGroup; signal: AbortSignal }>;
+  /** Every declared group, on or off. */
+  declaredAgentTools(): ReadonlyArray<{ owner: string; declaration: { id: string; toolPrefix: string } }>;
+}
+
+export interface RiffetMcpDeps { contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined }
+
+const CORE_NAMES = new Set(TOOLS.map(tool => tool.name));
 
 /**
  * The Riffet MCP server behind each conversation's stdio shim (docs/DEVICES.md §2). A request is
@@ -209,8 +221,22 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     return this.devicesOf(session).some(id => isScreenDevice(this.deps.auth.device(id)!));
   }
 
+  /** The snapshot's plugin groups whose plugin is on now, in the snapshot's order. */
+  private pluginGroupsOf(session: Session) {
+    const selected = session.toolGroups ?? [];
+    if (!selected.some(group => group.includes('/'))) return [];
+    const groups = this.deps.plugins?.()?.agentToolGroups() ?? [];
+    return selected.flatMap(id => groups.filter(item => item.declaration.id === id));
+  }
+
+  private pluginTools(session: Session): ToolDefinition[] {
+    return this.pluginGroupsOf(session).flatMap(({ group }) => group.tools
+      .filter(tool => !CORE_NAMES.has(tool.name))
+      .map(tool => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })));
+  }
+
   tools(session: Session): Array<Omit<ToolDefinition, 'group'>> {
-    const core = [...TOOLS];
+    const core = [...TOOLS, ...this.pluginTools(session)];
     const devices = this.devicesOf(session);
     if (!devices.length) return core;
     const names = Object.fromEntries(devices.map(id => [id, this.deps.auth.device(id)!.name]));
@@ -239,6 +265,10 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     if (method !== 'tools/call') throw new AppError('METHOD_NOT_FOUND', 'Unknown Riffet MCP method', 404);
     const raw = (params && typeof params === 'object' ? params : {}) as { name?: unknown; arguments?: unknown };
     const args = (raw.arguments && typeof raw.arguments === 'object' && !Array.isArray(raw.arguments) ? raw.arguments : {}) as Record<string, unknown>;
+    if (typeof raw.name === 'string' && !CORE_NAMES.has(raw.name)) {
+      const plugin = await this.callPlugin(session, raw.name, args, signal);
+      if (plugin) return plugin;
+    }
     const screenTool = SCREEN_TOOLS.find(item => item.name === raw.name);
     const deviceTool = DEVICE_TOOLS.find(item => item.name === raw.name) ?? screenTool;
     const tool = TOOLS.find(item => item.name === raw.name);
@@ -254,6 +284,35 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
       throw error;
     }
+  }
+
+  /** A tool of a plugin group, or undefined when no plugin group (selected or not, on or off) has that name's prefix. */
+  private async callPlugin(session: Session, name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<McpToolResult | undefined> {
+    const source = this.deps.plugins?.();
+    const declared = source?.declaredAgentTools().find(item => name.startsWith(item.declaration.toolPrefix));
+    if (!declared) return undefined;
+    const owned = this.pluginGroupsOf(session).find(item => item.declaration.id === declared.declaration.id);
+    // Removed from the conversation, or its plugin turned off: it stops at once, even in a CLI launched with it.
+    if (!owned) {
+      const selected = (session.toolGroups ?? []).includes(declared.declaration.id as never);
+      return errorResult('TOOL_NOT_AVAILABLE', selected ? `${name} is unavailable: the plugin ${declared.owner} is turned off` : `${name} is not available in this conversation`);
+    }
+    if (!owned.group.tools.some(tool => tool.name === name)) return errorResult('TOOL_NOT_AVAILABLE', `${name} is not a tool of ${owned.declaration.id}`);
+    let projectPath: string | undefined;
+    if (session.projectId) { try { projectPath = this.deps.store.getProject(session.projectId).cwd; } catch { /* a removed project leaves no directory */ } }
+    // Ends with the CLI's request or with the plugin.
+    const controller = new AbortController();
+    const abort = () => controller.abort();
+    signal?.addEventListener('abort', abort, { once: true });
+    owned.signal.addEventListener('abort', abort, { once: true });
+    if (owned.signal.aborted) controller.abort();
+    try {
+      const result = await owned.group.call({ sessionId: session.id, ...(session.projectId ? { projectId: session.projectId } : {}), ...(projectPath ? { projectPath } : {}), callId: randomUUID(), signal: controller.signal }, name, args);
+      return { content: result.content, ...(result.structuredContent ? { structuredContent: result.structuredContent } : {}), ...(result.isError ? { isError: true } : {}) };
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
+      throw error;
+    } finally { signal?.removeEventListener('abort', abort); owned.signal.removeEventListener('abort', abort); }
   }
 
   private call(session: Session, name: string, args: Record<string, unknown>): McpToolResult {

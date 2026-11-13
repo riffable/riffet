@@ -51,22 +51,35 @@ struct ExtensionsPick {
 /// what was last seen.
 @MainActor @Observable final class ToolDevices {
     private(set) var devices: [PublicDevice]?
+    /// The plugins, for their agent tools (the browser, docs/BROWSER.md §2); read with the devices.
+    private(set) var plugins: [PluginDescriptor]?
     func load(_ workbench: Workbench) async {
-        guard let api = workbench.api, let loaded = try? await api.devices(), !Task.isCancelled else { return }
-        devices = loaded
+        guard let api = workbench.api else { return }
+        async let devices = try? api.devices()
+        async let plugins = try? api.plugins()
+        let (readDevices, readPlugins) = await (devices, plugins)
+        guard !Task.isCancelled else { return }
+        if let readDevices { self.devices = readDevices }
+        if let readPlugins { self.plugins = readPlugins }
     }
 }
 
 enum ToolsPick {
-    /// There is something to pick, or something already picked that can be switched off.
-    static func offered(devices: [PublicDevice]?, value: [String]) -> Bool {
-        !value.isEmpty || devices.map { !ToolGroups.shared.controllable(devices: $0).isEmpty } == true
+    /// The plugins' tool groups to list, or nil before the plugins are read.
+    static func pluginGroups(_ plugins: [PluginDescriptor]?, value: [String]) -> [PluginToolGroup]? {
+        plugins.map { ToolGroups.shared.pluginGroups(plugins: $0, value: value) }
     }
-    /// A new conversation's pick: the remembered phones that can be offered now. One offline is kept for the next.
-    static func offeredPicks(devices: [PublicDevice]?, value: [String]) -> [String] {
+    /// There is something to pick, or something already picked that can be switched off.
+    static func offered(devices: [PublicDevice]?, value: [String], plugins: [PluginDescriptor]? = nil) -> Bool {
+        !value.isEmpty || devices.map { !ToolGroups.shared.controllable(devices: $0).isEmpty } == true
+            || pluginGroups(plugins, value: [])?.contains(where: \.enabled) == true
+    }
+    /// A new conversation's pick: the remembered phones and plugin tools that can be offered now. One offline is kept for the next.
+    static func offeredPicks(devices: [PublicDevice]?, value: [String], plugins: [PluginDescriptor]? = nil) -> [String] {
         let kit = ToolGroups.shared
-        let offered = Set((devices.map { kit.controllable(devices: $0) } ?? []).map { kit.deviceGroup(deviceId: $0.id) })
-        return kit.phones(groups: value).filter { offered.contains($0) }
+        var offered = Set((devices.map { kit.controllable(devices: $0) } ?? []).map { kit.deviceGroup(deviceId: $0.id) })
+        offered.formUnion((pluginGroups(plugins, value: []) ?? []).filter(\.enabled).map(\.id))
+        return kit.picks(groups: value).filter { offered.contains($0) }
     }
     /// The phones picked, then how many MCP servers and Skills are off.
     /// With switches and nothing changed, everything installed is on: 默认, not 未开启.
@@ -99,13 +112,14 @@ struct ToolsPickerLink: View {
     let value: [String]
     let devices: [PublicDevice]?
     let onChange: ([String]) -> Void
+    var plugins: [PluginDescriptor]? = nil
     var extensions: ExtensionsPick? = nil
     var footnote: String? = nil
     var error: String? = nil
     var enabled = true
     var body: some View {
         NavigationLink {
-            ToolsPickerPage(value: value, devices: devices, onChange: onChange, extensions: extensions, footnote: footnote, error: error, enabled: enabled)
+            ToolsPickerPage(value: value, devices: devices, onChange: onChange, plugins: plugins, extensions: extensions, footnote: footnote, error: error, enabled: enabled)
         } label: {
             LabeledContent("技能与工具", value: ToolsPick.summary(value, off: extensions?.off.count ?? 0, switches: extensions != nil))
         }.accessibilityIdentifier("sessionToolsOptions")
@@ -118,6 +132,7 @@ struct ToolsPickerPage: View {
     let value: [String]
     let devices: [PublicDevice]?
     let onChange: ([String]) -> Void
+    var plugins: [PluginDescriptor]? = nil
     var extensions: ExtensionsPick? = nil
     var footnote: String? = nil
     var error: String? = nil
@@ -130,8 +145,18 @@ struct ToolsPickerPage: View {
         // A phone in the value that is no longer offered stays listed, so it can be switched off.
         let offered = Set(controllable.map { kit.deviceGroup(deviceId: $0.id) })
         let stale = devices == nil ? [] : kit.phones(groups: value).filter { !offered.contains($0) }
+        let groups = ToolsPick.pluginGroups(plugins, value: value)
+        let language = Locale.current.language.languageCode?.identifier ?? "zh"
         Form {
             if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }
+            if let groups, !groups.isEmpty { Section {
+                ForEach(groups, id: \.id) { group in
+                    let on = value.contains(group.id)
+                    Button { onChange(kit.toggled(value: value, devices: known, plugins: groups, group: group.id, on: !on)) } label: {
+                        ConfigurationChoiceRow(title: group.label(language: language), detail: group.enabled ? nil : String(localized: "已停用", bundle: .riffet), selected: on)
+                    }.foregroundStyle(.primary)
+                }
+            } }
             if !controllable.isEmpty || !stale.isEmpty { Section {
                 ForEach(controllable, id: \.id) { device in
                     let group = kit.deviceGroup(deviceId: device.id)
@@ -152,7 +177,7 @@ struct ToolsPickerPage: View {
     }
     private func row(_ title: String, detail: String?, group: String, known: [PublicDevice]) -> some View {
         let on = value.contains(group)
-        return Button { onChange(ToolGroups.shared.toggled(value: value, devices: known, group: group, on: !on)) } label: {
+        return Button { onChange(ToolGroups.shared.toggled(value: value, devices: known, plugins: ToolsPick.pluginGroups(plugins, value: value), group: group, on: !on)) } label: {
             ConfigurationChoiceRow(title: title, detail: detail, selected: on)
         }.foregroundStyle(.primary)
     }

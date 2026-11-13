@@ -50,6 +50,7 @@ import riffet.ui.pickers.ToolsPickerPage
 import riffet.ui.pickers.extensionsPick
 import riffet.ui.pickers.rememberExtensionsListed
 import riffet.ui.pickers.rememberToolDevices
+import riffet.ui.pickers.rememberPluginToolGroups
 import riffet.ui.pickers.toolsOffered
 import riffet.ui.pickers.toolsSummary
 import riffet.ui.pickers.approvalShortLabelOf
@@ -444,7 +445,8 @@ fun SessionScreen(
     // a phone to pick or one already picked to switch off.
     val toolsSupported = !quickChat && current.archivedAt == null && capabilities?.supportsRiffetTools == true
     val toolDevices = rememberToolDevices(api, enabled = toolsSupported)
-    val toolGroups = riffet.shared.ToolGroups.phones(intended.toolGroups)
+    val toolGroups = riffet.shared.ToolGroups.picks(intended.toolGroups)
+    val pluginTools = rememberPluginToolGroups(api, enabled = toolsSupported, value = toolGroups)
     val extensionsOff = riffet.shared.ExtensionsOff.clean(intended.extensionsOff)
     val extensions = extensionsPick(
         api, allowed = !quickChat && current.archivedAt == null, capabilities = capabilities, backendId = current.backendId,
@@ -452,7 +454,7 @@ fun SessionScreen(
         onChange = { controller?.setExtensionsOff(it) },
     )
     val extensionsListed = rememberExtensionsListed(extensions)
-    val toolsShown = (toolsSupported && toolsOffered(toolDevices, toolGroups)) || (extensions != null && extensionsListed != false)
+    val toolsShown = (toolsSupported && toolsOffered(toolDevices, toolGroups, pluginTools)) || (extensions != null && extensionsListed != false)
     val currentModelLabel = detailModelLabel(detail, intended)
     // The composer's chip and the 发送设置 row repeat Fast / Max / the thinking level: their controls
     // are two sheets deep, so the state has to be readable without opening them.
@@ -1046,6 +1048,7 @@ fun SessionScreen(
                     ToolsPickerPage(
                         value = toolGroups,
                         devices = toolDevices,
+                        plugins = pluginTools,
                         onChange = { controller.setToolGroups(it) },
                         extensions = extensions,
                         footnote = stringResource(Res.string.pickers_tools_next_launch),

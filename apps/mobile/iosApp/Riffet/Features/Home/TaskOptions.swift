@@ -61,6 +61,7 @@ struct NewTaskOptions: View {
     var focus: SessionOptionFocus = .all
     /// The phones the new task may control: the list read now and the remembered pick that is offered.
     var toolDevices: [PublicDevice]?
+    var toolPlugins: [PluginDescriptor]? = nil
     var toolGroups: [String] = []
     var onPickTools: ([String]) -> Void = { _ in }
     /// The MCP and Skill switches of the new task; nil where the backend has none.
@@ -149,11 +150,11 @@ struct NewTaskOptions: View {
                         ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: choice.approval) { draft.approval = $0 }
                     } header: { Text("操作确认") }
                 }
-                let phones = catalog.capabilities.supportsRiffetTools && backend != .chat && ToolsPick.offered(devices: toolDevices, value: [])
+                let phones = catalog.capabilities.supportsRiffetTools && backend != .chat && ToolsPick.offered(devices: toolDevices, value: [], plugins: toolPlugins)
                 // Nothing to toggle, nothing to show; a list not read yet keeps the row.
                 let phonesUnknown = catalog.capabilities.supportsRiffetTools && backend != .chat && toolDevices == nil
                 if phones || phonesUnknown || extensions.map({ hasSwitches($0) ?? true }) == true {
-                    Section { ToolsPickerLink(value: toolGroups, devices: phones ? toolDevices : nil, onChange: onPickTools, extensions: extensions) }
+                    Section { ToolsPickerLink(value: toolGroups, devices: phones ? toolDevices : nil, onChange: onPickTools, plugins: phones ? toolPlugins : nil, extensions: extensions) }
                 }
             } else { Section { Text("尚未读取到此项目的 Agent 配置。").foregroundStyle(.secondary); Button("重新读取", action: { retry?() }) } }
             if let error = workbench.backendError { Section { Text(error).foregroundStyle(.red); Button("重新读取 Agent") { Task { await workbench.loadBackends() } } } }
@@ -286,12 +287,12 @@ struct SessionOptionsView: View {
                         project: current.projectId, profiles: [current.backendProfileId ?? ""], session: current.id)
     }
     private var usage: NativeBackendUsage? { usageRead?.scope == usageScope ? usageRead?.value : nil }
-    private var tools: [String] { pendingTools ?? ToolGroups.shared.phones(groups: current.toolGroups) }
+    private var tools: [String] { pendingTools ?? ToolGroups.shared.picks(groups: current.toolGroups) }
     private var extensionsOff: [String] { pendingOff ?? ExtensionsOff.shared.clean(value: current.extensionsOff) }
     /// Phones need a backend that takes the tools and something to pick or switch off; quick chat and archived sessions have none.
     private func phonesShown(_ catalog: NativeBackendCatalogEntry) -> Bool {
         catalog.capabilities.supportsRiffetTools && current.backendId != .chat && current.archivedAt == nil
-            && ToolsPick.offered(devices: toolDevices.devices, value: tools)
+            && ToolsPick.offered(devices: toolDevices.devices, value: tools, plugins: toolDevices.plugins)
     }
     private func extensionsPick(_ catalog: NativeBackendCatalogEntry) -> ExtensionsPick? {
         ExtensionsPick.make(workbench: workbench, allowed: current.backendId != .chat && current.archivedAt == nil, capabilities: catalog.capabilities,
@@ -402,7 +403,7 @@ struct SessionOptionsView: View {
                     }.accessibilityIdentifier("sessionApprovalOptions")
                 }
                 if toolsShown(catalog) {
-                    ToolsPickerLink(value: tools, devices: phonesShown(catalog) ? toolDevices.devices : nil, onChange: setTools,
+                    ToolsPickerLink(value: tools, devices: phonesShown(catalog) ? toolDevices.devices : nil, onChange: setTools, plugins: phonesShown(catalog) ? toolDevices.plugins : nil,
                         extensions: extensionsPick(catalog), footnote: String(localized: "下次启动时生效", bundle: .riffet), error: toolsError)
                 }
             }.disabled(pending || current.archivedAt != nil)

@@ -60,7 +60,7 @@ function Instance({ entry, serviceId, instanceId, projectId, sessionId, visible,
   }, [entry.pluginId, entry.id, entry.active, entry.unavailable, entry.activateOnView, entry.activationState, visible]);
   const render = entry.render;
   const access = render?.kind === 'plugin' ? render.access : undefined;
-  const host = useMemo(() => createPluginHost({ stores, sessionId, locale: i18n.locale, access, ...(settingsPage ? { settingsPage } : {}) }), [stores, sessionId, i18n.locale, access, settingsPage]);
+  const host = useMemo(() => createPluginHost({ stores, pluginId: entry.pluginId, sessionId, locale: i18n.locale, access, ...(settingsPage ? { settingsPage } : {}) }), [stores, entry.pluginId, sessionId, i18n.locale, access, settingsPage]);
   // The page's flags belong to this instance: whatever it left set is cleared with it.
   useEffect(() => () => { settingsPage?.setDirty(false); settingsPage?.setBusy(false); }, [settingsPage]);
   const context = useMemo<ViewContext | undefined>(() => controller && ({

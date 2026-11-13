@@ -134,3 +134,34 @@ suspend fun RiffetApi.activatePluginView(id: String, viewId: String): PluginDesc
 
 @Throws(Exception::class)
 suspend fun RiffetApi.pluginLogs(id: String): PluginLogsResponse = get("/api/integrations/" + id.enc() + "/logs").decode()
+
+/** The plugin's own page in [locale] (docs/PLUGIN_ARCHITECTURE.md「插件页」). */
+@Throws(Exception::class)
+suspend fun RiffetApi.pluginPage(id: String, locale: String): PluginPageResponse =
+    get("/api/integrations/" + id.enc() + "/page?locale=" + locale.encodeURLQueryComponent()).decode()
+
+/** Saves one of the page's values and answers with the page read again; `null` clears it. */
+@Throws(Exception::class)
+suspend fun RiffetApi.setPluginPageText(id: String, key: String, value: String?, locale: String): PluginPageResponse =
+    changePluginPage(id, locale, "set", kotlinx.serialization.json.buildJsonObject { put("key", kotlinx.serialization.json.JsonPrimitive(key)); put("value", value?.let { kotlinx.serialization.json.JsonPrimitive(it) } ?: kotlinx.serialization.json.JsonNull) })
+
+@Throws(Exception::class)
+suspend fun RiffetApi.setPluginPageToggle(id: String, key: String, on: Boolean, locale: String): PluginPageResponse =
+    changePluginPage(id, locale, "set", kotlinx.serialization.json.buildJsonObject { put("key", kotlinx.serialization.json.JsonPrimitive(key)); put("value", kotlinx.serialization.json.JsonPrimitive(on)) })
+
+@Throws(Exception::class)
+suspend fun RiffetApi.setPluginPageList(id: String, key: String, values: List<String>, locale: String): PluginPageResponse =
+    changePluginPage(id, locale, "set", kotlinx.serialization.json.buildJsonObject { put("key", kotlinx.serialization.json.JsonPrimitive(key)); put("value", kotlinx.serialization.json.JsonArray(values.map { kotlinx.serialization.json.JsonPrimitive(it) })) })
+
+/** One of the page's buttons. */
+@Throws(Exception::class)
+suspend fun RiffetApi.runPluginPageAction(id: String, action: String, item: String?, locale: String): PluginPageResponse =
+    changePluginPage(id, locale, "run", kotlinx.serialization.json.buildJsonObject { put("action", kotlinx.serialization.json.JsonPrimitive(action)); item?.let { put("item", kotlinx.serialization.json.JsonPrimitive(it)) } })
+
+private suspend fun RiffetApi.changePluginPage(id: String, locale: String, kind: String, change: kotlinx.serialization.json.JsonObject): PluginPageResponse =
+    post("/api/integrations/" + id.enc() + "/page", kotlinx.serialization.json.buildJsonObject { put("locale", kotlinx.serialization.json.JsonPrimitive(locale)); put(kind, change) }).decode()
+
+/** The package's README in [locale], or the nearest one; null when it has none. */
+@Throws(Exception::class)
+suspend fun RiffetApi.pluginReadme(id: String, locale: String): PluginReadmeResponse =
+    get("/api/integrations/" + id.enc() + "/readme?locale=" + locale.encodeURLQueryComponent()).decode()

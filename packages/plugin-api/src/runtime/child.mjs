@@ -183,6 +183,7 @@ const handlers = {
       avatarStyles: Object.keys(contributions.avatarStyles ?? {}),
       status: typeof contributions.status === 'function',
       doctorChecks: typeof contributions.doctorChecks === 'function',
+      page: typeof contributions.page?.read === 'function',
       unsupported: unsupportedKinds,
     };
   },
@@ -218,6 +219,12 @@ const handlers = {
   },
   status() { return activation.contributions.status(); },
   doctorChecks() { return activation.contributions.doctorChecks(); },
+  'page.read'({ locale }) { return activation.contributions.page.read({ locale }); },
+  async 'page.run'({ locale, action, item }) {
+    const page = activation.contributions.page;
+    if (typeof page.run !== 'function') throw new Error('this page has no buttons');
+    return (await page.run({ locale }, action, item)) ?? {};
+  },
 
   'modelSource.catalog'({ id, backend, overrides }) {
     const source = sourceOf(id);

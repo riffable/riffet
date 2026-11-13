@@ -5,9 +5,9 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import QRCode from 'qrcode';
 import {
   AGENT_PROTOCOL_VERSION, PLUGIN_API_VERSION, type ActivationScope, type Contributions, type DeviceFlow, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest,
-  type AgentBackend, type AvatarStyleProvider, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type TaskProvider, protocolBackends, sourceProtocols,
+  type AgentBackend, type AgentToolGroup, type PluginPageProvider, type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type TaskProvider, protocolBackends, sourceProtocols,
 } from '@riffet/plugin-api';
-import type { ActionStep, AppearanceDeclarations, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import type { ActionStep, AppearanceDeclarations, PluginPage, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 // The core's only import of the built-in list (`pnpm check:plugins`), so a build can swap it here.
 import { builtinPlugins } from '../../../../plugins/index.js';
@@ -17,6 +17,7 @@ import { checkManifest, declaredIds, knownDeclarations } from './declarations.js
 import { developmentDirectories, developmentFile, fileIntegrity, loadDevelopmentPackage, packagePlugin, readPackage } from './development.js';
 import { createPluginHost } from './host.js';
 import { builtinPackageRoot } from './package-root.js';
+import { checkedPage, packageReadme, settingValue } from './page.js';
 import { PluginStore, type PluginItem, type PluginItemPatch } from './store.js';
 import { PluginLogs } from './logs.js';
 import type { PluginActivationState, PluginLogEntry } from '../../../../packages/contracts/src/plugin-management.js';
@@ -122,6 +123,8 @@ export interface OwnedSharePublisher { owner: PluginManifest['id']; publisher: S
 /** `version` and `projectType` come from the manifest, so the host can record what a task started under. `source` is where the code runs from: an installed package's plans are confirmed before they run. */
 export interface OwnedTaskProvider { owner: PluginManifest['id']; version?: string; projectType?: string; source?: Source; provider: TaskProvider }
 /** A generated avatar style of an enabled plugin: its declaration and the provider that draws it. */
+/** `signal` is the activation's: it aborts when the plugin is turned off. */
+export interface OwnedAgentTools { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['agentTools']>[number]; group: AgentToolGroup; signal: AbortSignal }
 export interface OwnedAvatarStyle { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['avatarStyles']>[number]; provider: AvatarStyleProvider }
 /** A command ready to run: the declaration, the handler, and the signal that aborts with the activation. */
 export interface ResolvedCommand { declaration: CommandDeclaration; handler: CommandHandler; signal: AbortSignal }
@@ -152,6 +155,8 @@ export interface PluginRegistryOptions {
   statusTimeoutMs?: number;
   /** The loopback ports the server answers on, closed to installed packages even when they may use the network. */
   serverPorts?: () => readonly number[];
+  /** `host.sessions` of an in-process plugin that declares agent tools or channels. */
+  sessions?: NonNullable<PluginHost['sessions']>;
 }
 
 function describeError(error: unknown): string { return error instanceof Error && error.message ? error.message : String(error); }
@@ -222,7 +227,7 @@ export class PluginRegistry {
     });
     this.invalidate = options.invalidateModelCatalogs ?? (() => undefined);
     this.agentBackendProvided = options.agentBackendProvided ?? (() => false);
-    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}) };
+    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}) };
     this.runningTasks = options.runningTasks ?? (() => 0);
     this.statusTimeoutMs = options.statusTimeoutMs ?? STATUS_TIMEOUT_MS;
     for (const plugin of options.plugins ?? builtinPlugins) this.register(plugin, 'builtin');
@@ -374,6 +379,80 @@ export class PluginRegistry {
     await Promise.all([...this.entries.values()].filter(entry => this.permitted(entry) && this.events(entry).includes('task') && entry.plugin.manifest.contributes?.tasks?.length).map(entry => this.ensureEntry(entry, 'task:project').catch(() => undefined)));
   }
 
+  // ── The plugin's page and README (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────
+
+  /** The page as the plugin builds it now. Reading it activates a plugin that waits for a command or a view, as opening a view does. */
+  async page(id: string, locale: string | undefined): Promise<PluginPageResponse> {
+    await this.loading;
+    const entry = this.require(id);
+    return { page: await this.readPage(entry, await this.pageProvider(entry), locale) };
+  }
+
+  /** One change from the page: a setting saved as `update` saves it, or a button. Answers with the page read again. */
+  async changePage(id: string, input: unknown): Promise<PluginPageResponse> {
+    await this.loading;
+    const entry = this.require(id);
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('INVALID_INPUT', 'Expected a page change');
+    const { locale, set, run, ...rest } = input as Record<string, unknown>;
+    if (Object.keys(rest).length || (set === undefined) === (run === undefined)) throw new AppError('INVALID_INPUT', 'Expected one of set or run');
+    if (locale !== undefined && typeof locale !== 'string') throw new AppError('INVALID_INPUT', 'locale must be text');
+    const provider = await this.pageProvider(entry);
+    const context = { locale: (locale as string | undefined) ?? '' };
+    let message: string | undefined;
+    if (set !== undefined) {
+      if (!set || typeof set !== 'object' || typeof (set as { key?: unknown }).key !== 'string') throw new AppError('INVALID_INPUT', 'set needs a key and a value');
+      const { key, value } = set as { key: string; value: unknown };
+      let saved: string | null;
+      try { saved = settingValue(value); } catch (error) { throw new AppError('INVALID_INPUT', describeError(error)); }
+      await this.update(id, { settings: { [key]: saved } });
+    } else {
+      if (!run || typeof run !== 'object') throw new AppError('INVALID_INPUT', 'run needs an action');
+      const { action, item } = run as { action?: unknown; item?: unknown };
+      if (typeof action !== 'string' || !action || action.length > 64 || (item !== undefined && (typeof item !== 'string' || item.length > 512))) throw new AppError('INVALID_INPUT', 'run needs an action');
+      if (!provider.run) throw new AppError('INTEGRATION_ACTION_NOT_FOUND', 'This page has no buttons', 404);
+      const outcome = await this.guarded(entry, async () => provider.run!(context, action, item as string | undefined));
+      if (outcome && typeof outcome.message === 'string' && outcome.message.trim()) message = this.journal.redact(id, outcome.message.slice(0, 400));
+    }
+    // A change may have turned the plugin off (a setting its detection reads): the page is then not there to read.
+    const now = entry.active?.contributions?.page;
+    if (!now) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
+    return { page: await this.readPage(entry, now, context.locale), ...(message ? { message } : {}) };
+  }
+
+  /** The README for `locale`: `README.<tag>.md`, else `README.md`, in the package's directory. Never runs the plugin. */
+  async readme(id: string, locale: string | undefined): Promise<PluginReadmeResponse> {
+    await this.loading;
+    const entry = this.require(id);
+    const root = entry.root ?? (entry.source === 'builtin' ? builtinPackageRoot(id) : undefined);
+    const text = root ? await packageReadme(root, locale) : undefined;
+    // The details already show the name: a first heading that only repeats it is left out.
+    const { manifest } = entry.plugin;
+    const names = new Set([manifest.name, manifest.id, ...Object.values(manifest.title ?? {})].map(name => name.trim().toLowerCase()));
+    const heading = text?.match(/^\s*#\s+(.+?)\s*#*\s*(?:\r?\n|$)/);
+    const readme = heading && names.has(heading[1]!.toLowerCase()) ? text!.slice(heading[0].length).trimStart() : text?.trimStart();
+    return readme ? { readme } : {};
+  }
+
+  private async pageProvider(entry: Entry): Promise<PluginPageProvider> {
+    const { manifest } = entry.plugin;
+    if (!manifest.contributes?.page) throw new AppError('INTEGRATION_PAGE_NOT_FOUND', 'This plugin has no page', 404);
+    if (!entry.active && (this.events(entry).includes('view') || this.events(entry).includes('command'))) await this.ensureEntry(entry, 'view:page');
+    const provider = entry.active?.contributions?.page;
+    if (!provider) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
+    return provider;
+  }
+
+  private async readPage(entry: Entry, provider: PluginPageProvider, locale: string | undefined): Promise<PluginPage> {
+    const { manifest } = entry.plugin;
+    const settings = new Map((manifest.settings ?? []).map(field => [field.key, field.kind] as const));
+    const secrets = (() => { try { return this.store.item(manifest.id).secrets; } catch { return {}; } })();
+    return this.guarded(entry, async () => {
+      let raw: unknown;
+      await bounded(async () => { raw = await provider.read({ locale: locale ?? '' }); }, 10_000);
+      return checkedPage(raw, settings, key => Boolean(secrets[key]));
+    }, 'INTEGRATION_PAGE_FAILED');
+  }
+
   async logs(id: string): Promise<PluginLogEntry[]> { await this.loading; this.require(id); return this.journal.read(id); }
 
   private log(entry: Entry, level: PluginLogEntry['level'], phase: string, message: string): void {
@@ -507,6 +586,32 @@ export class PluginRegistry {
         return provider ? [{ owner: entry.plugin.manifest.id, declaration, provider }] : [];
       });
     });
+  }
+
+  /** The agent tool groups of the enabled plugins: declared in the manifest and provided by the committed activation. */
+  agentToolGroups(): OwnedAgentTools[] {
+    return [...this.entries.values()].filter(entry => !entry.waiting).flatMap(entry => {
+      const groups = entry.active?.contributions?.agentTools;
+      return (entry.plugin.manifest.contributes?.agentTools ?? []).flatMap(declaration => {
+        const group = groups && Object.hasOwn(groups, declaration.id) ? groups[declaration.id] : undefined;
+        return group && entry.active ? [{ owner: entry.plugin.manifest.id, declaration, group, signal: entry.active.controller.signal }] : [];
+      });
+    });
+  }
+
+  /** The declared tool groups of every plugin, on or off, so a selected group of a plugin that is off is known as such. */
+  declaredAgentTools(): Array<{ owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['agentTools']>[number] }> {
+    return [...this.entries.values()].flatMap(entry => (entry.plugin.manifest.contributes?.agentTools ?? []).map(declaration => ({ owner: entry.plugin.manifest.id, declaration })));
+  }
+
+  /** The handler of an enabled plugin's declared channel `<pluginId>/<name>`, with the signal of the activation that gave it. */
+  channel(pluginId: string, name: string): { handler: PluginChannelHandler; signal: AbortSignal } | undefined {
+    const entry = this.entries.get(pluginId);
+    const id = `${pluginId}/${name}`;
+    if (!entry || entry.waiting || !entry.active || !entry.plugin.manifest.contributes?.channels?.some(declared => declared.id === id)) return undefined;
+    const channels = entry.active.contributions?.channels;
+    const handler = channels && Object.hasOwn(channels, id) ? channels[id] : undefined;
+    return handler ? { handler, signal: entry.active.controller.signal } : undefined;
   }
 
   /**
@@ -1176,6 +1281,7 @@ export class PluginRegistry {
     const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined } : {
       ...this.hostOptions, ownAgentBackends: (manifest.contributes?.agentBackends ?? []).map(declared => declared.id),
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
+      ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
       service: (pluginId, name, range) => this.serviceOf(manifest.id, pluginId, name, range),
     });
     host.logger = Object.fromEntries((['debug', 'info', 'warn', 'error'] as const).map(level => [level, (message: string) => {
@@ -1584,6 +1690,20 @@ export class PluginRegistry {
     }
     for (const [styleId, provider] of Object.entries(contributions.avatarStyles ?? {})) {
       if (!manifest.contributes?.avatarStyles?.some(declared => declared.id === styleId) || typeof provider?.generate !== 'function') throw new Error(`avatar style "${styleId}" is not declared in contributes.avatarStyles or has no generate()`);
+    }
+    for (const [groupId, group] of Object.entries(contributions.agentTools ?? {})) {
+      const declared = manifest.contributes?.agentTools?.find(item => item.id === groupId);
+      if (!declared || !Array.isArray(group?.tools) || typeof group.call !== 'function') throw new Error(`agent tools "${groupId}" are not declared in contributes.agentTools or have no call()`);
+      const names = new Set<string>();
+      for (const tool of group.tools) {
+        if (typeof tool?.name !== 'string' || !tool.name.startsWith(declared.toolPrefix) || !/^[a-z][a-z0-9_]{1,63}$/.test(tool.name) || names.has(tool.name)) throw new Error(`agent tool "${String(tool?.name)}" must be named "${declared.toolPrefix}<name>" and appear once`);
+        names.add(tool.name);
+      }
+    }
+    if (contributions.page !== undefined && (!manifest.contributes?.page || typeof contributions.page?.read !== 'function')) throw new Error('page is not declared in contributes.page or has no read()');
+    if (manifest.contributes?.page && !contributions.page) throw new Error('Declared page is not provided');
+    for (const [channelId, handler] of Object.entries(contributions.channels ?? {})) {
+      if (!manifest.contributes?.channels?.some(declared => declared.id === channelId) || typeof handler?.open !== 'function') throw new Error(`channel "${channelId}" is not declared in contributes.channels or has no open()`);
     }
     for (const [name, service] of Object.entries(contributions.services ?? {})) {
       if (!SERVICE_NAME.test(name) || !service || typeof service !== 'object' || typeof service.version !== 'string' || !SERVICE_VERSION.test(service.version)) throw new Error(`service "${name}" needs a name like "scan" and a version like "1.0.0"`);

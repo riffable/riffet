@@ -134,7 +134,7 @@ function describedByChild(raw: unknown): ChildContributions {
   for (const item of list(raw.avatarStyles ?? [], 'an avatar style')) if (!text(item, 200)) throw malformed('an avatar style');
   for (const item of list(raw.actions, 'an action')) if (!isRecord(item) || !text(item.id, 64) || !text(item.label, 200) || (item.kind !== 'run' && item.kind !== 'device-flow')) throw malformed('an action');
   if (!list(raw.unsupported, 'the unsupported list').every(item => text(item, 64))) throw malformed('the unsupported list');
-  if (typeof raw.status !== 'boolean' || typeof raw.doctorChecks !== 'boolean') throw malformed('the activation');
+  if (typeof raw.status !== 'boolean' || typeof raw.doctorChecks !== 'boolean' || !optional(raw.page, value => typeof value === 'boolean')) throw malformed('the activation');
   return raw as unknown as ChildContributions;
 }
 
@@ -423,6 +423,16 @@ export function remotePlugin(options: RemoteOptions): Plugin {
       }
       if (description.status) contributions.status = async () => statusFromChild(await call('status', {}, TIMEOUTS.status));
       if (description.doctorChecks) contributions.doctorChecks = async () => checksFromChild(await call('doctorChecks', {}, TIMEOUTS.doctor));
+      // The registry checks the page, for every package alike.
+      if (description.page) {
+        contributions.page = {
+          read: async ({ locale }) => await call('page.read', { locale }, TIMEOUTS.status) as never,
+          run: async ({ locale }, action, item) => {
+            const outcome: unknown = await call('page.run', { locale, action, ...(item !== undefined ? { item } : {}) }, TIMEOUTS.action);
+            return isRecord(outcome) && typeof outcome.message === 'string' ? { message: outcome.message } : {};
+          },
+        };
+      }
       if (isolation.kind === 'none') {
         // Shown for as long as the package runs: its own status can add to the warning, never hide it.
         const own = contributions.status;

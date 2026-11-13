@@ -22,12 +22,25 @@ final class ToolsPickerModel {
     private var offScope = ""
 
     private static func remembered() -> [String] {
-        (UserDefaults.standard.stringArray(forKey: lastKey) ?? []).filter { $0.hasPrefix("device:") }
+        (UserDefaults.standard.stringArray(forKey: lastKey) ?? []).filter(isPickable)
     }
+
+    /// Phones (`device:<id>`) and plugin tool groups (`<pluginId>/<name>`, docs/BROWSER.md §2).
+    static func isPickable(_ id: String) -> Bool { id.hasPrefix("device:") || isPluginGroup(id) }
+    static func isPluginGroup(_ id: String) -> Bool { !id.hasPrefix("device:") && id.contains("/") && id.contains(".") }
 
     func setGroups(_ next: [String]) {
         groups = next
-        UserDefaults.standard.set(next.filter { $0.hasPrefix("device:") }, forKey: Self.lastKey)
+        UserDefaults.standard.set(next.filter(Self.isPickable), forKey: Self.lastKey)
+    }
+
+    /// The tool groups of the plugins that are on, plus any `value` names whose plugin is off now (so the pick can be cleared).
+    static func pluginGroups(_ value: [String]) -> [(id: String, name: String, off: Bool)] {
+        PluginsStore.shared.items.flatMap { plugin in
+            (plugin.declared?.agentTools ?? []).compactMap { group in
+                plugin.enabled || value.contains(group.id) ? (group.id, localizedText(group.title, fallback: group.id), !plugin.enabled) : nil
+            }
+        }
     }
 
     /// Switched-off items belong to one conversation setup: another agent, provider or project starts clean.
@@ -76,8 +89,9 @@ final class ToolsPickerModel {
     /// What a new conversation is created with: nil where the picker is not offered.
     func creation(capabilities: NativeBackendCapabilities?, agent: String, projectId: String?, scope: String) -> (groups: [String]?, off: [String]?) {
         guard let capabilities else { return (nil, nil) }
+        let usable = Self.pluginGroups([]).map(\.id)
         let phoneGroups = capabilities.supportsRiffetTools
-            ? groups.filter { id in phones.contains { Self.group($0.id) == id && $0.allowControl && $0.online } }
+            ? groups.filter { id in usable.contains(id) || phones.contains { Self.group($0.id) == id && $0.allowControl && $0.online } }
             : nil
         let offered = Self.toggles(capabilities, agent: agent, projectId: projectId) != nil
         let items = offered ? offItems(scope: scope) : []
@@ -143,6 +157,13 @@ struct ToolsPicker: View {
 
     private var toggles: ExtensionToggles? { ToolsPickerModel.toggles(capabilities, agent: agent, projectId: projectId) }
     private var phones: [PublicDevice] { capabilities.supportsRiffetTools ? model.controllable(groups) : [] }
+    private var pluginGroups: [(id: String, name: String, off: Bool)] { capabilities.supportsRiffetTools ? ToolsPickerModel.pluginGroups(groups) : [] }
+
+    /// `groups` with `group` switched; a phone or plugin group that is gone is dropped with the change.
+    private func switched(_ group: String, on: Bool) -> [String] {
+        let kept = groups.filter { id in id != group && (phones.contains { ToolsPickerModel.group($0.id) == id } || pluginGroups.contains { $0.id == id }) }
+        return on ? kept + [group] : kept
+    }
     private var loadKey: String { "\(agent)|\(profileId ?? "")|\(projectId ?? "")|\(toggles != nil)" }
 
     private func rows(_ listed: [String]?, prefix: String) -> [String] {
@@ -153,10 +174,10 @@ struct ToolsPicker: View {
 
     private var mcpRows: [String] { toggles?.mcp == true ? rows(model.loaded?.mcp.map(\.name), prefix: Self.mcp) : [] }
     private var skillRows: [String] { toggles?.skills == true ? rows(model.loaded?.skills.map(\.name), prefix: Self.skill) : [] }
-    private var offered: Bool { !phones.isEmpty || !mcpRows.isEmpty || !skillRows.isEmpty }
+    private var offered: Bool { !phones.isEmpty || !pluginGroups.isEmpty || !mcpRows.isEmpty || !skillRows.isEmpty }
 
     private var summary: String {
-        let phoneCount = phones.filter { groups.contains(ToolsPickerModel.group($0.id)) }.count
+        let phoneCount = phones.filter { groups.contains(ToolsPickerModel.group($0.id)) }.count + pluginGroups.filter { !$0.off && groups.contains($0.id) }.count
         let offCount = off.count
         let parts = [phoneCount > 0 ? String(localized: "\(phoneCount) 项") : "", offCount > 0 ? String(localized: "已关 \(offCount)") : ""].filter { !$0.isEmpty }
         return parts.isEmpty ? String(localized: "默认") : parts.joined(separator: " · ")
@@ -188,7 +209,7 @@ struct ToolsPicker: View {
 
     /// Everything the menu rows show: a change republishes them.
     private var publishKey: [String] {
-        phones.map { "\($0.id)|\($0.name)|\($0.online)" } + groups + off + mcpRows + ["|"] + skillRows
+        phones.map { "\($0.id)|\($0.name)|\($0.online)" } + pluginGroups.map { "\($0.id)|\($0.name)|\($0.off)" } + groups + off + mcpRows + ["|"] + skillRows
             + [loadKey, "\(model.loadingExtensions)", "\(model.loadFailed)", "\(model.loaded == nil)"]
     }
 
@@ -202,6 +223,10 @@ struct ToolsPicker: View {
 
     private func menuEntries(loading: Bool, failed: Bool) -> [NativeMenuEntry] {
         var entries: [NativeMenuEntry] = []
+        for group in pluginGroups {
+            let on = groups.contains(group.id)
+            entries.append(.item(group.name, subtitle: group.off ? String(localized: "已停用") : nil, checked: on) { setGroups(switched(group.id, on: !on)) })
+        }
         if !phones.isEmpty { entries.append(.header(String(localized: "手机"))) }
         for device in phones {
             let group = ToolsPickerModel.group(device.id)
@@ -254,6 +279,9 @@ struct ToolsPicker: View {
     private var panel: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                ForEach(pluginGroups, id: \.id) { group in
+                    row(group.name, on: groups.contains(group.id), trailing: group.off ? String(localized: "已停用") : nil) { on in setGroups(switched(group.id, on: on)) }
+                }
                 if !phones.isEmpty { header("手机") }
                 ForEach(phones, id: \.id) { device in
                     let group = ToolsPickerModel.group(device.id)

@@ -17,6 +17,8 @@ final class PluginManagementStore {
     var loading = false
     var recovery = false
     var diagnostics: [PluginDiagnostic] = []
+    /// READMEs by plugin id and language; an empty one is a plugin without, a missing one is not read yet.
+    var readmes: [String: String] = [:]
     var logs: [PluginLogEntry] = []
     @ObservationIgnored private var readSerial = 0
     var grant: PluginGrantRequired?
@@ -33,6 +35,8 @@ final class PluginManagementStore {
     var marketError: String?
     @ObservationIgnored private var marketSerial = 0
     var connected: Bool { api != nil }
+    /// For the plugin's own page, which talks to the server itself.
+    var client: RiffetApi? { api }
     var dirty: Bool { !draft.isEmpty }
     var selected: PluginDescriptor? { items.first { Self.key($0) == selectedID || $0.id == selectedID } }
     static func key(_ plugin: PluginDescriptor) -> String {
@@ -208,6 +212,14 @@ final class PluginManagementStore {
             let result = try await api.pluginDiagnostics(id: selected.id)
             if current == self.generation, key == self.selected.map(Self.key) { self.diagnostics = result }
         }
+    }
+    static func readmeKey(_ plugin: PluginDescriptor) -> String { plugin.id + "|" + PluginPageModel.locale }
+    /// Read once per plugin and language; a failure shows the description instead.
+    func loadReadme(_ plugin: PluginDescriptor) async {
+        let key = Self.readmeKey(plugin)
+        guard let api, readmes[key] == nil, !plugin.rejected else { return }
+        let text = (try? await api.pluginReadme(id: plugin.id, locale: PluginPageModel.locale))?.readme ?? ""
+        readmes[key] = text
     }
     func setRecovery(_ enabled: Bool) async { await run { api in _ = try await api.setPluginRecovery(enabled: enabled) } }
     func reload() async { guard let selected else { return }; await run { api in _ = try await api.reloadPlugin(id: selected.id) } }

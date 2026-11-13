@@ -110,6 +110,23 @@ function avatarStyle(pluginId: string, value: unknown, path: string): string | u
   return localized(value.title, `${path}.title`, 80);
 }
 
+/** A tool group's names all start with its prefix, so two groups (and Riffet's own tools) cannot collide. */
+const TOOL_PREFIX = /^[a-z][a-z0-9]{1,23}_$/;
+/** Prefixes of Riffet's own tools and device tools. */
+const RESERVED_TOOL_PREFIXES = ['device_', 'read_', 'schedule_', 'cancel_', 'list_', 'notify_', 'screen_', 'riffet_'];
+function agentTools(pluginId: string, value: unknown, path: string): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  if (!isContributionOf(pluginId, value.id)) return `${path}.id must be "${pluginId}/<name>"`;
+  if (typeof value.toolPrefix !== 'string' || !TOOL_PREFIX.test(value.toolPrefix) || RESERVED_TOOL_PREFIXES.includes(value.toolPrefix)) return `${path}.toolPrefix must be lowercase, end with "_" and not be one of Riffet's own (${RESERVED_TOOL_PREFIXES.join(', ')})`;
+  return localized(value.title, `${path}.title`, 80) ?? (value.description === undefined ? undefined : localized(value.description, `${path}.description`, 400)) ?? icon(value.icon, `${path}.icon`);
+}
+
+function channel(pluginId: string, value: unknown, path: string): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  if (!isContributionOf(pluginId, value.id)) return `${path}.id must be "${pluginId}/<name>"`;
+  return value.scope === 'session' ? undefined : `${path}.scope must be "session"`;
+}
+
 /** The persisted backend id, not a `<pluginId>/<name>` contribution id: a built-in one (official `riffet` plugins only) or one under the plugin's own id. */
 function agentBackend(pluginId: string, value: unknown, path: string): string | undefined {
   if (!isRecord(value)) return `${path} must be an object`;
@@ -225,6 +242,10 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     const problem = localized(declarations.sharePublisher.title, 'contributes.sharePublisher.title', 80);
     if (problem) return problem;
   }
+  if (declarations.page !== undefined) {
+    if (!isRecord(declarations.page)) return 'contributes.page must be an object';
+    if (declarations.page.title !== undefined) { const problem = localized(declarations.page.title, 'contributes.page.title', 40); if (problem) return problem; }
+  }
   if (declarations.actions !== undefined) {
     if (!Array.isArray(declarations.actions) || declarations.actions.length > 64) return 'contributes.actions must be a list of at most 64 actions';
     const ids = new Set<string>();
@@ -235,7 +256,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     }
   }
   const seen = new Set<string>();
-  for (const [key, check] of [['views', view], ['commands', command], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle]] as const) {
+  for (const [key, check] of [['views', view], ['commands', command], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle], ['agentTools', agentTools], ['channels', channel]] as const) {
     const items = declarations[key];
     if (items === undefined) continue;
     if (!Array.isArray(items)) return `contributes.${key} must be an array`;
@@ -261,7 +282,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
 /** The ids a plugin declares, for the registry's check that no two plugins claim one. */
 export function declaredIds(declarations: PluginDeclarations | undefined): string[] {
   const { palettes, fonts, backgrounds, presets, iconPacks } = declarations?.appearance ?? {};
-  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
+  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
 }
 
 /** The members of a validated record that this version knows, in that order: whatever else a package wrote there is dropped. */
@@ -288,9 +309,11 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const tasks = declarations.tasks?.map(item => pick(item, ['id', 'title', 'projectType']));
   const agentBackends = declarations.agentBackends?.map(item => ({ ...pick(item, ['id', 'title']), ...(item.icon ? { icon: pick(item.icon, ['svg', 'sfSymbol']) } : {}) }));
   const avatarStyles = declarations.avatarStyles?.map(item => pick(item, ['id', 'title', 'credit', 'needsName']));
+  const agentToolGroups = declarations.agentTools?.map(item => ({ ...pick(item, ['id', 'title', 'description', 'toolPrefix']), ...(item.icon ? { icon: pick(item.icon, ['svg', 'sfSymbol']) } : {}) }));
+  const channels = declarations.channels?.map(item => pick(item, ['id', 'scope']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -360,6 +383,9 @@ const declarationsSchema = z.object({
   tasks: z.array(z.object({ ...contributionSchema, projectType: z.string().regex(CONDITION_TOKEN).optional() }).passthrough()).optional(),
   agentBackends: z.array(z.object({ ...contributionSchema, icon: iconSchema.optional() }).passthrough()).optional(),
   avatarStyles: z.array(z.object({ ...contributionSchema, credit: z.string().max(AVATAR_CREDIT_MAX).optional(), needsName: z.boolean().optional() }).passthrough()).max(64).optional(),
+  agentTools: z.array(z.object({ ...contributionSchema, description: localizedSchema(400).optional(), toolPrefix: z.string().regex(/^[a-z][a-z0-9]{1,23}_$/), icon: iconSchema.optional() }).passthrough()).max(16).optional(),
+  channels: z.array(z.object({ id: z.string(), scope: z.literal('session') }).passthrough()).max(16).optional(),
+  page: z.object({ title: localizedSchema(40).optional() }).passthrough().optional(),
   appearance: appearanceSchema.optional(),
 }).passthrough();
 

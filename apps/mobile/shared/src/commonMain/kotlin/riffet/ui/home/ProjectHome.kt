@@ -158,6 +158,7 @@ import riffet.ui.pickers.ToolsPickerPage
 import riffet.ui.pickers.extensionsPick
 import riffet.ui.pickers.rememberExtensionsListed
 import riffet.ui.pickers.offeredPicks
+import riffet.ui.pickers.rememberPluginToolGroups
 import riffet.ui.pickers.rememberToolDevices
 import riffet.ui.pickers.toolsOffered
 import riffet.ui.pickers.toolsSummary
@@ -874,8 +875,9 @@ private fun HomeContent(
     // The phones the agent may control: offered only where the backend takes tools and there is a phone to pick.
     val toolsSupported = !chat && config.capabilities?.supportsRiffetTools == true
     val toolDevices = rememberToolDevices(api, enabled = toolsSupported)
-    val pickedTools = offeredPicks(toolDevices, config.toolGroups)
-    val phonesShown = toolsSupported && toolsOffered(toolDevices, emptyList())
+    val pluginTools = rememberPluginToolGroups(api, enabled = toolsSupported, value = emptyList())
+    val pickedTools = offeredPicks(toolDevices, config.toolGroups, pluginTools)
+    val phonesShown = toolsSupported && toolsOffered(toolDevices, emptyList(), pluginTools)
     // MCP servers and Skills switched off for this conversation only; a new one starts with everything on.
     var extensionsOff by remember(config.backendId, config.profileId, target.id) { mutableStateOf(emptyList<String>()) }
     val extensions = extensionsPick(
@@ -1151,6 +1153,7 @@ private fun HomeContent(
                 HomeSheet.Tools -> ToolsPickerPage(
                     value = pickedTools,
                     devices = toolDevices,
+                    plugins = pluginTools,
                     onChange = { config.pickToolGroups(it) },
                     extensions = extensions,
                     enabled = api != null,
@@ -1230,7 +1233,7 @@ internal class HomeConfig(
         private set
 
     fun pickToolGroups(groups: List<String>) {
-        toolGroups = ToolGroups.phones(groups)
+        toolGroups = ToolGroups.picks(groups)
         preferences?.setString(PreferenceKeys.TOOL_GROUPS, ToolGroups.encode(groups))
     }
 

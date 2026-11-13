@@ -122,7 +122,7 @@ try {
   // Each conversation's CLI spawns the Riffet MCP shim itself (docs/DEVICES.md §2).
   await copyFile('apps/server/src/riffet-mcp/riffet-mcp.mjs', 'dist/riffet-mcp.mjs');
   await cp('apps/server/src/visualization/assets', 'dist/visualization/assets', { recursive: true });
-  // A package's `assets/` (an appearance pack's fonts, palette and images) is served from here; the App payload carries dist/ whole.
+  // A package's `assets/` (an appearance pack's fonts, palette and images) and README are served from here; the App payload carries dist/ whole.
   // The layout is what apps/server/src/plugins/package-root.ts looks for, and a left-out vendor ships nothing.
   await rm('dist/integrations', { recursive: true, force: true }); // Legacy build output, never user data.
   await rm('dist/plugins', { recursive: true, force: true });
@@ -130,6 +130,11 @@ try {
     for (const pack of (await readdir(`plugins/${vendor.name}`, { withFileTypes: true })).filter(entry => entry.isDirectory())) {
       const assets = `plugins/${vendor.name}/${pack.name}/assets`;
       if ((await stat(assets).catch(() => undefined))?.isDirectory()) await cp(assets, `dist/${assets}`, { recursive: true });
+      // Its README (`README.md`, `README.<language>.md`), for 介绍 in the plugin's details.
+      for (const file of (await readdir(`plugins/${vendor.name}/${pack.name}`)).filter(name => /^README(\.[A-Za-z-]+)?\.md$/.test(name))) {
+        await mkdir(`dist/plugins/${vendor.name}/${pack.name}`, { recursive: true });
+        await copyFile(`plugins/${vendor.name}/${pack.name}/${file}`, `dist/plugins/${vendor.name}/${pack.name}/${file}`);
+      }
     }
   }
   await chmod('dist/cli.js',0o755);

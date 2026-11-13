@@ -28,8 +28,10 @@ const NO_SETTINGS_PAGE: SettingsPageService = { setDirty: () => undefined, setBu
  * host serves one view instance; `sessionId` is the conversation it shows, which navigation
  * compares against.
  */
-export function createPluginHost({ stores, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE }: {
+export function createPluginHost({ stores, pluginId, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE }: {
   stores: WorkbenchStores;
+  /** The plugin the view belongs to; absent for the app's own views. */
+  pluginId?: string | undefined;
   sessionId: string | undefined;
   locale: string;
   /** What the plugin declared (`WebPlugin.access`); without it `request` and `settings` refuse everything. */
@@ -98,6 +100,7 @@ export function createPluginHost({ stores, sessionId, locale, access, settingsPa
         const target = lists.get().sessions.find((item) => item.id === id);
         if (target) handlers.selectSession(target);
       },
+      ...(pluginId ? { openPluginPage: () => { void nav.navigate(() => nav.openPlugins(pluginId, '', 'page')); } } : {}),
     },
     notify: { error: (error, fallback) => toast.error(errorMessage(error, fallback)), errorText: errorMessage, success: (message) => toast.success(message) },
     request: {

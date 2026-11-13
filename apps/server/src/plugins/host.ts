@@ -22,6 +22,10 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   startTask?: (input: { requestId: string; projectId: string; providerId: string; actionId: string; params?: TaskParams; confirm?: string }) => Promise<Task>;
   /** `host.services.get` of this plugin; absent for an installed package, which gets none. */
   service?: (pluginId: string, name: string, range: string) => unknown;
+  /** The core's conversations; offered only when `ownsSessionSurfaces`. */
+  sessions?: NonNullable<PluginHost['sessions']>;
+  /** Whether this plugin declares agent tools or channels. */
+  ownsSessionSurfaces?: boolean;
 }): PluginHost {
   const directory = join(options.stateDir, 'plugin-data', id);
   return {
@@ -59,6 +63,7 @@ export function createPluginHost(id: PluginManifest['id'], options: {
       },
     } } : {}),
     ...(options.service ? { services: { get: ((pluginId: string, name: string, range: string) => options.service!(pluginId, name, range)) as NonNullable<PluginHost['services']>['get'] } } : {}),
+    ...(options.sessions && options.ownsSessionSurfaces ? { sessions: options.sessions } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };
 }

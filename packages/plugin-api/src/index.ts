@@ -9,13 +9,13 @@
 // refuses a manifest written against another version.
 
 import type {
-  ActionStep, PluginField, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo,
+  ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo,
   NativeBackendId, NativeBackendUsage, NativeRuntimeControl, PluginCommandResult, PluginDeclarations, PluginRequirement, ShareCapability, Task, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams,
 } from '@riffet/contracts';
 import type { AgentBackend, AgentProfile } from './agent.js';
 import type { GatewayProtocol } from '@riffet/contracts';
 
-export type { ActionStep, PluginField, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
+export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
 export type { PluginCommandResult };
 export * from './agent.js';
@@ -104,6 +104,101 @@ export interface Contributions {
   services?: Record<string, PluginService>;
   /** Keyed by style id; each is declared in the manifest's `contributes.avatarStyles`. Installed isolated packages can provide them too. */
   avatarStyles?: Record<string, AvatarStyleProvider>;
+  /** Keyed by group id; each is declared in the manifest's `contributes.agentTools`. In-process packages only. */
+  agentTools?: Record<string, AgentToolGroup>;
+  /** Keyed by channel id; each is declared in the manifest's `contributes.channels`. In-process packages only. */
+  channels?: Record<string, PluginChannelHandler>;
+  /** The plugin's own page in its details, declared by the manifest's `contributes.page`. */
+  page?: PluginPageProvider;
+}
+
+// ── The plugin's page (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────────────────
+
+export interface PluginPageContext {
+  /** The client's language, a BCP-47 tag such as `zh-Hans` or `en`. */
+  readonly locale: string;
+}
+
+/**
+ * Builds the page each time a client shows it and after each change. A keyed item names one of the manifest's `settings`;
+ * the host saves a change there and reads the page again, so `read` only reports what `host.settings()` holds. Keep it cheap:
+ * slow facts (sizes, probes) belong in a cache the plugin refreshes.
+ */
+export interface PluginPageProvider {
+  read(context: PluginPageContext): PluginPage | Promise<PluginPage>;
+  /** A button. Work that outlasts a request runs on after this returns; the page shows it, with `refreshMs` while it runs. */
+  run?(context: PluginPageContext, action: string, item?: string): Promise<{ message?: string } | void>;
+}
+
+/** A `list` item's setting: a JSON array of strings, or a comma-separated line written by hand or before the page existed. */
+export function listSetting(value: string | undefined): string[] {
+  const text = (value ?? '').trim();
+  if (text.startsWith('[')) {
+    try { const parsed: unknown = JSON.parse(text); if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === 'string' && Boolean(item.trim())).map(item => item.trim()); } catch { /* read as a line */ }
+  }
+  return text.split(',').map(item => item.trim()).filter(Boolean);
+}
+
+// ── Agent tools (docs/BROWSER.md §2) ──────────────────────────────────────────
+
+/** One MCP tool. The list a group gives must not change while the plugin is on: a running CLI keeps the list it started with. */
+export interface AgentToolDefinition {
+  /** Starts with the group's declared `toolPrefix`. */
+  name: string;
+  description: string;
+  /** JSON Schema of the arguments, an `object`. */
+  inputSchema: Record<string, unknown>;
+}
+
+export type AgentToolContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
+export interface AgentToolResult { content: AgentToolContent[]; structuredContent?: Record<string, unknown>; isError?: boolean }
+
+/** What one call runs with. The host has checked that the conversation selected this group and is not archived. */
+export interface AgentToolContext {
+  readonly sessionId: string;
+  readonly projectId?: string;
+  /** The project's directory on this machine, when the conversation has one. */
+  readonly projectPath?: string;
+  /** Unique per call. */
+  readonly callId: string;
+  /** Aborts when the CLI's request ends or the plugin is turned off. */
+  readonly signal: AbortSignal;
+}
+
+export interface AgentToolGroup {
+  tools: readonly AgentToolDefinition[];
+  /** A thrown `host.error` below 500 reaches the Agent as `CODE: message`; anything else is a server error. */
+  call(context: AgentToolContext, name: string, args: Record<string, unknown>): Promise<AgentToolResult>;
+}
+
+// ── Channels ─────────────────────────────────────────────────────────────────
+
+export interface PluginChannelSocket {
+  send(data: string | Uint8Array): void;
+  close(code?: number, reason?: string): void;
+  /** Bytes queued and not yet sent; a producer of frames skips while this is high. */
+  readonly bufferedAmount: number;
+}
+
+/** One client connection. The host has checked the user, the session and that the plugin is on. */
+export interface PluginChannelContext {
+  readonly sessionId: string;
+  readonly projectId?: string;
+  /** Aborts when the socket closes or the plugin is turned off. */
+  readonly signal: AbortSignal;
+}
+
+export interface PluginChannelHandler {
+  open(context: PluginChannelContext, socket: PluginChannelSocket): { message?(data: string | Uint8Array, binary: boolean): void } | void;
+}
+
+/** A conversation as a plugin with agent tools or channels sees it. */
+export interface PluginSessionView {
+  id: string;
+  title?: string;
+  projectId?: string;
+  projectPath?: string;
+  archived: boolean;
 }
 
 /** What a generated avatar is drawn from (docs/OWNER.md「随机头像」). */
@@ -189,6 +284,15 @@ export interface PluginHost {
    * dependency is optional and absent; asking for a plugin not in `requires` throws. Absent for isolated installed packages.
    */
   services?: { get<T extends PluginService = PluginService>(pluginId: string, name: string, range: string): T | undefined };
+  /**
+   * Conversations, for a plugin that declares `agentTools` or `channels`; absent otherwise. `wake` sends `note` into the
+   * conversation as its next turn (as a one-time wake-up does); `notify` shows a notice on the user's clients.
+   */
+  sessions?: {
+    get(sessionId: string): PluginSessionView | undefined;
+    wake(sessionId: string, note: string): void;
+    notify(sessionId: string, notice: { title?: string; body: string }): void;
+  };
   /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
   error(code: string, message: string, statusCode?: number): Error;
 }

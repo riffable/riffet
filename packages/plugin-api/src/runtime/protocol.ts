@@ -36,6 +36,8 @@ export interface ChildContributions {
   avatarStyles: string[];
   status: boolean;
   doctorChecks: boolean;
+  /** Whether it gives a page (`Contributions.page`); absent from a child written before pages existed. */
+  page?: boolean;
   /** Contribution kinds the package returned that cannot run out of process in this version. */
   unsupported: string[];
 }
@@ -54,6 +56,9 @@ export type HostToChild = {
   'flow.poll': { params: { flow: string }; result: ActionOutcome };
   status: { params: Record<string, never>; result: PluginStatus };
   doctorChecks: { params: Record<string, never>; result: DoctorCheck[] };
+  /** The server checks the page before a client sees it. */
+  'page.read': { params: { locale: string }; result: unknown };
+  'page.run': { params: { locale: string; action: string; item?: string }; result: { message?: string } };
   'modelSource.catalog': { params: { id: string; backend: ModelSourceBackend; overrides: SourceOverrides }; result: ModelInfo[] };
   'modelSource.prepare': { params: { id: string; overrides: SourceOverrides }; result: ResolvedSource };
   'modelSource.usage': { params: { id: string; overrides: SourceOverrides }; result: NativeBackendUsage };

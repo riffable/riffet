@@ -2,10 +2,12 @@ import { RIFFET_TOOL_GROUPS, type ToolGroupId } from '../../../../packages/contr
 import { AppError } from '../errors.js';
 
 const DEVICE_GROUP = /^device:[A-Za-z0-9._-]{1,100}$/;
+/** A plugin's `contributes.agentTools` id, `<pluginId>/<name>`; kept while the plugin is off, given only while it is on. */
+const PLUGIN_GROUP = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]{0,63}$/;
 const MAX_GROUPS = 32;
 
 export function isToolGroupId(value: unknown): value is ToolGroupId {
-  return typeof value === 'string' && ((RIFFET_TOOL_GROUPS as readonly string[]).includes(value) || DEVICE_GROUP.test(value));
+  return typeof value === 'string' && ((RIFFET_TOOL_GROUPS as readonly string[]).includes(value) || DEVICE_GROUP.test(value) || (value.length <= 130 && PLUGIN_GROUP.test(value)));
 }
 
 /** A validated, de-duplicated list of tool groups, in the order given. */

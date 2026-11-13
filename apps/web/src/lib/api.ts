@@ -743,6 +743,13 @@ export const api = {
   /** Where new shares go; `null` leaves it to the first enabled publisher. */
   setPluginDefaults: (update: PluginDefaultsUpdate) => request<PluginsResponse>('/api/integrations', json('PATCH', update)),
   updatePlugin: (id: string, update: PluginUpdate) => request<PluginDescriptor>(`/api/integrations/${encodeURIComponent(id)}`, json('PATCH', update)),
+  /** The plugin's own page (docs/PLUGIN_ARCHITECTURE.md「插件页」), in `locale`. */
+  pluginPage: (id: string, locale: string, signal?: AbortSignal) =>
+    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page?locale=${encodeURIComponent(locale)}`, { signal }),
+  changePluginPage: (id: string, change: import('@contracts').PluginPageChange) =>
+    request<import('@contracts').PluginPageResponse>(`/api/integrations/${encodeURIComponent(id)}/page`, json('POST', change)),
+  pluginReadme: (id: string, locale: string, signal?: AbortSignal) =>
+    request<import('@contracts').PluginReadmeResponse>(`/api/integrations/${encodeURIComponent(id)}/readme?locale=${encodeURIComponent(locale)}`, { signal }),
   /** A device flow answers `show-code`; its device code stays on the server behind `flowId`. */
   runPluginAction: (id: string, action: string, signal?: AbortSignal) =>
     request<ActionStep>(`/api/integrations/${encodeURIComponent(id)}/actions/${encodeURIComponent(action)}`, { ...json('POST', {}), signal }),

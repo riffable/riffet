@@ -132,6 +132,8 @@ export interface NavigationService {
   /** Previews a project file in the side panel. */
   openPath(path: string): void;
   openSession(sessionId: string): void;
+  /** Opens this plugin's own page in its details (docs/PLUGIN_ARCHITECTURE.md「插件详情」). Absent from an older host. */
+  openPluginPage?(): void;
 }
 
 export interface NotifyService {

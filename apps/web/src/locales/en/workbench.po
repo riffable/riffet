@@ -128,6 +128,11 @@ msgstr "Theme"
 msgid "今天"
 msgstr "Today"
 
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "介绍"
+msgstr "Overview"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "从终端导入…"
 msgstr "Import from terminal…"
@@ -386,11 +391,6 @@ msgstr "Delete data"
 msgid "刷新"
 msgstr "Refresh"
 
-#: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
-msgid "功能"
-msgstr "Features"
-
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
@@ -496,6 +496,10 @@ msgstr "Enable plugin"
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可打开专用配置"
 msgstr "Enable the plugin to open its custom configuration"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可用"
+msgstr "Available once the plugin is on"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用策略"
@@ -708,6 +712,7 @@ msgstr "Favorited"
 msgid "已更新，刷新后继续"
 msgstr "Updated; refresh to continue"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已设置"
 msgstr "Configured"
@@ -960,6 +965,7 @@ msgstr "Undo"
 msgid "撤销失败"
 msgstr "Couldn't undo"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr "Operation failed"
@@ -1203,6 +1209,10 @@ msgstr "Couldn't confirm the authorization status"
 msgid "无法离开扩展管理页面"
 msgstr "Couldn't leave the extensions page"
 
+#: src/app/plugins/PluginPageView.tsx
+msgid "无法读取"
+msgstr "Could not read"
+
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"
 msgstr "Couldn't read the resume command"
@@ -1433,10 +1443,6 @@ msgstr "No configurable options"
 msgid "没有插件"
 msgstr "No plugins"
 
-#: src/app/plugins/PluginsPage.tsx
-msgid "没有独立功能入口"
-msgstr "No separate features"
-
 #: src/plugins/LogRecords.tsx
 msgid "没有符合筛选的记录"
 msgstr "No records match the filter"
@@ -1476,6 +1482,7 @@ msgstr "Add project"
 msgid "清空"
 msgstr "Clear"
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/plugins/ModelField.tsx
 msgid "清除"
@@ -1579,6 +1586,10 @@ msgstr "Offline · Showing the list saved just now"
 #: src/app/Sidebar.tsx
 msgid "移出标签栏"
 msgstr "Remove from tab bar"
+
+#: src/app/plugins/PluginPageView.tsx
+msgid "移除 {value}"
+msgstr "Remove {value}"
 
 #: src/app/DirectoryPicker.tsx
 msgid "移除收藏"
@@ -1720,8 +1731,14 @@ msgstr "to get a pairing code"
 msgid "要在 {0} 做什么？"
 msgstr "What do you want to do in {0}?"
 
+#: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
 #: src/app/WorkbenchOverlays.tsx
+msgid "设置"
+msgstr "Settings"
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
 msgid "设置"
 msgstr "Settings"
 
@@ -1746,12 +1763,8 @@ msgstr "Access token"
 msgid "访问网络"
 msgstr "Access the network"
 
-#: src/plugins/TasksView.tsx
-msgid "诊断"
-msgstr "Diagnostics"
-
 #: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
+#: src/plugins/TasksView.tsx
 msgid "诊断"
 msgstr "Diagnostics"
 
@@ -1903,10 +1916,6 @@ msgstr "General"
 #: src/app/App.tsx
 msgid "配对码"
 msgstr "Pairing code"
-
-#: src/app/plugins/PluginsPage.tsx
-msgid "配置"
-msgstr "Configuration"
 
 #: src/app/plugins/PluginsPage.tsx
 msgctxt "plugin-detail-tab"

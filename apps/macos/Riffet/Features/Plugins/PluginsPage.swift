@@ -16,7 +16,7 @@ struct PluginsPage: View {
     @State private var rereading = false
     @State private var collapsing = false
     @State private var removing: PluginDescriptor?
-    @State private var detailTab = "features"
+    @State private var detailTab = "overview"
     @State private var configurationPage = ""
     @State private var pendingDetailTab: String?
     @State private var pendingConfigurationPage: String?
@@ -165,27 +165,32 @@ struct PluginsPage: View {
                         .help("关闭").accessibilityLabel("关闭")
                         .keyboardShortcut(.cancelAction).disabled(store.busy)
                 }.padding(Space.xl)
-                SegmentedTrack(selection: Binding(get: { detailTab }, set: { selectDetailTab($0) })) {
-                    Text("功能").tag("features")
-                    Text("配置").tag("configuration")
+                SegmentedTrack(selection: Binding(get: { shownTab(item) }, set: { selectDetailTab($0) })) {
+                    Text("介绍").tag("overview")
+                    if Self.hasPage(item) { Text(pageTitle(item)).tag("page") }
                     Text("管理").tag("management")
-                    Text("诊断").tag("diagnostics")
                 }
                 .accessibilityLabel("插件详情").disabled(store.busy)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, Space.xl).padding(.bottom, Space.lg)
                 Divider().overlay(palette.line)
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Space.lg) {
-                        errorNotice
-                        if store.dirty && (store.selected == nil || store.selected?.rejected == true) {
-                            Text("插件已不可用，当前内容会保留到关闭").font(.callout).foregroundStyle(palette.fg3)
+                if shownTab(item) == "page", item.declared?.page != nil, item.enabled, store.selected != nil, let api = store.client {
+                    // The plugin's own page is a settings form of its own, scrolling as one.
+                    PluginPageForm(api: api, plugin: item, disabled: store.busy || !store.connected) { Task { await store.refresh() } }
+                        .id(item.managementKey)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Space.lg) {
+                            errorNotice
+                            if store.dirty && (store.selected == nil || store.selected?.rejected == true) {
+                                Text("插件已不可用，当前内容会保留到关闭").font(.callout).foregroundStyle(palette.fg3)
+                            }
+                            detail(item)
                         }
-                        detail(item)
-                    }
-                    .padding(Space.xl)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }.id(item.managementKey + ":" + detailTab)
+                        .padding(Space.xl)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }.id(item.managementKey + ":" + shownTab(item))
+                }
             }
         }
         .frame(width: min(760, visible.width - 64), height: min(720, visible.height - 112))
@@ -198,7 +203,7 @@ struct PluginsPage: View {
                 if let selected = selection { store.select(selected); configurationPage = "" }
                 if let tab = pendingDetailTab { detailTab = tab }
                 if let page = pendingConfigurationPage { configurationPage = page }
-                if collapsing { store.collapse(); detailTab = "features"; configurationPage = "" }
+                if collapsing { store.collapse(); detailTab = "overview"; configurationPage = "" }
                 if installing { Task { await store.choosePackage() } }
                 if rereading { Task { await store.refresh() } }
                 cancelPendingChange()
@@ -232,7 +237,22 @@ struct PluginsPage: View {
     private func closeInspector() {
         guard !store.busy else { return }
         if store.dirty { collapsing = true }
-        else { store.collapse(); detailTab = "features"; configurationPage = "" }
+        else { store.collapse(); detailTab = "overview"; configurationPage = "" }
+    }
+
+    /// Whether the plugin has a page of its own: one it builds, its settings, a settings view for the Mac or a sign-in.
+    static func hasPage(_ item: PluginDescriptor) -> Bool {
+        item.declared?.page != nil || !item.settings.isEmpty
+            || item.declared?.views?.contains { $0.locations.contains("settings") && $0.clients.contains("macos") } == true
+            || ((item.declared?.actions ?? []) + item.actions).contains { $0.kind == "device-flow" }
+    }
+
+    private func pageTitle(_ item: PluginDescriptor) -> String {
+        localizedText(item.declared?.page?.title, fallback: String(localized: "设置"))
+    }
+
+    private func shownTab(_ item: PluginDescriptor) -> String {
+        detailTab == "page" && !Self.hasPage(item) ? "overview" : detailTab
     }
 
     private func selectDetailTab(_ tab: String) {
@@ -296,7 +316,7 @@ struct PluginsPage: View {
         return menu
     }
 
-    private func select(_ item: PluginDescriptor, tab: String = "features") {
+    private func select(_ item: PluginDescriptor, tab: String = "overview") {
         guard !store.busy else { return }
         guard store.selected?.managementKey != item.managementKey else { return }
         if store.dirty { selection = item; pendingDetailTab = tab }
@@ -304,12 +324,30 @@ struct PluginsPage: View {
     }
 
     @ViewBuilder private func detail(_ item: PluginDescriptor) -> some View {
-        switch detailTab {
-        case "configuration": configuration(item)
-        case "management": management(item)
-        case "diagnostics": diagnostics(item)
-        default: features(item)
+        switch shownTab(item) {
+        case "page": configuration(item)
+        case "management":
+            // Both rare: one tab, diagnostics below.
+            management(item)
+            Divider()
+            Text("诊断").font(.callout.weight(.medium))
+            diagnostics(item)
+        default: overview(item)
         }
+    }
+
+    @ViewBuilder private func overview(_ item: PluginDescriptor) -> some View {
+        let readme = store.readmes[PluginManagementStore.readmeKey(item)]
+        if let readme, !readme.isEmpty {
+            MarkdownView(source: readme).frame(maxWidth: .infinity, alignment: .leading)
+        } else if readme == nil && !item.rejected {
+            Spinner(size: .small).frame(maxWidth: .infinity)
+        } else {
+            let description = localizedText(item.description_, fallback: "")
+            if !description.isEmpty { Text(description).font(.callout).foregroundStyle(palette.fg3).textSelection(.enabled) }
+        }
+        features(item)
+            .task(id: PluginManagementStore.readmeKey(item)) { await store.loadReadme(item) }
     }
 
     @ViewBuilder private func management(_ item: PluginDescriptor) -> some View {
@@ -349,7 +387,6 @@ struct PluginsPage: View {
     }
 
     @ViewBuilder private func diagnostics(_ item: PluginDescriptor) -> some View {
-        LabeledContent("状态") { Text(status(item)).foregroundStyle(palette.fg) }.font(.callout)
         if let activation = item.activation {
             LabeledContent("激活状态") {
                 switch activation.state {
@@ -406,8 +443,15 @@ struct PluginsPage: View {
         let declaredActions = item.declared?.actions ?? []
         let actions = (declaredActions + item.actions.filter { action in !declaredActions.contains { $0.id == action.id } })
             .filter { $0.kind == "device-flow" }
+        let generic = item.declared?.page == nil
         return VStack(alignment: .leading, spacing: Space.md) {
-            ForEach(item.settings, id: \.key) { field in
+            if !generic {
+                // Shown here only while the plugin is off: when on, the page replaces this view.
+                Text("启用插件后可用").foregroundStyle(palette.fg3)
+                Button("启用插件") { Task { await store.enable("on") } }
+                    .disabled(store.busy || store.dirty || !store.connected || store.selected == nil || item.rejected || item.stopping != nil)
+            }
+            ForEach(generic ? item.settings : [], id: \.key) { field in
                 VStack(alignment: .leading, spacing: Space.xs) {
                     Text(field.label).font(.callout.weight(.medium))
                     HStack {
@@ -419,7 +463,7 @@ struct PluginsPage: View {
                     }.textFieldStyle(.roundedBorder).disabled(store.busy)
                 }
             }
-            if !item.settings.isEmpty {
+            if generic && !item.settings.isEmpty {
                 HStack {
                     Button("保存") { Task { await store.save() } }.disabled(!store.dirty || store.busy || !store.connected || store.selected == nil || store.selected?.rejected == true)
                     Button("取消") { store.discard() }.disabled(!store.dirty || store.busy || !store.connected)
@@ -438,9 +482,7 @@ struct PluginsPage: View {
             ForEach(actions, id: \.id) { action in
                 Button(action.label) { flow = action }.disabled(store.busy || store.selected == nil || !item.enabled || !item.actions.contains { $0.id == action.id })
             }
-            if item.settings.isEmpty && pages.isEmpty && actions.isEmpty {
-                Text("没有可配置项").font(.callout).foregroundStyle(palette.fg3)
-            }
+
         }
     }
 
@@ -470,8 +512,6 @@ struct PluginsPage: View {
         let declaredActions = declared?.actions ?? []
         let actions = (declaredActions + item.actions.filter { action in !declaredActions.contains { $0.id == action.id } })
             .filter { $0.kind == "run" }
-        let description = localizedText(item.description_, fallback: "")
-        if !description.isEmpty { Text(description).font(.callout).foregroundStyle(palette.fg3).textSelection(.enabled) }
         if let agents = declared?.agentBackends, !agents.isEmpty {
             VStack(alignment: .leading, spacing: Space.sm) {
                 Text("Agent").font(.callout.weight(.medium))
@@ -547,9 +587,6 @@ struct PluginsPage: View {
         }
         ForEach(actions, id: \.id) { action in
             Button(action.label) { flow = action }.disabled(store.busy || store.selected == nil || !item.enabled || !item.actions.contains { $0.id == action.id })
-        }
-        if declared?.agentBackends?.isEmpty != false && declared?.modelSources?.isEmpty != false && item.contributes.modelSources.isEmpty && views.isEmpty && declared?.commands?.isEmpty != false && declared?.tasks?.isEmpty != false && declared?.appearance == nil && declared?.sharePublisher == nil && item.contributes.sharePublisher == nil && actions.isEmpty {
-            Text("没有独立功能入口").font(.callout).foregroundStyle(palette.fg3)
         }
     }
     private var browseEntries: [PluginMarketEntry] {

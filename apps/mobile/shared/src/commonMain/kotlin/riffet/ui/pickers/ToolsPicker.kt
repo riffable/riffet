@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.intl.Locale
 import kotlinx.coroutines.CancellationException
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.ExtensionToggles
@@ -25,6 +26,8 @@ import riffet.contracts.NativeBackendCapabilities
 import riffet.contracts.NativeBackendId
 import riffet.shared.ExtensionsOff
 import riffet.shared.LoadedExtensionsCache
+import riffet.shared.PluginToolGroup
+import riffet.shared.plugins
 import riffet.shared.PublicDevice
 import riffet.shared.RiffetApi
 import riffet.shared.ToolGroups
@@ -123,14 +126,36 @@ internal fun rememberToolDevices(api: RiffetApi?, enabled: Boolean): List<Public
     return devices
 }
 
-/** There is something to pick, or something already picked that can be switched off. */
-internal fun toolsOffered(devices: List<PublicDevice>?, value: List<String>): Boolean =
-    value.isNotEmpty() || devices?.let { ToolGroups.controllable(it).isNotEmpty() } == true
+/**
+ * The plugins' agent tools (the browser, docs/BROWSER.md §2), read with the devices: when the composer appears and when
+ * the app comes back. Null until the first read answers; [value] keeps a picked group listed after its plugin turned off.
+ */
+@Composable
+internal fun rememberPluginToolGroups(api: RiffetApi?, enabled: Boolean, value: List<String>): List<PluginToolGroup>? {
+    val resumed = rememberVisualHostResumed()
+    var plugins by remember(api) { mutableStateOf<List<riffet.shared.PluginDescriptor>?>(null) }
+    LaunchedEffect(api, enabled, resumed) {
+        if (api == null || !enabled || !resumed) return@LaunchedEffect
+        try {
+            plugins = api.plugins()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (_: Throwable) {
+            // Stays as it was; the next return to the app reads again.
+        }
+    }
+    return plugins?.let { ToolGroups.pluginGroups(it, value) }
+}
 
-/** A new conversation's pick: the remembered phones that can be offered now. One offline is kept for the next. */
-internal fun offeredPicks(devices: List<PublicDevice>?, value: List<String>): List<String> {
+/** There is something to pick, or something already picked that can be switched off. */
+internal fun toolsOffered(devices: List<PublicDevice>?, value: List<String>, plugins: List<PluginToolGroup>? = null): Boolean =
+    value.isNotEmpty() || devices?.let { ToolGroups.controllable(it).isNotEmpty() } == true || plugins?.any { it.enabled } == true
+
+/** A new conversation's pick: the remembered phones and plugin tools that can be offered now. One offline is kept for the next. */
+internal fun offeredPicks(devices: List<PublicDevice>?, value: List<String>, plugins: List<PluginToolGroup>? = null): List<String> {
     val offered = devices?.let(ToolGroups::controllable).orEmpty().mapTo(HashSet()) { ToolGroups.deviceGroup(it.id) }
-    return ToolGroups.phones(value).filter { it in offered }
+    plugins.orEmpty().filter { it.enabled }.mapTo(offered) { it.id }
+    return ToolGroups.picks(value).filter { it in offered }
 }
 
 /** The value shown on the send-settings row: the phones picked, then how many MCP servers and Skills are off. */
@@ -153,6 +178,7 @@ internal fun ToolsPickerPage(
     value: List<String>,
     devices: List<PublicDevice>?,
     onChange: (List<String>) -> Unit,
+    plugins: List<PluginToolGroup>? = null,
     extensions: ExtensionsPick? = null,
     footnote: String? = null,
     error: String? = null,
@@ -188,13 +214,24 @@ internal fun ToolsPickerPage(
     PickerPage(title = stringResource(Res.string.pickers_tools_title), onBack = onBack) {
         error?.let { SheetNotice(stringResource(Res.string.session_last_change_failed, it), SettingsNoticeKind.ERROR) }
         Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = metrics.rowPadding)) {
+            val language = Locale.current.language
+            plugins.orEmpty().forEach { group ->
+                OptionRow(
+                    label = group.label(language),
+                    selected = group.id in value,
+                    description = if (group.enabled) null else stringResource(Res.string.settings_disabled),
+                    onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), plugins, group.id, group.id !in value)) },
+                    disabledReason = "".takeUnless { enabled },
+                    multiple = true,
+                )
+            }
             if (controllable.isNotEmpty() || stale.isNotEmpty()) SectionLabel(stringResource(Res.string.pickers_tools_phones))
             controllable.forEach { device ->
                 val group = ToolGroups.deviceGroup(device.id)
                 OptionRow(
                     label = stringResource(Res.string.pickers_tools_control, device.name),
                     selected = group in value,
-                    onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), group, group !in value)) },
+                    onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), plugins, group, group !in value)) },
                     disabledReason = "".takeUnless { enabled },
                     multiple = true,
                 )
@@ -205,7 +242,7 @@ internal fun ToolsPickerPage(
                     label = known?.let { stringResource(Res.string.pickers_tools_control, it.name) } ?: stringResource(Res.string.pickers_tools_removed),
                     selected = true,
                     description = known?.takeIf { !it.online }?.let { stringResource(Res.string.pickers_tools_offline) },
-                    onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), group, false)) },
+                    onClick = { onChange(ToolGroups.toggled(value, devices.orEmpty(), plugins, group, false)) },
                     disabledReason = "".takeUnless { enabled },
                     multiple = true,
                 )

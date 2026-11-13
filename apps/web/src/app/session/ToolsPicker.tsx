@@ -6,6 +6,7 @@ import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
+import { localizedText, usePlugins } from '@/lib/plugins';
 import { useStores } from '../state/stores';
 import { whenIdle } from './useEarlierHistory';
 import { cn, errorMessage } from '@/lib/utils';
@@ -21,16 +22,37 @@ export const phoneGroup = (deviceId: string) => `${DEVICE_PREFIX}${deviceId}` as
 /** Riffet's own tools are always injected; a pick only names phones. Older snapshots may still carry `riffet.core`. */
 export const phoneGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX));
 
+/** A plugin's agent tools, `<pluginId>/<name>` (docs/BROWSER.md §2). */
+const isPluginGroup = (id: string) => /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]*$/.test(id);
+/** What a pick may name: phones and plugin tool groups. */
+const pickedGroups = (groups: readonly string[]): ToolGroupId[] => groups.filter((id): id is ToolGroupId => id.startsWith(DEVICE_PREFIX) || isPluginGroup(id));
+
+/**
+ * The tool groups of the plugins that are on, plus any the value already names whose plugin is off now
+ * (so the pick can be cleared). `available` lists only the usable ones.
+ */
+export function usePluginToolGroups(value: readonly string[]): { rows: Array<{ id: ToolGroupId; name: string; off: boolean }>; available: ToolGroupId[] } {
+  const plugins = usePlugins();
+  const rows: Array<{ id: ToolGroupId; name: string; off: boolean }> = [];
+  for (const plugin of plugins ?? []) {
+    for (const group of plugin.declared?.agentTools ?? []) {
+      const id = group.id as ToolGroupId;
+      if (plugin.enabled || value.includes(id)) rows.push({ id, name: localizedText(group.title) ?? group.id, off: !plugin.enabled });
+    }
+  }
+  return { rows, available: rows.filter((row) => !row.off).map((row) => row.id) };
+}
+
 /** A new conversation starts with what the last one on this browser was given. */
 export function lastToolGroups(): ToolGroupId[] {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(LAST_PICK_KEY) ?? '[]') as unknown;
-    return Array.isArray(parsed) ? phoneGroups(parsed.filter((item): item is string => typeof item === 'string')) : [];
+    return Array.isArray(parsed) ? pickedGroups(parsed.filter((item): item is string => typeof item === 'string')) : [];
   } catch { return []; }
 }
 
 export function rememberToolGroups(groups: readonly ToolGroupId[]): void {
-  try { window.localStorage.setItem(LAST_PICK_KEY, JSON.stringify(phoneGroups(groups))); } catch { /* Storage may be unavailable. */ }
+  try { window.localStorage.setItem(LAST_PICK_KEY, JSON.stringify(pickedGroups(groups))); } catch { /* Storage may be unavailable. */ }
 }
 
 /*
@@ -179,8 +201,8 @@ function extensionRows(listed: readonly string[] | undefined, off: readonly stri
 export const ToolsPickerInMenu = createContext(false);
 
 /**
- * The phones a conversation's agent may control (the consent lives on the phone, never here), and the
- * MCP servers and skills it keeps. Riffet's own tools need no pick.
+ * The plugin tools (the browser) and phones a conversation's agent may use (a phone's consent lives on the
+ * phone, never here), and the MCP servers and skills it keeps. Riffet's own tools need no pick.
  */
 export function ToolsPicker({ value, onChange, extensions, disabled, footnote, onError }: {
   value: readonly string[];
@@ -195,8 +217,9 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   const { t } = useLingui();
   const inMenu = useContext(ToolsPickerInMenu);
   const [open, setOpen] = useState(false);
-  const picked = phoneGroups(value);
+  const picked = pickedGroups(value);
   const { phones } = useControllablePhones(value);
+  const pluginGroups = usePluginToolGroups(value);
   const errorRef = useRef(onError);
   errorRef.current = onError;
   const loaded = useLoadedExtensions(extensions, open);
@@ -206,8 +229,8 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   };
 
   const toggle = (group: ToolGroupId, on: boolean) => {
-    // A phone that is gone is dropped with the change.
-    const kept = picked.filter((id) => id !== group && phones.some((device) => phoneGroup(device.id) === id));
+    // A phone that is gone is dropped with the change; so is a plugin group that is no longer listed.
+    const kept = picked.filter((id) => id !== group && (phones.some((device) => phoneGroup(device.id) === id) || pluginGroups.rows.some((row) => row.id === id)));
     onChange(on ? [...kept, group] : kept);
   };
 
@@ -224,7 +247,9 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   const label = t`技能与工具`;
   const rows = phones.map((device) => ({ id: phoneGroup(device.id), name: t`控制 ${device.name}`, offline: !device.online }));
   // A revoked phone has no row, so it is not counted; until the list arrives, every pick is.
-  const count = phones.length ? picked.filter((id) => rows.some((row) => row.id === id)).length : picked.length;
+  const phonePicks = phoneGroups(picked);
+  const count = (phones.length ? phonePicks.filter((id) => rows.some((row) => row.id === id)).length : phonePicks.length)
+    + picked.filter((id) => pluginGroups.available.includes(id)).length;
   const n = offCount;
   // With switches and nothing changed, everything installed is on: 默认, not 未开启.
   const summary = [count ? t`${count} 项` : '', offCount ? t`已关 ${n}` : ''].filter(Boolean).join(' · ') || (extensions ? t`默认` : t`未开启`);
@@ -236,6 +261,13 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
   );
   const items = (
     <>
+      {pluginGroups.rows.map((row) => checkboxRow(
+        row.id,
+        picked.includes(row.id),
+        row.name,
+        (on) => toggle(row.id, on),
+        row.off && <span className="shrink-0 text-xs text-fg-3">{t`已停用`}</span>,
+      ))}
       {rows.length > 0 && <DropdownMenuLabel>{t`手机`}</DropdownMenuLabel>}
       {rows.map((row) => checkboxRow(
         row.id,
@@ -266,7 +298,7 @@ export function ToolsPicker({ value, onChange, extensions, disabled, footnote, o
           <span className="shrink-0 text-xs">{t`重试`}</span>
         </DropdownMenuItem>
       )}
-      {footnote && (rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
+      {footnote && (rows.length > 0 || pluginGroups.rows.length > 0 || mcpRows.length > 0 || skillRows.length > 0) && <div className="px-2 pb-1.5 pt-1 text-xs text-fg-3">{footnote}</div>}
     </>
   );
   if (inMenu) {

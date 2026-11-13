@@ -20,7 +20,8 @@ export const STORAGE_KEYS = {
   backend: 'riffet.selectedBackend',
 };
 
-export type PluginDetailTab = 'features' | 'configuration' | 'management' | 'diagnostics';
+/** 介绍, the plugin's own page (its settings), and 管理 with 诊断. */
+export type PluginDetailTab = 'overview' | 'page' | 'management';
 
 export interface NavState {
   projectId: string;
@@ -199,7 +200,7 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     openPage(page: 'stats' | 'tasks' | 'extensions' | 'marks' | 'plugins') {
       store.set({ pluginsOpen: page === 'plugins', statsOpen: page === 'stats', tasksOpen: page === 'tasks', marksOpen: page === 'marks', attemptsGroupId: '', ...(page === 'extensions' ? { extensionsMounted: true, extensionsOpen: true } : {}) });
     },
-    openPlugins(pluginId = '', pluginViewId = '', pluginDetailTab: PluginDetailTab = 'features') { store.set({ ...NO_PAGE, extensionsOpen: false, pluginsOpen: true, pluginId, pluginViewId, pluginDetailTab, pluginOpenRevision: (store.get().pluginOpenRevision ?? 0) + 1 }); },
+    openPlugins(pluginId = '', pluginViewId = '', pluginDetailTab: PluginDetailTab = 'overview') { store.set({ ...NO_PAGE, extensionsOpen: false, pluginsOpen: true, pluginId, pluginViewId, pluginDetailTab, pluginOpenRevision: (store.get().pluginOpenRevision ?? 0) + 1 }); },
     openAttemptsGroup(groupId: string) {
       store.set({ ...NO_PAGE, attemptsGroupId: groupId });
     },

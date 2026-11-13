@@ -23,10 +23,15 @@ import { PluginVersionsDialog } from './PluginVersionsDialog';
 import { PluginFlowDialog } from './PluginFlowDialog';
 import { PluginMarket } from './PluginMarket';
 import { PluginMark } from './PluginMark';
+import { PluginPageView } from './PluginPageView';
+import { Markdown } from '../session/Markdown';
 
 type InstallSource = { file: File } | { market: { id: string; version: string } };
 const keyOf = (plugin: PluginDescriptor) => (plugin.source ?? 'builtin') + ':' + plugin.id + (plugin.source === 'development' && plugin.developmentPath ? ':' + plugin.developmentPath : '');
 const removable = (plugin: PluginDescriptor) => plugin.source === 'installed' ? Boolean(plugin.installed) : plugin.source === 'development' && Boolean(plugin.developmentPath);
+const deviceFlows = (plugin: PluginDescriptor) => [...(plugin.declared?.actions ?? []), ...plugin.actions].some(action => action.kind === 'device-flow');
+/** Whether the plugin has a page of its own: one it builds, its settings, a settings view for this client or a sign-in. */
+const hasPage = (plugin: PluginDescriptor) => Boolean(plugin.declared?.page || plugin.settings.length || plugin.declared?.views?.some(view => view.locations.includes('settings') && view.clients.includes('web')) || deviceFlows(plugin));
 // Static declarations keep a plugin in the same group when it is disabled.
 function groupOf(plugin: PluginDescriptor): 'agents' | 'workbench' | 'services' {
   const declared = plugin.declared;
@@ -70,7 +75,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const [draft, setDraft] = useState<Record<string, string | null>>({});
   const [baseline, setBaseline] = useState<PluginDescriptor>();
   const [diagnostics, setDiagnostics] = useState<PluginDiagnostic[]>([]);
-  const [detailTab, setDetailTab] = useState<PluginDetailTab>('features');
+  const [detailTab, setDetailTab] = useState<PluginDetailTab>('overview');
+  const [readme, setReadme] = useState<{ key: string; text?: string }>();
   const [customView, setCustomView] = useState('');
   const [customDirty, setCustomDirty] = useState(false);
   const [customBusy, setCustomBusy] = useState(false);
@@ -113,11 +119,13 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     if (!selectedId) setBaseline(undefined);
     else if (!dirty && !working && currentSelected) setBaseline(currentSelected);
   }, [currentSelected, selectedId, dirty, working]);
-  useEffect(() => { setDetailTab(selectedViewId ? 'configuration' : initialTab ?? 'features'); setCustomView(selectedViewId ?? ''); }, [selectedId, selectedViewId, initialTab, openRevision]);
+  useEffect(() => { setDetailTab(selectedViewId ? 'page' : initialTab ?? 'overview'); setCustomView(selectedViewId ?? ''); }, [selectedId, selectedViewId, initialTab, openRevision]);
   const settingsPages = useSettingsPages();
   const pages = settingsPages.filter(p => p.id.startsWith((selected?.id ?? '\u0000') + '/'));
   const settingsViews = selected?.declared?.views?.filter(view => view.locations.includes('settings') && view.clients.includes('web')) ?? [];
-  const configurationOptions = [...(selected?.settings.length ? [{ value: '', label: t({ message: '通用', context: 'plugin-configuration' }) }] : []), ...settingsViews.map(view => ({ value: view.id, label: localizedText(view.title, [i18n.locale]) ?? view.id }))];
+  const pageTitle = (p: PluginDescriptor) => localizedText(p.declared?.page?.title, [i18n.locale]) ?? t({ message: '设置', context: 'plugin-detail-tab' });
+  // The plugin's own page comes first; without one, its settings as a form.
+  const configurationOptions = [...(selected?.declared?.page ? [{ value: '', label: pageTitle(selected) }] : selected?.settings.length ? [{ value: '', label: t({ message: '通用', context: 'plugin-configuration' }) }] : []), ...settingsViews.map(view => ({ value: view.id, label: localizedText(view.title, [i18n.locale]) ?? view.id }))];
   const configurationId = configurationOptions.some(option => option.value === customView) ? customView : configurationOptions[0]?.value;
   const livePage = pages.find(p => p.id === configurationId);
   const keepPage = Boolean(dirty || working) && editingPage.current?.owner === (selected && keyOf(selected)) && editingPage.current?.entry.id === configurationId;
@@ -137,7 +145,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     catch (e) { if (alive.current) { if (!(e instanceof HttpError)) setReachable(false); setError(errorMessage(e, t({ message: '操作失败' }))); } }
     finally { operation.current = false; if (alive.current) setBusy(false); }
   };
-  const select = async (p: PluginDescriptor, tab: PluginDetailTab = 'features') => { if (await guard()) { if (!visible.includes(p)) { setQuery(''); setFilter('all'); } setDetailTab(tab); setCustomView(''); setDiagnostics([]); setVersions(false); setBaseline(p); onSelect(keyOf(p), tab); } };
+  const select = async (p: PluginDescriptor, tab: PluginDetailTab = 'overview') => { if (await guard()) { if (!visible.includes(p)) { setQuery(''); setFilter('all'); } setDetailTab(tab); setCustomView(''); setDiagnostics([]); setVersions(false); setBaseline(p); onSelect(keyOf(p), tab); } };
   const navigateDetail = async (change: () => void) => {
     if (detailNavigation.current) return;
     detailNavigation.current = true;
@@ -195,6 +203,16 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   });
   const [logs, setLogs] = useState<PluginLogEntry[]>([]);
   useEffect(() => setLogs([]), [selected?.id]);
+  // The README is read once per plugin and language while the dialog is open; a failure shows the description instead.
+  const readmeKey = selected && !selected.rejected ? selected.id + '\u0000' + i18n.locale : undefined;
+  useEffect(() => {
+    if (!readmeKey || readme?.key === readmeKey) return;
+    const controller = new AbortController();
+    void api.pluginReadme(selected!.id, i18n.locale, controller.signal).then(answer => setReadme({ key: readmeKey, text: answer.readme }), () => { if (!controller.signal.aborted) setReadme({ key: readmeKey }); });
+    return () => controller.abort();
+  }, [readmeKey]);
+  const readmeText = readme?.key === readmeKey ? readme?.text : undefined;
+  const readmeLoading = Boolean(readmeKey) && readme?.key !== readmeKey;
   const declarations = selected?.declared;
   const pluginActions = [...new Map([...(declarations?.actions ?? []), ...(selected?.actions ?? [])].map(action => [action.id, action])).values()];
   const groups = [{ id: 'agents', title: t({ message: 'Agent 与模型' }) }, { id: 'workbench', title: t({ message: '工作台' }) }, { id: 'services', title: t({ message: '服务与分享' }) }];
@@ -206,25 +224,28 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     { title: t({ message: '分享', context: 'plugin-feature' }), names: declarations?.sharePublisher ? [localizedText(declarations.sharePublisher.title, [i18n.locale]) ?? selected!.name] : selected?.contributes.sharePublisher ? [selected.contributes.sharePublisher.label] : [] },
   ].filter(group => group.names.length > 0);
   const hasFeatureActions = Boolean(declarations?.views?.some(view => !view.locations.includes('settings')) || declarations?.commands?.length || declarations?.appearance || pluginActions.some(action => action.kind !== 'device-flow'));
-  const features = selected && <div className="flex min-w-0 flex-col gap-5">
-    {selected.description && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{localizedText(selected.description, [i18n.locale])}</p>}
+  const overview = selected && <div className="flex min-w-0 flex-col gap-5">
+    {readmeText ? <Markdown className="min-w-0 text-sm" text={readmeText} />
+      : readmeLoading ? <div className="flex justify-center p-6"><Spinner /></div>
+      : selected.description && <p className="whitespace-pre-wrap break-words text-sm text-fg-2">{localizedText(selected.description, [i18n.locale])}</p>}
     {featureGroups.map(group => <section key={group.title} className="flex flex-col gap-2">
       <h3 className="text-xs font-medium text-fg-3">{group.title}</h3>
       <div className="flex flex-wrap gap-2">{group.names.map((name, index) => <Badge key={index} className="h-auto min-h-5 whitespace-normal py-1">{name}</Badge>)}</div>
     </section>)}
-    <div className="flex flex-wrap gap-2">
+    {hasFeatureActions && <div className="flex flex-wrap gap-2">
       {declarations?.views?.filter(view => !view.locations.includes('settings')).map(view => <Button key={view.id} size="sm" variant="secondary" disabled={missing || !selected.enabled || Boolean(selected.stopping) || !availableViewIds.includes(view.id) || view.instances === 'per-session' && !sessionId || view.instances === 'per-project' && !projectId} onClick={() => onOpenFeature(view)}>{localizedText(view.title, [i18n.locale])}<IconSquareArrowOutUpRight /></Button>)}
       {declarations?.commands?.map(command => <Button key={command.id} size="sm" variant="secondary" disabled={missing || !commandActions.some(action => action.id === 'plugin:' + command.id) || working} onClick={() => commandActions.find(action => action.id === 'plugin:' + command.id)?.run()}>{localizedText(command.title, [i18n.locale])}</Button>)}
       {((declarations?.modelSources?.length ?? selected.contributes.modelSources?.length) || declarations?.agentBackends?.length) ? <Button size="sm" variant="secondary" disabled={missing} onClick={onOpenModels}><Trans>模型与 Agent</Trans><IconSquareArrowOutUpRight /></Button> : null}
       {declarations?.appearance && <Button size="sm" variant="secondary" disabled={missing} onClick={onOpenAppearance}><Trans>选择外观</Trans><IconSquareArrowOutUpRight /></Button>}
       {pluginActions.filter(action => action.kind !== 'device-flow').map(action => <Button key={action.id} size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
-    </div>
-
-    {featureGroups.length === 0 && !hasFeatureActions && <EmptyState title={t({ message: '没有独立功能入口' })} />}
+    </div>}
   </div>;
   const configuration = selected && <div className="flex min-w-0 flex-col gap-5">
     {configurationOptions.length > 1 && <Segmented value={configurationId ?? ''} onChange={value => { if (value !== configurationId) void navigateDetail(() => setCustomView(value)); }} options={configurationOptions.map(option => ({ ...option, disabled: working }))} ariaLabel={t({ message: '配置', context: 'plugin-detail-tab' })} />}
-      {configurationId === '' && selected.settings.length > 0 && <form onSubmit={e => { e.preventDefault(); void save(); }} className="flex flex-col gap-4">
+      {configurationId === '' && selected.declared?.page && (!selected.enabled || missing
+        ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可用</Trans></p>{!missing && <Button size="sm" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>}</div>
+        : <PluginPageView key={selected.id} pluginId={selected.id} disabled={working || !reachable} onChanged={() => { void reloadPlugins().catch(() => undefined); }} />)}
+      {configurationId === '' && !selected.declared?.page && selected.settings.length > 0 && <form onSubmit={e => { e.preventDefault(); void save(); }} className="flex flex-col gap-4">
         {selected.settings.map(field => <Field key={field.key} label={field.label}>
           <div className="flex items-center gap-2"><Input type={field.kind === 'secret' ? 'password' : 'text'} autoComplete="off" disabled={working} readOnly={unavailable} value={draft[field.key] ?? (Object.hasOwn(draft, field.key) ? '' : baseline?.settings.find(f => f.key === field.key)?.value ?? '')} placeholder={field.kind === 'secret' && field.set ? t({ message: '已设置' }) : undefined} onChange={e => setDraft(value => ({ ...value, [field.key]: e.target.value }))} />{field.kind === 'secret' && field.set && <Button type="button" size="xs" variant="secondary" disabled={working || unavailable} onClick={() => setDraft(value => ({ ...value, [field.key]: null }))}><Trans>清除</Trans></Button>}</div>
         </Field>)}
@@ -238,7 +259,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     {pluginActions.filter(action => action.kind === 'device-flow').map(action => <Button key={action.id} className="self-start" size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
     {configurationOptions.length === 0 && !pluginActions.some(action => action.kind === 'device-flow') && <EmptyState title={t({ message: '没有可配置项' })} />}
   </div>;
-  const management = selected && <div className="flex min-w-0 flex-col gap-5">
+  const managementContent = selected && <div className="flex min-w-0 flex-col gap-5">
     {selected.source === 'installed' || selected.source === 'development'
       ? <Button className="self-start" size="sm" variant="danger" disabled={working || dirty || missing || !reachable || !removable(selected)} onClick={() => void remove()}><Trans>卸载插件</Trans></Button>
       : <p className="text-xs text-fg-3"><Trans>内置插件不可卸载</Trans></p>}
@@ -258,8 +279,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       <div className="flex flex-col gap-3 text-sm">{(selected.capabilities ?? []).map(capability => <p key={capability}>{capabilityLabel(capability)}</p>)}<p className="text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>{(selected.source === 'development' || selected.installed?.versions.some(version => version.selected && version.trusted)) && <p className="text-fg-3"><Trans>以服务器进程的权限运行</Trans></p>}</div>
     </section>
   </div>;
-  const diagnosticContent = selected && <div className="flex min-w-0 flex-col gap-5">
-    <p className="text-sm">{status(selected)}</p>
+  const diagnosticContent = selected && <section className="flex min-w-0 flex-col gap-5 border-t border-line pt-4">
+    <h3 className="text-sm font-medium"><Trans>诊断</Trans></h3>
     {selected.activation?.state === 'idle' && <p className="text-sm text-fg-3"><Trans>按需加载</Trans></p>}
     {selected.status?.message && <p className="break-words text-sm text-fg-3">{selected.status.message}</p>}
     {selected.stopping && <Button className="self-start" size="sm" variant="secondary" disabled={working || dirty || missing || !reachable} onClick={() => void confirmDialog({ title: t({ message: '立即停用或切换版本？' }), description: t({ message: '运行中的任务会继续，插件功能立即撤下' }), confirmLabel: t({ message: '继续' }) }).then(ok => { if (ok) void update({ force: true }); })}><Trans>立即处理</Trans></Button>}
@@ -276,12 +297,15 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
         {!selected.rejected && <Button className="self-start" size="sm" variant="secondary" disabled={working || dirty || missing || !reachable} onClick={() => void run(() => api.reloadPlugin(selected.id))}><Trans>重载插件</Trans></Button>}
 
       </div>
-  </div>;
+  </section>;
+  // Management and diagnostics are both rare: one tab, diagnostics below.
+  const management = selected && <div className="flex min-w-0 flex-col gap-6">{managementContent}{diagnosticContent}</div>;
+  const pageShown = Boolean(selected && hasPage(selected));
+  const shownTab: PluginDetailTab = detailTab === 'page' && !pageShown ? 'overview' : detailTab;
   const detailTabs: Array<{ value: PluginDetailTab; label: string }> = [
-    { value: 'features', label: t({ message: '功能', context: 'plugin-detail-tab' }) },
-    { value: 'configuration', label: t({ message: '配置', context: 'plugin-detail-tab' }) },
+    { value: 'overview', label: t({ message: '介绍', context: 'plugin-detail-tab' }) },
+    ...(pageShown && selected ? [{ value: 'page' as const, label: selected.declared?.page ? pageTitle(selected) : t({ message: '设置', context: 'plugin-detail-tab' }) }] : []),
     { value: 'management', label: t({ message: '管理', context: 'plugin-detail-tab' }) },
-    { value: 'diagnostics', label: t({ message: '诊断', context: 'plugin-detail-tab' }) },
   ];
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-bg">
@@ -325,7 +349,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
                       </span>
                     </button>
                     {(plugin.rejected || plugin.stopping || plugin.status?.state === 'attention' || plugin.status?.state === 'unavailable') && <span className="text-xs text-fg-3">{status(plugin)}</span>}
-                    <Button size="icon-sm" variant="quiet" disabled={working} aria-label={t({ message: '配置' }) + ' ' + label(plugin)} aria-haspopup="dialog" onClick={() => void select(plugin, 'configuration')}><IconSettings2 /></Button>
+                    <Button size="icon-sm" variant="quiet" className={hasPage(plugin) ? undefined : 'invisible'} disabled={working || !hasPage(plugin)} aria-hidden={!hasPage(plugin) || undefined} tabIndex={hasPage(plugin) ? undefined : -1} aria-label={t({ message: '设置' }) + ' ' + label(plugin)} aria-haspopup="dialog" onClick={() => void select(plugin, 'page')}><IconSettings2 /></Button>
                     {!plugin.rejected && <Switch checked={plugin.enabled} disabled={working || dirty || !reachable || Boolean(plugin.stopping)} aria-label={label(plugin) + ' · ' + status(plugin)} onCheckedChange={enabled => void update({ enablement: enabled ? 'on' : 'off' }, plugin)} />}
                   </div>
               )}</div>
@@ -338,8 +362,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       <Dialog open={Boolean(selected)} onOpenChange={open => { if (!open) closeSettings(); }}>
         <DialogContent mobileFullscreen className="h-[min(42rem,calc(var(--app-height,100dvh)-32px))] max-w-3xl" aria-describedby={undefined}>
           <DialogHeader><div className="flex min-w-0 items-center gap-3">{selected && <PluginMark plugin={selected} />}<div className="min-w-0"><DialogTitle>{selected && label(selected)}</DialogTitle>{selected && <p className="mt-1 text-xs text-fg-3">{[selected.version && 'v' + selected.version, source(selected), status(selected)].filter(Boolean).join(' · ')}</p>}</div></div></DialogHeader>
-          <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={detailTab} onChange={value => { if (value !== detailTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, disabled: working }))} />
-          <DialogBody key={detailTab} className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === detailTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{detailTab === 'features' ? features : detailTab === 'configuration' ? configuration : detailTab === 'management' ? management : diagnosticContent}</DialogBody>
+          <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={shownTab} onChange={value => { if (value !== shownTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, disabled: working }))} />
+          <DialogBody key={shownTab} className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
         </DialogContent>
         <PluginVersionsDialog plugin={versions ? selected : undefined} onClose={() => setVersions(false)} onChanged={() => { void changed(); }} />
         <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} />

@@ -103,6 +103,7 @@
     "node-pty": "1.2.0-beta.15",
     "officeparser": "8.2.0",
     "pdfjs-dist": "6.2.108",
+    "playwright-core": "1.65.0",
     "pngjs": "7.0.0",
     "qrcode": "1.5.4",
     "radix-ui": "1.4.3",

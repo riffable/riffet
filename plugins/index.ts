@@ -4,11 +4,13 @@
 
 import type { Plugin } from '@riffet/plugin-api';
 import { avatars } from './riffet/avatars/index.js';
+import { browser } from './riffet/browser/index.js';
 import { canvas } from './riffet/canvas/index.js';
 import { cursor } from './riffet/cursor/index.js';
 
 export const builtinPlugins: Plugin[] = [
   cursor,
   canvas,
+  browser,
   avatars,
 ];

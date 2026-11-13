@@ -20,7 +20,7 @@ import { backendSelection, hasNativeTerminal, launchSelection, sessionBackend, u
 import { useWakeLock } from '@/lib/wake-lock';
 import type { HeaderSlots } from '../Header';
 import { ApprovalPicker, ApprovalSummary } from '../session/ApprovalPicker';
-import { ToolsPicker, offersExtensionToggles, offersRiffetTools, useControllablePhones, useExtensionsOffered } from '../session/ToolsPicker';
+import { ToolsPicker, offersExtensionToggles, offersRiffetTools, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from '../session/ToolsPicker';
 import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
@@ -848,7 +848,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   ) : undefined), [backendCapabilities, mobileViewport, approval, changeApproval, pickersBlocked, paneAnswers, t]);
   const [toolGroupsValue, changeToolGroups] = useSessionPick(session, 'toolGroups', NO_TOOL_GROUPS, onSessionChanged, onError);
   const [extensionsOffValue, changeExtensionsOff] = useSessionPick(session, 'extensionsOff', NO_EXTENSIONS_OFF, onSessionChanged, onError);
-  const phonesOffered = useControllablePhones(toolGroupsValue).offered && offersRiffetTools(backendCapabilities);
+  const pluginToolRows = usePluginToolGroups(toolGroupsValue).rows.length;
+  const phonesOffered = (useControllablePhones(toolGroupsValue).offered || pluginToolRows > 0) && offersRiffetTools(backendCapabilities);
   const extensionToggles = session.projectId ? offersExtensionToggles(backendCapabilities) : undefined;
   const extensionPick = useMemo(() => (extensionToggles && session.projectId
     ? { backendId, ...(session.backendProfileId ? { profileId: session.backendProfileId } : {}), projectId: session.projectId, toggles: extensionToggles, off: extensionsOffValue, onChange: changeExtensionsOff }

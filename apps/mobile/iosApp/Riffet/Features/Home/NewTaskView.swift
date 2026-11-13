@@ -53,9 +53,9 @@ struct NewTaskView: View {
     private var toolsKey: String { "riffet.ios.\(workbench.baseURL.absoluteString).tool-groups" }
     /// The last pick on this device; only the phones online now are shown and sent.
     private var rememberedTools: [String] { remembered ?? ToolGroups.shared.decode(raw: UserDefaults.standard.string(forKey: toolsKey)) }
-    private var pickedTools: [String] { ToolsPick.offeredPicks(devices: toolDevices.devices, value: rememberedTools) }
+    private var pickedTools: [String] { ToolsPick.offeredPicks(devices: toolDevices.devices, value: rememberedTools, plugins: toolDevices.plugins) }
     private var phonesShown: Bool {
-        catalog?.capabilities.supportsRiffetTools == true && backend != .chat && ToolsPick.offered(devices: toolDevices.devices, value: [])
+        catalog?.capabilities.supportsRiffetTools == true && backend != .chat && ToolsPick.offered(devices: toolDevices.devices, value: [], plugins: toolDevices.plugins)
     }
     private var extensions: ExtensionsPick? {
         ExtensionsPick.make(workbench: workbench, allowed: backend != .chat, capabilities: catalog?.capabilities, backendId: backend,
@@ -87,7 +87,7 @@ struct NewTaskView: View {
     }
     private var shownModel: String? { chat ? chatChoice?.model : draft.model }
     private func pickTools(_ groups: [String]) {
-        remembered = ToolGroups.shared.phones(groups: groups)
+        remembered = ToolGroups.shared.picks(groups: groups)
         UserDefaults.standard.set(ToolGroups.shared.encode(groups: groups), forKey: toolsKey)
     }
     private var contextKey: String { "\(backend.name)|\(draft.profileID ?? "")|\(draft.projectID ?? "")|\(workbench.list.backendRevision)" }
@@ -136,7 +136,7 @@ struct NewTaskView: View {
         .sheet(item: $options) { focus in
             NavigationStack { NewTaskOptions(workbench: workbench, draft: draft, catalog: catalog, backend: backend,
                 loading: loadingCatalog, error: catalogError, retry: { Task { await loadCatalog(reload: true) } }, focus: focus,
-                toolDevices: toolDevices.devices, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions,
+                toolDevices: toolDevices.devices, toolPlugins: toolDevices.plugins, toolGroups: pickedTools, onPickTools: pickTools, extensions: extensions,
                 quickChat: chat, selectedModel: chatChoice?.model).toolbar {
                 ToolbarItem(placement: .confirmationAction) { Button("完成") { options = nil } }
             } }

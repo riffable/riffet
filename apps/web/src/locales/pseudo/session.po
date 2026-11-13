@@ -948,6 +948,10 @@ msgid "已停止"
 msgstr ""
 
 #: src/app/session/ToolsPicker.tsx
+msgid "已停用"
+msgstr ""
+
+#: src/app/session/ToolsPicker.tsx
 msgid "已关 {n}"
 msgstr ""
 

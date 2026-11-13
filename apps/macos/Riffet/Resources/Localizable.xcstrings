@@ -1,6 +1,76 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "后退": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Back"
+          }
+        }
+      }
+    },
+    "前进": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Forward"
+          }
+        }
+      }
+    },
+    "拒绝": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deny"
+          }
+        }
+      }
+    },
+    "允许": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow"
+          }
+        }
+      }
+    },
+    "下单": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Order"
+          }
+        }
+      }
+    },
+    "付款": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pay"
+          }
+        }
+      }
+    },
+    "需要先选择或下载浏览器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose or download a browser first"
+          }
+        }
+      }
+    },
     "%lld 项": {
       "localizations": {
         "en": {
@@ -20767,6 +20837,46 @@
         }
       }
     },
+    "介绍": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overview"
+          }
+        }
+      }
+    },
+    "启用插件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on the plugin"
+          }
+        }
+      }
+    },
+    "启用插件后可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available once the plugin is on"
+          }
+        }
+      }
+    },
+    "移除 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove %@"
+          }
+        }
+      }
+    },
     "启用插件后可打开专用配置": {
       "localizations": {
         "en": {
@@ -21187,16 +21297,6 @@
         }
       }
     },
-    "功能": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Features"
-          }
-        }
-      }
-    },
     "加载中": {
       "localizations": {
         "en": {
@@ -21243,26 +21343,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "This configuration is unavailable in this client"
-          }
-        }
-      }
-    },
-    "没有可配置项": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No configurable options"
-          }
-        }
-      }
-    },
-    "没有独立功能入口": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No separate features"
           }
         }
       }

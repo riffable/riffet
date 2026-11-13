@@ -15,7 +15,7 @@ import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
-import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered } from './session/ToolsPicker';
+import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from './session/ToolsPicker';
 import { BackendPicker } from './session/BackendPicker';
 import { DirectoryMenu } from './session/DirectoryMenu';
 import { AttemptsDialog, AttemptsHistory } from './session/Attempts';
@@ -148,9 +148,10 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const [toolGroups, setToolGroups] = useState<ToolGroupId[]>(lastToolGroups);
   const changeToolGroups = useCallback((next: ToolGroupId[]) => { setToolGroups(next); rememberToolGroups(next); }, []);
   const { phones } = useControllablePhones(NO_TOOL_GROUPS);
-  // A remembered phone that is offline now is left out of this conversation and kept for the next.
-  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id));
-  const toolsOffered = !quickChat && offersRiffetTools(capabilities) && phones.length > 0;
+  const pluginTools = usePluginToolGroups(NO_TOOL_GROUPS);
+  // A remembered phone that is offline now (or a plugin that is off) is left out of this conversation and kept for the next.
+  const pickedToolGroups = toolGroups.filter((id) => phones.some((device) => phoneGroup(device.id) === id) || pluginTools.available.includes(id));
+  const toolsOffered = !quickChat && offersRiffetTools(capabilities) && (phones.length > 0 || pluginTools.available.length > 0);
   const [selection, setSelection] = useState(defaultModel);
   const [selectionEdited, setSelectionEdited] = useState(false);
   /*

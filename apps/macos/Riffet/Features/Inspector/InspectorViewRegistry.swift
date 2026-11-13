@@ -72,7 +72,9 @@ enum InspectorViewRegistry {
 
     /// Renderers of a plugin's own native views by view ID. The Mac offers a declared plugin view
     /// only when one is registered here: a view with no native renderer is not shown.
-    private static let pluginRenderers: [String: Make] = [:]
+    private static let pluginRenderers: [String: Make] = [
+        "riffet.browser/panel": { AnyView(BrowserPanel(workbench: $0, project: $1)) },
+    ]
 
     /// The native renderer of a view that declares the Mac as a client, if there is one.
     private static func nativeRenderer(for view: ViewDeclaration) -> Make? {

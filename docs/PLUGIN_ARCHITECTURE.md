@@ -55,10 +55,13 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 | `taskProviders` | 项目任务：识别项目、列出操作、构造命令、解析日志。由宿主运行任务，见 [TASKS.md](TASKS.md)；`id` 须在 manifest 的 `contributes.tasks` 中声明 |
 | `agentBackends` | 实验性。Agent 后端（`AgentBackend`，见 `packages/plugin-api/src/agent.ts`）：探测、档案、会话打开与恢复、发送、停止、交互响应、历史与事件观察。插件只拿到受限的异步 `AgentHost`，没有 store、Fastify 和终端服务；commandId、排队、投递记录、journal 与会话归属留在核心。`id` 须在 `contributes.agentBackends` 声明：官方 `riffet` 插件可用内置 ID（Cursor 仍是 `cursor`），其余只能是 `<插件 ID>` 或 `<插件 ID>.<名称>`（小写、至多 64 字符，见下「Agent 身份」）。启用时注册、停用时撤销：新会话与新投递返回 503 `NATIVE_BACKEND_UNAVAILABLE` 并带原因，历史与 journal 照常可读，运行中的原生进程只断开观察、不被终止 |
 | `avatarStyles` | 个人资料的随机头像风格（[OWNER.md](OWNER.md)「随机头像」）：`generate({ seed, size, ink, paper, name? })` 返回 SVG，同样的参数必须得到同样的图；`id` 须在 `contributes.avatarStyles` 声明，`needsName` 的风格才会收到昵称。核心校验 SVG 后栅格化并存储，插件的输出不会原样交给客户端 |
+| `agentTools` | 经 Riffet MCP 交给 Agent 的工具组（[BROWSER.md](BROWSER.md) §2）：`{ tools, call(context, name, args) }`，键是 `contributes.agentTools` 声明的组 ID，工具名须以声明的 `toolPrefix` 开头。会话在「技能与工具」里选了这个组（`toolGroups`）才注入；插件关闭时调用得 `TOOL_NOT_AVAILABLE`。只给进程内的包 |
+| `channels` | 每个会话一条 WebSocket，`PLUGIN_CHANNEL_ROUTE(pluginId, name)?sessionId=`，键是 `contributes.channels` 声明的 ID。宿主核对登录、会话和插件开启后调用 `open(context, socket)`；插件关闭或登录被撤销时断开。只给进程内的包 |
+| `page` | 插件自己的页（见下「插件详情」）：`read({ locale })` 返回分组和条目，`run(context, action, item?)` 处理按钮。`contributes.page` 声明它（可带页签名 `title`）。独立包也能提供：页面是数据，经子进程协议的 `page.read` / `page.run` 传回 |
 | `actions` | 设置页里的操作；`device-flow` 类操作由服务端保管设备码，客户端只拿到 flowId |
 | `status`、`doctorChecks` | 设置页状态与 `riffet doctor` 检查项 |
 
-插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`。
+插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`；声明了 `agentTools` 或 `channels` 的进程内插件另有 `sessions`（读会话与项目目录、往会话发一轮、发通知）。
 
 `PLUGIN_API_VERSION` 当前为 1，只做可加性变更：新增可选成员不升版本，任何会让既有插件出错的改动都要升版本。`apiVersion` 不一致的插件不会加载，在插件管理页和 doctor 中显示原因。
 
@@ -89,13 +92,30 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - 默认后端：`AppSettings.defaultBackendId`（缺省为 Cursor）保存用户的选择；服务端返回的是生效值：保存的后端当前未注册（插件关闭）或客户端不能解码时，依次回退到 Cursor（可用时）和注册顺序中第一个可用的后端，保存的值不变，插件回来后恢复。新会话没指定后端时用同一个值。后端不可用时保存设置不校验它的默认值（原样保留的通过，修改则 503）。
 - 名称与图标：客户端从 `GET /api/backends`（已启用）或插件描述的 `declared.agentBackends`（启用与否）取名称；`icon.svg`（包内路径，至多 64 KB）由 `GET /api/agent-icons/<ID>`（`AGENT_ICON_ROUTE`）按 Agent ID 提供，不论插件是否启用，只提供声明的那个文件，带 `ETag` 与限制脚本的 CSP，客户端只能当图片画；`icon.sfSymbol` 给 Mac。内置 ID 保持 `gen:marks` 生成的图标，未知 ID 用通用图标和中性色。
 
+## 插件详情
+
+插件详情有三个页签：
+
+- **介绍**：包目录里的 `README.<语言>.md`（如 `README.zh-Hans.md`），没有则用 `README.md`，经 `GET /api/integrations/:id/readme?locale=` 读取，不执行插件代码。首个标题只是重复插件名时省略。内置包放在 `plugins/<vendor>/<name>/`，构建时与 `assets/` 一起复制到 `dist/plugins/`。没有 README 时显示 `description`。下方列出插件提供的 Agent、模型源、任务、视图、命令和操作入口。
+- **插件自己的页**：页签名取 `contributes.page.title`，缺省为「设置」。声明了 `page` 时显示插件构建的页面；否则显示 `settings` 表单和 `locations` 含 `settings` 的自定义视图。都没有时不显示这个页签。
+- **管理**：启停策略、版本、来源、权限、卸载；下方是诊断（状态说明、运行诊断、日志、重载、兼容性）。
+
+插件页（`packages/contracts/src/plugin-page.ts`）由插件在运行时构建，各端用自己的原生控件绘制，插件不写界面代码。分组有可选标题和一行脚注。条目包括：
+
+- 设置类：`choice`（单选，每个选项可带检测结果 `detail` 和一个按钮）、`toggle`、`text`（可为密钥）、`list`。这类条目的 `key` 必须是 manifest `settings` 里声明的键。修改即时保存到同一份设置，插件仍从 `host.settings()` 读取；`toggle` 存为 `true`/`false`，`list` 存为 JSON 数组，用 `listSetting()` 读取，它也兼容逗号分隔的旧值。
+- 展示类：`row`（只读的名称、值和说明，可带按钮）、`buttons`。按钮可带 `confirm` / `confirmDetail`，客户端先确认再执行。
+
+宿主在服务端校验每次读取：格式不对时整页报错；引用未声明的键时拒绝；密钥条目的值一律去掉，只保留 `set`。`refreshMs` 让客户端在显示期间定时重读，用于下载这类自己会变化的状态。
+
+接口：`GET /api/integrations/:id/page?locale=` 读取；`POST /api/integrations/:id/page` 带 `{ locale, set: { key, value } }` 或 `{ locale, run: { action, item? } }` 修改，返回重读后的页面和可选的 `message`。插件关闭时返回 409。按需激活的插件（`view`、`command`）在读取页面时激活。
+
 ## Manifest 与静态声明
 
 `PluginManifest` 的可选成员，不执行插件代码即可读取，所以关闭的插件仍显示它们：
 
 - `version`：包版本（semver），不参与贡献 ID。
 - `title`、`description`：`LocalizedText`（BCP-47 标签到文本）。客户端依次取完全匹配、语言前缀、`zh-Hans`、`en`、第一项，都没有则用 `name`。
-- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。贡献 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
+- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。贡献 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
 - `requires`：`[{ id, optional? }]`。
 
 加载时校验：ID 带本插件的命名空间且不重复、位置与客户端是已知值、条件合法。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
@@ -124,7 +144,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - 偏好：会话视图的顺序与隐藏存在 `riffet.sessionViews.v1`，按视图 ID；旧值 `canvas` 读作 `riffet.canvas/canvas`；当前不可用的 ID 原样保留，插件回来时视图回到原位。`chat` 不可隐藏。
 - 文案：插件界面文字放在插件自己的 `messages.ts`（`zh-Hans` 与 `en`），用 `useMessages` 按 `host.locale` 取，不进宿主的 `.po`。
 - 样式：Web 入口用与应用相同的 Tailwind 类，`apps/web/src/styles/index.css` 的 `@source` 已包含 `plugins/`。
-- 设置页：`locations` 含 `settings` 的视图由独立「插件」详情弹窗的“配置”页签承载，仅在插件开启时加载；`BackendProfilesSection` 为所选 Agent 列出其插件（`declared.agentBackends` 含该 Agent）的设置页链接。页面用 `host.settingsPage.setDirty/setBusy` 向插件页面报告未保存与保存中，卸载时复位。
+- 设置页：`locations` 含 `settings` 的视图由「插件」详情弹窗里插件自己的页签承载（见上「插件详情」），仅在插件开启时加载；`BackendProfilesSection` 为所选 Agent 列出其插件（`declared.agentBackends` 含该 Agent）的设置页链接。页面用 `host.settingsPage.setDirty/setBusy` 向插件页面报告未保存与保存中，卸载时复位。
 - 访问：入口在 `defineWebPlugin` 里用 `access: { requests, settings }` 声明视图可调用的服务端路径前缀（以 `/api/` 开头）和可读写的 `/api/settings` 键；`host.request.get/post`、`host.settings.get/subscribe/update`（`useSettings()`）只放行已声明的部分，其余拒绝。内置入口是可信代码，这是安全带与清单，不是沙箱。`isUnavailable(error)` 识别插件关闭时的 503 `NATIVE_BACKEND_UNAVAILABLE`。
 
 ## 自定义视图

@@ -128,6 +128,11 @@ msgstr ""
 msgid "今天"
 msgstr ""
 
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
+msgid "介绍"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 msgid "从终端导入…"
 msgstr ""
@@ -386,11 +391,6 @@ msgstr ""
 msgid "刷新"
 msgstr ""
 
-#: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
-msgid "功能"
-msgstr ""
-
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
@@ -495,6 +495,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可打开专用配置"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "启用插件后可用"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
@@ -708,6 +712,7 @@ msgstr ""
 msgid "已更新，刷新后继续"
 msgstr ""
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已设置"
 msgstr ""
@@ -960,6 +965,7 @@ msgstr ""
 msgid "撤销失败"
 msgstr ""
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr ""
@@ -1203,6 +1209,10 @@ msgstr ""
 msgid "无法离开扩展管理页面"
 msgstr ""
 
+#: src/app/plugins/PluginPageView.tsx
+msgid "无法读取"
+msgstr ""
+
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "无法读取恢复命令"
 msgstr ""
@@ -1433,10 +1443,6 @@ msgstr ""
 msgid "没有插件"
 msgstr ""
 
-#: src/app/plugins/PluginsPage.tsx
-msgid "没有独立功能入口"
-msgstr ""
-
 #: src/plugins/LogRecords.tsx
 msgid "没有符合筛选的记录"
 msgstr ""
@@ -1476,6 +1482,7 @@ msgstr ""
 msgid "清空"
 msgstr ""
 
+#: src/app/plugins/PluginPageView.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/plugins/ModelField.tsx
 msgid "清除"
@@ -1578,6 +1585,10 @@ msgstr ""
 
 #: src/app/Sidebar.tsx
 msgid "移出标签栏"
+msgstr ""
+
+#: src/app/plugins/PluginPageView.tsx
+msgid "移除 {value}"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
@@ -1720,8 +1731,14 @@ msgstr ""
 msgid "要在 {0} 做什么？"
 msgstr ""
 
+#: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
 #: src/app/WorkbenchOverlays.tsx
+msgid "设置"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgctxt "plugin-detail-tab"
 msgid "设置"
 msgstr ""
 
@@ -1746,12 +1763,8 @@ msgstr ""
 msgid "访问网络"
 msgstr ""
 
-#: src/plugins/TasksView.tsx
-msgid "诊断"
-msgstr ""
-
 #: src/app/plugins/PluginsPage.tsx
-msgctxt "plugin-detail-tab"
+#: src/plugins/TasksView.tsx
 msgid "诊断"
 msgstr ""
 
@@ -1902,10 +1915,6 @@ msgstr ""
 
 #: src/app/App.tsx
 msgid "配对码"
-msgstr ""
-
-#: src/app/plugins/PluginsPage.tsx
-msgid "配置"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx

@@ -23,8 +23,9 @@ function grantOf(text: string): string[] {
 }
 
 /** Built-in plugins (docs/PLUGIN_ARCHITECTURE.md). Device codes stay in the registry; clients only see a flow id. */
-export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps, 'plugins'>): void {
+export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps, 'plugins'> & Partial<Pick<RouteDeps, 'store' | 'auth'>>): void {
   const { plugins } = deps;
+  if (deps.store && deps.auth) registerChannelRoute(app, plugins, deps.store, deps.auth);
   const install = async (request: FastifyRequest, input: Parameters<typeof plugins.install>[0]) => {
     try { return await plugins.install(input); }
     catch (error) {
@@ -44,6 +45,10 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
   app.post<{ Params: { id: string } }>('/api/integrations/:id/diagnostics', async request => plugins.diagnostics(request.params.id));
   app.get<{ Params: { id: string } }>('/api/integrations/:id/logs', async request => ({ logs: await plugins.logs(request.params.id) }));
   app.post<{ Params: { id: string }; Body: unknown }>('/api/integrations/:id/activate', { bodyLimit: 4096 }, async request => plugins.activateView(request.params.id, request.body));
+  // The plugin's own page and README (docs/PLUGIN_ARCHITECTURE.md「插件页」).
+  app.get<{ Params: { id: string }; Querystring: { locale?: string } }>('/api/integrations/:id/page', async request => plugins.page(request.params.id, request.query.locale));
+  app.post<{ Params: { id: string }; Body: unknown }>('/api/integrations/:id/page', { bodyLimit: 64 * 1024 }, async request => plugins.changePage(request.params.id, request.body));
+  app.get<{ Params: { id: string }; Querystring: { locale?: string } }>('/api/integrations/:id/readme', async request => plugins.readme(request.params.id, request.query.locale));
   app.post<{ Params: { id: string } }>('/api/integrations/:id/reload', async request => plugins.reload(request.params.id));
 
   app.post<{ Body: { path?: unknown } }>('/api/integrations/development', { bodyLimit: 4096 }, async request => {
@@ -131,5 +136,35 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     // Every client fetches these or loads them as subresources, where the sandbox does not apply.
     return reply.type(type).header('Cache-Control', 'no-cache').header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "sandbox; default-src 'none'").send(createReadStream(file));
+  });
+}
+
+function registerChannelRoute(app: FastifyInstance, plugins: RouteDeps['plugins'], store: RouteDeps['store'], auth: RouteDeps['auth']): void {
+  // A plugin's per-session socket (`contributes.channels`, docs/BROWSER.md §5). The user is checked by the API hook; the
+  // session, the plugin being on and the declaration here. Turning the plugin off or revoking the login closes it.
+  app.get<{ Params: { id: string; name: string }; Querystring: { sessionId?: string } }>('/api/integrations/:id/channels/:name', { websocket: true }, (socket, request) => {
+    let session: ReturnType<typeof store.getSession> | undefined;
+    try { session = store.getSession(String(request.query.sessionId ?? '')); } catch { /* answered below */ }
+    if (!session || session.archivedAt) { socket.close(4404, 'No such conversation'); return; }
+    const found = plugins.channel(request.params.id, request.params.name);
+    if (!found) { socket.close(4503, 'Channel unavailable'); return; }
+    const controller = new AbortController();
+    const close = () => { if (socket.readyState <= 1) socket.close(4503, 'Plugin turned off'); };
+    found.signal.addEventListener('abort', close, { once: true });
+    const unwatch = auth.onRevoke(request, () => socket.terminate());
+    socket.once('close', () => { controller.abort(); unwatch(); found.signal.removeEventListener('abort', close); });
+    let handlers: ReturnType<typeof found.handler.open>;
+    try {
+      handlers = found.handler.open({ sessionId: session.id, projectId: session.projectId, signal: controller.signal }, {
+        send: data => { if (socket.readyState === 1) socket.send(data); },
+        close: (code, reason) => socket.close(code ?? 1000, reason),
+        get bufferedAmount() { return socket.bufferedAmount; },
+      });
+    } catch { socket.close(1011, 'Channel failed to open'); return; }
+    socket.on('message', (raw: Buffer | ArrayBuffer | Buffer[], binary: boolean) => {
+      try { auth.authenticate(request); } catch { socket.terminate(); return; }
+      const bytes = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.from(raw as ArrayBuffer);
+      try { handlers?.message?.(binary ? new Uint8Array(bytes) : bytes.toString('utf8'), binary); } catch { /* the plugin's own failure */ }
+    });
   });
 }
