@@ -63,6 +63,7 @@ apps/macos/Riffet/Features/Browser/   Mac 原生面板（按插件启用与否�
 
 - **浏览器来源**：默认用插件自己下载的 Chrome Headless Shell，放在 `<stateDir>/plugin-data/riffet.browser/browsers/`，版本与 `playwright-core` 配套，不碰用户日常的 Chrome，也不受它自动更新的影响。没有下载时，状态显示「需要下载浏览器」。插件页「设置」里的浏览器单选给出每个来源的检测结果：内置 Chromium 是否已下载（未下载时带「下载」按钮，在后台运行 `playwright-core install chromium-headless-shell`，页面显示进度），Chrome / Edge 是否已安装（未找到的不能选），以及「其他浏览器」加可执行文件路径。设置键是 `browser`（`bundled`、`chrome`、`msedge`、`custom`）和 `executablePath`，资料目录始终独立。首次调用工具时如果没有可用的浏览器，返回 `BROWSER_NOT_INSTALLED` 并指向这个页面，不在后台静默下载。
 - **`PLAYWRIGHT_BROWSERS_PATH`**：Playwright 只在注册表初始化时读一次。插件在首次加载 Playwright 的那一刻设置它，随即恢复，所以服务之后启动的 Agent 和终端不会继承 Riffet 的浏览器目录。
+- **自动化标记**：登录页（Google 等）会拒绝声明了自动化的浏览器，提示「此浏览器或应用可能不安全」。启动时去掉 `--enable-automation`、关闭 `AutomationControlled`（`navigator.webdriver` 为 false），并把用户代理里的 `HeadlessChrome` 换成 `Chrome`，客户端提示（`Sec-CH-UA`）保持浏览器自己的值。用户代理要等浏览器跑起来才知道，所以服务启动后每种浏览器的第一次启动会重启一次。这只是让用户能登录，不是反检测：站点仍可能凭其他特征拒绝，那时交给用户在自己的浏览器里完成。
 - **进程**：每个项目一个持久上下文（`launchPersistentContext`，资料目录 `profiles/<projectId>`），首次调用时才启动，空闲 15 分钟关闭。CDP 走管道（Playwright 的默认方式），不开 TCP 端口，本机其他进程接不进来。
 - **会话与标签页**：每个会话有自己的一组标签页，Agent 只看得到、只操作得到本会话的标签页。同一项目的会话共享 cookie 和登录状态，这是有意的：登录一次，整个项目都能用。快速对话和没有项目的会话用临时上下文，结束即丢。
 - **视口**：每个标签页固定视口，默认 1280×800，`browser_open` 可以指定。面板按比例缩放显示，不跟面板尺寸重排页面，以免 Agent 看到的布局和截图对不上。
@@ -88,9 +89,9 @@ apps/macos/Riffet/Features/Browser/   Mac 原生面板（按插件启用与否�
 ## 5. 画面与共同操作
 
 - **画面**：`page.screencast.start({ onFrame })` 推 JPEG 帧，经 `riffet.browser/live` 频道发给正在看的客户端。没有人看就不推帧；有多个人看时共用一路帧。开着 `screencast.showActions({ cursor: 'pointer' })`，Agent 点了哪里、输入了什么，画面上能直接看到；用户自己输入时这些标注暂时隐藏（停手 1.5 秒后恢复），因为它们描述的是 Agent 的动作。
-- **面板**：视图位置 `sidebar`（Web 右侧上下文面板的页签，Mac 详情栏，`InspectorViewRegistry.pluginRenderers` 里的原生渲染器）。内容是后退、前进、刷新、地址栏，多个标签页时有标签条，Agent 有请求时显示请求条（确认用「拒绝 / 允许」，`browser_handoff` 用「完成」）。面板打开时才连接频道；没有自动打开（待做：首次 `browser_open` 时提示）。
+- **面板**：视图位置 `sidebar`（Web 右侧上下文面板的页签，Mac 详情栏，`InspectorViewRegistry.pluginRenderers` 里的原生渲染器）。内容是后退、前进、刷新、地址栏，多个标签页时有标签条（当前和悬停的标签显示关闭按钮，Web 上中键也可关闭），Agent 有请求时显示请求条（确认用「拒绝 / 允许」，`browser_handoff` 用「完成」）。面板打开时才连接频道；没有自动打开（待做：首次 `browser_open` 时提示）。
 - **共同操作**：没有控制权之分，用户的输入随时送达页面，不中止 Agent 正在执行的步骤，Agent 也不必等用户。用户点击、滚动、按键或导航之后（单纯移动指针不算），Agent 的下一次调用结果会附一句「用户操作过页面，ref 可能失效，请重新取快照」。两边同时操作可能互相干扰，这里取宽松：由 Agent 根据提示重新读页面。风险操作的确认（§6）不受影响。
-- **输入回灌**：Web 用 canvas 加一个隐藏的 textarea，Mac 用 `NSView` 实现 `NSTextInputClient`。指针、滚轮、按键经 Playwright 的 `mouse`、`keyboard` 发给页面；输入法上屏和粘贴用 `insertText`。坐标按视口缩放换算。
+- **输入回灌**：Web 用 canvas 加一个隐藏的 textarea，Mac 用 `NSView` 实现 `NSTextInputClient`。指针、滚轮、按键经 Playwright 的 `mouse`、`keyboard` 发给页面，按会话依次执行；排队中还没执行的指针移动只留最后一个、滚轮增量累加，触控板的连续事件不会积压成滚动滞后；输入法上屏和粘贴用 `insertText`。坐标按视口缩放换算。
 - **`browser_handoff`**：面板里显示原因，同时发通知（复用 `notify_user`），然后最多等 300 秒（MCP 调用上限 330 秒）。用户在这段时间内点「完成」，就直接返回；超时返回 `BROWSER_HANDOFF_PENDING`，等用户点「完成」时，Riffet 往这个会话发一条消息让它继续（复用一次性唤醒的投递）。付款永远走这一步，不会由 Agent 代点。
 - **Mac 原生**：画面用 CALayer 显示解码后的帧，不用 WKWebView 套一层 Web 面板（遵循 Mac 先原生）。按插件是否启用决定显示，同 `Workbench.canvasAvailable`。
 - **移动端**：先不做；B3 做会话内只读画面。

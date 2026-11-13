@@ -51,5 +51,6 @@ export type BrowserLiveClientMessage =
   | { type: 'navigate'; url: string }
   | { type: 'back' } | { type: 'forward' } | { type: 'reload' }
   | { type: 'select'; tab: string }
+  | { type: 'close'; tab: string }
   | { type: 'done' }
   | { type: 'answer'; id: string; allow: boolean };

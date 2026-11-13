@@ -149,5 +149,6 @@ final class BrowserLive {
     func navigate(_ url: String) { send(["type": "navigate", "url": url]) }
     func command(_ type: String) { send(["type": type]) }
     func select(_ tab: String) { send(["type": "select", "tab": tab]) }
+    func close(_ tab: String) { send(["type": "close", "tab": tab]) }
     func answer(_ id: String, allow: Bool) { send(["type": "answer", "id": id, "allow": allow]) }
 }

@@ -87,14 +87,44 @@ export class Engine {
     return this.playwright;
   }
 
-  /** A persistent, headless context on `profileDir`. CDP runs over a pipe (Playwright's default): no debugging port is opened. */
+  /** The browser's own user agent with `HeadlessChrome` read as `Chrome`, by executable; learnt on its first launch. */
+  private readonly userAgents = new Map<string, string>();
+
+  /**
+   * A persistent, headless context on `profileDir`. CDP runs over a pipe (Playwright's default): no debugging port is opened.
+   *
+   * Sign-in pages (Google's among them) refuse a browser that announces automation, so it does not: no
+   * `--enable-automation`, `navigator.webdriver` stays false, and the user agent is the one a windowed Chrome of the same
+   * version sends.
+   * The user agent is only known once the browser runs, so the first launch of each browser in the server's life is
+   * done twice.
+   */
   async launch(choice: BrowserChoice, profileDir: string): Promise<BrowserContext> {
     const { chromium } = await this.load();
-    return chromium.launchPersistentContext(profileDir, {
+    const key = choice.kind === 'bundled' ? 'bundled' : choice.kind === 'channel' ? choice.channel : choice.path;
+    const open = (userAgent?: string) => chromium.launchPersistentContext(profileDir, {
       headless: true,
       viewport: { width: 1280, height: 800 },
       acceptDownloads: true,
+      ignoreDefaultArgs: ['--enable-automation'],
+      args: ['--disable-blink-features=AutomationControlled', ...(userAgent ? [`--user-agent=${userAgent}`] : [])],
       ...(choice.kind === 'channel' ? { channel: choice.channel } : choice.kind === 'path' ? { executablePath: choice.path } : {}),
     });
+    const known = this.userAgents.get(key);
+    const context = await open(known);
+    let userAgent: string | undefined;
+    if (known) {
+      // The browser may have updated itself since: the major version follows it.
+      const major = context.browser()?.version().split('.')[0];
+      if (!major || known.includes(`Chrome/${major}.`)) return context;
+      userAgent = known.replace(/Chrome\/\d+/, `Chrome/${major}`);
+    } else {
+      const own = await context.pages()[0]?.evaluate(() => navigator.userAgent).catch(() => undefined);
+      if (!own || !own.includes('HeadlessChrome/')) return context;
+      userAgent = own.replace('HeadlessChrome/', 'Chrome/');
+    }
+    this.userAgents.set(key, userAgent);
+    await context.close().catch(() => undefined);
+    return open(userAgent);
   }
 }

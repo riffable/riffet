@@ -165,6 +165,7 @@ function LiveBrowser({ sessionId, visible, signal }: { sessionId: string; visibl
   const BackIcon = Icon('chevron-right');
   const ReloadIcon = Icon('refresh-cw');
   const GlobeIcon = Icon('globe');
+  const CloseIcon = Icon('x');
   const navButton = (label: string, onClick: () => void, icon: ReactNode, disabled = false) => (
     <ui.Tip label={label}><ui.Button variant="ghost" size="icon-xs" aria-label={label} disabled={disabled} onClick={onClick}>{icon}</ui.Button></ui.Tip>
   );
@@ -191,10 +192,17 @@ function LiveBrowser({ sessionId, visible, signal }: { sessionId: string; visibl
       {(state?.tabs.length ?? 0) > 1 && (
         <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-2 py-1">
           {state!.tabs.map((tab) => (
-            <button key={tab.id} type="button" onClick={() => send({ type: 'select', tab: tab.id })} title={tab.url}
-              className={`max-w-40 shrink-0 truncate rounded px-2 py-0.5 text-xs ${tab.active ? 'bg-hover text-fg' : 'text-fg-3 hover:bg-hover hover:text-fg'}`}>
-              {tab.title || tab.url}
-            </button>
+            <div key={tab.id} title={tab.url}
+              onAuxClick={(event) => { if (event.button === 1) { event.preventDefault(); send({ type: 'close', tab: tab.id }); } }}
+              className={`group flex max-w-44 shrink-0 items-center rounded text-xs ${tab.active ? 'bg-hover text-fg' : 'text-fg-3 hover:bg-hover hover:text-fg'}`}>
+              <button type="button" onClick={() => send({ type: 'select', tab: tab.id })} className="min-w-0 truncate py-0.5 pl-2 text-left">
+                {tab.title || tab.url}
+              </button>
+              <button type="button" aria-label={m.closeTab} onClick={() => send({ type: 'close', tab: tab.id })}
+                className={`mx-0.5 grid size-4 shrink-0 place-items-center rounded text-fg-3 hover:bg-active hover:text-fg ${tab.active ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'}`}>
+                <CloseIcon className="size-3" />
+              </button>
+            </div>
           ))}
         </div>
       )}

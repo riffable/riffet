@@ -14,9 +14,30 @@ function parse(data: string | Uint8Array): BrowserLiveClientMessage | undefined 
   try { const value = JSON.parse(data) as BrowserLiveClientMessage; return value && typeof value === 'object' && typeof value.type === 'string' ? value : undefined; } catch { return undefined; }
 }
 
+/**
+ * Folds `next` into a queued message that has not run yet: pointer moves keep the last position, wheel steps add up.
+ * A trackpad sends wheel and move events faster than the page takes them; run one by one they pile up, and the page
+ * keeps scrolling the old way after the user has stopped or turned back.
+ */
+function merge(into: BrowserLiveClientMessage, next: BrowserLiveClientMessage): boolean {
+  if (into.type === 'mouse' && into.action === 'move' && next.type === 'mouse' && next.action === 'move') {
+    into.x = next.x; into.y = next.y; into.modifiers = next.modifiers;
+    return true;
+  }
+  if (into.type !== 'wheel' || next.type !== 'wheel' || !finite(into.deltaX, -10_000, 10_000) || !finite(into.deltaY, -10_000, 10_000)
+    || !finite(next.deltaX, -10_000, 10_000) || !finite(next.deltaY, -10_000, 10_000)) return false;
+  if (JSON.stringify(into.modifiers ?? {}) !== JSON.stringify(next.modifiers ?? {})) return false;
+  into.x = next.x; into.y = next.y;
+  into.deltaX = Math.max(-10_000, Math.min(10_000, into.deltaX + next.deltaX));
+  into.deltaY = Math.max(-10_000, Math.min(10_000, into.deltaY + next.deltaY));
+  return true;
+}
+
 export function liveChannel(browsers: Browsers, host: PluginHost): PluginChannelHandler {
   /** Input runs in order per conversation; a slow navigation does not let a later click overtake it. */
   const chains = new Map<string, Promise<void>>();
+  /** The last queued message of each conversation while it waits its turn, so a burst of moves or wheel steps folds into it. */
+  const tails = new Map<string, BrowserLiveClientMessage>();
 
   async function withModifiers(session: SessionBrowser, modifiers: BrowserModifiers | undefined, run: () => Promise<void>): Promise<void> {
     const page = session.tabs.get(session.active ?? '')?.page;
@@ -39,6 +60,7 @@ export function liveChannel(browsers: Browsers, host: PluginHost): PluginChannel
       return;
     }
     if (message.type === 'select') { if (typeof message.tab === 'string' && session.tabs.has(message.tab)) browsers.select(session, message.tab); return; }
+    if (message.type === 'close') { if (typeof message.tab === 'string') await session.tabs.get(message.tab)?.page.close().catch(() => undefined); return; }
     const tab = session.active ? session.tabs.get(session.active) : undefined;
     if (!tab) return;
     const { page } = tab;
@@ -83,8 +105,14 @@ export function liveChannel(browsers: Browsers, host: PluginHost): PluginChannel
         message(data) {
           const message = parse(data);
           if (!message) return;
+          const tail = tails.get(session.id);
+          if (tail && merge(tail, message)) return;
+          tails.set(session.id, message);
           const previous = chains.get(session.id) ?? Promise.resolve();
-          const next = previous.then(() => handle(session, message)).catch(error => {
+          const next = previous.then(() => {
+            if (tails.get(session.id) === message) tails.delete(session.id);
+            return handle(session, message);
+          }).catch(error => {
             socket.send(JSON.stringify({ type: 'error', code: (error as { code?: string }).code ?? 'BROWSER_FAILED', message: String((error as Error).message ?? error).split('\n')[0] }));
           });
           chains.set(session.id, next);

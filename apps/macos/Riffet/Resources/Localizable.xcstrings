@@ -5900,6 +5900,16 @@
         }
       }
     },
+    "关闭标签页": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Tab"
+          }
+        }
+      }
+    },
     "关闭 (esc)": {
       "localizations": {
         "en": {

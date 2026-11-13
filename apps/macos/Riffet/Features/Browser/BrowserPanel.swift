@@ -89,18 +89,7 @@ private struct BrowserContent: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: Space.xs) {
                 ForEach(tabs) { tab in
-                    Button { live.select(tab.id) } label: {
-                        Text(verbatim: tab.title.isEmpty ? tab.url : tab.title)
-                            .lineLimit(1).truncationMode(.tail)
-                            .font(.riffet(size: S(12)))
-                            .foregroundStyle(tab.active ? palette.fg : palette.fg3)
-                            .frame(maxWidth: 160)
-                            .padding(.horizontal, Space.sm)
-                            .frame(height: 22)
-                            .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(tab.active ? palette.bgHover : .clear))
-                    }
-                    .buttonStyle(.plain)
-                    .help(Text(verbatim: tab.url))
+                    BrowserTabChip(tab: tab, select: { live.select(tab.id) }, close: { live.close(tab.id) })
                 }
             }
             .padding(.horizontal, Space.sm)
@@ -150,5 +139,39 @@ private struct BrowserContent: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// A tab in the strip: its title selects it; the close button shows on the active tab and on hover.
+private struct BrowserTabChip: View {
+    let tab: BrowserLiveTab
+    let select: () -> Void
+    let close: () -> Void
+    @State private var hovering = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Button(action: select) {
+                Text(verbatim: tab.title.isEmpty ? tab.url : tab.title)
+                    .lineLimit(1).truncationMode(.tail)
+                    .font(.riffet(size: S(12)))
+                    .foregroundStyle(tab.active || hovering ? palette.fg : palette.fg3)
+                    .frame(maxWidth: 160, alignment: .leading)
+                    .padding(.leading, Space.sm)
+                    .frame(height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            Button(action: close) { Image(icon: "xmark").font(.riffet(size: S(8), weight: .bold)) }
+                .buttonStyle(IconButtonStyle(size: 16))
+                .opacity(tab.active || hovering ? 1 : 0)
+                .help(Text("关闭标签页"))
+                .accessibilityLabel(Text("关闭标签页"))
+                .padding(.horizontal, 3)
+        }
+        .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(tab.active || hovering ? palette.bgHover : .clear))
+        .onHover { hovering = $0 }
+        .help(Text(verbatim: tab.url))
     }
 }
