@@ -187,13 +187,16 @@ struct ImageViewerOverlay: View {
                     .padding(.horizontal, Space.lg)
                     .padding(.top, Space.md)
                     Spacer()
-                    HStack(spacing: Space.sm) {
-                        Text(item.label).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(.white.opacity(0.85)).lineLimit(1)
-                        Spacer()
-                        if let notice { Text(notice).font(.riffet(size: S(12))).foregroundStyle(.white.opacity(0.8)).lineLimit(1) }
+                    // No caption: an attachment's name is a temporary path or "image.png". Only what a
+                    // save reports shows, centred, and only once there is something to say.
+                    if let notice {
+                        Text(notice).font(.riffet(size: S(12))).foregroundStyle(.white.opacity(0.9)).lineLimit(1)
+                            .padding(.horizontal, Space.md)
+                            .padding(.vertical, Space.xs + 2)
+                            .background(.white.opacity(0.12), in: Capsule())
+                            .padding(.bottom, Space.lg)
+                            .transition(.opacity)
                     }
-                    .padding(.horizontal, Space.lg)
-                    .padding(.bottom, Space.lg)
                 }
                 .opacity(viewer.closing ? 0 : 1)
                 .animation(Motion.fast, value: viewer.closing)

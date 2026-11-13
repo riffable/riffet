@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -545,8 +544,8 @@ private fun FullScreenImageViewer(
  * The page itself, with no window around it, so a snapshot probe can render it off-device.
  *
  * The image owns the whole frame and is never cropped ([ContentScale.Fit]). The only chrome is one
- * bar at the bottom: the file's name, its path in mono, and the actions — the top of the screen is
- * image, all the way up. Tapping the image still dismisses, which is the whole-page gesture the
+ * row of actions at the bottom — the top of the screen is image, all the way up. The name and path
+ * are read out to accessibility only: an attachment's name is "image.png" or a temporary path. Tapping the image still dismisses, which is the whole-page gesture the
  * viewer has always had; the bar's own buttons consume their taps, so aiming at 下载 or 关闭 cannot
  * dismiss the page instead.
  */
@@ -602,7 +601,7 @@ internal fun ImageViewerPage(
         ) {
             Image(
                 painter = painter,
-                contentDescription = label,
+                contentDescription = listOfNotNull(label, detail).joinToString(" · "),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxSize()
@@ -631,8 +630,6 @@ internal fun ImageViewerPage(
         }
 
         ImageViewerInfoBar(
-            label = label,
-            detail = detail,
             onDownload = onDownload,
             onDismiss = onDismiss,
             modifier = Modifier.align(Alignment.BottomCenter),
@@ -641,7 +638,7 @@ internal fun ImageViewerPage(
 }
 
 /**
- * The viewer's only chrome: what the file is, and the two things that can be done with it.
+ * The viewer's only chrome: the two things that can be done with the image, centred at the bottom.
  *
  * A gradient rather than an opaque bar, so the image keeps the full height of the screen. The bottom
  * system inset is this bar's own business because the window draws under the gesture bar
@@ -650,17 +647,11 @@ internal fun ImageViewerPage(
  */
 @Composable
 private fun ImageViewerInfoBar(
-    label: String,
-    detail: String?,
     onDownload: (() -> Unit)?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // A project file's label is its path; the name is what the reader recognises, the rest is the
-    // line below it. An attachment's label is already a name, and its detail carries the type.
-    val name = label.substringAfterLast('/').ifEmpty { label }
-    val secondary = listOfNotNull(detail, label.takeIf { it != name }).joinToString(" · ")
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
             .background(
@@ -671,32 +662,14 @@ private fun ImageViewerInfoBar(
                 ),
             )
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal))
-            .padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp),
+            .padding(start = 20.dp, end = 20.dp, top = 24.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
     ) {
-        Text(
-            text = name,
-            style = TimelineTheme.type.body,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-        if (secondary.isNotEmpty()) {
-            Spacer(Modifier.height(3.dp))
-            Text(
-                text = secondary,
-                style = TimelineTheme.type.monoSmall,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+        if (onDownload != null) {
+            ViewerAction(stringResource(Res.string.timeline_download), RiffetIcons.Download, primary = true, onClick = onDownload)
         }
-        Spacer(Modifier.height(12.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (onDownload != null) {
-                ViewerAction(stringResource(Res.string.timeline_download), RiffetIcons.Download, primary = true, onClick = onDownload)
-            }
-            ViewerAction(stringResource(Res.string.timeline_close), RiffetIcons.Close, primary = false, onClick = onDismiss)
-        }
+        ViewerAction(stringResource(Res.string.timeline_close), RiffetIcons.Close, primary = false, onClick = onDismiss)
     }
 }
 

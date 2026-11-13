@@ -1,10 +1,11 @@
-import { useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { flushSync } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconDownload, IconImage, IconX } from '@/components/icons';
 import { Dialog, DialogClose, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { boundedCache } from '@/lib/bounded-cache';
 import { cn } from '@/lib/utils';
+import { exit } from '@/lib/motion';
 import { isTextField } from '@/lib/tap-focus';
 import { SaveImageButton } from './marks';
 import { ASSEMBLY_MS, useLingering } from './sessionLayout';
@@ -231,44 +232,212 @@ function ZoomableImageFrame({ src, name, label, path, className, size, maxHeight
   );
 }
 
+/** A close is played by the open viewer: it calls `done` once the viewer has left the screen. */
+type Closer = (done: () => void) => void;
+
+const FALLBACK_EASING = 'cubic-bezier(0.2, 0.7, 0.2, 1)';
+
+/** The shared duration and easing tokens, read where WAAPI cannot resolve `var()` itself. */
+function motionTokens() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    duration: parseFloat(style.getPropertyValue('--duration-slow')) || 300,
+    easing: style.getPropertyValue('--ease-out-soft').trim() || FALLBACK_EASING,
+  };
+}
+
+/** The on-screen rect of `element` when it is laid out and at least partly in the viewport. */
+function visibleRect(element: Element | null | undefined): DOMRect | undefined {
+  if (!element?.isConnected) return undefined;
+  const rect = element.getBoundingClientRect();
+  const inside = rect.right > 0 && rect.bottom > 0 && rect.left < window.innerWidth && rect.top < window.innerHeight;
+  return rect.width > 0 && rect.height > 0 && inside ? rect : undefined;
+}
+
+/** `transform` that maps a box laid out at `to` onto `from` (top-left origin, uniform scale by width). */
+function flipTransform(from: DOMRect, to: DOMRect): string {
+  return `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width})`;
+}
+
+/**
+ * The lightbox's content. Opening grows the image from the thumbnail to its fitted place while the
+ * backdrop and bar fade in; closing runs it backwards. The flying image is a copy laid over the
+ * viewer (the viewer's frame scrolls and would clip it, and the zoom/pan layout stays untouched),
+ * while the real one stays hidden until the copy lands. Without a thumbnail on screen, or with
+ * reduced motion, only the fade plays.
+ */
+function ViewerBody({ src, name, thumb, closer, onClose }: {
+  src: string;
+  name: string;
+  thumb: () => Element | null | undefined;
+  closer: RefObject<Closer | null>;
+  onClose: () => void;
+}) {
+  const { t } = useLingui();
+  const backdrop = useRef<HTMLDivElement>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const stage = useRef<HTMLDivElement>(null);
+  // Stops whatever flight is running and puts the real image back.
+  const settle = useRef<(() => void) | null>(null);
+  const thumbOf = useRef(thumb);
+  thumbOf.current = thumb;
+
+  const fades = (from: number, to: number, done?: () => void) => {
+    const { duration, easing } = motionTokens();
+    const stops = [backdrop, bar, stage].map((target, index) => {
+      const element = target.current;
+      if (!element) return () => {};
+      const stop: () => void = exit(element, [{ opacity: from }, { opacity: to }], { duration, easing }, () => {
+        if (to === 1) stop();
+        if (index === 0) done?.();
+      });
+      return stop;
+    });
+    return () => stops.forEach((stop) => stop());
+  };
+
+  /** Flies a copy of the image between two rects; `to` is where the copy is laid out. */
+  const fly = (root: HTMLElement, source: DOMRect, laid: DOMRect, forward: boolean, done: () => void) => {
+    const { duration, easing } = motionTokens();
+    const bounds = root.getBoundingClientRect();
+    const copy = document.createElement('img');
+    copy.src = src;
+    copy.alt = '';
+    copy.setAttribute('aria-hidden', 'true');
+    copy.draggable = false;
+    copy.className = 'pointer-events-none absolute z-10 max-w-none rounded-md';
+    Object.assign(copy.style, { left: `${laid.left - bounds.left}px`, top: `${laid.top - bounds.top}px`, width: `${laid.width}px`, height: `${laid.height}px`, transformOrigin: '0 0' });
+    root.appendChild(copy);
+    const shifted = flipTransform(source, laid);
+    const keyframes = forward ? [{ transform: shifted }, { transform: 'none' }] : [{ transform: 'none' }, { transform: shifted }];
+    const stop = exit(copy, keyframes, { duration, easing }, done);
+    return () => { stop(); copy.remove(); };
+  };
+
+  useLayoutEffect(() => {
+    const root = backdrop.current?.parentElement;
+    const real = stage.current?.querySelector('img');
+    if (!root || !real) return;
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const source = visibleRect(thumbOf.current());
+    let alive = true;
+    let stopFly: (() => void) | undefined;
+    let waiting: (() => void) | undefined;
+    const stopFades = fades(0, 1);
+    const land = () => { stopFly?.(); stopFly = undefined; waiting?.(); waiting = undefined; real.style.visibility = ''; };
+    settle.current = () => { stopFades(); land(); };
+
+    if (source && !reduced) {
+      real.style.visibility = 'hidden';
+      // The copy needs the real image's fitted box, which exists once it has loaded and been laid out.
+      let attempts = 0;
+      const measure = () => {
+        if (!alive) return;
+        const laid = real.complete && real.naturalWidth > 0 && real.style.width ? visibleRect(real) : undefined;
+        if (laid) {
+          stopFly = fly(root, source, laid, true, land);
+          return;
+        }
+        if (++attempts > 600 || real.complete && real.naturalWidth === 0) { land(); return; }
+        frame = requestAnimationFrame(measure);
+      };
+      let frame = requestAnimationFrame(measure);
+      waiting = () => cancelAnimationFrame(frame);
+    }
+    return () => { alive = false; settle.current?.(); settle.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    closer.current = (done) => {
+      const root = backdrop.current?.parentElement;
+      const real = stage.current?.querySelector('img');
+      settle.current?.();
+      settle.current = null;
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const target = visibleRect(thumbOf.current());
+      const current = real && real.style.width ? visibleRect(real) : undefined;
+      if (!root || !target || !current || reduced) {
+        fades(1, 0, done);
+        return;
+      }
+      real!.style.visibility = 'hidden';
+      fly(root, target, current, false, done);
+      // The backdrop and bar go with the flight; the stage's own fade would show the real image's toolbar leaving late.
+      fades(1, 0);
+    };
+    return () => { closer.current = null; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [closer]);
+
+  return (
+    <>
+      <div ref={backdrop} className="pointer-events-none absolute inset-0 -z-10 bg-black/95" />
+      <div
+        ref={bar}
+        className="flex h-14 shrink-0 items-center gap-2 pl-4 pr-2 pt-[env(safe-area-inset-top,0px)]"
+        onClick={(event) => {
+          if (event.target instanceof Element && !event.target.closest('a, button')) onClose();
+        }}
+      >
+        <DialogTitle className="sr-only">{name}</DialogTitle>
+        <span className="flex-1" />
+        <a href={src} download={name} aria-label={t`下载图片`} className="grid size-11 place-items-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white">
+          <IconDownload className="size-4.5" />
+        </a>
+        <DialogClose aria-label={t`关闭`} className="grid size-11 place-items-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white">
+          <IconX className="size-5" />
+        </DialogClose>
+      </div>
+      <div ref={stage} className="flex min-h-0 flex-1 flex-col">
+        <ZoomPanImage src={src} alt={name} tone="overlay" className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom,0px)]" onBackgroundClick={onClose} />
+      </div>
+    </>
+  );
+}
+
 /**
  * In-app lightbox. Images must never open as a top-level tab: browsers refuse to navigate to
  * `data:` URLs, which leaves the user on a blank page.
  */
 export function ImageViewer({ src, name, children }: { src: string; name: string; children: ReactNode }) {
-  const { t } = useLingui();
   // A pointer close must not leave a focus ring on the thumbnail; a keyboard close should. Neither
   // applies when the preview was opened while typing: the dialog hands the caret back to that field.
   const pointer = useRef(false);
   const fromField = useRef(false);
   const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const closer = useRef<Closer | null>(null);
+  const closing = useRef(false);
+  // Every way out (button, Esc, backdrop, bar) asks here; the dialog closes when the exit has played.
+  const requestClose = () => {
+    if (!open || closing.current) return;
+    closing.current = true;
+    const play = closer.current;
+    const finish = () => { closing.current = false; setOpen(false); };
+    if (play) play(finish); else finish();
+  };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{children}</DialogTrigger>
+    <Dialog open={open} onOpenChange={(next) => { if (next) setOpen(true); else requestClose(); }}>
+      <DialogTrigger asChild ref={trigger}>{children}</DialogTrigger>
       <DialogContent
         hideClose
         aria-describedby={undefined}
-        className="left-0 top-[var(--app-top,0px)] h-[var(--app-height,100dvh)] max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none bg-black/95 p-0 text-white shadow-none"
+        className="left-0 top-[var(--app-top,0px)] h-[var(--app-height,100dvh)] max-h-none w-full max-w-none translate-x-0 translate-y-0 rounded-none bg-transparent p-0 text-white shadow-none"
+        // The viewer plays its own enter and exit; the dialog's default zoom and fade would stack on it.
+        style={{ animation: 'none' }}
         onOpenAutoFocus={() => { fromField.current = isTextField(document.activeElement); }}
         onPointerDownCapture={() => { pointer.current = true; }}
         onKeyDownCapture={() => { pointer.current = false; }}
         onCloseAutoFocus={(event) => { if (pointer.current && !fromField.current) event.preventDefault(); pointer.current = false; }}
       >
-        <div
-          className="flex h-14 shrink-0 items-center gap-2 pl-4 pr-2 pt-[env(safe-area-inset-top,0px)]"
-          onClick={(event) => {
-            if (event.target instanceof Element && !event.target.closest('a, button')) setOpen(false);
-          }}
-        >
-          <DialogTitle className="min-w-0 flex-1 truncate text-sm font-medium text-white/85">{name}</DialogTitle>
-          <a href={src} download={name} aria-label={t`下载图片`} className="grid size-11 place-items-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white">
-            <IconDownload className="size-4.5" />
-          </a>
-          <DialogClose aria-label={t`关闭`} className="grid size-11 place-items-center rounded-lg text-white/75 transition-colors hover:bg-white/10 hover:text-white">
-            <IconX className="size-5" />
-          </DialogClose>
-        </div>
-        <ZoomPanImage src={src} alt={name} tone="overlay" className="min-h-0 flex-1 pb-[env(safe-area-inset-bottom,0px)]" onBackgroundClick={() => setOpen(false)} />
+        <ViewerBody
+          src={src}
+          name={name}
+          thumb={() => trigger.current?.matches('img') ? trigger.current : trigger.current?.querySelector('img[data-image-thumb]')}
+          closer={closer}
+          onClose={requestClose}
+        />
       </DialogContent>
     </Dialog>
   );
