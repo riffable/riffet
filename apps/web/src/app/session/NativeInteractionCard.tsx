@@ -251,9 +251,10 @@ export function NativeInteractionCard({
       case 'skip': return t`跳过`;
       case 'cancel': return t`取消`;
       case 'next': return t`下一题`;
-      default: return action.label;
+      default: return action.shortLabel ?? action.label;
     }
   };
+  const reviewed = actionRows ? shown.actions.filter((action) => action.detail) : [];
 
   return (
     <article
@@ -266,19 +267,30 @@ export function NativeInteractionCard({
       onKeyDown={onCardKeyDown}
     >
       <header className="flex min-w-0 items-center gap-2">
-        <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{title}</h3>
+        <h3 className="min-w-0 flex-1 truncate text-sm font-medium text-fg" title={title}>{title}</h3>
         {shortcutHint && <span className="hidden shrink-0 text-xs text-fg-3 md:group-focus-within:inline">{shortcutHint}</span>}
         {shown.expiresAt && submission?.phase !== 'success' && <ExpiryCountdown sessionId={sessionId} interaction={{ ...shown, expiresAt: shown.expiresAt }} />}
         {counter && <span className="shrink-0 text-xs text-fg-3">{counter}</span>}
       </header>
 
       <div className="mt-2 flex flex-col gap-2">
-        {shown.message && (isPlan
-          ? <div className="max-h-80 overflow-y-auto overscroll-contain rounded-md bg-bg px-2.5 py-2"><Markdown text={shown.message} /></div>
-          : <p className={cn('whitespace-pre-wrap text-sm leading-5 text-fg-2', !isQuestion && !selectsOptions && 'rounded-md bg-bg px-2 py-1.5 font-mono text-xs leading-5 break-words')}>
-            {shown.message}
-          </p>
-        )}
+        {/* Every body scrolls within a bound so a long command or plan never pushes the actions out of view. */}
+        {isPlan
+          ? shown.message && <div className="max-h-80 overflow-y-auto overscroll-contain rounded-md bg-bg px-2.5 py-2"><Markdown text={shown.message} /></div>
+          : actionRows
+            ? (shown.message || reviewed.length > 0) && (
+              // The request and the exact scope each choice grants are read in one place, in full; the buttons only name the choice.
+              <div className="flex max-h-72 flex-col gap-2 overflow-y-auto overscroll-contain rounded-md bg-bg px-2 py-1.5 font-mono text-xs leading-5 text-fg-2 whitespace-pre-wrap break-words">
+                {shown.message && <p>{shown.message}</p>}
+                {reviewed.map((action) => (
+                  <section key={action.id} className="flex flex-col gap-0.5 border-t border-line-soft pt-2 first:border-t-0 first:pt-0">
+                    <h4 className="font-sans font-medium text-fg">{actionLabel(action)}</h4>
+                    <p className="text-fg-3">{action.detail}</p>
+                  </section>
+                ))}
+              </div>
+            )
+            : shown.message && <p className="max-h-72 overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-sm leading-5 text-fg-2">{shown.message}</p>}
 
         {showsOptions && (
           <fieldset className="flex min-w-0 flex-col gap-0.5" disabled={busy || !connected}>
