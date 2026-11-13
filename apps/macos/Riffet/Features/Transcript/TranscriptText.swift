@@ -54,7 +54,8 @@ struct TranscriptText {
     /// A run of prose blocks as paragraphs of one attributed string. [size] and [lineHeight] let a
     /// surface read at its own scale (a folded reasoning row keeps its 13/20 type when opened);
     /// [color] overrides the muted/answer body colours.
-    mutating func prose(_ blocks: [MarkdownBlock], muted: Bool, quoted: Bool, gap: CGFloat, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat = MarkdownStyle.bodyLineHeight, color: NSColor? = nil, headings: Bool = false) -> NSAttributedString {
+    mutating func prose(_ blocks: [MarkdownBlock], muted: Bool, quoted: Bool, gap: CGFloat, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat? = nil, color: NSColor? = nil, headings: Bool = false) -> NSAttributedString {
+        let lineHeight = lineHeight ?? style.bodyLineHeight
         var paragraphs: [Paragraph] = []
         let body = color ?? (muted || quoted ? style.color(\.fg2) : style.color(\.fg))
         for block in blocks {
@@ -84,7 +85,8 @@ struct TranscriptText {
         return result
     }
 
-    private mutating func emit(_ block: MarkdownBlock, into paragraphs: inout [Paragraph], indent: CGFloat, gap: CGFloat, body: NSColor, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat = MarkdownStyle.bodyLineHeight) {
+    private mutating func emit(_ block: MarkdownBlock, into paragraphs: inout [Paragraph], indent: CGFloat, gap: CGFloat, body: NSColor, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat? = nil) {
+        let lineHeight = lineHeight ?? style.bodyLineHeight
         switch block {
         case let .paragraph(text):
             var paragraph = Paragraph(text: inline(text, size: size, weight: .regular, color: body), lineGap: style.lineGap(size: size, lineHeight: lineHeight), gapBefore: gap)
@@ -111,7 +113,8 @@ struct TranscriptText {
 
     /// One list item: the marker in its own column (16pt, or 20pt right-aligned for a number), the
     /// text 6pt after it, and every further line and block hanging at the text.
-    private mutating func list(_ item: MarkdownListItem, marker: NSAttributedString, ordered: Bool, into paragraphs: inout [Paragraph], indent: CGFloat, gap: CGFloat, body: NSColor, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat = MarkdownStyle.bodyLineHeight) {
+    private mutating func list(_ item: MarkdownListItem, marker: NSAttributedString, ordered: Bool, into paragraphs: inout [Paragraph], indent: CGFloat, gap: CGFloat, body: NSColor, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat? = nil) {
+        let lineHeight = lineHeight ?? style.bodyLineHeight
         let content = indent + (ordered ? MarkdownStyle.orderedContent : MarkdownStyle.unorderedContent)
         let tabs = [
             NSTextTab(textAlignment: ordered ? .right : .center, location: indent + (ordered ? MarkdownStyle.orderedMarkerRight : MarkdownStyle.unorderedMarkerCentre)),
@@ -155,10 +158,12 @@ struct TranscriptText {
         // contrast a path-dense paragraph read as a row of buttons louder than its own headings.
         // Outlined, the chip is the hairline alone: its "background" is the stroke colour, flagged
         // so the layout manager strokes it, and TextKit still has a run to ask it about.
+        // Plain, the code face alone marks it, a step smaller, with a narrow space each side.
+        let plain = style.inlineCode == .plain
         let outlined = style.block == .outlined
         let codeBackground = outlined ? style.color(\.lineSoft) : style.color(\.bgSubtle)
-        var chip: [NSAttributedString.Key: Any] = [.backgroundColor: codeBackground, .riffetChipRadius: min(4, style.radii.control)]
-        if outlined { chip[.riffetChipOutline] = true }
+        var chip: [NSAttributedString.Key: Any] = plain ? [:] : [.backgroundColor: codeBackground, .riffetChipRadius: min(4, style.radii.control)]
+        if outlined && !plain { chip[.riffetChipOutline] = true }
         for run in text.runs {
             let piece = String(text[run.range].characters)
             if let link = run.link, let tex = MathText.tex(link) {
@@ -170,7 +175,7 @@ struct TranscriptText {
             let code = intent.contains(.code)
             var attributes: [NSAttributedString.Key: Any] = [.foregroundColor: color]
             if code {
-                attributes[.font] = style.mono(MarkdownStyle.inlineCodeSize * size / MarkdownStyle.bodySize, strong ? .semibold : .regular)
+                attributes[.font] = style.mono((plain ? MarkdownStyle.plainInlineCodeSize : MarkdownStyle.inlineCodeSize) * size / MarkdownStyle.bodySize, strong ? .semibold : .regular)
                 attributes.merge(chip) { $1 }
             } else {
                 // Medium, not semibold: PingFang's semibold turns a bolded sentence into a black bar.
@@ -196,7 +201,7 @@ struct TranscriptText {
                 }
             }
             // The web pads inline code by 5px; a no-break space each side cannot wrap away from it.
-            let pad = code ? NSAttributedString(string: "\u{00A0}", attributes: chip.merging([.font: style.font(MarkdownStyle.bodySize)]) { $1 }) : nil
+            let pad = code ? NSAttributedString(string: plain ? "\u{202F}" : "\u{00A0}", attributes: chip.merging([.font: style.font(MarkdownStyle.bodySize)]) { $1 }) : nil
             if let pad { result.append(pad) }
             result.append(NSAttributedString(string: piece, attributes: attributes))
             if let pad { result.append(pad) }

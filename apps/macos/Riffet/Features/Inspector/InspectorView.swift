@@ -38,9 +38,17 @@ struct InspectorView: View {
                     if !views.isEmpty {
                         switch style.rightPanel {
                         case .outline:
-                            HStack(spacing: Space.lg) {
-                                ForEach(views) { view in
-                                    UnderlineTab(title: view.title, selected: view.tab == shown, style: style) { tab = view.tab }
+                            if style.tabs == .pill {
+                                HStack(spacing: 2) {
+                                    ForEach(views) { view in
+                                        PillTab(title: view.title, symbol: view.symbol, selected: view.tab == shown, style: style) { tab = view.tab }
+                                    }
+                                }
+                            } else {
+                                HStack(spacing: Space.lg) {
+                                    ForEach(views) { view in
+                                        UnderlineTab(title: view.title, selected: view.tab == shown, style: style) { tab = view.tab }
+                                    }
                                 }
                             }
                         case .inspector, .panels:
@@ -62,14 +70,17 @@ struct InspectorView: View {
                         }
                     }
                     Spacer(minLength: 0)
-                    PanelMaximizeButton().environment(\.panelMaximize, maximize).environment(\.panelFloat, float)
-                    if style.rightPanel == .outline {
-                        Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(12))) }
-                            .buttonStyle(IconButtonStyle())
-                            .help("关闭")
+                    // One run of buttons, spaced as one: float, full screen, close.
+                    HStack(spacing: 0) {
+                        PanelMaximizeButton().environment(\.panelMaximize, maximize).environment(\.panelFloat, float)
+                        if style.rightPanel == .outline {
+                            Button { workbench.setInspectorOpen(false) } label: { Image(icon: "xmark").font(.riffet(size: S(style.tabs == .pill ? 13 : 12))) }
+                                .buttonStyle(IconButtonStyle(size: PanelMaximizeButton.width))
+                                .help("关闭")
+                        }
                     }
                 }
-                .padding(.horizontal, Space.md)
+                .padding(.horizontal, style.tabs == .pill ? Space.sm : Space.md)
                 .frame(height: style.rightPanel == .outline ? style.layout.header : InspectorMetrics.headerHeight)
                 .panelDragHandle()
                 PanelRule()
@@ -113,6 +124,37 @@ struct InspectorView: View {
         return SegmentedTrack(selection: Binding(get: { shown }, set: { tab = $0 }), inset: inset) {
             ForEach(views) { Text($0.title).tag($0.tab) }
         }
+    }
+}
+
+/// A tab in a `.pill` row (`StyleSpec.Tabs`): a filled pill when current. With a symbol it is the
+/// icon alone, a 28pt square, and the current one adds its name; without one, the name alone.
+struct PillTab: View {
+    let title: String
+    var symbol: String? = nil
+    /// A row under the panel's own (a view's sections): a step smaller, so it reads as one level down.
+    var compact = false
+    let selected: Bool
+    let style: StyleSpec
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.xs + 2) {
+                if let symbol { Image(icon: symbol).font(.riffet(size: S(13))).frame(width: 16) }
+                if selected || symbol == nil { Text(verbatim: title).font(.riffet(size: S(compact ? style.text.secondary : style.text.body))).lineLimit(1) }
+            }
+            .foregroundStyle(selected ? palette.fg : palette.fg3)
+            .padding(.horizontal, symbol != nil && !selected ? 0 : compact ? Space.xs + 2 : Space.sm)
+            .frame(minWidth: compact ? 24 : 28, minHeight: compact ? 24 : 28)
+            .background(selected ? palette.bgActive : (hovering ? palette.bgHover : .clear), in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help(symbol == nil ? "" : title)
     }
 }
 
@@ -166,20 +208,22 @@ struct PanelMaximizeButton: View {
     @Environment(\.panelFloat) private var float
 
     var body: some View {
+        // Beside pill tabs the controls take the window header's 13pt symbol, as the tabs do.
+        let glyph = S(DisplayPreferences.shared.style.tabs == .pill ? 13 : 12), box = Self.width
         HStack(spacing: 0) {
             if let float {
                 Button(action: float.toggle) {
-                    Image(icon: float.on ? "sidebar.right" : "pip").font(.riffet(size: S(12)))
+                    Image(icon: float.on ? "sidebar.right" : "pip").font(.riffet(size: glyph))
                 }
-                .buttonStyle(IconButtonStyle(size: Self.width))
+                .buttonStyle(IconButtonStyle(size: box))
                 .help(float.on ? "停靠到侧边" : "悬浮")
             }
             if let maximize, float?.on != true {
                 Button(action: maximize.toggle) {
                     Image(icon: maximize.on ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .font(.riffet(size: S(12)))
+                        .font(.riffet(size: glyph))
                 }
-                .buttonStyle(IconButtonStyle(size: Self.width))
+                .buttonStyle(IconButtonStyle(size: box))
                 .help(maximize.on ? "退出全屏 (⌥⌘F)" : "全屏 (⌥⌘F)")
             }
         }

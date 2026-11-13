@@ -1266,7 +1266,20 @@ private struct FadeIn: ViewModifier {
 private extension View {
     func fadesIn() -> some View { modifier(FadeIn()) }
 
+    @ViewBuilder
     func popupSurface(_ palette: Palette) -> some View {
+        // These popups sit in a panel with no room around it, so the window server draws the shadow.
+        if DisplayPreferences.shared.style.menu == .drawn {
+            let shape = RoundedRectangle(cornerRadius: Radius.menu, style: .continuous)
+            background(palette.bgPopover, in: shape)
+                .overlay(shape.strokeBorder(palette.line, lineWidth: 1))
+                .clipShape(shape)
+        } else {
+            popupCard(palette)
+        }
+    }
+
+    private func popupCard(_ palette: Palette) -> some View {
         background(palette.bgPopover, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line, lineWidth: 0.5))
             .clipShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))

@@ -167,6 +167,8 @@ const KEYS: Record<string, Key> = {
   SquareCheckFilled: { l: { n: 'square-check', solid: true }, p: 'CheckSquare', web: { n: 'square-check', solid: true } },
   SquareMinusFilled: { l: { n: 'square-minus', solid: true }, p: 'MinusSquare', web: { n: 'square-minus', solid: true } },
   SquarePen: { l: 'square-pen', p: 'NotePencil', web: 'square-pen' },
+  Pip: { l: 'picture-in-picture-2', p: 'PictureInPicture', web: 'picture-in-picture-2' }, ScrollText: { l: 'scroll-text', p: 'Scroll', web: 'scroll-text' },
+  Smartphone: { l: 'smartphone', p: 'DeviceMobile', web: 'smartphone' },
   Stethoscope: { l: 'stethoscope', p: 'Stethoscope', web: 'stethoscope' },
   TextCursor: { l: 'text-cursor-input', p: 'Textbox', web: 'text-cursor-input' },
   TextSize: { l: 'a-large-small', p: 'TextAa', web: 'a-large-small' },

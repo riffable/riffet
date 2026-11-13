@@ -425,10 +425,10 @@ private struct SessionTab: View, Equatable {
             default:
                 SessionAgentMark(backend: session.agent)
             }
-            CappedWidth(maximum: pinned && !active ? 168 : 200) {
+            CappedWidth(maximum: active ? 280 : 160) {
                 Text(title)
-                    .font(.riffet(size: S(style.text.secondary), weight: active ? .medium : .regular))
-                    .foregroundStyle(active ? palette.fg : palette.fg2)
+                    .font(.riffet(size: S(style.text.body), weight: .regular))
+                    .foregroundStyle(active ? palette.fg : palette.fg3)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
@@ -444,7 +444,7 @@ private struct SessionTab: View, Equatable {
                 } else if session.state == .failed {
                     Circle().fill(palette.danger).frame(width: 6, height: 6)
                 } else if unread {
-                    Circle().fill(palette.accent).frame(width: 6, height: 6)
+                    Circle().fill(style.ink == .quiet ? palette.fg : palette.accent).frame(width: 6, height: 6)
                 }
             }
             .frame(width: 18, height: 18)
@@ -452,12 +452,10 @@ private struct SessionTab: View, Equatable {
         .padding(.leading, 10)
         .padding(.trailing, 5)
         .frame(height: style.layout.header - 2 * Space.sm + 2)
-        .background(shape.fill(active ? palette.bgElevated : hovering ? palette.bgHover : .clear))
+        .background(shape.fill(active ? palette.bgActive : hovering ? palette.bgHover : .clear))
         .overlay {
             if preview {
                 shape.strokeBorder(active ? palette.fg4 : palette.line, style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
-            } else if active {
-                shape.strokeBorder(palette.line, lineWidth: 1)
             }
         }
         .contentShape(shape)

@@ -316,7 +316,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
             .disabled(!sendEnabled || !model.canSend || model.schedulingLater)
             .help("稍后发送")
             .accessibilityLabel("稍后发送")
-            .popover(isPresented: $pickingLater, arrowEdge: .top) {
+            .stylePopover(isPresented: $pickingLater, arrowEdge: .top) {
                 VStack(alignment: .trailing, spacing: Space.md) {
                     DatePicker("", selection: $laterDate, in: Date.now..., displayedComponents: [.date, .hourAndMinute])
                         .labelsHidden()
@@ -331,23 +331,37 @@ struct ComposerView<Controls: View, Trailing: View>: View {
 
     private func attachButton(line: Bool) -> some View {
         Button {
-            guard let tools = toolsSlot.entries else { model.pickFiles(upload: upload); return }
-            toolsSlot.refresh?()
-            attachAnchor.popUp(entries: [
-                .item(String(localized: "添加图片或文件"), symbol: "paperclip") { model.pickFiles(upload: upload) },
-                .separator,
-                .submenu(String(localized: "技能与工具"), symbol: "puzzlepiece.extension", entries: tools()),
-            ])
+            // As on the web: files, then a session reference (an @ the mention menu picks up), then the tools.
+            var entries: [NativeMenuEntry] = [.item(String(localized: "添加图片或文件"), symbol: "paperclip") { model.pickFiles(upload: upload) }]
+            if features.addSessionReference != nil {
+                entries.append(.item(String(localized: "引用会话"), symbol: "at") { insertMention() })
+            }
+            if let tools = toolsSlot.entries {
+                toolsSlot.refresh?()
+                entries += [.separator, .submenu(String(localized: "技能与工具"), symbol: "puzzlepiece.extension", entries: tools())]
+            }
+            guard entries.count > 1 else { model.pickFiles(upload: upload); return }
+            attachAnchor.popUp(entries: entries)
         } label: {
             if line {
                 Image(icon: "plus").font(.riffet(size: S(16))).foregroundStyle(palette.fg2)
             } else {
-                Image(icon: "paperclip")
+                Image(icon: "plus")
             }
         }
         .buttonStyle(IconButtonStyle(size: line ? 32 : 26))
         .background(MenuAnchorView(anchor: attachAnchor))
         .help("添加附件（也可以拖入或粘贴）")
+    }
+
+    /// Types an @ at the caret (after a space when it would join a word), which opens the mention menu.
+    private func insertMention() {
+        let ns = model.text as NSString
+        let caret = min(max(model.caret, 0), ns.length)
+        let before = caret > 0 ? ns.substring(with: NSRange(location: caret - 1, length: 1)) : ""
+        let insert = before.isEmpty || before.rangeOfCharacter(from: .whitespacesAndNewlines) != nil ? "@" : " @"
+        model.replace(text: ns.replacingCharacters(in: NSRange(location: caret, length: 0), with: insert), caret: caret + (insert as NSString).length)
+        model.focus()
     }
 
     private func fullscreenButton(_ fullscreen: Binding<Bool>) -> some View {

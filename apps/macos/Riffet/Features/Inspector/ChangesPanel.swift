@@ -34,6 +34,7 @@ struct ChangesPanel: View {
     /// A diff of a turn, a branch or a commit: read-only.
     @State private var scopedDiff: GitDiffTarget?
     @State private var scope: GitScope = .uncommitted
+    @State private var scopeAnchor = MenuAnchor()
     @State private var diff: GitDiff?
     /// The file [diff] belongs to: a reload of the same file keeps the old diff on screen until the new one arrives.
     @State private var diffPath: String?
@@ -212,7 +213,7 @@ struct ChangesPanel: View {
                 sectionTabs(spacing: Space.sm)
                 ChoiceMenu(options: pages.map { page in ChoiceOption(title: page.title, selected: page == section) { section = page } }) {
                     HStack(spacing: Space.xs) {
-                        Text(verbatim: section.title).font(.riffet(size: S(13), weight: .semibold)).foregroundStyle(palette.fg)
+                        Text(verbatim: section.title).font(.riffet(size: S(13), weight: DisplayPreferences.shared.style.tabs == .pill ? .regular : .semibold)).foregroundStyle(palette.fg)
                         Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
                     }
                     .padding(.horizontal, Space.sm)
@@ -225,28 +226,52 @@ struct ChangesPanel: View {
             if section != .worktrees { refreshButton }
             PanelMaximizeButton()
         }
-        .padding(.leading, Space.md)
+        .padding(.leading, DisplayPreferences.shared.style.tabs == .pill ? Space.sm : Space.md)
         .padding(.trailing, Space.sm)
         .frame(height: InspectorMetrics.headerHeight)
     }
 
     private func sectionTabs(spacing: CGFloat) -> some View {
         let style = DisplayPreferences.shared.style
-        return HStack(spacing: spacing) {
+        return HStack(spacing: style.tabs == .pill ? 2 : spacing) {
             ForEach(pages) { page in
-                UnderlineTab(title: page.title, selected: page == section, style: style, size: 12.5) { section = page }
+                if style.tabs == .pill {
+                    PillTab(title: page.title, compact: true, selected: page == section, style: style) { section = page }
+                } else {
+                    UnderlineTab(title: page.title, selected: page == section, style: style, size: 12.5) { section = page }
+                }
             }
         }
         .fixedSize()
     }
 
+    /// The scope as a chip menu, for the styles whose tabs are pills.
+    private var scopeChip: some View {
+        let style = DisplayPreferences.shared.style
+        let options = scopes.map { item in ChoiceOption(title: item.title, selected: item == activeScope) { scope = item } }
+        return Button { scopeAnchor.popUp(options) } label: {
+            HStack(spacing: Space.xs) {
+                Text(verbatim: activeScope.title).font(.riffet(size: S(style.text.secondary)))
+                Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold))
+            }
+        }
+        .buttonStyle(ChipButtonStyle())
+        .background(MenuAnchorView(anchor: scopeAnchor))
+        .fixedSize()
+    }
+
     private var scopeBar: some View {
         HStack(spacing: 0) {
-            SegmentedTrack(selection: $scope, fontSize: 11.5, inset: Space.sm) {
-                ForEach(scopes) { Text(verbatim: $0.title).tag($0) }
+            if DisplayPreferences.shared.style.tabs == .pill {
+                Spacer(minLength: 0)
+                scopeChip
+            } else {
+                SegmentedTrack(selection: $scope, fontSize: 11.5, inset: Space.sm) {
+                    ForEach(scopes) { Text(verbatim: $0.title).tag($0) }
+                }
+                .fixedSize()
+                Spacer(minLength: 0)
             }
-            .fixedSize()
-            Spacer(minLength: 0)
         }
         .padding(.horizontal, Space.sm)
         .padding(.top, Space.sm)
@@ -266,7 +291,10 @@ struct ChangesPanel: View {
                 .id(project.id)
             }
             PanelRule()
-            if error == nil || git.notARepository, scopes.count > 1, !git.notARepository { scopeBar }
+            // Pill styles put the scope chip at the end of the stage-all row when that row shows.
+            let pillScope = DisplayPreferences.shared.style.tabs == .pill
+            let showsStageBar = error == nil && !git.notARepository && activeScope == .uncommitted && !(status?.entries.isEmpty ?? true)
+            if error == nil || git.notARepository, scopes.count > 1, !git.notARepository, !(pillScope && showsStageBar) { scopeBar }
             if git.notARepository {
                 ContentUnavailableView(GitCopy.notARepository, icon: "exclamationmark.triangle")
             } else if let error {
@@ -321,6 +349,7 @@ struct ChangesPanel: View {
                 .foregroundStyle(palette.fg3)
                 .monospacedDigit()
             Spacer(minLength: 0)
+            if DisplayPreferences.shared.style.tabs == .pill, scopes.count > 1 { scopeChip }
         }
         .padding(.leading, Space.xs + 2 + Space.sm)
         .padding(.trailing, Space.sm)
@@ -720,18 +749,27 @@ struct GitEntryRow: View {
     @Environment(\.palette) private var palette
 
     var body: some View {
-        HStack(spacing: Space.sm + 2) {
+        let style = DisplayPreferences.shared.style
+        HStack(spacing: style.fileRow == .inline ? Space.xs + 2 : Space.sm + 2) {
             // Room for the stage box laid over the row.
             Color.clear.frame(width: StageBox.size)
             if entry.path.hasSuffix("/") { Image(icon: "folder").font(.riffet(size: S(12))).foregroundStyle(palette.fg3) }
-            VStack(alignment: .leading, spacing: 1) {
-                Text((trimTrailingSlash(entry.path) as NSString).lastPathComponent)
-                    .font(.riffet(size: S(13)))
-                    .foregroundStyle(palette.fg)
-                    .lineLimit(1)
-                let directory = (trimTrailingSlash(entry.path) as NSString).deletingLastPathComponent
+            let name = (trimTrailingSlash(entry.path) as NSString).lastPathComponent
+            let directory = (trimTrailingSlash(entry.path) as NSString).deletingLastPathComponent
+            if style.fileRow == .inline {
+                Text(name).font(.riffet(size: S(style.text.body))).foregroundStyle(palette.fg).lineLimit(1).layoutPriority(1)
                 if !directory.isEmpty {
-                    Text(directory).font(.riffet(size: S(11))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
+                    Text(directory).font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
+                }
+            } else {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.riffet(size: S(13)))
+                        .foregroundStyle(palette.fg)
+                        .lineLimit(1)
+                    if !directory.isEmpty {
+                        Text(directory).font(.riffet(size: S(11))).foregroundStyle(palette.fg4).lineLimit(1).truncationMode(.head)
+                    }
                 }
             }
             Spacer(minLength: Space.sm)
@@ -742,8 +780,9 @@ struct GitEntryRow: View {
             StatusLetter(code: entry.index + entry.worktree)
         }
         .padding(.horizontal, Space.sm)
-        .padding(.vertical, 6)
+        .padding(.vertical, style.fileRow == .inline ? 0 : 6)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(minHeight: style.fileRow == .inline ? style.layout.sidebarRow : nil)
     }
 }
 

@@ -87,9 +87,7 @@ struct ComposerMenuView: View {
             .fixedSize(horizontal: false, vertical: true)
             .onChange(of: highlight) { _, value in proxy.scrollTo(value) }
         }
-        .background(.regularMaterial, in: Self.shape)
-        .overlay(Self.shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-        .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        .modifier(ComposerMenuChrome(shape: Self.shape))
     }
 
     @ViewBuilder
@@ -198,5 +196,21 @@ struct ReferenceChip: View {
         .help(reference.path + (reference.line.map { ":\($0.int64Value)" } ?? ""))
         .onHover { hovering = $0 }
         .onTapGesture { open?() }
+    }
+}
+
+/// The menu's card: the drawn menus' surface under the drawn recipe, the system's material otherwise.
+private struct ComposerMenuChrome: ViewModifier {
+    let shape: RoundedRectangle
+
+    func body(content: Content) -> some View {
+        if DisplayPreferences.shared.style.menu == .drawn {
+            content.floatingSurface(cornerRadius: Radius.menu)
+        } else {
+            content
+                .background(.regularMaterial, in: shape)
+                .overlay(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
+                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+        }
     }
 }

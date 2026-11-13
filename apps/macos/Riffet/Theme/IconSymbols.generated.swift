@@ -4,6 +4,7 @@ enum IconSymbols {
     /// SF Symbol name -> semantic key; `<pack>.<key>` is the symbol image in Icons.xcassets.
     static let keys: [String: String] = [
         "app.badge": "AppBadge",
+        "apple.terminal": "SquareTerminal",
         "archivebox": "Archive",
         "arrow.clockwise": "Refresh",
         "arrow.counterclockwise": "Undo",
@@ -96,6 +97,7 @@ enum IconSymbols {
         "hand.raised": "Hand",
         "highlighter": "Highlighter",
         "info.circle": "Info",
+        "iphone": "Smartphone",
         "ladybug": "Bug",
         "laptopcomputer": "Laptop",
         "laptopcomputer.and.iphone": "Devices",
@@ -125,6 +127,7 @@ enum IconSymbols {
         "photo": "Image",
         "pin": "Pin",
         "pin.slash": "PinOff",
+        "pip": "Pip",
         "play": "Play",
         "play.circle": "CirclePlay",
         "play.fill": "Play",
@@ -170,6 +173,7 @@ enum IconSymbols {
         "terminal": "Terminal",
         "text.alignleft": "AlignLeft",
         "text.bubble": "MessageSquareText",
+        "text.page": "ScrollText",
         "text.quote": "Quote",
         "text.word.spacing": "NoWrap",
         "textformat.size": "TextSize",

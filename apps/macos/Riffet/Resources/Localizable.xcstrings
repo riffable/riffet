@@ -21,6 +21,16 @@
         }
       }
     },
+    "引用会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reference session"
+          }
+        }
+      }
+    },
     "拒绝": {
       "localizations": {
         "en": {

@@ -67,6 +67,8 @@ private struct MenuLook {
     let border: NSColor
     let radius: CGFloat
     let rowRadius: CGFloat
+    /// A raised surface lifts the card the way the web's `--shadow-pop` does; an outlined one keeps its warm shadow.
+    let raised: Bool
 
     init() {
         let style = DisplayPreferences.shared.style
@@ -81,8 +83,10 @@ private struct MenuLook {
         fg4 = palette.nsColor(\.fg4)
         line = palette.nsColor(\.line)
         border = style.surface == .outlined ? palette.nsColor(\.lineStrong) : palette.nsColor(\.line)
-        radius = style.radii.floating
-        rowRadius = style.radii.container
+        radius = style.radii.menu
+        // A row's corner nests inside the card's, which is padded by `MenuMetric.pad`.
+        rowRadius = min(style.radii.container, max(4, style.radii.menu - MenuMetric.pad))
+        raised = style.surface == .raised
     }
 
     func attributed(_ text: String, font: NSFont, color: NSColor) -> NSAttributedString {
@@ -181,8 +185,8 @@ private final class MenuCardView: NSView {
         layer.cornerCurve = .continuous
         layer.borderWidth = 1
         layer.masksToBounds = false
-        layer.shadowRadius = 20
-        layer.shadowOffset = CGSize(width: 0, height: -12)
+        layer.shadowRadius = look.raised ? 12 : 20
+        layer.shadowOffset = CGSize(width: 0, height: look.raised ? -8 : -12)
         layer.shadowOpacity = 1
         layer.shadowPath = CGPath(roundedRect: NSRect(origin: .zero, size: size), cornerWidth: look.radius, cornerHeight: look.radius, transform: nil)
         refreshColors()
@@ -201,7 +205,9 @@ private final class MenuCardView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer.backgroundColor = look.bg.cgColor
             layer.borderColor = look.border.cgColor
-            layer.shadowColor = (dark ? NSColor.black.withAlphaComponent(0.5) : NSColor(srgbRed: 60 / 255, green: 50 / 255, blue: 40 / 255, alpha: 0.16)).cgColor
+            layer.shadowColor = (dark ? NSColor.black.withAlphaComponent(look.raised ? 0.55 : 0.5)
+                : look.raised ? NSColor(srgbRed: 15 / 255, green: 23 / 255, blue: 42 / 255, alpha: 0.14)
+                : NSColor(srgbRed: 60 / 255, green: 50 / 255, blue: 40 / 255, alpha: 0.16)).cgColor
         }
     }
 }

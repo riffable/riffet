@@ -30,18 +30,24 @@ struct TranscriptStyle: @unchecked Sendable {
     var link: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable = \.accent
     /// The native interface style (its `key` already differs through `link`).
     var native = false
+    /// The prose line the style sets 14pt text on (`StyleSpec.Text.readingLine`).
+    var bodyLineHeight: CGFloat = MarkdownStyle.bodyLineHeight
+    /// Inline code as a tinted chip, or the code face alone on the sentence's paper.
+    var inlineCode: StyleSpec.InlineCode = .chip
+    /// Quiet, running work is told once, by the working line under the turn; its process header stays still.
+    var ink: StyleSpec.Ink = .brand
     let gutter: CGFloat = TranscriptStyle.gutterWidth
     /// The reading column's side margin, also used to tell how much slack the column has around it.
     static let gutterWidth: CGFloat = 28
 
     /// The revision belongs in the key: editing a custom theme keeps its id and changes its colours.
-    var key: String { "\(palette.values.id)|\(palette.revision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(toolRun.rawValue)|\(block.rawValue),\(paper == \.bg)|\(iconPack)|\(mark == \.accent),\(link == \.accent)" }
+    var key: String { "\(palette.values.id)|\(palette.revision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(toolRun.rawValue)|\(block.rawValue),\(paper == \.bg)|\(iconPack)|\(mark == \.accent),\(link == \.accent)|\(bodyLineHeight),\(inlineCode.rawValue),\(ink.rawValue)" }
 
     @MainActor
     static func current(dark: Bool) -> TranscriptStyle {
         let preferences = DisplayPreferences.shared
         let native = preferences.style.backend == .native
-        return TranscriptStyle(palette: ThemeStore.shared.palette, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, toolRun: preferences.style.toolRun, block: preferences.style.block, paper: preferences.style.window == .flat ? \.bgElevated : \.bg, iconPack: IconPack.shared.effective, mark: Palette.markRole, link: native ? \.fg : \.accent, native: native)
+        return TranscriptStyle(palette: ThemeStore.shared.palette, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, toolRun: preferences.style.toolRun, block: preferences.style.block, paper: preferences.style.window == .flat ? \.bgElevated : \.bg, iconPack: IconPack.shared.effective, mark: preferences.style.ink == .quiet ? \.fg2 : Palette.markRole, link: native ? \.fg : \.accent, native: native, bodyLineHeight: preferences.style.text.readingLine, inlineCode: preferences.style.inlineCode, ink: preferences.style.ink)
     }
 
     func s(_ size: CGFloat) -> CGFloat { ladderTextSize(size) * scale }
@@ -155,7 +161,7 @@ struct TranscriptRhythm {
     }
 
     /// Between two paragraphs of prose: the gap a paragraph break leaves inside one text.
-    var prose: CGFloat { MarkdownStyle.blockGap + style.lineGap(size: MarkdownStyle.bodySize, lineHeight: MarkdownStyle.bodyLineHeight) }
+    var prose: CGFloat { MarkdownStyle.blockGap + style.lineGap(size: MarkdownStyle.bodySize, lineHeight: style.bodyLineHeight) }
 
     /// Between prose and a row, either way round: the row's centre sits a paragraph's distance
     /// from the centre of the nearest line, as the next paragraph's first line would.
@@ -218,6 +224,8 @@ enum MarkdownStyle {
     static var orderedContent: CGFloat { orderedMarkerBox + markerTextGap }
     static let quoteInset: CGFloat = 14
     static let inlineCodeSize: CGFloat = 12.5
+    /// Inline code without its chip (`StyleSpec.InlineCode.plain`): 0.86 of the body.
+    static let plainInlineCodeSize: CGFloat = 12
     static let codeSize: CGFloat = 12.5
     static let codeHeaderHeight: CGFloat = 28
     static let codeBodyInset: CGFloat = 11

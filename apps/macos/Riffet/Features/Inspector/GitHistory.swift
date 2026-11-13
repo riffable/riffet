@@ -301,6 +301,7 @@ struct GitHistoryView: View {
     /// A switch moved HEAD: the status and the other tabs read again.
     let onSwitched: () -> Void
     @Environment(\.palette) private var palette
+    @State private var branchAnchor = MenuAnchor()
     @State private var refs: GitRefs?
     @State private var commits: [GitCommit] = []
     @State private var graph: [GitGraphRow] = []
@@ -367,23 +368,25 @@ struct GitHistoryView: View {
         .frame(height: InspectorMetrics.headerHeight - 4)
     }
 
+    /// Branches, remotes and the new-branch actions, in the app's own menu (drawn or the system's per
+    /// the style), built on click so a re-render never rebuilds it while it is open.
     private var branchMenu: some View {
-        Menu {
-            ForEach(refs?.branches ?? [], id: \.name) { ref in
-                Toggle(isOn: Binding(get: { ref.current?.boolValue == true }, set: { _ in
-                    if ref.current?.boolValue != true { Task { await `switch`(branch: ref.name, create: false, remote: nil) } }
-                })) { Text(verbatim: ref.name) }
-                .disabled(ref.elsewhere?.boolValue == true)
-            }
-            if let refs, !refs.remotes.isEmpty {
-                Divider()
-                ForEach(refs.remotes.prefix(30), id: \.name) { remote in
-                    Button(remote.name) { Task { await `switch`(branch: nil, create: false, remote: remote.name) } }
+        Button {
+            guard let refs else { return }
+            var entries: [NativeMenuEntry] = refs.branches.map { ref in
+                let current = ref.current?.boolValue == true
+                return .item(ref.name, checked: current, enabled: ref.elsewhere?.boolValue != true) {
+                    if !current { Task { await `switch`(branch: ref.name, create: false, remote: nil) } }
                 }
             }
-            Divider()
-            if let refs, refs.remoteCount > 30 { Button(GitCopy.checkOutRemote) { prompt = .remote } }
-            Button(GitCopy.newBranch) { prompt = .newBranch }
+            if !refs.remotes.isEmpty {
+                entries.append(.separator)
+                entries += refs.remotes.prefix(30).map { remote in .item(remote.name) { Task { await `switch`(branch: nil, create: false, remote: remote.name) } } }
+            }
+            entries.append(.separator)
+            if refs.remoteCount > 30 { entries.append(.item(GitCopy.checkOutRemote) { prompt = .remote }) }
+            entries.append(.item(GitCopy.newBranch) { prompt = .newBranch })
+            branchAnchor.popUp(entries: entries)
         } label: {
             HStack(spacing: 5) {
                 Image(icon: "arrow.triangle.branch").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
@@ -395,9 +398,10 @@ struct GitHistoryView: View {
             }
             .padding(.horizontal, 6)
             .frame(height: 28)
+            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .background(MenuAnchorView(anchor: branchAnchor))
         .fixedSize()
         .disabled(busy || refs == nil)
     }

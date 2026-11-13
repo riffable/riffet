@@ -335,10 +335,12 @@ struct ToolsPicker: View {
     }
 
     private func header(_ title: LocalizedStringKey) -> some View {
+        // Set over the names, past the rows' check column, so a section reads as one block.
         Text(title)
-            .font(.riffet(size: S(11), weight: .medium))
+            .font(.riffet(size: S(12), weight: .medium))
             .foregroundStyle(palette.fg3)
-            .padding(.horizontal, Space.sm)
+            .padding(.leading, Space.sm + ToolsRow.checkColumn + Space.sm)
+            .padding(.trailing, Space.sm)
             .padding(.top, Space.sm)
             .padding(.bottom, Space.xxs)
     }
@@ -349,6 +351,8 @@ struct ToolsPicker: View {
 }
 
 private struct ToolsRow: View {
+    static let checkColumn: CGFloat = 12
+
     let name: String
     let on: Bool
     let trailing: String?
@@ -359,14 +363,14 @@ private struct ToolsRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Space.sm) {
-                Image(icon: "checkmark").font(.riffet(size: S(10), weight: .semibold)).foregroundStyle(palette.fg2).opacity(on ? 1 : 0).frame(width: 12)
+                Image(icon: "checkmark").font(.riffet(size: S(10), weight: .semibold)).foregroundStyle(palette.fg2).opacity(on ? 1 : 0).frame(width: Self.checkColumn)
                 Text(verbatim: name).lineLimit(1).truncationMode(.tail).foregroundStyle(palette.fg)
                 Spacer(minLength: Space.sm)
                 if let trailing { Text(verbatim: trailing).font(.riffet(size: S(12)).monospacedDigit()).foregroundStyle(palette.fg3) }
             }
             .font(.riffet(size: S(13)))
             .padding(.horizontal, Space.sm)
-            .frame(height: 28)
+            .frame(height: 30)
             .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(hovering ? palette.bgHover : .clear))
             .contentShape(Rectangle())
         }

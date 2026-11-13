@@ -73,11 +73,13 @@ struct ModelControls: View {
         .help(modelSelectionSummary(catalog: activeModels, selection: selection))
         .accessibilityLabel("选择模型")
         .accessibilityValue(modelSelectionSummary(catalog: activeModels, selection: selection))
-        .anchoredPopup(isPresented: $open) {
-            ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loadedKey == usageKey ? loaded : nil,
-                       reserveAccountUsage: reserveAccountUsage, loadingUsage: loadingUsage,
-                       providers: providers, activeProviderId: activeProviderId,
-                       choose: choose, chooseInProvider: chooseInProvider, retryProvider: retryProvider)
+        .anchoredPopup(isPresented: $open, inset: PopoverSurface<EmptyView>.inset) {
+            PopoverSurface {
+                ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loadedKey == usageKey ? loaded : nil,
+                           reserveAccountUsage: reserveAccountUsage, loadingUsage: loadingUsage,
+                           providers: providers, activeProviderId: activeProviderId,
+                           choose: choose, chooseInProvider: chooseInProvider, retryProvider: retryProvider)
+            }
         }
         // Directory and quota reads are independent; a slow catalog must not delay current quota.
         .task(id: open ? usageKey : nil) {
@@ -188,17 +190,15 @@ struct ModelPanel: View {
                 contents
             }
         }
-        .frame(width: min(twoColumn ? 420 : 320, availableSize.width), alignment: .leading)
-        .background(palette.bgPopover, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+        // The provider column is wide enough for a name like "Claude Code" beside its check.
+        .frame(width: min(twoColumn ? 440 : 320, availableSize.width), alignment: .leading)
     }
 
     private var contents: some View {
         VStack(alignment: .leading, spacing: 0) {
             if twoColumn {
                 HStack(alignment: .top, spacing: 0) {
-                    providerColumn.frame(width: 132)
+                    providerColumn.frame(width: 152)
                     // A vertical divider takes whatever height it is offered; held to the lists', the
                     // panel stays as tall as its rows wherever the popup has room to grow.
                     Divider().overlay(palette.line).frame(height: listHeight)
@@ -308,10 +308,10 @@ struct ModelPanel: View {
         choose(selectionWithParam(catalog: shownModels, currentSelection: selection ?? resolved.model, paramId: param.id, value: value))
     }
 
-    @ViewBuilder
     private func row(_ param: ModelParam_) -> some View {
         let kind = paramKind(param: param)
-        HStack(spacing: Space.sm) {
+        let quiet = DisplayPreferences.shared.style.ink == .quiet
+        return HStack(spacing: Space.sm) {
             Text(Self.title(param, kind)).font(.riffet(size: S(13))).foregroundStyle(palette.fg2).lineLimit(1).layoutPriority(1)
             Spacer(minLength: Space.sm)
             switch kind {
@@ -324,22 +324,34 @@ struct ModelPanel: View {
                         .help(Text(verbatim: "Follows Claude Code's Fast setting"))
                 }
                 Toggle(Self.title(param, kind), isOn: Binding(get: { isOn(param: param) }, set: { value(for: param, toggledValue(param: param, on: $0, fallback: nil)) }))
-                    .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(palette.accent)
+                    .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(quiet ? palette.primary : palette.accent)
                     .accessibilityValue(Text(verbatim: param.value == "default" ? "Default" : isOn(param: param) ? "On" : "Off"))
             default:
                 ChoiceMenu(options: (kind == .max ? param.options : listValues(param: param)).map { option in
                     ChoiceOption(title: optionLabel(param: param, value: option.value), selected: param.value == option.value) { value(for: param, option.value) }
                 }) {
-                    HStack(spacing: 6) {
-                        Text(optionLabel(param: param, value: param.value)).lineLimit(1)
-                        Spacer(minLength: 0)
-                        Image(icon: "chevron.up.chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                    if quiet {
+                        // A bare chip, as the composer's own: the value and a chevron, flush right.
+                        HStack(spacing: Space.xs) {
+                            Text(optionLabel(param: param, value: param.value)).lineLimit(1)
+                            Image(icon: "chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                        }
+                        .font(.riffet(size: S(13))).foregroundStyle(palette.fg)
+                        .padding(.horizontal, Space.sm).frame(height: 26)
+                        .contentShape(Rectangle())
+                    } else {
+                        HStack(spacing: 6) {
+                            Text(optionLabel(param: param, value: param.value)).lineLimit(1)
+                            Spacer(minLength: 0)
+                            Image(icon: "chevron.up.chevron.down").font(.riffet(size: S(9), weight: .semibold)).foregroundStyle(palette.fg4)
+                        }
+                        .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
+                        .padding(.horizontal, 8).frame(width: 100, height: 24)
+                        .background(palette.bg, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
                     }
-                    .font(.riffet(size: S(12))).foregroundStyle(palette.fg2)
-                    .padding(.horizontal, 8).frame(width: 100, height: 24)
-                    .background(palette.bg, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
                 }
+                .fixedSize()
                 .accessibilityLabel(Self.title(param, kind))
             }
         }

@@ -28,7 +28,7 @@ struct StyleSpec: Sendable, Equatable {
     enum Header: String, Sendable { case toolbar, sessionTabs, titleMenu }
     enum RightPanel: String, Sendable { case inspector, outline, panels }
     enum Composer: String, Sendable { case card, line }
-    enum ToolRun: String, Sendable { case summary, list }
+    enum ToolRun: String, Sendable { case summary, list, labelled }
     enum Home: String, Sendable { case tiles, docked }
     enum Approval: String, Sendable { case stack, rows, inline }
     enum Settings: String, Sendable { case window, modal }
@@ -37,10 +37,14 @@ struct StyleSpec: Sendable, Equatable {
     enum Form: String, Sendable { case grouped, lined }
     enum Menu: String, Sendable { case system, drawn }
     enum Selection: String, Sendable { case wash, block }
+    enum InlineCode: String, Sendable { case chip, plain }
+    enum Ink: String, Sendable { case brand, quiet }
+    enum Tabs: String, Sendable { case underline, pill }
+    enum FileRow: String, Sendable { case stacked, inline }
 
-    struct Radii: Sendable, Equatable { let control, container, card, floating: CGFloat }
+    struct Radii: Sendable, Equatable { let control, container, card, floating, menu: CGFloat }
     struct Layout: Sendable, Equatable { let sidebarWidth, sidebarRow, sidebarGap, header, rightPanel: CGFloat }
-    struct Text: Sendable, Equatable { let body, secondary, label, sidebar: CGFloat }
+    struct Text: Sendable, Equatable { let body, secondary, label, sidebar, readingLine: CGFloat }
     struct Fonts: Sendable, Equatable { let ui, mono: String }
 
     let backend: Backend
@@ -59,6 +63,10 @@ struct StyleSpec: Sendable, Equatable {
     let form: Form
     let menu: Menu
     let selection: Selection
+    let inlineCode: InlineCode
+    let ink: Ink
+    let tabs: Tabs
+    let fileRow: FileRow
     let radii: Radii
     let layout: Layout
     let text: Text
@@ -67,26 +75,26 @@ struct StyleSpec: Sendable, Equatable {
     let fonts: Fonts
 
     static let native = StyleSpec(
-        backend: .native, titleBar: .unified, window: .system, sidebar: .systemList, header: .toolbar, rightPanel: .inspector, composer: .card, toolRun: .summary, home: .tiles, approval: .stack, settings: .window, surface: .raised, block: .filled, form: .grouped, menu: .system, selection: .wash,
-        radii: Radii(control: 6, container: 10, card: 10, floating: 14),
+        backend: .native, titleBar: .unified, window: .system, sidebar: .systemList, header: .toolbar, rightPanel: .inspector, composer: .card, toolRun: .summary, home: .tiles, approval: .stack, settings: .window, surface: .raised, block: .filled, form: .grouped, menu: .system, selection: .wash, inlineCode: .chip, ink: .brand, tabs: .underline, fileRow: .stacked,
+        radii: Radii(control: 6, container: 10, card: 10, floating: 14, menu: 14),
         layout: Layout(sidebarWidth: 248, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340),
-        text: Text(body: 13, secondary: 12, label: 11, sidebar: 13),
+        text: Text(body: 13, secondary: 12, label: 11, sidebar: 13, readingLine: 25),
         icons: "sf-symbols",
         fonts: Fonts(ui: "system", mono: "system")
     )
     static let riffet = StyleSpec(
-        backend: .custom, titleBar: .unified, window: .insetCard, sidebar: .projectTree, header: .sessionTabs, rightPanel: .outline, composer: .card, toolRun: .summary, home: .tiles, approval: .rows, settings: .modal, surface: .raised, block: .filled, form: .grouped, menu: .drawn, selection: .block,
-        radii: Radii(control: 8, container: 10, card: 12, floating: 16),
+        backend: .custom, titleBar: .unified, window: .insetCard, sidebar: .projectTree, header: .sessionTabs, rightPanel: .outline, composer: .card, toolRun: .labelled, home: .tiles, approval: .rows, settings: .modal, surface: .raised, block: .filled, form: .grouped, menu: .drawn, selection: .block, inlineCode: .plain, ink: .quiet, tabs: .pill, fileRow: .inline,
+        radii: Radii(control: 8, container: 10, card: 12, floating: 16, menu: 12),
         layout: Layout(sidebarWidth: 236, sidebarRow: 30, sidebarGap: 8, header: 44, rightPanel: 320),
-        text: Text(body: 14, secondary: 13, label: 12, sidebar: 13),
+        text: Text(body: 13, secondary: 12, label: 12, sidebar: 13, readingLine: 23),
         icons: "web",
         fonts: Fonts(ui: "Inter", mono: "JetBrains Mono")
     )
     static let line = StyleSpec(
-        backend: .custom, titleBar: .compact, window: .flat, sidebar: .timeGroups, header: .titleMenu, rightPanel: .panels, composer: .line, toolRun: .list, home: .docked, approval: .inline, settings: .modal, surface: .outlined, block: .outlined, form: .lined, menu: .drawn, selection: .block,
-        radii: Radii(control: 8, container: 8, card: 10, floating: 12),
+        backend: .custom, titleBar: .compact, window: .flat, sidebar: .timeGroups, header: .titleMenu, rightPanel: .panels, composer: .line, toolRun: .list, home: .docked, approval: .inline, settings: .modal, surface: .outlined, block: .outlined, form: .lined, menu: .drawn, selection: .block, inlineCode: .chip, ink: .brand, tabs: .underline, fileRow: .stacked,
+        radii: Radii(control: 8, container: 8, card: 10, floating: 12, menu: 12),
         layout: Layout(sidebarWidth: 248, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340),
-        text: Text(body: 14, secondary: 13, label: 12, sidebar: 14),
+        text: Text(body: 14, secondary: 13, label: 12, sidebar: 14, readingLine: 25),
         icons: "lucide",
         fonts: Fonts(ui: "system", mono: "system")
     )

@@ -1,0 +1,152 @@
+/* Riffet style, next: one page of rules (docs/design/riffet-style.md) applied to the main window.
+   Colours are the web's role tokens; a palette swaps their values, the rules only say which role goes where. */
+:root{
+  --bg:#fff;--bg-sidebar:#f7f8fa;--bg-subtle:#f5f6f8;--bg-muted:#eef0f3;--bg-popover:#fff;
+  --bg-hover:rgb(35 45 70/.055);--bg-active:rgb(35 45 70/.09);--bg-bubble:#eef3fd;
+  --fg:#2a2c2e;--fg-2:#50555d;--fg-3:#60666e;--fg-4:#adb2ba;
+  --line:rgb(15 23 42/.08);--line-strong:rgb(15 23 42/.13);
+  --primary:#15171a;--primary-fg:#fff;
+  --accent:#3867f0;--accent-soft:rgb(56 103 240/.1);
+  --success:#1f9d55;--danger:#e0454b;--warning:#c77f06;
+  --diff-add:#e6f4e7;--diff-del:#fce6e2;--diff-add-marker:#01a241;--diff-del-marker:#ba2723;
+  --shadow-float:0 0 0 .5px rgb(24 24 26/.06),0 1px 2px rgb(24 24 26/.03),0 8px 24px -12px rgb(24 24 26/.12);
+  --font:-apple-system,"SF Pro Text","PingFang SC",sans-serif;--mono:"SF Mono",ui-monospace,Menlo,monospace;
+
+  /* the rules: three text sizes for chrome, one for reading, one line, three radii, a 4pt grid */
+  --t-body:13px;--t-meta:12px;--t-read:14px;--lh-read:23px;
+  --r-control:6px;--r-row:8px;--r-card:12px;
+  --row:30px;
+}
+.dark{
+  --bg:#141416;--bg-sidebar:#1a1a1d;--bg-subtle:#1d1d20;--bg-muted:#27272b;--bg-popover:#252528;
+  --bg-hover:rgb(255 255 255/.06);--bg-active:rgb(255 255 255/.1);--bg-bubble:#27282c;
+  --fg:#d2d4d7;--fg-2:#b6bac1;--fg-3:#9da2aa;--fg-4:#62666e;
+  --line:rgb(255 255 255/.075);--line-strong:rgb(255 255 255/.12);
+  --primary:#eceef1;--primary-fg:#141416;
+  --accent:#5b8cff;--accent-soft:rgb(91 140 255/.15);
+  --success:#3fb96f;--danger:#f0676c;--warning:#e5a13a;
+  --diff-add:#1f3124;--diff-del:#3c1f1b;--diff-add-marker:#41c977;--diff-del-marker:#fa423e;
+  --shadow-float:0 0 0 .5px rgb(255 255 255/.07),0 10px 28px -12px rgb(0 0 0/.7);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font:var(--t-body)/20px var(--font);color:var(--fg);background:#d9dbe0;-webkit-font-smoothing:antialiased}
+html:not(.render) body{padding:24px;display:flex;flex-direction:column;gap:32px;align-items:flex-start}
+html.render body{background:none}
+.frame{position:relative;overflow:hidden;background:var(--bg-sidebar);color:var(--fg);flex:none;width:1440px;height:900px}
+svg{flex:none;display:block}
+.ic{stroke:currentColor;fill:none;stroke-width:1.25;stroke-linecap:round;stroke-linejoin:round}
+.ic *{vector-effect:non-scaling-stroke}
+.mono{font-family:var(--mono)}
+.tnum{font-variant-numeric:tabular-nums}
+.spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.ell{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;min-width:0}
+
+/* ---------- one ghost button, one chip: every control in the window is one of these ---------- */
+.ib{width:28px;height:28px;border-radius:var(--r-control);display:grid;place-items:center;color:var(--fg-3)}
+.ib.on{background:var(--bg-active);color:var(--fg)}
+.chip{height:26px;padding:0 8px;border-radius:var(--r-control);display:inline-flex;align-items:center;gap:6px;color:var(--fg-2);font-size:var(--t-body);white-space:nowrap}
+.chip .cv{color:var(--fg-4)}
+.chip.line{box-shadow:inset 0 0 0 1px var(--line)}
+
+/* ---------- sidebar ---------- */
+.sb{position:absolute;left:0;top:0;bottom:0;width:236px;display:flex;flex-direction:column}
+.sb-top{height:52px;flex:none;position:relative}
+.lights{position:absolute;left:14px;top:20px;display:flex;gap:8px}
+.lights i{width:12px;height:12px;border-radius:50%;display:block}
+.lights i:nth-child(1){background:#ff5f57}.lights i:nth-child(2){background:#febc2e}.lights i:nth-child(3){background:#28c840}
+.brand{position:absolute;left:84px;top:14px;height:24px;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:600}
+.sb-top .ib{position:absolute;right:8px;top:12px}
+.nav{padding:0 8px;display:flex;flex-direction:column}
+.nrow{height:var(--row);border-radius:var(--r-row);display:flex;align-items:center;gap:10px;padding:0 8px;font-size:var(--t-body);color:var(--fg)}
+.nrow .ic{color:var(--fg)}
+.nrow .k{margin-left:auto;font-size:var(--t-meta);color:var(--fg-4)}
+.sec{height:28px;margin-top:16px;padding:0 16px;display:flex;align-items:center;font-size:var(--t-meta);font-weight:500;color:var(--fg-3)}
+.list{padding:0 8px;display:flex;flex-direction:column}
+.srow{height:var(--row);border-radius:var(--r-row);display:flex;align-items:center;gap:8px;padding:0 8px;font-size:var(--t-body);color:var(--fg-2)}
+.srow .t{flex:1}
+.srow .tail{font-size:var(--t-meta);color:var(--fg-4);flex:none}
+.srow.sel{background:var(--bg-active);color:var(--fg)}
+.srow.unread{color:var(--fg);font-weight:500}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--fg);display:block}
+.state{font-size:11px;line-height:18px;padding:0 6px;border-radius:9px;color:var(--warning);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warning) 35%,transparent)}
+.sb-foot{margin-top:auto;height:48px;display:flex;align-items:center;gap:2px;padding:0 8px 0 14px}
+.av{width:22px;height:22px;border-radius:50%;background:var(--bg-muted);color:var(--fg-2);font-size:11px;font-weight:500;display:grid;place-items:center;margin-right:auto}
+
+/* ---------- window body: inset cards, one hairline, no shadow ---------- */
+.card{position:absolute;top:8px;bottom:8px;background:var(--bg);border-radius:var(--r-card);box-shadow:0 0 0 1px var(--line);overflow:hidden;display:flex;flex-direction:column}
+.main{left:236px}
+.panel{width:344px;right:8px}
+.head{height:44px;flex:none;display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--line)}
+
+/* tabs: the current one keeps its whole title; the rest shrink to a floor, then overflow into a menu */
+.tab{height:28px;border-radius:var(--r-control);display:flex;align-items:center;gap:6px;padding:0 8px;font-size:var(--t-body);color:var(--fg-3);flex:0 1 160px;min-width:96px}
+.tab .mk{color:var(--fg-4)}
+.tab.on{background:var(--bg-active);color:var(--fg);flex:0 0 auto;max-width:280px}
+.tab.on .mk{color:var(--fg-2)}
+.tab .x{margin-left:auto;color:var(--fg-4)}
+.tab.more{flex:none;min-width:0;padding:0 6px;color:var(--fg-3)}
+.sp{flex:1}
+
+/* ---------- transcript ---------- */
+.scroll{flex:1;overflow:hidden;position:relative}
+.col{width:680px;margin:0 auto;padding:0 0 180px}
+.user.first{margin-top:-8px}
+.read{font-size:var(--t-read);line-height:var(--lh-read);color:var(--fg)}
+.read p+p,.read p+ul,.read ul+p{margin-top:10px}
+.read ul{padding-left:18px}
+.read li+li{margin-top:4px}
+.read li::marker{color:var(--fg-4)}
+.read code{font-family:var(--mono);font-size:.86em;padding:0 1px;color:var(--fg)}
+.read .past{color:var(--fg-2)}
+.user{display:flex;justify-content:flex-end;margin:28px 0 20px}
+.user .b{max-width:76%;background:var(--bg-bubble);border-radius:var(--r-card);padding:8px 14px;font-size:var(--t-read);line-height:var(--lh-read)}
+.user .b p+p{margin-top:2px}
+.fold{display:flex;align-items:center;gap:6px;height:26px;font-size:var(--t-meta);color:var(--fg-3);margin-bottom:6px}
+.fold .ic{color:var(--fg-4)}
+.tools{margin:4px 0 12px;padding-left:2px}
+.tool{display:flex;align-items:center;gap:8px;height:26px;font-size:var(--t-body);color:var(--fg-2)}
+.tool .ic{color:var(--fg-4)}
+.tool .nm{font-weight:500;color:var(--fg-2)}
+.tool .tg{font-family:var(--mono);font-size:var(--t-meta);color:var(--fg-3)}
+.tool .meta{margin-left:auto;font-size:var(--t-meta);color:var(--fg-4)}
+.code{margin:12px 0;border-radius:var(--r-row);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.code .ch{height:30px;display:flex;align-items:center;gap:8px;padding:0 6px 0 12px;font-size:var(--t-meta);color:var(--fg-3);border-bottom:1px solid var(--line)}
+.code .ch .ib{margin-left:auto;width:24px;height:24px}
+.code pre{font:12px/20px var(--mono);padding:6px 0}
+.code .l{padding:0 12px;display:flex;gap:12px}
+.code .l.a{background:var(--diff-add)}.code .l.d{background:var(--diff-del)}
+.code .l .m{width:8px;color:var(--fg-4)}.code .l.a .m{color:var(--diff-add-marker)}.code .l.d .m{color:var(--diff-del-marker)}
+.metarow{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:var(--t-meta);color:var(--fg-3)}
+.metarow .ib{width:24px;height:24px;color:var(--fg-4)}
+.live{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:var(--t-meta);color:var(--fg-3)}
+
+/* composer: the floating glass island; frosting only inside its own shape */
+.composer{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;width:704px;border-radius:var(--r-card);background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(18px) saturate(1.4);box-shadow:var(--shadow-float),inset 0 0 0 1px var(--line);padding:12px 8px 8px}
+.composer .ph{font-size:var(--t-read);line-height:var(--lh-read);color:var(--fg-4);padding:0 8px 10px}
+.composer .bar{display:flex;align-items:center;gap:2px}
+.send{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:var(--primary-fg);margin-left:4px}
+.send.off{background:var(--bg-muted);color:var(--fg-4)}
+
+/* ---------- right panel ---------- */
+.vt{height:28px;border-radius:var(--r-control);display:flex;align-items:center;gap:6px;padding:0 7px;color:var(--fg-3);font-size:var(--t-body)}
+.vt.on{background:var(--bg-active);color:var(--fg)}
+.pbar{height:40px;display:flex;align-items:center;gap:2px;padding:0 8px;border-bottom:1px solid var(--line);flex:none}
+.seg{height:26px;padding:0 8px;border-radius:var(--r-control);display:flex;align-items:center;font-size:var(--t-body);color:var(--fg-3)}
+.seg.on{color:var(--fg);background:var(--bg-active)}
+.repo{height:36px;display:flex;align-items:center;gap:6px;padding:0 16px;font-size:var(--t-body);color:var(--fg)}
+.repo .ic{color:var(--fg-3)}
+.repo .r{margin-left:auto;font-size:var(--t-meta);color:var(--fg-3)}
+.add{color:var(--success)}.del{color:var(--danger)}
+.lh{height:32px;display:flex;align-items:center;gap:8px;padding:0 8px 0 16px;font-size:var(--t-meta);color:var(--fg-3)}
+.lh .chip{margin-left:auto;font-size:var(--t-meta);height:24px}
+.frow{height:var(--row);margin:0 8px;border-radius:var(--r-row);display:flex;align-items:center;gap:8px;padding:0 8px;font-size:var(--t-body)}
+.frow.sel{background:var(--bg-hover)}
+.frow .dir{font-size:var(--t-meta);color:var(--fg-4)}
+.frow .n{margin-left:auto;font:var(--t-meta)/1 var(--mono)}
+.frow .st{width:12px;text-align:right;font-size:var(--t-meta);color:var(--fg-4)}
+.cb{width:14px;height:14px;border-radius:4px;box-shadow:inset 0 0 0 1px var(--line-strong);flex:none}
+.commit{margin:auto 12px 12px;border-radius:var(--r-row);box-shadow:inset 0 0 0 1px var(--line);height:36px;display:flex;align-items:center;padding:0 6px 0 12px;font-size:var(--t-body);color:var(--fg-4)}
+.commit .send{margin-left:auto;width:24px;height:24px}
+
+/* reading-only scrollbar thumb, shown because the window is mid-scroll */
+.thumb{position:absolute;right:3px;top:300px;width:5px;height:140px;border-radius:3px;background:var(--line-strong)}

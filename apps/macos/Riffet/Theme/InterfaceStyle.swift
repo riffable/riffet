@@ -26,6 +26,8 @@ enum Radius {
     static var container: CGFloat { DisplayPreferences.shared.style.radii.container }
     static var card: CGFloat { DisplayPreferences.shared.style.radii.card }
     static var floating: CGFloat { DisplayPreferences.shared.style.radii.floating }
+    /// Menus and popovers: the web's `rounded-xl`, a step under the composer's.
+    static var menu: CGFloat { DisplayPreferences.shared.style.radii.menu }
 }
 
 extension Palette {

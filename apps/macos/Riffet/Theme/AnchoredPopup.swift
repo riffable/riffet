@@ -63,14 +63,14 @@ private struct StylePopover<Popup: View>: ViewModifier {
 }
 
 /// The drawn menu's card around a popup's content: paper fill, hairline, floating radius, and its shadow.
-private struct PopoverSurface<Content: View>: View {
+struct PopoverSurface<Content: View>: View {
     static var inset: CGFloat { 44 }
 
     let content: () -> Content
 
     var body: some View {
         content()
-            .floatingSurface(cornerRadius: DisplayPreferences.shared.style.radii.floating)
+            .floatingSurface(cornerRadius: DisplayPreferences.shared.style.radii.menu)
             .padding(Self.inset)
     }
 }
@@ -88,7 +88,25 @@ private struct FloatingSurface: ViewModifier {
             .background(palette.bgPopover, in: shape)
             .clipShape(shape)
             .overlay(shape.strokeBorder(style.surface == .outlined ? palette.lineStrong : palette.line, lineWidth: 1))
-            .shadow(color: scheme == .dark ? .black.opacity(0.5) : Color(red: 60 / 255, green: 50 / 255, blue: 40 / 255).opacity(0.16), radius: 20, y: 12)
+            .modifier(FloatingShadow(raised: style.surface == .raised, dark: scheme == .dark))
+    }
+}
+
+/// The shadow under a floating card. Raised, the web's `--shadow-pop`: a tight contact shadow under a
+/// soft drop; outlined, one warm shadow under the hairline. The drawn menu's card layer matches it.
+struct FloatingShadow: ViewModifier {
+    let raised: Bool
+    let dark: Bool
+
+    func body(content: Content) -> some View {
+        let slate = Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
+        if raised {
+            content
+                .shadow(color: dark ? .black.opacity(0.3) : slate.opacity(0.05), radius: 2.5, y: 2)
+                .shadow(color: dark ? .black.opacity(0.55) : slate.opacity(0.14), radius: 12, y: 8)
+        } else {
+            content.shadow(color: dark ? .black.opacity(0.5) : Color(red: 60 / 255, green: 50 / 255, blue: 40 / 255).opacity(0.16), radius: 20, y: 12)
+        }
     }
 }
 
