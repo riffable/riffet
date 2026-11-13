@@ -1,5 +1,5 @@
-import { runProcess } from '@riffet/plugin-api';
-import type { AgentHost } from '@riffet/plugin-api';
+import { runProcess } from '@riffet/plugin-api/kit';
+import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { queueConfiguration } from './config-queue.js';
 import { listModels } from './models.js';
 import { AGY_ID, applyAgyUpdate, type AgyRecord } from './protocol.js';

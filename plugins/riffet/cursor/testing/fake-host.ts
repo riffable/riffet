@@ -1,9 +1,9 @@
-import type { AgentControlMessage, AgentDispatchBinding, AgentEvent } from '@riffet/plugin-api';
+import type { AgentControlMessage, AgentDispatchBinding, AgentEvent } from '@riffet/plugin-api/experimental/agent';
+import { AppError } from '@riffet/plugin-api/kit';
 import {
-  AppError,
   type AgentDialogs, type AgentHost, type AgentLaunchSpec, type AgentProjectView, type AgentReservation, type AgentRunRef, type AgentSessionPatch, type AgentSessionView,
   type AgentTerminalControl, type AgentTerminalHandle, type AgentTerminals, type AgentTerminalView,
-} from '@riffet/plugin-api';
+} from '@riffet/plugin-api/experimental/agent';
 
 const notScripted = (what: string) => (): never => { throw new Error(`FakeHost: ${what} is not scripted`); };
 

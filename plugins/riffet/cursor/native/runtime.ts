@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 import type { TerminalAppearance } from '@contracts';
-import { AppError, resolveTerminalAppearance, type AgentProjectView, type AgentReservation, type AgentSessionView, type AgentTerminalHandle } from '@riffet/plugin-api';
+import { AppError, resolveTerminalAppearance } from '@riffet/plugin-api/kit';
+import { type AgentProjectView, type AgentReservation, type AgentSessionView, type AgentTerminalHandle } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter } from '../cli-adapter.js';
 import { cursorConfigDirectory, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';

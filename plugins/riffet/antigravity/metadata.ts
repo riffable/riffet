@@ -1,4 +1,4 @@
-import type { AgentCapabilities, AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentCapabilities, AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import { parseAgyProfile } from './config.js';
 
 export const COMMANDS = ['model', 'mode', 'mcp', 'skills', 'plugins', 'hooks', 'clear', 'resume', 'rewind', 'help'];

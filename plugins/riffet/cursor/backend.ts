@@ -1,13 +1,13 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } from '@contracts';
+import { AppError, materializeNativeInput, queryDirectory, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
-  AGENT_PROTOCOL_VERSION, AppError, materializeNativeInput, queryDirectory, scanCommandRoots, scanSkillRoots, slashTokens,
-  type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext, type AgentControlMessage,
-  type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest, type AgentPrewarmResult,
-  type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentSendRequest, type AgentStopOptions, type AgentTerminalBehaviour, type AgentTraits,
-  type AgentTranscriptSource,
-} from '@riffet/plugin-api';
+  AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
+  type AgentControlMessage, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
+  type AgentPrewarmResult, type AgentProfile, type AgentProjectConfigs, type AgentProjectView, type AgentReport, type AgentSendRequest, type AgentStopOptions,
+  type AgentTerminalBehaviour, type AgentTraits, type AgentTranscriptSource,
+} from '@riffet/plugin-api/experimental/agent';
 import { CURSOR_AGENT_BUSY_PATTERN, CURSOR_AGENT_READY_PATTERN, CURSOR_CLI_VERSIONS, cursorAgentStartupError } from './cli-adapter.js';
 import { CURSOR_LAUNCH_ENV, cursorLaunchProfileOf, cursorLaunchSpec, redactCursorOutput, runCursor, type CursorLaunchProfile } from './cli-driver.js';
 import { cursorCapabilityReport, cursorNeedsLogin, describeCursorProfile, runCursorOperation } from './config.js';

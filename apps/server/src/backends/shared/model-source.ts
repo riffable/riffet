@@ -6,7 +6,8 @@
 // a saved name plus the profile's own overrides into wire facts, so the Claude and Codex drivers read
 // `ResolvedSource` and never grow a branch per source.
 
-import { protocolBackend, sourceEndpoint, sourceProtocols, type GatewayProtocol, type ModelSourceBackend, type ModelSourceProvider, type ResolvedSource, type SourceCredential, type SourceOverrides } from '@riffet/plugin-api';
+import { type GatewayProtocol, type ModelSourceBackend, type ModelSourceProvider, type ResolvedSource, type SourceCredential, type SourceOverrides } from '@riffet/plugin-api';
+import { protocolBackend, sourceEndpoint, sourceProtocols } from '@riffet/plugin-api/kit';
 import type { ModelInfo, NativeBackendUsage, NativeModelSource } from '../../../../../packages/contracts/src/index.js';
 
 export { sourceEndpoint };

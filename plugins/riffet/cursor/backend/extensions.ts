@@ -1,4 +1,4 @@
-import type { AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import { cursorCommand, cursorConfigDirectory, cursorLaunchProfileOf } from '../cli-driver.js';
 
 const SKILLS = ['.cursor/skills', '.agents/skills', '.claude/skills', '.codex/skills'];

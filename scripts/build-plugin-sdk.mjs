@@ -15,7 +15,7 @@ const temporary = await mkdtemp(join(tmpdir(), 'riffet-plugin-sdk-'));
 const contractsTypes = join(temporary, 'contracts/dist/index.d.ts');
 const configs = [
   { folder: 'contracts', entries: { index: 'index.ts' } },
-  { folder: 'plugin-api', entries: { index: 'index.ts', manifest: 'manifest.ts', tooling: 'tooling.ts', 'package-files': 'package-files.ts', cli: 'cli.ts', agent: 'agent.ts' } },
+  { folder: 'plugin-api', entries: { index: 'index.ts', manifest: 'manifest.ts', tooling: 'tooling.ts', 'package-files': 'package-files.ts', cli: 'cli.ts', agent: 'agent.ts', 'kit/index': 'kit/index.ts' } },
   { folder: 'plugin-web', entries: { index: 'index.ts', bridge: 'bridge.ts', 'bridge-client': 'bridge-client.ts' } },
 ];
 await mkdir(output, { recursive: true });

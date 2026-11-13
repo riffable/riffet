@@ -1,23 +1,10 @@
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeInteractionResult, NativeStatus } from '@contracts';
+import { resolveCliExecutable, runProcess } from '@riffet/plugin-api/kit';
 import {
-  AGENT_PROTOCOL_VERSION,
-  resolveCliExecutable,
-  runProcess,
-  type AgentBackend,
-  type AgentCapabilities,
-  type AgentConfigurePatch,
-  type AgentContext,
-  type AgentExtensionLayout,
-  type AgentHost,
-  type AgentModelQuery,
-  type AgentOpenResult,
-  type AgentProfile,
-  type AgentReport,
-  type AgentRunRef,
-  type AgentSendRequest,
-  type AgentStopOptions,
-} from '@riffet/plugin-api';
+  AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
+  type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
+} from '@riffet/plugin-api/experimental/agent';
 import { agyMode, agyModelSelector, agyToolPermission, parseAgyProfile } from './config.js';
 import { queueConfiguration } from './config-queue.js';
 import { interrupt, runtimeAction } from './control.js';

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { NativeActivity, NativeContext, NativeWorkbenchEvent } from '@contracts';
-import { activityEvent, activityId, AppError, clipDetail } from '@riffet/plugin-api';
+import { activityEvent, activityId, AppError, clipDetail } from '@riffet/plugin-api/kit';
 import { ChatReader, TranscriptMapper, userQuery, type ChatCompaction, type ChatMessage, type ChatMeta } from './chat-store.js';
 
 const HISTORY_TURNS = 8;

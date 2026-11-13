@@ -9,7 +9,7 @@ import type { Journal } from '../journal/journal.js';
 import type { LaneWriter, TranscriptSource, TurnEndStatus } from '../journal/ingest.js';
 import type { TerminalBehaviour, TerminalInteractionControl, TerminalLaunchEnv, TerminalObserver, TerminalService } from '../terminal/service.js';
 import type { CliVersionRange } from './shared/cli-version.js';
-import type { AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 
 export type NativeTerminalControls = Pick<TerminalService,
   'get' | 'screen' | 'paste' | 'sendKeys' | 'stop' | 'observe' | 'subscribe' | 'withInteraction' | 'panePid'

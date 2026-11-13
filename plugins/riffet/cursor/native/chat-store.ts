@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { NativeContext } from '@contracts';
 import { isJobLogPath } from './job-log.js';
-import { announcedImagePaths, imagePathFields, isImagePath, parseSteerContexts, toolImageContent } from '@riffet/plugin-api';
+import { announcedImagePaths, imagePathFields, isImagePath, parseSteerContexts, toolImageContent } from '@riffet/plugin-api/kit';
 
 /**
  * Read-only access to the Cursor CLI chat store (`<config>/chats/<md5(cwd)>/<chatId>/store.db`).

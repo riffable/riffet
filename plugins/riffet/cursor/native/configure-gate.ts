@@ -1,5 +1,5 @@
 import type { ApprovalMode, NativeStatus } from '@contracts';
-import { AppError } from '@riffet/plugin-api';
+import { AppError } from '@riffet/plugin-api/kit';
 
 /**
  * The approval mode the CLI's footer names. It prints nothing for its default allowlist, so a

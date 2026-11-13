@@ -1,4 +1,5 @@
-import { providerTitlePatch, stripTerminalSequences, type AgentSessionView, type AgentTerminalObservation } from '@riffet/plugin-api';
+import { providerTitlePatch, stripTerminalSequences } from '@riffet/plugin-api/kit';
+import { type AgentSessionView, type AgentTerminalObservation } from '@riffet/plugin-api/experimental/agent';
 import type { CursorPort } from './host-port.js';
 
 /**

@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { NativeInteractionResponse, NativeInteractionResult } from '@contracts';
-import type { AgentContext, AgentHost } from '@riffet/plugin-api';
+import type { AgentContext, AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { readJson, writeJson } from './bridge.js';
 import { sha } from './composer.js';
 import { answerOf, answered, fingerprint, interactionOf } from './interactions.js';

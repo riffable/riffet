@@ -1,7 +1,7 @@
 import type {
   NativeContext, NativeJob, NativeStatus, NativeStreamMessage, NativeWorkbenchEvent, RunMetrics, Session, SessionState,
 } from '@contracts';
-import type { StatsSink } from '@riffet/plugin-api';
+import type { StatsSink } from '@riffet/plugin-api/kit';
 import { CursorTranscriptMeter } from './cursor-metrics.js';
 import type { ChatMeta } from './chat-store.js';
 import type { Transcript } from './transcript.js';

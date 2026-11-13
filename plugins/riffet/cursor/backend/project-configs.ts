@@ -6,7 +6,7 @@ import type { ConfigFile } from '@contracts';
 import {
   AppError, MAX_CONFIG_DOCUMENT_BYTES, assertWithin, atomicWriteConfigDocument, hashConfigContent as hash, isWithin, projectDirectory as projectRoot,
   readConfigDocumentBytes as readConfigBytes, redactConfigDocument as redactConfig, resolveScopedPath, restoreConfigDocumentSecrets as mergeRedactedContent,
-} from '@riffet/plugin-api';
+} from '@riffet/plugin-api/kit';
 
 type ProjectRef = { cwd: string };
 

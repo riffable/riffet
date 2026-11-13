@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { activityOfEvent, type AgentLaneBatch, type AgentLaneWriter, type AgentTranscriptSource } from '@riffet/plugin-api';
+import { activityOfEvent } from '@riffet/plugin-api/kit';
+import { type AgentLaneBatch, type AgentLaneWriter, type AgentTranscriptSource } from '@riffet/plugin-api/experimental/agent';
 import { FakeLaneWriter, FakeLanes, isHiddenKind, pullLane, type FakeRow } from './fake-lane-writer.js';
 
 /*

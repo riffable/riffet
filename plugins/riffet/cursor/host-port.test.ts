@@ -1,4 +1,4 @@
-import type { AgentSessionView } from '@riffet/plugin-api';
+import type { AgentSessionView } from '@riffet/plugin-api/experimental/agent';
 import { describe, expect, it } from 'vitest';
 import { cursorPort } from './host-port.js';
 import { FakeHost } from './testing/fake-host.js';

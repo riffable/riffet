@@ -2,7 +2,7 @@ import { spawn,type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import type { ApprovalMode, CursorCliSettings } from '@contracts';
-import { AppError, mergePath, resolveCliExecutable, runProcess, shellFunctionInvocation, type ProcessOptions } from '@riffet/plugin-api';
+import { AppError, mergePath, resolveCliExecutable, runProcess, shellFunctionInvocation, type ProcessOptions } from '@riffet/plugin-api/kit';
 import { homedir } from 'node:os';
 import { isAbsolute,resolve,join } from 'node:path';
 

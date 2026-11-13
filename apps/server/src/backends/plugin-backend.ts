@@ -1,9 +1,9 @@
 import type {
-  AgentBackend, AgentContext, AgentControlMessage, AgentDelivery, AgentDispatchBinding, AgentEvent, AgentHost, AgentProfile, AgentReservation, AgentRunRef,
-  AgentSessionView, AgentTerminalView, AgentTranscript, AgentTranscriptBatch, AgentTranscriptSource,
-} from '@riffet/plugin-api';
+  AgentBackend, AgentContext, AgentControlMessage, AgentDelivery, AgentDispatchBinding, AgentEvent, AgentHost, AgentProfile, AgentReservation, AgentRunRef, AgentSessionView,
+  AgentTerminalView, AgentTranscript, AgentTranscriptBatch, AgentTranscriptSource,
+} from '@riffet/plugin-api/experimental/agent';
 import { basename } from 'node:path';
-import { sourceProtocols } from '@riffet/plugin-api';
+import { sourceProtocols } from '@riffet/plugin-api/kit';
 import type { NativeBackendId, NativeInteractionResult, NativeStatus, NativeWorkbenchEvent, Project, Run, Session, TerminalInfo } from '../../../../packages/contracts/src/index.js';
 import { NativeInteractions } from '../agent-host/interactions.js';
 import { AppError } from '../errors.js';

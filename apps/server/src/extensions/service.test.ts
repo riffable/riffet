@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Project } from '../../../../packages/contracts/src/index.js';
 import type { NativeBackendProfileConfig } from '../backends/types.js';
-import type { AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import { ExtensionService } from './service.js';
 import type { ExtensionContext } from './types.js';
 

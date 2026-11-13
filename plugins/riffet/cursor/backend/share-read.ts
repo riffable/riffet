@@ -1,7 +1,8 @@
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { NativeWorkbenchEvent } from '@contracts';
-import { SHARE_MAX_CHILDREN as MAX_CHILDREN, shareChildReferences as childReferences, shareUnavailable as unavailable, type AgentContext, type AgentHistory, type AgentHistoryOptions } from '@riffet/plugin-api';
+import { SHARE_MAX_CHILDREN as MAX_CHILDREN, shareChildReferences as childReferences, shareUnavailable as unavailable } from '@riffet/plugin-api/kit';
+import { type AgentContext, type AgentHistory, type AgentHistoryOptions } from '@riffet/plugin-api/experimental/agent';
 import { ChatReader, workspaceChatsDir } from '../native/chat-store.js';
 import { readCompleteTranscript } from '../native/transcript.js';
 

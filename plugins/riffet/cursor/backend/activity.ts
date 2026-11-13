@@ -1,5 +1,5 @@
 import type { NativeActivity, NativeJob, NativeStatus } from '@contracts';
-import { activityId, activityOfEvent, activityTitle, ActivityLedger, clipDetail, withActivity } from '@riffet/plugin-api';
+import { activityId, activityOfEvent, activityTitle, ActivityLedger, clipDetail, withActivity } from '@riffet/plugin-api/kit';
 import type { WatchMessage } from '../native/watch.js';
 
 /** The activity of one Cursor job; Cursor has no way to stop a job from outside, so it never carries `stop`. */

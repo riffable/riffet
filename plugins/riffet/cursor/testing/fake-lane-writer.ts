@@ -1,9 +1,9 @@
 import { createHash } from 'node:crypto';
 import type { NativeActivity, NativeWorkbenchEvent, SyncLane } from '@contracts';
+import { ActivityLedger, activityEvent, activityOfEvent, isLiveActivity } from '@riffet/plugin-api/kit';
 import {
-  ActivityLedger, activityEvent, activityOfEvent, isLiveActivity,
   type AgentLaneBatch, type AgentLaneWriter, type AgentSubagentBinding, type AgentSubagentInfo, type AgentTranscriptSource, type AgentTurnStatus,
-} from '@riffet/plugin-api';
+} from '@riffet/plugin-api/experimental/agent';
 
 /*
  * A recording, in-memory `AgentLaneWriter`: the lane logs of one session as the core's journal keeps them

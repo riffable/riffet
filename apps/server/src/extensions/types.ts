@@ -1,6 +1,6 @@
 import type { ExtensionCreateTarget, ExtensionDetail, ExtensionInventory, ExtensionItem, ExtensionFile } from '../../../../packages/contracts/src/extensions.js';
 import type { Project } from '../../../../packages/contracts/src/index.js';
-import type { AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import type { NativeBackendProfileConfig } from '../backends/types.js';
 
 /** Internal request context. Profile configuration never crosses the HTTP boundary. */

@@ -1,5 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import type { AgentContext, AgentHost, AgentStopOptions } from '@riffet/plugin-api';
+import type { AgentContext, AgentHost, AgentStopOptions } from '@riffet/plugin-api/experimental/agent';
 import { required } from './lifecycle.js';
 import { changed, loadContext, owned, type Hub } from './runtime.js';
 import { refresh } from './poll.js';

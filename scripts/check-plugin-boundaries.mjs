@@ -53,7 +53,7 @@ for (const file of files) {
         // `plugins/index.ts` and `web.ts` list the packages; every other file belongs to the one directory `plugins/<vendor>/<name>/`.
         const own = file.split('/').length > 2 ? `${file.split('/').slice(0, 3).join('/')}/` : 'plugins/';
         if (!relativeTarget.startsWith(own)) fail(`may only import files under ${own}`);
-      } else if (specifier !== '@riffet/plugin-api' && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) {
+      } else if (specifier !== '@riffet/plugin-api' && !specifier.startsWith('@riffet/plugin-api/') && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) {
         fail('may import only @riffet/plugin-api, @contracts, Node built-ins and package.json dependencies');
       }
     } else if (file.startsWith(API)) {

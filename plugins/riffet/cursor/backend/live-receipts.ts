@@ -1,5 +1,5 @@
 import { samePromptText } from '@contracts';
-import type { AgentHost } from '@riffet/plugin-api';
+import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { cursorPromptAlias, type CursorLive, type CursorLiveStep } from '../native/live.js';
 
 /** How long a sent prompt waits for its CLI to take it; a CLI without the live tap never reports one. */

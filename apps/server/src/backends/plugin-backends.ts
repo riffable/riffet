@@ -1,4 +1,4 @@
-import type { AgentBackend } from '@riffet/plugin-api';
+import type { AgentBackend } from '@riffet/plugin-api/experimental/agent';
 import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
 import { PluginBackendDriver, type WorkspaceObserver } from './plugin-backend.js';

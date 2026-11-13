@@ -1,7 +1,7 @@
 import { realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { CapabilityReport, CommandResult } from '@contracts';
-import { AppError, TMUX_MIN_VERSION, detectTailscale, runProcess, tmuxTooOld } from '@riffet/plugin-api';
+import { AppError, TMUX_MIN_VERSION, detectTailscale, runProcess, tmuxTooOld } from '@riffet/plugin-api/kit';
 import { cursorCommand, cursorLaunchProfileOf, runCursor, type CursorLaunchProfile } from './cli-driver.js';
 
 const REDACTED = '[REDACTED]';

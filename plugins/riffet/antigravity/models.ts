@@ -1,4 +1,4 @@
-import type { AgentHost, AgentModelQuery } from '@riffet/plugin-api';
+import type { AgentHost, AgentModelQuery } from '@riffet/plugin-api/experimental/agent';
 import { agyModelSelector } from './config.js';
 import { agyRecord, type AgyRecord } from './protocol.js';
 import type { Hub } from './runtime.js';

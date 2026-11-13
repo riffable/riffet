@@ -20,6 +20,10 @@
       "types": "./dist/package-files.d.ts",
       "import": "./dist/package-files.js"
     },
+    "./kit": {
+      "types": "./dist/kit/index.d.ts",
+      "import": "./dist/kit/index.js"
+    },
     "./experimental/agent": {
       "types": "./dist/agent.d.ts",
       "import": "./dist/agent.js"

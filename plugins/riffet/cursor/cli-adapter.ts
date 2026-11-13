@@ -1,7 +1,7 @@
 import { homedir } from 'os';
 import { join } from 'path';
 import type { ApprovalMode } from '@contracts';
-import { stripTerminalSequences, type CliVersionRange } from '@riffet/plugin-api';
+import { stripTerminalSequences, type CliVersionRange } from '@riffet/plugin-api/kit';
 import { approvalArgs } from './cli-driver.js';
 
 /**

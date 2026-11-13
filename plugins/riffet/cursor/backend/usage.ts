@@ -1,4 +1,5 @@
-import type { AgentHost, AgentSessionView, UsageObservation } from '@riffet/plugin-api';
+import type { UsageObservation } from '@riffet/plugin-api/kit';
+import type { AgentHost, AgentSessionView } from '@riffet/plugin-api/experimental/agent';
 import { ChatReader, chatStorePath } from '../native/chat-store.js';
 import { cursorPromptAlias, type CursorLive, type CursorUsageCapture } from '../native/live.js';
 

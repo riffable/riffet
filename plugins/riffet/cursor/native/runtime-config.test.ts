@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AgentLaunchSpec, AgentSessionView } from '@riffet/plugin-api';
+import type { AgentLaunchSpec, AgentSessionView } from '@riffet/plugin-api/experimental/agent';
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { NativeRuntimeManager } from './runtime.js';

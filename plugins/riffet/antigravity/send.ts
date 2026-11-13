@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import { materializeAttachment, type AgentHost, type AgentSendRequest } from '@riffet/plugin-api';
+import { materializeAttachment } from '@riffet/plugin-api/kit';
+import { type AgentHost, type AgentSendRequest } from '@riffet/plugin-api/experimental/agent';
 import { composerHolds, composerText, emptyComposer } from './composer.js';
 import { required } from './lifecycle.js';
 import { resync } from './poll.js';

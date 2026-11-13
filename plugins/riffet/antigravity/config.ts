@@ -4,7 +4,7 @@ import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:f
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseSelection } from '@contracts';
-import { AppError, resolveCliExecutable } from '@riffet/plugin-api';
+import { AppError, resolveCliExecutable } from '@riffet/plugin-api/kit';
 import { agyRecord } from './protocol.js';
 
 export interface AgyProfile {

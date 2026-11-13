@@ -1,8 +1,8 @@
 import type { RunMetrics } from '@contracts';
+import { AppError, type StatsSink } from '@riffet/plugin-api/kit';
 import {
-  AppError,
-  type AgentDialogs, type AgentHost, type AgentProjectView, type AgentRunRef, type AgentSessionPatch, type AgentSessionView, type AgentTerminals, type AgentTerminalView, type StatsSink,
-} from '@riffet/plugin-api';
+  type AgentDialogs, type AgentHost, type AgentProjectView, type AgentRunRef, type AgentSessionPatch, type AgentSessionView, type AgentTerminals, type AgentTerminalView,
+} from '@riffet/plugin-api/experimental/agent';
 
 /**
  * What `NativeService` and `NativeRuntimeManager` use of the core, in the shape they used it: reads that

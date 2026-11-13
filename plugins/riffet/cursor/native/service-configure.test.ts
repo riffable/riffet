@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ApprovalMode, NativeStatus } from '@contracts';
-import type { AgentLaunchSpec, AgentSessionView, AgentTerminalView } from '@riffet/plugin-api';
+import type { AgentLaunchSpec, AgentSessionView, AgentTerminalView } from '@riffet/plugin-api/experimental/agent';
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { adoptableApproval, approvalFromFooter, configureGate, NativeService } from './service.js';

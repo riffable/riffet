@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NativeStreamMessage, NativeWorkbenchEvent, RunMetrics } from '@contracts';
 import { CursorTranscriptMeter } from './cursor-metrics.js';
-import { estimatedTokens, type UsageRecord } from '@riffet/plugin-api';
+import { estimatedTokens, type UsageRecord } from '@riffet/plugin-api/kit';
 
 const at = (offsetMs: number) => new Date(1_700_000_000_000 + offsetMs).toISOString();
 

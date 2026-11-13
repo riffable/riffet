@@ -1,5 +1,6 @@
 import type { CapabilityReport } from '@contracts';
-import { cliCheck, type DoctorCheck } from '@riffet/plugin-api';
+import { type DoctorCheck } from '@riffet/plugin-api';
+import { cliCheck } from '@riffet/plugin-api/kit';
 import { CURSOR_CLI_VERSIONS } from '../cli-adapter.js';
 
 /**

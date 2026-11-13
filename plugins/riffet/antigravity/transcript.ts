@@ -2,17 +2,10 @@ import { createHash } from 'node:crypto';
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { NativeJob, NativeWorkbenchEvent } from '@riffet/contracts';
+import { activityEvent, clipDetail, toolImageContent } from '@riffet/plugin-api/kit';
 import {
-  activityEvent,
-  clipDetail,
-  toolImageContent,
-  type AgentHistory,
-  type AgentHost,
-  type AgentLaneWriter,
-  type AgentTranscriptSource,
-  type AgentTurnStatus,
-  type AgentUsageRecord,
-} from '@riffet/plugin-api';
+  type AgentHistory, type AgentHost, type AgentLaneWriter, type AgentTranscriptSource, type AgentTurnStatus, type AgentUsageRecord,
+} from '@riffet/plugin-api/experimental/agent';
 import { AGY_ID, agyRecord, type AgyRecord, type AgySnapshot } from './protocol.js';
 import { readAgySnapshot } from './storage.js';
 

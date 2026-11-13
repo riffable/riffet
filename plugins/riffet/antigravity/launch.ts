@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api';
+import type { AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api/experimental/agent';
 import { prepareBridge, readJson, writeJson } from './bridge.js';
 import { sha } from './composer.js';
 import { agyModelSelector, agyProfileEnvironment, parseAgyProfile, prepareAgySession } from './config.js';

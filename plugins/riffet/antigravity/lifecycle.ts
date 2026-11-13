@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { AgentContext, AgentHost } from '@riffet/plugin-api';
+import type { AgentContext, AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { readJson } from './bridge.js';
 import { validateMcp } from './mcp-scope.js';
 import { endOpenTurns, refresh, schedule } from './poll.js';

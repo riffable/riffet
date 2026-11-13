@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, rename, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { versionAtLeast } from '@riffet/plugin-api';
+import { versionAtLeast } from '@riffet/plugin-api/kit';
 import { runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 
 const probes = new Map<string, Promise<boolean>>();

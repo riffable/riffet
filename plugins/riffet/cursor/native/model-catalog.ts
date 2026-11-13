@@ -1,5 +1,5 @@
 import type { ModelConfigOption, ModelInfo } from '@contracts';
-import { AppError } from '@riffet/plugin-api';
+import { AppError } from '@riffet/plugin-api/kit';
 
 export interface NativeModelEntry { value: string; name: string; }
 

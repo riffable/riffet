@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { AgentContext, AgentHost, AgentInteractionReceipt, AgentRunRef, AgentSendRequest } from '@riffet/plugin-api';
+import type { AgentContext, AgentHost, AgentInteractionReceipt, AgentRunRef, AgentSendRequest } from '@riffet/plugin-api/experimental/agent';
 import { AntigravityBackend } from './backend.js';
 import { writeJson } from './bridge.js';
 import { interactionOf } from './interactions.js';

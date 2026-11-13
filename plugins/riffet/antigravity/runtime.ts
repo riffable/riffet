@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { NativeRuntimeNotice, NativeStatus } from '@contracts';
-import type { AgentConfigurePatch, AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api';
+import type { AgentConfigurePatch, AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api/experimental/agent';
 import { readJson } from './bridge.js';
 import { sha } from './composer.js';
 import type { PreparedAgySession } from './config.js';

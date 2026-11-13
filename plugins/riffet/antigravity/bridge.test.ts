@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, truncat
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { runProcess } from '@riffet/plugin-api';
+import { runProcess } from '@riffet/plugin-api/kit';
 import { agySessionPaths } from './config.js';
 import { prepareBridge, readJson, writeJson } from './bridge.js';
 const roots: string[] = [];

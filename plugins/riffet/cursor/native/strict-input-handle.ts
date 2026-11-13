@@ -1,4 +1,5 @@
-import { AppError, type AgentTerminalControl } from '@riffet/plugin-api';
+import { AppError } from '@riffet/plugin-api/kit';
+import { type AgentTerminalControl } from '@riffet/plugin-api/experimental/agent';
 
 /**
  * Wraps a `AgentTerminalControl` so that submission-boundary primitives (`keys`, `paste`)

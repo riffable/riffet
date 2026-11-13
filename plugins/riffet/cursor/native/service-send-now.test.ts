@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { AppError, type AgentSessionView, type AgentTerminalView } from '@riffet/plugin-api';
+import { AppError } from '@riffet/plugin-api/kit';
+import { type AgentSessionView, type AgentTerminalView } from '@riffet/plugin-api/experimental/agent';
 import { cursorPort } from '../host-port.js';
 import { FakeHost } from '../testing/fake-host.js';
 import { NativeService } from './service.js';

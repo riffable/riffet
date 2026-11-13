@@ -1,5 +1,5 @@
 import type { NativeStreamMessage, NativeWorkbenchEvent, RunMetrics } from '@contracts';
-import { estimateTokens, runTracker, type RunMetricsTracker, type StatsSink } from '@riffet/plugin-api';
+import { estimateTokens, runTracker, type RunMetricsTracker, type StatsSink } from '@riffet/plugin-api/kit';
 
 const noopStats: StatsSink = {
   recordUsage() {},

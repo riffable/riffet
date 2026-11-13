@@ -1,10 +1,8 @@
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeWorkbenchEvent, Session } from '@contracts';
-import {
-  AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch,
-  type AgentProjectView, type AgentSessionView, type AgentTerminalControl, type StatsSink,
-} from '@riffet/plugin-api';
+import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
+import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter, cursorComposerHoldsPrompt } from '../cli-adapter.js';
 import { approvalArgs, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';

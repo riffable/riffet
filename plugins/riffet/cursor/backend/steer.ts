@@ -1,8 +1,8 @@
 import type { NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Run } from '@contracts';
+import { AppError, DeferredSteerInputs, NativeHookServer, type SteerBinding, type SteerHost } from '@riffet/plugin-api/kit';
 import {
-  AppError, DeferredSteerInputs, NativeHookServer,
-  type AgentDispatchBinding, type AgentHost, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentTurnStatus, type SteerBinding, type SteerHost,
-} from '@riffet/plugin-api';
+  type AgentDispatchBinding, type AgentHost, type AgentRunRef, type AgentSendRequest, type AgentSessionView, type AgentTurnStatus,
+} from '@riffet/plugin-api/experimental/agent';
 import type { CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { NativeService } from '../native/service.js';

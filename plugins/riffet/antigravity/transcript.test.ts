@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
-import type { AgentLaneWriter } from '@riffet/plugin-api';
+import type { AgentLaneWriter } from '@riffet/plugin-api/experimental/agent';
 import { agyStepIdentity, AntigravityTranscriptSource, mapAgySnapshot } from './transcript.js';
 import type { AgySnapshot } from './protocol.js';
 const cid = '11111111-1111-1111-1111-111111111111',

@@ -7,7 +7,7 @@ import { AppError } from '../errors.js';
 import { runtimeSettings as dshRuntimeSettings } from '../backends/dsh/settings.js';
 import { assertWithin, isWithin, projectRoot } from '../workspace/scope.js';
 import { MAX_CONFIG_DOCUMENT_BYTES, hashConfigContent, readConfigDocumentBytes, redactSensitiveText } from '../settings/config-documents.js';
-import type { AgentExtensionLayout } from '@riffet/plugin-api';
+import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import type { ExtensionContext, ExtensionDocumentDescriptor, ExtensionSnapshot } from './types.js';
 import { readSkillSettings } from './skill-settings.js';
 

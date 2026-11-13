@@ -8,6 +8,8 @@ export default defineConfig({
     alias: {
       '@contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
       '@riffet/contracts': fileURLToPath(new URL('./packages/contracts/src/index.ts', import.meta.url)),
+      '@riffet/plugin-api/kit': fileURLToPath(new URL('./packages/plugin-api/src/kit/index.ts', import.meta.url)),
+      '@riffet/plugin-api/experimental/agent': fileURLToPath(new URL('./packages/plugin-api/src/agent.ts', import.meta.url)),
       '@riffet/plugin-api': fileURLToPath(new URL('./packages/plugin-api/src/index.ts', import.meta.url)),
       '@riffet/plugin-web': fileURLToPath(new URL('./packages/plugin-web/src/index.ts', import.meta.url)),
       // So web modules that import via the `@/` alias are testable too.
