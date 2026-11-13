@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { NativeStatus, Session, SessionDeletionPreview, SessionDeletionReceipt } from '../../../packages/contracts/src/index.js';
 import { AppError } from './errors.js';
+import { workspaceObserver } from './backends/shared/workspace-observer.js';
 import type { Store } from './store.js';
 import type { SessionCommands } from './orchestration/session-commands.js';
 import type { SessionLock } from './agent-host/session-lock.js';
@@ -166,6 +167,8 @@ export class SessionDeletion {
     for (const id of ids) {
       try {
         await rm(join(stateDir, 'chat', `${encodeURIComponent(id)}.jsonl`), { force: true });
+        // What its commands were seen to change holds the contents of the files they changed.
+        workspaceObserver(stateDir).forget(id);
         // A client-chosen id is only ever a single path segment here; anything else is left to the context sweep.
         if (/^[\w.-]+$/.test(id) && id !== '.' && id !== '..') await rm(join(stateDir, 'contexts', id), { recursive: true, force: true });
         await planFiles.remove(id);

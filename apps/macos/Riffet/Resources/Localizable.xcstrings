@@ -16638,6 +16638,56 @@
         }
       }
     },
+    "记录命令改动的文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record files changed by commands"
+          }
+        }
+      }
+    },
+    "已开启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
+          }
+        }
+      }
+    },
+    "信任": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trust"
+          }
+        }
+      }
+    },
+    "由 Codex 写入 ~/.codex/config.toml": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Written by Codex to ~/.codex/config.toml"
+          }
+        }
+      }
+    },
+    "重启会话后生效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Takes effect after the session restarts"
+          }
+        }
+      }
+    },
     "设为默认": {
       "localizations": {
         "en": {

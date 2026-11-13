@@ -12,6 +12,12 @@ export interface CapabilityReport {
   tailscale: TailscaleCapability;
   checkedAt: string; warnings: string[];
 }
+/**
+ * Whether a backend's shell commands are observed for the files they change (`GET /api/backends/:id/command-observation`).
+ * `unsupported`: this CLI cannot; `untrusted`: it waits for the user to trust the hooks that observe, in the CLI's own
+ * trust store; `inactive`: trusted or not, the running server was started without them; `active`: observed.
+ */
+export interface CommandObservation { state: 'unsupported' | 'inactive' | 'untrusted' | 'active' }
 /** What the machine offers every Agent (`GET /api/system/machine`): tmux for their terminals, and the tailnet. Not an Agent's own fact, so it is there while any Agent plugin is off. */
 export interface MachineReport { tmux: boolean; tailscale: TailscaleCapability; warnings: string[]; checkedAt: string; }
 export interface ModelConfigOption { id: string; name: string; description?: string; category?: string; type: 'select'; currentValue: string; options: Array<{ value: string; name: string; description?: string }>; }

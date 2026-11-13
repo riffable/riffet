@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 import type { NativeActivity, NativeJob, Run } from '../../../../packages/contracts/src/index.js';
-import { SYNC_BUDGET, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
+import { SYNC_BUDGET, type FileChange, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { isLiveActivity } from '../journal/activity.js';
 import { laneKey, type Journal, type JournalAppend } from '../journal/journal.js';
 import { hasTurnEnded, servingKey, turnMetaId } from '../journal/ingest.js';
@@ -8,6 +8,7 @@ import type { BlobWriter } from './budget.js';
 import { generationOf, LaneFold, rowFrames, type FoldContext, type FoldInputs, type RowEntry, type TimelineChange } from './fold.js';
 import { LaneFinder } from './find.js';
 import { rowOf, TimelineTables } from './tables.js';
+import { toolFileChanges } from '../../../../packages/timeline/src/lineDiff.js';
 
 export { FOLD_VERSION, type ResetReason, type TimelineChange } from './fold.js';
 
@@ -65,6 +66,8 @@ interface Hot { fold: LaneFold }
 type SubagentProgress = ReturnType<FoldContext['subagent']>;
 interface Work { journal: boolean; runs: boolean; jobs: NativeJob[]; subagents: Set<string>; waiters: Array<() => void> }
 
+/** The files a subagent row names at most; the newest are kept. */
+const MAX_SUBAGENT_CHANGES = 200;
 const laneId = (sessionId: string, lane: SyncLane) => `${sessionId}\n${lane}`;
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, Math.floor(value)));
 const MAX_POS = Number.MAX_SAFE_INTEGER;
@@ -82,6 +85,8 @@ export class TimelineService {
   private readonly summaries = new Map<string, SubagentProgress>();
   /** Summaries whose lane has gained rows since: re-read on use, yet still what a change is compared with. */
   private readonly staleSummaries = new Set<string>();
+  /** Per subagent lane, the files each tool row changed, by row key and the content digest they were read at (a rebuilt lane counts revisions again). */
+  private readonly laneFileChanges = new Map<string, Map<string, { digest: string; changes: FileChange[] }>>();
   private immediate: ReturnType<typeof setImmediate> | undefined;
   private readonly offs: Array<() => void> = [];
   private closed = false;
@@ -269,6 +274,7 @@ export class TimelineService {
     for (const [id, work] of [...this.work]) if (owned(id)) { this.work.delete(id); for (const waiter of work.waiters) waiter(); }
     for (const id of [...this.listeners.keys()]) if (owned(id)) this.listeners.delete(id);
     for (const id of [...this.summaries.keys()]) if (id.startsWith(`${sessionId}\n`)) { this.summaries.delete(id); this.staleSummaries.delete(id); }
+    for (const id of [...this.laneFileChanges.keys()]) if (owned(id)) this.laneFileChanges.delete(id);
     this.deps.journal.tx(() => {
       const cut = this.tables.truncatedBlobs(sessionId);
       this.tables.dropSession(sessionId);
@@ -426,7 +432,36 @@ export class TimelineService {
     const end = closed && key && turnId ? journal.entity(key, turnMetaId(turnId, 'ended')) : undefined;
     const ended = (end?.payload as { status?: unknown } | undefined)?.status;
     const status: SubagentProgress['status'] = ended === 'failed' ? 'failed' : ended === 'cancelled' || ended === 'interrupted' ? 'cancelled' : end ? 'completed' : start ? 'running' : undefined;
-    return { rows, running: status === 'running', ...(turnId ? { turnId } : {}), ...(status ? { status } : {}), ...(start ? { startedAt: start.at } : {}), ...(end ? { endedAt: end.at } : {}) };
+    const changes = this.subagentFileChanges(sessionId, lane);
+    return { rows, running: status === 'running', ...(turnId ? { turnId } : {}), ...(status ? { status } : {}), ...(start ? { startedAt: start.at } : {}), ...(end ? { endedAt: end.at } : {}), ...(changes.length ? { changes } : {}) };
+  }
+
+  /**
+   * The files a subagent changed, carried by the parent's tool row: the conversation's outputs list only reads
+   * the lane it shows, and a subagent's lane is loaded when it is opened. Read from the lane's folded tool rows,
+   * so it holds for any backend and for a subagent still running; a path last touched later moves to the end.
+   */
+  private subagentFileChanges(sessionId: string, lane: SyncLane): FileChange[] {
+    const id = laneId(sessionId, lane);
+    const known = this.laneFileChanges.get(id);
+    const read = new Map<string, { digest: string; changes: FileChange[] }>();
+    const byPath = new Map<string, FileChange>();
+    for (const { key, digest } of this.tables.toolDigests(sessionId, lane)) {
+      let entry = known?.get(key);
+      if (entry?.digest !== digest) {
+        const stored = this.tables.row(sessionId, lane, key);
+        const row = stored && rowOf(stored.payload, stored.seq, stored.rev);
+        entry = { digest, changes: row?.kind === 'tool' ? toolFileChanges(row.event.data) : [] };
+      }
+      read.set(key, entry);
+      for (const change of entry.changes) {
+        const current = byPath.get(change.path);
+        byPath.delete(change.path);
+        byPath.set(change.path, current ? { ...current, added: current.added + change.added, removed: current.removed + change.removed } : change);
+      }
+    }
+    this.laneFileChanges.set(id, read);
+    return [...byPath.values()].slice(-MAX_SUBAGENT_CHANGES);
   }
 
   private evict(): void {

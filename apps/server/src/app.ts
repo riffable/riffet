@@ -36,6 +36,7 @@ import { ExternalSessions } from './native/external-sessions.js';
 import { registerExternalSessionRoutes } from './routes/external-sessions.js';
 import { setAppServerOwner } from './backends/shared/codex-app-server.js';
 import { CodexBackendAdapter } from './backends/codex/index.js';
+import { workspaceObserver } from './backends/shared/workspace-observer.js';
 import { traexFlavor } from './backends/codex/flavors.js';
 import { ClaudeBackendAdapter } from './backends/claude/index.js';
 import { DshBackendAdapter } from './backends/dsh/index.js';
@@ -183,7 +184,7 @@ export async function createApp(options: AppOptions = {}) {
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
   const backendRegistry=new NativeBackendRegistry()
-    .register(new CodexBackendAdapter(undefined, undefined, plugins))
+    .register(new CodexBackendAdapter(undefined, undefined, plugins, {stateDir}))
     .register(claudeAdapter)
     .register(new DshBackendAdapter())
     .register(new DroidBackendAdapter())
@@ -196,7 +197,7 @@ export async function createApp(options: AppOptions = {}) {
     riffetMcp, prepareContextInput:run=>contextReferences.render(run),
   });
   // A plugin's Agent backends are registered while it is enabled and withdrawn when it is not; evaluated by `refreshWithin` below.
-  const pluginBackends=new PluginBackends({plugins,registry:backendRegistry,service:nativeBackends});
+  const pluginBackends=new PluginBackends({plugins,registry:backendRegistry,service:nativeBackends,workspaceObserver:workspaceObserver(stateDir)});
   pluginBackends.start();
   // Sync v3's ingest is attached before anything can open a conversation (the dispatcher resumes unfinished
   // runs at the first await below): a runtime built without it believes it writes the journal itself, and a

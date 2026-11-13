@@ -69,3 +69,20 @@ export function contentDiffStats(contents: readonly Record<string, unknown>[], a
   }
   return { added, removed, files: new Set(diffs.map((item) => item.path)).size };
 }
+
+/**
+ * The files one tool call changed, from the `diff` blocks of its folded data, in the order they
+ * appear. A failed edit was not applied; what a failed command changed was seen on disk (`observed`)
+ * and stays. `created` holds when a block has no old side.
+ */
+export function toolFileChanges(data: Record<string, unknown>): Array<{ path: string; added: number; removed: number; created: boolean }> {
+  const content = Array.isArray(data.content) ? data.content : [];
+  const failed = data.status === 'failed';
+  return content.flatMap((item) => {
+    if (!item || typeof item !== 'object') return [];
+    const block = item as Record<string, unknown>;
+    if (block.type !== 'diff' || typeof block.path !== 'string' || (failed && block.observed !== true)) return [];
+    const stats = contentDiffStats([block])!;
+    return [{ path: block.path, added: stats.added, removed: stats.removed, created: typeof block.oldText !== 'string' || block.oldText === '' }];
+  });
+}

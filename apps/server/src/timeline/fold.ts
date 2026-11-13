@@ -78,7 +78,7 @@ export interface FoldContext {
   /** The session no longer refers to these blobs: the whole of a cut row that was replaced or went. */
   release(sessionId: string, hashes: string[]): void;
   /** A subagent lane's summary for the tool row that started it. */
-  subagent(sessionId: string, toolCallId: string): Pick<NonNullable<Extract<TimelineRow, { kind: 'tool' }>['subagent']>, 'rows' | 'running' | 'turnId' | 'status' | 'startedAt' | 'endedAt'>;
+  subagent(sessionId: string, toolCallId: string): Pick<NonNullable<Extract<TimelineRow, { kind: 'tool' }>['subagent']>, 'rows' | 'running' | 'turnId' | 'status' | 'startedAt' | 'endedAt' | 'changes'>;
 }
 
 interface Entity { event: WorkbenchEvent; draft: boolean }

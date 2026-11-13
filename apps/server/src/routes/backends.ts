@@ -52,6 +52,16 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const {project,session}=queryContext(request);
     return nativeBackends.catalog.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
   });
+  app.get<{Params:{id:string}}>('/api/backends/:id/command-observation',async(request)=>{
+    requireBackendVisibleToClient(request.headers,request.params.id);
+    if(!isNativeBackendId(request.params.id))throw new AppError('INVALID_BACKEND','Choose a supported native backend');
+    return nativeBackends.admin.commandObservation(request.params.id);
+  });
+  app.post<{Params:{id:string}}>('/api/backends/:id/command-observation/trust',async(request)=>{
+    requireBackendVisibleToClient(request.headers,request.params.id);
+    if(!isNativeBackendId(request.params.id))throw new AppError('INVALID_BACKEND','Choose a supported native backend');
+    return nativeBackends.admin.trustCommandObservation(request.params.id);
+  });
   app.get<{Params:{id:string}}>('/api/backends/:id/profiles',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     if(!isNativeBackendId(request.params.id)||request.params.id==='chat')throw new AppError('INVALID_BACKEND','Choose a supported native backend');

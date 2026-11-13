@@ -24,6 +24,9 @@ struct AgentSettings: View {
     @State private var backendsLoading = true
     @State private var saving = false
     @State private var error: String?
+    /// The server's answer for the Agent on show; nil until read, and for an Agent that cannot observe commands.
+    @State private var observation: String?
+    @State private var trusting = false
     @State private var editor: ProviderSelection?
 
     /// The models offered for an Agent whose default model is chosen here.
@@ -80,6 +83,7 @@ struct AgentSettings: View {
             await loadProfiles(workbench)
             await loadModelCatalog(workbench)
         }
+        .task(id: backend) { await loadObservation(workbench) }
         .onReceive(NotificationCenter.default.publisher(for: .settingsSectionDidShow)) { note in
             guard note.object as? String == SettingsSection.agents.rawValue,
                   Date.now.timeIntervalSince(refreshedAt) > 30 else { return }
@@ -186,6 +190,7 @@ struct AgentSettings: View {
             .disabled(saving)
 
             approvalRow(workbench, settings: settings)
+            observationRow(workbench)
 
             if renderer?.choosesDefaultModelHere == true {
                 SettingsRow(String(localized: "\(backendTitle(backend)) 默认模型")) {
@@ -230,6 +235,50 @@ struct AgentSettings: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func observationRow(_ workbench: Workbench) -> some View {
+        if let observation, observation != "unsupported" {
+            SettingsRow(
+                "记录命令改动的文件",
+                detail: observation == "untrusted" ? "由 Codex 写入 ~/.codex/config.toml" : nil
+            ) {
+                switch observation {
+                case "untrusted":
+                    Button("信任") { Task { await trustObservation(workbench) } }
+                        .controlSize(.small)
+                        .disabled(trusting)
+                case "active":
+                    Text("已开启").font(.riffet(size: S(12.5))).foregroundStyle(palette.fg3)
+                default:
+                    Text("重启会话后生效").font(.riffet(size: S(12.5))).foregroundStyle(palette.fg3)
+                }
+            }
+        }
+    }
+
+    private func loadObservation(_ workbench: Workbench) async {
+        observation = nil
+        guard let builtin = builtinBackend(backend), let api = workbench.host.api else { return }
+        let requested = backend
+        let state = try? await api.commandObservation(backendId: builtin)
+        guard !Task.isCancelled, backend == requested else { return }
+        observation = state
+    }
+
+    private func trustObservation(_ workbench: Workbench) async {
+        guard let builtin = builtinBackend(backend), let api = workbench.host.api else { return }
+        let requested = backend
+        trusting = true
+        error = nil
+        defer { trusting = false }
+        do {
+            let state = try await api.trustCommandObservation(backendId: builtin)
+            if backend == requested { observation = state }
+        } catch {
+            self.error = error.riffetMessage
         }
     }
 

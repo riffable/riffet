@@ -139,6 +139,15 @@
 - **原因**：原规则要求整条命令不换行才能批准，菜单栏只有 360pt，带路径的命令几乎都会折行，结果只剩拒绝。
 - **否决**：为了出现允许按钮而缩小字号或加宽菜单。
 
+## 2026-11-13 · 「产出」包含 shell 命令改动的文件
+
+- **决定**：编辑工具自带的 diff 仍是主来源；shell 命令的改动由驱动在命令前后各拍一次工作树快照来观测，作为 `observed: true` 的 diff 并入该命令的工具结果，「产出」和命令行的 diff 卡片直接复用。快照存在状态目录的影子 git 仓库里，借用项目对象库，不写项目的 `.git`；只观测 git 工作树。Claude 先接入（PreToolUse / PostToolUse hook），其他驱动按同一接口接入。
+- **原因**：只认编辑工具时，agent 用 `sed`、脚本、格式化或代码生成改的文件全部缺席。据 anthropics/claude-code#94657，Claude Code 在 auto 和 bypass 模式下也开始倾向用 Bash 改文件。窗口缩到单条命令后，同目录其他会话或编辑器的写入只在命令执行的那几秒里混入。
+- **否决**：每回合或每一步拍快照（opencode、Cline 的做法，同目录多会话互相串）；每会话一个 worktree（改变产品形态）；从命令文本猜测改了哪些文件；直接使用项目的 index 或往项目对象库里写入。
+- **决定**：子 agent 的改动（编辑和命令）由服务端从它的 lane 汇总成按文件的统计，挂在启动它的那一行的 `subagent.changes` 上，「产出」据此并入。异步子 agent 的结果行在它开始干活之前就写下了，所以不在结果行上汇总。
+- **决定**：Codex 用启动时注入的 PreToolUse / PostToolUse hook；hook 须由用户在 Codex 的信任机制里确认才生效，Riffet 不伪造信任记录。PostToolUse 晚于命令完成通知，所以已开窗的命令的完成事件最多延后 4.5 秒等观测结果。Cursor 的 hook id 与转录里的调用 id 不同，在 postToolUse 时从它的 chat store 找命令相同、尚无结果的唯一调用，按真实 id 记录；找不到唯一的一条就不记录。
+- **规则**：`apps/server/src/backends/shared/workspace-observer.ts`；子 agent 汇总在 `apps/server/src/timeline/service.ts` 的 `subagentFileChanges`。
+
 ## 2026-11-13 · Mac 服务器状态提示用 NoticeBar
 
 - **决定**：主窗口和菜单栏的服务器提示（已停止、版本不一致、重启被会话阻塞）统一用 `NoticeBar`。主窗口里是内缩的浮起卡片，图标、说明、操作在同一行，主操作靠右；说明与阻塞原因并入正文，不另起行。

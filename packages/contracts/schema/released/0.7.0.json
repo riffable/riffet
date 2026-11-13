@@ -5148,6 +5148,32 @@
                             },
                             "endedAt": {
                               "type": "string"
+                            },
+                            "changes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "added": {
+                                    "type": "number"
+                                  },
+                                  "removed": {
+                                    "type": "number"
+                                  },
+                                  "created": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "added",
+                                  "removed",
+                                  "created"
+                                ]
+                              }
                             }
                           },
                           "required": [
@@ -6690,6 +6716,32 @@
                             },
                             "endedAt": {
                               "type": "string"
+                            },
+                            "changes": {
+                              "type": "array",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "added": {
+                                    "type": "number"
+                                  },
+                                  "removed": {
+                                    "type": "number"
+                                  },
+                                  "created": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "path",
+                                  "added",
+                                  "removed",
+                                  "created"
+                                ]
+                              }
                             }
                           },
                           "required": [
@@ -10722,6 +10774,32 @@
                   },
                   "endedAt": {
                     "type": "string"
+                  },
+                  "changes": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "path": {
+                          "type": "string"
+                        },
+                        "added": {
+                          "type": "number"
+                        },
+                        "removed": {
+                          "type": "number"
+                        },
+                        "created": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "path",
+                        "added",
+                        "removed",
+                        "created"
+                      ]
+                    }
                   }
                 },
                 "required": [
@@ -12243,6 +12321,32 @@
                         },
                         "endedAt": {
                           "type": "string"
+                        },
+                        "changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "added": {
+                                "type": "number"
+                              },
+                              "removed": {
+                                "type": "number"
+                              },
+                              "created": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "added",
+                              "removed",
+                              "created"
+                            ]
+                          }
                         }
                       },
                       "required": [
@@ -13796,6 +13900,32 @@
                         },
                         "endedAt": {
                           "type": "string"
+                        },
+                        "changes": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "path": {
+                                "type": "string"
+                              },
+                              "added": {
+                                "type": "number"
+                              },
+                              "removed": {
+                                "type": "number"
+                              },
+                              "created": {
+                                "type": "boolean"
+                              }
+                            },
+                            "required": [
+                              "path",
+                              "added",
+                              "removed",
+                              "created"
+                            ]
+                          }
                         }
                       },
                       "required": [

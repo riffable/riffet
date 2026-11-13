@@ -7,7 +7,7 @@ import { homedir } from 'node:os';
 import { basename, resolve as resolvePath } from 'node:path';
 import { EXTERNAL_CACHE_MS, holderOf, listExternalThreads, scanProcesses, type ProcessRow } from './external.js';
 import type {
-  ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendUsage, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest,
+  CommandObservation, ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendUsage, NativeInteraction, NativeInteractionResponse, NativeInteractionResult, NativeRuntimeActionRequest,
   LoadedExtensions, NativeSlashItem, NativeStatus, NativeStopRequest, NativeTurnTarget, Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
 import type { CodexAppServerClient, CodexAppServerFactory } from '../shared/codex-app-server.js';
@@ -25,7 +25,7 @@ import { AppError } from '../../errors.js';
 import { materializeAttachment } from '../attachments.js';
 import type {
   ExternalHolder, ExternalSessionEntry, ExternalSessionScan, NativePtyLaunchSpec,
-  NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig,
+  NativeBackendAvailability, NativeBackendConfigurePatch, NativeBackendConfigureResult, NativeBackendDriver, NativeBackendHost, NativeDriverCommandObservation, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig,
   NativeBackendSendRequest, NativeBackendTraits, NativeControlMessage,
   NativeDriverExtensions, NativeDriverExternal, NativeDriverStored,
 } from '../types.js';
@@ -45,8 +45,12 @@ import { isKnownBlockingTitle } from '../../agent-host/interaction-choice.js';
 import { CodexSessionRuntime, type NativeRuntimeHooks } from './runtime.js';
 import { rolloutItemSpans } from './item-spans.js';
 import { CodexTranscriptSource, type CodexLiveFeed } from './transcript-source.js';
+import { codexObservation, type CodexObservation } from './observation.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
 import type { RpcItem } from './types.js';
+
+/** How long the settings page is answered from the last read of whether commands are observed. */
+const OBSERVATION_READ_MS = 5 * 60_000;
 
 const startNativeAppServer: CodexAppServerFactory = options => CodexAppServerProcess.start(options);
 
@@ -118,13 +122,43 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   private readonly externalScans = new Map<string, { at: number; entries: ExternalSessionEntry[] }>();
   private closing = false;
   private closeTask: Promise<void> | undefined;
+  /** What shell commands changed in the working tree, seen by hooks (`observation.ts`). */
+  readonly observation?: CodexObservation;
+  readonly commandObservation?: NativeDriverCommandObservation;
 
   constructor(
     private readonly startAppServer: CodexAppServerFactory = startNativeAppServer,
     private readonly flavor: CodexFlavor = codexFlavor,
     /** The plugins' sidecars for native processes (`PluginRegistry`); without them a process runs as launched. */
     private readonly runtimeHooks?: NativeRuntimeHooks,
+    options: { stateDir?: string } = {},
   ) {
+    // Only Codex itself has the hooks that observation runs on; TRAE's fork is not assumed to.
+    if (options.stateDir && flavor.id === 'codex') this.observation = codexObservation(options.stateDir);
+    if (this.observation) {
+      // Read, and trusted, through a management server started with the same hooks a conversation's server gets:
+      // the trust is keyed by what the hooks are, so it holds for every later launch.
+      const observation = this.observation;
+      // A read starts a server, so a settings page shown again within a few minutes is answered from the last one.
+      const read = new Map<string, { at: number; state: CommandObservation['state'] }>();
+      const through = async (profile: NativeBackendProfileConfig, act: (transport: CodexAppServerClient, cwd: string) => Promise<CommandObservation['state']>): Promise<CommandObservation> => {
+        const executable = executableOf(profile, this.flavor);
+        const hooks = await observation.launchArgs(executable);
+        if (!hooks.length) return { state: 'unsupported' };
+        const cwd = await queryDirectory(undefined, profile);
+        const state = await this.withTransport(undefined, profile, undefined, transport => act(transport, cwd), hooks);
+        read.set(executable, { at: Date.now(), state });
+        return { state };
+      };
+      this.commandObservation = {
+        state: async (_host, profile) => {
+          const known = read.get(executableOf(profile, this.flavor));
+          if (known && Date.now() - known.at < OBSERVATION_READ_MS) return { state: known.state };
+          return await through(profile, (transport, cwd) => observation.probe(transport, cwd));
+        },
+        trust: (_host, profile) => through(profile, (transport, cwd) => observation.trust(transport, cwd)),
+      };
+    }
     this.id = flavor.id;
     this.label = flavor.label;
     // TRAE background children outlive the foreground turn independently. Keep observing them,
@@ -225,7 +259,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     catch (error) { throw new AppError('NATIVE_PROFILE_SWITCH_FAILED', safeProviderError(error, target.config), 502); }
     // A fresh, unloaded process validates the target launch before the old writer is released.
     // Its snapshot deliberately has no old socket/TUI binding to accidentally reattach.
-    const replacement = new CodexSessionRuntime(host, { ...session, nativeRuntime: undefined, terminalId: undefined }, project, target, this.startAppServer, this.flavor, this.runtimeHooks);
+    const replacement = new CodexSessionRuntime(host, { ...session, nativeRuntime: undefined, terminalId: undefined }, project, target, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
     let released = false;
     this.restarting.add(sessionId);
     const task = Promise.resolve().then(async () => {
@@ -249,7 +283,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         if (released) {
           // The failed target never receives user input. Restore the old writer, retain the
           // desired provider and pending flag, and let an explicit retry attempt it again.
-          restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks);
+          restored = new CodexSessionRuntime(host, { ...host.getSession(sessionId), nativeRuntime: undefined, terminalId: undefined }, project, source, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
           restored.attachFeed(this.feedOf(sessionId));
           this.runtimes.set(sessionId, restored);
           try {
@@ -345,7 +379,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         const promise = Promise.resolve().then(async () => {
           if (!await previous.restartBackend(options.restartFingerprint!, options.restartAddress!)) return previous;
           this.runtimes.delete(session.id);
-          const replacement = new CodexSessionRuntime(host, host.getSession(session.id), project, profile, this.startAppServer, this.flavor, this.runtimeHooks);
+          const replacement = new CodexSessionRuntime(host, host.getSession(session.id), project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
           replacement.attachFeed(this.feedOf(session.id));
           await replacement.start();
           this.runtimes.set(session.id, replacement);
@@ -826,13 +860,13 @@ export class CodexBackendAdapter implements NativeBackendDriver {
   }
 
   /** The session's live app-server when it has one, otherwise a short-lived one for this read. */
-  private async withTransport<T>(project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, read: (transport: CodexAppServerClient) => Promise<T>): Promise<T> {
+  private async withTransport<T>(project: Project | undefined, profile: NativeBackendProfileConfig, session: Session | undefined, read: (transport: CodexAppServerClient) => Promise<T>, extraArgs: string[] = []): Promise<T> {
     assertSupportedProfile(profile, this.flavor);
     const existing = session ? this.runtimes.get(session.id)?.transport : undefined;
     if (existing?.isOnline) return await read(existing);
     const transport = await this.startAppServer({
       executable: executableOf(profile, this.flavor),
-      args: [...this.flavor.args(profile.config), ...(project ? codexTrustArgs(project.cwd) : [])],
+      args: [...this.flavor.args(profile.config), ...(project ? codexTrustArgs(project.cwd) : []), ...extraArgs],
       cwd: await queryDirectory(project, profile),
       env: providerEnv(profile, this.flavor),
       onNotification: () => undefined,
@@ -853,6 +887,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     return new CodexTranscriptSource({
       sessionId,
       backend: this.flavor.id,
+      ...(this.observation ? { observedChanges: (toolCallId: string) => this.observation?.changes(sessionId, toolCallId) } : {}),
       threadId: threadOf,
       reader: async () => {
         if (!threadOf()) return undefined;
@@ -1017,6 +1052,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       // socket bindings let the next service instance reconnect to the same writer.
       await Promise.allSettled(runtimes.map(runtime => runtime.dispose(host, { keepRunning: true })));
       for (const sessionId of this.sessionListeners.keys()) this.clearListeners(sessionId);
+      await this.observation?.close();
     })();
     await this.closeTask;
   }
@@ -1078,7 +1114,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
         // socket and let the verified terminal endpoint select the existing owner below.
         await current.dispose(host, { keepRunning: true });
       }
-      const runtime = new CodexSessionRuntime(host, session, project, profile, this.startAppServer, this.flavor, this.runtimeHooks);
+      const runtime = new CodexSessionRuntime(host, session, project, profile, this.startAppServer, this.flavor, this.runtimeHooks, this.observation);
       runtime.attachFeed(this.feedOf(session.id));
       await runtime.start({ reconnectOnly });
       this.runtimes.set(session.id, runtime);

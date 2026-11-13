@@ -179,6 +179,30 @@ function revocable<T extends object>(target: T, revoked: () => boolean, label: s
   return out as T;
 }
 
+/**
+ * The working-tree observer (`shared/workspace-observer.ts`), as this driver needs it: the app builds it, since the kernel
+ * does not import `shared/`. Its diffs are plain records here, the plugin's own shape.
+ */
+export interface WorkspaceObserver {
+  begin(key: string, cwd: string): Promise<void>;
+  end(key: string): Promise<readonly Record<string, unknown>[] | undefined>;
+  discard(key: string): void;
+  record(scope: string, key: string, diffs: readonly Record<string, unknown>[]): void;
+  changes(scope: string, key: string): readonly Record<string, unknown>[] | undefined;
+}
+
+/** The observer's windows are keyed process-wide, so a plugin's keys are scoped to its session. */
+function workspaceChangesOf(observer: WorkspaceObserver, own: (sessionId: string) => unknown): NonNullable<AgentHost['workspaceChanges']> {
+  const scoped = (sessionId: string, key: string) => `${sessionId}\0${key}`;
+  return {
+    begin: async (id, key, cwd) => { own(id); await observer.begin(scoped(id, key), cwd); },
+    end: async (id, key) => { own(id); return observer.end(scoped(id, key)); },
+    discard: (id, key) => { own(id); observer.discard(scoped(id, key)); },
+    record: (id, callId, diffs) => { own(id); observer.record(id, callId, diffs); },
+    changes: (id, callId) => { own(id); return observer.changes(id, callId); },
+  };
+}
+
 /** A conversation the plugin has not reported on is offline, which is also what the core shows for a closed one. */
 const OFFLINE: NativeStatus = { phase: 'offline' };
 const UNFINISHED_DELIVERIES = new Set<string>(['queued', 'preparing', 'dispatching', 'input_sent', 'observed', 'uncertain']);
@@ -236,7 +260,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
   /** Set once the plugin's activation has been released: its host then refuses every call. */
   private revoked = false;
 
-  constructor(private readonly backend: AgentBackend, readonly owner: string) {
+  constructor(private readonly backend: AgentBackend, readonly owner: string, private readonly observer?: WorkspaceObserver) {
     this.id = backend.id;
     this.label = backend.label;
     this.traits = backend.traits;
@@ -739,6 +763,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
         },
         observeEvents: (id, events) => { own(id); native.stats.observeEvents(id, events); },
       },
+      ...(this.observer ? { workspaceChanges: workspaceChangesOf(this.observer, own) } : {}),
       // An attachment belongs to a run's input: the ones of the inputs this agent is delivering are all it can name.
       readAttachment: async id => {
         if (![...this.deliveringAttachments.values()].some(ids => ids.includes(id))) throw foreign('attachment');

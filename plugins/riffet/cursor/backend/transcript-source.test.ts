@@ -219,7 +219,7 @@ describe('Cursor transcript source', () => {
     expect(JSON.parse(writer.cursor!).reproject.n).toBeLessThanOrEqual(4);
     writer.child = bindChild;
     for (let tries = 0; tries < 100; tries++) if ((await pullLane(source(), writer, new AbortController().signal)).caughtUp) break;
-    expect(JSON.parse(writer.cursor!).mapping).toBe(2);
+    expect(JSON.parse(writer.cursor!).mapping).toBe(3);
     expect(writer.generation).toBe(generation);
     expect(rowsOf(lanes).filter(row => row.kind === 'meta.turn_ended' && ['req-image', 'req-cancelled'].includes(row.turnId!))).toEqual(originalEnds);
     const repaired = rowsOf(lanes);

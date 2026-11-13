@@ -31,9 +31,10 @@ class SessionOutputsCache {
 
 private fun computeEdits(item: TimelineItem.Tool, root: String?): List<SessionOutput> {
     val view = toolView(item.event.base, root)
-    if (view.status == "failed") return emptyList()
+    // A failed edit was not applied; what a failed command changed was seen on disk and stays.
     return view.contents.mapNotNull { content ->
         if (str(content["type"]) != "diff") return@mapNotNull null
+        if (view.status == "failed" && (content["observed"] as? JsonPrimitive)?.content != "true") return@mapNotNull null
         val path = (content["path"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapNotNull null
         val before = (content["oldText"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: ""
         val after = (content["newText"] as? JsonPrimitive)?.content ?: ""
@@ -45,14 +46,16 @@ private fun computeEdits(item: TimelineItem.Tool, root: String?): List<SessionOu
 }
 
 /**
- * Every file this conversation's tools wrote, with the lines each one gained and lost, newest
- * first. Edits to one path add up; a file last touched earlier moves to the front when touched again.
+ * Every file this conversation's tools wrote or its commands were seen to change, with the lines
+ * each one gained and lost, newest first. Edits to one path add up; a file last touched earlier moves to the front when touched again.
  */
 fun sessionOutputs(timeline: List<TimelineItem>, root: String?, cache: SessionOutputsCache): List<SessionOutput> {
     val byPath = LinkedHashMap<String, SessionOutput>()
     for (item in timeline) {
         if (item !is TimelineItem.Tool) continue
-        for (edit in cache.edits(item, root)) {
+        // A subagent's own rows sit in a lane of their own; the server sums what it changed onto the row that started it.
+        val subagent = item.subagent?.changes.orEmpty().map { SessionOutput(stripRoot(it.path, root), it.added.toInt(), it.removed.toInt(), it.created) }
+        for (edit in cache.edits(item, root) + subagent) {
             val current = byPath.remove(edit.path)
             byPath[edit.path] = if (current != null) {
                 SessionOutput(edit.path, current.added + edit.added, current.removed + edit.removed, current.created)

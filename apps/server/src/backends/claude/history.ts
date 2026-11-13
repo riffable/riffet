@@ -312,6 +312,8 @@ export interface ClaudeTranscriptHooks {
   promptText?: (prompt: string) => string | undefined;
   onToolUse?: (toolUseId: string, toolName: string, input: Record<string, unknown>) => void;
   onToolResult?: (toolUseId: string, failed: boolean) => void;
+  /** What a command changed in the working tree, seen around it (`workspace-observer.ts`); appended to its result. */
+  observedChanges?: (toolUseId: string) => readonly Record<string, unknown>[] | undefined;
   onModel?: (model: string) => void;
   /** Read-only exports associate the response model with its original message identity. */
   onMessageModel?: (nativeId: string, model: string) => void;
@@ -592,7 +594,8 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         state.calls.delete(toolUseId);
         continue;
       }
-      const resultContent = toolResultContent(part.content, call, failed, hooks.unbounded);
+      const observed = hooks.observedChanges?.(toolUseId) ?? [];
+      const resultContent = [...toolResultContent(part.content, call, failed, hooks.unbounded), ...observed];
       events.push({ ...resultBase(index, call), type: 'tool_call_update', data: {
         sessionUpdate: 'tool_call_update', toolCallId: toolUseId, status: failed ? 'failed' : 'completed',
         ...(call ? { toolName: call.name } : { contextMissing: true }),
@@ -1425,7 +1428,7 @@ export class ClaudeTranscript {
         progress.settled = subagentSettles(value) ?? progress.settled;
         // Every child row carries the prompt id of the parent turn it was written in, unchanged across the
         // child's own rounds: those are told apart by `runId`, so the parent's id is not passed on.
-        for (const { nativeTurnId: _parentTurn, ...event } of mapRow(value, progress.lines, this.session, mapper, { unbounded: this.hooks.unbounded }, true)) {
+        for (const { nativeTurnId: _parentTurn, ...event } of mapRow(value, progress.lines, this.session, mapper, { unbounded: this.hooks.unbounded, observedChanges: this.hooks.observedChanges }, true)) {
           added.push({ ...event, sequence: base.length + added.length + 1 });
         }
       }

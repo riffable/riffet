@@ -1,6 +1,7 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
+  CommandObservation,
   ActionStep,
   ApiError,
   BuildInfo,
@@ -708,6 +709,8 @@ export const api = {
     request<ProjectRecord>(`/api/projects/${encodeURIComponent(projectId)}/worktree-projects`, json('POST', body)),
   machine: () => request<MachineReport>('/api/system/machine'),
   backends: () => request<NativeBackendCatalogEntry[]>('/api/backends'),
+  commandObservation: (id: NativeBackendId, signal?: AbortSignal) => request<CommandObservation>(`/api/backends/${encodeURIComponent(id)}/command-observation`, { signal }),
+  trustCommandObservation: (id: NativeBackendId) => request<CommandObservation>(`/api/backends/${encodeURIComponent(id)}/command-observation/trust`, { method: 'POST' }),
   backendProfiles: (id: NativeBackendId, signal?: AbortSignal) => request<NativeBackendProfilesResponse>(`/api/backends/${id}/profiles`, { signal }),
   createBackendProfile: async (id: NativeBackendId, body: NativeBackendProfileSettingsUpdate): Promise<NativeBackendProfileSettings> => {
     const profileId = newId();

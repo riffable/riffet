@@ -2,6 +2,7 @@ import type { NativeContext, NativeWorkbenchEvent } from '../../../../../package
 import { toolImageContent } from '../shared/tool-images.js';
 import type { RpcTurn, RpcItem } from './types.js';
 import { firstLine, str, finiteToken, asRecord, asArray } from './util.js';
+import { splitUnifiedDiff, type DiffHunk } from '../shared/unified-diff.js';
 
 /** When an item began and ended (`item-spans.ts`). */
 export interface ItemSpan { startedAt: string; completedAt: string }
@@ -158,7 +159,10 @@ function commandToolCall(item: RpcItem): { name: string; kind: string; title: st
   };
 }
 
-export function projectToolItem(item: RpcItem, event: (id: string, type: string, data: Record<string, unknown>) => NativeWorkbenchEvent, base: string): NativeWorkbenchEvent[] {
+/** What a command changed in the working tree, seen around it by the hooks (`observation.ts`); appended to its result. */
+export type ObservedChanges = (toolCallId: string) => readonly Record<string, unknown>[] | undefined;
+
+export function projectToolItem(item: RpcItem, event: (id: string, type: string, data: Record<string, unknown>) => NativeWorkbenchEvent, base: string, observedChanges?: ObservedChanges): NativeWorkbenchEvent[] {
   const toolCallId = subagentToolCallId(item) ?? base;
   const status = toolStatus(item.status);
   if (isSubagentStart(item)) {
@@ -234,6 +238,9 @@ export function projectToolItem(item: RpcItem, event: (id: string, type: string,
     ...(item.type === 'fileChange' && changes.length ? { content: changes.flatMap(change => changeHunks(change).map(hunk => ({ type: 'diff', path: change.path, ...hunk }))) } : {}),
     ...(str(item.error) ? { content: [{ type: 'content', content: { type: 'text', text: item.error } }] } : {}),
   };
+  // A shell command reports no edits of its own; the diffs seen around it ride along with its output, as Claude's do.
+  const observed = item.type === 'commandExecution' ? observedChanges?.(toolCallId) : undefined;
+  if (observed?.length) resultData.content = [...asArray<unknown>(resultData.content), ...observed];
   return [call, event(`${base}:result`, 'tool_call_update', resultData)];
 }
 
@@ -243,10 +250,10 @@ export function projectStartedTool(item: RpcItem, sessionId: string, threadId: s
   return projectToolItem({ ...item, status: 'inProgress' }, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, item), base).slice(0, 1);
 }
 
-export function projectCompletedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan): NativeWorkbenchEvent[] {
+export function projectCompletedTool(item: RpcItem, sessionId: string, threadId: string, turnId: string, runId?: string, createdAt?: string, span?: ItemSpan, observedChanges?: ObservedChanges): NativeWorkbenchEvent[] {
   if (!isCodexToolItem(item)) return [];
   const base = `${threadId}:${turnId}:${subagentToolCallId(item) ?? item.type}`;
-  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, item), base);
+  const all = projectToolItem(item, (id, type, data) => makeStaticEvent(sessionId, runId ?? turnId, id, type, data, span ? spanTime(span, type, createdAt ?? new Date().toISOString()) : createdAt, item), base, observedChanges);
   // A child's start may be announced only once it has happened, so its row comes with it.
   if (isSubagentStart(item)) return all;
   const updates = all.filter(event => event.type === 'tool_call_update');
@@ -287,8 +294,6 @@ function webSearchQuery(item: RpcItem): string | undefined {
   return str(item.query) ?? str(action?.query) ?? str(queries[0]);
 }
 
-type DiffHunk = { oldText: string; newText: string; lineOffset?: number; newLineOffset?: number };
-
 /**
  * A file change as diffs to show. An added or deleted file arrives as its raw content, without
  * `+`/`-` prefixes (the rollout reader adds them, so both shapes occur); anything else is a
@@ -304,42 +309,6 @@ function changeHunks(change: Record<string, unknown>): DiffHunk[] {
     return [kind === 'add' ? { oldText: '', newText: text } : { oldText: text, newText: '' }];
   }
   return splitUnifiedDiff(diff);
-}
-
-// Each `@@` hunk becomes its own diff so it keeps its place in the file instead of being glued to
-// the previous one at line 1. Its two sides start at their own lines: an earlier hunk that added
-// or removed lines moves the new side away from the old.
-function splitUnifiedDiff(value: string): DiffHunk[] {
-  const hunks: Array<{ oldLines: string[]; newLines: string[]; offset: number; newOffset: number }> = [];
-  let hunk: (typeof hunks)[number] | undefined;
-  // Lines the current header still promises; while any remain, a `---`/`+++` or blank line is body.
-  let oldLeft = 0;
-  let newLeft = 0;
-  for (const line of value.split(/\r?\n/)) {
-    if (line.startsWith('@@')) {
-      const header = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/.exec(line);
-      oldLeft = header ? Number(header[2] ?? 1) : 0;
-      newLeft = header ? Number(header[4] ?? 1) : 0;
-      // An empty side (`-5,0`) inserts after line 5 rather than at it.
-      const offset = header ? Math.max(0, Number(header[1]) - (oldLeft ? 1 : 0)) : 0;
-      const newOffset = header ? Math.max(0, Number(header[3]) - (newLeft ? 1 : 0)) : 0;
-      hunks.push(hunk = { oldLines: [], newLines: [], offset, newOffset });
-      continue;
-    }
-    const inBody = oldLeft > 0 || newLeft > 0;
-    if (line.startsWith('\\') || (!inBody && (line.startsWith('+++') || line.startsWith('---')))) continue;
-    const marker = inBody && line === '' ? ' ' : line[0];
-    if (marker !== '+' && marker !== '-' && marker !== ' ') continue;
-    if (!hunk) hunks.push(hunk = { oldLines: [], newLines: [], offset: 0, newOffset: 0 });
-    const text = line.slice(1);
-    if (marker !== '+') { hunk.oldLines.push(text); oldLeft--; }
-    if (marker !== '-') { hunk.newLines.push(text); newLeft--; }
-  }
-  if (!hunks.length) return [{ oldText: '', newText: '' }];
-  return hunks.map(({ oldLines, newLines, offset, newOffset }) => ({
-    oldText: oldLines.join('\n'), newText: newLines.join('\n'),
-    ...(offset ? { lineOffset: offset } : {}), ...(newOffset !== offset ? { newLineOffset: newOffset } : {}),
-  }));
 }
 
 export function decodeHistoryCursor(value: string, generation: string): number | undefined {

@@ -134,7 +134,12 @@ data class TimelineRow(
         val status: TurnOutlineV3.Status? = null,
         val startedAt: String? = null,
         val endedAt: String? = null,
+        val changes: List<FileChange>? = null,
     )
+
+    /** A file a subagent's tools wrote or its commands were seen to change; edits to one path add up. */
+    @Serializable
+    data class FileChange(val path: String, val added: Long, val removed: Long, val created: Boolean)
 
     @Serializable
     data class TaskNotificationResult(val id: String, val status: Status, val exitCode: Long? = null, val runningMs: Long? = null) {

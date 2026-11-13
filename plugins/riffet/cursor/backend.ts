@@ -418,6 +418,7 @@ export class CursorBackend implements AgentBackend {
       live,
       chatsDir: () => workspaceChatsDir(launch.configDir, port.getProject(port.getSession(sessionId).projectId).cwd),
       chatId: () => port.getSession(sessionId).nativeSessionId,
+      ...(host.workspaceChanges ? { observedChanges: (toolCallId: string) => host.workspaceChanges?.changes(sessionId, toolCallId) } : {}),
       signals: listener => this.followTranscript(native, sessionId, listener),
     });
   }

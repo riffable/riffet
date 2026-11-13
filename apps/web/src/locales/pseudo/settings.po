@@ -474,6 +474,10 @@ msgstr ""
 msgid "保存的地址和 API Key 会一并删除。"
 msgstr ""
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "信任"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
 msgstr ""
@@ -1005,6 +1009,10 @@ msgstr ""
 msgid "已完成"
 msgstr ""
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "已开启"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "已拒绝"
 msgstr ""
@@ -1400,6 +1408,10 @@ msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法保存默认提供商"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法信任"
 msgstr ""
 
 #: src/app/settings/SettingsDialog.tsx
@@ -1877,6 +1889,10 @@ msgstr ""
 msgid "用飞书扫码"
 msgstr ""
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "由 Codex 写入 ~/.codex/config.toml"
+msgstr ""
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "画布摘要"
 msgstr ""
@@ -2149,6 +2165,10 @@ msgstr ""
 
 #: src/app/settings/SupportSections.tsx
 msgid "记录中"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "记录命令改动的文件"
 msgstr ""
 
 #: src/app/settings/SupportSections.tsx
@@ -2457,6 +2477,10 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "配色模式"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "重启会话后生效"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx

@@ -6475,6 +6475,15 @@
       "status": "running",
       "startedAt": "text",
       "endedAt": "text",
+      "changes": [
+        {
+          "path": "text",
+          "added": 1,
+          "removed": 1,
+          "created": true,
+          "futureField": 4
+        }
+      ],
       "futureField": 4
     },
     "futureField": 4

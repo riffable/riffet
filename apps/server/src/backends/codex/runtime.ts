@@ -10,6 +10,7 @@ import { NO_SERVER_RESPONSE } from '../shared/codex-app-server.js';
 import { listWorkbenchAppServers, stopWorkbenchAppServerAt } from '../shared/app-server-daemons.js';
 import { CodexDraftStream, messagePhase, type CodexDraftOptions } from './drafts.js';
 import { codexFlavor, type CodexFlavor } from './flavors.js';
+import { NotificationGate, type CodexObservation } from './observation.js';
 import { findCodexRollout } from './rollout-usage.js';
 import { normalizePlanEntries, parseRolloutPlan, type RolloutPlanSnapshot } from './rollout-plan.js';
 import { notificationSpan, rolloutItemSpans, type ItemSpans } from './item-spans.js';
@@ -244,6 +245,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   private readonly scopeFingerprint: string;
   /** A plugin's sidecar on the native process, such as a routing proxy, with the plugin's id. */
   private attachment?: { owner: string; value: RuntimeAttachment };
+  private detachObservation?: () => void;
 
   constructor(
     private readonly host: NativeBackendHost,
@@ -253,7 +255,10 @@ export class CodexSessionRuntime implements CodexThreadReader {
     private readonly startAppServer: CodexAppServerFactory,
     private readonly flavor: CodexFlavor = codexFlavor,
     private readonly runtimeHooks?: NativeRuntimeHooks,
+    /** Reports what shell commands change in the working tree (`observation.ts`); only Codex itself has the hooks it needs. */
+    private readonly observation?: CodexObservation,
   ) {
+    this.detachObservation = observation?.attach(session.id, () => this.nativeSessionId);
     // These describe the process we connected to. A later profile edit must not retroactively
     // change its launch identity or the fingerprint committed for that process.
     this.project = { ...project };
@@ -624,16 +629,19 @@ export class CodexSessionRuntime implements CodexThreadReader {
     const binding = this.session.nativeRuntime;
     const launchChanged = Boolean(binding?.fingerprint && !matchesRuntimeFingerprint(binding.fingerprint, this.project, this.profile, this.flavor));
     this.bindingScopeMismatch = Boolean(binding?.scopeFingerprint && binding.scopeFingerprint !== this.scopeFingerprint);
+    const gate = new NotificationGate();
     const options: CodexAppServerOptions = {
       executable: executableOf(this.profile, this.flavor),
-      args: [...this.flavor.args(this.profileConfig), ...codexTrustArgs(this.project.cwd)],
+      args: [...this.flavor.args(this.profileConfig), ...codexTrustArgs(this.project.cwd), ...await this.observation?.launchArgs(executableOf(this.profile, this.flavor)) ?? []],
       cwd: this.project.cwd,
       env: providerEnv(this.profile, this.flavor),
       credentialDir: credentialDirFor(this.flavor),
       requiredHumanApproval: this.flavor.id === 'codex',
-      onNotification: (method, params) => runtime?.onNotification(method, params),
+      // A command's completion waits for its PostToolUse record, and everything after it waits behind it.
+      onNotification: (method, params) => gate.push(this.observation?.hold(method, params), () => runtime?.onNotification(method, params)),
       onServerRequest: request => runtime?.onServerRequest(request) ?? Promise.reject(new Error(`${this.label} runtime is not ready`)),
-      onExit: error => runtime?.onExit(error),
+      // An exit is taken after a completion held before it, or the completion would land on a runtime that has let go.
+      onExit: error => gate.push(undefined, () => runtime?.onExit(error)),
     };
     runtime = this;
     const threadId = this.nativeSessionId;
@@ -2272,6 +2280,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   async dispose(host: NativeBackendHost, options: { keepRunning?: boolean } = {}): Promise<void> {
+    this.detachObservation?.();
+    this.detachObservation = undefined;
     this.requestInterrupt();
     for (const pending of this.pending.values()) {
       pending.resolve?.(NO_SERVER_RESPONSE);
@@ -2884,6 +2894,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     return projectCodexItem(item, turn, {
       sessionId: this.session.id, threadId, runId, createdAt, ...(commandId ? { commandId } : {}), questions: this.questionHistory,
       ...(span ? { span } : {}),
+      ...(this.observation ? { observedChanges: (toolCallId: string) => this.observation?.changes(this.session.id, toolCallId) } : {}),
       // A child thread's first message names the child, not this conversation; its compactions are its own.
       ...(options.childThreadId ? {} : {
         onUserText: (text: string) => this.nameFromMessage(text),
@@ -3000,6 +3011,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (method === 'turn/completed') {
       const turn = asRecord(params.turn);
       const turnId = str(turn?.id);
+      this.observation?.release(this.nativeSessionId);
       if (turnId && this.nativeCommand?.type === 'compact') {
         const items = asArray<RpcItem>(turn?.items);
         if (items.some(item => item.type === 'userMessage')) this.nativeCommand.userTurns.add(turnId);
@@ -3145,7 +3157,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
         : isCodexToolItem(item)
         ? method === 'item/started'
           ? projectStartedTool(item, this.session.id, this.nativeSessionId ?? 'unknown', turnId, turn?.runId, turn?.createdAt, span)
-          : projectCompletedTool(item, this.session.id, this.nativeSessionId ?? 'unknown', turnId, turn?.runId, turn?.createdAt, span)
+          : projectCompletedTool(item, this.session.id, this.nativeSessionId ?? 'unknown', turnId, turn?.runId, turn?.createdAt, span, id => this.observation?.changes(this.session.id, id))
         : this.projectItem(item, itemTurn, { span });
       if (item.type === 'userMessage') this.noteUserMessage(turnId, projected);
       if (method === 'item/completed') this.metering.noteCompletedOutput(turnId, item);

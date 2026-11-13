@@ -1,4 +1,4 @@
-import type { CapabilityReport, CommandResult, ConfigFile, NativeBackendId, Project } from '../../../../packages/contracts/src/index.js';
+import type { CapabilityReport, CommandObservation, CommandResult, ConfigFile, NativeBackendId, Project } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { assertTaskWorkspaceAvailable } from '../task-workspaces/identity.js';
 import type { BackendCatalog } from './catalog.js';
@@ -18,6 +18,19 @@ export class BackendAdmin {
     const driver = this.registry.require(backendId);
     if (!driver.admin?.loginLaunch) throw new AppError('NATIVE_LOGIN_UNSUPPORTED', `${driver.label} has no terminal login`, 409, { backendId });
     return await driver.admin.loginLaunch(this.host, project, this.catalog.validateProfile(backendId));
+  }
+
+  /** Whether the backend's shell commands are observed; a backend that cannot observe them says `unsupported`. */
+  async commandObservation(backendId: NativeBackendId): Promise<CommandObservation> {
+    const driver = this.registry.require(backendId);
+    if (!driver.commandObservation) return { state: 'unsupported' };
+    return await driver.commandObservation.state(this.host, this.catalog.validateProfile(backendId));
+  }
+
+  /** The user's trust of the hooks that observe the backend's commands, recorded in the CLI's own trust store. */
+  async trustCommandObservation(backendId: NativeBackendId): Promise<CommandObservation> {
+    const driver = this.forwarded(backendId, 'command observation', item => Boolean(item.commandObservation));
+    return await driver.commandObservation!.trust(this.host, this.catalog.validateProfile(backendId));
   }
 
   // The legacy `/api/cursor/*` and `/api/native/runtime/stats` endpoints forward to the backend that had them

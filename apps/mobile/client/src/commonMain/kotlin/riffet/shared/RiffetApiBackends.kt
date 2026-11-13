@@ -5,6 +5,8 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
 import riffet.contracts.ExtensionActionRequest
@@ -36,6 +38,18 @@ suspend fun RiffetApi.backends(): List<NativeBackendCatalogEntry> = get("/api/ba
 @Throws(Exception::class)
 suspend fun RiffetApi.backendProfiles(backendId: NativeBackendId): NativeBackendProfilesResponse =
     get("/api/backends/${backendId.wire()}/profiles").decode()
+
+/** `GET /api/backends/:id/command-observation`: `unsupported`, `inactive`, `untrusted` or `active`. */
+@Throws(Exception::class)
+suspend fun RiffetApi.commandObservation(backendId: NativeBackendId): String =
+    get("/api/backends/${backendId.wire()}/command-observation").decode<JsonObject>().observationState()
+
+/** `POST /api/backends/:id/command-observation/trust`: answers like [commandObservation]. */
+@Throws(Exception::class)
+suspend fun RiffetApi.trustCommandObservation(backendId: NativeBackendId): String =
+    post("/api/backends/${backendId.wire()}/command-observation/trust", buildJsonObject {}).decode<JsonObject>().observationState()
+
+private fun JsonObject.observationState(): String = this["state"]?.jsonPrimitive?.contentOrNull ?: "unsupported"
 
 /**
  * `POST /api/backends/:id/profiles`. The server answers with the whole list rather than the row,

@@ -588,11 +588,13 @@ describe('timeline service', () => {
     const startedAt = stamp(++tick);
     child.turnStarted('c1', startedAt);
     env.writer.activities.apply({ id: 'claude:agent-7', kind: 'background_task', status: 'running', title: 'review', toolCallId: 'task-1', task: { kind: 'agent' }, startedAt, stop: { via: 'session' } });
-    child.commit({ events: [answer('c-a1', 'c1', 'looking'), answer('c-a2', 'c1', 'found it')], cursor: '1' });
+    // A failed command that was seen changing a file: the change counts toward the parent row's summary.
+    const changed = tool('c-t1', 'c1', 'sh-1', 'failed', { content: [{ type: 'diff', path: '/repo/a.ts', oldText: 'one\ntwo', newText: 'one\nTWO\nthree', observed: true }] });
+    child.commit({ events: [answer('c-a1', 'c1', 'looking'), changed, answer('c-a2', 'c1', 'found it')], cursor: '1' });
     await env.ready('sub:task-1');
     await env.ready();
     expect(env.all().find(row => row.key === 'tool:task-1')).toMatchObject({
-      subagent: { lane: 'sub:task-1', agentId: 'agent-7', turnId: 'c1', status: 'running', startedAt, running: true, rows: 2 },
+      subagent: { lane: 'sub:task-1', agentId: 'agent-7', turnId: 'c1', status: 'running', startedAt, running: true, rows: 3, changes: [{ path: '/repo/a.ts', added: 2, removed: 1, created: false }] },
       activity: { id: 'claude:agent-7', status: 'running', stop: { via: 'session' } },
     });
     expect(env.service.outline(S, 'main').turns[0]).toMatchObject({ hasUserMessage: true, hasAttachments: false });
@@ -618,7 +620,7 @@ describe('timeline service', () => {
     await env.ready('sub:task-1');
     await env.ready();
     const resumed = env.all().find(row => row.key === 'tool:task-1');
-    expect(resumed).toMatchObject({ subagent: { turnId: 'c2', status: 'running', startedAt: resumedAt, running: true, rows: 3 } });
+    expect(resumed).toMatchObject({ subagent: { turnId: 'c2', status: 'running', startedAt: resumedAt, running: true, rows: 4 } });
     expect(resumed).toMatchObject({ activity: { id: 'claude:agent-7', status: 'failed', endedAt: failedAt } }); // The link retains the actual activity; a wake must not invent a live one.
     child.turnEnded('c2', 'completed', stamp(++tick));
     await env.ready('sub:task-1');

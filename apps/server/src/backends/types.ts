@@ -1,5 +1,5 @@
 import type {
-  CapabilityReport, CommandResult, ConfigFile, GatewayProtocol, LoadedExtensions, ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendId, NativeBackendProfile, NativeBackendUsage, ExtensionRuntimeReport, ExtensionActionRequest, ExtensionActionResult, ExtensionItem, ExtensionManagementCapabilities,
+  CapabilityReport, CommandObservation, CommandResult, ConfigFile, GatewayProtocol, LoadedExtensions, ModelInfo, NativeActivity, NativeBackendCapabilities, NativeBackendId, NativeBackendProfile, NativeBackendUsage, ExtensionRuntimeReport, ExtensionActionRequest, ExtensionActionResult, ExtensionItem, ExtensionManagementCapabilities,
   NativeInteraction, NativeInteractionResponse, NativeInteractionResult,
   NativeRunConfig, NativeRunInput, NativeRuntimeActionRequest, NativeStatus, NativeStopRequest, NativeStreamMessage, NativeWorkbenchEvent, NativeTurnTarget,
   NativeSlashItem, Project, Run, RunMetrics, Session, TerminalAppearance, TerminalInfo, ShareSelection, ShareTurn, ShareModelInfo,
@@ -462,6 +462,12 @@ export interface NativeDriverAdmin {
   runtimeStats?(host: NativeBackendHost): Record<string, unknown> | Promise<Record<string, unknown>>;
 }
 
+export interface NativeDriverCommandObservation {
+  state(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<CommandObservation>;
+  /** Records the user's trust of the observing hooks in the CLI's own trust store. */
+  trust(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<CommandObservation>;
+}
+
 export interface NativeBackendDriver {
   readonly id: NativeBackendId;
   readonly label: string;
@@ -579,6 +585,8 @@ export interface NativeBackendDriver {
   readonly stored?: NativeDriverStored;
   /** Management of the CLI on this machine. */
   readonly admin?: NativeDriverAdmin;
+  /** Whether shell commands are observed for the files they change, and the user's trust of what observes them. */
+  readonly commandObservation?: NativeDriverCommandObservation;
   interaction(host: NativeBackendHost, session: Session, profile: NativeBackendProfileConfig): Promise<NativeInteraction | undefined> | NativeInteraction | undefined;
   /**
    * Whether a dialog recognized on the CLI's screen is backed by something the driver knows the CLI waits on.

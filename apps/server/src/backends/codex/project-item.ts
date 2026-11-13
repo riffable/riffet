@@ -3,7 +3,7 @@ import { ACTIVITY_EVENT_TYPE } from '../../journal/activity.js';
 import { messagePhase } from './drafts.js';
 import { asyncQuestionReplyDisplay } from './interactions.js';
 import type { CodexQuestionHistory } from './question-history.js';
-import { isCodexToolItem, isFinalTurnStatus, projectToolItem, spanTime, subagentToolCallId, taskNotice, userItemText, type ItemSpan } from './transcript.js';
+import { isCodexToolItem, isFinalTurnStatus, projectToolItem, spanTime, subagentToolCallId, taskNotice, userItemText, type ItemSpan, type ObservedChanges } from './transcript.js';
 import type { RpcItem, RpcTurn } from './types.js';
 import { asArray, asRecord, str } from './util.js';
 
@@ -29,6 +29,8 @@ export interface CodexItemContext {
   phase?(itemId: string, nativeId: string): 'commentary' | 'final_answer' | undefined;
   /** A compaction as an activity row; without it a compaction is not an event (a child's, or a reader that keeps activities apart). */
   compaction?(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'startedAt' | 'status' | 'items'>, settled: boolean): NativeActivity;
+  /** What a command changed in the working tree, by its tool call id (`observation.ts`). */
+  observedChanges?: ObservedChanges;
   /** The text of a user message, for the conversation's first-message title. */
   onUserText?(text: string): void;
 }
@@ -121,7 +123,7 @@ export function projectCodexItem(item: RpcItem, turn: Pick<RpcTurn, 'id' | 'star
     const activity = context.compaction(item, turn, isFinalTurnStatus(turn.status));
     return [event(activity.id, ACTIVITY_EVENT_TYPE, { sessionUpdate: 'activity', activity })];
   }
-  if (isCodexToolItem(item)) return projectToolItem(item, event, base);
+  if (isCodexToolItem(item)) return projectToolItem(item, event, base, context.observedChanges);
   // TRAE CLI items Codex does not have. Each becomes the notice row other backends already use for
   // background work, rather than a turn that silently loses part of what happened.
   if (item.type === 'taskNotification') {

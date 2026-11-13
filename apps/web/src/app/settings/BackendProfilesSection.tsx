@@ -11,7 +11,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AppSettings, PluginAction, ModelContextWindows, ModelInfo, ModelInputModalities, ModelSourceDescriptor, NativeBackendId, NativeBackendProfileSettings, NativeBackendProfileSettingsUpdate, NativeCliVersion, NativeModelApiProtocol, NativeModelSource } from '@contracts';
+import type { AppSettings, CommandObservation, PluginAction, ModelContextWindows, ModelInfo, ModelInputModalities, ModelSourceDescriptor, NativeBackendId, NativeBackendProfileSettings, NativeBackendProfileSettingsUpdate, NativeCliVersion, NativeModelApiProtocol, NativeModelSource } from '@contracts';
 import { AgentMark } from '@/components/agent-marks';
 import { IconChevronRight, IconCircleAlert, IconPlus, IconRefreshCw, IconSave, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -213,6 +213,25 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
   const [login, setLogin] = useState<{ pluginId: string; action: PluginAction }>();
   const [loginOpen, setLoginOpen] = useState(false);
   const plugins = usePlugins();
+  const [observation, setObservation] = useState<{ backendId: string; state: CommandObservation['state'] }>();
+  const [trusting, setTrusting] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    setObservation(undefined);
+    void api.commandObservation(backendId, controller.signal).then((result) => {
+      if (!controller.signal.aborted) setObservation({ backendId, state: result.state });
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [backendId]);
+  const trustObservation = async () => {
+    setTrusting(true);
+    try {
+      const result = await api.trustCommandObservation(backendId);
+      setObservation({ backendId, state: result.state });
+    } catch (error) { onError(errorMessage(error, t`无法信任`)); }
+    finally { setTrusting(false); }
+  };
+  const observationState = observation?.backendId === backendId ? observation.state : undefined;
   const catalogRequest = useRef<AbortController | undefined>(undefined);
   // An Agent whose plugin brings settings pages is configured there, in place of a provider list.
   const settingsPages = settingsPagesOf(plugins, useSettingsPages(), backendId);
@@ -483,6 +502,13 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
           disabled={busy}
           onChange={(approval) => void saveDefaultApproval(approval)}
         />
+        {observationState && observationState !== 'unsupported' && (
+          <SettingsRow title={t`记录命令改动的文件`} description={observationState === 'untrusted' ? t`由 Codex 写入 ~/.codex/config.toml` : undefined}>
+            {observationState === 'active' && <span className="text-sm text-fg-3"><Trans>已开启</Trans></span>}
+            {observationState === 'inactive' && <span className="text-sm text-fg-3"><Trans>重启会话后生效</Trans></span>}
+            {observationState === 'untrusted' && <Button size="sm" variant="secondary" disabled={busy || trusting} onClick={() => void trustObservation()}><Trans>信任</Trans></Button>}
+          </SettingsRow>
+        )}
       </SettingsGroup>
 
       {ownPages ? (

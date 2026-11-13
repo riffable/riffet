@@ -59,6 +59,8 @@ export interface CursorTranscriptOptions {
   signals?(listener: CursorTranscriptSignals): () => void;
   /** Stamped on events; the journal does not keep it. */
   sessionId?: string;
+  /** What a shell call changed in the working tree, seen around it (`AgentHost.workspaceChanges`); merged into its result. */
+  observedChanges?(toolCallId: string): readonly Record<string, unknown>[] | undefined;
   /** The step each chat's CLI is streaming, ahead of its checkpoint in the store. */
   live?: Pick<CursorLive, 'read' | 'watch'>;
   limits?: Partial<CursorTranscriptLimits>;
@@ -67,7 +69,7 @@ export interface CursorTranscriptOptions {
 const DEFAULT_LIMITS: CursorTranscriptLimits = { stepMessages: 512, stepBytes: 4 * 1024 * 1024, tailTurns: 8, tailMessages: 512, sliceMs: 40 };
 const STATE_VERSION = 1;
 /** Normalized events can be upgraded without clearing turn ends or changing lane generations. */
-const MAPPING_VERSION = 2;
+const MAPPING_VERSION = 3;
 /** Events per commit while a lane reads on. */
 const COMMIT_EVENTS = 256;
 /** Turn ids opened lately; a request id seen among them again opens a turn of its own instead. */
@@ -240,6 +242,12 @@ export class CursorTranscriptSource implements AgentTranscriptSource {
 
   constructor(private readonly options: CursorTranscriptOptions) {
     this.limits = { ...DEFAULT_LIMITS, ...options.limits };
+  }
+
+  restoreMapper(state: TranscriptMapperState): TranscriptMapper {
+    const mapper = TranscriptMapper.restore(state);
+    mapper.observedChanges = this.options.observedChanges;
+    return mapper;
   }
 
   identity(): string | undefined {
@@ -454,7 +462,7 @@ class LaneRead {
   constructor(private readonly source: CursorTranscriptSource, private readonly w: AgentLaneWriter, private readonly view: ChatView, saved: LaneState | undefined, private readonly options: ReadOptions) {
     this.fresh = !saved;
     this.state = saved ?? emptyState(0, '');
-    this.mapper = TranscriptMapper.restore(this.state.mapper);
+    this.mapper = this.source.restoreMapper(this.state.mapper);
     this.children = new Map(this.state.children);
     this.stale = new Set(this.state.stale);
     this.tasks = new Map(this.state.tasks);
@@ -499,7 +507,7 @@ class LaneRead {
     const saved = this.state.reproject;
     const progress = saved && saved.n <= end && saved.n >= Math.min(this.state.from, end)
       ? saved : { n: Math.min(this.state.from, end), mapper: new TranscriptMapper().state() };
-    const mapper = TranscriptMapper.restore(progress.mapper);
+    const mapper = this.source.restoreMapper(progress.mapper);
     const tasks = new Map(progress.tasks);
     const stop = this.options.bounded ? Math.min(end, progress.n + this.source.limits.stepMessages) : end;
     let events: NativeWorkbenchEvent[] = [], bytes = 0;
@@ -601,7 +609,7 @@ class LaneRead {
       if (from === undefined) return this.abandon();
       this.hash = digestOf(ids, from);
       this.state = emptyState(from, this.hash.copy().digest('hex'));
-      this.mapper = TranscriptMapper.restore(this.state.mapper);
+      this.mapper = this.source.restoreMapper(this.state.mapper);
     } else {
       this.hash = digestOf(ids, Math.min(this.state.n, ids.length));
       const moved = this.state.root !== root && (ids.length < this.state.n || this.hash.copy().digest('hex') !== this.state.digest);
@@ -683,7 +691,7 @@ class LaneRead {
       ...emptyState(before.from, ''), placed: before.placed, children: before.children,
       ...(before.live ? { live: true as const } : {}), ...(before.compacting ? { compacting: before.compacting } : {}),
     };
-    this.mapper = TranscriptMapper.restore(this.state.mapper);
+    this.mapper = this.source.restoreMapper(this.state.mapper);
     this.hash = digestOf(ids, before.from);
     for (let position = before.from; position < at; position += 1) {
       const message = this.view.reader.message(ids[position]!);

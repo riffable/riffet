@@ -6,6 +6,8 @@ import {
 import type { CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { NativeService } from '../native/service.js';
+import { chatStorePath } from '../native/chat-store.js';
+import { resolveShellCall } from './shell-observation.js';
 import { probeCursorHookSteer, writeCursorHookPlugin } from './launch-plugin.js';
 import { CursorTranscriptSource } from './transcript-source.js';
 
@@ -192,6 +194,8 @@ export class CursorSteerBridge {
     if (!session) return {};
     const entry = this.bind(session.id);
     const target = { nativeSessionId, turnId };
+    // Outside the session lock: the snapshot can take a second or two, and the command waits for this hook but nothing else should.
+    await this.observeShell(session, payload);
     return this.port.withSessionLock(session.id, async () => {
       const current = this.port.getSession(session.id);
       if (signal.aborted || current.archivedAt || current.nativeSessionId !== nativeSessionId) return {};
@@ -233,6 +237,37 @@ export class CursorSteerBridge {
       });
       return context ? { additional_context: context } : {};
     });
+  }
+
+  /**
+   * What a shell command changes in the working tree is not in the chat store, so it is seen from outside: a snapshot
+   * before the command (`preToolUse` holds the command until it returns) and a comparison after it. Kept under the
+   * call's store id, which only the store knows (`resolveShellCall`), so that every import of the transcript finds it.
+   * Never fails the hook; a command that cannot be told from another running the same text is left unobserved.
+   */
+  private async observeShell(session: AgentSessionView, payload: Record<string, unknown>): Promise<void> {
+    const changes = this.host.workspaceChanges;
+    const event = payload.hook_event_name;
+    const hookId = payload.tool_use_id;
+    const input = payload.tool_input as { command?: unknown; block_until_ms?: unknown; cwd?: unknown } | undefined;
+    if (!changes || payload.tool_name !== 'Shell' || typeof hookId !== 'string' || !hookId) return;
+    if (event !== 'preToolUse' && event !== 'postToolUse' && event !== 'postToolUseFailure') return;
+    try {
+      if (event === 'preToolUse') {
+        // `block_until_ms: 0` backgrounds the command: it outlives its hooks, so there is no end to compare at.
+        if (typeof input?.command !== 'string' || input.block_until_ms === 0) return;
+        const roots = payload.workspace_roots;
+        const cwd = [input.cwd, payload.cwd, Array.isArray(roots) ? roots[0] : undefined].find((value): value is string => typeof value === 'string' && value !== '')
+          ?? this.port.getProject(session.projectId).cwd;
+        await changes.begin(session.id, hookId, cwd);
+        return;
+      }
+      const diffs = await changes.end(session.id, hookId);
+      if (!diffs?.length || typeof input?.command !== 'string' || typeof payload.conversation_id !== 'string') return;
+      const store = chatStorePath(this.profile.configDir, this.port.getProject(session.projectId).cwd, payload.conversation_id);
+      const callId = await resolveShellCall(store, input.command);
+      if (callId) changes.record(session.id, callId, diffs);
+    } catch { /* observation is best effort */ }
   }
 
   /**

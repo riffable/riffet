@@ -193,6 +193,8 @@ export const NativeStatusSchema = z.object({
   queue: NativeQueueSchema.optional(),
 });
 
+export const FileChangeSchema = z.object({ path: z.string(), added: z.number(), removed: z.number(), created: z.boolean() });
+
 const RowBaseSchema = z.object({
   key: z.string(),
   pos: z.number(),
@@ -234,6 +236,7 @@ export const TimelineRowSchema = z.discriminatedUnion('kind', [
       status: z.enum(['running', 'completed', 'failed', 'cancelled']).meta({ open: true }).optional(),
       startedAt: z.string().optional(),
       endedAt: z.string().optional(),
+      changes: z.array(FileChangeSchema).optional(),
     }).optional(),
   }),
   RowBaseSchema.extend({ kind: z.literal('plan'), entries: z.array(z.record(z.string(), z.unknown())) }),

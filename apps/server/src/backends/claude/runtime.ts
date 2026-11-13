@@ -31,6 +31,7 @@ import { TranscriptAdoption } from './title-adoption.js';
 import { LaunchCrashGuard } from './launch-guard.js';
 import { READY_GATE_MS, ReadyGate } from './ready-gate.js';
 import { normalizeClaudeModel, declaredLongContext, selectedModel, modelArgs, validateModelSelection } from './models.js';
+import type { WorkspaceObserver } from '../shared/workspace-observer.js';
 
 const MAX_INTERACTION_TEXT = 4000;
 const ACK_TIMEOUT_MS = 4000;
@@ -338,7 +339,7 @@ export class ClaudeSessionRuntime {
   private titleInputs?: string;
   private journalTurn?: { turnId: string; promptId?: string };
 
-  constructor(private readonly host: NativeBackendHost, session: Session, private readonly project: Project, private profile: NativeBackendProfileConfig, private readonly resumeRequested: boolean, private readonly bridge: ClaudeHookBridge, launchNotice?: string, private readonly changes?: ClaudeTranscriptChanges) {
+  constructor(private readonly host: NativeBackendHost, session: Session, private readonly project: Project, private profile: NativeBackendProfileConfig, private readonly resumeRequested: boolean, private readonly bridge: ClaudeHookBridge, launchNotice?: string, private readonly changes?: ClaudeTranscriptChanges, private readonly observer?: WorkspaceObserver) {
     this.session = session;
     this.launchGuard = new LaunchCrashGuard({
       host,
@@ -384,6 +385,7 @@ export class ClaudeSessionRuntime {
       commandForUserMessage: message => this.commandForUserMessage(message),
       promptText: prompt => this.rewrites.get(rewriteKey(prompt)),
       putBlob: text => this.host.journal?.putSessionBlob(this.session.id, Buffer.from(text)),
+      observedChanges: toolUseId => this.observer?.changes(this.session.id, toolUseId),
       onToolUse: (id, name, input) => this.onToolUse(id, name, input),
       onToolResult: (toolUseId, failed) => this.onToolResult(toolUseId, failed),
       // Transcript `model` is a display name ("Sonnet 4.5"), not the alias or id `--model` accepts, so
@@ -2245,6 +2247,18 @@ export class ClaudeSessionRuntime {
     if (mainThread && hookPromptId === activeTurnOf(this.state.mainTurn)?.promptId
       && ['PreToolUse', 'PermissionRequest', 'PostToolUse', 'PostToolUseFailure'].includes(event)) this.outputPromptId = hookPromptId;
     if (event === 'PostToolUse' || event === 'PostToolUseFailure' || event === 'PermissionDenied') {
+      // Taken before the hook returns: Claude Code writes the call's result row after its PostToolUse hooks, and the
+      // transcript mapping appends what was recorded here to that row.
+      const observedId = string(payload.tool_use_id);
+      // A file an edit tool changed is that tool's to report, not a command's that ran beside it.
+      const edited = event === 'PostToolUse' && ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(string(payload.tool_name) ?? '')
+        ? string(asRecord(payload.tool_input)?.file_path) ?? string(asRecord(payload.tool_input)?.notebook_path) : undefined;
+      if (edited) this.observer?.noteEdit(edited);
+      if (observedId && event === 'PermissionDenied') this.observer?.discard(observedId);
+      else if (observedId && this.observer) {
+        const diffs = await this.observer.end(observedId);
+        if (diffs?.length) this.observer.record(this.session.id, observedId, diffs);
+      }
       this.confirmHookInteraction(event, payload);
       if (matchesTurn && event === 'PostToolUseFailure' && payload.is_interrupt === true) {
         this.finishSteering('run_cancelled', 'Claude interrupted the running tool.');
@@ -2266,7 +2280,9 @@ export class ClaudeSessionRuntime {
       // person takes. By this hook the rows are down, and the dialog the CLI draws meanwhile is not lifted
       // while the card is up (see `refreshScreenState`).
       if (payload.tool_name === 'AskUserQuestion') return await this.awaitQuestion(payload, deliveryId, signal);
-      return await this.awaitPermission(payload, deliveryId, signal);
+      const decision = await this.awaitPermission(payload, deliveryId, signal);
+      await this.observeDecision(payload, decision);
+      return decision;
     }
     if (event === 'PreToolUse') {
       const toolId = string(payload.tool_use_id);
@@ -2277,6 +2293,11 @@ export class ClaudeSessionRuntime {
         if (toolName === 'AskUserQuestion') this.questionHooksDue.set(toolId, Date.now());
         this.announcedToolUses.set(this.toolFingerprint(toolName, asRecord(payload.tool_input) ?? {}), toolId);
         while (this.announcedToolUses.size > 256) this.announcedToolUses.delete(this.announcedToolUses.keys().next().value!);
+      }
+      // A shell command reports no edits; what it changed is seen around it, a subagent's as well as the main thread's.
+      // One left running in the background outlives its call, so it is not observed.
+      if (toolId && toolName === 'Bash' && asRecord(payload.tool_input)?.run_in_background !== true) {
+        await this.observer?.begin(toolId, string(payload.cwd) ?? this.project.cwd);
       }
     }
     return {};
@@ -2427,6 +2448,21 @@ export class ClaudeSessionRuntime {
       pending.resolveHook({});
       this.removePendingInteraction(pending, false);
     }
+  }
+
+  /**
+   * A command's window opens at its PreToolUse, which comes before the person decides. Refused here, the command never
+   * runs and the window goes; allowed, it starts over now, so what changed while the person was deciding is not the
+   * command's. A request left to the CLI's own dialog keeps the window it has.
+   */
+  private async observeDecision(payload: Record<string, unknown>, decision: Record<string, unknown>): Promise<void> {
+    if (!this.observer || payload.tool_name !== 'Bash') return;
+    const input = asRecord(payload.tool_input) ?? {};
+    const toolId = string(payload.tool_use_id) ?? this.announcedToolUses.get(this.toolFingerprint('Bash', input));
+    const behavior = string(asRecord(asRecord(decision.hookSpecificOutput)?.decision)?.behavior);
+    if (!toolId || !behavior) return;
+    if (behavior === 'deny') this.observer.discard(toolId);
+    else if (behavior === 'allow' && input.run_in_background !== true) await this.observer.begin(toolId, string(payload.cwd) ?? this.project.cwd);
   }
 
   private toolFingerprint(toolName: string, toolInput: Record<string, unknown>): string {

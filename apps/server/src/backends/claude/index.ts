@@ -25,6 +25,7 @@ import type { TranscriptSource } from '../../journal/ingest.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
 import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, rewriteKey, ClaudeSessionRuntime } from './runtime.js';
+import { workspaceObserver, type WorkspaceObserver } from '../shared/workspace-observer.js';
 export { CLAUDE_CLI_VERSIONS } from './launch.js';
 export { CLAUDE_CONFIG_SETTLE_MS } from './runtime.js';
 
@@ -157,8 +158,12 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   private bridgeRetry?: NodeJS.Timeout;
   private closing = false;
 
+  /** What a shell command changed, seen around it; only a served state directory keeps snapshots. */
+  private readonly observer?: WorkspaceObserver;
+
   constructor(options: { stateDir?: string } = {}) {
     this.bridge = new ClaudeHookBridge(options);
+    if (options.stateDir) this.observer = workspaceObserver(options.stateDir);
     // The descriptor is how a CLI that outlived the previous server finds this one, so it is published as soon as
     // the server is up, not when the first conversation happens to open. Never blocks start-up.
     if (options.stateDir) this.keepBridgeUp();
@@ -499,6 +504,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
         commandForUserMessage: message => runtime()?.commandForUserMessage(message),
         promptText: prompt => runtime()?.rewrites.get(rewriteKey(prompt)),
         putBlob: text => host.journal?.putSessionBlob(session.id, Buffer.from(text)),
+        observedChanges: toolUseId => this.observer?.changes(session.id, toolUseId),
       },
     });
   }
@@ -607,7 +613,7 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     const task = (async () => {
       const nativeSessionId = session.nativeSessionId ?? randomUUID();
       if (!session.nativeSessionId && start) host.setNativeSessionId(session.id, nativeSessionId);
-      const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes);
+      const runtime = new ClaudeSessionRuntime(host, { ...session, nativeSessionId }, project, profile, resumeRequested, this.bridge, launchNotice, this.changes, this.observer);
       this.runtimes.set(session.id, runtime);
       try {
         await runtime.monitor();

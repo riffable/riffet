@@ -974,6 +974,8 @@ export class TranscriptMapper {
   /** `runId` is the turn the call was issued in; its result keeps it so the pair merges into one card. */
   private readonly calls = new Map<string, PendingCall>();
   private readonly todos = new Map<string, Todo>();
+  /** What a shell call changed in the working tree, seen around it; appended to its result. Not part of the state: the lookup is the host's, and replays. */
+  observedChanges?: (toolCallId: string) => readonly Record<string, unknown>[] | undefined;
 
   /** The state after the last mapped message; {@link restore} continues from it as this mapper would. */
   state(): TranscriptMapperState {
@@ -1013,6 +1015,7 @@ export class TranscriptMapper {
   /** A copy to map a provisional message with, leaving this mapper's state as it was. */
   fork(): TranscriptMapper {
     const copy = new TranscriptMapper(this.unbounded);
+    copy.observedChanges = this.observedChanges;
     copy.turn = this.turn;
     copy.nativeTurnId = this.nativeTurnId;
     copy.turnAt = this.turnAt;
@@ -1130,7 +1133,11 @@ export class TranscriptMapper {
           continue;
         }
         const resultRun = call ? { ...(call.runId ? { runId: call.runId } : {}), ...(run.nativeTurnId ? { nativeTurnId: run.nativeTurnId } : {}) } : run;
-        events.push({ type: 'tool_call_update', ...resultRun, createdAt, data: { sessionUpdate: 'tool_call_update', toolCallId: part.toolCallId, ...(!call ? { contextMissing: true } : {}), ...describeToolResult({ toolName: str(part.toolName) ?? call?.toolName ?? 'tool', result: displayPart.result, content: displayPart.experimental_content }, displayMessage, call, this.unbounded) } });
+        const described = describeToolResult({ toolName: str(part.toolName) ?? call?.toolName ?? 'tool', result: displayPart.result, content: displayPart.experimental_content }, displayMessage, call, this.unbounded);
+        // A background shell has no result of its own to merge into: what it changes is not the command's.
+        const observed = !described.hidden && call && unwrap(call.toolName, call.args).name === 'Shell' ? this.observedChanges?.(part.toolCallId) ?? [] : [];
+        const data = observed.length ? { ...described, content: [...(Array.isArray(described.content) ? described.content : []), ...observed] } : described;
+        events.push({ type: 'tool_call_update', ...resultRun, createdAt, data: { sessionUpdate: 'tool_call_update', toolCallId: part.toolCallId, ...(!call ? { contextMissing: true } : {}), ...data } });
         if (context) events.push({ type: 'cursor_tool_context', ...run, createdAt,
           data: { hidden: true, text: context, toolCallId: part.toolCallId } });
         this.calls.delete(part.toolCallId);

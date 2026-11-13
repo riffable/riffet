@@ -219,6 +219,11 @@ export class TimelineTables {
     return rows.map(row => ({ key: row.key, pos: row.pos, turn: row.turn, rev: row.rev, row: rowOf(row.payload, row.seq, row.rev) }));
   }
 
+  /** The lane's live tool rows in order, as key and content digest: a reader redoes only the rows that changed. */
+  toolDigests(sessionId: string, lane: SyncLane): Array<{ key: string; digest: string }> {
+    return this.sql("SELECT key,digest FROM timeline_rows WHERE session_id=? AND lane=? AND kind='tool' AND deleted=0 ORDER BY pos").all(sessionId, lane) as Array<{ key: string; digest: string }>;
+  }
+
   /** The lane's activity rows (`activity:<id>`), in order. */
   activityRows(sessionId: string, lane: SyncLane): TimelineRow[] {
     return (this.sql("SELECT seq,rev,payload FROM timeline_rows WHERE session_id=? AND lane=? AND key>='activity:' AND key<'activity;' AND deleted=0 ORDER BY pos, key").all(sessionId, lane) as Array<{ seq: number; rev: number; payload: string }>)

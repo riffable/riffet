@@ -10,7 +10,7 @@ import type { CodexIngestState } from './journal-space.js';
 import { projectCodexItem, rowTextKey } from './project-item.js';
 import { CodexQuestionHistory } from './question-history.js';
 import { normalizePlanEntries } from './rollout-plan.js';
-import { codexPlanNativeId, isFinalTurnStatus, isProvisionalItemId, isSpawnAgentItem, isSubagentStart, subagentName, subagentToolCallId, turnStatus, type ItemSpan } from './transcript.js';
+import { codexPlanNativeId, isFinalTurnStatus, isProvisionalItemId, isSpawnAgentItem, isSubagentStart, subagentName, subagentToolCallId, turnStatus, type ItemSpan, type ObservedChanges } from './transcript.js';
 import type { RpcItem, RpcTurn } from './types.js';
 import { asArray, asRecord, str, toIso } from './util.js';
 
@@ -100,6 +100,8 @@ export interface CodexTranscriptOptions {
   sessionId: string;
   /** The flavor's id, which prefixes its activity ids. */
   backend: string;
+  /** What a shell command changed in the working tree, by its tool call id (`observation.ts`). */
+  observedChanges?: ObservedChanges;
   /** The thread the conversation follows now. */
   threadId(): string | undefined;
   /** A reader of the thread when one is connected; undefined while offline. */
@@ -630,6 +632,7 @@ export class CodexTranscriptSource implements TranscriptSource {
     const runId = (commandId ? this.options.runOf(commandId) : undefined) ?? turnRun ?? turn.id;
     return projectCodexItem(item, turn, {
       sessionId: this.options.sessionId, threadId, runId, createdAt, ...(span ? { span } : {}), ...(commandId ? { commandId } : {}), questions: this.questions,
+      ...(this.options.observedChanges ? { observedChanges: this.options.observedChanges } : {}),
       ...(main ? { phase: (itemId: string) => this.phases.get(itemId) } : {}),
     });
   }

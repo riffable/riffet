@@ -32,13 +32,15 @@ export type TimelineRow = RowBase & (
   | { kind: 'user'; text: string; attachments: UserAttachment[]; references?: CapturedSessionReference[]; pending?: 'queued' | 'preparing' | 'unconfirmed' | 'failed' }
   | { kind: 'assistant'; text: string; phase?: 'commentary' | 'final_answer' }
   | { kind: 'thought'; text: string; channel: ReasoningChannel }
-  | { kind: 'tool'; job?: NativeJob; activity?: NativeActivity; subagent?: { lane: SyncLane; agentId: string; running: boolean; title?: string; subagentType?: string; model?: string; rows: number; turnId?: string; status?: TurnOutlineV3['status']; startedAt?: string; endedAt?: string } }
+  | { kind: 'tool'; job?: NativeJob; activity?: NativeActivity; subagent?: { lane: SyncLane; agentId: string; running: boolean; title?: string; subagentType?: string; model?: string; rows: number; turnId?: string; status?: TurnOutlineV3['status']; startedAt?: string; endedAt?: string; changes?: FileChange[] } }
   | { kind: 'plan'; entries: Record<string, unknown>[] }
   | { kind: 'image'; src: string }
   /** A failure's readable reason; `detail` keeps its already-redacted diagnostic for disclosure. */
   | { kind: 'status'; tone: 'danger' | 'muted'; text: string; detail?: string }
   | { kind: 'task_notification'; taskId?: string; taskKind: string; status: TaskNotificationStatus; sourceStatus?: string; title: string; command?: string; detail?: string; jobResult?: TaskNotificationResult; subagentToolCallId?: string; tokens?: number; durationMs?: number }
   | { kind: 'activity'; activity: NativeActivity });
+/** A file a subagent's tools wrote or its commands were seen to change, with the lines it gained and lost; edits to one path add up. */
+export interface FileChange { path: string; added: number; removed: number; created: boolean }
 export interface TurnOutlineV3 { turn: string; turnId: string; startPos: number; endPos?: number; status: 'running' | 'completed' | 'failed' | 'cancelled'; at: string; endedAt?: string; preview?: string; hasUserMessage?: boolean; hasAttachments?: boolean; rows: number; runId?: string }
 /** One SSE event of `GET /api/v3/sessions/:id/sync`; the SSE `event:` is `type`. */
 export type SyncFrame =

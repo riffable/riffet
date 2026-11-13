@@ -1,7 +1,7 @@
 import type { AgentBackend } from '@riffet/plugin-api';
 import type { NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
-import { PluginBackendDriver } from './plugin-backend.js';
+import { PluginBackendDriver, type WorkspaceObserver } from './plugin-backend.js';
 import type { NativeBackendRegistry } from './registry.js';
 import type { NativeBackendService } from './service.js';
 
@@ -29,6 +29,8 @@ export class PluginBackends {
     plugins: Pick<PluginRegistry, 'agentBackends' | 'declaredAgentBackends' | 'agentBackendPending' | 'onChange' | 'onEnded'>;
     registry: NativeBackendRegistry;
     service: Pick<NativeBackendService, 'host' | 'detachBackend' | 'attachBackend' | 'catalog'>;
+    /** What shell commands change in the working tree, for a backend that reports it (`backends/shared/workspace-observer.ts`). */
+    workspaceObserver?: WorkspaceObserver;
   }) {}
 
   /** Mounts what is enabled now and follows changes until `close`. */
@@ -71,7 +73,7 @@ export class PluginBackends {
       if (this.mounted.has(id)) continue;
       let driver: PluginBackendDriver;
       try {
-        driver = new PluginBackendDriver(backend, owner);
+        driver = new PluginBackendDriver(backend, owner, this.options.workspaceObserver);
         registry.register(driver, owner);
         this.mounted.set(id, { backend, driver });
       } catch (error) {

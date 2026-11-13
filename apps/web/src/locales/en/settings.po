@@ -474,6 +474,10 @@ msgstr "Saved on the server; each device picks its own."
 msgid "保存的地址和 API Key 会一并删除。"
 msgstr "The saved address and API key will also be deleted."
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "信任"
+msgstr "Trust"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
 msgstr "Sending a message after it stops continues the same conversation; background tasks in the CLI end too."
@@ -1005,6 +1009,10 @@ msgstr "Sent a termination signal to {0} (PID {1})"
 msgid "已完成"
 msgstr "Done"
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "已开启"
+msgstr "On"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "已拒绝"
 msgstr "Denied"
@@ -1401,6 +1409,10 @@ msgstr "Couldn't save the default approval mode"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法保存默认提供商"
 msgstr "Couldn't save the default provider"
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "无法信任"
+msgstr "Couldn't trust"
 
 #: src/app/settings/SettingsDialog.tsx
 msgid "无法切换设置分区"
@@ -1877,6 +1889,10 @@ msgstr "Link an account with a code made here, in a private chat only"
 msgid "用飞书扫码"
 msgstr "Scan with Feishu"
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "由 Codex 写入 ~/.codex/config.toml"
+msgstr "Written by Codex to ~/.codex/config.toml"
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "画布摘要"
 msgstr "Canvas summaries"
@@ -2150,6 +2166,10 @@ msgstr "Unbind {name}?"
 #: src/app/settings/SupportSections.tsx
 msgid "记录中"
 msgstr "Recording"
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "记录命令改动的文件"
+msgstr "Record files changed by commands"
 
 #: src/app/settings/SupportSections.tsx
 msgid "记录浏览器交互"
@@ -2458,6 +2478,10 @@ msgstr "Palettes from {credits}"
 #: src/app/settings/ThemeEditor.tsx
 msgid "配色模式"
 msgstr "Color mode"
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "重启会话后生效"
+msgstr "Takes effect after the session restarts"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "重新加载最新版"

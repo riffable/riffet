@@ -69,7 +69,7 @@ export interface ClaudeTranscriptSourceOptions {
    */
   exited?(): string | undefined;
   /** What a running conversation knows about its rows; nothing that acts on the CLI. */
-  hooks?: Pick<ClaudeTranscriptHooks, 'additionalContext' | 'commandForUserMessage' | 'promptText' | 'putBlob'> & {
+  hooks?: Pick<ClaudeTranscriptHooks, 'additionalContext' | 'commandForUserMessage' | 'promptText' | 'putBlob' | 'observedChanges'> & {
     /** Persisted input fences survive the runtime and the journal's read cursor. */
     inputRuns?: () => readonly Run[];
     inputReceipt?: (event: NativeWorkbenchEvent) => void;
@@ -1057,7 +1057,9 @@ class LaneRead {
   private map(row: ClaudeRow, start: number, signals: ReturnType<typeof claudeRowSignals> = []) {
     const uuid = typeof row.uuid === 'string' ? row.uuid : `line-${start}`;
     const at = typeof row.timestamp === 'string' ? row.timestamp : NO_TIME;
-    const hooks = this.main ? this.source.hooks : {};
+    // The conversation's hooks match its own input and belong to the main lane; what a command changed is looked up
+    // by its call, in a subagent's lane as well.
+    const hooks = this.main ? this.source.hooks : { observedChanges: this.source.hooks.observedChanges };
     // Queuing/consuming an input is a receipt, not an execution boundary. In particular an input
     // absorbed mid-turn must not open an anonymous turn or close the turn still producing output.
     if (this.main && row.type === 'queue-operation' && row.isSidechain !== true && row.agentId === undefined) {

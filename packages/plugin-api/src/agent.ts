@@ -901,6 +901,22 @@ export interface AgentHost {
     /** Transcript events the plugin read or wrote, for the ledger to extract tool calls from. Full events, as the lane writer takes them. */
     observeEvents(sessionId: string, events: readonly NativeWorkbenchEvent[]): void;
   };
+  /**
+   * What a shell command changed in the working tree, seen from outside the Agent: for an Agent whose CLI does not report
+   * file edits made by a command. Absent when the host keeps no state directory to snapshot into.
+   */
+  workspaceChanges?: {
+    /** Snapshots the working tree `cwd` belongs to before command `key` runs; resolves once taken or given up on (about 1.5s at most), so call it before the command is allowed to run. */
+    begin(sessionId: string, key: string, cwd: string): Promise<void>;
+    /** Compares the working tree with the snapshot of `key` and releases it; `undefined` when the command was not observed. Always call it once after `begin`. */
+    end(sessionId: string, key: string): Promise<readonly Record<string, unknown>[] | undefined>;
+    /** Releases the snapshot of a command that never ran. */
+    discard(sessionId: string, key: string): void;
+    /** Keeps `diffs` as what the call `callId` of the session changed; the transcript mapping reads them back with `changes`. */
+    record(sessionId: string, callId: string, diffs: readonly Record<string, unknown>[]): void;
+    /** What `record` kept; synchronous, so a transcript read can replay it. */
+    changes(sessionId: string, callId: string): readonly Record<string, unknown>[] | undefined;
+  };
   readAttachment(id: string): Promise<{ attachment: Attachment; data: Uint8Array }>;
   interactionReceipts: {
     get(sessionId: string, requestId: string): Promise<AgentInteractionReceipt | undefined>;
