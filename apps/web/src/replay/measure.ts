@@ -1,4 +1,5 @@
 import { geometryAnimating, installLayoutShiftMonitor } from '@/lib/layout-shift-monitor';
+import { animationsOf } from '@/lib/motion';
 
 /*
  * Watches the transcript every frame while a recording plays and reports what moved for no reason a
@@ -120,7 +121,7 @@ export function watchTranscript(scroller: HTMLElement) {
       const before = previous.get(key);
       if (!before) {
         if (vanished.delete(key)) report({ kind: 'return', key });
-        if (now.visible && everSeen.has(key) && !animated.has(key) && now.element.getAnimations().some((animation) => (animation as CSSAnimation).animationName === 'enter')) {
+        if (now.visible && everSeen.has(key) && !animated.has(key) && animationsOf(now.element, { all: true }).some((animation) => (animation as CSSAnimation).animationName === 'enter')) {
           animated.add(key);
           report({ kind: 'replay', key });
         }
@@ -129,7 +130,7 @@ export function watchTranscript(scroller: HTMLElement) {
       }
       if (before.element !== now.element) {
         if (before.visible || now.visible) report({ kind: before.container === now.container ? 'remount' : 'move', key });
-        if (now.visible && now.element.getAnimations().some((animation) => (animation as CSSAnimation).animationName === 'enter')) report({ kind: 'replay', key });
+        if (now.visible && animationsOf(now.element, { all: true }).some((animation) => (animation as CSSAnimation).animationName === 'enter')) report({ kind: 'replay', key });
         continue;
       }
       if (!before.visible && !now.visible) continue;

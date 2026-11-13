@@ -4,6 +4,8 @@
  * to carry it. A shift that is neither animated nor compensated is the defect the contract names.
  */
 
+import { animationsOf } from './motion';
+
 interface Rect { x: number; y: number; width: number; height: number }
 export interface LayoutShiftSource { node: string; previous: Rect; current: Rect }
 export interface LayoutShiftRecord {
@@ -56,7 +58,7 @@ function note(at: number, continues = false) {
   } else spans.push({ from: at, to: at });
   if (spans[0]!.to < at - KEEP_MS) spans = spans.filter((span) => span.to >= at - KEEP_MS);
 }
-const runningGeometry = () => typeof document !== 'undefined' && document.getAnimations().some((animation) => animation.playState === 'running' && geometric(animation));
+const runningGeometry = () => typeof document !== 'undefined' && animationsOf(document).some((animation) => animation.playState === 'running' && geometric(animation));
 function sample(now: number) {
   sampler = requestAnimationFrame(sample);
   const running = runningGeometry();

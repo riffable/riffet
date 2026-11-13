@@ -17,6 +17,7 @@ import { tabZones, type TabEntry } from './tabsStore';
 import { useTabs } from './useTabs';
 import { useZoneDrag } from './useZoneDrag';
 import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { animationsOf, cancelAnimations, exit, settled } from '@/lib/motion';
 
 export type TabBarVariant = 'inline' | 'strip';
 
@@ -28,7 +29,7 @@ const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)'
 function growIn(node: HTMLElement | null) {
   if (!node || reducedMotion()) return;
   // Measure the settled width: a grow already running (an effect run twice) would report its own first frame.
-  for (const animation of node.getAnimations()) animation.cancel();
+  cancelAnimations(node);
   const width = `${node.offsetWidth}px`;
   node.animate([{ minWidth: '0px', maxWidth: '0px', opacity: 0 }, { minWidth: width, maxWidth: width, opacity: 1 }], TAB_MOTION);
 }
@@ -147,10 +148,15 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
 }
 
 /** A tab just closed, collapsing where it was so its neighbours close the gap rather than jump. */
-function LeavingTab({ session, width, variant }: { session: Session; width: number; variant: TabBarVariant }) {
+function LeavingTab({ session, width, variant, onGone }: { session: Session; width: number; variant: TabBarVariant; onGone: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const gone = useRef(onGone);
+  gone.current = onGone;
+  // The ghost goes when its own collapse ends, so the neighbours' move and the removal share one clock.
   useLayoutEffect(() => {
-    ref.current?.animate([{ minWidth: `${width}px`, maxWidth: `${width}px`, opacity: 1 }, { minWidth: '0px', maxWidth: '0px', opacity: 0 }], { ...TAB_MOTION, fill: 'forwards' });
+    const node = ref.current;
+    if (!node) return;
+    return exit(node, [{ minWidth: `${width}px`, maxWidth: `${width}px`, opacity: 1 }, { minWidth: '0px', maxWidth: '0px', opacity: 0 }], TAB_MOTION, () => gone.current());
   }, [width]);
   return (
     <div ref={ref} aria-hidden className={cn('pointer-events-none flex shrink-0 items-center gap-1.5 overflow-hidden whitespace-nowrap text-sm text-fg-2', variant === 'strip' ? 'h-9 pl-3' : 'h-7 rounded-lg border border-transparent pl-2')} style={{ width }}>
@@ -180,14 +186,11 @@ function Zone({ name, variant, onReorder, onOverflow, onDragBegin, className, ch
     if (!node) return;
     // A tab growing in or collapsing out briefly overfills the row; read it once they settle, so
     // the fades and the 全部标签 button do not flash on every switch.
-    // A closed tab's collapse fills forwards, so it stays listed after it finishes; waiting on its
-    // already-settled `finished` would re-measure in a microtask loop that never yields.
-    const moving = node.getAnimations({ subtree: true }).filter((animation) => animation.playState !== 'finished'
-      && (animation.effect as KeyframeEffect | null)?.target?.parentElement === node);
+    const moving = animationsOf(node, { subtree: true }).filter((animation) => (animation.effect as KeyframeEffect | null)?.target?.parentElement === node);
     if (moving.length) {
       if (!settling.current) {
         settling.current = true;
-        void Promise.allSettled(moving.map((animation) => animation.finished)).then(() => { settling.current = false; measure(); });
+        void settled(moving).then(() => { settling.current = false; measure(); });
       }
       return;
     }
@@ -290,8 +293,6 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
   // What the last paint showed: which tabs (so a new one grows in, though not on the bar's first
   // paint), where each sat and how wide (so a closed one collapses from there).
   const shown = useRef<{ ids: Set<string>; places: Map<string, Place> } | undefined>(undefined);
-  const leavingTimers = useRef(new Set<number>());
-  useEffect(() => () => { for (const timer of leavingTimers.current) window.clearTimeout(timer); }, []);
   const [leaving, setLeaving] = useState<(Place & { key: string })[]>([]);
   const visible = new Set([...zones.pinned, ...zones.normal].map((entry) => entry.sessionId));
   // A temporary tab handed to another conversation changes in place, rather than collapsing beside
@@ -310,8 +311,6 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
       const gone = [...previous.places].filter(([id]) => !visible.has(id) && !swapped.has(id)).map(([id, place]) => ({ key: `${id}:${Date.now()}`, ...place }));
       if (gone.length) {
         setLeaving((current) => [...current, ...gone]);
-        const timer = window.setTimeout(() => { leavingTimers.current.delete(timer); setLeaving((current) => current.filter((item) => !gone.includes(item))); }, TAB_MOTION.duration);
-        leavingTimers.current.add(timer);
       }
     }
     const places = new Map<string, Place>();
@@ -413,7 +412,7 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
   };
   const withLeaving = (nodes: ReactNode[], zone: 'pins' | 'tabs') => {
     for (const item of leaving.filter((ghost) => ghost.zone === zone).sort((a, b) => a.index - b.index)) {
-      nodes.splice(Math.min(item.index, nodes.length), 0, <LeavingTab key={item.key} session={item.session} width={item.width} variant={variant} />);
+      nodes.splice(Math.min(item.index, nodes.length), 0, <LeavingTab key={item.key} session={item.session} width={item.width} variant={variant} onGone={() => setLeaving((current) => current.filter((ghost) => ghost !== item))} />);
     }
     return nodes;
   };

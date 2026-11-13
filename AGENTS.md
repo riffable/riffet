@@ -39,6 +39,12 @@
 - 排查重建：`adb shell setprop log.tag.RiffetLifecycle DEBUG` 后重启 App，`adb logcat -s RiffetLifecycle` 中同一标签无故出现 `-` 再 `+`，即该子树被重新挂载。
 - 同一开关下，`shift <key> 旧高→新高` 是已结束的行在屏幕上变了高度（读者自己展开的除外），即首帧与稳定帧不一致。
 
+## Web 动画约定
+
+- 动画状态只经 `apps/web/src/lib/motion.ts` 读取和等待；`pnpm check:motion` 拦截直接调用 `getAnimations()` 与 Animation 的 `.finished`。
+- 复查动画状态要让出一帧，不用微任务循环：已结束但仍留在列表里的动画（`fill: 'forwards'`）曾让一个标签页死循环。
+- 动画结束后要移除的元素，由该动画自己的结束触发移除（`exit`），定时器只作动画不运行时的兜底。
+
 ## 测试与验证
 
 - **非必要不增加测试。** 新功能、修复或重构不自动要求新增测试文件或用例；先复用现有测试、类型检查、构建和针对性验证。

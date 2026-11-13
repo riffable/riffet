@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { animationsOf, settled } from './motion';
 
 export const MIN_FEEDBACK_VISIBLE_MS = 1500;
 
@@ -86,12 +87,12 @@ export function useFeedbackTimer<T extends HTMLElement>(current: boolean, onFini
       for (let node: HTMLElement | null = element; visible && node; node = node.parentElement) {
         const style = getComputedStyle(node);
         if (node.inert || node.hidden || node.getAttribute('aria-hidden') === 'true' || style.visibility === 'hidden' || Number(style.opacity) < 0.999) visible = false;
-        for (const animation of node.getAnimations()) {
+        for (const animation of animationsOf(node)) {
           if (animation.playState !== 'running' || animation.effect?.getComputedTiming().iterations === Infinity) continue;
           visible = false;
           if (!animationWaits.has(animation)) {
             animationWaits.add(animation);
-            void animation.finished.then(sync, sync);
+            void settled([animation]).then(sync);
           }
         }
       }

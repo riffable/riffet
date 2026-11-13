@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { animationsOf } from '@/lib/motion';
 
 interface Props {
   open: boolean;
@@ -74,7 +75,8 @@ export function Collapse({ open, children, className, keep, onReveal, still, id 
         let waited = 0;
         const check = () => {
           if (rendered.current !== open && ++waited < COMMIT_WAIT_FRAMES) { frame = requestAnimationFrame(check); return; }
-          if (!outer.current?.getAnimations().length) finish();
+          // Any listed animation counts, finished or not: a finished one that fills still means a transition owns the box.
+          if (!outer.current || !animationsOf(outer.current, { all: true }).length) finish();
         };
         frame = requestAnimationFrame(check);
       });

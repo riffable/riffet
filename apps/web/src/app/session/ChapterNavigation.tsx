@@ -4,6 +4,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { markdownHeadings, type MarkdownHeading } from './Markdown';
 import { useViewPrefs } from './viewPrefs';
+import { animationsOf } from '@/lib/motion';
 
 interface ReadingChapters {
   scope: string;
@@ -104,7 +105,7 @@ export function ChapterNavigation({ scrollRef, columnRef, onNavigate, scope }: {
       frame = 0;
       // The reading column slides with Web Animations when a sidebar/panel changes. Its size
       // stays constant during that slide, so a ResizeObserver alone cannot follow its position.
-      if (column.getAnimations().some((animation) => animation.playState === 'running' || animation.pending)) schedule();
+      if (animationsOf(column).length) schedule();
       const bounds = scroller.getBoundingClientRect();
       const line = bounds.top + Math.min(96, bounds.height * 0.2);
       let body: HTMLElement | undefined;

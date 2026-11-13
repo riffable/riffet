@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, type RefObject } from 'react';
+import { cancelAnimations } from '@/lib/motion';
 
 const measurementProperties = [
   'box-sizing', 'width',
@@ -89,7 +90,7 @@ export function useComposerAutosize(options: ComposerAutosizeOptions): void {
         const step = parseFloat(height) - previous;
         const line = parseFloat(computed.lineHeight) || 24;
         if (Math.abs(step) > line * 1.5 && !reducedMotion.matches) {
-          for (const animation of element.getAnimations()) if (animation.id === RESIZE_ID) animation.cancel();
+          cancelAnimations(element, RESIZE_ID);
           element.animate([{ height: `${previous}px` }, { height }], { id: RESIZE_ID, duration: RESIZE_MS, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
         }
       }

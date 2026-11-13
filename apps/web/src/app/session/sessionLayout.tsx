@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps } fro
 import { flushSync } from 'react-dom';
 
 import { cn } from '@/lib/utils';
+import { cancelAnimations } from '@/lib/motion';
 
 /**
  * The conversation's geometry, decided in one place. Its only inputs are the session's own width and
@@ -122,7 +123,7 @@ export function useSessionLayout(asideAllowed: boolean) {
       if (!step || assembling || reduced.matches) return;
       for (const { target, offset, delta } of moves) {
         if (Math.abs(delta) < STEP_MIN_PX / 2) continue;
-        for (const animation of target.getAnimations()) if (animation.id === STEP_ID) animation.cancel();
+        cancelAnimations(target, STEP_ID);
         target.animate([{ transform: `translateX(${delta + offset}px)` }, { transform: 'none' }], { id: STEP_ID, duration: STEP_MS, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });
       }
     };

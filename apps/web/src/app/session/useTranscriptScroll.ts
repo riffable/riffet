@@ -1,5 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { captureReadingAnchor, readingAnchorTop, type ReadingAnchor } from './readingAnchor';
+import { animationsOf } from '@/lib/motion';
 
 export interface TranscriptScrollHandle {
   scrollByReader(deltaY: number, deltaMode?: number): boolean;
@@ -48,7 +49,7 @@ const inLastTurn = (scroller: HTMLElement, target: Element) => {
   const last = turns[turns.length - 1];
   return !last || last.contains(target) || Boolean(last.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
 };
-const transitioning = (element: Element) => element.getAnimations({ subtree: true }).some((animation) => 'transitionProperty' in animation && animation.playState === 'running');
+const transitioning = (element: Element) => animationsOf(element, { subtree: true }).some((animation) => 'transitionProperty' in animation && animation.playState === 'running');
 interface Navigation {
   frame: number;
   resolve: () => number | undefined;

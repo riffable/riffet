@@ -26,6 +26,7 @@
     "check:public-artifacts": "node scripts/check-public-artifacts.mjs",
     "check:mobile-strings": "node scripts/check-mobile-strings.mjs",
     "check:compose": "node scripts/check-compose-pitfalls.mjs",
+    "check:motion": "node scripts/check-web-motion.mjs",
     "check:privacy": "node scripts/check-privacy.mjs",
     "check:docs": "node scripts/check-doc-paths.mjs",
     "check:design": "node scripts/check-design-rules.mjs",

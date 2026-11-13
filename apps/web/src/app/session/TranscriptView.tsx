@@ -39,6 +39,7 @@ import { POS_STEP } from '../../../../../packages/timeline/src/rows';
 import { truncationOf } from '@/sync/rows';
 import { FailureDetails } from './FailureDetails';
 import { ChapterNavigation } from './ChapterNavigation';
+import { animationsOf } from '@/lib/motion';
 
 const time = (value: string) => { const at = new Date(value).getTime(); return Number.isFinite(at) ? at : undefined; };
 
@@ -906,7 +907,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
           // Only containing disclosures affect the target's placement. A transition elsewhere
           // in the row (such as a hovered tool button) must not block search navigation.
           for (let container = item?.parentElement; container && container !== row; container = container.parentElement) {
-            opening ||= container.getAnimations().some(animation => 'transitionProperty' in animation && animation.playState === 'running');
+            opening ||= animationsOf(container).some(animation => 'transitionProperty' in animation && animation.playState === 'running');
           }
           if (parent.type === 'process' && (!item || folded || item.closest('[hidden]') || opening)) {
             if (reveal?.row !== target || reveal.item !== key) {

@@ -33,6 +33,7 @@ import { ComposerAttachments } from './ComposerAttachments';
 import { attachmentMimeType, planIntake, type CandidateFile, type PendingUpload } from './composerAttachmentIntake';
 import { mentionsDeletedSession } from '@/lib/session-deletion';
 import { detectSlashTrigger, invokedSlashItems, removeSlashToken, slashCandidates, slashMenuGroups } from './slashMenu';
+import { findAnimation } from '@/lib/motion';
 
 const NO_FILES: FileEntry[] = [];
 
@@ -452,7 +453,7 @@ function followContentHeight(frame: HTMLDivElement | null) {
     const moving = frame.parentElement && getComputedStyle(frame.parentElement).overflow !== 'visible';
     if (!previous || moving || previous.width !== next.width || Math.abs(previous.height - next.height) < 1 || reducedMotion.matches) return;
     // A swap mid-slide starts from where the box is now, not from where the last one began.
-    const running = frame.getAnimations().find((animation) => animation.id === FOLLOW_ID);
+    const running = findAnimation(frame, FOLLOW_ID);
     const from = running ? frame.getBoundingClientRect().height : previous.height;
     running?.cancel();
     frame.animate([{ height: `${from}px`, overflow: 'hidden' }, { height: `${next.height}px`, overflow: 'hidden' }], { id: FOLLOW_ID, duration: FOLLOW_MS, easing: 'cubic-bezier(0.2, 0.7, 0.2, 1)' });

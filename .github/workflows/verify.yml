@@ -72,6 +72,8 @@ jobs:
         run: pnpm check:mobile-strings
       - name: Compose code avoids known remount and per-frame recomposition patterns
         run: pnpm check:compose
+      - name: Web animations are read and awaited only through lib/motion
+        run: pnpm check:motion
       - name: Loops, web literals, Mac spacing and motion follow the design rules
         run: pnpm check:design
       - name: Tests

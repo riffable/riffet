@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { Button } from './button';
 import { Input, Textarea } from './controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './dialog';
+import { animationsOf, settled } from '@/lib/motion';
 
 export function Toaster() {
   const toasts = useToasts();
@@ -95,8 +96,7 @@ function ToastRow({ item, onDetails }: { item: ToastItem; onDetails(): void }) {
     if (!element || !available || item.leaving) return;
     let active = true;
     // CSS and reduced-motion styles determine the duration; no second animation clock to drift.
-    const entrances = element.getAnimations();
-    void Promise.allSettled(entrances.map((animation) => animation.finished)).then(() => {
+    void settled(animationsOf(element)).then(() => {
       if (active) setEntered(true);
     });
     return () => { active = false; };
