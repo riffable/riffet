@@ -8,7 +8,7 @@ import { Badge, EmptyState, Spinner } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { localizedText } from '@/lib/plugins';
 import { Markdown } from '../session/Markdown';
-import { capabilityLabel } from './PluginGrantDialog';
+import { ExecutableNote, ModelSourceNote, capabilityLabel } from './PluginGrantDialog';
 import { Mark } from './PluginMark';
 
 export function PluginMarket({ market, error, query, installed, busy, onInstall, onRetry }: {
@@ -61,6 +61,8 @@ export function PluginMarket({ market, error, query, installed, busy, onInstall,
               {open.capabilities.length || open.trustedRequired
                 ? <div className="flex flex-wrap gap-2">{open.capabilities.map(capability => <Badge key={capability} className="h-auto min-h-5 whitespace-normal py-1">{capabilityLabel(capability)}</Badge>)}{open.trustedRequired && <Badge className="h-auto min-h-5 whitespace-normal py-1"><Trans>以服务器进程的权限运行</Trans></Badge>}</div>
                 : <p className="text-sm text-fg-2"><Trans>无</Trans></p>}
+              {open.capabilities.includes('models.provide') && <ModelSourceNote sources={open.modelSources} />}
+              {open.capabilities.includes('process.exec') && <ExecutableNote names={open.executables} />}
             </section>
             {open.readme && <Markdown className="min-w-0 border-t border-line pt-5 text-sm" text={open.readme} />}
           </DialogBody>

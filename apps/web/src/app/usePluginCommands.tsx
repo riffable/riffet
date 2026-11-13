@@ -43,7 +43,7 @@ export function usePluginCommands({ project, sessionId, openSession }: {
   project: ProjectRecord | undefined;
   sessionId: string | undefined;
   openSession: (id: string) => void;
-}): { actions: () => PaletteAction[]; dialogs: ReactNode } {
+}): { actions: () => PaletteAction[]; dialogs: ReactNode; /** Ids of commands whose default shortcut is not registered. */ rejectedKeybindings: ReadonlySet<string> } {
   const { i18n } = useLingui();
   const { ui, nav } = useStores();
   const descriptors = usePlugins();
@@ -125,6 +125,7 @@ export function usePluginCommands({ project, sessionId, openSession }: {
 
   // Default shortcuts: judged over every enabled command, so a binding does not start or stop working with the context; it runs only while its command is offered.
   const keys = useMemo(() => registerKeybindings(all, isApplePlatform), [all]);
+  const rejectedKeybindings = useMemo(() => new Set(keys.rejected.map((item) => item.id)), [keys]);
   useEffect(() => {
     for (const { id, keybinding, reason } of keys.rejected) console.warn(`[riffet] the shortcut ${keybinding} of ${id} ${REJECTION[reason]}, so it is not registered`);
   }, [keys]);
@@ -162,5 +163,5 @@ export function usePluginCommands({ project, sessionId, openSession }: {
       />
     </>
   );
-  return { actions, dialogs };
+  return { actions, dialogs, rejectedKeybindings };
 }

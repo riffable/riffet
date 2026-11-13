@@ -19,8 +19,9 @@
       "minLength": 1
     },
     "apiVersion": {
-      "type": "number",
-      "const": 1
+      "type": "integer",
+      "minimum": -9007199254740991,
+      "maximum": 9007199254740991
     },
     "defaultEnabled": {
       "anyOf": [
@@ -130,7 +131,7 @@
       "maximum": 1000000
     },
     "capabilities": {
-      "maxItems": 5,
+      "maxItems": 6,
       "type": "array",
       "items": {
         "type": "string",
@@ -139,8 +140,17 @@
           "tasks.run",
           "projects.read",
           "sessions.read",
-          "network"
+          "network",
+          "process.exec"
         ]
+      }
+    },
+    "executables": {
+      "maxItems": 8,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
       }
     },
     "activation": {
@@ -252,6 +262,13 @@
                 "required": [
                   "text"
                 ]
+              },
+              "hosts": {
+                "maxItems": 16,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
               }
             },
             "required": [
@@ -964,6 +981,106 @@
             ],
             "additionalProperties": {}
           }
+        },
+        "agentTools": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "description": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 400
+                }
+              },
+              "toolPrefix": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]{1,23}_$"
+              },
+              "icon": {
+                "type": "object",
+                "properties": {
+                  "svg": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^(?!\\/)(?!.*(?:^|\\/)\\.\\.(?:\\/|$))[^\\\\\\u0000]+$"
+                  },
+                  "sfSymbol": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z0-9.]{1,64}$"
+                  }
+                }
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "toolPrefix"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "channels": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "scope": {
+                "type": "string",
+                "const": "session"
+              }
+            },
+            "required": [
+              "id",
+              "scope"
+            ],
+            "additionalProperties": {}
+          }
+        },
+        "page": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+              },
+              "additionalProperties": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 40
+              }
+            }
+          },
+          "additionalProperties": {}
         },
         "appearance": {
           "type": "object",

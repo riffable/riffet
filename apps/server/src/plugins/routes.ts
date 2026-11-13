@@ -3,14 +3,13 @@ import { basename } from 'node:path';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { PluginMarketList, PluginsResponse } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
-import { proxiedRequest } from '../auth.js';
+import { localRequest } from '../auth.js';
 import type { RouteDeps } from '../routes/deps.js';
 import { MAX_ARCHIVE_BYTES } from '../plugins-host/archive.js';
 import { parseMultipart } from '../plugins-host/multipart.js';
 import { checkMarketReference, downloadMarketPackage, listMarket, marketOffer, resolveMarketPackage } from '../plugins-host/market.js';
 
-const isLoopback = (address: string) => address === '::1' || address.startsWith('127.') || address.startsWith('::ffff:127.');
-const onServiceMachine = (request: FastifyRequest) => isLoopback(request.ip) && !proxiedRequest(request.headers);
+const onServiceMachine = (request: FastifyRequest) => localRequest(request);
 
 /** A grant is a JSON list of capability names, or a comma-separated line of them. */
 function grantOf(text: string): string[] {
@@ -52,12 +51,12 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
   app.post<{ Params: { id: string } }>('/api/integrations/:id/reload', async request => plugins.reload(request.params.id));
 
   app.post<{ Body: { path?: unknown } }>('/api/integrations/development', { bodyLimit: 4096 }, async request => {
-    if (!isLoopback(request.ip) || proxiedRequest(request.headers)) throw new AppError('PLUGIN_DEVELOPMENT_LOCAL_ONLY', 'Development links are only available from this machine', 403);
+    if (!onServiceMachine(request)) throw new AppError('PLUGIN_DEVELOPMENT_LOCAL_ONLY', 'Development links are only available from this machine', 403);
     if (typeof request.body?.path !== 'string' || !request.body.path) throw new AppError('INVALID_INPUT', 'path must be text');
     return plugins.linkDevelopment(request.body.path);
   });
   app.delete<{ Params: { id: string } }>('/api/integrations/development/:id', async request => {
-    if (!isLoopback(request.ip) || proxiedRequest(request.headers)) throw new AppError('PLUGIN_DEVELOPMENT_LOCAL_ONLY', 'Development links are only available from this machine', 403);
+    if (!onServiceMachine(request)) throw new AppError('PLUGIN_DEVELOPMENT_LOCAL_ONLY', 'Development links are only available from this machine', 403);
     return { integrations: await plugins.unlinkDevelopment(request.params.id) };
   });
 
@@ -96,7 +95,7 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
         const trust = parts.filter(part => part.name === 'trusted');
         const choice = trust[0]?.data.toString('utf8').trim();
         if (trust.length > 1 || (choice !== undefined && choice !== 'true' && choice !== 'false')) throw new AppError('INVALID_INPUT', 'trusted must be true or false');
-        if (choice === 'true' && (!isLoopback(request.ip) || proxiedRequest(request.headers))) throw new AppError('PLUGIN_TRUST_LOCAL_ONLY', 'Trusted installation is only available directly on the service machine', 403);
+        if (choice === 'true' && (!onServiceMachine(request))) throw new AppError('PLUGIN_TRUST_LOCAL_ONLY', 'Trusted installation is only available directly on the service machine', 403);
         return install(request, { input: { archive: file.data }, source: `upload:${basename(file.filename!).slice(0, 120) || 'package.tgz'}`, grant, ...(choice === 'true' ? { trusted: true } : {}) });
       }
       const body = request.body;
@@ -112,7 +111,7 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
         return install(request, { input: { archive }, source: `market:${found.id}@${found.version}`, grant, expected: found, ...(trusted === true ? { trusted: true } : {}) });
       }
       if (typeof path !== 'string' || !path) throw new AppError('INVALID_INPUT', 'path must be text');
-      if (!isLoopback(request.ip) || proxiedRequest(request.headers)) throw new AppError('PLUGIN_PATH_INSTALL_LOCAL_ONLY', 'Installing from a path is only available from this machine; upload the package instead', 403);
+      if (!onServiceMachine(request)) throw new AppError('PLUGIN_PATH_INSTALL_LOCAL_ONLY', 'Installing from a path is only available from this machine; upload the package instead', 403);
       return install(request, { input: { path }, source: `path:${path}`, grant, ...(trusted === true ? { trusted: true } : {}) });
     });
   });
@@ -124,7 +123,7 @@ export function registerPluginRoutes(app: FastifyInstance, deps: Pick<RouteDeps,
     const { source, path } = request.query;
     if (source !== undefined && source !== 'installed' && source !== 'development') throw new AppError('INVALID_INPUT', 'source must be installed or development');
     if (path !== undefined && typeof path !== 'string') throw new AppError('INVALID_INPUT', 'path must be text');
-    return { integrations: await plugins.uninstall(request.params.id, { source, path, allowDevelopment: isLoopback(request.ip) && !proxiedRequest(request.headers) }) };
+    return { integrations: await plugins.uninstall(request.params.id, { source, path, allowDevelopment: onServiceMachine(request) }) };
   });
   app.delete<{ Params: { id: string } }>('/api/integrations/:id/data', async request => ({ integrations: await plugins.deleteData(request.params.id) }));
   app.post<{ Params: { id: string; action: string } }>('/api/integrations/:id/actions/:action', { bodyLimit: 4096 }, async request => plugins.runAction(request.params.id, request.params.action));

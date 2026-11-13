@@ -9,7 +9,7 @@ export const PLUGIN_WEB_API_VERSION = 1;
  * What a package may ask for, granted per version at install. The host enforces a capability where
  * it mediates the call (see docs/PLUGIN_ARCHITECTURE.md for which ones the operating system also enforces).
  */
-export const PLUGIN_CAPABILITIES = ['models.provide', 'tasks.run', 'projects.read', 'sessions.read', 'network'] as const;
+export const PLUGIN_CAPABILITIES = ['models.provide', 'tasks.run', 'projects.read', 'sessions.read', 'network', 'process.exec'] as const;
 export type PluginCapability = typeof PLUGIN_CAPABILITIES[number];
 
 /** Whether one entry of a package works with this host: `range` is the package's `hostApi` requirement. */
@@ -50,6 +50,10 @@ export interface PluginGrantRequired {
   trustedRequired?: boolean;
   /** This request came directly from the service machine, where explicit trust is allowed. */
   trustedAllowed?: boolean;
+  /** The package's declared model sources. `hosts` are the only addresses an isolated package's source may send requests and the profile's key to, besides one the user typed; a source without it is not limited. */
+  modelSources?: Array<{ id: string; hosts?: string[] }>;
+  /** With `process.exec`: the commands the package runs on this machine, outside the sandbox, as the user who runs Riffet. */
+  executables?: string[];
 }
 
 /**
@@ -80,6 +84,9 @@ export interface PluginMarketEntry {
   /** The manifest's `contributes` keys, such as `appearance` or `modelSources`. */
   contributes: string[];
   capabilities: string[];
+  /** As in a grant request. */
+  modelSources?: PluginGrantRequired['modelSources'];
+  executables?: string[];
   trustedRequired?: boolean;
   /** Whether some release declares a server host API this server provides. */
   compatible: boolean;

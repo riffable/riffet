@@ -2,15 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { chmodSync, closeSync, constants, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { cp, mkdir, open, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { PLUGIN_API_VERSION, type PluginManifest } from '@riffet/plugin-api';
+import type { PluginManifest } from '@riffet/plugin-api';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/index.js';
 import { AppearanceService } from '../appearance/index.js';
 import { AppError } from '../errors.js';
 import { migratePluginStorage } from '../compat.js';
-import { checkManifest } from '../plugins/declarations.js';
+import { apiVersionProblem, checkManifest } from '../plugins/declarations.js';
 import { MANIFEST_FILE, confined, readPackage } from '../plugins/development.js';
 import { MAX_ARCHIVE_BYTES, integrityOf, readArchive, readDirectory, reroot, writeFiles, type PackageFile } from './archive.js';
-import { checkPackageFields, installedModelSourceProblem, referencedFiles, requestedCapabilities, serverIncompatibility } from './compat.js';
+import { installedModelSourceProblem, referencedFiles, requestedCapabilities, serverIncompatibility } from './compat.js';
 
 // Installed packages (docs/PLUGIN_ARCHITECTURE.md "独立包"): `<stateDir>/plugins/<id>/<version>/` holds the
 // files, `installed.json` records which versions exist and which one is selected, and a plugin's data
@@ -60,9 +60,10 @@ export async function inspectPackage(directory: string, options: { agents?: 'all
   const { root, manifest, entries } = read;
   const id = String(manifest.id);
   if (!PLUGIN_ID.test(id) || id.length > 64) throw invalid(`"${id.slice(0, 80)}" is not a valid plugin id`);
-  if (manifest.apiVersion !== PLUGIN_API_VERSION) throw invalid(`written for plugin API v${String(manifest.apiVersion)}; this Riffet provides v${PLUGIN_API_VERSION}`, 'PLUGIN_INCOMPATIBLE', 409);
+  const versionProblem = apiVersionProblem(manifest.apiVersion);
+  if (versionProblem) throw invalid(versionProblem, 'PLUGIN_INCOMPATIBLE', 409);
   if (typeof manifest.version !== 'string' || !SEMVER.test(manifest.version)) throw invalid('version must be a semantic version');
-  const problem = checkManifest(manifest) ?? checkPackageFields(manifest);
+  const problem = checkManifest(manifest, 'load');
   if (problem) throw invalid(problem);
   const incompatible = serverIncompatibility(manifest);
   if (incompatible) throw invalid(incompatible, 'PLUGIN_INCOMPATIBLE', 409);

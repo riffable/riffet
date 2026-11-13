@@ -15,6 +15,16 @@ export const proxiedRequest = (headers?: import('node:http').IncomingHttpHeaders
   Boolean(headers && (headers['x-forwarded-for'] || headers.forwarded || headers['x-real-ip'] || headers['tailscale-user-login']));
 const LOOPBACK_NAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
+/** Sent from this machine itself: a loopback peer, not relayed by a proxy, and addressed by a loopback name. */
+export function localRequest(request: Pick<FastifyRequest, 'ip' | 'headers'>): boolean {
+  if (!['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.ip) || proxiedRequest(request.headers)) return false;
+  const hostHeader = request.headers.host;
+  if (!hostHeader) return false;
+  let host: URL;
+  try { host = new URL(`http://${hostHeader}`); } catch { return false; }
+  return LOOPBACK_NAMES.has(normalizeHost(host.hostname));
+}
+
 /**
  * A paired native client or browser. `hash` never leaves the server. The device's own report
  * (`PUT /api/devices/me`, docs/DEVICES.md §3) fills in the rest; a browser never sends one.
@@ -126,7 +136,7 @@ export class Auth {
     }
     // Token-free access is for this machine only. A proxy on the same machine connects from
     // loopback, so a forwarded request or one addressed to a non-loopback name is refused as well.
-    if(!this.tokenRequired&&(!['127.0.0.1','::1','::ffff:127.0.0.1'].includes(request.ip)||proxiedRequest(request.headers)||!LOOPBACK_NAMES.has(normalizeHost(host.hostname))))throw new AppError('LOCAL_ACCESS_ONLY','Token-free access only accepts local connections',403);
+    if(!this.tokenRequired&&!localRequest(request))throw new AppError('LOCAL_ACCESS_ONLY','Token-free access only accepts local connections',403);
   }
   private sign(value: string) { return createHmac('sha256',this.signingKey).update(value).digest('base64url'); }
   verifyToken(value: unknown): boolean { return typeof value==='string' && equal(value,this.token); }

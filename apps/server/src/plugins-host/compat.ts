@@ -1,8 +1,7 @@
-import { AGENT_PROTOCOL_VERSION, PLUGIN_API_VERSION, type PluginManifest } from '@riffet/plugin-api';
+import { PLUGIN_API_VERSION, type PluginManifest } from '@riffet/plugin-api';
+import { AGENT_PROTOCOL_VERSION } from '@riffet/plugin-api/experimental/agent';
 import { PLUGIN_WEB_API_VERSION, type PluginCompatibility } from '../../../../packages/contracts/src/index.js';
 import { satisfies } from './semver.js';
-
-export { checkPackageFields } from '../../../../packages/plugin-api/src/manifest.js';
 
 /** Isolated model providers cannot occupy the historical identities that carry saved profile keys. */
 export function installedModelSourceProblem(pluginId: string, id: string): string | undefined {

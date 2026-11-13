@@ -44,6 +44,19 @@ export function parseKeybinding(text: string, apple: boolean): string | undefine
   return code ? chord(modifiers, code) : undefined;
 }
 
+/** A declared binding as key caps: the platform's glyph or word for each modifier, as the tab shortcuts in settings read. */
+export function keybindingCaps(text: string, apple: boolean): string[] {
+  return text.split('+').map((part) => part.trim()).filter(Boolean).map((part) => {
+    const name = part.toLowerCase();
+    if (name === 'mod') return apple ? '⌘' : 'Ctrl';
+    if (name === 'cmd' || name === 'command' || name === 'meta') return apple ? '⌘' : 'Meta';
+    if (name === 'ctrl' || name === 'control') return apple ? '⌃' : 'Ctrl';
+    if (name === 'alt' || name === 'option') return apple ? '⌥' : 'Alt';
+    if (name === 'shift') return apple ? '⇧' : 'Shift';
+    return part.length === 1 ? part.toUpperCase() : part;
+  });
+}
+
 /** The chord of a key press. */
 export const chordOf = (event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'code'>): string =>
   chord(new Set(MODIFIERS.filter((modifier) => event[`${modifier}Key`])), event.code);

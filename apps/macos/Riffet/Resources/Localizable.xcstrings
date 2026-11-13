@@ -21207,6 +21207,16 @@
         }
       }
     },
+    "以你的身份运行本机命令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs these commands on this machine as you"
+          }
+        }
+      }
+    },
     "访问网络": {
       "localizations": {
         "en": {
@@ -21217,12 +21227,32 @@
         }
       }
     },
-    "读取会话内容": {
+    "读取所在项目的会话内容，可由插件界面发出": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Read session content"
+            "value": "Read this project's sessions; the plugin's interface can send them out"
+          }
+        }
+      }
+    },
+    "模型请求与密钥发往": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model requests and the key go to"
+          }
+        }
+      }
+    },
+    "模型请求与密钥发往插件指定的地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Model requests and the key go to an address the plugin chooses"
           }
         }
       }

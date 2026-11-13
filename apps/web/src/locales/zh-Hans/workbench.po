@@ -62,7 +62,6 @@ msgstr "CLI 与终端工具"
 msgid "Couldn't read Git status"
 msgstr "Couldn't read Git status"
 
-#: src/app/ProjectHome.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "Shell 终端"
 msgstr "Shell 终端"
@@ -137,6 +136,10 @@ msgstr "介绍"
 msgid "从终端导入…"
 msgstr "从终端导入…"
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "以你的身份运行本机命令"
+msgstr "以你的身份运行本机命令"
+
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -200,11 +203,7 @@ msgstr "使用配对码登录"
 msgid "侧边聊天"
 msgstr "侧边聊天"
 
-#: src/app/FolderFavorites.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
-#: src/app/WorkbenchHeader.tsx
 msgid "保存"
 msgstr "保存"
 
@@ -229,8 +228,6 @@ msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr "允许插件使用 Riffet 的文件、网络和进程权限"
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
 msgid "全部"
 msgstr "全部"
 
@@ -246,10 +243,6 @@ msgstr "全部标为已读"
 msgid "全部标签"
 msgstr "全部标签"
 
-#: src/app/plugins/PluginFlowDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/tabs/TabBar.tsx
-#: src/app/tabs/TabStyleSetting.tsx
 #: src/app/use-terminal-actions.ts
 msgid "关闭"
 msgstr "关闭"
@@ -303,8 +296,6 @@ msgstr "内置插件不可卸载"
 msgid "最后一个标签"
 msgstr "最后一个标签"
 
-#: src/app/ProjectHome.tsx
-#: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "最近会话"
 msgstr "最近会话"
@@ -464,11 +455,9 @@ msgid "取消置顶"
 msgstr "取消置顶"
 
 #: src/app/SessionInfo.tsx
-#: src/plugins/hostViews.ts
 msgid "变更"
 msgstr "变更"
 
-#: src/app/Header.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr "变更与文件"
@@ -545,7 +534,6 @@ msgid "在浏览器中打开授权页"
 msgstr "在浏览器中打开授权页"
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "在终端中"
 msgstr "在终端中"
 
@@ -589,7 +577,6 @@ msgstr "复制地址"
 msgid "外部插件已暂停"
 msgstr "外部插件已暂停"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "多个标签用逗号分隔"
 msgstr "多个标签用逗号分隔"
@@ -768,6 +755,10 @@ msgstr "当前项目"
 msgctxt "workbench-session-pending"
 msgid "待确认"
 msgstr "待确认"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "快捷键未生效"
+msgstr "快捷键未生效"
 
 #: src/app/Workbench.tsx
 msgid "快速对话"
@@ -956,7 +947,6 @@ msgstr "搜索终端会话"
 msgid "搜索结果"
 msgstr "搜索结果"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "撤销"
 msgstr "撤销"
@@ -975,8 +965,6 @@ msgctxt "settings-action-failed"
 msgid "操作失败"
 msgstr "操作失败"
 
-#: src/app/tabs/tabsStore.ts
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgctxt "workbench-action-failed"
 msgid "操作失败"
@@ -1127,7 +1115,6 @@ msgstr "无法删除数据"
 msgid "无法刷新会话列表"
 msgstr "无法刷新会话列表"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "无法刷新项目列表"
 msgstr "无法刷新项目列表"
@@ -1310,7 +1297,6 @@ msgstr "暂停所有外部插件？"
 msgid "暂无会话"
 msgstr "暂无会话"
 
-#: src/app/ProjectHome.tsx
 #: src/app/use-session-actions.ts
 msgid "暂时无法确认是否已发送"
 msgstr "暂时无法确认是否已发送"
@@ -1355,8 +1341,6 @@ msgstr "未读"
 msgid "本机"
 msgstr "本机"
 
-#: src/app/plugins/PluginMarket.tsx
-#: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
 msgstr "权限"
@@ -1398,6 +1382,14 @@ msgctxt "plugin-feature"
 msgid "模型源"
 msgstr "模型源"
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往"
+msgstr "模型请求与密钥发往"
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往插件指定的地址"
+msgstr "模型请求与密钥发往插件指定的地址"
+
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr "模型选择已保留，目录恢复前暂不能发送。"
@@ -1423,10 +1415,8 @@ msgstr "此配置在当前客户端不可用"
 msgid "没有匹配的插件"
 msgstr "没有匹配的插件"
 
-#: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "没有匹配的结果"
 msgstr "没有匹配的结果"
 
@@ -1781,8 +1771,8 @@ msgid "请重新选择文件"
 msgstr "请重新选择文件"
 
 #: src/app/plugins/PluginGrantDialog.tsx
-msgid "读取会话内容"
-msgstr "读取会话内容"
+msgid "读取所在项目的会话内容，可由插件界面发出"
+msgstr "读取所在项目的会话内容，可由插件界面发出"
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "读取项目文件"
@@ -1853,7 +1843,6 @@ msgid "返回"
 msgstr "返回"
 
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "还没有会话"
 msgstr "还没有会话"
 
@@ -1932,7 +1921,6 @@ msgstr "重命名"
 msgid "重命名…"
 msgstr "重命名…"
 
-#: src/app/Header.tsx
 #: src/app/use-session-actions.ts
 msgid "重命名会话"
 msgstr "重命名会话"

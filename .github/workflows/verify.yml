@@ -40,6 +40,8 @@ jobs:
         run: pnpm gen:theme:check
       - name: Generated interface styles are current
         run: pnpm gen:styles:check
+      - name: Plugin view base style is current
+        run: pnpm gen:plugin-style:check
       # Skia's path operations are only pinned on the platform the catalog was generated on.
       - name: Generated Mac icon packs are current
         if: runner.os == 'macOS'
@@ -48,6 +50,8 @@ jobs:
         run: pnpm gen:timeline-fixtures:check
       - name: Contract schemas and fixtures are current
         run: pnpm gen:contracts:check
+      - name: Plugin SDK has a released baseline for its version
+        run: pnpm gen:plugin-api:check
       - name: Model prompts are current
         run: pnpm gen:prompts:check
       - name: App versions match package.json

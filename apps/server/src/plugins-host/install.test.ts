@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, stat, writeFile } from
 import { createServer as createHttpServer } from 'node:http';
 import { createServer as createSocketServer } from 'node:net';
 import { homedir, tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, isAbsolute, join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +12,7 @@ import { PluginRegistry } from '../plugins/registry.js';
 import { registerPluginRoutes } from '../plugins/routes.js';
 import { PluginProcess, permissionArguments } from './process.js';
 import { runtimeFile } from './remote.js';
+import { SourceAddresses } from './addresses.js';
 import { SANDBOX_EXEC, requireIsolation, sandboxArguments, sandboxProfile, sandboxSupport } from './sandbox.js';
 import { integrityOf, readArchive, type PackageFile } from './archive.js';
 import { archiveFiles, type ArchiveFormat } from '../../../../scripts/pack-plugin.js';
@@ -387,6 +388,32 @@ describe('running an installed package', () => {
     expect(commanded.reason).toBeTruthy();
   });
 
+  it('holds a source that declares hosts to them and to what the user typed, and refuses the server\'s own port to a catalog fetch', async () => {
+    const { registry: reg } = await registry([], { serverPorts: () => [4999] });
+    const served = entry(`globalThis.attempt = url => host.gateway.fetchModels({ baseUrl: url, timeoutMs: 1000 }).then(() => 'allowed', error => error.code);`)
+      .replace(/resolve: overrides => .*?, catalog:/s, "resolve: o => ({ codexBaseUrl: o.apiKey === 'bad' ? 'https://evil.example/v1' : (o.apiEndpoint ?? 'https://models.example/v1') }), catalog:")
+      .replace("pid: {", "attempt: { label: 'Attempt', kind: 'run', run: async () => ({ kind: 'hint', text: JSON.stringify([await globalThis.attempt('http://127.0.0.1:4999'), await globalThis.attempt('http://169.254.169.254')]) }) },\n        pid: {");
+    await install(reg, pack({
+      'riffet-plugin.json': manifest('acme.hosts', '1.0.0', { capabilities: ['models.provide', 'network'], contributes: { modelSources: [{ id: 'acme.hosts.remote', title: { en: 'Remote' }, hosts: ['models.example', '*.gateway.example'] }] } }),
+      'server/index.mjs': served,
+    }), ['models.provide', 'network']);
+    const [source] = reg.modelSources();
+    await source!.prepare!({});
+    expect(source!.resolve({})).toMatchObject({ codexBaseUrl: 'https://models.example/v1' });
+    await source!.prepare!({ apiKey: 'bad' });
+    expect(source!.resolve({ apiKey: 'bad' })).toEqual({ reason: expect.any(String) });
+    // The address the profile names is the user's own.
+    await source!.prepare!({ apiEndpoint: 'https://typed.example/v1' });
+    expect(source!.resolve({ apiEndpoint: 'https://typed.example/v1' })).toMatchObject({ codexBaseUrl: 'https://typed.example/v1' });
+    expect(JSON.parse(((await reg.runAction('acme.hosts', 'attempt')) as { text: string }).text)).toEqual(['PLUGIN_ADDRESS_REFUSED', 'PLUGIN_ADDRESS_REFUSED']);
+
+    const policy = new SourceAddresses({ contributes: { modelSources: [{ id: 'a.b', title: {}, hosts: ['*.gateway.example', 'models.example:8443'] }] }, settings: [{ key: 'url', label: 'URL', kind: 'text' }] }, () => ({ url: 'http://10.0.0.5:8080/v1' }), () => [4999]);
+    expect(() => policy.checkFetch(new URL('https://eu.gateway.example/v1'))).not.toThrow();
+    expect(() => policy.checkFetch(new URL('http://10.0.0.5:8080'))).not.toThrow();
+    expect(() => policy.checkFetch(new URL('https://models.example/v1'))).toThrow();
+    expect(() => policy.checkFetch(new URL('http://[::1]:4999'))).toThrow();
+  });
+
   it('reads optional model-source usage with profile overrides and rejects malformed quota reports', async () => {
     const { registry: reg } = await registry();
     const served = entry().replace('catalog: async () =>', `usage: async overrides => {
@@ -464,6 +491,90 @@ describe('running an installed package', () => {
     });
     // Only the one read the detecting call made reached the project.
     expect(reads).toEqual(['pom.xml']);
+  });
+
+  macOnly('runs the commands an installed package declared in its state directory, and only those', () => {
+    // The package speaks the protocol itself where it must send what the shim would not (an undeclared name, a path, a variable off the list).
+    const probe = `
+      const fs = process.getBuiltinModule('node:fs');
+      const listeners = new Set();
+      process.stdin.on('data', chunk => { for (const line of String(chunk).split('\\n')) if (line) for (const listener of listeners) listener(JSON.parse(line)); });
+      const ask = (method, params) => new Promise(resolve => {
+        const id = 900000 + Math.floor(Math.random() * 90000);
+        const listener = message => { if (message && message.id === id && message.method === undefined) { listeners.delete(listener); resolve(message.error ? { error: message.error.code ?? message.error.message } : { result: message.result }); } };
+        listeners.add(listener);
+        fs.writeSync(1, JSON.stringify({ id, method, params }) + '\\n');
+      });
+      const settle = run => Promise.resolve().then(run).then(value => ({ result: value }), error => ({ error: error.code ?? error.message }));
+      const print = "process.stdout.write(process.cwd() + '|' + (process.env.PROBE_VAR ?? ''))";
+      globalThis.probe = async () => ({
+        cli: host.resolveCli('node'), missing: host.resolveCli('ls') ?? null,
+        ran: await settle(() => host.runProcess('node', ['-e', print], { cwd: '/', env: { PROBE_VAR: 'v' } })),
+        stateDir: await host.stateDir(),
+        undeclared: await ask('host.exec', { command: 'ls', args: [] }),
+        absolute: await ask('host.exec', { command: process.execPath, args: ['-e', ''] }),
+        envOffList: await ask('host.exec', { command: 'node', args: ['-e', ''], env: { NODE_OPTIONS: '--inspect' } }),
+        inUse: [host.modelSourceInUse('acme.exec.remote'), host.modelSourceInUse('acme.exec.unlisted')],
+        task: await settle(() => host.tasks.start('p1', 'build', { a: 'b' }, { providerId: 'acme.exec/build', confirm: 'fp' })),
+        foreign: await settle(() => host.tasks.start('p1', 'build', undefined, { providerId: 'acme.other/build' })),
+      });`;
+    const server = (extra = '') => entry(probe)
+      .replace("overrides.apiKey === 'command' ?", "String(overrides.apiKey).startsWith('command') ?")
+      .replace("command: '/bin/sh', args: ['-c', 'true']", "command: overrides.apiKey === 'command' ? 'node' : 'ls', args: ['-e', '1']")
+      .replace("pid: {", `probe: { label: 'Probe', kind: 'run', run: async () => ({ kind: 'hint', text: JSON.stringify(await globalThis.probe()) }) },\n        pid: {`)
+      .replace("modelSources: [", `${extra}modelSources: [`);
+    const tasks = "taskProviders: [{ id: 'acme.exec/build', detect: async () => false, actions: async () => [], plan: async () => ({ file: 'true', args: [] }) }],\n      ";
+
+    it('refuses what was not declared or granted, and passes a command credential on as an absolute path', async () => {
+      const started: unknown[] = [];
+      const { registry: reg, stateDir } = await registry([], {
+        savedModelSources: () => ['acme.exec.remote', 'acme.exec.unlisted'],
+        startTask: async input => { started.push(input); return { id: 't1' } as never; },
+      });
+      await install(reg, pack({
+        'riffet-plugin.json': manifest('acme.exec', '1.0.0', {
+          capabilities: ['models.provide', 'process.exec', 'tasks.run'], executables: ['node'],
+          contributes: { tasks: [{ id: 'acme.exec/build', title: { en: 'Build' } }], modelSources: [{ id: 'acme.exec.remote', title: { en: 'Remote' }, backends: ['codex'] }] },
+        }),
+        'server/index.mjs': server(tasks),
+      }), ['models.provide', 'process.exec', 'tasks.run']);
+      const seen = JSON.parse(((await reg.runAction('acme.exec', 'probe')) as { text: string }).text) as Record<string, any>;
+      expect(seen.cli).toBe('node');
+      expect(seen.missing).toBeNull();
+      // The requested cwd `/` is ignored: the command ran in the package's state directory, with the one allowed variable.
+      const [cwd, variable] = String(seen.ran.result.stdout).split('|');
+      expect(await realpath(cwd!)).toBe(await realpath(seen.stateDir));
+      expect(await realpath(seen.stateDir)).toBe(await realpath(join(stateDir, 'plugin-data', 'acme.exec')));
+      expect(variable).toBe('v');
+      expect(seen.ran.result).toMatchObject({ code: 0, timedOut: false, truncated: false });
+      expect(seen.undeclared).toEqual({ error: 'PLUGIN_EXEC_UNDECLARED' });
+      expect(seen.absolute).toEqual({ error: 'PLUGIN_EXEC_UNDECLARED' });
+      expect(seen.envOffList).toEqual({ error: 'PLUGIN_EXEC_ENV_REFUSED' });
+      expect(seen.inUse).toEqual([true, false]);
+      expect(seen.task.result).toEqual({ id: 't1' });
+      expect(started).toEqual([expect.objectContaining({ projectId: 'p1', providerId: 'acme.exec/build', actionId: 'build', confirm: 'fp', params: { a: 'b' } })]);
+      expect(seen.foreign).toEqual({ error: 'PLUGIN_TASK_PROVIDER_FOREIGN' });
+
+      const [source] = reg.modelSources();
+      await source!.prepare!({ apiKey: 'command' });
+      const allowed = source!.resolve({ apiKey: 'command' }).credential;
+      expect(allowed).toMatchObject({ kind: 'command', args: ['-e', '1'] });
+      expect(isAbsolute((allowed as { command: string }).command)).toBe(true);
+      expect(basename((allowed as { command: string }).command)).toBe('node');
+      await source!.prepare!({ apiKey: 'command-other' });
+      expect(source!.resolve({ apiKey: 'command-other' })).toMatchObject({ reason: expect.any(String) });
+      expect(source!.resolve({ apiKey: 'command-other' }).credential).toBeUndefined();
+    });
+
+    it('refuses a command to a package that was not granted process.exec', async () => {
+      const { registry: reg } = await registry();
+      await install(reg, pack({ 'riffet-plugin.json': manifest('acme.plain', '1.0.0', { capabilities: ['models.provide'] }), 'server/index.mjs': server() }));
+      const seen = JSON.parse(((await reg.runAction('acme.plain', 'probe')) as { text: string }).text) as Record<string, any>;
+      expect(seen.cli).toBeUndefined();
+      expect(seen.ran).toEqual({ error: 'PLUGIN_HOST_UNSUPPORTED' });
+      expect(seen.undeclared).toEqual({ error: 'PLUGIN_CAPABILITY_DENIED' });
+      expect(seen.task.error).toBeTruthy();
+    });
   });
 
   it('marks a crashed package failed without touching the server or other integrations, and starts it again on refresh', async () => {

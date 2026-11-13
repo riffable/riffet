@@ -3,7 +3,8 @@ import Foundation
 
 /*
  * The page a plugin's web view runs in, built the way the web host builds it
- * (apps/web/src/plugins/isolated/document.ts and entry.ts), so keep the two in step. The view's own
+ * (apps/web/src/plugins/isolated/document.ts and entry.ts), so keep the two in step; the base stylesheet is
+ * generated from packages/plugin-web (`pnpm gen:plugin-style`). The view's own
  * script is the only script in it. The policy is what limits what the page can load and where it can
  * send data: it travels as the response header and again as a meta tag.
  *
@@ -47,6 +48,43 @@ enum PluginPageDocument {
         ].joined(separator: "; ")
     }
 
+    // BEGIN GENERATED plugin-base-style (scripts/gen-plugin-style.ts)
+    /// `PLUGIN_BASE_STYLE` of packages/plugin-web: tokens and element rules, the same text as the web page.
+    static let baseStyleVersion = 1
+    static let baseStyle = #"""
+:root{--riffet-space-1:4px;--riffet-space-2:8px;--riffet-space-3:12px;--riffet-space-4:16px;--riffet-space-5:24px;--riffet-radius-control:8px;--riffet-radius-container:10px;--riffet-radius-card:12px;--riffet-font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI","Helvetica Neue",sans-serif;--riffet-font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,"PingFang SC",monospace;--riffet-text-reading:14px;--riffet-leading-reading:23px;--riffet-text-ui:13px;--riffet-leading-ui:20px;--riffet-text-small:12px;--riffet-leading-small:16px;--riffet-control-height:32px;--riffet-border-width:1px;--riffet-focus-ring:color-mix(in srgb,var(--accent) 50%,transparent)}
+:where(html,body){margin:0;height:100%}
+:where(body){background:var(--bg);color:var(--fg);font:var(--riffet-text-ui)/var(--riffet-leading-ui) var(--riffet-font-sans);-webkit-font-smoothing:antialiased}
+:where(a){color:var(--accent);text-decoration:none}
+:where(a:hover){text-decoration:underline;text-underline-offset:3px}
+:where(button,input,textarea,select){box-sizing:border-box;margin:0;font:inherit;color:inherit}
+:where(button,input[type=button],input[type=submit],input[type=reset]){display:inline-flex;align-items:center;justify-content:center;gap:6px;height:var(--riffet-control-height);padding:0 12px;border:var(--riffet-border-width) solid var(--line-strong);border-radius:var(--riffet-radius-control);background:var(--bg-elevated);font-weight:500;white-space:nowrap;cursor:pointer;user-select:none;-webkit-user-select:none;transition:background-color .15s}
+:where(button:hover:not(:disabled),input[type=button]:hover:not(:disabled),input[type=submit]:hover:not(:disabled),input[type=reset]:hover:not(:disabled)){background:var(--bg-subtle)}
+:where(button:disabled,input[type=button]:disabled,input[type=submit]:disabled,input[type=reset]:disabled){opacity:.45;cursor:default}
+:where(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color],[type=button],[type=submit],[type=reset],[type=image]),textarea,select){width:100%;min-width:0;height:var(--riffet-control-height);padding:0 10px;border:var(--riffet-border-width) solid var(--line-strong);border-radius:var(--riffet-radius-control);background:var(--bg-elevated);outline:none;transition:border-color .15s,box-shadow .15s}
+:where(textarea){height:auto;min-height:80px;padding:8px 10px;line-height:20px;resize:vertical}
+:where(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color],[type=button],[type=submit],[type=reset],[type=image]):hover,textarea:hover,select:hover){border-color:color-mix(in srgb,var(--fg-4) 60%,transparent)}
+:where(input:not([type=checkbox],[type=radio],[type=range],[type=file],[type=color],[type=button],[type=submit],[type=reset],[type=image]):focus,textarea:focus,select:focus){border-color:var(--accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 15%,transparent)}
+:where(input,textarea,select)::placeholder{color:var(--fg-4)}
+:where(input,textarea,select):disabled{opacity:.5}
+:where(:focus-visible){outline:2px solid var(--riffet-focus-ring);outline-offset:1px}
+:where(input,textarea,select):focus-visible{outline:none}
+::selection{background:color-mix(in srgb,var(--accent) 24%,transparent)}
+:where(code,kbd,samp,pre){font-family:var(--riffet-font-mono);font-size:.86em}
+:where(pre){margin:0;padding:var(--riffet-space-2) var(--riffet-space-3);overflow:auto;border:var(--riffet-border-width) solid var(--line);border-radius:var(--riffet-radius-container);background:var(--bg-subtle);font-size:var(--riffet-text-small);line-height:var(--riffet-leading-ui)}
+:where(pre code){font-size:inherit}
+:where(hr){margin:var(--riffet-space-4) 0;border:0;border-top:var(--riffet-border-width) solid var(--line)}
+:where(table){border-collapse:collapse}
+:where(th,td){padding:7px var(--riffet-space-3);border-bottom:var(--riffet-border-width) solid var(--line);text-align:left;vertical-align:top}
+:where(th){background:var(--bg-subtle);color:var(--fg-2);font-weight:500}
+:where(*){scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+:where(*)::-webkit-scrollbar{width:10px;height:10px}
+:where(*)::-webkit-scrollbar-thumb{border:3px solid transparent;border-radius:999px;background:var(--line-strong) padding-box}
+:where(*)::-webkit-scrollbar-thumb:hover{background:var(--fg-4) padding-box}
+:where(*)::-webkit-scrollbar-track,:where(*)::-webkit-scrollbar-corner{background:transparent}
+"""#
+    // END GENERATED plugin-base-style
+
     /// The first script of the page (`CHANNEL_SCRIPT` of the web host, with the protocol's names filled in):
     /// listens for the host's answer, then asks. On the Mac `window.parent` is the window itself, which
     /// is where the bridge's shim listens.
@@ -60,7 +98,7 @@ enum PluginPageDocument {
             "<html lang=\"\(attribute(locale))\"><head><meta charset=\"utf-8\">",
             "<meta http-equiv=\"Content-Security-Policy\" content=\"\(attribute(policy(network: network)))\">",
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">",
-            "<style>:root{color-scheme:\(theme.scheme);\(vars)}html,body{margin:0;height:100%}body{background:var(--bg);color:var(--fg);font:13px/1.5 system-ui,-apple-system,sans-serif}</style>",
+            "<style>:root{color-scheme:\(theme.scheme);\(vars)}\(baseStyle)</style>",
             "<script>\(channelScript)</script>",
             "</head><body><div id=\"root\"></div>",
             // The view's script runs as a classic script created here, so it needs no `src` and the policy needs no origin.

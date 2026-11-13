@@ -58,7 +58,7 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 | 字段 | 说明 |
 | --- | --- |
 | `id`、`vendor`、`name` | 必需。`id` 是 `<vendor>.<name>`，小写字母、数字、`-`、`.`，至多 64 字符；默认隔离安装不能用 `riffet.` 命名空间；本机显式可信安装可以保留官方外部包身份，但任何安装都不能与内置或开发包同 ID |
-| `apiVersion` | 必需，等于 `PLUGIN_API_VERSION`（当前 1）；其他值不加载 |
+| `apiVersion` | 必需整数，落在宿主支持的区间 [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`]（当前均为 1）内；区间之外不加载，原因写明两端 |
 | `defaultEnabled` | 必需，`true`、`false` 或 `"auto"`（交给服务端入口的 `detect()`） |
 | `requiresTrustedHost` | 可选布尔值，要求显式可信安装以使用宿主 CLI、进程或其他同进程接口；声明本身不会授予信任 |
 | `activation` | 可选事件数组：`startup`、`command`、`model-source`、`task`、`view`。缺省按启动激活；其余事件须有对应静态贡献，模型源须声明协议。启用与正在运行分别由 `enabled`、`active` 表达 |
@@ -69,12 +69,13 @@ Web 和 macOS 的工作台侧栏 →「插件」，无需打开项目或模型�
 | `hostApi` | `{ server?, web?, agent? }`，semver 范围，对照宿主的 `PLUGIN_API_VERSION`、`PLUGIN_WEB_API_VERSION`、`AGENT_PROTOCOL_VERSION`。入口不兼容时不使用，原因显示在插件管理页 |
 | `dataVersion` | 包在状态目录里保存的数据格式版本，见「版本、回滚与数据」 |
 | `capabilities` | 包要求的能力，见「能力与授权」 |
-| `entries` | `{ server?, web? }`，包内相对路径。`server` 是 `.js/.mjs/.cjs/.ts` 模块，默认导出 `{ detect?, activate(host, scope) }`；`web` 是打包好的单文件脚本，在隔离框架里运行（见 PLUGIN_ARCHITECTURE.md「自定义视图」） |
+| `executables` | `string[]`，至多 8 个、不重复的命令名，每个匹配 `^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`（不含路径、斜杠、空格）。与 `process.exec` 互为前提：列了命令必须要求该能力，要求该能力必须列命令，否则包不合格。授权时向用户显示这些名字；见「能力与授权」 |
+| `entries` | `{ server?, web? }`，包内相对路径。`server` 是 `.js/.mjs/.cjs/.ts` 模块，默认导出 `{ detect?, activate(host, scope) }`；`web` 是打包好的单文件脚本，在隔离框架里运行（见 PLUGIN_ARCHITECTURE.md「自定义视图」；页面自带统一的基础样式 `--riffet-*`，同见该节） |
 | `contributes` | 静态声明，见下。不执行包代码即可读取，所以插件关闭时仍然列出 |
 
 服务端入口返回的 `Contributions`（`modelSources`、`taskProviders`、`actions`、`status`、`doctorChecks`、`agentBackends` 等）是运行时贡献，接口在 `packages/plugin-api/src/index.ts`。manifest 的 `contributes.modelSources` 可以声明协议、覆盖项与登录入口；`contributes.actions` 声明操作标签和类型，首次登录不需要先失败一次。运行时贡献和静态声明是两件事：声明让客户端知道有什么，贡献才真正提供它。
 
-`riffet.cursor` 提供 `usage` 服务（`1.0.0`）：`read(): Promise<{ records: RecordedUsageObservation[] }>` 返回已持久化的回合计量，`subscribe(listener: () => void): () => void` 提示读取方重新读取。类型从 `@riffet/plugin-api` 导出；每条记录的 ID 由 backend、原生会话和原生回合决定，`coverage` 是 `complete`、`partial` 或 `conflict`。只将 `complete` 用于准确统计；缺字段不是零，冲突记录不可相加。`inputTokens` 不含两个缓存计数，`outputTokens` 包含 `reasoningTokens`；`requestedModel` 与实际 `model` 分开。服务只含计量元数据，不含提示词、消息正文或连接凭据。
+`riffet.cursor` 提供 `usage` 服务（`1.0.0`）：`read(): Promise<{ records: RecordedUsageObservation[] }>` 返回已持久化的回合计量，`subscribe(listener: () => void): () => void` 提示读取方重新读取。类型从 `@riffet/plugin-api/kit` 导出；每条记录的 ID 由 backend、原生会话和原生回合决定，`coverage` 是 `complete`、`partial` 或 `conflict`。只将 `complete` 用于准确统计；缺字段不是零，冲突记录不可相加。`inputTokens` 不含两个缓存计数，`outputTokens` 包含 `reasoningTokens`；`requestedModel` 与实际 `model` 分开。服务只含计量元数据，不含提示词、消息正文或连接凭据。
 
 Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-usage/`，写入统计账本成功才删除队列文件；启动时和后台定期补收，不依赖打开会话界面。没有结束计数的中断保持未知，旧 CLI 或未加载流采集器的进程不保证覆盖。主 Agent 和子 Agent 独立计量；回合总量覆盖同一执行归属的文本估算，不作为单次响应的速度样本。
 
@@ -86,15 +87,15 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 
 ## 声明
 
-`contributes` 里的每个贡献 ID 是 `<插件 id>/<名称>`（名称小写字母、数字、`.`、`-`，至多 64 字符），在所有插件间唯一；不合格的包不加载，原因写在插件管理页和 `riffet doctor`。Agent 的 ID 是例外，见下。
+`contributes` 里的每个贡献 ID 是 `<插件 id>/<名称>`（名称小写字母、数字、`.`、`-`，至多 64 字符），在所有插件间唯一；不合格的包不加载，原因写在插件管理页和 `riffet doctor`。已知成员写错（类型、ID、命名空间、重复、版本号等）与未知的 `capabilities` 名称使包不合格；宿主不认识的其他值（视图的位置、客户端、渲染器、`when` 条件键，`activation` 事件）只让那一项被跳过，原因同样写在这两处，其余照常加载。`pack` 与 `check` 对这些值严格报错。Agent 的 ID 是例外，见下。
 
 | 种类 | 字段 | 说明 |
 | --- | --- | --- |
 | `views` | `id`、`title`、`icon?`（`{ svg?, sfSymbol? }`，`svg` 是包内路径）、`locations`、`defaultLocation?`、`clients`（`web`、`macos`）、`instances`（`single`、`per-session`、`per-project`）、`when?`、`renderer?` | 工作台视图。位置取自 `session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`。`renderer` 可为 `tasks`、`list`、`form`、`detail`；由 Web/Mac 宿主绘制，操作复用本包声明的命令，不需要自定义 Web 入口。`requires` 声明客户端能力，缺失时显示不可用原因。非内置包的自定义视图位置只能是 `session-view` 或 `sidebar` |
-| `commands` | `id`、`title`、`when?`、`keybinding?`、`scope?`（`global`、`project`、`session`，缺省 `project`）、`params?`（与任务操作相同的字段列表） | 命令面板与快捷键引用它。代码在运行时贡献 `commands: { [id]: { run(context) } }`，`context` 是 `{ projectId?, sessionId?, args, confirm?, signal }`，返回 `{ kind: 'done', message? }`、`{ kind: 'open', view?, sessionId?, path? }` 或 `{ kind: 'task', taskId }`；要启动任务用 `host.tasks.start(projectId, actionId, params?, { providerId? })`，只能是自己的任务提供方。执行路径是 `POST /api/integrations/:id/commands/:name`，服务端按插件开启、声明与处理函数、作用域和项目会话归属、`when`、`params` 的顺序重新检查，同一 `requestId` 十分钟内只执行一次。隔离安装的包也能贡献命令：处理函数在它自己的进程里运行，宿主逐字段检查返回的结果（不合格是协议错误），调用期限 60 秒，`signal` 在期限前 5 秒与插件关闭时中止；它没有 `host.tasks`，命令不能启动任务。包的视图经消息桥的 `commands.execute` 执行本包声明的命令，结果原样交给视图 |
+| `commands` | `id`、`title`、`when?`、`keybinding?`、`scope?`（`global`、`project`、`session`，缺省 `project`）、`params?`（与任务操作相同的字段列表） | 命令面板与快捷键引用它。代码在运行时贡献 `commands: { [id]: { run(context) } }`，`context` 是 `{ projectId?, sessionId?, args, confirm?, signal }`，返回 `{ kind: 'done', message? }`、`{ kind: 'open', view?, sessionId?, path? }` 或 `{ kind: 'task', taskId }`；要启动任务用 `host.tasks.start(projectId, actionId, params?, { providerId? })`，只能是自己的任务提供方。执行路径是 `POST /api/integrations/:id/commands/:name`，服务端按插件开启、声明与处理函数、作用域和项目会话归属、`when`、`params` 的顺序重新检查，同一 `requestId` 十分钟内只执行一次。隔离安装的包也能贡献命令：处理函数在它自己的进程里运行，宿主逐字段检查返回的结果（不合格是协议错误），调用期限 60 秒，`signal` 在期限前 5 秒与插件关闭时中止；持有 `tasks.run` 的包可以用 `host.tasks.start` 启动自己的任务提供方的任务，每条新计划仍先经用户确认。包的视图经消息桥的 `commands.execute` 执行本包声明的命令，结果原样交给视图 |
 | `appearance` | `palettes`、`fonts`、`backgrounds`、`presets`、`iconPacks` | 配色是与自定义主题同结构的 JSON（53 个角色 × 明暗 + 各 16 个 ANSI）；字体是 woff2；背景是 PNG、JPEG 或 WebP；预设引用它们的贡献 ID；图标包为 Android 使用的单色矢量 JSON。细节和限制见 [THEMES.md](THEMES.md) §7 |
 | `tasks` | `[{ id, title, projectType? }]` | 项目任务提供方的声明，代码在运行时贡献 `taskProviders`，见 [TASKS.md](TASKS.md) |
-| modelSources | [{ id, title }] | 模型源的静态元数据；id 与运行时模型源相同，停用时也能列出。声明不授予 models.provide 能力 |
+| modelSources | [{ id, title, hosts? }] | 模型源的静态元数据；id 与运行时模型源相同，停用时也能列出。声明不授予 models.provide 能力。`hosts` 至多 16 项，每项是小写主机名，可带前导 `*.`（匹配任意子域，不含域名本身）和 `:端口`（缺省不限端口），格式不合法时清单被拒绝。隔离安装的包声明了 `hosts` 后，该源解析出的所有地址必须落在这些主机内，或是用户自己输入的地址：档案的 `apiEndpoint`，以及本包 `text` 类设置中可解析为 http(s) 的值；不符的解析结果返回 `reason`，不交给驱动。没有声明 `hosts` 的源不受此限（兼容已安装的包）。授权确认里显示这些主机 |
 | sharePublisher | { title } | 分享发布方的静态元数据；由内置、可信开发包与可信安装包提供运行时实现 |
 | `agentBackends` | `[{ id, title, icon? }]` | 插件提供的 Agent。`id` 是 `<插件 id>` 或 `<插件 id>.<名称>`（至多 64 字符）；内置 ID 只有官方 `riffet` 插件能声明 |
 | `avatarStyles` | `[{ id, title, credit?, needsName? }]` | 个人资料的随机头像风格，`id` 是 `<插件 id>/<名称>`，`credit`（至多 300 字）是署名。代码贡献 `avatarStyles: { [id]: { generate({ seed, size, ink, paper, name? }) } }`，返回 SVG；核心校验后栅格化，见 [OWNER.md](OWNER.md)「随机头像」。隔离安装的包也能提供 |
@@ -112,8 +113,20 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 | `projects.read` | 在一次任务调用内，经宿主发的句柄读该项目的文件（`exists`、`readText`、`list`） | 宿主：句柄绑定那次调用，路径限定在项目内，包看不到绝对路径 |
 | `sessions.read` | 自定义视图经消息桥读它所属项目里的会话：大纲和时间线行（含工具输入输出） | 宿主：桥的身份绑在端口上，每个请求检查 |
 | `network` | 独立进程的对外 IP 连接；`gateway.fetchModels` | macOS 由操作系统沙箱约束；其他平台只约束经宿主的 `gateway.fetchModels` |
+| `process.exec` | 经 `host.runProcess` 运行 `executables` 里的命令，并把其中之一作为模型源的命令凭据 | 用户授权与宿主按名单检查；命令本身在沙箱外运行 |
 
-授权按版本记录，必须等于包要求的集合：多一个或少一个都得 409 `PLUGIN_GRANT_REQUIRED`，`details` 带包要求的列表。新版本增加能力就需要新的授权，旧授权不沿用。Web 与 macOS 插件管理页弹出确认，命令行用 `--yes`（接受包要求的全部）或 `--grant a,b`。授权只是用户的同意，能不能做到取决于上面的「由谁约束」：能力声明只有经宿主或操作系统边界执行，才是权限保证。
+`process.exec` 的语义：`executables` 里的命令在沙箱之外、以运行 Riffet 的用户的身份运行，参数由包决定。这是同意的边界，不是隔离：声明 `python3`、`node` 之类的解释器，等于允许包执行任意代码，用户在授权前看到的就是这些名字。宿主在每次调用时检查：
+
+- `host.runProcess(file, args, options)` 的 `file` 必须与某个声明的名字逐字相等（路径、未声明的名字得 `unsupported` 或 403 `PLUGIN_EXEC_UNDECLARED`）；宿主用与进程内插件相同的 `resolveCli` 解析为绝对路径，未安装得 404，解析结果在包目录或包的状态目录之内（包自带或自己写出的文件）得 403。包拿不到宿主路径：`host.resolveCli(name)` 只在该命令当前已安装时返回 `name` 本身。
+- `args` 至多 64 项、每项至多 8192 字符、不含 NUL。工作目录固定为包的状态目录，`options.cwd` 被接受但忽略。没有标准输入。
+- 环境是服务的环境加上 `options.env` 里的项；`env` 的名字须通过任务计划使用的同一个判定（[TASKS.md](TASKS.md)「已安装包的计划」，实现在 `backends/shared/installed-env.ts`），否则 403 `PLUGIN_EXEC_ENV_REFUSED` 并写出变量名。
+- 限制：超时默认 30 秒、至多 120 秒；输出默认 256 KB、至多 1 MB；同一个包同时至多 4 个，超出得 429。结果是 `ProcessResult`（`code`、`stdout`、`stderr`、`timedOut`、`truncated`）。
+- 插件日志每次运行记一行：命令名、参数个数、耗时、退出码；参数不写入日志（可能含密钥）。
+- 模型源的 `resolve()` 可返回 `credential: { kind: 'command', command, args }`，`command` 须是声明的名字，`args` 同上限；宿主把它解析为绝对路径后交给驱动。该命令之后由 Agent CLI 自己运行（Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`），同样在沙箱外。其他写法仍然被拒，源返回 `reason`。
+- 同步成员的答案由宿主随加载与状态更新送入：`host.resolveCli` 用「各声明命令当前是否已安装」，`host.modelSourceInUse(id)` 用「本包自己 `contributes.modelSources` 里被某个已保存档案使用的 id」，设置或密钥变化、下一次调用前会再送。
+- 持有 `tasks.run` 的隔离包有 `host.tasks.start(projectId, actionId, params?, { providerId?, confirm? })`，与进程内的实现相同：只能启动自己的任务提供方，每条新计划仍由任务服务向用户确认，`confirm` 原样传入。
+
+授权按版本记录，必须等于包要求的集合：多一个或少一个都得 409 `PLUGIN_GRANT_REQUIRED`，`details` 带包要求的列表，以及声明的模型源（`modelSources: [{ id, hosts? }]`）；市场的 offer 带同样的字段。新版本增加能力就需要新的授权，旧授权不沿用。Web 与 macOS 插件管理页弹出确认，命令行用 `--yes`（接受包要求的全部）或 `--grant a,b`。授权只是用户的同意，能不能做到取决于上面的「由谁约束」：能力声明只有经宿主或操作系统边界执行，才是权限保证。
 
 ## 信任级别
 
@@ -123,10 +136,10 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 | --- | --- | --- | --- |
 | 内置 Cursor、Canvas | 服务进程 | 公共接口内全部能力 | 随应用发布 |
 | `riffet plugin dev` 或 `RIFFET_DEV_PLUGINS` | 服务进程，与 Riffet 同权限 | 公共接口内全部能力 | 修改后自动重建与重载 |
-| 默认安装 | 独立 Node 进程，按平台能力隔离 | 模型源、任务、命令、操作、诊断与静态声明 | 固定版本、切换、失败回退、卸载 |
+| 默认安装 | 独立 Node 进程，按平台能力隔离；持有 `process.exec` 时可在沙箱外运行声明的命令 | 模型源（含声明命令的命令凭据）、任务、命令、操作、诊断与静态声明 | 固定版本、切换、失败回退、卸载 |
 | 本机 CLI `install --trusted` | 服务进程，与 Riffet 同权限 | 包括 CLI、命令凭据、分享发布器、运行时钩子、Agent 后端与服务 | 同默认安装；信任按版本保存 |
 
-可信安装只接受服务所在设备上、无代理的路径或显式确认上传请求；Web/Mac 默认使用隔离安装，按需请求信任。`--trusted` 是本机操作员对代码的信任选择，不是能力沙箱。能力集合仍需准确授权，可信代码实际可以访问服务的文件、网络、凭据与进程。升级不能从 manifest 继承信任，安装每个新版本都必须再次显式传入 `--trusted`；切回旧版本使用旧版本已有的记录。同版本不能改变信任模式，需先卸载。可信包有独立的数据和版本管理，但仍受 Node 模块缓存影响：同一服务进程已导入过某版本后，不能用不同内容替换该路径；应增加版本号或重启。
+可信安装只接受服务所在设备上的路径或显式确认上传请求：对端为回环地址、无代理头、`Host` 为回环名（与免令牌访问同一判定）；Web/Mac 默认使用隔离安装，按需请求信任。`--trusted` 是本机操作员对代码的信任选择，不是能力沙箱。能力集合仍需准确授权，可信代码实际可以访问服务的文件、网络、凭据与进程。升级不能从 manifest 继承信任，安装每个新版本都必须再次显式传入 `--trusted`；切回旧版本使用旧版本已有的记录。同版本不能改变信任模式，需先卸载。可信包有独立的数据和版本管理，但仍受 Node 模块缓存影响：同一服务进程已导入过某版本后，不能用不同内容替换该路径；应增加版本号或重启。
 
 所有非内置包的自定义界面继续走隔离消息桥，服务端可信不会获得应用内 React/原生界面入口。可信安装包的项目任务仍由宿主管理，并保留安装包的计划确认和环境变量限制。
 
@@ -160,7 +173,7 @@ riffet plugin install "$PWD/dist/android.tgz" --trusted --yes
 - `riffet plugin uninstall <id> [version]`：省略版本时卸载全部安装版本；保留设置、密钥和数据，运行中的相关任务会阻止整插件卸载。Web/Mac 插件详情直接提供“卸载插件”；内置包不提供卸载。
 - 开发包在详情的“管理”中使用“卸载插件”，保留源目录、设置和数据，并持久排除该目录的自动发现；显式重新关联后恢复。`unlink` 仍用于仅解除保存的开发关联。监听中的 dev 不会重新建立已移除的关联。
 - `riffet plugin install <路径> [--yes | --grant a,b] [--trusted]`：接受目录或上述归档；服务运行时经接口生效，停止时直接记录，下次启动生效。无能力包无需 `--yes`，有能力包需精确授权。
-- `POST /api/integrations/install`：`multipart/form-data` 上传归档，`grant` 为能力名数组或 JSON，`trusted` 是显式确认的布尔字符串；或本机 JSON `{ path, grant, trusted? }`。路径安装拒绝非本机和代理请求；上传可带 `trusted=true`，只允许直接来自服务所在设备的请求。
+- `POST /api/integrations/install`：`multipart/form-data` 上传归档，`grant` 为能力名数组或 JSON，`trusted` 是显式确认的布尔字符串；或本机 JSON `{ path, grant, trusted? }`。路径安装拒绝非本机和代理请求；上传可带 `trusted=true`，只允许直接来自服务所在设备的请求（回环对端、无代理头、`Host` 为回环名）。
 - 安装先在临时目录校验声明、入口、资源与兼容性，再计算内容完整性摘要。不同归档格式包含同样的路径、文件字节和执行位时得到同一摘要；摘要只证明内容未变，不认证发布者。
 
 其余插件位于独立的外部插件仓库，每个目录单独持有 manifest、源码和资源。它们保留原插件/模型源/贡献 ID，因此已有配置、档案、分享和外观引用保持有效；应用不再内置这些包，需要单独安装。构建产物包含运行依赖（含插件自带的附属进程），不依赖 Riffet 的 dist 目录。
@@ -175,7 +188,7 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 - 校验：服务端（或服务未运行时的 CLI）下载归档，按安装时的方式解包，内容完整性必须等于索引所列，否则得 422 `PLUGIN_MARKET_MISMATCH`，什么也不安装。摘要与归档格式无关，同 `riffet plugin pack` 输出的那个；安装记录的来源为 `market:<id>@<版本>`。摘要只证明内容是索引审核时的那份，不证明发布者。
 - 接口：`GET /api/integrations/market` 列出索引里可安装的包（内置插件除外），各取本服务能运行的最新版本，`?refresh=1` 跳过一分钟的缓存；`GET /api/integrations/market/:id?version=` 返回形如授权请求的 `PluginMarketOffer`；`POST /api/integrations/install` 接受 `{ market: { id, version? }, grant, trusted? }`。任何客户端都可以请求，显式信任仍只限服务所在设备。
 - 客户端：Web 与 Mac 的插件页有「浏览」，经服务端读同一份索引，安装前先显示版本与能力，确认后才安装。公共页面只做展示：给出安装命令，以及在 Mac 上打开的 `riffet://plugins/install?id=&version=`（同样先确认，链接本身不会安装任何东西）。
-- 索引地址：默认 `https://riffable.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
+- 索引地址：默认 `https://riffable.github.io/riffet/plugins/index.json`；服务与 CLI 读环境变量 `RIFFET_PLUGIN_INDEX`（https、回环 http 或 file 地址）。归档地址必须是 https，或与索引同协议。下载手动处理重定向（至多 5 跳），每一跳在请求前按同一规则检查。`--dev` 启动的服务在未设置该变量且存在 `dist/site/plugins/index.json` 时读这份本地构建：`pnpm build:site && pnpm dev`，再 `pnpm dev:web`，即可在插件页浏览和安装。
 
 发布：`riffet plugin pack` 输出归档路径和它的完整性摘要。把归档放到可公开下载的 https 地址（如 GitHub Release），再提交 `site/plugins/registry/<id>.json`：
 
@@ -211,6 +224,8 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 | 信号 | 只能发给自己；发给服务进程或任何别的进程得 `EPERM` | 不受限：包可以向服务进程发信号，包括 `SIGKILL`；`SIGUSR1` 靠服务端的监听挡住 |
 | 网络 | 默认拒绝一切。持有 `network` 才放开对外 IP 连接（含回环）和名称解析；不能监听，不能连接别的 unix socket（tmux、ssh-agent、Docker），服务自己的端口也始终关闭 | 不受限，`network` 只约束经宿主的 `gateway.fetchModels` |
 | 环境 | 只有 `NODE_ENV`、`LANG`、`TZ`、`OPENSSL_CONF=/dev/null`，没有令牌和 `PATH` | 同左 |
+
+`process.exec` 是例外：它声明的命令不在上表的约束内，以运行 Riffet 的用户的身份在沙箱外运行，参数由包决定；被约束的只是命令名（逐字相等、解析到包之外的文件）、环境变量名单、工作目录、超时、输出大小和并发数。声明解释器（`python3`、`node`、`sh`）的包等于获得任意代码执行，用户在授权时只看得到名字。
 
 两个平台都没有的限制：CPU 和磁盘用量（内存只限制 V8 堆为 256 MB）；包经授权合法读到的内容——`projects.read` 读到的项目文件、模型源收到的 `overrides`、它自己的密钥——持有 `network` 的包可以把它们送出去。`sessions.read` 在 Web 上同理：框架的 CSP 拦不住所有外送途径（见 PLUGIN_ARCHITECTURE.md「自定义视图」），所以持有它的包能读到什么就能送出什么。在支持的平台上这些是已知的、没有设上限的，不要把安装包当作可信代码。
 
@@ -253,7 +268,7 @@ Riffet 自带构建与打包工具，不依赖插件安装 CLI 或相邻源码 c
 
 固定版本 `@riffet/plugin-api` 提供编译后的 ESM、类型、manifest Schema 和兼容的 `riffet-plugin` CLI。后者的 pack 使用同一实现，dev 默认委托 Riffet；独立 `build`、`check`、`dev --build-only` 留作高级调试。`scripts/pack-plugin.ts` 只是源码仓库兼容包装，不是独立插件的前置依赖。
 
-宿主仓库的 `pnpm build:plugin-sdk -- --out <目录>` 生成 contracts、服务端 SDK、Web SDK 的可发布归档，命令不会发布到 registry。稳定接口使用包根；Agent 另提供 `@riffet/plugin-api/experimental/agent`。编辑器 Schema 为 `@riffet/plugin-api/riffet-plugin.schema.json`；未安装 SDK 的纯资源包可省略 `$schema`。运行时校验、打包校验和 Schema 共用公共定义，命名空间等关联规则在同一校验器中补充。
+宿主仓库的 `pnpm build:plugin-sdk -- --out <目录>` 生成 contracts、服务端 SDK、Web SDK 的可发布归档，命令不会发布到 registry。稳定接口使用包根；Agent 协议在 `@riffet/plugin-api/experimental/agent`，与核心共用的工具包在 `@riffet/plugin-api/kit`（供官方包使用，不承诺兼容）。编辑器 Schema 为 `@riffet/plugin-api/riffet-plugin.schema.json`；未安装 SDK 的纯资源包可省略 `$schema`。运行时校验、打包校验和 Schema 共用公共定义，命名空间等关联规则在同一校验器中补充。
 
 ## 按需激活、诊断与执行位置
 
@@ -273,7 +288,7 @@ riffet plugin reload acme.example-provider
 
 页面导入默认走隔离安装。包声明 `requiresTrustedHost: true`，或旧包保留官方命名空间、历史模型源 ID、Agent / 分享发布器贡献时，服务返回 `PLUGIN_TRUST_REQUIRED` 及包 ID、版本、能力和本次请求是否允许本机信任；Web/Mac 显示默认未勾选的“信任此插件”，确认后重新上传。可信选择属于版本安装记录，manifest、vendor 或 `trusted` 自称都不能授信。远端或代理连接只显示服务所在设备的安装引导，不能提交可信安装。
 
-保留历史模型源 ID 的插件若需要宿主 CLI 与命令凭据，改成命名空间 ID 也不能在隔离模式运行。若此前通过 dev 建立了同 ID 开发关联，应先在插件详情的“管理”中卸载开发包，再导入正式归档。
+保留历史模型源 ID 的插件若需要宿主 CLI 与命令凭据，改成命名空间 ID 后，要在 `executables` 里声明这些命令并要求 `process.exec`，才能在隔离模式运行。若此前通过 dev 建立了同 ID 开发关联，应先在插件详情的“管理”中卸载开发包，再导入正式归档。
 
 `DELETE /api/integrations/:id?source=installed` 一次卸载该插件的全部安装版本；已有按版本 DELETE 路径保留。开发包使用 `source=development&path=<目录>`，目录来自描述符的 `developmentPath`，以区分同 ID 的不同来源和目录。省略来源但目标存在歧义时拒绝卸载。卸载先检查相关运行任务、原子保存移除记录，再停用匹配目标的作用域和依赖方；保存失败时保留运行状态，仍被引用的文件沿用延迟回收。设置、密钥、数据和备份均保留，“删除数据”仍是独立操作。损坏而被拒绝加载的安装包同样可以卸载。
 

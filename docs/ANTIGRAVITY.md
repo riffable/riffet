@@ -115,7 +115,7 @@ plugins/riffet/antigravity/
   assets/                  CLI 子进程可直接执行的最小桥接脚本
 ```
 
-复用 `@riffet/plugin-api` 的 CLI resolver、exec、NativeHookServer、附件、模型选择、配置文件、TurnTracker 和 Activity 辅助能力。继续使用宿主 TerminalService、SessionCommands、Journal、Stats 和 RiffetMcpService；不复制另一套 tmux 服务、转录数据库或请求调度器。不引入 ACP SDK、Python runtime 或生产模型流量代理。
+复用 `@riffet/plugin-api/kit` 的 CLI resolver、exec、NativeHookServer、附件、模型选择、配置文件、TurnTracker 和 Activity 辅助能力。继续使用宿主 TerminalService、SessionCommands、Journal、Stats 和 RiffetMcpService；不复制另一套 tmux 服务、转录数据库或请求调度器。不引入 ACP SDK、Python runtime 或生产模型流量代理。
 
 具体 Agent 的逻辑不进入 kernel；插件不得导入另一个 driver 或服务端内部模块。确有复用价值的机制从 kit 暴露，依赖由 host 或 `app.ts` 注入。遵守 [服务端分层](guide/architecture.md) 和 `check:plugins`。
 

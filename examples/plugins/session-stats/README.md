@@ -3,7 +3,7 @@
 A sidebar view that shows the open conversation's turn count, total and median turn duration, and the tools of its last turn. It is a custom view of a package that is not built in, so it runs in a sandboxed frame (Web) or a WebView (macOS) and reaches Riffet only through the message bridge (docs/PLUGIN_ARCHITECTURE.md, 自定义视图).
 
 - `riffet-plugin.json`: the id `example.session-stats`, one `sidebar` view for `web` and `macos`, and the capability `sessions.read`, which the bridge needs for `sessions.outline` and `sessions.timeline`.
-- `src/main.ts`: plain DOM. It negotiates the UI host with `connect({ requiredMethods })`, refreshes on project-scoped data invalidations, and calls from the bridge client, reads the outline and the last turn's rows, and styles itself with the pushed theme variables (`var(--fg)`, `var(--bg-subtle)`, ...).
+- `src/main.ts`: plain DOM. It negotiates the UI host with `connect({ requiredMethods })`, refreshes on project-scoped data invalidations, and calls from the bridge client, reads the outline and the last turn's rows, and styles itself with the pushed theme variables (`var(--fg)`, `var(--bg-subtle)`, ...) and the host base stylesheet's `--riffet-*` tokens.
 - `web/index.js`: the web entry, built from `src/main.ts` with the bridge client bundled in. It is committed so the package runs as it is.
 
 ## Rebuild

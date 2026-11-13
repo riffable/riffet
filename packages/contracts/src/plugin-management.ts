@@ -97,6 +97,8 @@ export interface PluginDescriptor {
   webEntry?: { path: string; integrity?: string };
   /** What the package holds: the selected version's grant for an installed package, what the manifest asks for a development one (trusted, so no grant). Absent for built-in plugins. */
   capabilities?: string[];
+  /** With `process.exec`: the commands the selected version runs on this machine, outside the sandbox. */
+  executables?: string[];
   /**
    * Set while turning it off, or switching to `version`, waits for its running tasks: it stays on and refuses new tasks and
    * commands (409), and `status` says so. `PATCH` with `force: true` proceeds at once; the tasks keep running either way.

@@ -62,7 +62,6 @@ msgstr ""
 msgid "Couldn't read Git status"
 msgstr ""
 
-#: src/app/ProjectHome.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "Shell 终端"
 msgstr ""
@@ -137,6 +136,10 @@ msgstr ""
 msgid "从终端导入…"
 msgstr ""
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "以你的身份运行本机命令"
+msgstr ""
+
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -200,11 +203,7 @@ msgstr ""
 msgid "侧边聊天"
 msgstr ""
 
-#: src/app/FolderFavorites.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
-#: src/app/WorkbenchHeader.tsx
 msgid "保存"
 msgstr ""
 
@@ -229,8 +228,6 @@ msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
 msgid "全部"
 msgstr ""
 
@@ -246,10 +243,6 @@ msgstr ""
 msgid "全部标签"
 msgstr ""
 
-#: src/app/plugins/PluginFlowDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/tabs/TabBar.tsx
-#: src/app/tabs/TabStyleSetting.tsx
 #: src/app/use-terminal-actions.ts
 msgid "关闭"
 msgstr ""
@@ -303,8 +296,6 @@ msgstr ""
 msgid "最后一个标签"
 msgstr ""
 
-#: src/app/ProjectHome.tsx
-#: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "最近会话"
 msgstr ""
@@ -464,11 +455,9 @@ msgid "取消置顶"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
-#: src/plugins/hostViews.ts
 msgid "变更"
 msgstr ""
 
-#: src/app/Header.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr ""
@@ -545,7 +534,6 @@ msgid "在浏览器中打开授权页"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "在终端中"
 msgstr ""
 
@@ -589,7 +577,6 @@ msgstr ""
 msgid "外部插件已暂停"
 msgstr ""
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "多个标签用逗号分隔"
 msgstr ""
@@ -767,6 +754,10 @@ msgstr ""
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-pending"
 msgid "待确认"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "快捷键未生效"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -956,7 +947,6 @@ msgstr ""
 msgid "搜索结果"
 msgstr ""
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "撤销"
 msgstr ""
@@ -975,8 +965,6 @@ msgctxt "settings-action-failed"
 msgid "操作失败"
 msgstr ""
 
-#: src/app/tabs/tabsStore.ts
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgctxt "workbench-action-failed"
 msgid "操作失败"
@@ -1127,7 +1115,6 @@ msgstr ""
 msgid "无法刷新会话列表"
 msgstr ""
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "无法刷新项目列表"
 msgstr ""
@@ -1310,7 +1297,6 @@ msgstr ""
 msgid "暂无会话"
 msgstr ""
 
-#: src/app/ProjectHome.tsx
 #: src/app/use-session-actions.ts
 msgid "暂时无法确认是否已发送"
 msgstr ""
@@ -1355,8 +1341,6 @@ msgstr ""
 msgid "本机"
 msgstr ""
 
-#: src/app/plugins/PluginMarket.tsx
-#: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
 msgstr ""
@@ -1398,6 +1382,14 @@ msgctxt "plugin-feature"
 msgid "模型源"
 msgstr ""
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往"
+msgstr ""
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往插件指定的地址"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr ""
@@ -1423,10 +1415,8 @@ msgstr ""
 msgid "没有匹配的插件"
 msgstr ""
 
-#: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "没有匹配的结果"
 msgstr ""
 
@@ -1781,7 +1771,7 @@ msgid "请重新选择文件"
 msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
-msgid "读取会话内容"
+msgid "读取所在项目的会话内容，可由插件界面发出"
 msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
@@ -1853,7 +1843,6 @@ msgid "返回"
 msgstr ""
 
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "还没有会话"
 msgstr ""
 
@@ -1932,7 +1921,6 @@ msgstr ""
 msgid "重命名…"
 msgstr ""
 
-#: src/app/Header.tsx
 #: src/app/use-session-actions.ts
 msgid "重命名会话"
 msgstr ""

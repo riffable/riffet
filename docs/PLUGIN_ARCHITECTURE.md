@@ -30,16 +30,16 @@ Riffet 插件可以提供模型源、分享目标、Agent 后端、视图、命�
 packages/plugin-api/src/index.ts   插件可用的全部接口（@riffet/plugin-api）
 packages/contracts/src/plugins.ts       静态声明（视图、命令）、贡献 ID 规则
 plugins/index.ts                   内置插件清单，按优先级排列
-plugins/riffet/{cursor,canvas}/    随应用构建的两个插件
+plugins/riffet/<name>/             随应用构建的插件（cursor、antigravity、canvas、browser、avatars）
 <外部插件仓库>/<name>/           独立分发的插件，每个目录一个 manifest
 apps/server/src/plugins/           注册与生命周期、声明校验、本地开发包、存储与路由
 ```
 
-服务端插件只能导入 `@riffet/plugin-api`、`@contracts`、Node 内置模块、package.json 中的依赖，以及本包目录（`plugins/<vendor>/<name>/`）下的文件，不含同一 `<vendor>` 下其他包的文件；外部模型源作为独立包构建。客户端入口（`plugins/<vendor>/<name>/web/**`）只能导入 `@riffet/plugin-web`、`@contracts`、package.json 中的依赖和本包内的文件。核心只有 `apps/server/src/plugins/registry.ts` 导入 `plugins/index.ts`，Web 一侧只有 `apps/web/src/plugins/registry.ts` 导入 `plugins/web.ts`，所以替换这一处即可得到不含插件的构建。`pnpm check:plugins`（CI 同样执行）检查这些边界。
+服务端插件只能导入 `@riffet/plugin-api`（含子路径）、`@contracts`、Node 内置模块、package.json 中的依赖，以及本包目录（`plugins/<vendor>/<name>/`）下的文件，不含同一 `<vendor>` 下其他包的文件；外部模型源作为独立包构建。客户端入口（`plugins/<vendor>/<name>/web/**`）只能导入 `@riffet/plugin-web`、`@contracts`、package.json 中的依赖和本包内的文件。核心只有 `apps/server/src/plugins/registry.ts` 导入 `plugins/index.ts`，Web 一侧只有 `apps/web/src/plugins/registry.ts` 导入 `plugins/web.ts`，所以替换这一处即可得到不含插件的构建。`pnpm check:plugins`（CI 同样执行）检查这些边界。
 
 ## 对外构建
 
-`RIFFET_EXCLUDED_VENDORS=acme pnpm build` 在打包时用一份生成的清单替换 `plugins/index.ts` 的入口：被排除厂商的模块不会进入 bundle，外部插件及其附属进程均不再由应用构建。多个厂商用逗号分隔；当前主仓库仅内置 Cursor 和 Canvas。
+`RIFFET_EXCLUDED_VENDORS=acme pnpm build` 在打包时用一份生成的清单替换 `plugins/index.ts` 的入口：被排除厂商的模块不会进入 bundle，外部插件及其附属进程均不再由应用构建。多个厂商用逗号分隔；主仓库内置的插件都在 `plugins/riffet/` 下，清单见 `plugins/index.ts`。
 
 构建后运行 `pnpm check:public-artifacts` 扫描 `dist/`，命中被排除厂商的标识、内部域名或对应的 source map 路径即失败。`RIFFET_ARTIFACT_DENYLIST` 可以补充要拒绝的字符串（逗号分隔，按正则转义后的字面量匹配）。
 
@@ -63,18 +63,31 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`；声明了 `agentTools` 或 `channels` 的进程内插件另有 `sessions`（读会话与项目目录、往会话发一轮、发通知）。
 
-`PLUGIN_API_VERSION` 当前为 1，只做可加性变更：新增可选成员不升版本，任何会让既有插件出错的改动都要升版本。`apiVersion` 不一致的插件不会加载，在插件管理页和 doctor 中显示原因。
+`PLUGIN_API_VERSION` 是宿主提供的插件 API 版本，当前为 1，只做可加性变更：新增可选成员不升版本，任何会让既有插件出错的改动都要升版本。`PLUGIN_API_MIN_VERSION`（当前为 1）是宿主仍然加载的最旧版本。manifest 的 `apiVersion` 落在 [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`] 内即被接受，区间之外的插件不会加载，在插件管理页和 doctor 中显示原因：比宿主新的写明宿主最高提供的版本，比下限旧的写明宿主不再加载该版本。提高下限是唯一的破坏性步骤，与新增版本分开进行。区间判断集中在 `apiVersionProblem`（`packages/plugin-api/src/manifest.ts`），注册表、安装和打包共用。`hostApi.server` 仍是对 `PLUGIN_API_VERSION` 求值的 semver 范围，与此区间无关。
+
+可加性由发布基线检查：`packages/plugin-api/released/<版本>/`（`@riffet/plugin-web` 的桥协议在 `packages/plugin-web/released/<版本>/`）是该 SDK 版本发布时根入口生成的 `.d.ts`，对 `@riffet/contracts` 的引用不动（契约有自己的快照）。`src/released-compat.ts` 在 `pnpm typecheck` 内逐项比较，不另设 CI 步骤，分两个方向：宿主提供给插件的类型（`PluginHost`、各 `*Context` 等），当前类型必须可赋给基线类型，即宿主仍给出承诺过的全部成员；插件提供给宿主的类型（`Plugin`、`Contributions`、`ModelSourceProvider` 等），基线类型必须可赋给当前类型，即新成员只能是可选的。`PluginHost.runProcess`、`resolveCli`、`secrets`、`gateway.fetchModels` 等常用方法另按参数和返回值逐一比较，因为方法简写的参数是双变的。拟议成员不在承诺内，由 `PROPOSED_CONTRIBUTIONS`（`agentBackends`、`runtimeHooks`、`services`、`channels`、`agentTools`）和 `PROPOSED_HOST_MEMBERS`（`agentProfiles`、`services`、`sessions`）两份清单排除：它们只给进程内的包（内置、开发、受信任安装），不升 API 版本也可能变化，出现第二个独立使用方后再纳入承诺。桥协议按方法比较：旧视图的参数仍被接受、结果仍是旧视图所期望的，已发布的方法和事件不得消失。升 SDK 版本时运行 `pnpm gen:plugin-api` 写入新版本的基线；`pnpm gen:plugin-api:check` 只确认当前版本有基线，不会重写已发布版本。
+
+入口与稳定性：
+
+| 入口 | 内容 | 稳定性 |
+| --- | --- | --- |
+| `@riffet/plugin-api` | 插件接口：manifest 类型、`Plugin`、`PluginHost`、`Contributions` 及各类贡献 | 同一 API 版本内只做可加性变更 |
+| `@riffet/plugin-api/kit` | 与核心共用的工具包 | 供官方包使用，不承诺兼容 |
+| `@riffet/plugin-api/experimental/agent` | Agent 协议 | 实验性 |
+| `@riffet/plugin-api/manifest`、`/tooling`、`/package-files`、`/schema` | manifest 校验、构建与打包、包文件、JSON Schema | 工具 |
+
+已安装的包自带构建时的 SDK，不受入口拆分影响；包在下次升级 SDK 归档时再改导入。
 
 ## Agent 协议
 
-`AgentBackend` 与 `AgentHost`（`packages/plugin-api/src/agent.ts`，`AGENT_PROTOCOL_VERSION` 为 1，实验性，只做可加性变更）。Cursor 是第一个用它实现的官方插件（`plugins/riffet/cursor/`）；核心里没有 Cursor 的代码，只留兼容身份（`session-identity.ts`、`cursor-cli.json`、`AppSettings.cursorCli`、`/api/cursor/*`）。除上表的探测、会话、发送、历史外：
+`AgentBackend` 与 `AgentHost`（`packages/plugin-api/src/agent.ts`，经 `@riffet/plugin-api/experimental/agent` 导入，`AGENT_PROTOCOL_VERSION` 为 1，实验性，只做可加性变更）。Cursor 是第一个用它实现的官方插件（`plugins/riffet/cursor/`）；核心里没有 Cursor 的代码，只留兼容身份（`session-identity.ts`、`cursor-cli.json`、`AppSettings.cursorCli`、`/api/cursor/*`）。除上表的探测、会话、发送、历史外：
 
 - 同步读 `host.view`：本 Agent 的会话、项目、终端、首条消息与某一轮的 run。`updateSession`、`setNativeSessionId`、`recordActivity` 在调用返回时即对 `view` 可见，promise 只报告失败。
 - 状态补丁：`AgentSessionPatch` 另含 `state`、`error`，只有声明 `traits.ownsSessionObservation` 的后端可写，其余得 403 `AGENT_PATCH_REFUSED`。`observe(host, context, report)` 的 `report` 只发给当前订阅者（首次回放），`host.emit` 广播；`host.stats.observeEvents` 把读到的事件交给统计。
 - 终端：`AgentLaunchSpec` 带 `kind`（`native`，或旧值 `cursor`）和 `reuseLive`（会话已有活终端则复用，并发启动合并）。`host.terminals` 另有 `interact`（独占读屏与按键）、`observe`、`panePid` 和预留池（`reserve`/`claim`/`extendReservation`/`reservations`/`releaseReservation`，`POST /api/native/prewarm` 驱动 `AgentBackend.prewarm`）。`AgentBackend.terminal`（默认标题、就绪判断、启动失败提示）、`launchEnv`（交给 pane 与不许泄漏进 tmux 服务端的环境名）、`loginLaunch`（终端登录）。
 - 对话框：`host.dialogs` 识别并应答终端上的信任、提问类对话框；`settledScreen` 判断应答后 Agent 是否已回到自己的提示符。
 - 转录：除批量的 `transcript.read`，可实现 `transcriptSource`（`identity`/`pull`/`watch`/`drain`），写入 `AgentLaneWriter`（草稿、撤回、重投影、轮次起止、活动账本、子 Agent 车道、scratch 窗口），journal 直接承载；hook 驱动的写入走 `host.transcript.withSource`。
-- 工具包：核心与插件共用的纯函数在 `packages/plugin-api/src/kit/`，经 `@riffet/plugin-api` 导出，核心旧路径只留转出；`AppError` 是同一个类。
+- 工具包：核心与插件共用的纯函数在 `packages/plugin-api/src/kit/`，经 `@riffet/plugin-api/kit` 导出，核心旧路径只留转出；`AppError` 是同一个类。
 - 档案与配置：`describeProfile`（档案列表显示的实际启动值）、`validateProfileConfig`（保存前校验）、`projectConfigs`（项目配置文件）。`capabilityReport`、`runCommand`、`runtimeStats` 是 `/api/cursor/capabilities`、`/api/cursor/command`、`/api/native/runtime/stats` 的转发目标，没有驱动得 503，驱动没有该操作得 409。
 - 其他可选成员：`usage`、`usageTranscript`、`canReleaseInput`、`runtimeAction`、`stopActivity`、`extendInteraction`、`relaunchForAppearance`、`rename`、`invalidateModels`、`endorsesScreenDialog`、`closesSessionsItself`、`status`，以及扩展管理（`extensionLayout`、`extensionRuntime`、`skillStates`、`setSkillEnabled`、`reloadExtensions`、`authorizeMcp`、`manageExtension`）。
 - 登录状态：`AgentAvailability.needsLogin` 表示已安装但未登录，`/api/backends` 的条目带 `needsLogin`，客户端对任何后端显示同一个提示，不读 Agent 专有的能力报告。机器的 tmux 与 Tailscale 状态不属于某个 Agent：`GET /api/system/machine` 返回 `MachineReport`（`tmux`、`tailscale`、`warnings`、`checkedAt`），Agent 插件关闭时照常回答。
@@ -118,7 +131,28 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。贡献 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
 - `requires`：`[{ id, optional? }]`。
 
-加载时校验：ID 带本插件的命名空间且不重复、位置与客户端是已知值、条件合法。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
+校验分两侧，使用同一个函数 `checkManifest`，以模式区分。加载时（`load`），宿主不认识的值只跳过那一项并写一条说明：视图 `locations`、`clients` 中的未知值被去掉，去空的视图被跳过；`renderer.kind` 未知的视图被跳过；视图或命令的 `when` 含未知条件键时该视图或命令被跳过（宿主无法判断何时可见，所以保持隐藏）；`activation` 中的未知事件被去掉，都未知时插件不按启动激活，也不退回 `startup`。被跳过的项不出现在 `declared`，不占用贡献 ID，不能被命令路由执行，也不触发按需激活；说明在插件的诊断和 `riffet doctor` 中以警告显示。打包与检查（`check`、`pack`）使用严格模式，未知值一律报错，因为作者时工具与 SDK 同版本，未知值只会是笔误。`capabilities` 中的未知名称在两侧都拒绝整个包：宿主无法约束的权限不能授予。已知成员的格式错误（类型、ID 格式、命名空间、重复、semver 等）也仍然拒绝。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
+
+视图位置与客户端的承载情况（`locations` 的六个值，截至当前实现）：
+
+| 位置 | Web | macOS | 移动端 |
+|---|---|---|---|
+| `session-view` | 承载 | 无 | 无 |
+| `sidebar` | 承载 | 承载 | 无 |
+| `settings` | 仅内置入口绘制 | 仅原生注册的渲染器 | 无 |
+| `panel`、`main`、`navigation` | 保留，无客户端承载 | 保留，无客户端承载 | 无 |
+
+### 冲突规则
+
+多个已启用插件争用同一对象时，结果在加载时按注册顺序决定，每次启动相同。注册顺序为：内置（`plugins/index.ts` 的顺序）、开发包、已安装包。
+
+| 对象 | 规则 | 后注册者 |
+| --- | --- | --- |
+| 贡献 ID、模型源 ID、Agent 工具前缀（`toolPrefix`） | 加载时判定，先注册者持有 | 被拒绝，原因显示在插件管理页和 doctor |
+| 分享发布者 | 单选，用户选择默认项 | 不涉及 |
+| 运行时钩子（`runtimeHooks`） | 有序链：按注册顺序尝试，第一个 `prepare` 返回附件的钩子服务该进程 | 保留，diagnostics 注明排在谁之后 |
+
+模型源 ID 若未在 `contributes.modelSources` 中静态声明，激活时仍按已激活者先得；被其他插件静态声明的 ID 一律归声明者，不论其是否已激活。
 
 ## 生命周期
 
@@ -131,6 +165,9 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - 依赖：按 `requires` 的顺序激活；必需的插件缺失或未启用时本插件保持关闭，原因为 `requires <id>`；依赖停用时依赖它的插件随之停用，并且先于它停用（离被依赖者最远的先走）；依赖环在加载时整体拒绝。可选依赖只影响激活顺序。
 - 服务关闭时 `registry.close()` 结束所有激活，同样依赖它的先于被依赖的。
 - 激活期限：`activate` 约 30 秒仍没有结果，这次激活以问题结束（`activation failed: did not finish within 30s`），已登记的 disposer 运行，之后才到的结果照常释放，同一插件的队列不会被它占住。取代、失败和迟到的激活清理不掉的东西被等待并记为该插件的诊断（doctor 可查）。
+- 调用期限：贡献被提交时由注册表包一层，消费方无需改动。进程内插件的这些调用有等待上限，超时以「插件 id、操作、上限」的错误结束（代码本身无法取消）：模型源 `prepare` 30 秒、`catalog` 60 秒、`usage` 30 秒；运行时钩子 `prepare` / `recover` 各 30 秒，附件 `bindNative` / `stop` 各 10 秒、`act` 30 秒；分享发布器 `capability` 30 秒、`find` / `remove` / `verify` 各 60 秒、`deploy` 10 分钟。`resolve`、`publicUrl` 同步，不设上限；智能体工具 `call` 可能在等用户，也不设上限。隔离进程的调用由 `remote.ts` 的 `TIMEOUTS` 限时，这里只记录失败。所有这些调用的失败都写入该插件自己的日志（低于 500 的 `AppError` 是业务答复，记为 debug），错误原样交给调用方。
+- 快速失败：同一次激活连续三次调用超时（普通错误不计，成功或抛错都清零）后，60 秒内其调用立即以 503 `PLUGIN_NOT_RESPONDING` 拒绝；之后放行第一次调用，成功则恢复，再超时则再关 60 秒。状态写在该次激活上，重载或重新启用从头计。期间插件的 `note` 显示「not responding … until <时间>」，进入状态与 doctor，调用恢复后清除。
+- 进程重启：隔离进程在激活提交后退出或违反协议时，撤回贡献（同上），随后在 2 秒、10 秒、60 秒后各自动重试一次，走与刷新相同的评估，依赖它的插件随之重新评估。重启后的进程稳定运行 10 分钟，次数清零。三次都失败后保持关闭，`problem` 附「automatic restarts stopped」，直到手动刷新、启用或重载。注册表关闭、插件被关闭或卸载、替换、恢复模式开启时不重启；激活阶段的失败仍按原处理（含版本回退），不自动重启。
 - 登录：`runAction` 返回时插件已被关闭，则不登记设备码流程（409 `INTEGRATION_DISABLED`）；`pollFlow` 也核对插件仍在开启。
 
 ## Web 视图
@@ -153,6 +190,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 入口：与其他插件视图同一套门槛：插件已启用、视图声明 `web`、`compatibility.web.ok` 不为 false；位置为 `session-view` 或 `sidebar`（`settings` 位置只能由内置入口绘制）；没有 `webEntry` 的非内置包没有 Web 视图。实例按上下文定 key，换会话或项目是新框架，旧通道随之关闭。
 - 框架：宿主用用户的会话经 `GET /api/integrations/:id/files/<path>` 取脚本（至多 8 MB），有 `integrity` 先校验，不符或写法不认识都拒绝；再放进 `<iframe sandbox="allow-scripts" srcdoc csp=…>`，没有 `allow-same-origin`，页面的源不透明：没有 cookie、存储，读不到应用页面。`csp` 属性与页面 CSP 相同（嵌入式强制），支持它的浏览器还会拒绝框架被导航到不声明接受该策略的页面，其余浏览器忽略它。页面 CSP：`default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'`；包持有 `network` 时 `connect-src https:`。已知缺口（Web）：在不支持嵌入式强制的浏览器里，CSP 拦不住脚本把自己的框架导航到别处（实测请求照常发出），也拦不住 WebRTC；宿主只能在框架第二次加载时丢弃该视图，拦不住那次请求，也发现不了页面加载中途的导航。所以 Web 上的 `network` 不是对 `sessions.read` 的真实防线：持有 `sessions.read` 的包能读到什么就能送出什么。Mac 的 WebView 拒绝除引导页外的所有导航。
+- 基础样式：引导页的 `<style>` 在颜色变量之后带一份带版本的基础样式（`packages/plugin-web/src/base-style.ts` 的 `PLUGIN_BASE_STYLE`，版本常量 `PLUGIN_BASE_STYLE_VERSION`，现为 1）。Web 的 `document.ts` 直接引用它；Mac 的 `PluginPageDocument.swift` 里是 `pnpm gen:plugin-style` 生成的同一份文本，`gen:plugin-style:check` 在 CI 中核对。内容分两层：`--riffet-*` 自定义属性（间距 4/8/12/16/24、圆角 8/10/12、界面与等宽字体栈、阅读/界面/次要三档字号与行高、控件高度 32、边框宽度 1px、焦点环），数值取自应用自己的控件与 `docs/design/riffet-style.md`；以及只针对原生元素的规则（`body`、`a`、`button`、`input`/`textarea`/`select`、`code`/`pre`/`kbd`、`hr`、`table`、`:focus-visible`、`::selection`、禁用态、细滚动条），全部包在 `:where()` 里，特异性为零，包自己的 CSS 不需要 `!important` 即可覆盖。没有类名组件、工具类和脚本；CSP 不变（内联 `<style>` 已被 `style-src 'unsafe-inline'` 允许）。`BRIDGE_VERSION` 不变，`host.info` 暂不报告样式版本。
 - 通道：请求通道的是宿主生成的引导页自己，不是视图：引导页的第一段脚本（`document.ts` 的 `CHANNEL_SCRIPT`）先挂上 `riffet-plugin:init` 的监听、把端口的 `Promise` 放在 `window.__riffetPort`，再向父窗口发 `riffet-plugin:ready`，此后才注入视图的脚本；`connect()` 只取这个 `Promise`，不再自己发请求，页面不是宿主生成的则以 `unsupported` 失败。宿主只回应它自己嵌入的那个窗口（以 `event.source` 为准），只回应第一次：同一窗口的消息按序到达，所以第一个请求必然是引导页发的，之后任何请求（包括框架被导航到的页面发的）都被忽略，握手也无法重置通道的限流。不以框架的第一次 `load` 为界：Chrome 实测在页面加载中发出的消息晚于 `load` 才送达（`load,message:ready`），按 `load` 判界会拒绝引导页自己的请求。宿主在框架渲染前就挂好监听（Web 用 layout effect），框架第二次 `load` 仍丢弃该视图。宿主创建 `MessageChannel`，把一个端口随 `riffet-plugin:init` 交给框架。之后所有请求都在这个端口上，包的身份、能力、项目都绑在端口上，载荷里的自报字段不读。请求 `{ id, method, params }`，回复 `{ id, result }` 或 `{ id, error: { code, message } }`，推送 `{ event, data }`。
 - 校验顺序：频率与并发、大小、方法是否已知、包是否持有该方法的能力、参数 schema（多余的键也拒绝），最后才到服务。限制：请求 64 KB、结果 1 MB、同时 16 个、令牌桶 60 个突发每秒补 30 个、文本 500 字符、时间线至多 200 行。视图卸载或上下文变化时通道关闭，未完成的请求中止，之后不再回复。
 
@@ -203,11 +241,12 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 ## 独立包
 
-独立包是用户安装的固定版本预构建包：一个目录或 `.tgz` / `.tar.gz` / `.zip` / `.tar`，根部有 `riffet-plugin.json`（字段同本地开发包，npm 风格的单层 `package/` 前缀会被去掉）。安装不运行任何脚本，也没有 npm install；包自带所需依赖，或只用宿主 API。manifest 另有三个可选成员：
+独立包是用户安装的固定版本预构建包：一个目录或 `.tgz` / `.tar.gz` / `.zip` / `.tar`，根部有 `riffet-plugin.json`（字段同本地开发包，npm 风格的单层 `package/` 前缀会被去掉）。安装不运行任何脚本，也没有 npm install；包自带所需依赖，或只用宿主 API。manifest 另有四个可选成员：
 
 - `hostApi`：`{ server?, web?, agent? }`，semver 范围，分别对照 `PLUGIN_API_VERSION`、Web 插件 SDK 版本（`PLUGIN_WEB_API_VERSION`）、`AGENT_PROTOCOL_VERSION`。描述符的 `compatibility` 给出每个入口的 `{ range, ok }`。服务端入口不兼容时不激活，状态里写明原因，声明照常列出；Web 不兼容的入口由 Web 目录跳过，插件管理页显示「客户端版本不兼容」。范围只支持 `>= > <= < = ^ ~ x *`、空格（并）和 `||`。
 - `dataVersion`：包保存在状态目录里的数据格式版本。
-- `capabilities`：包要求的能力，取自 `PLUGIN_CAPABILITIES`（`models.provide`、`tasks.run`、`projects.read`、`sessions.read`、`network`），不认识的名字使安装被拒绝。
+- `capabilities`：包要求的能力，取自 `PLUGIN_CAPABILITIES`（`models.provide`、`tasks.run`、`projects.read`、`sessions.read`、`network`、`process.exec`），不认识的名字使安装被拒绝。
+- `executables`：与 `process.exec` 一起出现的命令名列表，见下文「权限由宿主按调用检查」。
 
 ### 安装与版本
 
@@ -270,24 +309,29 @@ node --permission --no-experimental-sqlite
 | 信号 | 只能发给自己：`process.kill(ppid, 0)`、向服务进程发 `SIGTERM`/`SIGKILL`/`SIGUSR1` 都是 `EPERM` | **不受限**：包可以杀死服务进程。向服务发 `SIGUSR1` 会使 Node 打开 Inspector 端口，服务在启动第一个包进程时装一个监听挡住它（Node 24.19，测试覆盖），`--disable-sigusr1` 同样有效；`SIGKILL` 等无法阻止 |
 | 网络 | 默认全部拒绝（`fetch`、`net.connect`、监听、UDP）。持有 `network` 才允许对外 IP 连接和名称解析；连接其他 unix socket（tmux、ssh-agent、Docker）和服务自己的端口始终 `EPERM` | Node 24 **不受限**：`network` 只约束经宿主代理的 `gateway.fetchModels`；Node 25+ 由权限模型默认拒绝，授权 `network` 后传入 `--allow-net`，仍无服务端口隔离 |
 | 环境 | 服务进程的环境变量（令牌、PATH）不传入 | 同左 |
+| `process.exec` | 例外：声明的命令在沙箱外以用户的身份运行（`host.exec`，见下） | 同左 |
 
 **仍然没有约束的**（两个平台）：CPU 与磁盘占用（内存只限制 V8 堆为 256 MB）；包经授权合法读到的东西，持有 `network` 的包都能送出去——自己的包和状态目录、宿主通过协议交给它的内容（`projects.read` 读到的项目文件、模型源的 `overrides`、它自己的密钥）；回环上的其他服务：`network` 包含 `127.0.0.1`，除服务自己的端口外本机的其他服务（模型服务器、数据库）它都连得上，服务自己的端口只在启动时已知的 `--port`（及监听后的实际端口）上关闭，同一台机器上另一个 Riffet 实例或前端开发服务器的端口不在其内；Node 文档列出的权限模型绕过方式（`v8.setFlagsFromString`、使用已有的文件描述符等）在内层仍然存在，外层沙箱是为此而设。Seatbelt 的 `sandbox-exec` 已标为弃用，但仍随系统提供，Linux 上的等价物（用户命名空间、Landlock）尚未实现。
 
 **权限由宿主按调用检查**，不信包自己说了什么。协议是逐行 JSON 的 RPC，走子进程的 stdin/stdout，不用 Node 的 IPC 通道（它的解析器把一行坏数据抛到服务的顶层）；一条消息至多 8 MB，坏行或超长都只让该插件失败（`packages/plugin-api/src/runtime/protocol.ts`，子进程一侧是 `child.mjs`，构建时复制为 `dist/plugin-runtime.mjs`）：子进程里的入口得到一个代理 `PluginHost`，调用回到服务端，每次按该版本被授予的能力检查：
 
 - 贡献按种类检查：模型源需要 `models.provide`，任务提供方需要 `tasks.run`，缺少则激活失败并写明。
-- `gateway.fetchModels` 需要 `network`（请求字段逐项校验，`select` 与 `signal` 不能跨进程）；`invalidateModelCatalogs` 需要 `models.provide`；`secrets.set` 只写自己的密钥。`runProcess`、`resolveCli`、`agentProfiles` 不提供。
+- `gateway.fetchModels` 需要 `network`（请求字段逐项校验，`select` 与 `signal` 不能跨进程）；`invalidateModelCatalogs` 需要 `models.provide`；`secrets.set` 只写自己的密钥。`agentProfiles` 不提供。
+- `host.exec`（`host.runProcess` 的跨进程形式）需要 `process.exec`：`command` 须与包声明的某个 `executables` 逐字相等，宿主用进程内插件同一个 `resolveCli` 解析为绝对路径（未安装 404；落在包目录或包状态目录之内的文件 403），`args` 至多 64 项、每项至多 8192 字符、不含 NUL，工作目录恒为包的状态目录（子进程传来的 `cwd` 不用），环境是服务的环境加上 `env` 里通过任务计划同一判定（`backends/shared/installed-env.ts`）的变量，超时默认 30 秒、至多 120 秒，输出默认 256 KB、至多 1 MB，每包同时至多 4 个（429），没有标准输入；底层是进程内宿主用的同一个 `runProcess`。这是同意的边界，不是隔离：命令在沙箱外以运行 Riffet 的用户的身份运行，参数由包决定，声明解释器的包可执行任意代码。日志只记命令名、参数个数、耗时和退出码。
+- `host.tasks.start` 需要 `tasks.run`，由进程内包得到的同一个实现服务：只能启动包自己的任务提供方，任务服务仍对每条新计划确认，`confirm` 原样传入；包没有声明任务提供方时宿主没有 `tasks`，答 501 `PLUGIN_HOST_UNSUPPORTED`。
+- 同步成员的预载事实：随 `load` 与 `state` 送给子进程（每次调用前，只要设置、密钥或下列内容变了就重送）：`executables: { [名字]: 是否已安装 }`（只有持有 `process.exec` 时非空）和 `modelSourcesInUse`（包自己声明的模型源 id 中被已保存档案使用的）。子进程里 `resolveCli(name)` 在该名字为真时返回 `name` 本身（包看不到宿主路径），`modelSourceInUse(id)` 查这份列表，`tasks` 只在被授予 `tasks.run` 时存在（`load` 带 `granted`）。这些是协议的可加性增加，缺省时子进程按空处理，所以 `RUNTIME_PROTOCOL_VERSION` 不变。
+- 命令凭据：模型源 `resolve()` 的 `credential: { kind: 'command', command, args }` 在持有 `process.exec` 且 `command` 是声明的名字、`args` 合乎上述限制时被接受，宿主把 `command` 解析为绝对路径再交给驱动；该命令之后由 Agent CLI 自己运行（Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`），在沙箱外。
 - 项目只以句柄出现：宿主为一次任务调用（`detect`、`actions`、`plan`）发一个随机句柄，绑定那次调用的 `ProjectContext`，调用结束即失效；`project.exists/readText/list` 需要 `projects.read`，句柄无效、过期或不属于本包的一律 403 `PLUGIN_HANDLE_INVALID`。路径限定、符号链接检查仍由宿主的 `ProjectContext` 完成，包看不到绝对路径。
 - 任务计划（`TaskPlan`）只由宿主的任务服务在用户发起任务后执行，并照常校验。
 - 子进程发来的请求同时不超过 64 个，未知方法得 404 `PLUGIN_UNKNOWN_HOST_CALL`。
 
-**进程生命周期**：激活时启动，停用时先对子进程发 `dispose`（执行包登记的清理，至多约 5 秒），再结束进程。每个调用都有期限（激活 30 秒，模型目录 60 秒，状态 8 秒等），进程退出、协议错误或调用超时都使该插件失败：撤回它的贡献，状态显示原因，依赖它的插件先关闭，管理功能不受影响，服务不受影响。只在下一次显式开启或刷新时重新启动。
+**进程生命周期**：激活时启动，停用时先对子进程发 `dispose`（执行包登记的清理，至多约 5 秒），再结束进程。每个调用都有期限（激活 30 秒，模型目录 60 秒，状态 8 秒等），进程退出、协议错误或调用超时都使该插件失败：撤回它的贡献，状态显示原因，依赖它的插件先关闭，管理功能不受影响，服务不受影响。已提交的激活失败后自动重启（2 / 10 / 60 秒，见「生命周期」），三次都失败则保持关闭，直到下一次显式开启或刷新。
 
 **本阶段支持的贡献**：模型源、任务提供方、操作（含设备码登录）、命令（`Contributions.commands`）、头像风格（`Contributions.avatarStyles`）、状态、doctor 检查，以及静态声明（视图、外观、任务声明）。不支持的有：Agent 后端（声明了 `contributes.agentBackends` 的包在安装时被拒绝：「agent backends need a trusted package in this version」）、分享发布目标、运行时钩子。
 
-- 模型源的 `resolve()` 是同步的，跨进程做不到，所以代理保存「每组 overrides 最近一次的结果」：`ModelSourceProvider` 增加可选的异步 `prepare(overrides)`，激活后对默认值预取，目录读取（`sourceCatalog`）前核心先 `await prepare`，缓存超过 60 秒的 `resolve` 在后台刷新。没有预取过的 overrides 先返回 `reason`「尚未准备好」，并触发一次预取。子进程返回的结果逐字段校验：地址只能是 http(s)，凭据只能是静态密钥——`command` 凭据会在沙箱外执行（Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`），安装包提供时该源返回 `reason`。
+- 模型源的 `resolve()` 是同步的，跨进程做不到，所以代理保存「每组 overrides 最近一次的结果」：`ModelSourceProvider` 增加可选的异步 `prepare(overrides)`，激活后对默认值预取，目录读取（`sourceCatalog`）前核心先 `await prepare`，缓存超过 60 秒的 `resolve` 在后台刷新。没有预取过的 overrides 先返回 `reason`「尚未准备好」，并触发一次预取。子进程返回的结果逐字段校验：地址只能是 http(s)，凭据只能是静态密钥，或持有 `process.exec` 时指向声明的可执行文件的 `command` 凭据（它会在沙箱外执行：Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`）；其他 `command` 凭据使该源返回 `reason`。声明了 `contributes.modelSources[].hosts` 的源另受地址限制：`endpoints[*].baseUrl`、`claudeBaseUrl`、`codexBaseUrl` 和描述里的 `defaultEndpoint` 的主机必须匹配声明，或是用户输入的地址（该次调用的档案 `apiEndpoint`、本包 `text` 设置中的 http(s) 地址），否则 `resolve` 返回 `reason`，地址不交给驱动；`defaultEndpoint` 不符时激活失败。未声明 `hosts` 的源保持原行为。`host.gateway.fetchModels` 由服务进程发起，不在沙箱内，所以宿主在请求前按字面主机名检查（不做 DNS 解析）：目标是回环或未指定地址上的服务自己的端口时一律拒绝；链路本地地址（169.254.0.0/16、fe80::/10）除非是用户输入的地址也拒绝；包声明了 `hosts` 时目标须匹配声明或为用户输入的地址。该请求只在原 origin 内跟随重定向，重定向不改变主机。
 - 模型源的可选 `usage(overrides)` 通过 `modelSource.usage` RPC 返回 `NativeBackendUsage`。激活描述只在提供该方法时声明能力，宿主校验并投影账号窗口、余额和模型状态，不透传包的其他字段。额度使用 profile 自己的地址和凭据，与 CLI 登录账号分开；旧包省略此方法仍可正常提供模型。
-- 命令：子进程在激活结果里列出命令 ID，宿主对每个生成代理，由命令路由（`POST /api/integrations/:id/commands/:name`，声明、范围、`when`、参数的检查都在路由里）调用；调用带 `projectId`、`sessionId`、已校验的 `args` 和 `timeoutMs`，子进程在期限前 5 秒中止 `signal`（60 秒的调用期限同其他调用，超过使该插件失败），插件关闭时也中止。返回的 `CommandResult` 逐字段校验（`done` 的消息至多 16 种语言、各 500 字；`open` 至少有 `view`、`sessionId`、`path` 之一，`path` 为项目内相对路径；`task` 要有 `taskId`），不合格是协议错误。已安装的包没有 `host.tasks`，命令不能启动任务。
+- 命令：子进程在激活结果里列出命令 ID，宿主对每个生成代理，由命令路由（`POST /api/integrations/:id/commands/:name`，声明、范围、`when`、参数的检查都在路由里）调用；调用带 `projectId`、`sessionId`、已校验的 `args` 和 `timeoutMs`，子进程在期限前 5 秒中止 `signal`（60 秒的调用期限同其他调用，超过使该插件失败），插件关闭时也中止。返回的 `CommandResult` 逐字段校验（`done` 的消息至多 16 种语言、各 500 字；`open` 至少有 `view`、`sessionId`、`path` 之一，`path` 为项目内相对路径；`task` 要有 `taskId`），不合格是协议错误。持有 `tasks.run` 的已安装包有 `host.tasks.start`，命令可以启动自己提供方的任务。
 - 头像风格：子进程在激活结果里列出风格 ID，宿主对每个生成代理，调用 `avatar.generate` 取回 SVG（调用期限 10 秒，核心自己另有 5 秒的等待，超过使该插件失败）；返回值必须是字符串，之后同在进程内的风格一样由核心校验、栅格化。
 - 子进程回复的错误只保留 400、404、409、422 四种状态，其余（含 401、403、5xx 和没有状态）一律 502：状态由包自选，不能冒充服务端自己的结论（401 会被当作登录失效，403 当作权限不足）；错误码限 `^[A-Z][A-Z0-9_]{0,63}$`，否则取 `INTEGRATION_ACTION_FAILED`，消息至多 2000 字。
 - 模型源 ID：已安装的包只能提供 `<插件 id>.<名称>`（名称为小写字母、数字、连字符，全长至多 64），激活时检查，不合格激活失败并写明。模型源 ID 存在档案里、档案带 API Key，若允许任意 ID，包可以在内置源（ID 不含点，插件 ID 一定含点所以不会撞）未启用时占用它的 ID 并收到档案的密钥；名称不含点，使 `a.b` 的 `c.d` 与 `a.b.c` 的 `d` 不会重名。
@@ -339,7 +383,7 @@ Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也
 
 恢复模式持久化在 plugins.json 的 recovery 字段，先于外部插件的 detect 执行；内置包不暂停，每个插件原本的 on/off/auto 保持不变，服务重启后仍有效。运行任务沿用现有等待停用规则。命令行 riffet plugin recovery on/off 可在服务停止时修改恢复状态，并取得状态目录锁；reload <id> 和 diagnostics <id> 需要正在运行的服务。
 
-当前安装渠道是本地 TGZ/ZIP/TAR 上传或本机 CLI 目录安装，没有公共市场、远程自动更新或作者签名认证；SDK 已能独立生成归档，尚未发布至 registry。完整性哈希用于发现内容变化，不代表作者身份认证。
+安装渠道是本地 TGZ/ZIP/TAR 上传、本机 CLI 目录安装和按 ID 从静态索引安装（见 [插件市场](PLUGINS.md#插件市场)）；没有远程自动更新，也不做作者签名认证；SDK 已能独立生成归档，尚未发布至 registry。完整性哈希用于发现内容变化，不代表作者身份认证。
 
 
 ## 独立分发与后续改进（2026-11-09）
@@ -367,6 +411,6 @@ CLI 的编译器由宿主运行依赖提供，不查找插件私有编译器；�
 
 ### 页面安装信任与整插件移除
 
-本机 Web/Mac 上传与 CLI 路径安装使用相同的版本信任记录；multipart `trusted=true` 必须来自 loopback、无代理头且通过认证/CSRF。隔离校验遇到需要宿主能力的包，返回结构化 `PLUGIN_TRUST_REQUIRED`，客户端显式确认后重传；`requiresTrustedHost` 只描述需求，不授予执行权限。保留旧模型源 ID 等兼容包使用同一确认流程。
+本机 Web/Mac 上传与 CLI 路径安装使用相同的版本信任记录；multipart `trusted=true` 必须来自 loopback、无代理头、`Host` 为回环名，且通过认证/CSRF。隔离校验遇到需要宿主能力的包，返回结构化 `PLUGIN_TRUST_REQUIRED`，客户端显式确认后重传；`requiresTrustedHost` 只描述需求，不授予执行权限。保留旧模型源 ID 等兼容包使用同一确认流程。
 
 整插件 DELETE 在管理队列中处理 `source` 和开发目录 `path`，以描述符的 `developmentPath` 精确定位同 ID 的不同来源和目录。安装包一次移除所有版本，开发包持久排除自动发现；均保留设置和数据，检查运行任务，先保存移除记录再停止匹配的作用域。坏包或目录暂时不存在时仍保留管理目标，不能借用同 ID 健康插件的身份。描述符 `developmentLinked` 仍只表示保存的关联，原 unlink 接口保留。dev 首次成功构建建立关联，后续仅重载，已解除的关联不会被 watcher 恢复。

@@ -1,5 +1,6 @@
 // A sidebar view that reads the open conversation through the message bridge: turn count, total and median
-// turn duration, and the tools of the last turn. Plain DOM, no framework. `build.mjs` bundles it with the
+// turn duration, and the tools of the last turn. Plain DOM, no framework; spacing, radius and type come from the
+// host's base stylesheet (`--riffet-*` properties, PLUGIN_BASE_STYLE in packages/plugin-web). `build.mjs` bundles it with the
 // bridge client into `web/index.js`, which is the package's web entry.
 import { connect, type BridgeConnection } from '@riffet/plugin-web/bridge-client';
 
@@ -12,14 +13,14 @@ const pick = (locale: string): Messages => (locale.toLowerCase().startsWith('zh'
 
 const style = document.createElement('style');
 style.textContent = `
-  body { padding: 12px; }
-  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-  .cell { background: var(--bg-subtle); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
-  .label { color: var(--fg-3); font-size: 11px; }
-  .value { color: var(--fg); font-size: 18px; font-variant-numeric: tabular-nums; }
-  h2 { color: var(--fg-3); font-size: 11px; font-weight: 500; margin: 16px 0 6px; }
+  body { padding: var(--riffet-space-3); }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--riffet-space-2); }
+  .cell { background: var(--bg-subtle); border: var(--riffet-border-width) solid var(--line); border-radius: var(--riffet-radius-container); padding: var(--riffet-space-2) var(--riffet-space-3); }
+  .label { color: var(--fg-3); font-size: var(--riffet-text-small); line-height: var(--riffet-leading-small); }
+  .value { color: var(--fg); font-size: var(--riffet-text-reading); line-height: var(--riffet-leading-reading); font-weight: 500; font-variant-numeric: tabular-nums; }
+  h2 { color: var(--fg-3); font-size: var(--riffet-text-small); line-height: var(--riffet-leading-small); font-weight: 500; margin: var(--riffet-space-4) 0 var(--riffet-space-2); }
   ul { list-style: none; margin: 0; padding: 0; }
-  li { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid var(--line-soft); }
+  li { display: flex; justify-content: space-between; padding: var(--riffet-space-1) 0; border-bottom: var(--riffet-border-width) solid var(--line-soft); }
   li span:last-child { color: var(--fg-3); font-variant-numeric: tabular-nums; }
   .muted { color: var(--fg-3); }
 `;

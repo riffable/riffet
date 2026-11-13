@@ -1,6 +1,6 @@
 # Riffet Plugin API
 
-API v1 for Riffet product plugins. Stable entry points are the manifest, lifecycle, model-source, command and task contracts; Agent interfaces and the in-app Web SDK remain experimental. `@riffet/plugin-api/experimental/agent` makes that boundary explicit while the existing root exports remain compatible.
+API v1 for Riffet product plugins. Stable entry points are the manifest, lifecycle, model-source, command and task contracts; Agent interfaces and the in-app Web SDK remain experimental. The Agent protocol is imported from `@riffet/plugin-api/experimental/agent` and is not part of the package root. `@riffet/plugin-api/kit` holds helpers shared with the Riffet core for first-party packages, with no compatibility promise.
 
 The package ships compiled ESM, TypeScript declarations, the manifest JSON Schema and the `riffet-plugin` executable. It does not import a Riffet checkout or private host implementation.
 

@@ -15,6 +15,7 @@ import { isWithin, projectRoot } from '../workspace/scope.js';
 import { checkCommand, checkGlobs, diagnosticsContext, expandArtifacts, projectContext, resolveWorkingDirectory } from './files.js';
 import { identify, isAlive, processStart, readExitCode, signalExitCode, signalGroup, spawnTask } from './process.js';
 import { TaskStore, isOpen, type ApprovalKey, type StoredTask } from './store.js';
+import { INSTALLED_ENV_VALUE_BYTES, installedEnvNameAllowed } from '../backends/shared/installed-env.js';
 
 const POLL_MS = 500;
 /** From SIGTERM to SIGKILL. */
@@ -34,15 +35,6 @@ const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const ACTION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const PARAM_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** What an installed package's plan may set: a plain upper-case name that cannot change how a program or the shell starts, with a bounded value. */
-const INSTALLED_ENV_NAME = /^[A-Z][A-Z0-9_]{0,63}$/;
-// `SHELLOPTS`, `BASHOPTS` and `PS4` reach the `/bin/sh` wrapper every task runs under (bash imports them: `SHELLOPTS=xtrace` with `PS4='$(…)'` runs code before the command).
-const INSTALLED_ENV_DENIED = new Set([
-  'NODE_OPTIONS', 'NODE_PATH', 'PATH', 'HOME', 'SHELL', 'BASH_ENV', 'ENV', 'ZDOTDIR', 'SHELLOPTS', 'BASHOPTS', 'PS4', 'IFS',
-  'PYTHONSTARTUP', 'PYTHONPATH', 'PYTHONHOME', 'RUBYOPT', 'RUBYLIB', 'PERL5OPT', 'PERL5LIB', 'PERLLIB', 'JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS',
-]);
-const INSTALLED_ENV_DENIED_PREFIXES = ['DYLD_', 'LD_', 'GIT_', 'SSH_', 'RIFFET_', 'BASH_', 'LUA_'];
-const INSTALLED_ENV_VALUE_BYTES = 4096;
 /** The most an installed package's plan may show the user, in characters of `file`, `args` and `env` together: what fits the confirmation without hiding a part. */
 const INSTALLED_PLAN_CHARS = 8192;
 /** Control, format (bidirectional overrides, zero-width) and line-separator characters: they can make the confirmed text read as something else. */
@@ -223,7 +215,7 @@ function cleanDiagnostics(raw: unknown): TaskDiagnostic[] {
 function checkInstalledPlan(plan: { file: string; args: string[]; env: Record<string, string> }): void {
   const invalid = (message: string) => new AppError('TASK_PLAN_INVALID', message, 502);
   for (const [name, value] of Object.entries(plan.env)) {
-    if (!INSTALLED_ENV_NAME.test(name) || INSTALLED_ENV_DENIED.has(name) || INSTALLED_ENV_DENIED_PREFIXES.some(prefix => name.startsWith(prefix))) throw invalid(`The plan's env may not set ${name}`);
+    if (!installedEnvNameAllowed(name)) throw invalid(`The plan's env may not set ${name}`);
     if (Buffer.byteLength(value) > INSTALLED_ENV_VALUE_BYTES) throw invalid(`The plan's env value of ${name} is longer than ${INSTALLED_ENV_VALUE_BYTES} bytes`);
   }
   const shown = [plan.file, ...plan.args, ...Object.entries(plan.env).flat()];

@@ -23,7 +23,7 @@ const send = message => { writeOut(`${JSON.stringify(message)}\n`); };
 
 let nextId = 1;
 const pending = new Map();
-const state = { pluginId: '', stateDir: '', settings: {}, secrets: {} };
+const state = { pluginId: '', stateDir: '', settings: {}, secrets: {}, executables: {}, modelSourcesInUse: [], granted: [] };
 let plugin;
 let activation;
 const flows = new Map();
@@ -84,8 +84,15 @@ const host = {
       if (value === null) delete state.secrets[name]; else state.secrets[name] = value;
     },
   },
-  runProcess: async () => { throw unsupported('runProcess'); },
-  resolveCli: () => undefined,
+  // `process.exec`: a command the package declared runs on the host, outside this sandbox, in the package's state directory
+  // (`options.cwd` is accepted and ignored). The package never learns a host path: `resolveCli` answers with the name.
+  runProcess: async (file, args, options = {}) => {
+    if (typeof file !== 'string' || !Object.hasOwn(state.executables, file)) throw unsupported('runProcess');
+    const { timeoutMs, maxOutputBytes, env } = options;
+    return call('host.exec', { command: file, args, ...(timeoutMs !== undefined ? { timeoutMs } : {}), ...(maxOutputBytes !== undefined ? { maxOutputBytes } : {}), ...(env ? { env } : {}) });
+  },
+  resolveCli: name => (typeof name === 'string' && Object.hasOwn(state.executables, name) && state.executables[name] === true ? name : undefined),
+  modelSourceInUse: id => state.modelSourcesInUse.includes(id),
   gateway: {
     fetchModels(request) {
       if (typeof request?.select === 'function') return Promise.reject(unsupported('gateway.fetchModels with select'));
@@ -97,6 +104,9 @@ const host = {
     effortOption,
   },
   invalidateModelCatalogs: () => { call('host.invalidateModelCatalogs').catch(() => undefined); },
+  get tasks() {
+    return state.granted.includes('tasks.run') ? { start: (projectId, actionId, params, options) => call('host.tasks.start', { projectId, actionId, ...(params ? { params } : {}), ...(options?.providerId ? { providerId: options.providerId } : {}), ...(options?.confirm ? { confirm: options.confirm } : {}) }) } : undefined;
+  },
   error: (code, message, statusCode) => Object.assign(new Error(message), { code, ...(statusCode !== undefined ? { statusCode } : {}) }),
 };
 
@@ -142,14 +152,14 @@ async function bounded(run, ms) {
 }
 
 const handlers = {
-  async load({ entry, pluginId, stateDir, settings, secrets }) {
-    Object.assign(state, { pluginId, stateDir, settings, secrets });
+  async load({ entry, pluginId, stateDir, settings, secrets, executables, modelSourcesInUse, granted }) {
+    Object.assign(state, { pluginId, stateDir, settings, secrets, executables: executables ?? {}, modelSourcesInUse: modelSourcesInUse ?? [], granted: granted ?? [] });
     const exported = (await import(pathToFileURL(entry).href)).default;
     if (!exported || typeof exported.activate !== 'function') throw new Error('the server entry must export default { activate }');
     plugin = exported;
     return { protocol: 1 };
   },
-  state({ settings, secrets }) { Object.assign(state, { settings, secrets }); return null; },
+  state({ settings, secrets, executables, modelSourcesInUse }) { Object.assign(state, { settings, secrets, executables: executables ?? {}, modelSourcesInUse: modelSourcesInUse ?? [] }); return null; },
 
   async activate({ generation }) {
     const controller = new AbortController();

@@ -3,10 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ActionOutcome, ActivationScope, Contributions, Plugin, PluginHost, PluginManifest, SharePublisher } from '@riffet/plugin-api';
+import { AppError } from '../errors.js';
 import { PluginRegistry } from './registry.js';
 import { PluginStore } from './store.js';
 import { migratePluginStorage } from '../compat.js';
 import { PackageStore } from '../plugins-host/packages.js';
+import { apiVersionProblem, checkManifest } from './declarations.js';
 
 const directories: string[] = [];
 afterEach(async () => { for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true }); });
@@ -96,6 +98,32 @@ describe('on-demand plugin execution', () => {
       expect(restarted.store.item('acme.linked').settings).toEqual({ region: 'eu' });
       expect(await readFile(join(pkg, 'index.mjs'), 'utf8')).toBe(entry('second'));
     } finally { await restarted.close(); vi.unstubAllEnvs(); }
+  });
+
+  it('decides model source ids and agent tool prefixes at load, by registration order', async () => {
+    const declare = (id: PluginManifest['id'], extra: Partial<PluginManifest>) => custom(id, () => ({}), extra);
+    const sourceOf = (id: string) => ({ modelSources: [{ id, title: { en: id }, backends: ['codex' as const] }] });
+    const toolsOf = (id: string, toolPrefix: string) => ({ agentTools: [{ id: `${id}/tools`, title: { en: 'Tools' }, toolPrefix }] });
+    const undeclared = custom('acme.undeclared', () => ({ modelSources: [source('owned-source')] }));
+    const registry = new PluginRegistry({
+      stateDir: await stateDir(), developmentPackages: [],
+      plugins: [
+        declare('acme.first', { contributes: { ...sourceOf('dup-source'), ...toolsOf('acme.first', 'dup_') } }),
+        declare('acme.second', { contributes: { ...sourceOf('dup-source') } }),
+        declare('acme.third', { contributes: toolsOf('acme.third', 'dup_') }),
+        undeclared,
+        declare('acme.owner', { activation: ['model-source'], contributes: sourceOf('owned-source') }),
+      ],
+    });
+    try {
+      await registry.refresh();
+      expect(await byId(registry, 'acme.second')).toMatchObject({ rejected: true });
+      expect(await registry.diagnostics('acme.second')).toEqual([expect.objectContaining({ status: 'fail', detail: 'model source "dup-source" is already declared by acme.first' })]);
+      expect(await registry.diagnostics('acme.third')).toEqual([expect.objectContaining({ detail: 'agent tool prefix "dup_" is already declared by acme.first' })]);
+      // A declared owner wins at activation even though it is not active: the undeclared provider is refused.
+      expect(await byId(registry, 'acme.undeclared')).toMatchObject({ active: false });
+      expect(registry.modelSources().filter(item => item.id === 'owned-source')).toHaveLength(1);
+    } finally { await registry.close(); }
   });
 
   it('refuses occupied ids and failed activations before saving a development link', async () => {
@@ -824,10 +852,7 @@ describe('plugin manifests', () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const bad: Array<[string, unknown]> = [
       ['acme.b1', { views: [view('other.plugin/x')] }],
-      ['acme.b2', { views: [view('acme.b2/x', { locations: ['nowhere'] })] }],
-      ['acme.b3', { views: [view('acme.b3/x', { clients: ['ios'] })] }],
       ['acme.b4', { views: [view('acme.b4/x'), view('acme.b4/x')] }],
-      ['acme.b5', { commands: [{ id: 'acme.b5/run', title, when: { script: 'true' } }] }],
     ];
     const registry = new PluginRegistry({ stateDir: await stateDir(), plugins: [
       custom('acme.good', () => ({}), { defaultEnabled: false, version: '1.2.3', title: { 'zh-Hans': '画布', en: 'Canvas' }, contributes: { views: [view('acme.good/flow', { locations: ['session-view'], defaultLocation: 'session-view' }) as never] } }),
@@ -837,7 +862,7 @@ describe('plugin manifests', () => {
     expect(await byId(registry, 'acme.good')).toMatchObject({ enabled: false, source: 'builtin', version: '1.2.3', title: { en: 'Canvas' }, declared: { views: [{ id: 'acme.good/flow' }] } });
     expect(registry.modelSources()).toEqual([]);
     const reasons = (await registry.descriptors()).filter(item => item.id !== 'acme.good').map(item => item.status?.message ?? '');
-    expect(reasons).toEqual([expect.stringContaining('acme.b1/<name>'), expect.stringContaining('unknown location'), expect.stringContaining('unknown client'), expect.stringContaining('declared twice'), expect.stringContaining('unknown condition')]);
+    expect(reasons).toEqual([expect.stringContaining('acme.b1/<name>'), expect.stringContaining('declared twice')]);
   });
 
   it('loads a trusted development package without letting it take a built-in id, and serves only its allowed files from inside it', async () => {
@@ -1029,5 +1054,127 @@ describe('turning off or switching with running tasks', () => {
       expect(await registry.selectVersion('acme.swap', '1.0.0')).toMatchObject({ version: '2.0.0', stopping: { version: '1.0.0' } });
       expect(await registry.update('acme.swap', { force: true })).toMatchObject({ version: '1.0.0', installed: { selected: '1.0.0' } });
     } finally { await registry.close(); }
+  });
+});
+
+describe('calls into plugin code and process restarts', () => {
+  const live = (registry: PluginRegistry, id: string) => registry.modelSources().find(item => item.id === id)!;
+  const failProcess = (registry: PluginRegistry, id: string, reason = 'process exited') => {
+    const entry = (registry as unknown as { entries: Map<string, { active?: { generation: number } }> }).entries.get(id)!;
+    (registry as unknown as { processFailed(id: string, generation: number, reason: string): void }).processFailed(id, entry.active!.generation, reason);
+  };
+
+  it('stops waiting for a hung call, journals it, refuses calls after three timeouts in a row and tries again after the cool-down', async () => {
+    let hang = true;
+    const catalog = vi.fn(async () => { if (hang) await new Promise(() => undefined); return []; });
+    const registry = new PluginRegistry({ stateDir: await stateDir(), callTimeoutMs: 20, failFastMs: 120, plugins: [custom('acme.hung', () => ({ modelSources: [{ ...source('hung-source'), catalog }] }))] });
+    try {
+      await registry.refresh();
+      const provider = live(registry, 'hung-source');
+      await expect(provider.catalog('codex', {})).rejects.toMatchObject({ message: expect.stringMatching(/acme\.hung: modelSource\.catalog did not finish within 0\.02s/) });
+      expect((await registry.logs('acme.hung')).some(item => item.level === 'error' && item.message.includes('modelSource.catalog failed'))).toBe(true);
+      await expect(provider.catalog('codex', {})).rejects.toThrow('did not finish');
+      await expect(provider.catalog('codex', {})).rejects.toThrow('did not finish');
+      expect(catalog).toHaveBeenCalledTimes(3);
+      expect((await byId(registry, 'acme.hung')).status).toMatchObject({ state: 'attention', message: expect.stringContaining('not responding') });
+      await expect(provider.catalog('codex', {})).rejects.toMatchObject({ code: 'PLUGIN_NOT_RESPONDING' });
+      expect(catalog).toHaveBeenCalledTimes(3);
+      await new Promise(resolve => setTimeout(resolve, 140));
+      hang = false;
+      await expect(provider.catalog('codex', {})).resolves.toEqual([]);
+      expect(catalog).toHaveBeenCalledTimes(4);
+      expect((await byId(registry, 'acme.hung')).status?.state).not.toBe('attention');
+    } finally { await registry.close(); }
+  });
+
+  it('does not count an ordinary error toward fail-fast and passes it on unchanged', async () => {
+    const catalog = vi.fn(async () => { throw new AppError('GATEWAY_DOWN', 'gateway is down', 502); });
+    const registry = new PluginRegistry({ stateDir: await stateDir(), callTimeoutMs: 20, plugins: [custom('acme.down', () => ({ modelSources: [{ ...source('down-source'), catalog }] }))] });
+    try {
+      await registry.refresh();
+      for (let index = 0; index < 5; index++) await expect(live(registry, 'down-source').catalog('codex', {})).rejects.toMatchObject({ code: 'GATEWAY_DOWN', message: 'gateway is down', statusCode: 502 });
+      expect(catalog).toHaveBeenCalledTimes(5);
+      expect((await registry.logs('acme.down')).filter(item => item.message.includes('modelSource.catalog failed'))).toHaveLength(5);
+    } finally { await registry.close(); }
+  });
+
+  it('restarts a process that died while live with backoff, and stops after the third failed attempt', async () => {
+    let starts = 0;
+    const registry = new PluginRegistry({ stateDir: await stateDir(), restartDelaysMs: [5, 5, 5], plugins: [custom('acme.proc', () => { if (++starts > 1) throw new Error('still broken'); return {}; })] });
+    try {
+      await registry.refresh();
+      failProcess(registry, 'acme.proc');
+      await vi.waitFor(async () => expect((await byId(registry, 'acme.proc')).status?.message).toContain('automatic restarts stopped'));
+      expect(starts).toBe(4);
+      await new Promise(resolve => setTimeout(resolve, 30));
+      expect(starts).toBe(4);
+      expect((await registry.logs('acme.proc')).filter(item => item.message.startsWith('Restarting in'))).toHaveLength(3);
+    } finally { await registry.close(); }
+  });
+
+  it('brings a restarted process back, and does not restart one the user turned off', async () => {
+    let starts = 0;
+    const registry = new PluginRegistry({ stateDir: await stateDir(), restartDelaysMs: [20, 20, 20], plugins: [custom('acme.back', () => { starts++; return {}; }), custom('acme.off', () => { starts += 100; return {}; })] });
+    try {
+      await registry.refresh();
+      failProcess(registry, 'acme.back');
+      failProcess(registry, 'acme.off');
+      await registry.update('acme.off', { enablement: 'off' });
+      await vi.waitFor(() => expect(starts).toBe(102));
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(starts).toBe(102);
+      expect((await byId(registry, 'acme.off')).active).toBe(false);
+      expect((await byId(registry, 'acme.back')).active).toBe(true);
+    } finally { await registry.close(); }
+  });
+});
+
+describe('a manifest written for another host version', () => {
+  const title = { en: 'Item' };
+  const view = (name: string, locations: string[], extra: Record<string, unknown> = {}) => ({ id: `acme.newer/${name}`, title, locations, clients: ['web'], instances: 'single', ...extra });
+  const manifest = (extra: Record<string, unknown>) => ({
+    vendor: 'Acme', name: 'newer', apiVersion: 1, defaultEnabled: true,
+    contributes: { views: [view('known', ['sidebar']), view('docked', ['dock', 'sidebar'], { id: 'acme.newer/docked' }), view('only-dock', ['dock']), view('shiny', ['sidebar'], { renderer: { kind: 'carousel' } })], commands: [{ id: 'acme.newer/ok', title }, { id: 'acme.newer/gated', title, when: { hasBranch: true } }] },
+    ...extra,
+  }) as unknown as PluginManifest;
+
+  it('skips only the items it does not know, tells why, and never runs a skipped command', async () => {
+    const run = vi.fn(async () => ({ kind: 'done' as const, message: { en: 'ok' } }));
+    const value = custom('acme.newer', () => ({ commands: { 'acme.newer/ok': { run }, 'acme.newer/gated': { run } } }), manifest({ id: 'acme.newer' }));
+    const idle = custom('acme.idle', () => ({}), { activation: ['file-open' as never], contributes: { commands: [{ id: 'acme.idle/go', title }] } });
+    const registry = new PluginRegistry({ stateDir: await stateDir(), plugins: [value, idle], developmentPackages: [] });
+    try {
+      await registry.refresh();
+      const described = await byId(registry, 'acme.newer');
+      expect(described.declared?.views?.map(item => [item.id, item.locations])).toEqual([['acme.newer/known', ['sidebar']], ['acme.newer/docked', ['sidebar']]]);
+      expect(described.declared?.commands?.map(item => item.id)).toEqual(['acme.newer/ok']);
+      expect(registry.command('acme.newer', 'acme.newer/ok').declaration.id).toBe('acme.newer/ok');
+      expect(() => registry.command('acme.newer', 'acme.newer/gated')).toThrow(expect.objectContaining({ code: 'COMMAND_NOT_FOUND' }));
+      const notes = (await registry.diagnostics('acme.newer')).map(check => check.detail);
+      expect(notes).toEqual(expect.arrayContaining(['view "acme.newer/only-dock" skipped: unknown location "dock"', 'view "acme.newer/shiny" skipped: unknown renderer "carousel"', 'command "acme.newer/gated" skipped: unknown condition "hasBranch"']));
+      expect((await registry.doctorChecks()).map(check => check.detail)).toContain('command "acme.newer/gated" skipped: unknown condition "hasBranch"');
+      // Unknown activation events are dropped, not read as startup.
+      expect(await byId(registry, 'acme.idle')).toMatchObject({ active: false, activation: { events: [], state: 'idle' } });
+      expect((await registry.diagnostics('acme.idle')).map(check => check.detail)).toContain('activation event "file-open" is not known to this Riffet');
+    } finally { await registry.close(); }
+  });
+
+  it('still refuses an unknown capability, and author-time validation refuses what loading skips', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const registry = new PluginRegistry({ stateDir: await stateDir(), plugins: [custom('acme.cap', () => ({}), { capabilities: ['teleport'] as never })], developmentPackages: [] });
+    try {
+      await registry.refresh();
+      expect(await registry.doctorChecks()).toEqual([expect.objectContaining({ detail: expect.stringContaining('unknown capability "teleport"') })]);
+    } finally { await registry.close(); }
+    const written = manifest({ id: 'acme.newer' });
+    expect(checkManifest(written)).toMatch(/unknown location "dock"/);
+    expect(checkManifest(written, 'load')).toBeUndefined();
+  });
+
+  it('accepts the api versions between the minimum and the current one', () => {
+    expect([1, 2, 3].map(version => apiVersionProblem(version, 2, 3))).toEqual([expect.stringContaining('no longer loads v1'), undefined, undefined]);
+    expect(apiVersionProblem(4, 2, 3)).toBe('written for plugin API v4; this Riffet provides up to v3');
+    expect(apiVersionProblem(1.5)).toBe('apiVersion must be an integer');
+    expect(apiVersionProblem(1)).toBeUndefined();
   });
 });

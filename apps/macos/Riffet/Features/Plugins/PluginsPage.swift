@@ -378,7 +378,11 @@ struct PluginsPage: View {
         Divider()
         if let capabilities = item.capabilities, !capabilities.isEmpty {
             Text("权限").font(.callout.weight(.medium))
-            ForEach(capabilities, id: \.self) { Text(capability($0)).font(.callout) }
+            ForEach(capabilities, id: \.self) { value in
+                Text(capability(value)).font(.callout)
+                if value == "models.provide" { modelSourceNote(item.declared?.modelSources?.map(\.hosts) ?? []) }
+                if value == "process.exec" { executableNote(item.executables ?? []) }
+            }
         }
         if item.source == "development" || item.installed?.versions.contains(where: { $0.selected && $0.trusted }) == true {
             Text("以服务器进程的权限运行").font(.caption).foregroundStyle(palette.fg3)
@@ -667,7 +671,11 @@ struct PluginsPage: View {
                     if !entry.capabilities.isEmpty {
                         VStack(alignment: .leading, spacing: Space.sm) {
                             Text("权限").font(.callout.weight(.medium))
-                            ForEach(entry.capabilities, id: \.self) { Text(capability($0)).font(.callout) }
+                            ForEach(entry.capabilities, id: \.self) { value in
+                                Text(capability(value)).font(.callout)
+                                if value == "models.provide" { modelSourceNote(entry.modelSources?.map(\.hosts) ?? []) }
+                                if value == "process.exec" { executableNote(entry.executables ?? []) }
+                            }
                         }
                     }
                     if let readme = entry.readme, !readme.isEmpty,
@@ -700,7 +708,11 @@ struct PluginsPage: View {
         VStack(alignment: .leading, spacing: Space.md) {
             Text(store.grant?.id ?? "").font(.title3.weight(.semibold))
             Text(store.grant?.version ?? "").font(.caption).foregroundStyle(palette.fg3)
-            ForEach(store.grant?.capabilities ?? [], id: \.self) { Text(capability($0)) }
+            ForEach(store.grant?.capabilities ?? [], id: \.self) { value in
+                Text(capability(value))
+                if value == "models.provide" { modelSourceNote(store.grant?.modelSources?.map(\.hosts) ?? []) }
+                if value == "process.exec" { executableNote(store.grant?.executables ?? []) }
+            }
             if store.grant?.trustedAllowed == true {
                 Toggle("信任此插件", isOn: Binding(get: { store.trustedInstall }, set: { store.trustedInstall = $0 })).disabled(store.busy)
                 Text("允许插件使用 Riffet 的文件、网络和进程权限").font(.caption).foregroundStyle(palette.fg3)
@@ -738,13 +750,33 @@ struct PluginsPage: View {
         if item.status?.state == "attention" { return String(localized: "异常") }
         return item.enabled ? String(localized: "已启用") : String(localized: "已停用")
     }
+    /// Where a model source sends requests and the key: the hosts every source declares, otherwise any address it names.
+    @ViewBuilder private func modelSourceNote(_ sources: [[String]?]) -> some View {
+        let hosts = declaredHosts(sources)
+        if hosts.isEmpty {
+            Text("模型请求与密钥发往插件指定的地址").font(.caption).foregroundStyle(palette.fg3)
+        } else {
+            (Text("模型请求与密钥发往") + Text(" ") + Text(hosts.joined(separator: ", ")).font(.caption.monospaced()))
+                .font(.caption).foregroundStyle(palette.fg3)
+        }
+    }
+    /// The commands `process.exec` runs outside the sandbox, as the user.
+    @ViewBuilder private func executableNote(_ names: [String]) -> some View {
+        if !names.isEmpty { Text(names.joined(separator: ", ")).font(.caption.monospaced()).foregroundStyle(palette.fg3) }
+    }
+    private func declaredHosts(_ sources: [[String]?]) -> [String] {
+        guard !sources.isEmpty, sources.allSatisfy({ !($0 ?? []).isEmpty }) else { return [] }
+        var seen = Set<String>()
+        return sources.flatMap { $0 ?? [] }.filter { seen.insert($0).inserted }
+    }
     private func capability(_ value: String) -> String {
         switch value {
         case "models.provide": String(localized: "提供模型源")
         case "tasks.run": String(localized: "运行项目命令")
         case "projects.read": String(localized: "读取项目文件")
-        case "sessions.read": String(localized: "读取会话内容")
+        case "sessions.read": String(localized: "读取所在项目的会话内容，可由插件界面发出")
         case "network": String(localized: "访问网络")
+        case "process.exec": String(localized: "以你的身份运行本机命令")
         default: value
         }
     }

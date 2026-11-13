@@ -1,5 +1,5 @@
 import { z } from 'zod/v4';
-import type { PluginManifest } from './index.js';
+import { PLUGIN_API_MIN_VERSION, PLUGIN_API_VERSION, type PluginManifest } from './index.js';
 import {
   COMMAND_SCOPES, PLUGIN_CLIENTS, PLUGIN_ID, VIEW_INSTANCES, VIEW_LOCATIONS, isContributionOf,
   isAgentOfPlugin, isBuiltinBackendId, PLUGIN_CAPABILITIES,
@@ -16,6 +16,8 @@ const LANGUAGE_TAG = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
 const KEYBINDING = /^(?:(?:Mod|Ctrl|Alt|Shift|Meta)\+)*(?:[A-Za-z0-9`\-=[\]\\;',./]|F\d{1,2}|Enter|Escape|Space|Tab|Backspace|Delete|Arrow(?:Up|Down|Left|Right))$/;
 const SF_SYMBOL = /^[A-Za-z0-9.]{1,64}$/;
 const CONDITION_TOKEN = /^[a-z0-9][a-z0-9.:-]{0,63}$/;
+const ACTIVATION_EVENTS = ['startup', 'command', 'model-source', 'task', 'view'] as const;
+const CONDITION_KEYS = ['hasProject', 'hasSession', 'projectType', 'capability'] as const;
 const SETTING_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const PARAM_KEY = /^[A-Za-z0-9_.-]{1,64}$/;
 const PARAM_KINDS = ['text', 'boolean', 'choice'] as const;
@@ -26,6 +28,22 @@ const UNICODE_RANGE = /^U\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?(?:, ?U\+[0-9A
 const FONT_WEIGHT = /^(?:[1-9]\d{2}|1000)(?: (?:[1-9]\d{2}|1000))?$/;
 /** A reference to a contribution of any plugin: `<pluginId>/<name>`. */
 const CONTRIBUTION_REFERENCE = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]{0,63}$/;
+
+/** A model source's declared host: a lowercase hostname, optionally with a leading `*.` label and a `:port`. */
+const SOURCE_HOST = /^(?:\*\.)?(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?::\d{1,5})?$/;
+const MAX_SOURCE_HOSTS = 16;
+const validSourceHost = (value: unknown): value is string => typeof value === 'string' && value.length <= 253 && SOURCE_HOST.test(value)
+  && (!/:\d+$/.test(value) || Number(value.slice(value.lastIndexOf(':') + 1)) <= 65535);
+
+/** Whether `host` (`URL.host` form: lowercase, port only when not the scheme's default) is named by a declared entry. `*.x` matches any subdomain of `x`, not `x` itself; an entry without a port matches any port. */
+export function hostMatchesDeclared(host: string, declared: readonly string[]): boolean {
+  const [name = '', port] = host.split(/:(?=\d+$)/);
+  return declared.some(entry => {
+    const [pattern = '', declaredPort] = entry.split(/:(?=\d+$)/);
+    if (declaredPort !== undefined && declaredPort !== port) return false;
+    return pattern.startsWith('*.') ? name.endsWith(pattern.slice(1)) && name.length > pattern.length - 1 : name === pattern;
+  });
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === 'object' && !Array.isArray(value);
 const list = (value: unknown): unknown[] | undefined => Array.isArray(value) ? value : undefined;
@@ -235,6 +253,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
       sourceIds.add(item.id);
       const problem = localized(item.title, 'contributes.modelSources.title', 80);
       if (problem) return problem;
+      if (item.hosts !== undefined && (!Array.isArray(item.hosts) || item.hosts.length > MAX_SOURCE_HOSTS || !item.hosts.every(validSourceHost))) return 'contributes.modelSources.hosts must be at most 16 lowercase hostnames, each optionally with a leading "*." and a ":port"';
     }
   }
   if (declarations.sharePublisher !== undefined) {
@@ -292,7 +311,7 @@ function pick<T extends object>(item: T, keys: readonly string[]): T {
 const pickView = (view: ViewDeclaration): ViewDeclaration => ({
   ...pick(view, ['id', 'title', 'locations', 'defaultLocation', 'clients', 'instances', 'requires']),
   ...(view.icon ? { icon: pick(view.icon, ['svg', 'sfSymbol']) } : {}),
-  ...(view.when ? { when: pick(view.when, ['hasProject', 'hasSession', 'projectType', 'capability']) } : {}),
+  ...(view.when ? { when: pick(view.when, CONDITION_KEYS) } : {}),
   ...(view.renderer ? { renderer: rendererSchema.parse(view.renderer) as ViewDeclaration['renderer'] } : {}),
 });
 
@@ -303,7 +322,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const views = declarations.views?.map(pickView);
   const commands = declarations.commands?.map((item): CommandDeclaration => ({
     ...pick(item, ['id', 'title', 'keybinding', 'scope']),
-    ...(item.when ? { when: pick(item.when, ['hasProject', 'hasSession', 'projectType', 'capability']) } : {}),
+    ...(item.when ? { when: pick(item.when, CONDITION_KEYS) } : {}),
     ...(item.params ? { params: item.params.map(field => pick(field, ['key', 'label', 'kind', 'options', 'default', 'required'])) } : {}),
   }));
   const tasks = declarations.tasks?.map(item => pick(item, ['id', 'title', 'projectType']));
@@ -313,7 +332,7 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const channels = declarations.channels?.map(item => pick(item, ['id', 'scope']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -364,7 +383,7 @@ export const rendererSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('detail'), fields: z.array(z.object({ label: titleSchema, value: localizedSchema(4000) })).max(100), actions: z.array(actionSchema).max(16).optional() }),
 ]);
 const viewSchema = z.object({ id: z.string(), title: titleSchema, icon: iconSchema.optional(), locations: z.array(z.enum(VIEW_LOCATIONS)).min(1), defaultLocation: z.enum(VIEW_LOCATIONS).optional(), clients: z.array(z.enum(PLUGIN_CLIENTS)).min(1), instances: z.enum(VIEW_INSTANCES), when: conditionSchema.optional(), renderer: rendererSchema.optional(), requires: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).max(64).optional() }).passthrough();
-const modelSourceSchema = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), title: titleSchema, protocols: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).min(1).max(8).optional(), backends: z.array(z.enum(['claude', 'codex'])).optional(), defaultEndpoint: z.url().refine(value => /^https?:/.test(value), 'must use http or https').optional(), overridable: z.array(z.enum(['apiEndpoint', 'apiKey'])).optional(), loginAction: z.string().max(64).optional(), hint: z.object({ text: z.string().max(2000), command: z.string().max(2000).optional() }).optional() }).passthrough();
+const modelSourceSchema = z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), title: titleSchema, protocols: z.array(z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/)).min(1).max(8).optional(), backends: z.array(z.enum(['claude', 'codex'])).optional(), defaultEndpoint: z.url().refine(value => /^https?:/.test(value), 'must use http or https').optional(), overridable: z.array(z.enum(['apiEndpoint', 'apiKey'])).optional(), loginAction: z.string().max(64).optional(), hint: z.object({ text: z.string().max(2000), command: z.string().max(2000).optional() }).optional(), hosts: z.array(z.string().refine(validSourceHost, 'must be a lowercase hostname, optionally with a leading "*." and a ":port"')).max(MAX_SOURCE_HOSTS).optional() }).passthrough();
 const licenseSchema = z.object({ redistributable: z.boolean() });
 const contributionSchema = { id: z.string(), title: titleSchema };
 const appearanceSchema = z.object({
@@ -389,15 +408,20 @@ const declarationsSchema = z.object({
   appearance: appearanceSchema.optional(),
 }).passthrough();
 
+/** A bare command name: no path, no space. */
+export const EXECUTABLE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export const MAX_EXECUTABLES = 8;
+
 export const manifestShape = z.object({
   $schema: z.string().optional(),
-  id: z.string().regex(PLUGIN_ID).max(64), vendor: z.string().min(1), name: z.string().min(1), apiVersion: z.literal(1), defaultEnabled: z.union([z.boolean(), z.literal('auto')]), requiresTrustedHost: z.boolean().optional(),
+  id: z.string().regex(PLUGIN_ID).max(64), vendor: z.string().min(1), name: z.string().min(1), apiVersion: z.number().int(), defaultEnabled: z.union([z.boolean(), z.literal('auto')]), requiresTrustedHost: z.boolean().optional(),
   version: z.string().regex(SEMVER).optional(), title: titleSchema.optional(), description: localizedSchema(400).optional(),
   settings: z.array(z.object({ key: z.string().regex(SETTING_KEY), label: z.string(), kind: z.enum(['text', 'secret']) })).optional(),
   requires: z.array(z.object({ id: z.string().regex(PLUGIN_ID), optional: z.boolean().optional() })).optional(),
   hostApi: z.object({ server: z.string().optional(), web: z.string().optional(), agent: z.string().optional() }).passthrough().optional(),
   dataVersion: z.number().int().min(0).max(1_000_000).optional(), capabilities: z.array(z.enum(PLUGIN_CAPABILITIES)).max(PLUGIN_CAPABILITIES.length).optional(),
-  activation: z.array(z.enum(['startup', 'command', 'model-source', 'task', 'view'])).min(1).max(5).optional(),
+  executables: z.array(z.string().regex(EXECUTABLE_NAME)).max(MAX_EXECUTABLES).optional(),
+  activation: z.array(z.enum(ACTIVATION_EVENTS)).min(1).max(5).optional(),
   entries: z.object({ server: pathSchema.optional(), web: pathSchema.optional() }).optional(),
   contributes: declarationsSchema.optional(),
 }).passthrough();
@@ -415,8 +439,14 @@ export function checkPackageFields(manifest: PluginManifest): string | undefined
     for (const capability of raw.capabilities) if (!PLUGIN_CAPABILITIES.includes(capability as never)) return `capabilities names an unknown capability "${String(capability)}"`;
     if (new Set(raw.capabilities).size !== raw.capabilities.length) return 'capabilities repeats a name';
   }
+  if (raw.executables !== undefined) {
+    if (!Array.isArray(raw.executables) || raw.executables.length > MAX_EXECUTABLES || raw.executables.some(name => typeof name !== 'string' || !EXECUTABLE_NAME.test(name))) return `executables must list at most ${MAX_EXECUTABLES} bare command names`;
+    if (new Set(raw.executables).size !== raw.executables.length) return 'executables repeats a name';
+  }
+  // The names are what the user is shown when granting `process.exec`, so one without the other is a mistake.
+  if (Boolean((raw.executables as unknown[] | undefined)?.length) !== Boolean((raw.capabilities as unknown[] | undefined)?.includes('process.exec'))) return 'executables and the process.exec capability go together';
   if (raw.activation !== undefined) {
-    if (!Array.isArray(raw.activation) || !raw.activation.length || raw.activation.length > 5 || raw.activation.some(kind => !['startup', 'command', 'model-source', 'task', 'view'].includes(String(kind)))) return 'activation must list startup, command, model-source, task or view';
+    if (!Array.isArray(raw.activation) || !raw.activation.length || raw.activation.length > 5 || raw.activation.some(kind => !ACTIVATION_EVENTS.includes(kind as never))) return 'activation must list startup, command, model-source, task or view';
     if (new Set(raw.activation).size !== raw.activation.length) return 'activation repeats a kind';
     const declarations = manifest.contributes;
     const declared = { command: declarations?.commands?.length ? declarations.commands : declarations?.actions, 'model-source': declarations?.modelSources, task: declarations?.tasks, view: declarations?.views };
@@ -427,14 +457,117 @@ export function checkPackageFields(manifest: PluginManifest): string | undefined
 }
 
 export const manifestSchema = manifestShape.superRefine((value, context) => {
-  const problem = checkManifestRules(value as PluginManifest) ?? checkPackageFields(value as PluginManifest);
+  const problem = apiVersionProblem(value.apiVersion) ?? checkManifestRules(value as PluginManifest) ?? checkPackageFields(value as PluginManifest);
   if (problem) context.addIssue({ code: 'custom', message: problem });
 });
 
-export function checkManifest(manifest: PluginManifest): string | undefined {
-  const existing = checkManifestRules(manifest) ?? checkPackageFields(manifest);
+/**
+ * Why a manifest's `apiVersion` is outside what this host loads, if it is. `min` and `current` default to the
+ * SDK's constants; they are parameters so the range logic can be exercised with other bounds.
+ */
+export function apiVersionProblem(version: unknown, min: number = PLUGIN_API_MIN_VERSION, current: number = PLUGIN_API_VERSION): string | undefined {
+  if (typeof version !== 'number' || !Number.isInteger(version)) return 'apiVersion must be an integer';
+  if (version > current) return `written for plugin API v${version}; this Riffet provides up to v${current}`;
+  if (version < min) return `written for plugin API v${version}; this Riffet no longer loads v${version} packages (it loads v${min} to v${current})`;
+  return undefined;
+}
+
+export interface LoadedManifest {
+  /** The manifest as this host reads it: what it does not know is left out. The same object when nothing was. */
+  manifest: PluginManifest;
+  /** One sentence per value left out. */
+  notes: string[];
+  /** Ids of the views and commands left out. */
+  skipped: string[];
+}
+
+const rendererCommands = (renderer: Record<string, unknown>): unknown[] => renderer.kind === 'form' ? [renderer.command]
+  : renderer.kind === 'list' ? (list(renderer.items) ?? []).flatMap(item => isRecord(item) && item.command !== undefined ? [item.command] : [])
+  : renderer.kind === 'detail' ? (list(renderer.actions) ?? []).flatMap(item => isRecord(item) ? [item.command] : []) : [];
+
+/**
+ * What a host reads of a manifest written for another version: a value this version does not know leaves out
+ * that one item (an unknown view location, client, renderer or `when` key; an unknown activation event) and
+ * says so, instead of refusing the package. Values it does know are not touched, so whatever is malformed is
+ * still found by `checkManifest`; capabilities are not handled here either, since a permission the host cannot
+ * enforce must not be granted. A plugin whose activation events are all unknown is left with none, so it is
+ * not started at launch.
+ */
+export function loadableManifest(manifest: PluginManifest): LoadedManifest {
+  const notes: string[] = [];
+  const skipped: string[] = [];
+  const raw = manifest as unknown as Record<string, unknown>;
+  const unknownKey = (when: unknown) => isRecord(when) ? Object.keys(when).find(key => !CONDITION_KEYS.includes(key as never)) : undefined;
+  const declarations = isRecord(raw.contributes) ? raw.contributes : undefined;
+  let contributes = declarations;
+  let commands = list(declarations?.commands);
+  let views = list(declarations?.views);
+  const [commandsBefore, viewsBefore] = [commands?.length ?? 0, views?.length ?? 0];
+  if (commands) commands = commands.filter(item => {
+    const key = isRecord(item) && isContributionOf(manifest.id, item.id) ? unknownKey(item.when) : undefined;
+    if (key === undefined) return true;
+    notes.push(`command "${String((item as { id: string }).id)}" skipped: unknown condition "${key}"`);
+    skipped.push((item as { id: string }).id);
+    return false;
+  });
+  if (views) views = views.flatMap(item => {
+    if (!isRecord(item) || !isContributionOf(manifest.id, item.id)) return [item];
+    const id = item.id;
+    const skip = (reason: string) => { notes.push(`view "${id}" skipped: ${reason}`); skipped.push(id); return []; };
+    let next: Record<string, unknown> = item;
+    let narrowed = false;
+    for (const [field, known, what] of [['locations', VIEW_LOCATIONS, 'location'], ['clients', PLUGIN_CLIENTS, 'client']] as const) {
+      const values = list(item[field]);
+      const unknown = values?.filter(value => !(known as readonly unknown[]).includes(value));
+      if (!values || !unknown?.length) continue;
+      if (unknown.length === values.length) return skip(`unknown ${what} "${String(unknown[0])}"`);
+      for (const value of unknown) notes.push(`view "${id}": unknown ${what} "${String(value)}" ignored`);
+      next = { ...next, [field]: values.filter(value => !unknown.includes(value)) };
+      narrowed = true;
+    }
+    if (narrowed && typeof next.defaultLocation === 'string' && !(VIEW_LOCATIONS as readonly string[]).includes(next.defaultLocation)) { const { defaultLocation: _, ...rest } = next; next = rest; }
+    const renderer = isRecord(item.renderer) ? item.renderer : undefined;
+    if (renderer && typeof renderer.kind === 'string' && !rendererSchema.options.some(option => option.shape.kind.value === renderer.kind)) return skip(`unknown renderer "${renderer.kind}"`);
+    const key = unknownKey(item.when);
+    if (key !== undefined) return skip(`unknown condition "${key}"`);
+    const lost = renderer ? rendererCommands(renderer).find(command => typeof command === 'string' && skipped.includes(command)) : undefined;
+    return lost !== undefined ? skip(`its command "${String(lost)}" was skipped`) : [next];
+  });
+  if (declarations && (commands?.length !== commandsBefore || views?.length !== viewsBefore || notes.length)) {
+    contributes = { ...declarations, ...(commands ? { commands } : {}), ...(views ? { views } : {}) };
+  }
+  let activation = list(raw.activation);
+  if (activation) {
+    const known = activation.filter(event => (ACTIVATION_EVENTS as readonly unknown[]).includes(event));
+    for (const event of activation) if (!known.includes(event)) notes.push(`activation event "${String(event)}" is not known to this Riffet`);
+    // An event that waits on a contribution is dropped when every one of its contributions was skipped.
+    const emptied = (event: string, before: number, after: number | undefined, extra = 0) => before > 0 && !(after ?? 0) && !extra && known.includes(event);
+    const lost = [
+      ...(emptied('command', commandsBefore, commands?.length, list(declarations?.actions)?.length ?? 0) ? ['command'] : []),
+      ...(emptied('view', viewsBefore, views?.length) ? ['view'] : []),
+    ];
+    for (const event of lost) notes.push(`activation event "${event}" dropped: all its contributions were skipped`);
+    const kept = known.filter(event => !lost.includes(event as string));
+    activation = kept.length === activation.length ? undefined : kept;
+  }
+  if (!notes.length) return { manifest, notes, skipped };
+  return { manifest: { ...manifest, ...(contributes !== declarations ? { contributes: contributes as PluginManifest['contributes'] } : {}), ...(activation ? { activation: activation as PluginManifest['activation'] } : {}) }, notes, skipped };
+}
+
+/**
+ * The one validation of a manifest. `author` (the default, used by `check` and `pack`) refuses every value this
+ * SDK does not know: there the tool and the SDK are one version, so an unknown value is a typo. `load` (the
+ * host) first leaves out what `loadableManifest` says it does not know, then applies the same rules.
+ */
+export function checkManifest(manifest: PluginManifest, mode: 'author' | 'load' = 'author'): string | undefined {
+  const versionProblem = apiVersionProblem(manifest.apiVersion);
+  if (versionProblem) return versionProblem;
+  let checked = mode === 'load' ? loadableManifest(manifest).manifest : manifest;
+  // Every event unknown to this host leaves a plugin with none, which `activation` itself does not allow.
+  if (checked !== manifest && checked.activation && !checked.activation.length && manifest.activation?.length) { const { activation: _, ...rest } = checked; checked = rest as PluginManifest; }
+  const existing = checkManifestRules(checked) ?? checkPackageFields(checked);
   if (existing) return existing;
-  const result = manifestSchema.safeParse(manifest);
+  const result = manifestSchema.safeParse(checked);
   if (result.success) return undefined;
   const issue = result.error.issues[0]!;
   return `${issue.path.length ? issue.path.join('.') + ': ' : ''}${issue.message}`;

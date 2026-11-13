@@ -5,7 +5,7 @@
 
 import type { ActionOutcome, AvatarStyleRequest, GatewayProtocol, ModelSourceBackend, ResolvedSource, SourceOverrides, TaskActionSpec, TaskDiagnostic, TaskPlan } from '../index.js';
 import type { DoctorCheck, GatewayModelsRequest, PluginStatus } from '../index.js';
-import type { ModelInfo, NativeBackendUsage, PluginCommandResult, TaskParams } from '@riffet/contracts';
+import type { ModelInfo, NativeBackendUsage, PluginCommandResult, Task, TaskParams } from '@riffet/contracts';
 
 export const RUNTIME_PROTOCOL_VERSION = 1;
 
@@ -24,6 +24,10 @@ export type ChildToHost = {
   'project.exists': { params: { handle: string; path: string }; result: boolean };
   'project.readText': { params: { handle: string; path: string; maxBytes: number }; result: string | null };
   'project.list': { params: { handle: string; path: string }; result: string[] };
+  /** `process.exec`: `command` is one of the package's declared `executables`; the host runs it in the package's state directory. */
+  'host.exec': { params: { command: string; args: string[]; timeoutMs?: number; maxOutputBytes?: number; env?: Record<string, string> }; result: { code: number | null; stdout: string; stderr: string; timedOut: boolean; truncated: boolean } };
+  /** `tasks.run`: the package's own task providers only; `confirm` is the plan fingerprint the user approved. */
+  'host.tasks.start': { params: { projectId: string; actionId: string; params?: TaskParams; providerId?: string; confirm?: string }; result: Task };
 };
 
 export interface ChildContributions {
@@ -44,12 +48,20 @@ export interface ChildContributions {
 
 export type ChildDeviceFlow = { kind: 'device-flow'; verificationUri: string; userCode?: string; intervalMs: number; expiresAt: number; flow: string };
 
+/** What the child's synchronous members answer from, sent with `load` and again with `state` whenever it changes; absent from a server written before them. */
+export interface ChildFacts {
+  /** Which of the package's declared `executables` are installed on the host now (empty without `process.exec`). */
+  executables?: Record<string, boolean>;
+  /** Which of the package's own model source ids a saved profile names. */
+  modelSourcesInUse?: string[];
+}
+
 export interface ProjectCall { handle: string; id: string; name: string }
 
 /** What the server asks of the child. */
 export type HostToChild = {
-  load: { params: { entry: string; pluginId: string; stateDir: string; settings: Record<string, string>; secrets: Record<string, string> }; result: { protocol: number } };
-  state: { params: { settings: Record<string, string>; secrets: Record<string, string> }; result: null };
+  load: { params: { entry: string; pluginId: string; stateDir: string; settings: Record<string, string>; secrets: Record<string, string> } & ChildFacts & { /** The capabilities granted for this version: `host.tasks` exists only with `tasks.run`. */ granted?: string[] }; result: { protocol: number } };
+  state: { params: { settings: Record<string, string>; secrets: Record<string, string> } & ChildFacts; result: null };
   activate: { params: { generation: number }; result: ChildContributions };
   dispose: { params: Record<string, never>; result: { failures: string[] } };
   'action.run': { params: { id: string }; result: ActionOutcome | ChildDeviceFlow };

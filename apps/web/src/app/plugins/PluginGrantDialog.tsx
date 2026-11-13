@@ -12,12 +12,24 @@ const capabilityLabels: Record<PluginCapability, MessageDescriptor> = {
   'models.provide': msg`提供模型源`,
   'tasks.run': msg`运行项目命令（每条新命令先确认）`,
   'projects.read': msg`读取项目文件`,
-  'sessions.read': msg`读取会话内容`,
+  'sessions.read': msg`读取所在项目的会话内容，可由插件界面发出`,
   network: msg`访问网络`,
+  'process.exec': msg`以你的身份运行本机命令`,
 };
 
 /** An id this build does not know is shown as it is: the server may be newer than the page. */
 export const capabilityLabel = (id: string) => id in capabilityLabels ? i18n._(capabilityLabels[id as PluginCapability]) : id;
+
+/** Where an isolated package's model source sends requests and the profile's key: the hosts it declares, or any address it names. */
+export function ModelSourceNote({ sources }: { sources?: PluginGrantRequired['modelSources'] }) {
+  const hosts = sources?.length && sources.every(source => source.hosts?.length) ? [...new Set(sources.flatMap(source => source.hosts ?? []))] : [];
+  return <p className="text-xs text-fg-3">{hosts.length ? <><Trans>模型请求与密钥发往</Trans> <span className="font-mono">{hosts.join(', ')}</span></> : <Trans>模型请求与密钥发往插件指定的地址</Trans>}</p>;
+}
+
+/** The commands `process.exec` runs outside the sandbox, as the user. */
+export function ExecutableNote({ names }: { names?: string[] }) {
+  return names?.length ? <p className="text-xs text-fg-3"><span className="font-mono">{names.join(', ')}</span></p> : null;
+}
 
 export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
   request?: PluginGrantRequired;
@@ -44,7 +56,7 @@ export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
         </DialogHeader>
         <DialogBody className="flex flex-col gap-3">
           {Boolean(shown?.capabilities.length) && <ul className="flex flex-col gap-1.5 text-sm text-fg">
-            {shown?.capabilities.map((capability) => <li key={capability}>{capabilityLabel(capability)}</li>)}
+            {shown?.capabilities.map((capability) => <li key={capability} className="flex flex-col gap-0.5">{capabilityLabel(capability)}{capability === 'models.provide' && <ModelSourceNote sources={shown.modelSources} />}{capability === 'process.exec' && <ExecutableNote names={shown.executables} />}</li>)}
           </ul>}
           {shown?.trustedAllowed && <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-sm text-fg">

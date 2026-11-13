@@ -75,6 +75,8 @@ data class PluginMarketEntry(
     val readme: String? = null,
     val contributes: List<String> = emptyList(),
     val capabilities: List<String> = emptyList(),
+    val modelSources: List<PluginGrantModelSource>? = null,
+    val executables: List<String>? = null,
     val trustedRequired: Boolean? = null,
     /** False when no release runs on this server. */
     val compatible: Boolean,

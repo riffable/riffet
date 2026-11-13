@@ -6,7 +6,7 @@
 //
 // `PLUGIN_API_VERSION` names the shapes below. Changes are additive only: a new optional member
 // keeps the version, anything an existing plugin could break on bumps it, and the registry
-// refuses a manifest written against another version.
+// refuses a manifest whose `apiVersion` is outside [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`].
 
 import type {
   ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, LocalizedText, ModelConfigOption, ModelInfo,
@@ -18,17 +18,23 @@ import type { GatewayProtocol } from '@riffet/contracts';
 export type { ActionStep, PluginField, PluginPage, PluginPageButton, PluginPageItem, PluginPageOption, PluginPageSection, PluginStatus, TaskActionPresentation, TaskDiagnostic, TaskParamField, TaskParams };
 export type { TaskActionIcon, TaskLogRecords, TaskLogRule, TaskLogTone } from '@riffet/contracts';
 export type { PluginCommandResult };
-export * from './agent.js';
-export * from './kit/index.js';
 
+/**
+ * The plugin API version this host provides. A manifest's `apiVersion` is accepted when it lies in
+ * [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`]. Raising the minimum is the only breaking step and is done
+ * separately from adding a version.
+ */
 export const PLUGIN_API_VERSION = 1;
+/** The oldest manifest `apiVersion` this host still loads. */
+export const PLUGIN_API_MIN_VERSION = 1;
 
 export interface PluginManifest {
   /** `<vendor>.<name>`, lowercase. Also the plugin's key in `plugins.json`. */
   id: `${string}.${string}`;
   vendor: string;
   name: string;
-  apiVersion: typeof PLUGIN_API_VERSION;
+  /** An integer from `PLUGIN_API_MIN_VERSION` to `PLUGIN_API_VERSION`: the API the package was written against. */
+  apiVersion: number;
   /** Used while the user has not chosen. `auto` asks `detect()`. */
   defaultEnabled: 'auto' | boolean;
   /** Requires explicit local trust to use in-process host APIs; this never grants execution trust. */
@@ -52,6 +58,12 @@ export interface PluginManifest {
   activation?: Array<'startup' | 'command' | 'model-source' | 'task' | 'view'>;
   /** What an installed package asks for (`PLUGIN_CAPABILITIES`); the user grants exactly this set at install. Not a sandbox for in-process built-in, development or explicitly trusted installed code. */
   capabilities?: string[];
+  /**
+   * With `process.exec`: bare names of the commands the package may run through `host.runProcess`, at most 8. They run outside the
+   * sandbox, as the user who runs Riffet, with whatever arguments the package chooses; this is a consent boundary, not containment
+   * (an interpreter such as `python3` gives the package arbitrary code execution). The user sees the names before granting.
+   */
+  executables?: string[];
 }
 
 export interface Plugin {
@@ -85,7 +97,7 @@ export interface Contributions {
   dispose?(): void | Promise<void>;
   modelSources?: ModelSourceProvider[];
   sharePublisher?: SharePublisher;
-  /** One per backend; a second for the same backend is ignored. */
+  /** One hook per backend per plugin. Across plugins they are tried in registration order; the first whose `prepare` returns an attachment serves the native process. */
   runtimeHooks?: NativeRuntimeHook[];
   actions?: Record<string, ActionHandler>;
   status?(): Promise<PluginStatus>;
@@ -253,6 +265,7 @@ export interface PluginHost {
   settings(): Readonly<Record<string, string>>;
   /** Saved `secret` settings plus whatever the plugin stores itself. Never sent to clients. */
   secrets: { get(name: string): string | undefined; set(name: string, value: string | null): Promise<void> };
+  /** An isolated package may run only its declared `executables` (`process.exec`); the host runs them outside the sandbox in the package's state directory and ignores `options.cwd`. */
   runProcess(file: string, args: string[], options: ProcessOptions): Promise<ProcessResult>;
   /** Absolute path of a CLI, searched beyond the daemon's PATH; `undefined` when it is not installed. */
   resolveCli(command: string, env?: NodeJS.ProcessEnv): string | undefined;

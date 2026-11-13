@@ -1,11 +1,24 @@
 import { randomBytes } from 'node:crypto';
+import { realpathSync } from 'node:fs';
+import { relative, isAbsolute } from 'node:path';
 import type { GatewayModelsRequest, PluginHost, ProjectContext } from '@riffet/plugin-api';
 import { AppError } from '../errors.js';
+import { INSTALLED_ENV_VALUE_BYTES, installedEnvNameAllowed } from '../backends/shared/installed-env.js';
+import { AddressRefused, type SourceAddresses } from './addresses.js';
 import type { ProjectCall } from '../../../../packages/plugin-api/src/runtime/protocol.js';
 
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_PATH = 1024;
 const MAX_HEADERS = 32;
+const EXEC_DEFAULT_TIMEOUT_MS = 30_000;
+const EXEC_MAX_TIMEOUT_MS = 120_000;
+const EXEC_DEFAULT_OUTPUT = 256 * 1024;
+const EXEC_MAX_OUTPUT = 1024 * 1024;
+const EXEC_MAX_ARGS = 64;
+const EXEC_MAX_ARG_CHARS = 8192;
+const EXEC_MAX_ENV = 32;
+/** Commands one package runs at once. */
+const MAX_EXECS = 4;
 /** Catalog reads the server makes for one package at once: each buffers a response of up to 16 MB. */
 const MAX_FETCHES = 4;
 
@@ -48,7 +61,81 @@ export class HostService {
   private readonly handles = new Map<string, ProjectContext>();
   private fetching = 0;
 
-  constructor(private readonly host: PluginHost, private readonly granted: ReadonlySet<string>) {}
+  private executing = 0;
+
+  /**
+   * `exec` is what `process.exec` stands for. The named commands run outside the sandbox, as the user who runs Riffet, with the arguments
+   * the package chooses: this checks consent and names, it does not contain what the command does. `roots` are the package's directory
+   * and its state directory (real paths): a binary inside either is one the package shipped or wrote, and is refused.
+   */
+  constructor(
+    private readonly host: PluginHost, private readonly granted: ReadonlySet<string>, private readonly addresses?: SourceAddresses,
+    private readonly exec: { executables: readonly string[]; roots: readonly string[]; stateDir: string; modelSources: readonly string[] } = { executables: [], roots: [], stateDir: '', modelSources: [] },
+  ) {}
+
+  /** What the child's synchronous members answer from: which declared commands are installed now, and which of its model sources a saved profile names. */
+  facts(): { executables: Record<string, boolean>; modelSourcesInUse: string[] } {
+    const executables: Record<string, boolean> = {};
+    if (this.granted.has('process.exec')) for (const name of this.exec.executables) executables[name] = this.host.resolveCli(name) !== undefined;
+    return { executables, modelSourcesInUse: this.exec.modelSources.filter(id => this.host.modelSourceInUse?.(id)) };
+  }
+
+  private checkArgs(args: unknown): string[] {
+    if (!Array.isArray(args) || args.length > EXEC_MAX_ARGS || args.some(item => typeof item !== 'string' || item.length > EXEC_MAX_ARG_CHARS || item.includes('\0'))) {
+      throw new AppError('INVALID_INPUT', `args must be at most ${EXEC_MAX_ARGS} texts of at most ${EXEC_MAX_ARG_CHARS} characters, without NUL`);
+    }
+    return args as string[];
+  }
+
+  /** The absolute path of a command the package declared, or an error: not declared, not installed, or a file of the package's own. */
+  private executable(command: unknown): string {
+    if (typeof command !== 'string' || !this.exec.executables.includes(command)) throw new AppError('PLUGIN_EXEC_UNDECLARED', 'That command is not among the package\'s declared executables', 403);
+    const resolved = this.host.resolveCli(command);
+    if (!resolved) throw new AppError('PLUGIN_EXEC_NOT_FOUND', `${command} is not installed on this machine`, 404);
+    let real: string;
+    try { real = realpathSync(resolved); } catch { throw new AppError('PLUGIN_EXEC_NOT_FOUND', `${command} is not installed on this machine`, 404); }
+    for (const root of this.exec.roots) {
+      const path = relative(root, real);
+      if (path === '' || (!path.startsWith('..') && !isAbsolute(path))) throw new AppError('PLUGIN_EXEC_OWN_FILE', `${command} resolves to a file of the package itself`, 403);
+    }
+    return resolved;
+  }
+
+  /** A `{ kind: 'command' }` credential the drivers run later, outside the sandbox: the same rules as `host.exec`. `undefined` when it is not allowed. */
+  credentialCommand(command: unknown, args: unknown): { kind: 'command'; command: string; args: string[] } | undefined {
+    if (!this.granted.has('process.exec')) return undefined;
+    try { return { kind: 'command', command: this.executable(command), args: this.checkArgs(args ?? []) }; } catch { return undefined; }
+  }
+
+  private async execute(params: Record<string, unknown>): Promise<unknown> {
+    this.need('process.exec');
+    const command = params.command;
+    const file = this.executable(command);
+    const args = this.checkArgs(params.args ?? []);
+    const env: NodeJS.ProcessEnv = { ...process.env };
+    if (params.env !== undefined) {
+      if (!isRecord(params.env) || Object.keys(params.env).length > EXEC_MAX_ENV) throw new AppError('INVALID_INPUT', 'env must map names to text');
+      for (const [name, value] of Object.entries(params.env)) {
+        if (!installedEnvNameAllowed(name)) throw new AppError('PLUGIN_EXEC_ENV_REFUSED', `env may not set ${name}`, 403);
+        if (typeof value !== 'string' || Buffer.byteLength(value) > INSTALLED_ENV_VALUE_BYTES || value.includes('\0')) throw new AppError('INVALID_INPUT', `env value of ${name} must be text of at most ${INSTALLED_ENV_VALUE_BYTES} bytes`);
+        env[name] = value;
+      }
+    }
+    const number = (value: unknown, fallback: number, max: number) => typeof value === 'number' && value > 0 && Number.isFinite(value) ? Math.min(Math.floor(value), max) : fallback;
+    if (this.executing >= MAX_EXECS) throw new AppError('PLUGIN_HOST_BUSY', 'Too many commands running at once', 429);
+    this.executing++;
+    const started = Date.now();
+    try {
+      const result = await this.host.runProcess(file, args, {
+        cwd: this.exec.stateDir, env,
+        timeoutMs: number(params.timeoutMs, EXEC_DEFAULT_TIMEOUT_MS, EXEC_MAX_TIMEOUT_MS),
+        maxOutputBytes: number(params.maxOutputBytes, EXEC_DEFAULT_OUTPUT, EXEC_MAX_OUTPUT),
+      });
+      // The arguments may hold secrets: the journal gets their count only.
+      this.host.logger?.debug(`exec ${String(command)} (${args.length} args) ${Date.now() - started} ms exit ${result.code ?? 'none'}${result.timedOut ? ' timed out' : ''}`);
+      return { code: result.code, stdout: result.stdout, stderr: result.stderr, timedOut: result.timedOut, truncated: result.truncated };
+    } finally { this.executing--; }
+  }
 
   has(capability: string): boolean { return this.granted.has(capability); }
   need(capability: string): void { if (!this.granted.has(capability)) throw denied(capability); }
@@ -85,9 +172,24 @@ export class HostService {
       case 'host.gateway.fetchModels': {
         this.need('network');
         const request = gatewayRequest(params.request);
+        // The server makes this request, outside the sandbox: where it may go is checked here.
+        try { this.addresses?.checkFetch(new URL(request.baseUrl)); } catch (error) {
+          if (error instanceof AddressRefused) throw new AppError('PLUGIN_ADDRESS_REFUSED', error.message, 403);
+          throw error;
+        }
         if (this.fetching >= MAX_FETCHES) throw new AppError('PLUGIN_HOST_BUSY', 'Too many model catalog requests at once', 429);
         this.fetching++;
         try { return await this.host.gateway.fetchModels(request); } finally { this.fetching--; }
+      }
+      case 'host.exec': return this.execute(params);
+      case 'host.tasks.start': {
+        this.need('tasks.run');
+        const { projectId, actionId, params: taskParams, providerId, confirm } = params;
+        if (typeof projectId !== 'string' || typeof actionId !== 'string' || (providerId !== undefined && typeof providerId !== 'string') || (confirm !== undefined && typeof confirm !== 'string') || (taskParams !== undefined && !isRecord(taskParams))) {
+          throw new AppError('INVALID_INPUT', 'projectId and actionId must be text');
+        }
+        if (!this.host.tasks) throw new AppError('PLUGIN_HOST_UNSUPPORTED', 'This plugin has no task providers to start tasks with', 501);
+        return this.host.tasks.start(projectId, actionId, taskParams as never, { ...(providerId ? { providerId } : {}), ...(confirm ? { confirm } : {}) });
       }
       case 'project.exists': { this.need('projects.read'); const { project, path } = this.project(params); return project.exists(path); }
       case 'project.readText': {

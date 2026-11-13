@@ -62,7 +62,6 @@ msgstr "CLI and terminal tools"
 msgid "Couldn't read Git status"
 msgstr "Couldn't read Git status"
 
-#: src/app/ProjectHome.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "Shell 终端"
 msgstr "Shell terminal"
@@ -137,6 +136,10 @@ msgstr "Overview"
 msgid "从终端导入…"
 msgstr "Import from terminal…"
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "以你的身份运行本机命令"
+msgstr "Runs these commands on this machine as you"
+
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -200,11 +203,7 @@ msgstr "Sign in with a pairing code"
 msgid "侧边聊天"
 msgstr "Side chat"
 
-#: src/app/FolderFavorites.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
-#: src/app/WorkbenchHeader.tsx
 msgid "保存"
 msgstr "Save"
 
@@ -229,8 +228,6 @@ msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr "Allow the plugin to use Riffet’s file, network and process permissions"
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
 msgid "全部"
 msgstr "All"
 
@@ -246,10 +243,6 @@ msgstr "Mark all as seen"
 msgid "全部标签"
 msgstr "All tabs"
 
-#: src/app/plugins/PluginFlowDialog.tsx
-#: src/app/plugins/PluginsPage.tsx
-#: src/app/tabs/TabBar.tsx
-#: src/app/tabs/TabStyleSetting.tsx
 #: src/app/use-terminal-actions.ts
 msgid "关闭"
 msgstr "Close"
@@ -303,8 +296,6 @@ msgstr "Built-in plugins cannot be uninstalled"
 msgid "最后一个标签"
 msgstr "Last tab"
 
-#: src/app/ProjectHome.tsx
-#: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "最近会话"
 msgstr "Recent sessions"
@@ -464,11 +455,9 @@ msgid "取消置顶"
 msgstr "Unpin"
 
 #: src/app/SessionInfo.tsx
-#: src/plugins/hostViews.ts
 msgid "变更"
 msgstr "Changes"
 
-#: src/app/Header.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr "Changes and files"
@@ -545,7 +534,6 @@ msgid "在浏览器中打开授权页"
 msgstr "Open the authorization page in your browser"
 
 #: src/app/ImportSessionDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "在终端中"
 msgstr "In terminal"
 
@@ -589,7 +577,6 @@ msgstr "Copy address"
 msgid "外部插件已暂停"
 msgstr "External plugins are paused"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "多个标签用逗号分隔"
 msgstr "Separate multiple tags with commas"
@@ -768,6 +755,10 @@ msgstr "Current project"
 msgctxt "workbench-session-pending"
 msgid "待确认"
 msgstr "Pending"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "快捷键未生效"
+msgstr "Shortcut not active"
 
 #: src/app/Workbench.tsx
 msgid "快速对话"
@@ -956,7 +947,6 @@ msgstr "Search terminal sessions"
 msgid "搜索结果"
 msgstr "Search results"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "撤销"
 msgstr "Undo"
@@ -975,8 +965,6 @@ msgctxt "settings-action-failed"
 msgid "操作失败"
 msgstr "Action failed"
 
-#: src/app/tabs/tabsStore.ts
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgctxt "workbench-action-failed"
 msgid "操作失败"
@@ -1127,7 +1115,6 @@ msgstr "Could not delete data"
 msgid "无法刷新会话列表"
 msgstr "Couldn't refresh the session list"
 
-#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "无法刷新项目列表"
 msgstr "Couldn't refresh the project list"
@@ -1310,7 +1297,6 @@ msgstr "Pause all external plugins?"
 msgid "暂无会话"
 msgstr "No sessions"
 
-#: src/app/ProjectHome.tsx
 #: src/app/use-session-actions.ts
 msgid "暂时无法确认是否已发送"
 msgstr "Can't confirm whether it was sent yet"
@@ -1355,8 +1341,6 @@ msgstr "Unread"
 msgid "本机"
 msgstr "This machine"
 
-#: src/app/plugins/PluginMarket.tsx
-#: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
 msgstr "Permissions"
@@ -1398,6 +1382,14 @@ msgctxt "plugin-feature"
 msgid "模型源"
 msgstr "Model sources"
 
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往"
+msgstr "Model requests and the key go to"
+
+#: src/app/plugins/PluginGrantDialog.tsx
+msgid "模型请求与密钥发往插件指定的地址"
+msgstr "Model requests and the key go to an address the plugin chooses"
+
 #: src/app/ProjectHome.tsx
 msgid "模型选择已保留，目录恢复前暂不能发送。"
 msgstr "Your model choice is kept; sending stays unavailable until the catalog is back."
@@ -1423,10 +1415,8 @@ msgstr "This configuration is unavailable in this client"
 msgid "没有匹配的插件"
 msgstr "No matching plugins"
 
-#: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "没有匹配的结果"
 msgstr "No matches"
 
@@ -1781,8 +1771,8 @@ msgid "请重新选择文件"
 msgstr "Select the file again"
 
 #: src/app/plugins/PluginGrantDialog.tsx
-msgid "读取会话内容"
-msgstr "Read conversations"
+msgid "读取所在项目的会话内容，可由插件界面发出"
+msgstr "Read this project's sessions; the plugin's interface can send them out"
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "读取项目文件"
@@ -1853,7 +1843,6 @@ msgid "返回"
 msgstr "Back"
 
 #: src/app/SessionSearchDialog.tsx
-#: src/app/Sidebar.tsx
 msgid "还没有会话"
 msgstr "No sessions yet"
 
@@ -1932,7 +1921,6 @@ msgstr "Rename"
 msgid "重命名…"
 msgstr "Rename…"
 
-#: src/app/Header.tsx
 #: src/app/use-session-actions.ts
 msgid "重命名会话"
 msgstr "Rename session"

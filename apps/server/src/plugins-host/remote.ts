@@ -3,8 +3,8 @@ import { realpath } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  ActionHandler, ActionOutcome, AvatarStyleProvider, CommandHandler, Contributions, DoctorCheck, Plugin, PluginHost, GatewayProtocol, PluginManifest, PluginStatus, ModelSourceBackend, ModelSourceProvider, PluginCommandResult, ResolvedSource,
-  SourceEndpoint, SourceOverrides, TaskDiagnostic, TaskProvider,
+  ActionHandler, ActionOutcome, AvatarStyleProvider, CommandHandler, Contributions, DoctorCheck, Plugin, PluginHost, GatewayProtocol, PluginManifest, PluginStatus,
+  ModelSourceBackend, ModelSourceProvider, PluginCommandResult, ResolvedSource, SourceEndpoint, SourceOverrides, TaskDiagnostic, TaskProvider,
 } from '@riffet/plugin-api';
 import type { ChildContributions, ChildDeviceFlow, HostToChild } from '../../../../packages/plugin-api/src/runtime/protocol.js';
 import type { ModelStatus, NativeBackendUsage, UsageWindow } from '@riffet/contracts';
@@ -13,6 +13,7 @@ import { HostService } from './host-service.js';
 import { PluginProcess } from './process.js';
 import { requireIsolation } from './sandbox.js';
 import { installedModelSourceProblem } from './compat.js';
+import { SourceAddresses } from './addresses.js';
 
 // An installed package as an `Plugin`: its server entry runs in a separate process
 // (`process.ts`), and what it contributes reaches the registry as proxies that call into it. Only
@@ -71,10 +72,11 @@ const httpUrl = (value: unknown): value is string => {
 };
 
 /**
- * What the child's `resolve` may hand the drivers, field by field. A `command` credential is refused: the drivers run
- * it outside the sandbox (Claude Code's `apiKeyHelper`, Codex's `auth.command`, the side-chat key refresh).
+ * What the child's `resolve` may hand the drivers, field by field. A `command` credential is accepted only for a package holding
+ * `process.exec` and only naming one of its declared executables (`HostService.credentialCommand`): the Agent CLI itself runs it later,
+ * outside the sandbox (Claude Code's `apiKeyHelper`, Codex's `auth.command`, the side-chat key refresh), as the user who runs Riffet.
  */
-function resolvedFromChild(value: unknown, label: string): ResolvedSource {
+function resolvedFromChild(value: unknown, label: string, service: HostService): ResolvedSource {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return { reason: `${label}：没有返回结果` };
   const { reason, endpoints, claudeBaseUrl, codexBaseUrl, credential, headers, disableWebsockets } = value as Record<string, unknown>;
   if (typeof reason === 'string' && reason) return { reason: reason.slice(0, 500) };
@@ -93,9 +95,13 @@ function resolvedFromChild(value: unknown, label: string): ResolvedSource {
   if (httpUrl(claudeBaseUrl)) result.claudeBaseUrl = claudeBaseUrl;
   if (httpUrl(codexBaseUrl)) result.codexBaseUrl = codexBaseUrl;
   if (credential !== undefined) {
-    const { kind, key } = (credential ?? {}) as { kind?: unknown; key?: unknown };
-    if (kind !== 'static' || !line(key, 64 * 1024) || !key) return { reason: `${label}：安装的包只能提供静态密钥` };
-    result.credential = { kind: 'static', key };
+    const { kind, key, command, args } = (credential ?? {}) as { kind?: unknown; key?: unknown; command?: unknown; args?: unknown };
+    if (kind === 'command') {
+      const resolved = service.credentialCommand(command, args);
+      if (!resolved) return { reason: `${label}：安装的包只能提供静态密钥` };
+      result.credential = resolved;
+    } else if (kind !== 'static' || !line(key, 64 * 1024) || !key) return { reason: `${label}：安装的包只能提供静态密钥` };
+    else result.credential = { kind: 'static', key };
   }
   if (headers && typeof headers === 'object') {
     for (const backend of ['claude', 'codex'] as const) {
@@ -264,32 +270,42 @@ class RemoteModelSource implements ModelSourceProvider {
   private readonly resolved = new Map<string, { value: ResolvedSource; at: number }>();
   private readonly preparing = new Map<string, Promise<void>>();
 
-  constructor(description: ChildContributions['modelSources'][number], private readonly call: Call) {
+  constructor(description: ChildContributions['modelSources'][number], private readonly call: Call, private readonly addresses: SourceAddresses, private readonly service: HostService) {
     this.id = description.id; this.label = description.label;
+    if (description.defaultEndpoint && !addresses.allows(description.id, description.defaultEndpoint, {})) throw new Error(`model source ${description.id}: its default endpoint is not among the hosts it declares`);
     if (description.protocols) this.protocols = description.protocols;
     if (description.backends) this.backends = description.backends;
     if (description.defaultEndpoint) this.defaultEndpoint = description.defaultEndpoint;
     if (description.overridable) this.overridable = description.overridable;
     if (description.loginAction) this.loginAction = description.loginAction;
     if (description.hint) this.hint = description.hint;
-    if (description.usage) this.usage = async overrides => usageFromChild(await this.call('modelSource.usage', { id: this.id, overrides }, TIMEOUTS.catalog));
+    if (description.usage) this.usage = async overrides => usageFromChild(await this.addresses.during(overrides, () => this.call('modelSource.usage', { id: this.id, overrides }, TIMEOUTS.catalog)));
   }
 
   /** Synchronous, so it answers from the last `prepare` for these overrides; a miss starts one and says the source is not ready. */
   resolve(overrides: SourceOverrides): ResolvedSource {
     const hit = this.resolved.get(stable(overrides));
     if (!hit || Date.now() - hit.at > RESOLVE_REFRESH_MS) void this.prepare(overrides).catch(() => undefined);
-    return hit?.value ?? { reason: `${this.label}：尚未准备好` };
+    if (!hit) return { reason: `${this.label}：尚未准备好` };
+    // Checked on every answer, not once when fetched: the settings an address may come from change while the answer is cached.
+    return this.declaredOnly(hit.value, overrides);
+  }
+
+  /** A source that declares hosts is held to them (and to what the user typed): an address outside never reaches a driver. */
+  private declaredOnly(value: ResolvedSource, overrides: SourceOverrides): ResolvedSource {
+    const addresses = [...Object.values(value.endpoints ?? {}).map(endpoint => endpoint?.baseUrl), value.claudeBaseUrl, value.codexBaseUrl];
+    const outside = addresses.find(address => address !== undefined && !this.addresses.allows(this.id, address, overrides));
+    return outside === undefined ? value : { reason: `${this.label}：地址不在插件声明的主机内` };
   }
 
   prepare(overrides: SourceOverrides): Promise<void> {
     const key = stable(overrides);
     let running = this.preparing.get(key);
     if (!running) {
-      running = this.call('modelSource.prepare', { id: this.id, overrides }, TIMEOUTS.prepare)
+      running = this.addresses.during(overrides, () => this.call('modelSource.prepare', { id: this.id, overrides }, TIMEOUTS.prepare))
         .then(value => {
           this.resolved.delete(key);
-          this.resolved.set(key, { value: resolvedFromChild(value, this.label), at: Date.now() });
+          this.resolved.set(key, { value: resolvedFromChild(value, this.label, this.service), at: Date.now() });
           while (this.resolved.size > MAX_RESOLVED) this.resolved.delete(this.resolved.keys().next().value!);
         })
         .finally(() => { this.preparing.delete(key); });
@@ -300,7 +316,7 @@ class RemoteModelSource implements ModelSourceProvider {
 
   async catalog(backend: ModelSourceBackend, overrides: SourceOverrides) {
     await this.prepare(overrides).catch(() => undefined);
-    return this.call('modelSource.catalog', { id: this.id, backend, overrides }, TIMEOUTS.catalog);
+    return this.addresses.during(overrides, () => this.call('modelSource.catalog', { id: this.id, backend, overrides }, TIMEOUTS.catalog));
   }
 }
 
@@ -328,7 +344,11 @@ export function remotePlugin(options: RemoteOptions): Plugin {
       const stateDir = await realpath(await host.stateDir());
       // Refuses here, before any process exists, when this machine cannot isolate one and the operator has not accepted that.
       const isolation = await requireIsolation();
-      const service = new HostService(host, new Set(options.granted));
+      const addresses = new SourceAddresses(manifest, options.settings, () => options.serverPorts?.() ?? []);
+      const service = new HostService(host, new Set(options.granted), addresses, {
+        executables: options.granted.includes('process.exec') ? manifest.executables ?? [] : [], roots: [packageRoot, stateDir], stateDir,
+        modelSources: (manifest.contributes?.modelSources ?? []).map(source => source.id),
+      });
       const child = new PluginProcess({
         runtime: runtimeFile(), packageRoot, stateDir, network: options.granted.includes('network'),
         ...(isolation.kind === 'os' ? { sandbox: { node: isolation.node, libraries: isolation.libraries, network: options.granted.includes('network'), withhold: options.serverPorts?.() ?? [] } } : {}),
@@ -342,16 +362,18 @@ export function remotePlugin(options: RemoteOptions): Plugin {
       let sent = '';
       const call: Call = async (method, params, timeoutMs) => {
         // Settings and secrets change while it runs; the child is told before the call that may read them.
-        const state = JSON.stringify([options.settings(), options.secrets()]);
+        const facts = service.facts();
+        const state = JSON.stringify([options.settings(), options.secrets(), facts]);
         if (state !== sent && method !== 'load') {
           sent = state;
-          await child.call('state', { settings: { ...options.settings() }, secrets: { ...options.secrets() } }, TIMEOUTS.status);
+          await child.call('state', { settings: { ...options.settings() }, secrets: { ...options.secrets() }, ...facts }, TIMEOUTS.status);
         }
         return child.call(method, params, timeoutMs);
       };
 
-      sent = JSON.stringify([options.settings(), options.secrets()]);
-      await child.call('load', { entry, pluginId: manifest.id, stateDir, settings: { ...options.settings() }, secrets: { ...options.secrets() } }, TIMEOUTS.load);
+      const facts = service.facts();
+      sent = JSON.stringify([options.settings(), options.secrets(), facts]);
+      await child.call('load', { entry, pluginId: manifest.id, stateDir, settings: { ...options.settings() }, secrets: { ...options.secrets() }, ...facts, granted: [...options.granted] }, TIMEOUTS.load);
       const description = describedByChild(await child.call('activate', { generation: scope.generation }, TIMEOUTS.activate));
 
       // A profile names a model source by id alone, and these hold a profile's API key: an installed package may only provide ids in its own namespace (`<pluginId>.<name>`), never one a built-in source has or could have (those have no dot), whether or not that built-in is on.
@@ -371,7 +393,7 @@ export function remotePlugin(options: RemoteOptions): Plugin {
         },
       };
       if (description.modelSources.length) {
-        const sources = description.modelSources.map(item => new RemoteModelSource(item, call));
+        const sources = description.modelSources.map(item => new RemoteModelSource(item, call, addresses, service));
         contributions.modelSources = sources;
         // The defaults every profile without overrides resolves with.
         for (const source of sources) void source.prepare({}).catch(() => undefined);

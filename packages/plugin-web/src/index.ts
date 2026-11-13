@@ -16,6 +16,8 @@ import type { AppSettings, AppSettingsUpdate, ModelInfo, Run, Session, SyncLane,
 // The message bridge of isolated views: protocol types and limits. The client a view bundles is `bridge-client.ts`.
 export * from './bridge.js';
 export { satisfies as satisfiesHostApi } from './compat.js';
+// The base stylesheet the host writes into an isolated view's page.
+export { PLUGIN_BASE_STYLE, PLUGIN_BASE_STYLE_VERSION } from './base-style.js';
 
 /* ------------------------------------------------------------------ views */
 

@@ -17,13 +17,13 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) awai
 
 const CURSOR_CLI = JSON.stringify({ executable: '/opt/cursor/cursor-agent', apiKey: 'secret-key' });
 
-async function boot() {
+async function boot(plugins = builtinPluginsWithout('riffet.cursor')) {
   const directory = realpathSync(mkdtempSync(join(tmpdir(), 'riffet-no-cursor-')));
   const stateDir = join(directory, 'state');
   const projectDir = join(directory, 'project');
   mkdirSync(stateDir); mkdirSync(projectDir);
   writeFileSync(join(stateDir, 'cursor-cli.json'), CURSOR_CLI, { mode: 0o600 });
-  const services = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent', plugins: builtinPluginsWithout('riffet.cursor') });
+  const services = await createApp({ stateDir, auth: false, cliPath: '/nonexistent/cursor-agent', plugins });
   cleanups.push(async () => { await services.app.close(); rmSync(directory, { recursive: true, force: true }); });
   const origin = { host: '127.0.0.1:4337', origin: 'http://127.0.0.1:4337' };
   const auth = await services.app.inject({ url: '/api/auth/status', headers: origin });
@@ -82,5 +82,11 @@ describe('the core without the Cursor plugin', () => {
     expect([saved.statusCode, saved.json().error.code]).toEqual([503, 'NATIVE_BACKEND_UNAVAILABLE']);
     expect(readFileSync(join(stateDir, 'cursor-cli.json'), 'utf8')).toBe(CURSOR_CLI);
     expect((await call('GET', '/api/settings')).json().cursorCli).toEqual(shape);
+  }, 30_000);
+
+  it('boots with no built-in plugins and still answers the catalogs', async () => {
+    const { call } = await boot([]);
+    expect((await call('GET', '/api/integrations')).statusCode).toBe(200);
+    expect((await call('GET', '/api/backends')).statusCode).toBe(200);
   }, 30_000);
 });

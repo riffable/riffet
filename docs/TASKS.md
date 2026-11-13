@@ -63,7 +63,7 @@
 - 环境变量与文本：名字须匹配 `^[A-Z][A-Z0-9_]{0,63}$`，不得是 `NODE_OPTIONS`、`NODE_PATH`、`DYLD_*`、`LD_*`、`PATH`、`HOME`、`SHELL`、`BASH_ENV`、`BASH_*`、`ENV`、`ZDOTDIR`、`SHELLOPTS`、`BASHOPTS`、`PS4`、`IFS`（任务外层的 `/bin/sh` 会读它们：`SHELLOPTS=xtrace` 加 `PS4='$(…)'` 在命令之前执行代码）、`PYTHONSTARTUP`、`PYTHONPATH`、`PYTHONHOME`、`RUBYOPT`、`RUBYLIB`、`PERL5OPT`、`PERL5LIB`、`PERLLIB`、`JAVA_TOOL_OPTIONS`、`_JAVA_OPTIONS`、`JDK_JAVA_OPTIONS`、`LUA_*`、`GIT_*`、`SSH_*`、`RIFFET_*`，值至多 4 KB；`file`、`args`、`env` 不得含控制、格式（双向覆盖、零宽）或行分隔字符，合计至多 8192 字符，使确认里看到的就是要运行的全部；否则 502 `TASK_PLAN_INVALID`。这是名单而非白名单：构建工具自己的变量（`GRADLE_OPTS`、`JAVA_OPTS`、`MAVEN_OPTS`、`RUSTC_WRAPPER`、`NPM_CONFIG_*` 等）仍可改变程序做什么，它们和其他变量一样显示在确认里。
 - 确认：`(插件, 版本, 提供方, 操作, 计划指纹)` 第一次运行时，`POST /api/tasks` 得到 409 `TASK_CONFIRM_REQUIRED`，`details` 是 `{ fingerprint, plan: { file, args, cwd, env } }`（`cwd` 相对项目，`.` 是项目根；指纹是项目与这四项规范化后的 sha256，所以批准只对这个项目有效：另一个项目里的 `./gradlew` 是另一个文件，要重新确认）。客户端把计划给用户看，同意后用同一个请求体加 `confirm: <fingerprint>` 再发一次：服务端把批准记在任务数据库的 `task_approvals` 表里并运行。之后相同的计划不再询问；`file`、`args`、`cwd` 或 `env` 任何一项变了需要重新确认；插件版本变了，旧版本的批准即丢弃。`confirm` 与现在的指纹不符（计划在两次请求之间变了）仍然是 409。
 
-经 `host.tasks.start`（命令里启动任务）的任务走同一条路；命令得到的是任务服务的原错误，`POST .../commands/:name` 带 `confirm` 重发即可，不另设状态。已安装包的宿主目前不提供 `host.tasks`，所以这只对将来的情形成立。
+经 `host.tasks.start`（命令里启动任务）的任务走同一条路；命令得到的是任务服务的原错误，`POST .../commands/:name` 带 `confirm` 重发即可，不另设状态。已安装的隔离包持有 `tasks.run` 时也有 `host.tasks.start`（`host.tasks.start` RPC），同样只启动自己的提供方，`confirm` 原样传入。
 
 ## 提供方接口
 

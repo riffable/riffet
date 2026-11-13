@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import type { PluginMarketEntry, PluginMarketOffer } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 import { AppError } from '../errors.js';
+import { grantExecutables, grantModelSources } from '../plugins/declarations.js';
 import { serverIncompatibility } from './compat.js';
 import { MAX_ARCHIVE_BYTES } from './archive.js';
 
@@ -20,12 +21,13 @@ export interface MarketReference { id: string; version?: string }
 
 /** One release as the index lists it, newest first. Built-in entries list versions without an archive. */
 interface IndexRelease { version: string; date?: string; archive?: string; integrity?: string; size?: number; capabilities?: string[]; hostApi?: { server?: string; agent?: string; web?: string }; trusted?: boolean }
-interface IndexManifest { vendor?: string; name?: string; title?: Record<string, string>; description?: Record<string, string>; contributes?: Record<string, unknown> }
+interface IndexManifest { vendor?: string; name?: string; title?: Record<string, string>; description?: Record<string, string>; contributes?: Record<string, unknown>; executables?: unknown }
 interface IndexEntry { id: string; origin?: string; source?: string; license?: string; readme?: string; manifest?: IndexManifest; versions?: IndexRelease[] }
 
 /** A release chosen from the index, ready to download. */
 export interface MarketPackage extends PluginMarketOffer { integrity: string; archive: URL }
 
+const MAX_REDIRECTS = 5;
 const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 /** `acme.thing` or `acme.thing@1.2.0`; anything else is not a market reference. */
@@ -65,10 +67,21 @@ async function fetchBytes(url: URL, limit: number, timeout: number, signal?: Abo
     if (info.size > limit) throw failed('the download is larger than allowed', 422);
     return readFile(path);
   }
-  const response = await fetch(url, { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout), redirect: 'follow' })
-    .catch((error: unknown) => { throw failed(`could not reach ${url.host || url.pathname}: ${error instanceof Error ? error.message : String(error)}`); });
-  // A redirect may not leave https: the index is what vouches for every archive.
-  if (response.redirected) { try { checkedUrl(response.url, base); } catch (error) { void response.body?.cancel(); throw error; } }
+  const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(timeout)]) : AbortSignal.timeout(timeout);
+  // A redirect may not leave the rule `checkedUrl` states (https, or the way the index was reached): the index is what vouches for every archive. Each hop is checked before it is requested.
+  let target = url;
+  let response: Response;
+  for (let hops = 0; ; hops++) {
+    response = await fetch(target, { signal: requestSignal, redirect: 'manual' })
+      .catch((error: unknown) => { throw failed(`could not reach ${target.host || target.pathname}: ${error instanceof Error ? error.message : String(error)}`); });
+    const location = [301, 302, 303, 307, 308].includes(response.status) ? response.headers.get('location') : null;
+    if (!location) break;
+    void response.body?.cancel();
+    if (hops >= MAX_REDIRECTS) throw failed('the download redirected too many times');
+    let next: URL;
+    try { next = new URL(location, target); } catch { throw failed('the download redirected to an invalid address'); }
+    target = checkedUrl(next.href, base);
+  }
   if (!response.ok) throw failed(`${url.host || url.pathname} answered HTTP ${response.status}`, response.status === 404 ? 404 : 502);
   if (Number(response.headers.get('content-length') ?? 0) > limit) throw failed('the download is larger than allowed', 422);
   const chunks: Buffer[] = [];
@@ -125,6 +138,8 @@ export async function listMarket(options: { index?: string; signal?: AbortSignal
       ...(site ? { page: `${site.href}#/${encodeURIComponent(entry.id)}` } : {}),
       contributes: Object.keys(manifest.contributes ?? {}).sort(),
       capabilities: [...new Set((release.capabilities ?? []).map(String))].sort(),
+      ...(grantModelSources(manifest.contributes) ? { modelSources: grantModelSources(manifest.contributes) } : {}),
+      ...(grantExecutables(manifest) ? { executables: grantExecutables(manifest) } : {}),
       ...(release.trusted ? { trustedRequired: true } : {}),
       compatible: runs(release),
     }];
@@ -143,11 +158,14 @@ export async function resolveMarketPackage(reference: MarketReference, options: 
     throw new AppError('PLUGIN_MARKET_NOT_FOUND', reference.version ? `${reference.id} ${reference.version} is not in the plugin index` : `no version of ${reference.id} in the plugin index runs on this Riffet`, 404);
   }
   const title = texts(entry.manifest?.title);
+  const models = grantModelSources(entry.manifest?.contributes);
   return {
     id: entry.id, version: release.version, integrity: release.integrity!, archive: checkedUrl(release.archive!, indexUrl),
     capabilities: [...new Set((release.capabilities ?? []).map(String))].sort(),
     ...(title ? { title } : {}),
     ...(release.trusted ? { trustedRequired: true } : {}),
+    ...(models ? { modelSources: models } : {}),
+    ...(grantExecutables(entry.manifest) ? { executables: grantExecutables(entry.manifest) } : {}),
   };
 }
 

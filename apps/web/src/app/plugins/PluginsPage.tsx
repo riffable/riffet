@@ -3,7 +3,8 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
 import { IconEllipsis, IconMenu, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
+import { Badge, EmptyState, Field, Input, Kbd, Segmented, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
+import { Tip } from '@/components/ui/tooltip';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
@@ -11,14 +12,16 @@ import { syncAppearance } from '@/lib/appearance';
 import { confirmDialog, useDiscardGuard } from '@/lib/dialogs';
 import { HttpError } from '@/lib/errors';
 import { localizedText, loadPlugins, refreshPlugins, reloadPlugins, replacePlugin, replacePlugins, usePlugins, usePluginRecovery } from '@/lib/plugins';
-import { errorMessage } from '@/lib/utils';
+import { cn, errorMessage } from '@/lib/utils';
+import { isApplePlatform } from '@/lib/platform';
+import { keybindingCaps } from '../pluginKeybindings';
 import { PluginView } from '@/plugins/PluginView';
 import { satisfiesHostApi } from '@riffet/plugin-web';
 import { PLUGIN_WEB_API_VERSION } from '@contracts';
 import { useSettingsPages } from '@/plugins/registry';
 import type { ViewEntry } from '@/plugins/catalog';
 import type { PluginDetailTab } from '../state/navStore';
-import { PluginGrantDialog, capabilityLabel } from './PluginGrantDialog';
+import { ExecutableNote, ModelSourceNote, PluginGrantDialog, capabilityLabel } from './PluginGrantDialog';
 import { PluginVersionsDialog } from './PluginVersionsDialog';
 import { PluginFlowDialog } from './PluginFlowDialog';
 import { PluginMarket } from './PluginMarket';
@@ -41,7 +44,7 @@ function groupOf(plugin: PluginDescriptor): 'agents' | 'workbench' | 'services' 
 }
 
 /** Workbench-owned management. Reading this page never activates or probes a plugin. */
-export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, onOpenSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, onOpenAppearance, onOpenModels }: {
+export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, onOpenSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels }: {
   selectedId: string;
   selectedViewId?: string;
   initialTab?: PluginDetailTab;
@@ -54,6 +57,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   onBeforeLeaveChange(guard: (() => Promise<boolean>) | undefined): void;
   availableViewIds: string[];
   commandActions: Array<{ id: string; run: () => void }> ;
+  rejectedKeybindings: ReadonlySet<string>;
   onOpenAppearance(): void;
   onOpenModels(): void;
   onOpenFeature(view: ViewDeclaration): void;
@@ -177,7 +181,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   const installFromMarket = (entry: PluginMarketEntry) => {
     const source = { market: { id: entry.id, version: entry.version } };
     if (!entry.capabilities.length && !entry.trustedRequired) void install(source, []);
-    else setGrant({ source, request: { id: entry.id, version: entry.version, capabilities: entry.capabilities, ...(entry.trustedRequired ? { trustedRequired: true } : {}), trustedAllowed: market?.trustedAllowed ?? false } });
+    else setGrant({ source, request: { id: entry.id, version: entry.version, capabilities: entry.capabilities, ...(entry.modelSources ? { modelSources: entry.modelSources } : {}), ...(entry.trustedRequired ? { trustedRequired: true } : {}), trustedAllowed: market?.trustedAllowed ?? false } });
   };
   const installedIds = useMemo(() => new Set((list ?? []).filter(plugin => plugin.source !== 'builtin').map(plugin => plugin.id)), [list]);
   const chooseInstall = async () => { if (await guard()) fileInput.current?.click(); };
@@ -234,7 +238,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     </section>)}
     {hasFeatureActions && <div className="flex flex-wrap gap-2">
       {declarations?.views?.filter(view => !view.locations.includes('settings')).map(view => <Button key={view.id} size="sm" variant="secondary" disabled={missing || !selected.enabled || Boolean(selected.stopping) || !availableViewIds.includes(view.id) || view.instances === 'per-session' && !sessionId || view.instances === 'per-project' && !projectId} onClick={() => onOpenFeature(view)}>{localizedText(view.title, [i18n.locale])}<IconSquareArrowOutUpRight /></Button>)}
-      {declarations?.commands?.map(command => <Button key={command.id} size="sm" variant="secondary" disabled={missing || !commandActions.some(action => action.id === 'plugin:' + command.id) || working} onClick={() => commandActions.find(action => action.id === 'plugin:' + command.id)?.run()}>{localizedText(command.title, [i18n.locale])}</Button>)}
+      {declarations?.commands?.map(command => <Button key={command.id} size="sm" variant="secondary" disabled={missing || !commandActions.some(action => action.id === 'plugin:' + command.id) || working} onClick={() => commandActions.find(action => action.id === 'plugin:' + command.id)?.run()}>{localizedText(command.title, [i18n.locale])}{command.keybinding && <Tip label={rejectedKeybindings.has(command.id) ? t`快捷键未生效` : ''}><span className={cn('flex items-center gap-0.5', rejectedKeybindings.has(command.id) && 'opacity-50 line-through')}>{keybindingCaps(command.keybinding, isApplePlatform).map(cap => <Kbd key={cap}>{cap}</Kbd>)}</span></Tip>}</Button>)}
       {((declarations?.modelSources?.length ?? selected.contributes.modelSources?.length) || declarations?.agentBackends?.length) ? <Button size="sm" variant="secondary" disabled={missing} onClick={onOpenModels}><Trans>模型与 Agent</Trans><IconSquareArrowOutUpRight /></Button> : null}
       {declarations?.appearance && <Button size="sm" variant="secondary" disabled={missing} onClick={onOpenAppearance}><Trans>选择外观</Trans><IconSquareArrowOutUpRight /></Button>}
       {pluginActions.filter(action => action.kind !== 'device-flow').map(action => <Button key={action.id} size="sm" variant="secondary" disabled={missing || working || !selected.enabled || Boolean(selected.stopping) || !selected.actions.some(value => value.id === action.id)} onClick={() => setFlow({ pluginId: selected.id, action })}>{action.label}</Button>)}
@@ -276,7 +280,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
         {!selected.rejected && <Field label={t({ message: '启用策略' })}><Select value={selected.enablement} disabled={working || dirty || missing || !reachable} onChange={e => void update({ enablement: e.target.value as PluginUpdate['enablement'] })}><option value="auto"><Trans>自动</Trans></option><option value="on"><Trans>开启</Trans></option><option value="off"><Trans>关闭</Trans></option></Select></Field>}
     <section className="flex flex-col gap-3 border-t border-line pt-4">
       <h3 className="text-sm font-medium"><Trans>权限</Trans></h3>
-      <div className="flex flex-col gap-3 text-sm">{(selected.capabilities ?? []).map(capability => <p key={capability}>{capabilityLabel(capability)}</p>)}<p className="text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>{(selected.source === 'development' || selected.installed?.versions.some(version => version.selected && version.trusted)) && <p className="text-fg-3"><Trans>以服务器进程的权限运行</Trans></p>}</div>
+      <div className="flex flex-col gap-3 text-sm">{(selected.capabilities ?? []).map(capability => <p key={capability}>{capabilityLabel(capability)}</p>)}{selected.capabilities?.includes('models.provide') && <ModelSourceNote sources={declarations?.modelSources} />}{selected.capabilities?.includes('process.exec') && <ExecutableNote names={selected.executables} />}<p className="text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>{(selected.source === 'development' || selected.installed?.versions.some(version => version.selected && version.trusted)) && <p className="text-fg-3"><Trans>以服务器进程的权限运行</Trans></p>}</div>
     </section>
   </div>;
   const diagnosticContent = selected && <section className="flex min-w-0 flex-col gap-5 border-t border-line pt-4">

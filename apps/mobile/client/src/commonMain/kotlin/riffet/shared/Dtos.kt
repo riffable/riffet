@@ -352,6 +352,8 @@ data class PluginDescriptor(
     val webEntry: WebEntry? = null,
     /** What the package holds; absent for built-in plugins. */
     val capabilities: List<String>? = null,
+    /** With `process.exec`: the commands the package runs on this machine, outside the sandbox. */
+    val executables: List<String>? = null,
 )
 
 @Serializable
@@ -371,7 +373,7 @@ data class PluginEntryCompatibility(val range: String = "", val ok: Boolean = tr
  */
 @Serializable
 data class PluginDeclarations(
-    val modelSources: List<NamedPluginContribution>? = null,
+    val modelSources: List<PluginModelSourceDeclaration>? = null,
     val sharePublisher: PluginPublisherDeclaration? = null,
     val actions: List<PluginAction>? = null,
     val appearance: PluginAppearanceDeclaration? = null,
@@ -853,7 +855,14 @@ data class PluginGrantRequired(
     val capabilities: List<String> = emptyList(),
     val trustedRequired: Boolean = false,
     val trustedAllowed: Boolean = false,
+    val modelSources: List<PluginGrantModelSource>? = null,
+    val executables: List<String>? = null,
 )
+/** A model source a package declares, with the only hosts it may send requests and the profile's key to besides an address the user typed. No hosts: not limited. */
+@Serializable
+data class PluginGrantModelSource(val id: String, val hosts: List<String>? = null)
+@Serializable
+data class PluginModelSourceDeclaration(val id: String, val title: Map<String, String> = emptyMap(), val hosts: List<String>? = null)
 @Serializable
 data class PluginUpdate(val enablement: String? = null, val settings: Map<String, String?>? = null, val force: Boolean? = null, val configRevision: String? = null)
 data class PluginInstallationResult(val plugin: PluginDescriptor? = null, val grant: PluginGrantRequired? = null)

@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | 数据库 `SCHEMA_VERSION` | `apps/server/src/store.ts` | 升级后旧版本无法打开数据库，升级前备份 |
 | 删除 `ProtocolFeature`、`PROTOCOL_INFO.version` 变化 | `packages/contracts/src/protocol.ts` | 仍可用的最低客户端版本 |
-| `PLUGIN_API_VERSION`、`AGENT_PROTOCOL_VERSION` | `packages/plugin-api/src` | 插件迁移方式 |
+| `PLUGIN_API_VERSION`、`AGENT_PROTOCOL_VERSION` | `packages/plugin-api/src` | 插件迁移方式；升 SDK 包版本时运行 `pnpm gen:plugin-api` 生成新基线 |
 | Node.js、macOS、iOS、Android 最低版本 | `package.json` `engines`、两个 `project.yml`、`libs.versions.toml` | 新的最低要求 |
 
 `scripts/release.mjs` 把这些来源与上一个 stable tag 比较：MAJOR.MINOR 未变却出现上述变化时，`release:prepare` 和发布工作流都会拒绝。新增协议能力不算不兼容。后端 CLI 的最低版本不在此列，由 `riffet doctor` 逐项提示。

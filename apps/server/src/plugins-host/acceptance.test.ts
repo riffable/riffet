@@ -17,6 +17,7 @@ const examples = resolve(fileURLToPath(new URL('.', import.meta.url)), '../../..
 const cleanups: Array<() => Promise<unknown> | unknown> = [];
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
@@ -249,11 +250,11 @@ async function localPackage(id: string, version: string, body: string, extra: Re
 
 describe('the public plugin index', () => {
   /** An index at a loopback address that lists one release of the theme sample, served with `served` as its archive. */
-  async function index(listed: { integrity: string }, served: Buffer) {
+  async function index(listed: { integrity: string }, served: Buffer, redirect?: string) {
     const server: Server = createServer((request, response) => {
       if (request.url === '/plugins/index.json') {
         response.setHeader('content-type', 'application/json').end(JSON.stringify({ schemaVersion: 1, plugins: [{ id: 'example.graphite-theme', manifest: { title: { en: 'Graphite' } }, versions: [{ version: '1.0.0', archive: 'packages/graphite.tgz', integrity: listed.integrity, capabilities: [] }] }] }));
-      } else if (request.url === '/plugins/packages/graphite.tgz') response.end(served);
+      } else if (request.url === '/plugins/packages/graphite.tgz') { if (redirect) response.writeHead(302, { location: redirect }).end(); else response.end(served); }
       else response.writeHead(404).end();
     }).listen(0, '127.0.0.1');
     await new Promise(done => server.once('listening', done));
@@ -276,6 +277,20 @@ describe('the public plugin index', () => {
     const installed = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme', version: '1.0.0' }, grant: [] });
     expect(installed.statusCode, installed.body).toBe(200);
     expect((await row('example.graphite-theme')).installed?.versions[0]).toMatchObject({ version: '1.0.0', source: 'market:example.graphite-theme@1.0.0', integrity: packed.integrity });
+  });
+
+  it('checks every redirect hop of a download before requesting it', async () => {
+    const packed = await packPlugin(join(examples, 'graphite-theme'));
+    await index(packed, packed.archive, 'http://download.example/graphite.tgz');
+    const { call, row } = await boot();
+    const requested: string[] = [];
+    const real = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => { requested.push(String(input)); return real(input, init); });
+    const refused = await call('POST', '/api/integrations/install', { market: { id: 'example.graphite-theme', version: '1.0.0' }, grant: [] });
+    expect(refused.statusCode).toBe(502);
+    expect(requested.some(url => url.includes('download.example'))).toBe(false);
+    expect(requested.some(url => url.endsWith('/plugins/packages/graphite.tgz'))).toBe(true);
+    expect(await row('example.graphite-theme')).toBeUndefined();
   });
 });
 

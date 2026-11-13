@@ -1,27 +1,31 @@
-import { randomBytes } from 'node:crypto';
 import { realpath } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import QRCode from 'qrcode';
 import {
-  AGENT_PROTOCOL_VERSION, PLUGIN_API_VERSION, type ActivationScope, type Contributions, type DeviceFlow, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest,
-  type AgentBackend, type AgentToolGroup, type PluginPageProvider, type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type TaskProvider, protocolBackends, sourceProtocols,
+  type ActivationScope, type Contributions, type DoctorCheck, type Plugin, type PluginHost, type PluginManifest, type AgentToolGroup,
+  type AvatarStyleProvider, type PluginChannelHandler, type CommandHandler, type ModelSourceProvider, type NativeRuntimeHook, type SharePublisher, type TaskProvider,
 } from '@riffet/plugin-api';
-import type { ActionStep, AppearanceDeclarations, PluginPage, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import { protocolBackends, sourceProtocols } from '@riffet/plugin-api/kit';
+import { AGENT_PROTOCOL_VERSION, type AgentBackend } from '@riffet/plugin-api/experimental/agent';
+import type { ActionStep, AppearanceDeclarations, PluginPageResponse, PluginReadmeResponse, CommandDeclaration, PluginDeclarations, InstalledPluginInfo, PluginDescriptor, PluginEnablement, PluginStatus, ModelSourceDescriptor, NativeBackendId, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
 // The core's only import of the built-in list (`pnpm check:plugins`), so a build can swap it here.
 import { builtinPlugins } from '../../../../plugins/index.js';
 import { AppError } from '../errors.js';
 import { MODEL_SOURCE_ID } from '../settings/index.js';
-import { checkManifest, declaredIds, knownDeclarations } from './declarations.js';
+import { apiVersionProblem, checkManifest, declaredIds, grantExecutables, grantModelSources, knownDeclarations, loadableManifest } from './declarations.js';
 import { developmentDirectories, developmentFile, fileIntegrity, loadDevelopmentPackage, packagePlugin, readPackage } from './development.js';
 import { createPluginHost } from './host.js';
 import { builtinPackageRoot } from './package-root.js';
-import { checkedPage, packageReadme, settingValue } from './page.js';
+import { CallGuard, FAIL_FAST_MS } from './call-guard.js';
+import { describeError, bounded, type Activation, type Entry, type Source, type WebEntry } from './entry.js';
+import { Flows } from './flows.js';
+import { Pages } from './pages.js';
+import { RESTART_DELAYS_MS, RESTART_STABLE_MS, Restarts } from './restarts.js';
 import { PluginStore, type PluginItem, type PluginItemPatch } from './store.js';
 import { PluginLogs } from './logs.js';
 import type { PluginActivationState, PluginLogEntry } from '../../../../packages/contracts/src/plugin-management.js';
-import { checkPackageFields, compatibility, referencedFiles, requestedCapabilities, serverIncompatibility } from '../plugins-host/compat.js';
+import { compatibility, referencedFiles, requestedCapabilities, serverIncompatibility } from '../plugins-host/compat.js';
 import { PackageStore, checkExpected, type PackageInput } from '../plugins-host/packages.js';
 import { remotePlugin } from '../plugins-host/remote.js';
 import { satisfies } from '../plugins-host/semver.js';
@@ -35,7 +39,6 @@ export const builtinPluginsChanging = (id: string, change: (plugin: Plugin) => P
 export const isBuiltinPlugin = (id: string): boolean => builtinPlugins.some(plugin => plugin.manifest.id === id);
 
 const ENABLEMENTS: readonly PluginEnablement[] = ['auto', 'on', 'off'];
-const MAX_FLOWS = 32;
 /** What one disposer gets: the wait ends then, though code that never yields cannot be interrupted. */
 const DISPOSE_TIMEOUT_MS = 5_000;
 /** How long `activate` may take before the activation ends as a problem, so one that never resolves cannot hold the plugin's queue. */
@@ -47,7 +50,6 @@ const SERVICE_VERSION = /^\d+\.\d+\.\d+$/;
 /** How long after the registry is made an Agent that has not been evaluated yet still counts as on its way (`agentBackendPending`): an activation, once begun, is bounded by its own timeout. */
 const START_GRACE_MS = 45_000;
 
-type Source = NonNullable<PluginDescriptor['source']>;
 /** Where a package ends up when a version is installed or removed: the list is what clients re-read. */
 export interface InstallRequest {
   input: PackageInput; source: string; grant: unknown; trusted?: boolean;
@@ -55,67 +57,9 @@ export interface InstallRequest {
   expected?: { id: string; version: string; integrity: string };
 }
 
-/** One activation: what `activate` opened, ended as a whole. */
-interface Activation {
-  generation: number;
-  controller: AbortController;
-  /** Registered through `scope.onDispose`, run last first. */
-  disposers: Array<() => void | Promise<void>>;
-  ended: boolean;
-  contributions?: Contributions;
-  /** Set when the package's process failed before this activation was committed. */
-  failed?: string;
-  /** The last answer of `status()`, and the call still out: a list read never starts a second one. */
-  statusLast?: PluginStatus;
-  statusCall?: Promise<PluginStatus>;
-}
-interface Entry {
-  plugin: Plugin;
-  host: PluginHost;
-  source: Source;
-  /** The real path of a development package's directory, or of the selected version of an installed one. */
-  root?: string;
-  /** The version an installed package runs. */
-  version?: string;
-  /** Explicit local-operator trust, separate from the installed source and package claims. */
-  trusted?: boolean;
-  /** The web entry of a development or installed package (`webEntry` on the descriptor). */
-  web?: WebEntry;
-  /** The server entry, which the files route never serves. */
-  server?: string;
-  /** Why this host can never run the package's server entry (`hostApi`); it keeps its declarations. */
-  blocked?: string;
-  /** A version switch that was undone, shown until the next one. */
-  note?: string;
-  /** Committed: lookups serve its contributions. */
-  active?: Activation;
-  /** Its enablement has been decided at least once, whichever way. */
-  evaluated?: boolean;
-  allowed?: boolean;
-  demand?: string;
-  demanding?: Promise<void>;
-  runtime?: Omit<PluginActivationState, 'events' | 'state'>;
-  /** Awaiting commit. `update()` aborts it, since the choice may have changed meanwhile. */
-  starting?: Activation;
-  generation: number;
-  /** Why it is off although it should be on, or why detection could not answer. */
-  problem?: string;
-  /** What the last teardown could not release. It stays until a teardown ends cleanly or the plugin is on again. */
-  cleanup?: string;
-  /**
-   * A turn-off or a switch to `version` that waits for the plugin's running tasks (design §8). The activation stays up and refuses
-   * new tasks and commands; it goes ahead when the last task ends, or at once when an update says `force`.
-   */
-  waiting?: { kind: 'off' } | { kind: 'switch'; version: string };
-  /** Set while an update with `force` evaluates, so a turn-off does not wait for tasks. */
-  force?: boolean;
-  /** Lifecycle changes of this entry, one at a time. */
-  tail: Promise<void>;
-}
 interface Rejected { id: string; vendor: string; name: string; reason: string; source?: Source; root?: string }
 /** A package version read from disk, ready to be an entry. */
 interface LoadedVersion { manifest: PluginManifest; root: string; version: string; integrity: string; granted: string[]; trusted?: boolean; server?: string; web?: WebEntry }
-type WebEntry = NonNullable<PluginDescriptor['webEntry']>;
 export interface OwnedRuntimeHook { owner: PluginManifest['id']; hook: NativeRuntimeHook }
 /** An Agent backend of an enabled integration. */
 export interface OwnedAgentBackend { owner: PluginManifest['id']; backend: AgentBackend }
@@ -128,7 +72,6 @@ export interface OwnedAgentTools { owner: PluginManifest['id']; declaration: Non
 export interface OwnedAvatarStyle { owner: PluginManifest['id']; declaration: NonNullable<PluginDeclarations['avatarStyles']>[number]; provider: AvatarStyleProvider }
 /** A command ready to run: the declaration, the handler, and the signal that aborts with the activation. */
 export interface ResolvedCommand { declaration: CommandDeclaration; handler: CommandHandler; signal: AbortSignal }
-interface Flow { pluginId: string; flow: DeviceFlow; polling: boolean; /** The activation that started it: a flow outlives neither it nor the integration being on. */ activation: Activation }
 
 export interface PluginRegistryOptions {
   stateDir: string;
@@ -153,25 +96,34 @@ export interface PluginRegistryOptions {
   activationTimeoutMs?: number;
   /** Defaults to 2 s. */
   statusTimeoutMs?: number;
+  /** Replaces every limit in `CALL_LIMITS_MS`. */
+  callTimeoutMs?: number;
+  /** How long calls are refused after three timeouts in a row. Defaults to 60 s. */
+  failFastMs?: number;
+  /** Pauses before each automatic restart of an isolated package. Defaults to 2 s, 10 s, 60 s. */
+  restartDelaysMs?: readonly number[];
+  /** How long a restarted process stays up before its attempts are forgotten. Defaults to 10 minutes. */
+  restartStableMs?: number;
   /** The loopback ports the server answers on, closed to installed packages even when they may use the network. */
   serverPorts?: () => readonly number[];
   /** `host.sessions` of an in-process plugin that declares agent tools or channels. */
   sessions?: NonNullable<PluginHost['sessions']>;
 }
 
-function describeError(error: unknown): string { return error instanceof Error && error.message ? error.message : String(error); }
-
-/** Ends the wait after `ms`; the code itself cannot be stopped, only no longer waited for. */
-async function bounded(run: () => void | Promise<void>, ms: number): Promise<void> {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    await Promise.race([
-      Promise.resolve().then(run),
-      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(`did not finish within ${ms / 1000}s`)), ms); timer.unref(); }),
-    ]);
-  } finally { clearTimeout(timer); }
+const MODEL_SOURCE_CLAIM = 'model-source:';
+const TOOL_PREFIX_CLAIM = 'tool-prefix:';
+/** What a manifest takes from the shared namespaces at load: contribution ids, model source ids and agent tool prefixes. */
+function claims(manifest: PluginManifest): string[] {
+  return [
+    ...declaredIds(manifest.contributes),
+    ...(manifest.contributes?.modelSources ?? []).map(source => MODEL_SOURCE_CLAIM + source.id),
+    ...(manifest.contributes?.agentTools ?? []).map(group => TOOL_PREFIX_CLAIM + group.toolPrefix),
+  ];
 }
-
+function claimLabel(claim: string): string {
+  return claim.startsWith(MODEL_SOURCE_CLAIM) ? `model source "${claim.slice(MODEL_SOURCE_CLAIM.length)}"`
+    : claim.startsWith(TOOL_PREFIX_CLAIM) ? `agent tool prefix "${claim.slice(TOOL_PREFIX_CLAIM.length)}"` : `contribution "${claim}"`;
+}
 class Superseded extends Error { constructor() { super('activation superseded'); } }
 
 /**
@@ -195,7 +147,10 @@ export class PluginRegistry {
   private readonly rejected: Rejected[] = [];
   /** Contribution id -> the plugin that declares it. */
   private readonly declared = new Map<string, string>();
-  private readonly flows = new Map<string, Flow>();
+  private readonly guard: CallGuard;
+  private readonly restarts: Restarts;
+  private readonly flows: Flows;
+  private readonly pages: Pages;
   private readonly invalidate: () => void;
   private readonly agentBackendProvided: (id: string) => boolean;
   private readonly changeListeners = new Set<() => void>();
@@ -234,6 +189,25 @@ export class PluginRegistry {
     this.rejectCycles();
     this.packages = new PackageStore(options.stateDir);
     this.activationTimeoutMs = options.activationTimeoutMs ?? ACTIVATION_TIMEOUT_MS;
+    this.restarts = new Restarts({
+      closed: () => this.closed, recovery: () => this.store.recovery(), evaluateAll: ids => this.evaluateAll(ids), dependents: id => this.dependents(id),
+      log: (entry, level, phase, message) => this.log(entry, level, phase, message), entry: id => this.entries.get(id),
+      restartDelaysMs: options.restartDelaysMs ?? RESTART_DELAYS_MS, restartStableMs: options.restartStableMs ?? RESTART_STABLE_MS,
+    });
+    this.guard = new CallGuard({
+      log: (entry, level, phase, message) => this.log(entry, level, phase, message), changed: () => this.changed(),
+      callTimeoutMs: options.callTimeoutMs, failFastMs: options.failFastMs ?? FAIL_FAST_MS,
+    });
+    this.flows = new Flows({
+      require: id => this.require(id), entry: id => this.entries.get(id), events: entry => this.events(entry),
+      ensureContribution: (kind, contributionId) => this.ensureContribution(kind, contributionId), ensureEntry: (entry, trigger) => this.ensureEntry(entry, trigger),
+      guarded: (entry, run, failureCode) => this.guarded(entry, run, failureCode),
+    });
+    this.pages = new Pages({
+      loading: () => this.loading, require: id => this.require(id), events: entry => this.events(entry), ensureEntry: (entry, trigger) => this.ensureEntry(entry, trigger),
+      guarded: (entry, run, failureCode) => this.guarded(entry, run, failureCode), update: (id, input) => this.update(id, input),
+      redact: (id, text) => this.journal.redact(id, text), item: id => this.store.item(id),
+    });
     this.versionInUse = options.versionInUse ?? (() => false);
     this.serverPorts = options.serverPorts ?? (() => []);
     this.loading = this.loadPackages(options.developmentPackages ?? developmentDirectories(), options.developmentPackages === undefined);
@@ -262,6 +236,7 @@ export class PluginRegistry {
   async close(): Promise<void> {
     this.closed = true;
     clearTimeout(this.pruneTimer);
+    for (const entry of this.entries.values()) this.restarts.clearRestarts(entry);
     await this.loading;
     // Dependents go before what they depend on, whichever entry's turn comes first.
     await Promise.all([...this.entries.values()].map(entry => {
@@ -381,77 +356,12 @@ export class PluginRegistry {
 
   // ── The plugin's page and README (docs/PLUGIN_ARCHITECTURE.md「插件页」) ──────
 
-  /** The page as the plugin builds it now. Reading it activates a plugin that waits for a command or a view, as opening a view does. */
-  async page(id: string, locale: string | undefined): Promise<PluginPageResponse> {
-    await this.loading;
-    const entry = this.require(id);
-    return { page: await this.readPage(entry, await this.pageProvider(entry), locale) };
-  }
+  page(id: string, locale: string | undefined): Promise<PluginPageResponse> { return this.pages.page(id, locale); }
 
-  /** One change from the page: a setting saved as `update` saves it, or a button. Answers with the page read again. */
-  async changePage(id: string, input: unknown): Promise<PluginPageResponse> {
-    await this.loading;
-    const entry = this.require(id);
-    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new AppError('INVALID_INPUT', 'Expected a page change');
-    const { locale, set, run, ...rest } = input as Record<string, unknown>;
-    if (Object.keys(rest).length || (set === undefined) === (run === undefined)) throw new AppError('INVALID_INPUT', 'Expected one of set or run');
-    if (locale !== undefined && typeof locale !== 'string') throw new AppError('INVALID_INPUT', 'locale must be text');
-    const provider = await this.pageProvider(entry);
-    const context = { locale: (locale as string | undefined) ?? '' };
-    let message: string | undefined;
-    if (set !== undefined) {
-      if (!set || typeof set !== 'object' || typeof (set as { key?: unknown }).key !== 'string') throw new AppError('INVALID_INPUT', 'set needs a key and a value');
-      const { key, value } = set as { key: string; value: unknown };
-      let saved: string | null;
-      try { saved = settingValue(value); } catch (error) { throw new AppError('INVALID_INPUT', describeError(error)); }
-      await this.update(id, { settings: { [key]: saved } });
-    } else {
-      if (!run || typeof run !== 'object') throw new AppError('INVALID_INPUT', 'run needs an action');
-      const { action, item } = run as { action?: unknown; item?: unknown };
-      if (typeof action !== 'string' || !action || action.length > 64 || (item !== undefined && (typeof item !== 'string' || item.length > 512))) throw new AppError('INVALID_INPUT', 'run needs an action');
-      if (!provider.run) throw new AppError('INTEGRATION_ACTION_NOT_FOUND', 'This page has no buttons', 404);
-      const outcome = await this.guarded(entry, async () => provider.run!(context, action, item as string | undefined));
-      if (outcome && typeof outcome.message === 'string' && outcome.message.trim()) message = this.journal.redact(id, outcome.message.slice(0, 400));
-    }
-    // A change may have turned the plugin off (a setting its detection reads): the page is then not there to read.
-    const now = entry.active?.contributions?.page;
-    if (!now) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
-    return { page: await this.readPage(entry, now, context.locale), ...(message ? { message } : {}) };
-  }
+  changePage(id: string, input: unknown): Promise<PluginPageResponse> { return this.pages.changePage(id, input); }
 
-  /** The README for `locale`: `README.<tag>.md`, else `README.md`, in the package's directory. Never runs the plugin. */
-  async readme(id: string, locale: string | undefined): Promise<PluginReadmeResponse> {
-    await this.loading;
-    const entry = this.require(id);
-    const root = entry.root ?? (entry.source === 'builtin' ? builtinPackageRoot(id) : undefined);
-    const text = root ? await packageReadme(root, locale) : undefined;
-    // The details already show the name: a first heading that only repeats it is left out.
-    const { manifest } = entry.plugin;
-    const names = new Set([manifest.name, manifest.id, ...Object.values(manifest.title ?? {})].map(name => name.trim().toLowerCase()));
-    const heading = text?.match(/^\s*#\s+(.+?)\s*#*\s*(?:\r?\n|$)/);
-    const readme = heading && names.has(heading[1]!.toLowerCase()) ? text!.slice(heading[0].length).trimStart() : text?.trimStart();
-    return readme ? { readme } : {};
-  }
+  readme(id: string, locale: string | undefined): Promise<PluginReadmeResponse> { return this.pages.readme(id, locale); }
 
-  private async pageProvider(entry: Entry): Promise<PluginPageProvider> {
-    const { manifest } = entry.plugin;
-    if (!manifest.contributes?.page) throw new AppError('INTEGRATION_PAGE_NOT_FOUND', 'This plugin has no page', 404);
-    if (!entry.active && (this.events(entry).includes('view') || this.events(entry).includes('command'))) await this.ensureEntry(entry, 'view:page');
-    const provider = entry.active?.contributions?.page;
-    if (!provider) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
-    return provider;
-  }
-
-  private async readPage(entry: Entry, provider: PluginPageProvider, locale: string | undefined): Promise<PluginPage> {
-    const { manifest } = entry.plugin;
-    const settings = new Map((manifest.settings ?? []).map(field => [field.key, field.kind] as const));
-    const secrets = (() => { try { return this.store.item(manifest.id).secrets; } catch { return {}; } })();
-    return this.guarded(entry, async () => {
-      let raw: unknown;
-      await bounded(async () => { raw = await provider.read({ locale: locale ?? '' }); }, 10_000);
-      return checkedPage(raw, settings, key => Boolean(secrets[key]));
-    }, 'INTEGRATION_PAGE_FAILED');
-  }
 
   async logs(id: string): Promise<PluginLogEntry[]> { await this.loading; this.require(id); return this.journal.read(id); }
 
@@ -475,6 +385,7 @@ export class PluginRegistry {
         : new AppError(failureCode, this.journal.redact(entry.plugin.manifest.id, describeError(error)), 502);
     }
   }
+
   /** Each enabled plugin's publisher under its id, in `plugins/index.ts` order: what a share records as its publisher. */
   sharePublishers(): OwnedSharePublisher[] {
     return [...this.entries.values()].flatMap(entry => {
@@ -714,9 +625,11 @@ export class PluginRegistry {
       if (entry.active) await this.deactivate(entry);
       if (development && !('reason' in development)) {
         for (const [declared, owner] of this.declared) if (owner === id) this.declared.delete(declared);
-        for (const declared of declaredIds(development.plugin.manifest.contributes)) this.declared.set(declared, id);
-        entry.plugin = development.plugin;
-        entry.host = this.createHost(development.plugin.manifest, 'development');
+        const admitted = this.admit(development.plugin);
+        for (const declared of claims(admitted.plugin.manifest)) this.declared.set(declared, id);
+        entry.plugin = admitted.plugin;
+        entry.skipped = admitted.skipped;
+        entry.host = this.createHost(admitted.plugin.manifest, 'development');
         entry.server = development.entries.server;
         entry.web = development.entries.web ? { path: development.entries.web, integrity: await fileIntegrity(development.root, development.entries.web) } : undefined;
         entry.blocked = serverIncompatibility(development.plugin.manifest);
@@ -882,7 +795,7 @@ export class PluginRegistry {
         if (this.wouldCycle(id, manifest.requires)) throw new AppError('PLUGIN_DEPENDENCY_CYCLE', 'Its requirements would make a dependency cycle', 409);
         const grant = Array.isArray(request.grant) && request.grant.every(item => typeof item === 'string') ? [...new Set(request.grant as string[])].sort() : undefined;
         if (!grant || grant.length !== staged.capabilities.length || grant.some((item, index) => item !== staged.capabilities[index])) {
-          throw new AppError('PLUGIN_GRANT_REQUIRED', `${id} ${version} asks for ${staged.capabilities.length ? staged.capabilities.join(', ') : 'no capabilities'}; grant exactly these to install it`, 409, { id, version, capabilities: staged.capabilities });
+          throw new AppError('PLUGIN_GRANT_REQUIRED', `${id} ${version} asks for ${staged.capabilities.length ? staged.capabilities.join(', ') : 'no capabilities'}; grant exactly these to install it`, 409, { id, version, capabilities: staged.capabilities, ...(grantModelSources(manifest.contributes) ? { modelSources: grantModelSources(manifest.contributes) } : {}), ...(grantExecutables(manifest) ? { executables: grantExecutables(manifest) } : {}) });
         }
         const select = !existing;
         // The same version that is recorded but no longer loads (its files were damaged): the upload puts it right.
@@ -1002,13 +915,15 @@ export class PluginRegistry {
   private swap(entry: Entry, plugin: Plugin, loaded: LoadedVersion): void {
     const id = plugin.manifest.id;
     for (const [declared, owner] of this.declared) if (owner === id) this.declared.delete(declared);
-    for (const declared of declaredIds(loaded.manifest.contributes)) this.declared.set(declared, id);
+    const admitted = this.admit(plugin);
+    for (const declared of claims(admitted.plugin.manifest)) this.declared.set(declared, id);
     const blocked = serverIncompatibility(loaded.manifest);
-    entry.plugin = plugin;
+    entry.plugin = admitted.plugin;
+    entry.skipped = admitted.skipped;
     entry.root = loaded.root;
     entry.version = loaded.version;
     entry.trusted = loaded.trusted === true;
-    entry.host = this.createHost(plugin.manifest, 'installed', entry.trusted);
+    entry.host = this.createHost(admitted.plugin.manifest, 'installed', entry.trusted);
     if (loaded.web) entry.web = loaded.web; else delete entry.web;
     if (loaded.server) entry.server = loaded.server; else delete entry.server;
     if (blocked) entry.blocked = blocked; else delete entry.blocked;
@@ -1160,59 +1075,9 @@ export class PluginRegistry {
     return (await this.descriptors()).find(item => item.id === id) ?? (() => { throw new AppError('INTEGRATION_NOT_FOUND', 'Plugin not found', 404); })();
   }
 
-  async runAction(id: string, actionId: string): Promise<ActionStep> {
-    const entry = this.require(id);
-    if (!entry.active && entry.plugin.manifest.contributes?.actions?.some(action => action.id === actionId)) {
-      const source = entry.plugin.manifest.contributes.modelSources?.find(source => source.loginAction === actionId);
-      if (source && this.events(entry).includes('model-source')) await this.ensureContribution('model-source', source.id);
-      else if (this.events(entry).includes('command')) await this.ensureEntry(entry, `command:action:${actionId}`);
-    }
-    const actions = entry.active?.contributions?.actions;
-    if (!actions) {
-      if (!entry.active) throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
-      throw new AppError('INTEGRATION_ACTION_NOT_FOUND', 'Unknown plugin action', 404);
-    }
-    const handler = Object.hasOwn(actions, actionId) ? actions[actionId] : undefined;
-    if (!handler) throw new AppError('INTEGRATION_ACTION_NOT_FOUND', 'Unknown plugin action', 404);
-    const activation = entry.active!;
-    const outcome = await this.guarded(entry, () => handler.run());
-    if (outcome.kind !== 'device-flow') return outcome;
-    // Turned off while the login was starting: no flow is registered for an activation that ended.
-    if (entry.active !== activation) throw new AppError('INTEGRATION_DISABLED', 'This plugin was turned off', 409);
-    let uri: URL | undefined;
-    try { uri = new URL(outcome.verificationUri); } catch { /* rejected below */ }
-    if (!uri || (uri.protocol !== 'https:' && uri.protocol !== 'http:')) throw new AppError('INTEGRATION_ACTION_FAILED', 'The plugin returned an invalid verification address', 502);
-    const now = Date.now();
-    for (const [key, flow] of this.flows) if (flow.flow.expiresAt <= now) this.flows.delete(key);
-    while (this.flows.size >= MAX_FLOWS) this.flows.delete(this.flows.keys().next().value!);
-    const flowId = randomBytes(16).toString('hex');
-    this.flows.set(flowId, { pluginId: id, flow: outcome, polling: false, activation });
-    return {
-      kind: 'show-code', flowId, verificationUri: outcome.verificationUri, ...(outcome.userCode ? { userCode: outcome.userCode } : {}),
-      qrSvg: await QRCode.toString(outcome.verificationUri, { type: 'svg' }), intervalMs: outcome.intervalMs, expiresAt: outcome.expiresAt,
-    };
-  }
+  runAction(id: string, actionId: string): Promise<ActionStep> { return this.flows.runAction(id, actionId); }
 
-  /** One poll. A poll already in flight answers `pending`, so a completed login has its side effects once. */
-  async pollFlow(id: string, flowId: string): Promise<ActionStep> {
-    const record = this.flows.get(flowId);
-    if (!record || record.pluginId !== id) throw new AppError('INTEGRATION_FLOW_NOT_FOUND', 'This sign-in is no longer pending', 404);
-    if (this.entries.get(id)?.active !== record.activation) {
-      this.flows.delete(flowId);
-      throw new AppError('INTEGRATION_DISABLED', 'This plugin is off', 409);
-    }
-    if (Date.now() >= record.flow.expiresAt) {
-      this.flows.delete(flowId);
-      return { kind: 'failed', message: '验证码已过期，请重新发起' };
-    }
-    if (record.polling) return { kind: 'pending' };
-    record.polling = true;
-    try {
-      const step = await this.guarded(this.require(id), () => record.flow.poll());
-      if (step.kind !== 'pending' && step.kind !== 'slow_down') this.flows.delete(flowId);
-      return step;
-    } finally { record.polling = false; }
-  }
+  pollFlow(id: string, flowId: string): Promise<ActionStep> { return this.flows.pollFlow(id, flowId); }
 
   /** Explicit per-plugin diagnostics never probe or activate other packages. */
   async diagnostics(id: string): Promise<DoctorCheck[]> {
@@ -1221,8 +1086,9 @@ export class PluginRegistry {
     if (!this.entries.has(id) && rejected) return [{ id, label: rejected.name, status: 'fail', detail: rejected.reason }];
     const entry = this.require(id);
     const checks: DoctorCheck[] = [
-      ...[entry.problem, entry.cleanup, entry.note].filter((value): value is string => Boolean(value)).map((detail, index) => ({ id: id + ':' + index, label: entry.plugin.manifest.name, status: 'warn' as const, detail })),
+      ...[entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? [])].filter((value): value is string => Boolean(value)).map((detail, index) => ({ id: id + ':' + index, label: entry.plugin.manifest.name, status: 'warn' as const, detail })),
     ];
+    checks.push(...this.hookNotes(id));
     const activation = entry.active;
     const run = activation?.contributions?.doctorChecks;
     let ended = false;
@@ -1234,6 +1100,19 @@ export class PluginRegistry {
     return checks;
   }
 
+  /** Notes for a plugin whose runtime hook for a backend is tried after another enabled plugin's. */
+  private hookNotes(id: string): DoctorCheck[] {
+    const entry = this.entries.get(id);
+    const hooked = (item: Entry) => (item.active?.contributions?.runtimeHooks ?? []).map(hook => hook.backendId);
+    if (!entry) return [];
+    const notes: DoctorCheck[] = [];
+    for (const backendId of new Set(hooked(entry))) {
+      const first = [...this.entries.values()].find(item => hooked(item).includes(backendId));
+      if (first && first !== entry) notes.push({ id: `${id}:hook:${backendId}`, label: entry.plugin.manifest.name, status: 'warn', detail: `runtime hook for ${backendId} is tried after ${first.plugin.manifest.id}` });
+    }
+    return notes;
+  }
+
   async doctorChecks(): Promise<DoctorCheck[]> {
     await this.refresh();
     const checks: DoctorCheck[] = this.rejected.map(item => ({ id: `integration:${item.id}`, label: `${item.name} (${item.id})`, status: 'warn', detail: `not loaded: ${item.reason}` }));
@@ -1242,7 +1121,8 @@ export class PluginRegistry {
     for (const entry of this.entries.values()) {
       const { manifest } = entry.plugin;
       const label = `${manifest.name} (${manifest.id})`;
-      for (const detail of [entry.problem, entry.cleanup, entry.note]) if (detail) checks.push({ id: `integration:${manifest.id}`, label, status: 'warn', detail });
+      for (const detail of [entry.problem, entry.cleanup, entry.note, ...(entry.skipped?.notes ?? [])]) if (detail) checks.push({ id: `integration:${manifest.id}`, label, status: 'warn', detail });
+      for (const note of this.hookNotes(manifest.id)) checks.push({ ...note, id: `integration:${manifest.id}`, label });
       const run = entry.active?.contributions?.doctorChecks;
       if (!run) continue;
       try { for (const check of await run()) checks.push({ ...check, id: `integration:${manifest.id}:${check.id}` }); }
@@ -1266,19 +1146,25 @@ export class PluginRegistry {
     console.warn(`[riffet] plugin ${item.id} not loaded: ${item.reason}`);
   }
 
+  /** The plugin as this host reads it: what its manifest says that this version does not know is left out, so every later reader, the claims and the routes see only the rest. */
+  private admit(plugin: Plugin): { plugin: Plugin; skipped: { notes: string[]; ids: string[] } } {
+    const { manifest, notes, skipped } = loadableManifest(plugin.manifest);
+    return { plugin: manifest === plugin.manifest ? plugin : { ...plugin, manifest }, skipped: { notes, ids: skipped } };
+  }
+
   /** What is wrong with a manifest as a candidate for entry `own` (or a new one), before it is trusted with an id or a contribution. */
   private invalidManifest(manifest: PluginManifest, own?: string): string | undefined {
     const id = String(manifest.id);
-    const valid = manifest.apiVersion !== PLUGIN_API_VERSION ? `written for plugin API v${manifest.apiVersion}; this Riffet provides v${PLUGIN_API_VERSION}`
-      : !PLUGIN_ID.test(id) || id.length > 64 ? 'invalid id'
-      : checkManifest(manifest) ?? checkPackageFields(manifest);
+    const valid = apiVersionProblem(manifest.apiVersion)
+      ?? (!PLUGIN_ID.test(id) || id.length > 64 ? 'invalid id' : checkManifest(manifest, 'load'));
     if (valid) return valid;
-    const clash = declaredIds(manifest.contributes).find(declared => this.declared.has(declared) && this.declared.get(declared) !== own);
-    return clash ? `contribution "${clash}" is already declared by ${this.declared.get(clash)}` : undefined;
+    // What this host leaves out of the manifest claims no id.
+    const clash = claims(loadableManifest(manifest).manifest).find(declared => this.declared.has(declared) && this.declared.get(declared) !== own);
+    return clash ? `${claimLabel(clash)} is already declared by ${this.declared.get(clash)}` : undefined;
   }
 
   private createHost(manifest: PluginManifest, source: Source, trusted = false): PluginHost {
-    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined } : {
+    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined, ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id) } : {
       ...this.hostOptions, ownAgentBackends: (manifest.contributes?.agentBackends ?? []).map(declared => declared.id),
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
       ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
@@ -1298,11 +1184,12 @@ export class PluginRegistry {
     const taken = existing ? (existing.source === 'builtin' && source !== 'builtin' ? 'a built-in plugin has this id' : existing.source === 'development' && source === 'installed' ? 'a development package has this id' : 'duplicate id') : undefined;
     const reason = taken ?? this.invalidManifest(manifest);
     if (reason) return this.reject({ id, vendor: String(manifest.vendor), name: String(manifest.name), reason, source, ...(source === 'development' && root ? { root } : {}) });
-    for (const declared of declaredIds(manifest.contributes)) this.declared.set(declared, id);
+    const admitted = this.admit(plugin);
+    for (const declared of claims(admitted.plugin.manifest)) this.declared.set(declared, id);
     const blocked = serverIncompatibility(manifest);
     this.entries.set(id, {
-      plugin, source, generation: 0, tail: Promise.resolve(),
-      host: this.createHost(manifest, source, extra?.trusted),
+      plugin: admitted.plugin, skipped: admitted.skipped, source, generation: 0, tail: Promise.resolve(),
+      host: this.createHost(admitted.plugin.manifest, source, extra?.trusted),
       ...(extra?.trusted ? { trusted: true } : {}),
       ...(root ? { root } : {}), ...(extra?.version ? { version: extra.version } : {}), ...(extra?.web ? { web: extra.web } : {}), ...(extra?.server ? { server: extra.server } : {}), ...(blocked ? { blocked } : {}),
     });
@@ -1399,6 +1286,7 @@ export class PluginRegistry {
       await this.deactivateDependents(entry, true, true);
       await this.deactivate(entry);
       entry.problem = reason;
+      this.restarts.scheduleRestart(entry);
     }).catch((error: unknown) => console.warn(`[riffet] plugin ${id} could not be stopped after its process failed: ${describeError(error)}`));
   }
 
@@ -1528,6 +1416,7 @@ export class PluginRegistry {
 
   private async settle(entry: Entry, enabled: boolean): Promise<string | undefined> {
     if (enabled && !entry.active) return this.activate(entry);
+    if (!enabled) this.restarts.clearRestarts(entry);
     if (!enabled && entry.active) {
       await this.deactivateDependents(entry, true, true);
       await this.deactivate(entry);
@@ -1553,7 +1442,7 @@ export class PluginRegistry {
   private async activate(entry: Entry): Promise<string | undefined> {
     const started = Date.now();
     entry.runtime = { trigger: entry.demand ?? 'startup' };
-    const activation: Activation = { generation: ++entry.generation, controller: new AbortController(), disposers: [], ended: false };
+    const activation: Activation = { generation: ++entry.generation, controller: new AbortController(), disposers: [], ended: false, timeouts: 0, openUntil: 0 };
     const { signal } = activation.controller;
     const id = entry.plugin.manifest.id;
     const version = entry.plugin.manifest.version;
@@ -1588,13 +1477,14 @@ export class PluginRegistry {
       ]);
       if (signal.aborted) throw new Superseded();
       if (activation.failed) throw new Error(activation.failed);
-      this.checked(staged, entry.plugin.manifest);
+      this.checked(staged, entry.plugin.manifest, entry.skipped?.ids ?? []);
       if (entry.source === 'installed' && entry.version) this.packages.markActivated(id, entry.version);
-      activation.contributions = staged;
+      activation.contributions = this.guard.guardContributions(entry, activation, staged);
       entry.active = activation;
       entry.cleanup = undefined;
       entry.runtime = { ...entry.runtime, activatedAt: new Date().toISOString(), durationMs: Date.now() - started };
       this.log(entry, 'info', 'activate', `Activation completed in ${Date.now() - started} ms`);
+      this.restarts.armStable(entry);
     } catch (error) {
       if (!(error instanceof Superseded)) {
         entry.problem = problem = `activation failed: ${this.journal.redact(id, describeError(error))}`;
@@ -1617,8 +1507,10 @@ export class PluginRegistry {
     const activation = entry.active!;
     entry.active = undefined;
     entry.waiting = undefined;
+    this.restarts.clearRestarts(entry, false);
+    if (activation.notice && entry.note === activation.notice) entry.note = undefined;
     const id = entry.plugin.manifest.id;
-    for (const [flowId, flow] of this.flows) if (flow.pluginId === id) this.flows.delete(flowId);
+    this.flows.forget(id);
     if (notify) { this.invalidate(); this.changed(); }
     const failures = await this.end(activation, activation.contributions);
     this.log(entry, failures.length ? 'warn' : 'info', 'dispose', `Deactivation completed in ${Date.now() - started} ms${failures.length ? `: ${failures.join('; ')}` : ''}`);
@@ -1668,9 +1560,12 @@ export class PluginRegistry {
   }
 
   /** A profile names a source by id alone, so two providers of one id would be ambiguous. */
-  private checked(contributions: Contributions, manifest: PluginManifest): void {
+  private checked(contributions: Contributions, manifest: PluginManifest, skipped: readonly string[] = []): void {
     const taken = new Set(this.active().flatMap(contribution => contribution.modelSources ?? []).map(source => source.id));
     for (const source of contributions.modelSources ?? []) {
+      // A plugin that declares the id statically owns it, whether or not it is active yet.
+      const owner = this.declared.get(MODEL_SOURCE_CLAIM + source.id);
+      if (owner !== undefined && owner !== manifest.id) throw new Error(`model source "${source.id}" is declared by ${owner}`);
       if (!MODEL_SOURCE_ID.test(source.id) || taken.has(source.id)) throw new Error(`model source "${source.id}" is invalid or already provided`);
       taken.add(source.id);
     }
@@ -1686,6 +1581,8 @@ export class PluginRegistry {
     if (manifest.contributes?.sharePublisher && !contributions.sharePublisher) throw new Error('Declared share publisher is not provided');
     // A command is run by its id from the declaration: each handler must be declared by this integration.
     for (const [commandId, handler] of Object.entries(contributions.commands ?? {})) {
+      // A command this host left out of the manifest stays unrunnable (`command()` finds no declaration); its handler is not an error.
+      if (skipped.includes(commandId)) continue;
       if (!manifest.contributes?.commands?.some(declared => declared.id === commandId) || typeof handler?.run !== 'function') throw new Error(`command "${commandId}" is not declared in contributes.commands or has no run()`);
     }
     for (const [styleId, provider] of Object.entries(contributions.avatarStyles ?? {})) {
@@ -1778,6 +1675,7 @@ export class PluginRegistry {
       ...(compat ? { compatibility: compat } : {}),
       ...(installed ? { installed } : {}),
       ...(held ? { capabilities: held } : {}),
+      ...(held?.includes('process.exec') && grantExecutables(manifest) ? { executables: grantExecutables(manifest) } : {}),
       ...(entry.web ? { webEntry: entry.web } : {}),
       ...(manifest.version ? { version: manifest.version } : {}),
       ...(manifest.title ? { title: manifest.title } : {}),
