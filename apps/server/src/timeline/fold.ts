@@ -390,6 +390,19 @@ export class LaneFold {
 
   /** One row of the log into the window; a change to an entity before it is set aside in `frozen` when written after `since`. */
   private applyRow(row: JournalRow, frozen: Array<{ identity: number; row: JournalRow }>, since = -1): void {
+    if (row.kind === TOMBSTONE_KIND && row.nativeId.startsWith('meta:subagent:')) {
+      if (this.ctx.journal.locate(this.key, row.nativeId)?.seq !== row.seq) return;
+      const toolCallId = row.nativeId.slice('meta:subagent:'.length);
+      this.subagents.set(toolCallId, null);
+      this.decorationChanged(toolCallId);
+      return;
+    }
+    if (row.kind === TOMBSTONE_KIND && this.ctx.journal.locate(this.key, row.nativeId)?.seq === row.seq) {
+      for (const [toolCallId, activity] of this.toolActivities) if (activity.id === row.nativeId) {
+        this.toolActivities.delete(toolCallId);
+        this.decorationChanged(toolCallId);
+      }
+    }
     if (row.kind === TOMBSTONE_KIND && row.nativeId.startsWith('meta:turn:') && row.nativeId.endsWith(':started')) {
       this.turnMetas.delete(row.nativeId.slice('meta:turn:'.length, -':started'.length));
       this.reproject = true;

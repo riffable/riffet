@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { open, realpath } from 'node:fs/promises';
 import type { NativeActivity, NativeWorkbenchEvent } from '../../../../../packages/contracts/src/index.js';
 import { taskReportDetail } from '../../../../../packages/timeline/src/values.js';
+import { forkedSkill } from './subagents.js';
 import {
   ACTIVITY_BLOB_LIMIT, ACTIVITY_DETAIL_LIMIT, ActivityLedger, activityEvent, activityId, activityTitle, clipDetail, isLiveActivity,
 } from '../../journal/activity.js';
@@ -267,6 +268,8 @@ function launchOf(call: { name: string; input: Record<string, unknown> }, result
     return { taskId: string(result.taskId)!, kind: 'monitor', title: description || activityTitle(command ?? '', 'Monitor'), ...(command ? { command } : {}) };
   }
   const agentId = string(result.agentId);
+  const fork = forkedSkill(call, result);
+  if (fork?.background === true) return { taskId: fork.agentId, kind: 'agent', title: fork.title };
   if (result.isAsync === true && result.status === 'async_launched' && agentId) {
     return { taskId: agentId, kind: 'agent', title: description || string(result.description) || 'Subagent', ...(outputFile ? { outputFile } : {}) };
   }
@@ -401,6 +404,15 @@ export class ClaudeActivities {
   /** The latest state of every activity, in the order they first appeared. */
   list(): NativeActivity[] { return this.states.list(); }
   get(id: string): NativeActivity | undefined { return this.states.get(id); }
+  /** The transcript no longer proves this agent launch. Its original tool rows remain history. */
+  forgetAgent(id: string): void {
+    if (this.states.get(id)?.task?.kind !== 'agent') return;
+    this.load(this.states.list().filter(item => item.id !== id));
+    this.runs.delete(id);
+    this.outputs.delete(id);
+    this.over.delete(id.slice('claude:'.length));
+    for (const [call, activity] of this.byToolCall) if (activity === id) this.byToolCall.delete(call);
+  }
   /** Output files of the tasks seen, by activity id. */
   outputFiles(): ReadonlyMap<string, string> { return this.outputs; }
   /** Remembers an agent the rows reported over; the oldest are let go past `MAX_AGENTS_OVER`. */

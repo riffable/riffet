@@ -9,7 +9,7 @@ import { buildTimeline } from '../../../../packages/timeline/src/buildTimeline.j
 import { projectEvents } from '../../../../packages/timeline/src/projectEvents.js';
 import { timelineRuns } from './fold.js';
 import { timelineRows } from '../../../../packages/timeline/src/rows.js';
-import { JournalLaneWriter, turnMetaId } from '../journal/ingest.js';
+import { JournalLaneWriter, subagentMetaId, turnMetaId } from '../journal/ingest.js';
 import { Journal, laneKey } from '../journal/journal.js';
 import { WorkspaceService } from '../workspace/index.js';
 import { SessionMedia } from './media.js';
@@ -624,6 +624,25 @@ describe('timeline service', () => {
     await env.ready('sub:task-1');
     await env.ready();
     expect(env.all().find(row => row.key === 'tool:task-1')).toMatchObject({ subagent: { turnId: 'c2', status: 'completed', running: false } });
+    // Retract only a disproven binding/activity, retaining the actual tool and stored child history.
+    env.writer.commit({ events: [], retire: [subagentMetaId('task-1'), 'claude:agent-7'], cursor: env.writer.cursor });
+    await env.ready();
+    expect(env.all().find(row => row.key === 'tool:task-1')).not.toHaveProperty('subagent');
+    expect(env.all().find(row => row.key === 'tool:task-1')).not.toHaveProperty('activity');
+    env.close();
+    env = open();
+    await env.ready();
+    expect(env.all().find(row => row.key === 'tool:task-1')).not.toHaveProperty('subagent');
+    expect(env.all().find(row => row.key === 'tool:task-1')).not.toHaveProperty('activity');
+    env.writer.child('task-1', 'agent-7'); // Later authoritative metadata can establish the binding again.
+    env.writer.activities.apply({ id: 'claude:agent-7', kind: 'background_task', status: 'completed', title: 'review', toolCallId: 'task-1', task: { kind: 'agent' }, startedAt, endedAt: stamp(++tick) });
+    await env.ready();
+    expect(env.all().find(row => row.key === 'tool:task-1')).toHaveProperty('subagent');
+    env.close();
+    env = open();
+    await env.ready();
+    expect(env.all().find(row => row.key === 'tool:task-1')).toHaveProperty('subagent');
+    expect(env.all().find(row => row.key === 'tool:task-1')).toHaveProperty('activity');
     env.close();
   });
 

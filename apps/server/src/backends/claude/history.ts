@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open, readFile, readdir, stat } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { join } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { INLINE_IMAGE_LIMIT, isImagePath, toolImageContent } from '../shared/tool-images.js';
@@ -12,6 +12,7 @@ import {
 import { ActivityLedger, activityEvent, activityId, activityOfEvent, isLiveActivity } from '../../journal/activity.js';
 import { firstHumanMessage } from '../../session-title.js';
 import { claudeGoalChange } from './goal.js';
+import { ClaudeSubagentDiscovery } from './subagents.js';
 /**
  * The largest transcript read. Rows are kept without the base64 no transcript shows (see
  * `parseRow`), so what stays in memory is far smaller than the file: a long session of screenshots
@@ -111,19 +112,6 @@ function hiddenPeerPrompt(row: ClaudeRow): string | undefined {
   if (Array.isArray(content) && content.some(block => record(block)?.type === 'tool_result')) return undefined;
   const promptId = promptIdOf(row);
   return promptId?.trim() ? promptId : undefined;
-}
-
-/** One subagent's `agent-<agentId>.meta.json`: what spawned it and what it is. */
-interface ClaudeSubagentMeta {
-  toolUseId?: string;
-  agentType?: string;
-  description?: string;
-  parentAgentId?: string;
-  stoppedByUser?: boolean;
-  /** `background` for an agent that outlives the turn that launched it. */
-  requestShape?: string;
-  /** Written by the CLI once the agent has reported back. */
-  finished?: boolean;
 }
 
 /**
@@ -1085,6 +1073,7 @@ export class ClaudeTranscript {
   private goalValue: SessionGoal | undefined;
   private readonly subagents = new Map<string, ClaudeSubagentState>();
   private subagentScannedAt = 0;
+  private readonly discovery = new ClaudeSubagentDiscovery();
   private transcriptState: 'ok' | 'unavailable' | 'unparsed' = 'unavailable';
   /** The latest state of every system activity: what the last mapping found, with what the runtime added since. */
   private activityCache?: { version: number; list: NativeActivity[] };
@@ -1180,6 +1169,7 @@ export class ClaudeTranscript {
     this.steps = [];
     this.userIds.clear();
     this.subagents.clear();
+    this.discovery.clear();
     this.subagentScannedAt = 0;
     this.transcriptState = file ? 'unparsed' : 'unavailable';
     this.backlog = { replay: false, signals: [] };
@@ -1338,24 +1328,13 @@ export class ClaudeTranscript {
     }
   }
 
-  /**
-   * Where Claude Code keeps this session's subagent files: `subagents/` beside the session JSONL,
-   * inside a directory named after the session id.
-   */
-  private subagentRoot(): string | undefined {
-    if (!this.file) return undefined;
-    const sessionId = basename(this.file).replace(/\.jsonl$/, '');
-    return join(dirname(this.file), sessionId, 'subagents');
-  }
-
   /** Registers newly written children, then reads whichever of them grew since the last poll. */
   private async refreshSubagents(): Promise<ClaudeSubagentFrame[]> {
-    const root = this.subagentRoot();
-    if (!root) return [];
+    if (!this.file) return [];
     const now = Date.now();
     if (now - this.subagentScannedAt >= SUBAGENT_SCAN_MS) {
       this.subagentScannedAt = now;
-      await this.scanSubagents(root);
+      await this.scanSubagents(this.file);
     }
     const frames: ClaudeSubagentFrame[] = [];
     for (const state of this.subagents.values()) {
@@ -1365,30 +1344,26 @@ export class ClaudeTranscript {
     return frames;
   }
 
-  private async scanSubagents(root: string): Promise<void> {
-    let entries: string[];
-    try { entries = await readdir(root); } catch { return; }
-    for (const entry of entries) {
-      if (!entry.startsWith('agent-') || !entry.endsWith('.meta.json')) continue;
-      const agentId = entry.slice('agent-'.length, -'.meta.json'.length);
-      if (!agentId) continue;
-      let meta: ClaudeSubagentMeta;
-      try { meta = JSON.parse(await readFile(join(root, entry), 'utf8')) as ClaudeSubagentMeta; } catch { continue; }
-      // The tool call is the identity the browser opens this child by; without one there is nothing
-      // to attach it to, and the row stays an ordinary tool row.
-      const toolCallId = string(meta.toolUseId);
-      if (!toolCallId) continue;
+  private async scanSubagents(file: string): Promise<void> {
+    const metas = await this.discovery.read(file);
+    for (const [toolCallId, state] of this.subagents) {
+      if (this.discovery.invalidates(state.agentId, toolCallId)) this.subagents.delete(toolCallId);
+    }
+    // A discovery revision can retract a launch without changing the main transcript.
+    this.activityCache = undefined;
+    for (const meta of metas) {
+      const toolCallId = meta.toolUseId, agentId = meta.agentId;
       const existing = this.subagents.get(toolCallId);
-      const state: ClaudeSubagentState = existing ?? {
-        toolCallId, agentId, file: join(root, `agent-${agentId}.jsonl`),
+      const state: ClaudeSubagentState = existing?.agentId === agentId ? existing : {
+        toolCallId, agentId, file: meta.file,
         size: 0, mtimeMs: 0, offset: 0, probe: Buffer.alloc(0), loaded: false, running: false, owesStep: false, lastAt: 0, mapped: [], sentUpTo: 0,
       };
-      if (string(meta.agentType)) state.subagentType = string(meta.agentType);
-      if (string(meta.description)) state.description = string(meta.description);
-      if (string(meta.parentAgentId)) state.parentAgentId = string(meta.parentAgentId);
-      state.stoppedByUser = meta.stoppedByUser === true;
-      state.finished = meta.finished === true;
-      state.background = meta.requestShape === 'background';
+      if (meta.info.subagentType) state.subagentType = meta.info.subagentType;
+      if (meta.info.title) state.description = meta.info.title;
+      if (meta.parentAgentId) state.parentAgentId = meta.parentAgentId;
+      state.stoppedByUser = meta.stopped;
+      state.finished = meta.finished;
+      state.background = meta.background;
       this.subagents.set(toolCallId, state);
     }
     while (this.subagents.size > SUBAGENT_LIMIT) {
@@ -1583,7 +1558,8 @@ export class ClaudeTranscript {
         ledger.apply(activity, Number.isFinite(when.getTime()) ? when : new Date());
       }
     }
-    this.activityCache = { version: this.mappedVersion, list: ledger.list() };
+    this.activityCache = { version: this.mappedVersion, list: ledger.list().filter(activity => activity.task?.kind !== 'agent' || !activity.toolCallId
+      || !this.discovery.invalidates(activity.id.slice('claude:'.length), activity.toolCallId)) };
     return this.activityCache.list;
   }
 

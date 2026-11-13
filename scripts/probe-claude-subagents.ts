@@ -2,7 +2,7 @@
  * Validates the workbench's assumptions about Claude Code subagent storage against real sessions.
  *
  * A child transcript is read from `<projectDir>/<sessionId>/subagents/agent-<agentId>.jsonl`, and
- * the tool call it belongs to comes from `agent-<agentId>.meta.json`'s `toolUseId`. Both the layout
+ * the tool call it belongs to comes from metadata or a forked Skill's structured result. The layout
  * and the field are the CLI's own private shape: if they change, subagent rows silently stop
  * opening, so run this after a Claude Code update to see which assumption broke:
  *
@@ -13,6 +13,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
+import { ClaudeSubagentDiscovery } from '../apps/server/src/backends/claude/subagents.js';
 
 type Level = 'ok' | 'warn' | 'fail';
 interface Check { level: Level; name: string; detail: string }
@@ -68,7 +69,7 @@ if (!existsSync(projects)) {
   add(sessions.length ? 'ok' : 'warn', 'sessions with subagents', `${sessions.length} session director${sessions.length === 1 ? 'y' : 'ies'} hold a subagents/ folder`);
 
   const selected = sessions.sort((left, right) => right.mtime - left.mtime).slice(0, limit);
-  let metas = 0, linked = 0, unlinked = 0, missingFiles = 0, missingMeta = 0, nested = 0;
+  let metas = 0, linked = 0, recovered = 0, unlinked = 0, missingFiles = 0, missingMeta = 0, nested = 0;
   const depths = new Map<number, number>();
   const sample: string[] = [];
   for (const session of selected) {
@@ -76,6 +77,7 @@ if (!existsSync(projects)) {
     const sessionFile = join(transcriptDir, `${session.sessionId}.jsonl`);
     if (!existsSync(sessionFile)) { add('fail', `session ${session.sessionId.slice(0, 8)}`, 'subagents/ exists but the session JSONL does not'); continue; }
     const sessionToolUses = toolUseIds(sessionFile);
+    const discovered = new Map((await new ClaudeSubagentDiscovery().read(sessionFile)).map(meta => [meta.agentId, meta]));
     let agentFiles: string[];
     try { agentFiles = readdirSync(session.root).filter(name => name.startsWith('agent-') && name.endsWith('.jsonl')); } catch { continue; }
     for (const agentFile of agentFiles) {
@@ -87,23 +89,25 @@ if (!existsSync(projects)) {
       metas += 1;
       const depth = typeof meta.spawnDepth === 'number' ? meta.spawnDepth : -1;
       depths.set(depth, (depths.get(depth) ?? 0) + 1);
-      if (!meta.toolUseId) { unlinked += 1; continue; }
+      const toolUseId = meta.toolUseId || discovered.get(agentId)?.toolUseId;
+      if (!toolUseId) { unlinked += 1; continue; }
       // A nested child's tool call lives in its parent agent's transcript, not in the session's.
       const owner = meta.parentAgentId ? join(session.root, `agent-${meta.parentAgentId}.jsonl`) : sessionFile;
       if (meta.parentAgentId) nested += 1;
       const ids = meta.parentAgentId ? toolUseIds(owner) : sessionToolUses;
       if (!existsSync(owner)) { missingFiles += 1; continue; }
-      if (ids.has(meta.toolUseId)) {
+      if (ids.has(toolUseId)) {
         linked += 1;
+        if (!meta.toolUseId) recovered += 1;
         if (sample.length < 5) sample.push(`${session.sessionId.slice(0, 8)} depth ${depth} ${meta.agentType ?? '?'} → ${basename(owner)}`);
       } else {
-        add('warn', `child ${agentId}`, `toolUseId ${meta.toolUseId} is not in ${basename(owner)}`);
+        add('warn', `child ${agentId}`, `toolUseId ${toolUseId} is not in ${basename(owner)}`);
       }
     }
   }
 
   add(metas ? 'ok' : 'fail', 'child metas', `${metas} read from ${selected.length} session(s)`);
-  add(linked === metas - unlinked - missingFiles ? 'ok' : 'warn', 'toolUseId linkage', `${linked} linked, ${unlinked} without a toolUseId, ${missingFiles} with an unreadable owner transcript`);
+  add(linked === metas ? 'ok' : 'warn', 'toolUseId linkage', `${linked - recovered} from metadata, ${recovered} from fork results, ${unlinked} unresolved, ${missingFiles} with an unreadable owner transcript`);
   add(missingMeta ? 'warn' : 'ok', 'meta beside every child', missingMeta ? `${missingMeta} child file(s) have no .meta.json` : 'every child file has a meta');
   add(nested ? 'ok' : 'warn', 'nested children', `${nested} child(ren) name a parentAgentId`);
   console.log(`depths     : ${[...depths].sort(([a], [b]) => a - b).map(([depth, count]) => `${depth}:${count}`).join('  ')}`);

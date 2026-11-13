@@ -7,6 +7,7 @@ import type { NativeWorkbenchEvent, Session } from '../../../../../packages/cont
 import { ActivityLedger, activityOfEvent } from '../../journal/activity.js';
 import { projectEvents } from '../../../../../packages/timeline/src/projectEvents.js';
 import { ClaudeActivities } from './activity.js';
+import { ClaudeSubagentDiscovery } from './subagents.js';
 import { JournalLaneWriter, pullLane, turnMetaId } from '../../journal/ingest.js';
 import { assertUnchanged, checkSession, rowsOf, runIngestContract, snapshot, visibleLanes, type IngestContractFixture } from '../../journal/ingest-contract.js';
 import { Journal, laneKey } from '../../journal/journal.js';
@@ -161,6 +162,162 @@ async function importAll(source: ClaudeTranscriptSource, journal: Journal): Prom
 }
 
 describe('Claude transcript source', () => {
+  it.each(['running', 'finished', 'stopped'] as const)('recovers a %s fork beyond an old cursor without reopening finished work or duplicating lanes', async (outcome) => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-fork-recovery-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, 'fork-session');
+    const root = join(dir, file.id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    const metaPath = join(root, 'agent-review.meta.json');
+    writeFileSync(metaPath, JSON.stringify({ agentType: 'general-purpose', description: '/code-review high' }));
+    writeFileSync(join(root, 'agent-review.jsonl'), `${JSON.stringify({ type: 'user', uuid: 'review-u', isSidechain: true, agentId: 'review', timestamp: '2026-10-20T00:00:04.000Z', message: { role: 'user', content: 'Review' } })}\n`);
+    file.turn('review', file => file.call('skill', 'Skill', { skill: 'code-review', args: 'high' })
+      .result('skill', 'Launched', { success: true, status: 'forked', background: true, commandName: 'code-review', agentId: 'review' }));
+    file.turn('later', file => {
+      if (outcome === 'stopped') file.call('stop', 'TaskStop', { task_id: 'review' }).result('stop', 'Stopped', { task_id: 'review' });
+    });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    // The previous adapter consumed these bytes but understood neither the activity nor the binding.
+    const launched = vi.spyOn(ClaudeActivities.prototype, 'launched').mockReturnValue([]);
+    const discover = vi.spyOn(ClaudeSubagentDiscovery.prototype, 'read').mockResolvedValue([]);
+    let writer: JournalLaneWriter;
+    try { writer = await importAll(source(), journal); } finally { launched.mockRestore(); discover.mockRestore(); }
+    const before = journal.head('wb'), oldCursor = JSON.parse(writer!.cursor!);
+    if (outcome === 'finished') writeFileSync(metaPath, JSON.stringify({ agentType: 'general-purpose', description: '/code-review high', finished: true }));
+    expect(writer!.subagents).toEqual([]);
+
+    const committed = snapshot(journal, 'wb');
+    const commit = writer!.commit.bind(writer!);
+    const failure = vi.spyOn(writer!, 'commit').mockImplementationOnce(batch => { commit(batch); throw new Error('fork recovery fault'); });
+    const recovering = source();
+    try { await expect(recovering.pull(writer!, new AbortController().signal)).rejects.toThrow('fork recovery fault'); }
+    finally { failure.mockRestore(); }
+    assertUnchanged(committed, snapshot(journal, 'wb'), 'failed fork recovery');
+    expect(writer!.activities.get('claude:review')).toBeUndefined();
+    // Retry on the very same writer, not a new writer whose empty memory would hide the bug.
+    while (!(await pullLane(recovering, writer!, new AbortController().signal)).caughtUp) { /* drain */ }
+    expect(writer.subagents).toEqual([{ toolCallId: 'skill', agentId: 'review', title: '/code-review high', subagentType: 'general-purpose' }]);
+    expect(activityOfEvent(journal.entity('wb', 'claude:review')?.payload)).toMatchObject({ status: outcome === 'finished' ? 'completed' : outcome === 'stopped' ? 'stopped' : 'running', toolCallId: 'skill', task: { kind: 'agent' } });
+    expect(journal.entity('wb', 'claude:review')?.turnId).toBe('p-review');
+    expect(journal.head('wb').generation).toBe(before.generation);
+    expect(JSON.parse(writer.cursor!)).toMatchObject({ f: oldCursor.f, o: oldCursor.o, s: { t: oldCursor.s.t } });
+    const recovered = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(recovered, snapshot(journal, 'wb'), 'fork recovery after a restart');
+
+    writeFileSync(metaPath, JSON.stringify({ agentType: 'general-purpose', description: '/code-review high', finished: true }));
+    writer = await importAll(source(), journal);
+    expect(activityOfEvent(journal.entity('wb', 'claude:review')?.payload)?.status).toBe(outcome === 'stopped' ? 'stopped' : 'completed');
+    expect(rowsOf(journal, laneKey('wb', 'sub:skill')).find(row => row.kind === 'meta.turn_ended')?.payload).toMatchObject({ status: 'completed' });
+    expect(writer.activities.live()).toEqual([]);
+    const settled = snapshot(journal, 'wb');
+    await importAll(source(), journal);
+    assertUnchanged(settled, snapshot(journal, 'wb'), 'finished fork after a restart');
+    checkSession(journal, 'wb');
+  });
+
+  it('discovers nested forks after a split result arrives and keeps them in their actual parent lane', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-nested-fork-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, 'nested-session').turn('parent', file => file.subagent('parent-call', 'parent'));
+    const root = join(dir, file.id, 'subagents');
+    writeFileSync(join(root, 'agent-review.meta.json'), JSON.stringify({ parentAgentId: 'parent', description: '/code-review high' }));
+    const parent = join(root, 'agent-parent.jsonl');
+    appendFileSync(parent, `${JSON.stringify({ type: 'assistant', uuid: 'nested-call', isSidechain: true, agentId: 'parent', timestamp: '2026-10-20T00:00:10.000Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'nested-skill', name: 'Skill', input: { skill: 'code-review' } }], stop_reason: 'tool_use' } })}\n`);
+    const result = JSON.stringify({ type: 'user', uuid: 'nested-result', isSidechain: true, agentId: 'parent', timestamp: '2026-10-20T00:00:11.000Z',
+      toolUseResult: { success: true, status: 'forked', background: true, agentId: 'review', commandName: 'code-review' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'nested-skill', content: 'Launched' }] } });
+    appendFileSync(parent, result.slice(0, 90));
+    const source = new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(source, journal);
+    expect(journal.entity(laneKey('wb', 'sub:parent-call'), 'meta:subagent:nested-skill')).toBeUndefined();
+    appendFileSync(parent, `${result.slice(90)}\n`);
+    await importAll(source, journal);
+    expect(journal.entity('wb', 'meta:subagent:nested-skill')).toBeUndefined();
+    expect(journal.entity(laneKey('wb', 'sub:parent-call'), 'meta:subagent:nested-skill')?.payload).toMatchObject({ agentId: 'review', lane: 'sub:nested-skill' });
+    // The child file itself can arrive later than both metadata and the result.
+    writeFileSync(join(root, 'agent-review.jsonl'), `${JSON.stringify({ type: 'assistant', uuid: 'review-answer', isSidechain: true, agentId: 'review', timestamp: '2026-10-20T00:00:12.000Z', message: { role: 'assistant', content: [{ type: 'text', text: 'Reviewed' }], stop_reason: 'end_turn' } })}\n`);
+    await importAll(source, journal);
+    expect(rowsOf(journal, laneKey('wb', 'sub:nested-skill')).some(row => row.kind === 'agent_message_chunk')).toBe(true);
+    const held = snapshot(journal, 'wb');
+    await importAll(new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path }), journal);
+    assertUnchanged(held, snapshot(journal, 'wb'), 'nested fork restart');
+  });
+
+  it('binds a fork to its issuing turn after a multi-pull import reaches the launch', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-fork-import-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, 'large-session').turn('old');
+    for (let i = 0; i < 5; i += 1) file.request(1024 * 1024);
+    file.turn('review', file => file.call('skill', 'Skill', { skill: 'code-review' })
+      .result('skill', 'Launched', { success: true, status: 'forked', background: true, agentId: 'review' }));
+    file.turn('last');
+    for (let i = 0; i < 5; i += 1) file.request(1024 * 1024);
+    const root = join(dir, file.id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    writeFileSync(join(root, 'agent-review.meta.json'), JSON.stringify({ description: '/code-review' }));
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    await importAll(new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path }), journal);
+    expect(journal.entity('wb', 'meta:subagent:skill')?.turnId).toBe('p-review');
+  });
+
+  it.each(['rewrite', 'conflict'] as const)('retracts a fork after a confirmed %s, preserving it across incomplete evidence', async (change) => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-fork-invalid-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, 'invalid-session').prompt('main');
+    const launch = (call: string) => file.call(call, 'Skill', { skill: 'code-review' })
+      .result(call, 'Launched', { success: true, status: 'forked', background: true, agentId: 'review' });
+    launch('first');
+    const root = join(dir, file.id, 'subagents');
+    mkdirSync(root, { recursive: true });
+    const meta = join(root, 'agent-review.meta.json');
+    writeFileSync(meta, JSON.stringify({ description: '/code-review' }));
+    writeFileSync(join(root, 'agent-review.jsonl'), `${JSON.stringify({ type: 'user', uuid: 'review-u', agentId: 'review', isSidechain: true, timestamp: '2026-10-20T00:00:01.000Z', message: { role: 'user', content: 'Review' } })}\n`);
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const live = new ClaudeTranscript({ id: 'wb', nativeSessionId: file.id, updatedAt: '' } as Session, file.id);
+    await live.setFile(file.path);
+    await importAll(source(), journal);
+    let time = Date.now();
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => time);
+    const refresh = async () => { time += 1100; await live.refresh(); return importAll(source(), journal); };
+    try {
+      writeFileSync(meta, '{');
+      let writer = await refresh();
+      expect(writer.subagents).toHaveLength(1);
+      expect(live.subagentFrames()).toHaveLength(1);
+      expect(live.backgroundAgents()).toHaveLength(1);
+      writeFileSync(meta, JSON.stringify({ description: '/code-review' }));
+      if (change === 'rewrite') {
+        writeFileSync(file.path, '{"type":"user","tool_result":\n');
+        await live.refresh();
+        time += 1100; await live.refresh();
+        expect(live.subagentFrames()).toHaveLength(1); // Complete newline is not valid evidence.
+        writeFileSync(file.path, `${JSON.stringify({ type: 'user', uuid: 'replacement', promptId: 'replacement', origin: { kind: 'human' }, timestamp: '2026-10-20T00:01:00.000Z', message: { role: 'user', content: 'New conversation' } })}\n`);
+      } else launch('second');
+      writer = await refresh();
+      expect(live.subagentFrames()).toEqual([]);
+      expect(live.backgroundAgents()).toEqual([]);
+      expect(live.activities().filter(activity => activity.task?.kind === 'agent')).toEqual([]);
+      expect(writer.subagents).toEqual([]);
+      expect(writer.activities.live()).toEqual([]);
+      if (change === 'conflict') {
+        expect(journal.entity('wb', 'meta:subagent:first')?.kind).toBe('tombstone');
+        expect(journal.entity('wb', `claude:${file.id}:c-first:0`)?.kind).toBe('tool_call');
+        expect(journal.entity('wb', `claude:${file.id}:r-first:0`)?.kind).toBe('tool_call_update');
+      }
+      const cold = new ClaudeTranscript({ id: 'wb', nativeSessionId: file.id, updatedAt: '' } as Session, file.id);
+      await cold.setFile(file.path);
+      expect(cold.subagentFrames()).toEqual(live.subagentFrames());
+      expect(cold.backgroundAgents()).toEqual(live.backgroundAgents());
+      const held = snapshot(journal, 'wb');
+      await importAll(source(), journal);
+      assertUnchanged(held, snapshot(journal, 'wb'), 'invalid fork after restart');
+    } finally { now.mockRestore(); }
+  });
+
   it('keeps a turn running through a tool-use stream error, retries and an absorbed input across restart', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-stream-error-'));
     dirs.push(dir);

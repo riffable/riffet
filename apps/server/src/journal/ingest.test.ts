@@ -260,6 +260,23 @@ describe('lane writer', () => {
     store.close();
   });
 
+  it('discards uncommitted activity and turn caches when an enclosing store transaction rolls back', () => {
+    const store = new Store(':memory:');
+    const writer = JournalLaneWriter.open(store.journal, 's');
+    writer.turnStarted('original', stamp(0));
+    const activity = { id: 'claude:review', kind: 'background_task', task: { kind: 'agent' }, title: 'Review', status: 'completed', startedAt: stamp(1), endedAt: stamp(2) } as const;
+    expect(() => store.transaction(() => {
+      writer.transaction(() => { writer.turnStarted('uncommitted', stamp(1)); writer.activities.apply(activity); });
+      throw new Error('outer rollback');
+    })).toThrow('outer rollback');
+    expect(writer.activities.get(activity.id)).toBeUndefined();
+    expect(store.journal.entity('s', activity.id)).toBeUndefined();
+    writer.transaction(() => writer.activities.apply(activity));
+    expect(store.journal.entity('s', activity.id)?.turnId).toBe('original');
+    expect(store.journal.entity('s', activity.id)?.rev).toBe(1);
+    store.close();
+  });
+
   it('carries live activities, compaction evidence and subagent bindings across a restart', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'riffet-ingest-'));
     dirs.push(dir);

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Session } from '../../../../../packages/contracts/src/index.js';
 import { ClaudeTranscript } from './history.js';
 import { taskOutputPath } from './activity.js';
+import { ClaudeSubagentDiscovery } from './subagents.js';
 
 const session = { id: 'session', projectId: 'project', kind: 'native', title: 'Claude', tags: [], state: 'idle', mode: 'agent', createdAt: '', updatedAt: '' } as Session;
 
@@ -631,6 +632,52 @@ describe('Claude subagent transcripts', () => {
     );
     const transcript = await open(file);
     expect(transcript.subagentFrames().map(frame => frame.toolCallId)).toEqual(['tool-1']);
+  });
+
+  it('recognizes only successful Skill forks and settles a background fork independently of the Skill return', async () => {
+    const cases = [
+      { id: 'background', result: { success: true, status: 'forked', background: true } },
+      { id: 'foreground', result: { success: true, status: 'forked', background: false } },
+      { id: 'inline', result: { success: true, status: 'completed' } },
+      { id: 'failed', result: { success: false, status: 'forked', background: true } },
+    ];
+    const lines = cases.flatMap(({ id, result }) => [
+      agentCall(`call-${id}`, { skill: 'code-review', args: 'high' }, 'Skill'),
+      { type: 'user', uuid: `result-${id}`, timestamp: at(2), toolUseResult: { ...result, agentId: id, commandName: 'code-review' },
+        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: `call-${id}`, content: 'Skill returned' }] } },
+    ]);
+    const file = subagentSession(lines, cases.map(({ id }) => ({ agentId: id, meta: { description: '/code-review high', agentType: 'general-purpose' },
+      lines: [childRow(id, { type: 'user', uuid: `${id}-prompt`, text: 'review', at: at(1) })] })));
+    const transcript = await open(file);
+    expect(transcript.subagentFrames().map(frame => frame.agentId).sort()).toEqual(['background', 'foreground']);
+    expect(transcript.backgroundAgents().map(agent => agent.agentId)).toEqual(['background']);
+    expect(transcript.activities().filter(activity => activity.task?.kind === 'agent')).toMatchObject([{ status: 'running', toolCallId: 'call-background' }]);
+    writeFileSync(join(file.replace(/\.jsonl$/, ''), 'subagents', 'agent-background.meta.json'), JSON.stringify({ description: '/code-review high', finished: true }));
+    const restored = await open(file);
+    await restored.refresh();
+    expect(restored.subagentFrames().find(frame => frame.agentId === 'background')?.running).toBe(false);
+    expect(restored.backgroundAgents()).toEqual([]);
+    expect(restored.activities().find(activity => activity.id === 'claude:background')?.status).toBe('completed');
+  });
+
+  it('drops cached fork evidence when its owner is rewritten and does not guess an ambiguous result', async () => {
+    const returned = (call: string, extra = false) => ({ type: 'user', uuid: `r-${call}`, timestamp: at(2),
+      toolUseResult: { success: true, status: 'forked', background: true, agentId: 'review' },
+      message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: call, content: 'started' }, ...(extra ? [{ type: 'tool_result', tool_use_id: 'other', content: 'done' }] : [])] } });
+    const rows = [agentCall('skill', { skill: 'code-review' }, 'Skill'), returned('skill')];
+    const file = subagentSession(rows, [{ agentId: 'review', meta: { description: '/code-review' }, lines: [childRow('review', { type: 'user', uuid: 'prompt', text: 'review', at: at(1) })] }]);
+    const discovery = new ClaudeSubagentDiscovery();
+    expect((await discovery.read(file)).map(meta => meta.toolUseId)).toEqual(['skill']);
+    // Same path/inode, smaller content: a former launch no longer proves a child belongs here.
+    writeFileSync(file, `${JSON.stringify(user({ uuid: 'replacement', at: at(0), text: 'new session' }))}\n`);
+    expect(await discovery.read(file)).toEqual([]);
+    const rewrite = (next: unknown[]) => writeFileSync(file, next.map(row => `${JSON.stringify(row)}\n`).join(''));
+    rewrite([agentCall('skill', { skill: 'code-review' }, 'Skill'), returned('skill', true)]);
+    expect(await discovery.read(file)).toEqual([]);
+    rewrite([...rows, agentCall('second', { skill: 'code-review' }, 'Skill'), returned('second')]);
+    expect(await discovery.read(file)).toEqual([]);
+    rewrite(rows);
+    expect((await discovery.read(file)).map(meta => meta.toolUseId)).toEqual(['skill']);
   });
 
   it('sends only what a child committed after the first snapshot', async () => {

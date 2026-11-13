@@ -1,12 +1,12 @@
-import { open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises';
+import { open, stat, type FileHandle } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
-import { basename, dirname, join } from 'node:path';
 import type { NativeActivity, NativeWorkbenchEvent, Run, Session } from '../../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET } from '../../../../../packages/contracts/src/sync.js';
 import { activityId, activityOfEvent, isLiveActivity } from '../../journal/activity.js';
-import { turnMetaId, type LaneWriter, type SubagentInfo, type TranscriptSource, type TurnEndStatus } from '../../journal/ingest.js';
+import { subagentMetaId, turnMetaId, type LaneWriter, type TranscriptSource, type TurnEndStatus } from '../../journal/ingest.js';
 import { ClaudeActivities, readTaskOutputTail, type ClaudeActivitiesState } from './activity.js';
 import { activeTurnOf, initialState, reduce } from './session-state.js';
+import { ClaudeSubagentDiscovery, type ClaudeSubagentMeta as SubagentMeta } from './subagents.js';
 import {
   claudeApiFailure, claudeFailureText, claudePromptKey, claudeRowOwesStep, claudeRowSignals, mapRow, parseRow, subagentSettles, subagentWake,
   type ClaudeRow, type ClaudeTask, type ClaudeTranscriptHooks, type MapperState, type ToolCall,
@@ -117,7 +117,7 @@ const fresh = (f: number, o: number): Cursor => ({ v: 1, f, o, s: { m: {} }, lif
 class OpenCalls extends Map<string, ToolCall> {
   override set(id: string, call: ToolCall): this {
     const input: Record<string, unknown> = {};
-    for (const key of ['file_path', 'subject', 'taskId', 'status', 'description', 'command']) {
+    for (const key of ['file_path', 'subject', 'taskId', 'status', 'description', 'command', 'skill', 'task_id', 'shell_id']) {
       const value = call.input[key];
       if (typeof value === 'string') input[key] = value.length > CALL_TEXT ? value.slice(0, CALL_TEXT) : value;
     }
@@ -269,12 +269,6 @@ async function tailStart(path: string): Promise<number> {
   } finally { await handle.close(); }
 }
 
-/** `background`: launched to outlive its turn, so it is an activity of the main lane too; `at`: when the metadata was last written. */
-interface SubagentMeta {
-  agentId: string; toolUseId: string; parentAgentId?: string; finished: boolean; stopped: boolean; background: boolean; at: string; file: string; meta: string;
-  info: SubagentInfo;
-}
-
 /**
  * The conversation's transcripts, read into its lanes: `main` from the session file (and, before it, the
  * files of the ids it ran under earlier), `sub:<toolCallId>` from each subagent's own file.
@@ -283,7 +277,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   /** Where each Claude session's file was found; a file that went is looked for again. */
   private readonly located = new Map<string, string>();
   /** Subagent metadata as last read, by file, and the lane writers handed out for the main writer of one generation. */
-  private readonly metas = new Map<string, { mtimeMs: number; size: number; meta?: SubagentMeta }>();
+  private readonly discovery = new ClaudeSubagentDiscovery();
   private lanes?: { owner: LaneWriter; generation: string; writers: Map<string, LaneWriter>; bound: Map<string, { spawner: LaneWriter; info: string }>; read: Map<string, string> };
 
   private readonly inputCommands = new Map<string, string>();
@@ -310,6 +304,11 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     return { id: this.options.sessionId, nativeSessionId: this.options.nativeSessionId(), updatedAt: NO_TIME } as Session;
   }
 
+  invalidAgentActivity(activity: NativeActivity): boolean {
+    return activity.task?.kind === 'agent' && Boolean(activity.toolCallId)
+      && this.discovery.invalidates(activity.id.slice('claude:'.length), activity.toolCallId!);
+  }
+
   async pull(w: LaneWriter, signal: AbortSignal): Promise<{ caughtUp: boolean }> {
     const files = await this.files();
     const current = files.at(-1);
@@ -319,7 +318,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
       if (cursor && !await sameFile(files[cursor.f], cursor)) { w.rebuild('identity-changed'); break; }
     }
     const receipts = await this.recoverInputs(current, signal);
-    const metas = await this.subagents(current);
+    const metas = await this.discovery.read(current, signal);
     await this.window(w, files, metas, signal);
     if (signal.aborted) return { caughtUp: false };
     const { done } = await this.read(w, files, decode(w.cursor) ?? fresh(0, 0), PULL_BYTES, metas, signal);
@@ -337,7 +336,7 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     const current = files.at(-1);
     if (!current) return;
     const receipts = await this.recoverInputs(current);
-    const metas = await this.subagents(current);
+    const metas = await this.discovery.read(current);
     // A lane never read gets its tail window like a first pull would, not a whole import in one go (G4).
     if (!await this.window(w, files, metas)) await this.read(w, files, decode(w.cursor) ?? fresh(0, 0), Infinity, metas);
     this.publishInputs(w, receipts);
@@ -555,10 +554,81 @@ export class ClaudeTranscriptSource implements TranscriptSource {
   private async read(w: LaneWriter, files: ReadonlyArray<string | undefined>, cursor: Cursor, limit: number, metas: readonly SubagentMeta[], signal?: AbortSignal): Promise<{ done: boolean; read: number }> {
     if (!await this.repairLifecycle(w, files, cursor, true, signal)) return { done: false, read: 0 };
     cursor = decode(w.cursor) ?? cursor;
+    if (!await this.recoverForkActivities(w, files, cursor, metas, signal)) return { done: false, read: 0 };
+    cursor = decode(w.cursor) ?? cursor;
     const reader = new LaneRead(this, w, cursor, true);
     const result = await reader.run(files, limit, signal);
     if (result.done && !signal?.aborted) await reader.settle(metas, this.options.exited?.());
     return result;
+  }
+
+  /** Recover only omitted Skill activities before an old cursor; never replay input or unrelated events. */
+  private async recoverForkActivities(w: LaneWriter, files: ReadonlyArray<string | undefined>, cursor: Cursor, metas: readonly SubagentMeta[], signal?: AbortSignal): Promise<boolean> {
+    const targets = metas.flatMap(meta => {
+      if (!meta.fork || !meta.background || meta.parentAgentId || w.event(activityId('claude', meta.agentId))) return [];
+      const result = w.event(`claude:${this.options.nativeSessionId()}:${meta.fork.resultUuid}:0`);
+      return result?.type === 'tool_call_update' && result.data.toolCallId === meta.toolUseId && result.data.status === 'completed' ? [{ meta, result }] : [];
+    });
+    if (!targets.length) return true;
+    const activities = new ClaudeActivities(this.sessionId);
+    const mapper: MapperState = { turnAt: '', calls: new OpenCalls(), tasks: new Map(), activities };
+    for (let f = 0; f <= cursor.f; f += 1) {
+      const file = files[f];
+      if (!file) continue;
+      const handle = await openFile(file);
+      if (!handle) return false;
+      try {
+        const { size } = await handle.stat();
+        const end = f === cursor.f ? Math.min(size, cursor.o) : size;
+        let position = 0, buffer = EMPTY, since = performance.now();
+        while (position < end) {
+          if (signal?.aborted) return false;
+          const chunk = await readRange(handle, position, Math.min(end, position + READ_CHUNK));
+          if (!chunk.length) return false;
+          const bytes = buffer.length ? Buffer.concat([buffer, chunk]) : chunk;
+          for (const line of linesOf(bytes, position - buffer.length, false)) {
+            const row = parseLine(line.bytes);
+            if (row && row.isSidechain !== true && row.agentId === undefined) mapRow(row, line.start, this.session(), mapper, {});
+            if (performance.now() - since >= STEP_MS) { await giveWay(); since = performance.now(); }
+            if (signal?.aborted) return false;
+          }
+          const newline = bytes.lastIndexOf(0x0a);
+          buffer = newline >= 0 ? bytes.subarray(newline + 1) : bytes;
+          position += chunk.length;
+        }
+      } finally { await handle.close(); }
+    }
+    const exited = this.options.exited?.();
+    for (const { meta } of targets) {
+      const id = activityId('claude', meta.agentId);
+      if (meta.finished || meta.stopped) activities.ended(id, meta.stopped ? 'stopped' : 'completed', meta.at);
+      else if (exited) activities.ended(id, 'unknown', exited);
+    }
+    const recovered = activities.state();
+    const ids = new Set(targets.map(({ meta }) => activityId('claude', meta.agentId)));
+    const items = recovered.items.filter(item => ids.has(item.id));
+    if (!items.length) return true;
+    const old = cursor.s.m.x ?? { items: [] };
+    const merged: ClaudeActivitiesState = {
+      ...old, items: [...old.items.filter(item => !ids.has(item.id)), ...items],
+      runs: [...(old.runs ?? []).filter(([id]) => !ids.has(id)), ...(recovered.runs ?? []).filter(([id]) => ids.has(id))],
+      byToolCall: [...(old.byToolCall ?? []).filter(([, id]) => !ids.has(id)), ...(recovered.byToolCall ?? []).filter(([, id]) => ids.has(id))],
+      agentsOver: [...new Set([...(old.agentsOver ?? []).filter(id => !ids.has(activityId('claude', id))), ...(recovered.agentsOver ?? []).filter(id => ids.has(activityId('claude', id)))])],
+    };
+    const next: Cursor = { ...cursor, s: { ...cursor.s, m: { ...cursor.s.m, x: merged } } };
+    // Activities enter through the writer's ledger, in their original issuing turn. Naming an
+    // existing turn changes no journal row; restore the cursor's current turn before continuing.
+    w.transaction(() => {
+      for (const activity of items) {
+        const result = targets.find(({ meta }) => activityId('claude', meta.agentId) === activity.id)!.result;
+        if (result.nativeTurnId) w.turnStarted(result.nativeTurnId, result.createdAt);
+        w.activities.apply(activity);
+      }
+      const current = cursorTurn(cursor.s);
+      if (current) w.turnStarted(current.k, NO_TIME);
+      w.commit({ events: [], cursor: JSON.stringify(next) });
+    });
+    return true;
   }
 
   /**
@@ -695,20 +765,44 @@ export class ClaudeTranscriptSource implements TranscriptSource {
 
   /** Every subagent of the conversation into its lane, the agent that spawned it naming it there (G9). */
   private async children(w: LaneWriter, metas: readonly SubagentMeta[], limit: number, signal?: AbortSignal): Promise<boolean> {
-    if (!metas.length) return true;
     if (this.lanes?.owner !== w || this.lanes.generation !== w.generation) this.lanes = { owner: w, generation: w.generation, writers: new Map(), bound: new Map(), read: new Map() };
     const lanes = this.lanes;
+    // Bindings are durable, so reconcile even after a restart or when this scan found no children.
+    const visited = new Set<LaneWriter>();
+    const reconcile = (owner: LaneWriter) => {
+      if (visited.has(owner)) return;
+      visited.add(owner);
+      for (const binding of owner.subagents) {
+        if (this.discovery.invalidates(binding.agentId, binding.toolCallId)) {
+          const id = activityId('claude', binding.agentId);
+          const activity = activityOfEvent(owner.event(id));
+          owner.transaction(() => {
+            owner.commit({ events: [], retire: [subagentMetaId(binding.toolCallId), ...(activity && this.invalidAgentActivity(activity) ? [id] : [])], cursor: owner.cursor });
+            if (activity && this.invalidAgentActivity(activity)) owner.activities.forget(id);
+          });
+          lanes.writers.delete(binding.toolCallId);
+          lanes.bound.delete(binding.toolCallId);
+          lanes.read.delete(binding.toolCallId);
+        } else reconcile(owner.child(binding.toolCallId, binding.agentId, binding));
+      }
+    };
+    reconcile(w);
+    if (w.scratch) reconcile(w.scratch);
     const exited = this.options.exited?.();
     let budget = limit, caughtUp = true;
     for (const meta of metas) {
       // The metadata file can acquire its title after this child was first opened. The writer keeps
       // its identity/cursor and only records fields that changed, even when the transcript did not.
       // Its first spawner stays: naming it again from a parent found later would record it twice.
-      const described = JSON.stringify(meta.info);
+      const described = JSON.stringify([meta.agentId, meta.info]);
       const bound = lanes.bound.get(meta.toolUseId);
       let child = lanes.writers.get(meta.toolUseId);
       if (!child || bound?.info !== described) {
-        const spawner = bound?.spawner ?? (meta.parentAgentId ? lanes.writers.get(metas.find(item => item.agentId === meta.parentAgentId)?.toolUseId ?? '') ?? w : w);
+        const spawner = bound?.spawner ?? (meta.parentAgentId ? lanes.writers.get(metas.find(item => item.agentId === meta.parentAgentId)?.toolUseId ?? '') : w);
+        if (!spawner) continue;
+        // Discovery reads ahead of the lane cursor. Wait until the launch has been ingested so
+        // a partial import cannot permanently bind this child to an earlier unrelated turn.
+        if (meta.fork && !spawner.event(`claude:${this.options.nativeSessionId()}:${meta.fork.resultUuid}:0`)) continue;
         child = spawner.child(meta.toolUseId, meta.agentId, meta.info);
         lanes.writers.set(meta.toolUseId, child);
         lanes.bound.set(meta.toolUseId, { spawner, info: described });
@@ -735,48 +829,6 @@ export class ClaudeTranscriptSource implements TranscriptSource {
     return caughtUp;
   }
 
-  /** The children `<session>/subagents/agent-<id>.meta.json` names a tool call for, each after the agent that spawned it. */
-  private async subagents(file: string): Promise<SubagentMeta[]> {
-    const root = join(dirname(file), basename(file).replace(/\.jsonl$/, ''), 'subagents');
-    let entries: string[];
-    try { entries = await readdir(root); } catch { return []; }
-    const metas: SubagentMeta[] = [];
-    for (const entry of entries) {
-      if (!entry.startsWith('agent-') || !entry.endsWith('.meta.json')) continue;
-      const agentId = entry.slice('agent-'.length, -'.meta.json'.length);
-      const path = join(root, entry);
-      const info = await stat(path).catch(() => undefined);
-      if (!agentId || !info) continue;
-      let known = this.metas.get(path);
-      if (!known || known.mtimeMs !== info.mtimeMs || known.size !== info.size) {
-        let meta: SubagentMeta | undefined;
-        try {
-          const value = record(JSON.parse(await readFile(path, 'utf8')));
-          const toolUseId = typeof value?.toolUseId === 'string' && value.toolUseId ? value.toolUseId : undefined;
-          const text = (field: unknown) => typeof field === 'string' && field.trim() ? field.trim() : undefined;
-          // `inherit` names no model: the agent runs on its parent's.
-          const title = text(value?.description), subagentType = text(value?.agentType), model = text(value?.model) === 'inherit' ? undefined : text(value?.model);
-          if (toolUseId) meta = {
-            agentId, toolUseId, finished: value!.finished === true, stopped: value!.stoppedByUser === true, background: value!.requestShape === 'background',
-            at: new Date(info.mtimeMs).toISOString(), file: join(root, `agent-${agentId}.jsonl`), meta: path,
-            info: { ...(title ? { title } : {}), ...(subagentType ? { subagentType } : {}), ...(model ? { model } : {}) },
-            ...(typeof value!.parentAgentId === 'string' ? { parentAgentId: value!.parentAgentId } : {}),
-          };
-        } catch { /* half written: read again once it changes */ }
-        this.metas.set(path, known = { mtimeMs: info.mtimeMs, size: info.size, ...(meta ? { meta } : {}) });
-      }
-      if (known.meta) metas.push(known.meta);
-    }
-    const depth = (meta: SubagentMeta, seen = new Set<string>()): number => {
-      const parent = meta.parentAgentId ? metas.find(item => item.agentId === meta.parentAgentId) : undefined;
-      if (!parent || seen.has(parent.agentId)) return 0;
-      seen.add(parent.agentId);
-      return 1 + depth(parent, seen);
-    };
-    return metas.map(meta => ({ meta, depth: depth(meta) }))
-      .sort((left, right) => left.depth - right.depth || (left.meta.agentId < right.meta.agentId ? -1 : left.meta.agentId > right.meta.agentId ? 1 : 0))
-      .map(item => item.meta);
-  }
 }
 
 /**
@@ -818,6 +870,18 @@ class LaneRead {
     this.ops = x ?? [];
     this.queuedInputs = cursor.s.q ?? [];
     this.parents = new Map(cursor.s.parents ?? []);
+    // A prior reader may have persisted this launch before its identity became ambiguous. Retire
+    // only the activity, retaining the actual Skill call/result, and keep cursor state in sync.
+    const invalid = activities?.list().filter(activity => source.invalidAgentActivity(activity)) ?? [];
+    if (invalid.length) {
+      for (const activity of invalid) activities!.forgetAgent(activity.id);
+      const ids = new Set(invalid.map(activity => activity.id));
+      this.ops = this.ops.filter(op => op[0] !== 'act' || !ids.has(op[1]));
+      w.transaction(() => {
+        w.commit({ events: [], retire: [...ids], cursor: this.encode() });
+        for (const id of ids) w.activities.forget(id);
+      });
+    }
   }
 
   /** Reads `files` from the cursor on, about `limit` bytes of them; `done` once the last one is read to its end. */
@@ -1020,6 +1084,7 @@ class LaneRead {
     for (const event of mapRow(row, start, this.source.session(), this.mapper, hooks, !this.main)) {
       const activity = activityOfEvent(event);
       if (!activity) visible.push(event);
+      else if (this.source.invalidAgentActivity(activity)) this.mapper.activities?.forgetAgent(activity.id);
       else if (!activities.includes(activity.id)) activities.push(activity.id);
     }
     if (this.main && row.type === 'user') {

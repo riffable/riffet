@@ -258,7 +258,7 @@ export class Journal {
   private settle(committed: boolean): void { for (const hook of this.settleHooks.splice(0)) hook(committed); }
 
   /** Runs `fn` when the open transaction ends (at once, as committed, when none is open). */
-  private whenSettled(fn: (committed: boolean) => void): void {
+  whenSettled(fn: (committed: boolean) => void): void {
     if (this.afterTransaction) this.afterTransaction(fn);
     else if (!this.transaction && this.depth) this.settleHooks.push(fn);
     else fn(true);

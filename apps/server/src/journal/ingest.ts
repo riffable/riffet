@@ -294,7 +294,16 @@ export class JournalLaneWriter implements LaneWriter {
     return row?.kind === TURN_ENDED && row.at === at && payload?.status === 'failed' && payload.error === error;
   }
 
-  transaction(task: () => void): void { this.journal.tx(task); }
+  transaction(task: () => void): void {
+    this.journal.tx(() => {
+      // The ledger and issuing turn change before SQL commits. After a rollback the next access
+      // must read committed state again, including when this transaction joined the store's.
+      this.journal.whenSettled(committed => {
+        if (!committed) { this.ledger = undefined; this.turn = undefined; }
+      });
+      task();
+    });
+  }
 
   turnReopened(turnId: string, at: string, cursor?: string): void {
     this.journal.tx(() => {

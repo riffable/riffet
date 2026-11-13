@@ -216,6 +216,9 @@ export class ActivityLedger {
 
   clear(): void { this.items.clear(); this.stopTokens.clear(); }
 
+  /** The source retracted this activity; preserve every other activity's pending stop token. */
+  forget(id: string): void { this.items.delete(id); this.stopTokens.delete(id); }
+
   private trim(): void {
     if (this.items.size <= LEDGER_LIMIT) return;
     for (const [id, activity] of this.items) {
