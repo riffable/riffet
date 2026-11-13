@@ -58,7 +58,7 @@ function record(type: string, detail?: unknown): void {
 }
 
 /** Only shipped asset names are retained; routes, queries, fragments and external hosts are not. */
-function resourceName(value: string): string {
+export function resourceName(value: string): string {
   try {
     const url = new URL(value, window.location.href);
     if (!['http:', 'https:'].includes(url.protocol)) return url.protocol;

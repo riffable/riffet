@@ -2351,3 +2351,34 @@ describe('folder favorites', () => {
     expect((await call('GET', `/api/folder-favorites?projectId=${project.id}`)).statusCode).toBe(404);
   });
 });
+
+describe('browser diagnostics', () => {
+  it('takes crash reports without credentials within tight limits, and jank batches only with them', async () => {
+    const { app, stateDir } = await boot(undefined, '<html></html>', undefined, true);
+    const headers = { host: '127.0.0.1:4317', 'content-type': 'application/reports+json' };
+    const crash = { type: 'crash', url: 'http://127.0.0.1:4317/a?secret=1', body: { reason: 'unresponsive', stack: 'at loop (/assets/index-abc.js:1:2)\nat x', extra: 'dropped' } };
+    const post = (payload: string) => app.inject({ method: 'POST', url: '/api/client-reports', headers, payload });
+    const dir = join(stateDir, 'diagnostics', 'browser');
+    const shell = await app.inject({ method: 'GET', url: '/deep/link', headers: { host: '127.0.0.1:4317' } });
+    expect(shell.headers['document-policy']).toBe('include-js-call-stacks-in-crash-reports');
+    expect(String(shell.headers['reporting-endpoints'])).toContain('default="/api/client-reports"');
+
+    expect((await post('{"not":"an array"}')).statusCode).toBe(400);
+    expect((await post(JSON.stringify([{ type: 'deprecation', body: {} }]))).statusCode).toBe(204);
+    expect((await post(JSON.stringify([{ type: 'crash', body: { stack: 'x'.repeat(70_000) } }]))).statusCode).toBe(413);
+    expect((await app.inject({ method: 'POST', url: '/api/client-reports', headers: { host: '127.0.0.1:4317', 'content-type': 'text/plain' }, payload: '[]' })).statusCode).toBe(400);
+    await expect(readdir(dir)).rejects.toMatchObject({ code: 'ENOENT' });
+
+    expect((await post(JSON.stringify([crash]))).statusCode).toBe(204);
+    const files = await readdir(dir);
+    expect(files).toHaveLength(1);
+    const saved = JSON.parse(await readFile(join(dir, files[0]!), 'utf8'));
+    expect(saved[0]).toMatchObject({ url: 'http://127.0.0.1:4317/a', reason: 'unresponsive' });
+    expect(saved[0]).not.toHaveProperty('extra');
+    let limited = 0;
+    for (let i = 0; i < 8; i += 1) if ((await post(JSON.stringify([crash]))).statusCode === 429) limited += 1;
+    expect(limited).toBeGreaterThan(0);
+
+    expect((await app.inject({ method: 'POST', url: '/api/client-jank', headers: { host: '127.0.0.1:4317' }, payload: { entries: [] } })).statusCode).toBe(401);
+  });
+});

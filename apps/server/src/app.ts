@@ -56,6 +56,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerBackendRoutes } from './routes/backends.js';
 import { registerProjectRoutes } from './routes/projects.js';
 import { patchSession, registerSessionRoutes } from './routes/sessions.js';
+import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerShareRoutes } from './routes/shares.js';
 import { ShareService } from './shares/service.js';
@@ -241,7 +242,7 @@ export async function createApp(options: AppOptions = {}) {
   await app.register(websocket,{options:{maxPayload:256*1024}});
   const streams=new Set<import('node:http').ServerResponse>();
   // Exact matches on the matched route pattern, so a shaped or encoded path stays guarded.
-  const PUBLIC_API=new Set(['/api/auth/status','/api/auth/login','/api/devices/pair','/api/devices/prove']);
+  const PUBLIC_API=new Set(['/api/auth/status','/api/auth/login','/api/devices/pair','/api/devices/prove','/api/client-reports']);
   // Read-only access to an explicit path outside the project (e.g. a /tmp screenshot the agent just
   // produced). Unset, it follows the binding: on for loopback, off once other machines can connect —
   // including through `tailscale serve` or a reverse proxy, which reach a loopback binding too.
@@ -331,6 +332,7 @@ export async function createApp(options: AppOptions = {}) {
   void deletion.resumeCleanup();
   const clientLogs=new ClientLogs(join(stateDir,'client-logs'));
   app.post<{Body:{name?:unknown;content?:unknown}}>('/api/client-logs',async(request)=>clientLogs.save(request.body?.name,request.body?.content));
+  registerBrowserDiagnosticsRoutes(app,join(stateDir,'diagnostics','browser'));
   registerNativeRoutes(app,deps);
   registerSyncRoutes(app,{...deps,sync,timeline,turnSummaries,sessionMedia});
   registerTerminalRoutes(app,deps);

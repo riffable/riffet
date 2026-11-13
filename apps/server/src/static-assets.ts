@@ -9,6 +9,8 @@ import { isApiRequest } from './auth.js';
 const gzipAsync = promisify(gzip), brotliAsync = promisify(brotliCompress);
 const mime: Record<string, string> = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 const CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'; form-action 'self'";
+// Lets Chrome attach the page's JS call stack to the crash report it sends when the user exits an unresponsive tab.
+const CRASH_REPORTING = { 'Document-Policy': 'include-js-call-stacks-in-crash-reports', 'Reporting-Endpoints': 'crash-reporting="/api/client-reports", default="/api/client-reports"' };
 type Encoding = 'br' | 'gzip' | 'identity';
 interface Asset { stamp: string; body: Buffer; etag: string; encoded: Partial<Record<Encoding, Buffer>>; pending: Partial<Record<Encoding, Promise<Buffer>>>; bytes: number }
 
@@ -80,6 +82,7 @@ export function registerWebAssets(app: FastifyInstance, root?: string) {
       .header('Content-Security-Policy', CSP).header('Vary', 'Accept-Encoding').header('ETag', etag)
       .header('Cache-Control', path.startsWith(join(webRoot, 'assets') + sep) && /-[\w-]{8,}\.[^.]+$/.test(path) ? 'public, max-age=31536000, immutable' : 'no-cache');
     if (selected !== 'identity') reply.header('Content-Encoding', selected);
+    if (extname(path) === '.html') reply.headers(CRASH_REPORTING);
     if (request.headers['if-none-match']?.split(',').some((value) => value.trim() === '*' || value.trim().replace(/^W\//, '') === etag)) return reply.code(304).send();
     let body = asset.body;
     if (selected !== 'identity') {

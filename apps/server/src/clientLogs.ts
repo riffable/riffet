@@ -11,7 +11,8 @@ const KEEP = 20;
  * debugging can read them in place instead of having the user export and forward a file.
  */
 export class ClientLogs {
-  constructor(readonly dir: string, private readonly keep = KEEP) {}
+  /** `ext` also scopes pruning, so stores that share a directory never evict each other's files. */
+  constructor(readonly dir: string, private readonly keep = KEEP, private readonly ext = '.txt') {}
 
   async save(name: unknown, content: unknown): Promise<{ path: string; bytes: number }> {
     if (typeof content !== 'string' || !content.length) throw new AppError('INVALID_LOG', 'Log content is required');
@@ -21,7 +22,7 @@ export class ClientLogs {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     await mkdir(this.dir, { recursive: true, mode: 0o700 });
     for (let copy = 0; ; copy += 1) {
-      const path = join(this.dir, `${stamp}${copy ? `-${copy}` : ''}${label ? `_${label}` : ''}.txt`);
+      const path = join(this.dir, `${stamp}${copy ? `-${copy}` : ''}${label ? `_${label}` : ''}${this.ext}`);
       try {
         await writeFile(path, content, { mode: 0o600, flag: 'wx' });
       } catch (error) {
@@ -35,7 +36,7 @@ export class ClientLogs {
 
   /** Names start with an ISO stamp, so name order is age order. */
   private async prune(): Promise<void> {
-    const files = (await readdir(this.dir)).filter((file) => file.endsWith('.txt')).sort();
+    const files = (await readdir(this.dir)).filter((file) => file.endsWith(this.ext)).sort();
     for (const file of files.slice(0, Math.max(0, files.length - this.keep))) await rm(join(this.dir, file), { force: true });
   }
 }

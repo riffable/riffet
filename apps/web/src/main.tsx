@@ -8,6 +8,7 @@ import { startLocale, useLocale } from './lib/i18n';
 import { App } from './app/App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { installFocusRingPolicy } from './lib/focus-ring';
+import { startMainThreadMonitor } from './lib/main-thread-monitor';
 import { toast } from './lib/toast';
 import './lib/theme';
 import './lib/display-settings';
@@ -18,6 +19,7 @@ import './styles/font-metrics.css';
 import './styles/index.css';
 
 installFocusRingPolicy();
+startMainThreadMonitor();
 
 // Development only: every layout shift no transition accounts for, and every spinner or disabled
 // state that came and went too fast to mean anything, is reported in the console (docs/WEB.md,

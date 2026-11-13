@@ -519,6 +519,8 @@ export const api = {
   },
   health: () => request<{ ok: boolean; version: string; build?: BuildInfo; managedBy?: 'cli' | 'launchd' | 'app'; instanceId?: string }>('/health'),
   uploadClientLog: (name: string, content: string) => request<{ path: string; bytes: number }>('/api/client-logs', json('POST', { name, content })),
+  /** `keepalive` lets the batch leave while the page is being hidden or closed; the browser caps such a body at 64 KB. */
+  uploadJankReport: (report: unknown, keepalive = false) => request<void>('/api/client-jank', { ...json('POST', report), keepalive }),
   checkForUpdates: () => request<UpdateCheck>('/api/update'),
   authStatus: async () => {
     const status = await request<AuthStatus>('/api/auth/status', { signal: timeout() });
