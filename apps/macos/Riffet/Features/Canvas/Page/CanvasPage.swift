@@ -157,7 +157,7 @@ private struct CanvasNextPlacement: ViewModifier {
         let y = min(max(slot.minY, 12), max(12, anchor.viewHeight - anchor.height - 12))
         content
             .frame(width: width)
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+            .elevation(.pop)
             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if anchor.height != $0 { anchor.height = $0 } }
             .offset(x: x, y: y)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

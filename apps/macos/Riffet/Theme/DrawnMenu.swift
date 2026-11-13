@@ -185,9 +185,12 @@ private final class MenuCardView: NSView {
         layer.cornerCurve = .continuous
         layer.borderWidth = 1
         layer.masksToBounds = false
-        layer.shadowRadius = look.raised ? 12 : 20
-        layer.shadowOffset = CGSize(width: 0, height: look.raised ? -8 : -12)
-        layer.shadowOpacity = 1
+        if !look.raised {
+            // The line style's own warm shadow (FloatingShadow); raised, `Elevation.pop`, set in refreshColors.
+            layer.shadowRadius = 20
+            layer.shadowOffset = CGSize(width: 0, height: -12)
+            layer.shadowOpacity = 1
+        }
         layer.shadowPath = CGPath(roundedRect: NSRect(origin: .zero, size: size), cornerWidth: look.radius, cornerHeight: look.radius, transform: nil)
         refreshColors()
     }
@@ -205,9 +208,11 @@ private final class MenuCardView: NSView {
         effectiveAppearance.performAsCurrentDrawingAppearance {
             layer.backgroundColor = look.bg.cgColor
             layer.borderColor = look.border.cgColor
-            layer.shadowColor = (dark ? NSColor.black.withAlphaComponent(look.raised ? 0.55 : 0.5)
-                : look.raised ? NSColor(srgbRed: 15 / 255, green: 23 / 255, blue: 42 / 255, alpha: 0.14)
-                : NSColor(srgbRed: 60 / 255, green: 50 / 255, blue: 40 / 255, alpha: 0.16)).cgColor
+            if look.raised {
+                Elevation.pop.apply(to: layer, dark: dark)
+            } else {
+                layer.shadowColor = (dark ? NSColor.black.withAlphaComponent(0.5) : NSColor(srgbRed: 60 / 255, green: 50 / 255, blue: 40 / 255, alpha: 0.16)).cgColor
+            }
         }
     }
 }

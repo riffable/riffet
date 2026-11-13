@@ -1,8 +1,9 @@
 import SwiftUI
 
 // The iPhone's design layer: the type scale, metrics, motion and the few drawn
-// components every page shares. Values follow the Android client's iOS recipe
-// (shared/…/ui/design/ThemePresets.kt `IosPreset`); materials are the system's.
+// components every page shares. The generated regions come from the ios style in
+// packages/contracts/src/mobile-styles.ts (`pnpm gen:tokens`), the same values the
+// Android client's `IosPreset` draws; materials are the system's.
 
 /// Text roles. Sizes scale with Dynamic Type relative to the listed text style.
 enum RiffetText {
@@ -21,22 +22,30 @@ enum RiffetText {
     /// Commands and paths in tool rows, code block language names.
     case monoSmall
 
+    // BEGIN GENERATED text (scripts/gen-design-tokens.ts)
     fileprivate var size: CGFloat {
         switch self {
-        case .body, .headline: 16
+        case .body: 16
+        case .headline: 16
         case .barTitle: 17
         case .label: 15
-        case .caption, .monoSmall: 13
+        case .caption: 13
         case .mono: 14
+        case .monoSmall: 13
         }
     }
     fileprivate var weight: Font.Weight {
         switch self {
-        case .headline, .label: .medium
+        case .body: .regular
+        case .headline: .medium
         case .barTitle: .semibold
-        default: .regular
+        case .label: .medium
+        case .caption: .regular
+        case .mono: .regular
+        case .monoSmall: .regular
         }
     }
+    // END GENERATED text
     fileprivate var design: Font.Design { self == .mono || self == .monoSmall ? .monospaced : .default }
     fileprivate var style: Font.TextStyle {
         switch self {
@@ -71,25 +80,35 @@ extension View {
 
 /// Layout metrics shared by every page.
 enum RiffetMetrics {
+    // BEGIN GENERATED metrics (scripts/gen-design-tokens.ts)
     static let pageInset: CGFloat = 16
-    static let rowMinHeight: CGFloat = 68
-    static let avatar: CGFloat = 44
-    static let chipHeight: CGFloat = 34
     static let groupRadius: CGFloat = 16
     static let settingsRowHeight: CGFloat = 52
     static let composerRadius: CGFloat = 24
     static let sendButton: CGFloat = 36
+    /// The floating shadow before Liquid Glass: SwiftUI's radius is half the Compose blur.
+    static let floatingShadowRadius: CGFloat = 7
+    static let floatingShadowY: CGFloat = 4
+    static let floatingShadowOpacity: Double = 0.12
+    // END GENERATED metrics
+    // The iPhone's own: not part of the shared style.
+    static let rowMinHeight: CGFloat = 68
+    static let avatar: CGFloat = 44
+    static let chipHeight: CGFloat = 34
     static let hitTarget: CGFloat = 44
     /// The conversation column on a wide window (iPad, an unfolded iPhone Duo); narrower windows use their full width.
     static let readingWidth: CGFloat = 760
 }
 
-/// Motion shared by every page. Springs match the Android tokens (spatial: ζ 0.86, k 550).
+/// Motion shared by every page, generated from the ios style's tokens: a spring's response is one
+/// period of the Compose stiffness, its damping the same ratio.
 enum RiffetMotion {
+    // BEGIN GENERATED motion (scripts/gen-design-tokens.ts)
     static let spatial = Animation.spring(response: 0.27, dampingFraction: 0.86)
     static let effects = Animation.spring(response: 0.16, dampingFraction: 1)
     static let release = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.28)
     static let chevron = Animation.timingCurve(0.25, 0.1, 0.25, 1, duration: 0.18)
+    // END GENERATED motion
 }
 
 // MARK: - Glass
@@ -102,7 +121,7 @@ extension View {
         } else {
             background(.regularMaterial, in: shape)
                 .overlay(shape.stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.10), radius: 7, y: 4)
+                .shadow(color: .black.opacity(RiffetMetrics.floatingShadowOpacity), radius: RiffetMetrics.floatingShadowRadius, y: RiffetMetrics.floatingShadowY)
         }
     }
 

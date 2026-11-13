@@ -88,7 +88,6 @@
   --chart-6: #528951;
   --chart-7: #aa8f35;
   --chart-8: #718096;
-  --shadow-xs: 0 1px 1.5px rgb(15 23 42 / 0.04);
   --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05);
   --shadow-pop: 0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05);
   --shadow-focus: 0 2px 14px -6px rgb(15 23 42 / 0.1);
@@ -150,7 +149,6 @@
   --chart-6: #92b77b;
   --chart-7: #c6b36b;
   --chart-8: #9ba7bc;
-  --shadow-xs: 0 1px 1.5px rgb(0 0 0 / 0.2);
   --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.18);
   --shadow-pop: 0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6);
   --shadow-focus: 0 0 #0000;
@@ -1405,6 +1403,7 @@
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, "PingFang SC", monospace;
 
+  /* BEGIN GENERATED text (scripts/gen-design-tokens.ts) */
   --text-*: initial;
   --text-2xs: 11px;
   --text-2xs--line-height: 16px;
@@ -1420,6 +1419,7 @@
   --text-xl--line-height: 26px;
   --text-2xl: 22px;
   --text-2xl--line-height: 30px;
+  /* END GENERATED text */
 
   --radius-sm: 6px;
   --radius-md: 8px;
@@ -1428,7 +1428,9 @@
   --radius-2xl: 16px;
   --radius-3xl: 20px;
 
+  /* BEGIN GENERATED theme-easing (scripts/gen-design-tokens.ts) */
   --ease-out-soft: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* END GENERATED theme-easing */
 }
 
 @theme inline {
@@ -1466,12 +1468,10 @@
   --color-toast-success: var(--toast-success);
   --color-toast-danger: var(--toast-danger);
   --color-focus: var(--focus-ring);
-  --shadow-xs: var(--shadow-xs);
   --shadow-soft: var(--shadow-soft);
   --shadow-pop: var(--shadow-pop);
   --shadow-focus: var(--shadow-focus);
   --color-canvas: var(--canvas);
-  --shadow-lift: var(--shadow-lift);
   --shadow-composer: var(--shadow-composer);
   --shadow-composer-focus: var(--shadow-composer-focus);
   --shadow-peek: var(--shadow-peek);
@@ -1489,6 +1489,7 @@
  * `--enter-scale` is the one zoom every popover, menu, dialog and tooltip starts from.
  */
 :root {
+  /* BEGIN GENERATED motion (scripts/gen-design-tokens.ts) */
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-decelerate: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ease-accelerate: cubic-bezier(0.3, 0, 0.8, 0.15);
@@ -1499,6 +1500,7 @@
   --duration-slow: 300ms;
   --duration-exit-fast: 100ms;
   --duration-exit-base: 140ms;
+  /* END GENERATED motion */
   --enter-scale: 0.97;
 }
 
@@ -1529,7 +1531,6 @@
  */
 html:root {
   --canvas: var(--bg-sidebar);
-  --shadow-lift: 0 0 0 1px var(--line-strong);
   --shadow-composer: 0 0 0 0.5px rgb(24 24 26 / 0.08), 0 2px 4px rgb(24 24 26 / 0.03), 0 10px 28px -12px rgb(24 24 26 / 0.14);
   --shadow-composer-focus: 0 0 0 0.5px rgb(24 24 26 / 0.12), 0 2px 4px rgb(24 24 26 / 0.04), 0 12px 32px -12px rgb(24 24 26 / 0.18);
   --shadow-peek: 0 0 0 1px var(--line), 0 18px 48px -16px rgb(24 24 26 / 0.28);
@@ -2670,6 +2671,7 @@ html.dark {
  */
 :root {
   --text-scale: 1;
+  /* BEGIN GENERATED text-scaled (scripts/gen-design-tokens.ts) */
   --text-2xs: calc(11px * var(--text-scale));
   --text-2xs--line-height: calc(16px * var(--text-scale));
   --text-xs: calc(12px * var(--text-scale));
@@ -2684,6 +2686,7 @@ html.dark {
   --text-xl--line-height: calc(26px * var(--text-scale));
   --text-2xl: calc(22px * var(--text-scale));
   --text-2xl--line-height: calc(30px * var(--text-scale));
+  /* END GENERATED text-scaled */
   /* The answer surface (`.md`, `.md-muted`): a looser leading than `--text-base` for long prose. */
   --text-md: calc(14px * var(--text-scale));
   --leading-md: 1.8;

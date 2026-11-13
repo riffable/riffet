@@ -15,8 +15,9 @@ import { themeContrastFailures } from './check-theme-contrast';
  * `--check` lets CI fail when it is stale.
  *
  * Only what Compose can express is generated. The `--shadow-*` tokens are multi-layer CSS box
- * shadows that Compose has no equivalent for; they are emitted as raw strings so a platform layer
- * maps them deliberately instead of silently pretending an elevation matches.
+ * shadows; a mobile style draws its own floating shadow (`floatingShadow*` in ThemePresets.kt,
+ * docs/design/system/foundations.md §6), so they are not emitted. The Mac reads them through
+ * `gen:styles`.
  */
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -113,7 +114,6 @@ if (contrastFailures.length) {
   throw new Error(`Built-in themes break the contrast rules of docs/THEMES.md 2.2:\n  ${contrastFailures.join('\n  ')}`);
 }
 
-const shadowTokens = [...defaultLight.keys()].filter((name) => name.startsWith('--shadow'));
 
 const HEX = /^#([0-9a-f]{3}|[0-9a-f]{4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
 const RGB = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([\d.]+)\s*\)$/i;
@@ -261,18 +261,6 @@ write();
 write('val RiffetRadius = RiffetRadii(');
 for (const name of radii) write(`    ${identifier(camel(name.replace(/^--radius-/, '')))} = ${length(theme.get(name)!, 'dp')},`);
 write(')');
-write();
-write('/**');
-write(' * Multi-layer CSS box shadows. Compose has no equivalent primitive, so these are recorded rather');
-write(' * than approximated: a platform layer decides how (or whether) to reproduce each one.');
-write(' */');
-write('object RiffetShadowCss {');
-for (const name of shadowTokens) {
-  const role = identifier(camel(name.replace(/^--shadow-/, '')));
-  write(`    const val ${role}: String = ${JSON.stringify(defaultLight.get(name)!)}`);
-  write(`    const val ${role}Dark: String = ${JSON.stringify(defaultDark.get(name) ?? defaultLight.get(name)!)}`);
-}
-write('}');
 write();
 write('/** The web easing curve closest to what the UI uses for structural motion. */');
 if (theme.has('--ease-out-soft')) write(`const val RIFFET_EASE_OUT_SOFT = ${JSON.stringify(theme.get('--ease-out-soft')!)}`);

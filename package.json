@@ -40,6 +40,8 @@
     "gen:brand": "tsx scripts/gen-brand.ts",
     "gen:theme": "tsx scripts/gen-mobile-theme.ts",
     "gen:theme:check": "tsx scripts/gen-mobile-theme.ts --check",
+    "gen:tokens": "tsx scripts/gen-design-tokens.ts",
+    "gen:tokens:check": "tsx scripts/gen-design-tokens.ts --check",
     "gen:styles": "tsx scripts/gen-interface-styles.ts",
     "gen:styles:check": "tsx scripts/gen-interface-styles.ts --check",
     "gen:plugin-style": "tsx scripts/gen-plugin-style.ts",

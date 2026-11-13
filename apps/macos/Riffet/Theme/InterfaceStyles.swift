@@ -99,3 +99,35 @@ struct StyleSpec: Sendable, Equatable {
         fonts: Fonts(ui: "system", mono: "system")
     )
 }
+
+/// One drop shadow, in SwiftUI terms (`radius` is half the CSS blur).
+struct ShadowLayer: Sendable, Equatable { let red, green, blue, opacity, radius, x, y: CGFloat }
+
+/// How far a surface floats above the content (docs/design/system/foundations.md §6), from the web's `--shadow-*`.
+enum Elevation: Sendable, CaseIterable {
+    /// `--shadow-soft`
+    case raised
+    /// `--shadow-composer`
+    case float
+    /// `--shadow-composer-focus`
+    case floatFocus
+    /// `--shadow-pop`
+    case pop
+    /// `--shadow-peek`
+    case peek
+
+    func layers(dark: Bool) -> [ShadowLayer] {
+        switch (self, dark) {
+        case (.raised, false): [ShadowLayer(red: 0.0588, green: 0.0902, blue: 0.1647, opacity: 0.03, radius: 1, x: 0, y: 1), ShadowLayer(red: 0.0588, green: 0.0902, blue: 0.1647, opacity: 0.021, radius: 5, x: 0, y: 3)]
+        case (.raised, true): [ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0.18, radius: 1, x: 0, y: 1)]
+        case (.float, false): [ShadowLayer(red: 0.0941, green: 0.0941, blue: 0.102, opacity: 0.03, radius: 2, x: 0, y: 2), ShadowLayer(red: 0.0941, green: 0.0941, blue: 0.102, opacity: 0.055, radius: 14, x: 0, y: 10)]
+        case (.float, true): [ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0.274, radius: 14, x: 0, y: 10)]
+        case (.floatFocus, false): [ShadowLayer(red: 0.0941, green: 0.0941, blue: 0.102, opacity: 0.04, radius: 2, x: 0, y: 2), ShadowLayer(red: 0.0941, green: 0.0941, blue: 0.102, opacity: 0.082, radius: 16, x: 0, y: 12)]
+        case (.floatFocus, true): [ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0.34, radius: 16, x: 0, y: 12)]
+        case (.pop, false): [ShadowLayer(red: 0.0588, green: 0.0902, blue: 0.1647, opacity: 0.071, radius: 12, x: 0, y: 8), ShadowLayer(red: 0.0588, green: 0.0902, blue: 0.1647, opacity: 0.021, radius: 2.5, x: 0, y: 2)]
+        case (.pop, true): [ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0.319, radius: 16, x: 0, y: 12)]
+        case (.peek, false): [ShadowLayer(red: 0.0941, green: 0.0941, blue: 0.102, opacity: 0.141, radius: 24, x: 0, y: 18)]
+        case (.peek, true): [ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0.432, radius: 24, x: 0, y: 18)]
+        }
+    }
+}

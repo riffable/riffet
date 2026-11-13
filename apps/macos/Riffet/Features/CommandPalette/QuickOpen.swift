@@ -29,7 +29,7 @@ struct QuickOpenOverlay: ViewModifier {
                             .transition(.opacity)
                         QuickOpenDialog(workbench: workbench, project: project, dismiss: { self.project = nil })
                             .clipShape(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous))
-                            .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
+                            .elevation(.pop)
                             .padding(Space.xl)
                             .transition(.opacity.combined(with: .offset(y: -8)))
                     }

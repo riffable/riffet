@@ -313,7 +313,7 @@ struct UsageChart: View {
         .padding(Space.sm)
         .background(palette.bgPopover, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
-        .shadow(color: .black.opacity(0.14), radius: 10, y: 3)
+        .elevation(.pop)
     }
 
     private func legend(_ data: UsageChartData) -> some View {

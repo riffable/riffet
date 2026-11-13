@@ -192,7 +192,7 @@ struct WorkbenchView: View {
                             .onTapGesture { importRequest = nil }
                         ExternalImportDialog(workbench: workbench, projectId: request.projectId, listHeight: min(680, geometry.size.height * 0.72), dismiss: { importRequest = nil })
                             .clipShape(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous))
-                            .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
+                            .elevation(.peek)
                             .padding(.horizontal, Space.xl)
                             .padding(.top, geometry.size.height * 0.06)
                     }
@@ -209,7 +209,7 @@ struct WorkbenchView: View {
                             .transition(.opacity)
                         SearchDialog(workbench: workbench, dismiss: { searchPresented = false })
                             .clipShape(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous))
-                            .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
+                            .elevation(.pop)
                             .padding(Space.xl)
                             .transition(.opacity.combined(with: .offset(y: -8)))
                     }
@@ -1283,7 +1283,7 @@ private extension View {
         background(palette.bgPopover, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line, lineWidth: 0.5))
             .clipShape(RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-            .shadow(color: .black.opacity(0.12), radius: 14, y: 5)
+            .elevation(.pop)
     }
 }
 

@@ -1808,20 +1808,5 @@ val RiffetRadius = RiffetRadii(
     `3xl` = 20.dp,
 )
 
-/**
- * Multi-layer CSS box shadows. Compose has no equivalent primitive, so these are recorded rather
- * than approximated: a platform layer decides how (or whether) to reproduce each one.
- */
-object RiffetShadowCss {
-    const val xs: String = "0 1px 1.5px rgb(15 23 42 / 0.04)"
-    const val xsDark: String = "0 1px 1.5px rgb(0 0 0 / 0.2)"
-    const val soft: String = "0 1px 2px rgb(15 23 42 / 0.03), 0 3px 10px -4px rgb(15 23 42 / 0.05)"
-    const val softDark: String = "0 1px 2px rgb(0 0 0 / 0.18)"
-    const val pop: String = "0 0 0 0.5px rgb(15 23 42 / 0.1), 0 8px 24px -8px rgb(15 23 42 / 0.14), 0 2px 5px -2px rgb(15 23 42 / 0.05)"
-    const val popDark: String = "0 0 0 0.5px rgb(255 255 255 / 0.09), 0 12px 32px -10px rgb(0 0 0 / 0.6)"
-    const val focus: String = "0 2px 14px -6px rgb(15 23 42 / 0.1)"
-    const val focusDark: String = "0 0 #0000"
-}
-
 /** The web easing curve closest to what the UI uses for structural motion. */
 const val RIFFET_EASE_OUT_SOFT = "cubic-bezier(0.2, 0.7, 0.2, 1)"

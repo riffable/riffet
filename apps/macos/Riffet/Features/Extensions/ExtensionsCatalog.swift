@@ -422,7 +422,7 @@ struct ExtensionsCatalog: View {
         }
         .padding(.horizontal, Space.md)
         .padding(.vertical, 6)
-        .background(Capsule().fill(palette.bgElevated).shadow(color: .black.opacity(0.14), radius: 12, y: 3))
+        .background(Capsule().fill(palette.bgElevated).elevation(.pop))
         .overlay(Capsule().strokeBorder(palette.line))
     }
 

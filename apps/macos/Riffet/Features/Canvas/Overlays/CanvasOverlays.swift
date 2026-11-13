@@ -12,7 +12,7 @@ struct CanvasPanelStyle: ViewModifier {
         content
             .background(palette.bgElevated.opacity(0.95), in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
-            .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+            .elevation(.pop)
     }
 }
 

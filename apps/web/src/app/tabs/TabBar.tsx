@@ -123,7 +123,7 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
           ? cn('isolate', active && 'session-tab-current tab-strip-current',
             !active && 'after:absolute after:inset-[4px_2px_6px] after:-z-10 after:rounded-lg after:content-[""] hover:after:bg-hover',
             !active && preview && 'after:border after:border-dashed after:border-line-strong')
-          : cn(active ? 'session-tab-current shadow-xs' : 'hover:bg-hover',
+          : cn(active ? 'session-tab-current shadow-soft' : 'hover:bg-hover',
             preview ? (active ? 'border-dashed border-fg-4' : 'border-dashed border-line-strong') : 'border-transparent'),
       )}
     >

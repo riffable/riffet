@@ -329,7 +329,7 @@ struct CustomModeSwitch: View {
                 shape
                     .fill(on ? palette.bgElevated : .clear)
                     // Lifted by a shadow, or drawn by a hairline (`StyleSpec.Surface`).
-                    .shadow(color: .black.opacity(on && style.surface == .raised ? 0.12 : 0), radius: 1, y: 0.5)
+                    .elevation(on && style.surface == .raised ? .raised : nil)
                     .overlay(shape.strokeBorder(on && style.surface == .outlined ? palette.line : .clear))
             )
             .contentShape(Rectangle())

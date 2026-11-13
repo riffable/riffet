@@ -7,7 +7,7 @@
 ## 1. 决策
 
 **iPhone 用 SwiftUI / UIKit 原生界面，业务与状态继续共享 KMP；界面的结构、密度、字号层级和组件形态与 Android 的 iOS 配方对齐。**
-2026-11 起，iPhone 不再单独设计信息架构和版式：三个 Tab、会话列表行、时间线、输入栏和设置分组都以 Android（`shared/…/ui/design/ThemePresets.kt` 的 `IosPreset` 及各页面实现）为准，两端一起演进。iOS 保留的是平台层：系统 TabView / NavigationStack / sheet / Menu、返回手势、Dynamic Type、VoiceOver，以及系统材质——Android 用手绘磨砂模仿的悬浮层，在 iPhone 上直接用 Liquid Glass。设计 token 与共享组件在 `iosApp/Riffet/Design/RiffetDesign.swift`。
+2026-11 起，iPhone 不再单独设计信息架构和版式：三个 Tab、会话列表行、时间线、输入栏和设置分组都以 Android（`shared/…/ui/design/ThemePresets.kt` 的 `IosPreset` 及各页面实现）为准，两端一起演进。iOS 保留的是平台层：系统 TabView / NavigationStack / sheet / Menu、返回手势、Dynamic Type、VoiceOver，以及系统材质——Android 用手绘磨砂模仿的悬浮层，在 iPhone 上直接用 Liquid Glass。设计 token 与共享组件在 `iosApp/Riffet/Design/RiffetDesign.swift`；其中的字号、尺寸、动效由 `pnpm gen:tokens` 从 `packages/contracts/src/mobile-styles.ts` 的 ios 风格生成，iPhone 自己的差异写在同一文件的 `IOS_NATIVE_OVERRIDES`。
 
 正式客户端与第一、二版 Demo 均最低 iOS 18.0。iOS 26 上悬浮层（底栏、输入栏、回到最新、顶栏按钮）用 Liquid Glass，顶栏下用系统软滚动边缘；iOS 18 回退到系统材质。导航栏和 Tab 栏不设自定义背景，否则会盖掉这两种效果。不维护手绘的仿 Liquid Glass 控件。
 

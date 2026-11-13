@@ -1,17 +1,20 @@
 import AppKit
 import SwiftUI
 
+// BEGIN GENERATED motion (scripts/gen-design-tokens.ts)
 /// The three animation tiers (docs/design/macos-native.md 3.1); nothing in the app picks a free duration.
 enum Motion {
-    /// Hover, press and other small state changes.
-    static let fast = Animation.snappy(duration: 0.12)
-    /// Expanding, switching and resizing.
+    /// Hover, press, a check, an icon changing shape.
+    static let fast = Animation.snappy(duration: 0.15)
+    /// Cross-fades, menus and popovers, the selection pill sliding.
     static let standard = Animation.snappy(duration: 0.2)
-    /// An overlay's own panel and scrim.
+    /// Panels, a sidebar's content, sheets, the search panel.
     static let expressive = Animation.smooth(duration: 0.3)
 }
+// END GENERATED motion
 
-/// Spacing steps used everywhere; nothing in the app picks a free number.
+// BEGIN GENERATED space (scripts/gen-design-tokens.ts)
+/// Spacing steps used everywhere (docs/design/system/foundations.md 3); nothing in the app picks a free number.
 enum Space {
     static let xxs: CGFloat = 2
     static let xs: CGFloat = 4
@@ -21,6 +24,7 @@ enum Space {
     static let xl: CGFloat = 24
     static let xxl: CGFloat = 32
 }
+// END GENERATED space
 
 /// The width the transcript and its composer share, so the input lines up with what it answers.
 @MainActor
@@ -300,7 +304,7 @@ extension View {
         return background(
             RoundedRectangle(cornerRadius: radius, style: .continuous)
                 .fill(palette.bgElevated)
-                .shadow(color: .black.opacity(raised ? 0.04 : 0), radius: 6, y: 2)
+                .elevation(raised ? .raised : nil)
         )
         .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(raised ? palette.line : palette.lineStrong, lineWidth: 1))
     }

@@ -12,7 +12,9 @@ import { DESKTOP_STYLES, DESKTOP_STYLE_RECIPES, type DesktopStyleLength } from '
  * `--check` lets CI fail when it is stale, as `gen:theme` does for the palette.
  */
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const css = parseStylesheet(readFileSync(resolve(root, 'apps/web/src/styles/index.css'), 'utf8')).namespace;
+const stylesheet = readFileSync(resolve(root, 'apps/web/src/styles/index.css'), 'utf8');
+const parsed = parseStylesheet(stylesheet);
+const css = parsed.namespace;
 const out = resolve(root, 'apps/macos/Riffet/Theme/InterfaceStyles.swift');
 
 function length(value: DesktopStyleLength, where: string): string {
@@ -90,6 +92,87 @@ for (const style of DESKTOP_STYLES) {
   emit(`        fonts: Fonts(ui: ${JSON.stringify(style.tokens.fonts.ui)}, mono: ${JSON.stringify(style.tokens.fonts.mono)})`);
   emit('    )');
 }
+emit('}');
+emit();
+
+// Elevation (docs/design/system/foundations.md §6): the web's box shadows, light and dark. The
+// default theme's blocks carry the small ones; the shell's `html:root` / `html.dark` blocks the
+// composer and peek ones, which gen:theme does not read. Shadows follow the mode, not the palette.
+const ELEVATION = { raised: '--shadow-soft', float: '--shadow-composer', floatFocus: '--shadow-composer-focus', pop: '--shadow-pop', peek: '--shadow-peek' } as const;
+
+function shellBlock(selector: string): Map<string, string> {
+  const text = stylesheet.replace(/\/\*[\s\S]*?\*\//g, '');
+  const start = text.search(new RegExp(`^${selector.replace('.', '\\.')}\\s*\\{`, 'm'));
+  if (start < 0) throw new Error(`gen:styles: index.css has no ${selector} block`);
+  const body = text.slice(text.indexOf('{', start) + 1, text.indexOf('}', start));
+  return new Map([...body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]));
+}
+const shellLight = shellBlock('html:root');
+const shellDark = shellBlock('html.dark');
+const shadowValue = (name: string, dark: boolean): string => {
+  const value = dark
+    ? shellDark.get(name) ?? parsed.defaultDark.get(name) ?? shellLight.get(name) ?? parsed.defaultLight.get(name)
+    : shellLight.get(name) ?? parsed.defaultLight.get(name);
+  if (!value) throw new Error(`gen:styles: index.css does not define ${name}`);
+  return value;
+};
+
+/** The standard normal CDF, via Abramowitz–Stegun 7.1.26 for erf (error under 1.5e-7). */
+function normalCdf(z: number): number {
+  const x = Math.abs(z) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * x);
+  const erf = 1 - ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * Math.exp(-x * x);
+  return 0.5 * (1 + Math.sign(z) * erf);
+}
+
+/** Splits a box-shadow list at its top-level commas. */
+const shadowLayers = (value: string) => value.split(/,(?![^(]*\))/).map((layer) => layer.trim()).filter(Boolean);
+
+/**
+ * One SwiftUI shadow per blurred layer. A ring (`0 0 0 Npx`, no blur) is the surface's own hairline,
+ * which every floating surface already strokes, so it is left out. SwiftUI's radius is the CSS blur
+ * halved (the Gaussian's sigma), and it has no spread: a negative spread pulls a CSS shadow's edge in
+ * under the surface, so the opacity is scaled by how much of the Gaussian still shows past the edge,
+ * 2Φ(spread / sigma). Without that a web shadow tuned with -12px of spread reads three times as dark.
+ */
+function swiftShadows(name: string, dark: boolean): string[] {
+  const result: string[] = [];
+  for (const layer of shadowLayers(shadowValue(name, dark))) {
+    const color = /(rgb\([^)]*\)|#[0-9a-f]+|var\([^)]*\))\s*$/i.exec(layer)?.[1];
+    const lengths = layer.replace(color ?? '', '').trim().split(/\s+/).map((part) => parseFloat(part));
+    const [x = 0, y = 0, blur = 0, spread = 0] = lengths;
+    if (blur === 0 && x === 0 && y === 0) continue;
+    if (!color || color === '#0000') continue;
+    const rgb = /^rgb\(\s*(\d+)\s+(\d+)\s+(\d+)\s*\/\s*([\d.]+)\s*\)$/i.exec(color);
+    if (!rgb) throw new Error(`gen:styles: ${name} has a blurred layer in ${color}; only rgb(r g b / a) is supported`);
+    const sigma = blur / 2;
+    const shown = spread < 0 && sigma > 0 ? 2 * normalCdf(spread / sigma) : 1;
+    const opacity = Math.round(Number(rgb[4]) * shown * 1000) / 1000;
+    const channel = (value: string) => Math.round((Number(value) / 255) * 10000) / 10000;
+    result.push(`ShadowLayer(red: ${channel(rgb[1]!)}, green: ${channel(rgb[2]!)}, blue: ${channel(rgb[3]!)}, opacity: ${opacity}, radius: ${sigma}, x: ${x}, y: ${y})`);
+  }
+  return result;
+}
+
+emit('/// One drop shadow, in SwiftUI terms (`radius` is half the CSS blur).');
+emit('struct ShadowLayer: Sendable, Equatable { let red, green, blue, opacity, radius, x, y: CGFloat }');
+emit();
+emit('/// How far a surface floats above the content (docs/design/system/foundations.md §6), from the web\'s `--shadow-*`.');
+emit('enum Elevation: Sendable, CaseIterable {');
+for (const [tier, token] of Object.entries(ELEVATION)) { emit(`    /// \`${token}\``); emit(`    case ${tier}`); }
+emit();
+emit('    func layers(dark: Bool) -> [ShadowLayer] {');
+emit('        switch (self, dark) {');
+for (const tier of Object.keys(ELEVATION) as (keyof typeof ELEVATION)[]) {
+  for (const dark of [false, true]) {
+    const layers = swiftShadows(ELEVATION[tier], dark);
+    // ElevationShadow (AnchoredPopup.swift) draws a fixed two slots so a surface keeps its identity.
+    if (layers.length > 2) throw new Error(`gen:styles: ${ELEVATION[tier]} has ${layers.length} blurred layers; the Mac draws at most 2`);
+    emit(`        case (.${tier}, ${dark}): ${layers.length ? `[${layers.join(', ')}]` : '[]'}`);
+  }
+}
+emit('        }');
+emit('    }');
 emit('}');
 emit();
 

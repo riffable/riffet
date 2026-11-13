@@ -238,7 +238,7 @@ export function PublishSection({ project, status, sessionId, active, onError, on
           {pull.unavailable && <p className="text-xs text-fg-4">{pull.unavailable}</p>}
 
           {pr && (
-            <div className="flex flex-col gap-2 rounded-lg bg-elevated p-2.5 shadow-xs">
+            <div className="flex flex-col gap-2 rounded-lg bg-elevated p-2.5 shadow-soft">
               <a href={pr.url} target="_blank" rel="noreferrer noopener" className="line-clamp-2 text-sm font-medium text-fg hover:text-accent">{pr.title}</a>
               <div className="flex flex-wrap items-center gap-1.5">
                 <Badge tone={pr.state === 'OPEN' ? (pr.isDraft ? 'neutral' : 'success') : pr.state === 'MERGED' ? 'accent' : 'danger'}>

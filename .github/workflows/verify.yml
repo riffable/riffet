@@ -36,6 +36,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Typecheck
         run: pnpm typecheck
+      - name: Generated design tokens are current
+        run: pnpm gen:tokens:check
       - name: Generated themes are current
         run: pnpm gen:theme:check
       - name: Generated interface styles are current

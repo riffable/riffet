@@ -475,10 +475,7 @@ final class TurnPreviewView: NSView {
         text.cell?.truncatesLastVisibleLine = true
         addSubview(text)
         addSubview(time)
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.12
-        layer?.shadowRadius = 12
-        layer?.shadowOffset = CGSize(width: 0, height: -4)
+        applyElevation()
     }
 
     required init?(coder: NSCoder) { fatalError() }
@@ -487,7 +484,13 @@ final class TurnPreviewView: NSView {
     override var wantsUpdateLayer: Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? { nil }
 
+    private func applyElevation() {
+        guard let layer else { return }
+        Elevation.pop.apply(to: layer, dark: effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+    }
+
     override func updateLayer() {
+        applyElevation()
         guard let style, let layer else { return }
         layer.backgroundColor = style.color(\.bgPopover).cgColor
         layer.borderColor = style.color(\.line).cgColor
@@ -538,10 +541,7 @@ final class BackToBottomView: NSView {
         isHidden = true
         image.imageScaling = .scaleNone
         addSubview(image)
-        layer?.shadowColor = NSColor.black.cgColor
-        layer?.shadowOpacity = 0.08
-        layer?.shadowRadius = 6
-        layer?.shadowOffset = CGSize(width: 0, height: -2)
+        applyElevation()
         toolTip = String(localized: "回到底部 (⌘↓)")
         setAccessibilityElement(true)
         setAccessibilityRole(.button)
@@ -557,7 +557,13 @@ final class BackToBottomView: NSView {
         image.image = symbolImage("arrow.down", size: style.s(12.5), weight: .medium, color: style.color(\.fg2))
     }
 
+    private func applyElevation() {
+        guard let layer else { return }
+        Elevation.pop.apply(to: layer, dark: effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua)
+    }
+
     override func updateLayer() {
+        applyElevation()
         guard let style, let layer else { return }
         layer.backgroundColor = style.color(\.bgElevated).cgColor
         layer.borderColor = style.color(\.lineStrong).cgColor

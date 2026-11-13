@@ -85,11 +85,11 @@ Arc 好看的地方在于每个变化都有来处和去处，Riffet 也要做到
 
 ### 3.1 时长与曲线
 
-动画只用三档，写作 `Motion.fast` / `Motion.standard` / `Motion.expressive`（`Theme/Controls.swift`），不再在各处单独写 `easeOut(duration:)`。
+动画只用三档，写作 `Motion.fast` / `Motion.standard` / `Motion.expressive`（`Theme/Controls.swift`），不再在各处单独写 `easeOut(duration:)`。时长取 Web 的同名档位，由 `pnpm gen:tokens` 从 `packages/contracts/src/design-tokens.ts` 生成。
 
 | 档 | 用途 | SwiftUI |
 |---|---|---|
-| 快 | 悬停、按下、勾选、图标变形 | `.snappy(duration: 0.12)` |
+| 快 | 悬停、按下、勾选、图标变形 | `.snappy(duration: 0.15)` |
 | 标准 | 交叉淡入、菜单与弹出层、选中胶囊滑动 | `.snappy(duration: 0.2)` |
 | 舒展 | 面板、侧栏内容、sheet、搜索面板 | `.smooth(duration: 0.3)` |
 

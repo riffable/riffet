@@ -1535,7 +1535,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       {find && (
         <div
           role="search"
-          className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-xl border border-line bg-elevated/95 p-1 shadow-xs backdrop-blur max-md:left-3"
+          className="absolute right-3 top-3 z-10 flex items-center gap-0.5 rounded-xl border border-line bg-elevated/95 p-1 shadow-soft backdrop-blur max-md:left-3"
           // The field and the buttons alike: a step clicked with the mouse leaves the keyboard on its button.
           onKeyDown={(event) => { if (event.key === 'Escape' && !isComposingKey(event.nativeEvent)) { event.preventDefault(); closeFind(); } }}
         >
@@ -1561,7 +1561,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         </div>
       )}
       {seeking && (
-        <div role="status" className="absolute left-1/2 top-3 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-elevated/95 px-3 text-xs text-fg-2 shadow-xs backdrop-blur">
+        <div role="status" className="absolute left-1/2 top-3 z-10 inline-flex h-7 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-elevated/95 px-3 text-xs text-fg-2 shadow-soft backdrop-blur">
           <Spinner className="size-3.5" /><Trans>正在定位…</Trans>
         </div>
       )}
@@ -1571,7 +1571,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         <button
           type="button"
           onClick={jumpToConfirmation}
-          className="absolute bottom-12 left-1/2 z-10 inline-flex h-9 max-md:bottom-16 max-md:h-11 -translate-x-1/2 items-center gap-1.5 rounded-full border border-warning/30 bg-elevated/95 px-3 text-xs font-medium text-fg-2 shadow-xs backdrop-blur transition-colors hover:text-fg"
+          className="absolute bottom-12 left-1/2 z-10 inline-flex h-9 max-md:bottom-16 max-md:h-11 -translate-x-1/2 items-center gap-1.5 rounded-full border border-warning/30 bg-elevated/95 px-3 text-xs font-medium text-fg-2 shadow-soft backdrop-blur transition-colors hover:text-fg"
         >
           {pendingConfirmationCount > 1 ? t`${pendingConfirmationCount} 项待确认` : t`需要确认`} · <Trans>查看</Trans>
         </button>
@@ -1582,7 +1582,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
         aria-hidden={atBottom}
         onClick={scrollToBottom}
         className={cn(
-          'absolute bottom-3 left-1/2 z-10 inline-flex h-7 max-md:h-11 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-elevated/95 px-3 text-xs font-medium text-fg-2 shadow-xs backdrop-blur transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft hover:text-fg',
+          'absolute bottom-3 left-1/2 z-10 inline-flex h-7 max-md:h-11 -translate-x-1/2 items-center gap-1.5 rounded-full border border-line bg-elevated/95 px-3 text-xs font-medium text-fg-2 shadow-soft backdrop-blur transition-[opacity,transform] duration-[var(--duration-base)] ease-out-soft hover:text-fg',
           atBottom ? 'pointer-events-none translate-y-2 opacity-0' : 'translate-y-0 opacity-100',
         )}
       >

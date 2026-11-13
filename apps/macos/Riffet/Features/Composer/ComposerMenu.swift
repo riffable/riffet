@@ -210,7 +210,7 @@ private struct ComposerMenuChrome: ViewModifier {
             content
                 .background(.regularMaterial, in: shape)
                 .overlay(shape.strokeBorder(Color.primary.opacity(0.1), lineWidth: 0.5))
-                .shadow(color: .black.opacity(0.18), radius: 14, y: 6)
+                .elevation(.pop)
         }
     }
 }

@@ -29,7 +29,7 @@ struct CanvasInspector: View {
             .frame(width: 400)
             .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line, lineWidth: 1))
-            .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+            .elevation(.pop)
             .padding(12)
             .environment(\.conversationProjectId, controller.projectId)
             .transition(.move(edge: .trailing).combined(with: .opacity))

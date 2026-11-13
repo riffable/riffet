@@ -865,7 +865,7 @@ struct NoticeBar<Actions: View>: View {
         .background {
             if floating {
                 RoundedRectangle(cornerRadius: Radius.card, style: .continuous).fill(palette.bgElevated)
-                    .shadow(color: .black.opacity(raised ? 0.06 : 0), radius: 6, y: 2)
+                    .elevation(raised ? .raised : nil)
             }
         }
         .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(bare ? Color.clear : raised ? palette.line : palette.lineStrong, lineWidth: 1))
@@ -1020,7 +1020,7 @@ extension View {
         let raised = DisplayPreferences.shared.style.surface == .raised
         return background(palette.bgElevated, in: RoundedRectangle(cornerRadius: Radius.card, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Radius.card, style: .continuous).strokeBorder(raised ? palette.line : palette.lineStrong, lineWidth: 1))
-            .shadow(color: .black.opacity(raised ? 0.06 : 0), radius: 6, y: 2)
+            .elevation(raised ? .raised : nil)
     }
 }
 

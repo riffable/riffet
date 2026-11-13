@@ -328,7 +328,7 @@ private struct Segments<Value: Hashable>: View {
                             if on {
                                 RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
                                     .fill(palette.bgElevated)
-                                    .shadow(color: .black.opacity(0.06), radius: 1, y: 1)
+                                    .elevation(.raised)
                                     .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
                             }
                         }

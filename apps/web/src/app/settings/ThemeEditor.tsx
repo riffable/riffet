@@ -287,7 +287,7 @@ function ThemeForm({ draft, mode, issues, onChange, onMode }: {
               onClick={() => onMode(value)}
               className={cn(
                 'h-7 rounded-md px-3 text-xs transition-colors',
-                mode === value ? 'bg-elevated font-medium text-fg shadow-xs' : 'text-fg-3 hover:text-fg',
+                mode === value ? 'bg-elevated font-medium text-fg shadow-soft' : 'text-fg-3 hover:text-fg',
               )}
             >
               {value === 'light' ? <Trans>浅色</Trans> : <Trans>深色</Trans>}

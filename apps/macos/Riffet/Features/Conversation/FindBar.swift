@@ -37,7 +37,7 @@ struct FindBar: View {
         .frame(height: 30)
         .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(palette.bgElevated))
         .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
-        .shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+        .elevation(.pop)
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isSearchField)
         .accessibilityLabel("在会话中查找")

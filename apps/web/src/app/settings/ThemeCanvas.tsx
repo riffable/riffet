@@ -155,7 +155,7 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
             />
           );
         })}
-        <div data-canvas-control className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-lg bg-elevated p-0.5 shadow-xs">
+        <div data-canvas-control className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-0.5 rounded-lg bg-elevated p-0.5 shadow-soft">
           <Tip label={removeLabel}>
             <Button size="icon-xs" variant="quiet" aria-label={removeLabel} disabled={count === 1} onClick={() => commit({ ...seed, points: seed.points.slice(0, -1) })}><IconMinus /></Button>
           </Tip>

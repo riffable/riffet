@@ -138,7 +138,7 @@ struct CustomWorkbench<Header: View, Content: View>: View {
                     reset: { storedSidebarWidth = 0 }
                 )
             }
-            .shadow(color: .black.opacity(peeking && !sidebarShown ? 0.16 : 0), radius: 12, x: 2)
+            .elevation(peeking && !sidebarShown ? .peek : nil)
             .onHover { if peeking { peek.panel($0) { peeking = false } } }
             .offset(x: visible ? 0 : -(width + Space.sm))
             .opacity(visible || !reduceMotion ? 1 : 0)
@@ -169,7 +169,7 @@ struct CustomCard: ViewModifier {
                 .clipShape(shape)
                 .background(
                     shape.fill(on ? palette.bg.opacity(DisplayPreferences.shared.contentTint) : .clear)
-                        .shadow(color: .black.opacity(on ? 0.04 : 0), radius: 6, y: 2)
+                        .elevation(on ? .raised : nil)
                 )
         } else {
             content

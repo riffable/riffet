@@ -89,11 +89,11 @@ export function PairingQrScanner({ open, onOpenChange }: { open: boolean; onOpen
           {starting && <span className="absolute inset-x-0 bottom-3 text-center text-sm text-white"><Trans>正在打开相机…</Trans></span>}
         </div>}
         <div className="flex gap-2">
-          <label className="relative inline-flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-elevated px-3 text-sm font-medium text-fg shadow-xs hover:bg-subtle can-hover:has-[:focus-visible]:ring-2 can-hover:has-[:focus-visible]:ring-focus">
+          <label className="relative inline-flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-elevated px-3 text-sm font-medium text-fg shadow-soft hover:bg-subtle can-hover:has-[:focus-visible]:ring-2 can-hover:has-[:focus-visible]:ring-focus">
             <input type="file" accept="image/*" capture="environment" onChange={(event) => void fromImage(event)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={t`拍摄二维码`} />
             <IconQrCode className="size-4" /><Trans>拍摄二维码</Trans>
           </label>
-          <label className="relative inline-flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-elevated px-3 text-sm font-medium text-fg shadow-xs hover:bg-subtle can-hover:has-[:focus-visible]:ring-2 can-hover:has-[:focus-visible]:ring-focus">
+          <label className="relative inline-flex min-h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-lg border border-line-strong bg-elevated px-3 text-sm font-medium text-fg shadow-soft hover:bg-subtle can-hover:has-[:focus-visible]:ring-2 can-hover:has-[:focus-visible]:ring-focus">
             <input type="file" accept="image/*" onChange={(event) => void fromImage(event)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={t`选择图片`} />
             <Trans>选择图片</Trans>
           </label>

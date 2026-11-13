@@ -342,7 +342,7 @@ function Fact({ label, children, mono }: { label: string; children: ReactNode; m
 function Counter({ icon, label, value, detail }: { icon: ReactNode; label: string; value: ReactNode; detail?: ReactNode }) {
   return (
     <div className="flex min-w-0 items-center gap-2.5 rounded-lg bg-subtle px-3 py-2.5">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-elevated text-fg-3 shadow-xs [&_svg]:size-4">{icon}</span>
+      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-elevated text-fg-3 shadow-soft [&_svg]:size-4">{icon}</span>
       <span className="flex min-w-0 flex-col">
         <span className="truncate text-2xs text-fg-3">{label}</span>
         <span className="truncate text-sm font-medium tabular-nums text-fg">{value}{detail && <span className="ml-1 text-xs font-normal text-fg-3">{detail}</span>}</span>

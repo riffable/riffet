@@ -264,7 +264,7 @@ struct ComposerView<Controls: View, Trailing: View>: View {
         .background(
             RoundedRectangle(cornerRadius: Radius.floating, style: .continuous)
                 .fill(line ? palette.page : palette.bgElevated)
-                .shadow(color: .black.opacity(DisplayPreferences.shared.style.surface == .outlined ? 0 : 0.04), radius: 6, y: 2)
+                .elevation(DisplayPreferences.shared.style.surface == .outlined ? nil : .float)
         )
         .overlay(RoundedRectangle(cornerRadius: Radius.floating, style: .continuous).strokeBorder(line ? palette.lineStrong : palette.line, lineWidth: 1))
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { cardHeight = $0 }

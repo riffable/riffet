@@ -30,7 +30,7 @@ function SlidingSegments({ param, onChange, disabled, options = param.options, v
     <div role="radiogroup" aria-label={label ?? paramTitle(param)} className="relative grid rounded-lg bg-muted p-0.5" style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}>
       <span
         aria-hidden
-        className="absolute inset-y-0.5 left-0.5 rounded-md bg-elevated ring-[0.5px] ring-line-strong shadow-xs transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)]"
+        className="absolute inset-y-0.5 left-0.5 rounded-md bg-elevated ring-[0.5px] ring-line-strong shadow-soft transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)]"
         style={{ width: `calc((100% - 4px) / ${count})`, transform: `translateX(${index * 100}%)` }}
       />
       {options.map((option, optionIndex) => (

@@ -74,7 +74,7 @@ export function Switch({ className, ...props }: React.ComponentProps<typeof Swit
       {...props}
     >
       <span className="inline-flex h-[18px] w-8 shrink-0 items-center rounded-full bg-line-strong p-0.5 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-standard)] group-data-[state=checked]/switch:bg-accent">
-        <SwitchPrimitive.Thumb className="block size-3.5 rounded-full bg-white shadow-xs transition-[translate,background-color] duration-[var(--duration-fast)] ease-[var(--ease-standard)] data-[state=checked]:translate-x-3.5 data-[state=checked]:bg-accent-fg" />
+        <SwitchPrimitive.Thumb className="block size-3.5 rounded-full bg-white shadow-soft transition-[translate,background-color] duration-[var(--duration-fast)] ease-[var(--ease-standard)] data-[state=checked]:translate-x-3.5 data-[state=checked]:bg-accent-fg" />
       </span>
     </SwitchPrimitive.Root>
   );

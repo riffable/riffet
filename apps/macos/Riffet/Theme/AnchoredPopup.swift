@@ -92,22 +92,71 @@ private struct FloatingSurface: ViewModifier {
     }
 }
 
-/// The shadow under a floating card. Raised, the web's `--shadow-pop`: a tight contact shadow under a
-/// soft drop; outlined, one warm shadow under the hairline. The drawn menu's card layer matches it.
+/// The shadow under a floating card. Raised, the web's `--shadow-pop` (`Elevation.pop`); outlined
+/// (the line style), one warm shadow under the hairline, the line style's own. The drawn menu's card
+/// layer matches it.
 struct FloatingShadow: ViewModifier {
     let raised: Bool
     let dark: Bool
 
     func body(content: Content) -> some View {
-        let slate = Color(red: 15 / 255, green: 23 / 255, blue: 42 / 255)
         if raised {
-            content
-                .shadow(color: dark ? .black.opacity(0.3) : slate.opacity(0.05), radius: 2.5, y: 2)
-                .shadow(color: dark ? .black.opacity(0.55) : slate.opacity(0.14), radius: 12, y: 8)
+            content.modifier(ElevationShadow(tier: .pop, dark: dark))
         } else {
             content.shadow(color: dark ? .black.opacity(0.5) : Color(red: 60 / 255, green: 50 / 255, blue: 40 / 255).opacity(0.16), radius: 20, y: 12)
         }
     }
+}
+
+/// An `Elevation` tier's shadows (docs/design/system/foundations.md §6), generated from the web's
+/// `--shadow-*`. The surface strokes its own hairline; this adds only the drop shadows.
+struct ElevationShadow: ViewModifier {
+    let tier: Elevation?
+    let dark: Bool
+
+    func body(content: Content) -> some View {
+        // Always two shadow slots, whatever the tier: a changing modifier chain would rebuild the
+        // content (and lose its state) when a surface rises or settles. No tier has more than two layers.
+        let layers = tier?.layers(dark: dark) ?? []
+        let first = layers.first ?? .none, second = layers.dropFirst().first ?? .none
+        content
+            .shadow(color: first.color, radius: first.radius, x: first.x, y: first.y)
+            .shadow(color: second.color, radius: second.radius, x: second.x, y: second.y)
+    }
+}
+
+extension ShadowLayer {
+    static let none = ShadowLayer(red: 0, green: 0, blue: 0, opacity: 0, radius: 0, x: 0, y: 0)
+    var color: Color { Color(.sRGB, red: red, green: green, blue: blue, opacity: opacity) }
+    var cgColor: CGColor { CGColor(srgbRed: red, green: green, blue: blue, alpha: opacity) }
+}
+
+extension Elevation {
+    /// A layer-backed view carries one shadow: the tier's widest layer, which is the one that reads.
+    func apply(to layer: CALayer, dark: Bool) {
+        guard let drop = layers(dark: dark).max(by: { $0.radius < $1.radius }) else {
+            layer.shadowOpacity = 0
+            return
+        }
+        layer.shadowColor = drop.cgColor
+        layer.shadowOpacity = 1
+        layer.shadowRadius = drop.radius
+        // A macOS layer's y grows upward, flipped view or not: a shadow below has a negative offset.
+        layer.shadowOffset = CGSize(width: drop.x, height: -drop.y)
+    }
+}
+
+extension View {
+    /// The shadows of an `Elevation` tier in the current appearance; `nil` draws none, so a surface
+    /// that rises only in some states keeps one modifier chain.
+    func elevation(_ tier: Elevation?) -> some View { modifier(EnvironmentElevation(tier: tier)) }
+}
+
+private struct EnvironmentElevation: ViewModifier {
+    let tier: Elevation?
+    @Environment(\.colorScheme) private var scheme
+
+    func body(content: Content) -> some View { content.modifier(ElevationShadow(tier: tier, dark: scheme == .dark)) }
 }
 
 extension View {
