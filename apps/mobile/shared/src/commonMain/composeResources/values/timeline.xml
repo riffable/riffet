@@ -92,6 +92,8 @@
     <string name="timeline_copy_answer">复制回答</string>
 
     <!-- Interaction cards -->
+    <string name="timeline_interaction_approval">审批</string>
+    <string name="timeline_interaction_scope">允许范围</string>
     <string name="timeline_interaction_draft_stale">题目已更新，旧草稿未提交。</string>
     <string name="timeline_interaction_result_uncertain">暂时无法确认回答是否已提交</string>
     <string name="timeline_interaction_changed">题目已变化，请同步后继续。</string>

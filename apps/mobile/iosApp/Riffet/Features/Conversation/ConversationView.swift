@@ -496,10 +496,9 @@ struct ConversationView: View {
                                 onSubmitted: { ledger.submitted($0, interaction: record.interaction, for: ledgerKey) })
                 .id("approval." + record.id)
         } else {
-            VStack(alignment: .leading, spacing: 8) {
-                Label(record.interaction.title.isEmpty ? String(localized: "请求已结束", bundle: .riffet) : record.interaction.title, systemImage: record.confirmed ? "checkmark.circle" : "info.circle").font(.subheadline.weight(.medium))
-                Text(record.result ?? String(localized: "Agent 已不再等待此请求。", bundle: .riffet)).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
-            }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12)).id("approval." + record.id).accessibilityIdentifier("approvalResult")
+            InteractionCardView(workbench: workbench, interaction: record.interaction, sessionID: sessionID,
+                                readOnly: true, confirmed: record.confirmed, result: record.result ?? String(localized: "Agent 已不再等待此请求。", bundle: .riffet))
+                .id("approval." + record.id).accessibilityIdentifier("approvalResult")
         }
     }
     private func observeInteraction() {

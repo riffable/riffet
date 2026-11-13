@@ -1885,13 +1885,21 @@ describe('Codex native protocol controls', () => {
     for (const index of [0, 1, 3, 4]) {
       const nativeId = `native-decision-${index}`;
       h.transport!.resolveNativeRequest({ id: nativeId, method: 'item/commandExecution/requestApproval', params: {
-        threadId: 'native-thread', turnId: 'turn-1', itemId: 'command', command: 'pnpm test', availableDecisions: decisions,
+        threadId: 'native-thread', turnId: 'turn-1', itemId: 'command', command: 'pnpm test --runInBand', availableDecisions: decisions,
       } });
       const interaction = await waitFor(() => h.adapter.interaction(h.host, h.session));
       expect(interaction!.actions.map(action => action.id)).toEqual(['decision:0', 'cancel', 'approve', 'decision:3', 'decision:4']);
       const response = { interactionId: interaction!.id, revision: interaction!.revision, requestId: `web-decision-${index}`,
         action: index === 1 ? 'cancel' : `decision:${index}` };
       if (index === 0) {
+        // The persistent rule is the native prefix, not this invocation's full command.
+        expect(interaction!.message).toContain('pnpm test --runInBand');
+        expect(interaction!.actions[0]).toMatchObject({
+          label: 'Allow and remember command prefix: pnpm test', shortLabel: 'Allow and remember',
+          detail: 'Matching future commands will run without prompting.\n\nCommand prefix:\npnpm test',
+        });
+        expect(interaction!.actions[3]?.detail).toContain('registry.example');
+        expect(interaction!.actions[4]?.detail).toContain('denied');
         for (const action of ['approveForSession', 'deny', 'decision:9']) {
           await expect(h.adapter.respond(h.host, h.session, h.profile, { ...response, requestId: `invalid-${action}`, action }))
             .rejects.toMatchObject({ code: 'INVALID_NATIVE_INTERACTION' });

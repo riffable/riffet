@@ -3370,6 +3370,12 @@
                                 "primary",
                                 "danger"
                               ]
+                            },
+                            "shortLabel": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -3543,6 +3549,12 @@
                                 "primary",
                                 "danger"
                               ]
+                            },
+                            "shortLabel": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -7880,6 +7892,12 @@
                                 "primary",
                                 "danger"
                               ]
+                            },
+                            "shortLabel": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
                             }
                           },
                           "required": [
@@ -8066,6 +8084,12 @@
                                 "primary",
                                 "danger"
                               ]
+                            },
+                            "shortLabel": {
+                              "type": "string"
+                            },
+                            "detail": {
+                              "type": "string"
                             }
                           },
                           "required": [

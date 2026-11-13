@@ -65,6 +65,10 @@ class SessionActivityTest {
             listOf(InteractionChoice("允许", "allow"), InteractionChoice("拒绝", "deny")),
             interactionChoices(permission),
         )
+        assertTrue(interactionChoices(permission.copy(actions = permission.actions + NativeInteractionAction(
+            "remember", "Allow and remember command prefix: pnpm test",
+            shortLabel = "Allow and remember", detail = "Command prefix: pnpm test",
+        ))).isEmpty(), "a grant with a separate scope must be reviewed in the card")
 
         val question = interaction(
             NativeInteractionKind.QUESTION,

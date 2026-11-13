@@ -5039,6 +5039,8 @@
             "id": "text",
             "label": "text",
             "tone": "primary",
+            "shortLabel": "text",
+            "detail": "text",
             "futureField": 4
           }
         ],
@@ -5089,6 +5091,8 @@
           "id": "text",
           "label": "text",
           "tone": "primary",
+          "shortLabel": "text",
+          "detail": "text",
           "futureField": 4
         }
       ],
@@ -5587,6 +5591,8 @@
             "id": "text",
             "label": "text",
             "tone": "primary",
+            "shortLabel": "text",
+            "detail": "text",
             "futureField": 4
           }
         ],
@@ -5641,6 +5647,8 @@
           "id": "text",
           "label": "text",
           "tone": "primary",
+          "shortLabel": "text",
+          "detail": "text",
           "futureField": 4
         }
       ],
@@ -8320,7 +8328,9 @@
           {
             "id": "text",
             "label": "text",
-            "tone": "future-value"
+            "tone": "future-value",
+            "shortLabel": "text",
+            "detail": "text"
           }
         ],
         "expiresAt": "text",
@@ -8364,7 +8374,9 @@
         {
           "id": "text",
           "label": "text",
-          "tone": "future-value"
+          "tone": "future-value",
+          "shortLabel": "text",
+          "detail": "text"
         }
       ],
       "expiresAt": "text",

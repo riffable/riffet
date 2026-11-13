@@ -25,7 +25,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -56,8 +58,11 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -66,6 +71,9 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.NativeInteraction
 import riffet.ui.focus.keepsFocusOnTap
+import riffet.ui.focus.SelectableText
+import riffet.ui.pickers.PickerOverlay
+import riffet.ui.timeline.MarkdownBody
 import riffet.contracts.NativeInteractionAction
 import riffet.contracts.NativeInteractionKind
 import riffet.contracts.NativeInteractionResponse
@@ -204,8 +212,20 @@ fun InteractionCard(
     }
 
     fun submit(action: String) {
-        if (!connected) return
-        verified(shown.kind, interaction) { post(update { it.interactionChanged(latest).submit(action, newClientId()) }) }
+        val asked = shown
+        if (!latestConnected) return
+        verified(asked.kind, asked) {
+            // A remembered action id can be offered by a later revision with a different scope.
+            // Send only against the exact snapshot the reader saw, with or without device verification.
+            if (latest.id != asked.id || latest.revision != asked.revision || latest.actions.none { it.id == action }) {
+                scope.launch { verifyNotice = getString(Res.string.approval_verify_changed) }
+            } else {
+                post(update {
+                    if (it.shown.id != asked.id || it.shown.revision != asked.revision) null
+                    else it.submit(action, newClientId())
+                })
+            }
+        }
     }
 
     fun retry() {
@@ -240,186 +260,209 @@ fun InteractionCard(
     val questionIndex = shown.questionIndex
     val questionCount = shown.questionCount
     val lastQuestion = questionIndex != null && questionCount != null && questionIndex >= questionCount
+    var showingApproval by remember(interaction.id) { mutableStateOf(false) }
+    val approval = shown.kind == NativeInteractionKind.PERMISSION || shown.kind == NativeInteractionKind.PLAN ||
+        shown.kind == NativeInteractionKind.CONFIRMATION || shown.kind == NativeInteractionKind.CHOICE
+    if (approval) {
+        ApprovalCard(
+            shown = shown,
+            state = state,
+            connected = connected,
+            busy = busy,
+            verifyNotice = verifyNotice,
+            showingDetails = showingApproval,
+            onOpen = { showingApproval = true },
+            onDismiss = { showingApproval = false },
+            onSubmit = ::submit,
+            onSelectOption = ::changeOption,
+            onChangeOther = ::changeOther,
+            onRetry = ::retry,
+            onSync = ::sync,
+            modifier = modifier,
+        )
+        return
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .background(LocalRiffetSurfaces.current.card, RoundedCornerShape(LocalInterfaceStyle.current.groupRadius))
-            // A 20-option permission dialog must not squeeze the transcript (and the composer)
-            // off the screen; the card scrolls inside a bounded height instead.
+            // Long questions keep the transcript and composer visible; only the reading
+            // area scrolls, while submission and recovery controls stay outside it.
             .heightIn(max = 320.dp)
-            .verticalScroll(rememberScrollState())
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = shown.title.ifBlank {
-                    stringResource(if (isQuestion) Res.string.timeline_interaction_need_answer else Res.string.timeline_interaction_need_choice)
-                },
-                style = typography.label,
-                color = colors.fg,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            if (isQuestion && shown.questionCount != null) {
+        Column(Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "${shown.questionIndex?.coerceAtLeast(1) ?: 1} / ${shown.questionCount}",
-                    style = typography.caption,
-                    color = colors.fg3,
+                    text = shown.title.ifBlank {
+                        stringResource(if (isQuestion) Res.string.timeline_interaction_need_answer else Res.string.timeline_interaction_need_choice)
+                    },
+                    style = typography.label,
+                    color = colors.fg,
+                    maxLines = Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
                 )
-            }
-        }
-
-        val message = shown.message
-        if (!message.isNullOrBlank()) {
-            if (isQuestion || selectsOptions) {
-                Text(text = message, style = typography.bodySmall, color = colors.fg2)
-            } else {
-                // A permission/plan preview is terminal output: keep it monospaced. The card's own
-                // scroll handles a long preview, so this box deliberately does not scroll itself.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(LocalRiffetSurfaces.current.floating, RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-                        .padding(8.dp),
-                ) {
+                if (isQuestion && shown.questionCount != null) {
                     Text(
-                        text = message,
-                        style = typography.monoSmall,
-                        color = colors.fg2,
+                        text = "${shown.questionIndex?.coerceAtLeast(1) ?: 1} / ${shown.questionCount}",
+                        style = typography.caption,
+                        color = colors.fg3,
                     )
                 }
             }
-        }
-
-        if (isQuestion || selectsOptions) {
-            val options = shown.options
-            if (options.isNotEmpty()) {
-                val recipe = LocalInterfaceStyle.current.components.lists
-                Column(Modifier.then(if (shown.multiple != true) Modifier.selectableGroup() else Modifier)) {
-                    options.forEach { option ->
-                        val checked = selected.contains(option.id)
-                        val interactive = connected && !busy
-                        val source = remember(option.id) { MutableInteractionSource() }
-                        val focused by source.collectIsFocusedAsState()
-                        val shape = RoundedCornerShape(LocalInterfaceStyle.current.selectionRadius)
-                        val selection = if (shown.multiple == true) {
-                            Modifier.toggleable(value = checked, interactionSource = source,
-                                indication = LocalIndication.current, enabled = interactive, role = Role.Checkbox) { changeOption(option.id) }
-                        } else {
-                            Modifier.selectable(selected = checked, interactionSource = source,
-                                indication = LocalIndication.current, enabled = interactive, role = Role.RadioButton) { changeOption(option.id) }
-                        }
-                        val mark: @Composable () -> Unit = {
-                            if (shown.multiple == true) Checkbox(checked, onCheckedChange = null, enabled = interactive)
-                            else if (recipe.selectionAtEnd) riffet.ui.design.SelectionMark(checked, enabled = interactive)
-                            else RadioButton(checked, onClick = null, enabled = interactive)
-                        }
-                        // The row owns activation; marks only render its state.
-                        Row(
-                            modifier = Modifier.fillMaxWidth().heightIn(min = designMetrics.controlHeight)
-                                .clip(shape)
-                                .then(if (recipe.focusBorder && focused) Modifier.border(designMetrics.focusWidth, LocalRiffetSurfaces.current.focus, shape) else Modifier)
-                                .background(if (checked && recipe.selectionFill) LocalRiffetSurfaces.current.selected else androidx.compose.ui.graphics.Color.Transparent)
-                                .then(selection).padding(vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            if (!recipe.selectionAtEnd) mark()
-                            Text(option.label, style = if (recipe.grouped) typography.body else typography.bodySmall,
-                                color = when {
-                                    !interactive -> LocalRiffetSurfaces.current.disabledContent
-                                    checked && recipe.selectionFill -> LocalRiffetSurfaces.current.selectedContent
-                                    checked -> colors.accent
-                                    else -> colors.fg2
-                                }, modifier = Modifier.weight(1f))
-                            if (recipe.selectionAtEnd) {
-                                Spacer(Modifier.width(12.dp))
-                                mark()
-                            }
-                        }
+            val message = shown.message
+            if (!message.isNullOrBlank()) {
+                if (isQuestion || selectsOptions) {
+                    Text(text = message, style = typography.bodySmall, color = colors.fg2)
+                } else {
+                    // A permission/plan preview is terminal output: keep it monospaced. The card's own
+                    // scroll handles a long preview, so this box deliberately does not scroll itself.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(LocalRiffetSurfaces.current.floating, RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
+                            .padding(8.dp),
+                    ) {
+                        Text(
+                            text = message,
+                            style = typography.monoSmall,
+                            color = colors.fg2,
+                        )
                     }
                 }
             }
 
-            if (isQuestion && (shown.allowOther == true || options.isEmpty())) {
-                val locked = otherTextLocked(shown)
-                val inputSource = remember { MutableInteractionSource() }
-                val inputFocused by inputSource.collectIsFocusedAsState()
-                BasicTextField(
-                    value = currentDraft.otherText,
-                    interactionSource = inputSource,
-                    onValueChange = ::changeOther,
-                    enabled = connected && !busy,
-                    textStyle = typography.bodySmall.copy(color = if (connected && !busy) colors.fg else LocalRiffetSurfaces.current.disabledContent),
-                    cursorBrush = SolidColor(colors.accent),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .keepsFocusOnTap()
-                        .heightIn(min = designMetrics.inputMinHeight, max = designMetrics.composerMaxHeight)
-                        .background(LocalRiffetSurfaces.current.floating, RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-                        .border(BorderStroke(if (inputFocused) designMetrics.focusWidth else designMetrics.hairlineWidth, if (inputFocused) LocalRiffetSurfaces.current.focus else LocalRiffetSurfaces.current.hairline), RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                    decorationBox = { inner ->
-                        if (currentDraft.otherText.isEmpty()) {
-                            Text(
-                                text = if (options.isEmpty()) {
-                                    stringResource(Res.string.timeline_interaction_answer_placeholder)
-                                } else {
-                                    stringResource(Res.string.timeline_interaction_other_placeholder)
-                                },
-                                style = typography.bodySmall,
-                                color = colors.fg4,
-                            )
+            if (isQuestion || selectsOptions) {
+                val options = shown.options
+                if (options.isNotEmpty()) {
+                    val recipe = LocalInterfaceStyle.current.components.lists
+                    Column(Modifier.then(if (shown.multiple != true) Modifier.selectableGroup() else Modifier)) {
+                        options.forEach { option ->
+                            val checked = selected.contains(option.id)
+                            val interactive = connected && !busy
+                            val source = remember(option.id) { MutableInteractionSource() }
+                            val focused by source.collectIsFocusedAsState()
+                            val shape = RoundedCornerShape(LocalInterfaceStyle.current.selectionRadius)
+                            val selection = if (shown.multiple == true) {
+                                Modifier.toggleable(value = checked, interactionSource = source,
+                                    indication = LocalIndication.current, enabled = interactive, role = Role.Checkbox) { changeOption(option.id) }
+                            } else {
+                                Modifier.selectable(selected = checked, interactionSource = source,
+                                    indication = LocalIndication.current, enabled = interactive, role = Role.RadioButton) { changeOption(option.id) }
+                            }
+                            val mark: @Composable () -> Unit = {
+                                if (shown.multiple == true) Checkbox(checked, onCheckedChange = null, enabled = interactive)
+                                else if (recipe.selectionAtEnd) riffet.ui.design.SelectionMark(checked, enabled = interactive)
+                                else RadioButton(checked, onClick = null, enabled = interactive)
+                            }
+                            // The row owns activation; marks only render its state.
+                            Row(
+                                modifier = Modifier.fillMaxWidth().heightIn(min = designMetrics.controlHeight)
+                                    .clip(shape)
+                                    .then(if (recipe.focusBorder && focused) Modifier.border(designMetrics.focusWidth, LocalRiffetSurfaces.current.focus, shape) else Modifier)
+                                    .background(if (checked && recipe.selectionFill) LocalRiffetSurfaces.current.selected else androidx.compose.ui.graphics.Color.Transparent)
+                                    .then(selection).padding(vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                if (!recipe.selectionAtEnd) mark()
+                                Text(option.label, style = if (recipe.grouped) typography.body else typography.bodySmall,
+                                    color = when {
+                                        !interactive -> LocalRiffetSurfaces.current.disabledContent
+                                        checked && recipe.selectionFill -> LocalRiffetSurfaces.current.selectedContent
+                                        checked -> colors.accent
+                                        else -> colors.fg2
+                                    }, modifier = Modifier.weight(1f))
+                                if (recipe.selectionAtEnd) {
+                                    Spacer(Modifier.width(12.dp))
+                                    mark()
+                                }
+                            }
                         }
-                        inner()
-                    },
-                )
-                if (locked) {
-                    Text(text = stringResource(Res.string.timeline_interaction_other_locked), style = typography.caption, color = colors.fg3)
+                    }
+                }
+
+                if (isQuestion && (shown.allowOther == true || options.isEmpty())) {
+                    val locked = otherTextLocked(shown)
+                    val inputSource = remember { MutableInteractionSource() }
+                    val inputFocused by inputSource.collectIsFocusedAsState()
+                    BasicTextField(
+                        value = currentDraft.otherText,
+                        interactionSource = inputSource,
+                        onValueChange = ::changeOther,
+                        enabled = connected && !busy,
+                        textStyle = typography.bodySmall.copy(color = if (connected && !busy) colors.fg else LocalRiffetSurfaces.current.disabledContent),
+                        cursorBrush = SolidColor(colors.accent),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .keepsFocusOnTap()
+                            .heightIn(min = designMetrics.inputMinHeight, max = designMetrics.composerMaxHeight)
+                            .background(LocalRiffetSurfaces.current.floating, RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
+                            .border(BorderStroke(if (inputFocused) designMetrics.focusWidth else designMetrics.hairlineWidth, if (inputFocused) LocalRiffetSurfaces.current.focus else LocalRiffetSurfaces.current.hairline), RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        decorationBox = { inner ->
+                            if (currentDraft.otherText.isEmpty()) {
+                                Text(
+                                    text = if (options.isEmpty()) {
+                                        stringResource(Res.string.timeline_interaction_answer_placeholder)
+                                    } else {
+                                        stringResource(Res.string.timeline_interaction_other_placeholder)
+                                    },
+                                    style = typography.bodySmall,
+                                    color = colors.fg4,
+                                )
+                            }
+                            inner()
+                        },
+                    )
+                    if (locked) {
+                        Text(text = stringResource(Res.string.timeline_interaction_other_locked), style = typography.caption, color = colors.fg3)
+                    }
                 }
             }
-        }
 
-        val notice = when (state.notice) {
-            InteractionNotice.DRAFT_STALE -> stringResource(Res.string.timeline_interaction_draft_stale)
-            InteractionNotice.UNCONFIRMED -> stringResource(Res.string.timeline_interaction_sync_unconfirmed)
-            null -> null
-        }
-        if (notice != null) {
-            Text(text = notice, style = typography.caption, color = colors.warning)
-        }
-        val outcome = when (submission?.phase) {
-            SubmissionPhase.UNKNOWN -> stringResource(Res.string.timeline_interaction_result_unknown)
-            SubmissionPhase.STALE -> stringResource(Res.string.timeline_interaction_changed)
-            SubmissionPhase.UNCERTAIN -> stringResource(Res.string.timeline_interaction_result_uncertain)
-            SubmissionPhase.SUCCESS -> submission?.message
-            SubmissionPhase.POSTING, null -> null
-        }
-        if (outcome != null) {
-            Text(
-                text = outcome,
-                style = typography.caption,
-                color = if (submission?.phase == SubmissionPhase.SUCCESS) colors.success else colors.warning,
-            )
-        }
-        // The provider's reason is diagnostic detail, often in English; the reader first needs what to do.
-        val reason = submission?.message?.takeIf { submission?.phase == SubmissionPhase.UNCERTAIN && it.isNotBlank() && it != outcome }
-        if (reason != null) {
-            Text(text = reason, style = typography.caption, color = colors.fg3)
-        }
-        val error = state.error?.let {
-            it.message ?: when (it.kind) {
-                InteractionErrorKind.SUBMIT -> stringResource(Res.string.timeline_interaction_submit_failed)
-                InteractionErrorKind.SYNC -> stringResource(Res.string.timeline_interaction_sync_failed)
+            val notice = when (state.notice) {
+                InteractionNotice.DRAFT_STALE -> stringResource(Res.string.timeline_interaction_draft_stale)
+                InteractionNotice.UNCONFIRMED -> stringResource(Res.string.timeline_interaction_sync_unconfirmed)
+                null -> null
             }
+            if (notice != null) {
+                Text(text = notice, style = typography.caption, color = colors.warning)
+            }
+            val outcome = when (submission?.phase) {
+                SubmissionPhase.UNKNOWN -> stringResource(Res.string.timeline_interaction_result_unknown)
+                SubmissionPhase.STALE -> stringResource(Res.string.timeline_interaction_changed)
+                SubmissionPhase.UNCERTAIN -> stringResource(Res.string.timeline_interaction_result_uncertain)
+                SubmissionPhase.SUCCESS -> submission?.message
+                SubmissionPhase.POSTING, null -> null
+            }
+            if (outcome != null) {
+                Text(
+                    text = outcome,
+                    style = typography.caption,
+                    color = if (submission?.phase == SubmissionPhase.SUCCESS) colors.success else colors.warning,
+                )
+            }
+            // The provider's reason is diagnostic detail, often in English; the reader first needs what to do.
+            val reason = submission?.message?.takeIf { submission?.phase == SubmissionPhase.UNCERTAIN && it.isNotBlank() && it != outcome }
+            if (reason != null) {
+                Text(text = reason, style = typography.caption, color = colors.fg3)
+            }
+            val error = state.error?.let {
+                it.message ?: when (it.kind) {
+                    InteractionErrorKind.SUBMIT -> stringResource(Res.string.timeline_interaction_submit_failed)
+                    InteractionErrorKind.SYNC -> stringResource(Res.string.timeline_interaction_sync_failed)
+                }
+            }
+            if (error != null) {
+                Text(text = error, style = typography.caption, color = colors.danger)
+            }
+            verifyNotice?.let { Text(text = it, style = typography.caption, color = colors.warning) }
         }
-        if (error != null) {
-            Text(text = error, style = typography.caption, color = colors.danger)
-        }
-        verifyNotice?.let { Text(text = it, style = typography.caption, color = colors.warning) }
 
         // The pressed button carries the spinner; the caption is only for an action no button shows.
         val postingAction = submission?.takeIf { it.phase == SubmissionPhase.POSTING }?.request?.action
@@ -440,7 +483,7 @@ fun InteractionCard(
                 )
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 shown.actions.filter { it.id != "next" }.forEach { action ->
                     // A submit carries the draft, an `answer` is a question's own submit: both are the
                     // primary action and both wait for a selection, whether the kind is question or plan.
@@ -493,6 +536,267 @@ fun InteractionCard(
             Text(text = stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
         }
     }
+}
+
+/** The summary and reader share the parent card's frozen submission and verification gate. */
+@Composable
+private fun ApprovalCard(
+    shown: NativeInteraction,
+    state: InteractionCardState,
+    connected: Boolean,
+    busy: Boolean,
+    verifyNotice: String?,
+    showingDetails: Boolean,
+    onOpen: () -> Unit,
+    onDismiss: () -> Unit,
+    onSubmit: (String) -> Unit,
+    onSelectOption: (String) -> Unit,
+    onChangeOther: (String) -> Unit,
+    onRetry: () -> Unit,
+    onSync: () -> Unit,
+    modifier: Modifier,
+) {
+    val style = LocalInterfaceStyle.current
+    val surfaces = LocalRiffetSurfaces.current
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    val title = shown.title.ifBlank { stringResource(Res.string.timeline_interaction_approval) }
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val posting = state.submission?.takeIf { it.phase == SubmissionPhase.POSTING }?.request?.action
+    val selectsOptions = interactionSelectsOptions(shown)
+    val selectedOptions = state.currentDraft.selectedIds.toSet()
+    val answerPresent = selectedOptions.isNotEmpty() || state.currentDraft.otherText.isNotBlank()
+    val oneOffActionIds = setOf("approve", "allow-once")
+    val refusalActionIds = setOf("deny", "decline", "reject", "cancel")
+    val quickActionIds = oneOffActionIds + refusalActionIds
+    val directAuxiliaryActionIds = setOf("cancel", "previous", "skip")
+    val auxiliaryActions = shown.actions.filter { !carriesSelection(shown, it.id) && it.id != "next" }
+    val reviewedAuxiliaryActions = auxiliaryActions.filter { it.id !in directAuxiliaryActionIds || !it.detail.isNullOrBlank() }
+    var selectedAction by remember(shown.id, shown.revision) {
+        mutableStateOf(shown.actions.firstOrNull { it.id in oneOffActionIds }?.id)
+    }
+
+    BoxWithConstraints(
+        modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
+            .background(surfaces.card, RoundedCornerShape(style.groupRadius)).padding(12.dp),
+    ) {
+        val width = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+        val titleFits = !measurer.measure(title, typography.label, maxLines = 2,
+            overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = width)).hasVisualOverflow
+        val messageWidth = (width - with(density) { 16.dp.roundToPx() }).coerceAtLeast(1)
+        val messageFits = shown.message.isNullOrBlank() || !measurer.measure(shown.message.orEmpty(), typography.monoSmall,
+            maxLines = 3, overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = messageWidth)).hasVisualOverflow
+        fun labelFits(label: String) = !measurer.measure(label, typography.label, maxLines = 1,
+            constraints = Constraints(maxWidth = (width / 2).coerceAtLeast(1))).hasVisualOverflow
+        // Only explicit one-off and refusal decisions can be offered from a complete preview.
+        // Unknown/long action labels and remembered rules retain their exact text in the reader.
+        val quick = shown.actions.filter { action -> action.detail.isNullOrBlank() && labelFits(action.shortLabel ?: action.label) && action.id in quickActionIds }
+        // A blank body or an undisclosed per-action rule is not a complete approval preview.
+        val quickAllowed = shown.kind == NativeInteractionKind.PERMISSION && !selectsOptions && titleFits && messageFits &&
+            !shown.message.isNullOrBlank() && shown.actions.all { it.detail.isNullOrBlank() }
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(title, style = typography.label, color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (!shown.message.isNullOrBlank()) {
+                Text(shown.message.orEmpty(), style = typography.monoSmall, color = colors.fg2,
+                    maxLines = 3, overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth().background(surfaces.floating, RoundedCornerShape(style.controlRadius)).padding(8.dp))
+            }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                PlainAction(stringResource(Res.string.session_details), ActionTone.NORMAL, true, neutral = true, onClick = onOpen)
+                quick.filter { quickAllowed || it.id in refusalActionIds }.forEach { action ->
+                    PlainAction(action.shortLabel ?: action.label, if (action.id in refusalActionIds) ActionTone.NORMAL else ActionTone.PRIMARY, connected && !busy,
+                        posting = action.id == posting, neutral = true, onClick = { onSubmit(action.id) })
+                }
+            }
+            ApprovalNotices(state, connected, verifyNotice, onRetry, onSync)
+        }
+    }
+
+    if (showingDetails) {
+        PickerOverlay(title = stringResource(Res.string.timeline_interaction_approval), onDismiss = onDismiss, fullHeight = true) {
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                SelectableText { Text(title, style = typography.title, color = colors.fg) }
+                if (!shown.message.isNullOrBlank()) {
+                    SelectableText {
+                        if (shown.kind == NativeInteractionKind.PLAN) {
+                            MarkdownBody(shown.message.orEmpty(), color = colors.fg, style = typography.body, codeStyle = typography.mono,
+                                modifier = Modifier.fillMaxWidth())
+                        } else {
+                            Text(shown.message.orEmpty(), style = typography.mono, color = colors.fg,
+                                modifier = Modifier.fillMaxWidth().background(surfaces.floating, RoundedCornerShape(style.controlRadius)).padding(12.dp))
+                        }
+                    }
+                }
+                if (selectsOptions) {
+                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        shown.options.forEach { option ->
+                            val checked = option.id in selectedOptions
+                            Row(Modifier.fillMaxWidth().heightIn(min = style.metrics.controlHeight)
+                                .selectable(checked, enabled = connected && !busy,
+                                    role = if (shown.multiple == true) Role.Checkbox else Role.RadioButton,
+                                    onClick = { selectedAction = null; onSelectOption(option.id) }).padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.Top) {
+                                if (shown.multiple == true) Checkbox(checked, onCheckedChange = null, enabled = connected && !busy)
+                                else RadioButton(checked, onClick = null, enabled = connected && !busy)
+                                Text(option.label, style = typography.body, color = colors.fg,
+                                    modifier = Modifier.weight(1f).padding(start = 8.dp))
+                            }
+                        }
+                    }
+                    if (shown.allowOther == true) {
+                        val source = remember { MutableInteractionSource() }
+                        val focused by source.collectIsFocusedAsState()
+                        val shape = RoundedCornerShape(style.controlRadius)
+                        BasicTextField(
+                            value = state.currentDraft.otherText,
+                            onValueChange = { selectedAction = null; onChangeOther(it) },
+                            interactionSource = source,
+                            enabled = connected && !busy,
+                            textStyle = typography.bodySmall.copy(color = if (connected && !busy) colors.fg else surfaces.disabledContent),
+                            cursorBrush = SolidColor(colors.accent),
+                            modifier = Modifier.fillMaxWidth().keepsFocusOnTap()
+                                .heightIn(min = style.metrics.inputMinHeight, max = style.metrics.composerMaxHeight)
+                                .background(surfaces.floating, shape)
+                                .border(BorderStroke(if (focused) style.metrics.focusWidth else style.metrics.hairlineWidth,
+                                    if (focused) surfaces.focus else surfaces.hairline), shape)
+                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                            decorationBox = { inner ->
+                                if (state.currentDraft.otherText.isEmpty()) {
+                                    Text(stringResource(if (shown.options.isEmpty()) Res.string.timeline_interaction_answer_placeholder else Res.string.timeline_interaction_other_placeholder),
+                                        style = typography.bodySmall, color = colors.fg4)
+                                }
+                                inner()
+                            },
+                        )
+                        if (otherTextLocked(shown)) {
+                            Text(stringResource(Res.string.timeline_interaction_other_locked), style = typography.caption, color = colors.fg3)
+                        }
+                    }
+                    // Unknown or scoped auxiliary decisions are reviewed with their full text;
+                    // the fixed footer never has to contain an arbitrarily long provider label.
+                    auxiliaryActions.filter { it !in reviewedAuxiliaryActions }.forEach { action ->
+                        val compactLabel = when (action.id) {
+                            "cancel" -> stringResource(Res.string.timeline_cancel)
+                            "previous" -> stringResource(Res.string.timeline_interaction_previous)
+                            else -> stringResource(Res.string.timeline_interaction_skip)
+                        }
+                        if (action.label != compactLabel) {
+                            SelectableText { Text(action.label, style = typography.body, color = colors.fg2) }
+                        }
+                    }
+                    reviewedAuxiliaryActions.forEach { action ->
+                        val checked = selectedAction == action.id
+                        Row(Modifier.fillMaxWidth().heightIn(min = style.metrics.controlHeight)
+                            .selectable(checked, enabled = connected && !busy, role = Role.RadioButton,
+                                onClick = { selectedAction = action.id }).padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top) {
+                            RadioButton(checked, onClick = null, enabled = connected && !busy)
+                            Text(action.shortLabel ?: action.label, style = typography.body, color = colors.fg,
+                                modifier = Modifier.weight(1f).padding(start = 8.dp))
+                        }
+                        val explanation = action.detail?.takeIf { it.isNotBlank() }
+                            ?: action.label.takeIf { action.shortLabel != null && action.shortLabel != action.label }
+                        if (explanation != null) {
+                            SelectableText { Text(explanation, style = typography.monoSmall, color = colors.fg2) }
+                        }
+                    }
+                }
+                if (shown.actions.isNotEmpty() && !selectsOptions) {
+                    Text(stringResource(if (shown.kind == NativeInteractionKind.PERMISSION) Res.string.timeline_interaction_scope else Res.string.timeline_interaction_need_choice),
+                        style = typography.caption, color = colors.fg3)
+                    Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        shown.actions.forEach { action ->
+                            val chosen = selectedAction == action.id
+                            Row(Modifier.fillMaxWidth().heightIn(min = style.metrics.controlHeight)
+                                .selectable(chosen, enabled = connected && !busy, role = Role.RadioButton,
+                                    onClick = { selectedAction = action.id }).padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.Top) {
+                                RadioButton(chosen, onClick = null, enabled = connected && !busy)
+                                Column(Modifier.weight(1f).padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                    Text(action.shortLabel ?: action.label, style = typography.body, color = colors.fg)
+                                    if (!action.detail.isNullOrBlank()) {
+                                        SelectableText { Text(action.detail.orEmpty(), style = typography.monoSmall, color = colors.fg2) }
+                                    } else if (action.shortLabel != null && action.shortLabel != action.label) {
+                                        SelectableText { Text(action.label, style = typography.body, color = colors.fg2) }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                ApprovalNotices(state, connected, verifyNotice, onRetry, onSync, compact = false)
+            }
+            val chosen = if (selectsOptions) reviewedAuxiliaryActions.firstOrNull { it.id == selectedAction }
+                ?: shown.actions.firstOrNull { carriesSelection(shown, it.id) }
+                else shown.actions.firstOrNull { it.id == selectedAction }
+            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+                val availableWidth = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
+                val known = chosen?.id in quickActionIds || chosen?.id == "approveForSession" || chosen?.detail != null
+                val label = (chosen?.shortLabel ?: chosen?.label)?.takeIf { known && !measurer.measure(it, typography.label, maxLines = 1,
+                    constraints = Constraints(maxWidth = availableWidth)).hasVisualOverflow }
+                    ?: stringResource(Res.string.timeline_interaction_submit)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (selectsOptions) auxiliaryActions.filter { it !in reviewedAuxiliaryActions }.forEach { action ->
+                        val auxiliaryLabel = when (action.id) {
+                            "cancel" -> stringResource(Res.string.timeline_cancel)
+                            "previous" -> stringResource(Res.string.timeline_interaction_previous)
+                            else -> stringResource(Res.string.timeline_interaction_skip)
+                        }
+                        PlainAction(auxiliaryLabel, ActionTone.NORMAL, connected && !busy, posting = action.id == posting, neutral = true, singleLine = true) { onSubmit(action.id) }
+                    }
+                    PlainAction(label,
+                        if (chosen?.id in refusalActionIds) ActionTone.NORMAL else ActionTone.PRIMARY,
+                        chosen != null && connected && !busy && (!carriesSelection(shown, chosen.id) || answerPresent), posting = posting != null, neutral = true, singleLine = true) {
+                        chosen?.let { onSubmit(it.id) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ApprovalNotices(
+    state: InteractionCardState,
+    connected: Boolean,
+    verifyNotice: String?,
+    onRetry: () -> Unit,
+    onSync: () -> Unit,
+    compact: Boolean = true,
+) {
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    val notice = when (state.notice) {
+        InteractionNotice.DRAFT_STALE -> stringResource(Res.string.timeline_interaction_draft_stale)
+        InteractionNotice.UNCONFIRMED -> stringResource(Res.string.timeline_interaction_sync_unconfirmed)
+        null -> null
+    }
+    val outcome = when (state.submission?.phase) {
+        SubmissionPhase.UNKNOWN, SubmissionPhase.UNCERTAIN -> stringResource(Res.string.timeline_interaction_result_unknown)
+        SubmissionPhase.STALE -> stringResource(Res.string.timeline_interaction_changed)
+        SubmissionPhase.SUCCESS -> state.submission?.message
+        SubmissionPhase.POSTING, null -> null
+    }
+    val error = state.error?.message ?: state.error?.let {
+        stringResource(if (it.kind == InteractionErrorKind.SUBMIT) Res.string.timeline_interaction_submit_failed else Res.string.timeline_interaction_sync_failed)
+    }
+    val text = error ?: verifyNotice ?: outcome ?: notice
+    if (text != null) Text(text, style = typography.caption, color = if (error != null) colors.danger else colors.warning,
+        maxLines = if (compact) 3 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+    val reason = state.submission?.message?.takeIf { state.submission?.phase == SubmissionPhase.UNCERTAIN && it.isNotBlank() && it != text }
+    if (!compact && reason != null) Text(reason, style = typography.caption, color = colors.fg3)
+    if (state.canSync) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (state.submission?.phase == SubmissionPhase.UNKNOWN) {
+                PlainAction(stringResource(Res.string.timeline_retry), ActionTone.NORMAL, state.canRetry && connected, neutral = true, onClick = onRetry)
+            }
+            PlainAction(stringResource(if (state.syncing) Res.string.timeline_interaction_syncing else Res.string.timeline_interaction_sync),
+                ActionTone.NORMAL, !state.syncing, neutral = true, onClick = onSync)
+        }
+    }
+    if (!connected) Text(stringResource(Res.string.timeline_interaction_disconnected), style = typography.caption, color = colors.fg3)
 }
 
 private enum class ActionTone { DANGER, SAFE, PRIMARY, NORMAL }
@@ -591,16 +895,19 @@ private fun SubmittingSpinner(color: androidx.compose.ui.graphics.Color) {
 }
 
 @Composable
-private fun PlainAction(label: String, tone: ActionTone, enabled: Boolean, posting: Boolean = false, onClick: () -> Unit) {
+private fun PlainAction(label: String, tone: ActionTone, enabled: Boolean, posting: Boolean = false, neutral: Boolean = false, singleLine: Boolean = false, onClick: () -> Unit) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
+    val surfaces = LocalRiffetSurfaces.current
     if (LocalInterfaceStyle.current.components.lists.grouped) {
         riffet.ui.design.RiffetTextButton(onClick = onClick, enabled = enabled, danger = tone == ActionTone.DANGER) {
             Box(contentAlignment = Alignment.Center) {
                 Text(
                     label,
-                    color = if (!enabled) LocalRiffetSurfaces.current.disabledContent else if (tone == ActionTone.SAFE) colors.success else if (tone == ActionTone.DANGER) colors.danger else colors.accent,
+                    color = if (!enabled) surfaces.disabledContent else if (neutral) colors.fg else if (tone == ActionTone.SAFE) colors.success else if (tone == ActionTone.DANGER) colors.danger else colors.accent,
                     fontWeight = if (tone == ActionTone.PRIMARY) FontWeight.SemiBold else FontWeight.Normal,
+                    maxLines = if (singleLine) 1 else Int.MAX_VALUE,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = if (posting) Modifier.alpha(0f) else Modifier,
                 )
                 if (posting) SubmittingSpinner(colors.fg3)
@@ -608,13 +915,17 @@ private fun PlainAction(label: String, tone: ActionTone, enabled: Boolean, posti
         }
         return
     }
-    val background = when (tone) {
+    val background = if (neutral) {
+        if (tone == ActionTone.PRIMARY) surfaces.selected else surfaces.floating
+    } else when (tone) {
         ActionTone.DANGER -> colors.dangerSoft
         ActionTone.SAFE -> colors.successSoft
         ActionTone.PRIMARY -> colors.accent
         ActionTone.NORMAL -> LocalRiffetSurfaces.current.floating
     }
-    val foreground = when (tone) {
+    val foreground = if (neutral) {
+        if (tone == ActionTone.PRIMARY) surfaces.selectedContent else colors.fg
+    } else when (tone) {
         ActionTone.PRIMARY -> colors.accentFg
         ActionTone.DANGER -> colors.danger
         ActionTone.SAFE -> colors.success
@@ -630,7 +941,9 @@ private fun PlainAction(label: String, tone: ActionTone, enabled: Boolean, posti
         contentAlignment = Alignment.Center,
     ) {
         // The label keeps its space under the spinner, so the button does not change size.
-        Text(text = label, style = typography.label, color = if (enabled) foreground else LocalRiffetSurfaces.current.disabledContent, modifier = if (posting) Modifier.alpha(0f) else Modifier)
+        Text(text = label, style = typography.label, color = if (enabled) foreground else LocalRiffetSurfaces.current.disabledContent,
+            maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis,
+            modifier = if (posting) Modifier.alpha(0f) else Modifier)
         if (posting) SubmittingSpinner(foreground)
     }
 }

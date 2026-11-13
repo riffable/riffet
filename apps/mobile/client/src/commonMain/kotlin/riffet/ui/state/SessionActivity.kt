@@ -70,7 +70,10 @@ fun interactionChoices(interaction: NativeInteraction, limit: Int = 3): List<Int
         return interaction.options.map { InteractionChoice(it.label, submit.id, listOf(it.id)) }
     }
     if (interaction.actions.isEmpty() || interaction.actions.size > limit) return emptyList()
-    return interaction.actions.map { InteractionChoice(it.label, it.id) }
+    // Notification buttons have nowhere to show the scope of a persistent grant. Keep the
+    // complete decision in the card instead of offering a shortened, unreviewable permission.
+    if (interaction.actions.any { !it.detail.isNullOrBlank() }) return emptyList()
+    return interaction.actions.map { InteractionChoice(it.shortLabel ?: it.label, it.id) }
 }
 
 /** The last thing the agent said, as one line of plain text for a notification. */

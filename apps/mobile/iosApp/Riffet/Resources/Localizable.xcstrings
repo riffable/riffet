@@ -256,6 +256,11 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not process this image" } }
       }
     },
+    "审批" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Approval" } }
+      }
+    },
     "详情" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Details" } }

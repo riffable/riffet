@@ -158,7 +158,16 @@ export interface NativeInteraction {
   multiple?: boolean; allowOther?: boolean; otherValue?: string; otherSelected?: boolean;
   /** Position of this question in its group, **1-based** like the counter both clients render. */
   questionIndex?: number; questionCount?: number;
-  actions: Array<{ id: string; label: string; tone?: 'primary' | 'danger' }>;
+  actions: Array<{
+    id: string;
+    /** Complete provider label, retained for older clients and unknown actions. */
+    label: string;
+    tone?: 'primary' | 'danger';
+    /** Compact verb for a control. Never contains the command, host or rule being granted. */
+    shortLabel?: string;
+    /** Exact scope and consequence to review before choosing this action. */
+    detail?: string;
+  }>;
   /** ISO time after which the backend stops waiting and denies the request on its own. Claude no longer sets it: its requests wait as long as the CLI does. */
   expiresAt?: string;
   /** The latest `expiresAt` that 延长 can reach; absent when the deadline cannot be moved (always, for Claude). */

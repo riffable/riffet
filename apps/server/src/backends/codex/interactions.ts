@@ -128,10 +128,20 @@ function commandApprovalAction({ id, decision }: { id: string; decision: Command
     }
   }
   if ('acceptWithExecpolicyAmendment' in decision) {
-    return { id, label: `Allow and remember command prefix: ${displayCommand(decision.acceptWithExecpolicyAmendment.execpolicy_amendment)}`, tone: 'primary' };
+    const prefix = displayCommand(decision.acceptWithExecpolicyAmendment.execpolicy_amendment);
+    return {
+      id, label: `Allow and remember command prefix: ${prefix}`, tone: 'primary',
+      shortLabel: 'Allow and remember',
+      detail: `Matching future commands will run without prompting.\n\nCommand prefix:\n${prefix}`,
+    };
   }
   const amendment = decision.applyNetworkPolicyAmendment.network_policy_amendment;
-  return { id, label: `Remember network ${amendment.action}: ${amendment.host}`, ...(amendment.action === 'deny' ? { tone: 'danger' as const } : {}) };
+  return {
+    id, label: `Remember network ${amendment.action}: ${amendment.host}`,
+    shortLabel: amendment.action === 'deny' ? 'Deny and remember' : 'Allow and remember',
+    detail: `Future network requests to this host will be ${amendment.action === 'deny' ? 'denied' : 'allowed'}.\n\nHost:\n${amendment.host}`,
+    ...(amendment.action === 'deny' ? { tone: 'danger' as const } : {}),
+  };
 }
 
 function displayCommand(value: unknown): string {

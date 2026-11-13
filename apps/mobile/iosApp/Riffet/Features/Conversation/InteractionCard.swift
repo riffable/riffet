@@ -55,7 +55,7 @@ final class InteractionDrafts {
     /// Only presentation fields are retained. The wire response remains the exact saved receipt.
     private struct InteractionSnapshot: Codable, Equatable {
         struct Option: Codable, Equatable { let id: String; let label: String; let selected: Bool }
-        struct Action: Codable, Equatable { let id: String; let label: String; let tone: String? }
+        struct Action: Codable, Equatable { let id: String; let label: String; let tone: String?; let shortLabel: String?; let detail: String? }
         let id: String, revision: String, kind: String, title: String
         let transport: String?, terminalID: String?, epoch: Int64?, requestID: String?
         let message: String?, multiple: Bool?, allowOther: Bool?, otherValue: String?, otherSelected: Bool?
@@ -70,7 +70,7 @@ final class InteractionDrafts {
             questionIndex = value.questionIndex?.int64Value; questionCount = value.questionCount?.int64Value
             expiresAt = value.expiresAt; extendableUntil = value.extendableUntil
             options = value.options.map { .init(id: $0.id, label: $0.label, selected: $0.selected) }
-            actions = value.actions.map { .init(id: $0.id, label: $0.label, tone: $0.tone) }
+            actions = value.actions.map { .init(id: $0.id, label: $0.label, tone: $0.tone, shortLabel: $0.shortLabel, detail: $0.detail) }
         }
         var value: NativeInteraction? {
             let kinds: [NativeInteractionKind] = [.permission, .question, .plan, .confirmation, .choice]
@@ -81,7 +81,7 @@ final class InteractionDrafts {
                 multiple: multiple.map { KotlinBoolean(bool: $0) }, allowOther: allowOther.map { KotlinBoolean(bool: $0) },
                 otherValue: otherValue, otherSelected: otherSelected.map { KotlinBoolean(bool: $0) },
                 questionIndex: questionIndex.map { KotlinLong(value: $0) }, questionCount: questionCount.map { KotlinLong(value: $0) },
-                actions: actions.map { NativeInteractionAction(id: $0.id, label: $0.label, tone: $0.tone) },
+                actions: actions.map { NativeInteractionAction(id: $0.id, label: $0.label, tone: $0.tone, shortLabel: $0.shortLabel, detail: $0.detail) },
                 expiresAt: expiresAt, extendableUntil: extendableUntil)
         }
     }
@@ -174,6 +174,10 @@ struct InteractionCardView: View {
     let interaction: NativeInteraction
     var sessionID: String? = nil
     var openTerminal: (() -> Void)?
+    /// Settled ledger records reuse the reader while keeping every submit path disabled.
+    var readOnly = false
+    var confirmed = false
+    var result: String? = nil
     @Environment(\.palette) private var palette
     var onSubmitted: ((NativeInteractionResult) -> Void)? = nil
     /// Why this device held an answer back (device verification, a moved session, expiry) or failed on its own.
@@ -184,6 +188,8 @@ struct InteractionCardView: View {
     @State private var authenticating = false
     /// The action this device is sending; nil while the send is a retry.
     @State private var tappedAction: String?
+    @State private var showingDetails = false
+    @State private var selectedAction: String?
     @AppStorage("riffet.ios.biometricApprovals") private var requireTouchID = false
     private let drafts = InteractionDrafts.shared
 
@@ -194,8 +200,8 @@ struct InteractionCardView: View {
     private var card: InteractionCardState { drafts.state(for: key) ?? drafts.initial(interaction, for: key) }
     private var submission: InteractionSubmission? { card.submission }
     /// The reducer's busy, plus what only this device knows: verifying the reader, extending, expiry.
-    private var busy: Bool { card.busy || authenticating || extending || expired }
-    private var shown: NativeInteraction { card.shown }
+    private var busy: Bool { readOnly || card.busy || authenticating || extending || expired }
+    private var shown: NativeInteraction { readOnly ? interaction : card.shown }
     private var current: InteractionDraft { card.currentDraft }
     private var isQuestion: Bool { shown.kind == .question }
     private var selectsOptions: Bool { interactionSelectsOptions(interaction: shown) }
@@ -212,60 +218,235 @@ struct InteractionCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                Image(systemName: icon).riffetFont(.label, weight: .regular).foregroundStyle(palette.warning)
-                Text(title).riffetFont(.headline).foregroundStyle(palette.fg).fixedSize(horizontal: false, vertical: true)
-                Spacer()
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: readOnly ? (confirmed ? "checkmark.circle" : "info.circle") : icon).riffetFont(.label, weight: .regular).foregroundStyle(readOnly ? palette.fg3 : palette.warning)
+                Text(title).riffetFont(.headline).lineLimit(2)
+                    .foregroundStyle(palette.fg)
+                Spacer(minLength: 0)
                 if isQuestion, let count = shown.questionCount?.int64Value, count > 0 {
                     Text("\(max(1, shown.questionIndex?.int64Value ?? 1)) / \(count)").riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg3)
                 }
             }
-            if let message = shown.message, !message.isEmpty { messageView(message) }
-            if let expires {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(expires <= now ? String(localized: "此请求已过期，请同步最新状态。", bundle: .riffet) : String(localized: "剩余等待时间 \(max(0, Int(expires.timeIntervalSince(now)))) 秒", bundle: .riffet))
-                        .riffetFont(.caption).monospacedDigit().foregroundStyle(expires <= now ? palette.danger : palette.fg3)
-                    Spacer(minLength: 4)
-                    if let until = ServerTime.date(shown.extendableUntil), until > now {
-                        Button(extending ? "延长中…" : "延长等待") { Task { await extend() } }.riffetFont(.caption).disabled(extending || !connected || card.frozen)
-                    }
-                }
-                if expired { syncButton }
+            if let message = shown.message, !message.isEmpty {
+                Text(message).riffetFont(isQuestion ? .label : .monoSmall, weight: .regular).lineLimit(3)
+                    .foregroundStyle(palette.fg3)
             }
-            if isInteractionRenderable(interaction: shown) {
-                if selectsOptions, !shown.options.isEmpty { options }
-                if isQuestion, shown.allowOther?.boolValue == true || shown.options.isEmpty {
-                    TextField(shown.options.isEmpty ? "输入回答" : "其他…", text: Binding(get: { current.otherText }, set: changeOther))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(busy || !connected)
-                        .onSubmit(submitOnEnter)
-                    if shown.multiple?.boolValue == true, shown.otherSelected?.boolValue == true {
-                        Text("其他回答暂不能清空。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-                    }
-                }
-                notices
-                if !isQuestion, !selectsOptions { choiceButtons } else { footer }
-            } else {
-                notices
-                Text("这个对话框需要在终端里处理。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
-                if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(.bordered) }
+            if readOnly, let result {
+                Text(result).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).lineLimit(2)
             }
-            if !connected {
-                Text("重连后提交").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).frame(maxWidth: .infinity, alignment: .trailing)
-            }
+            summaryActions
         }
         .padding(16)
         .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 14))
         .accessibilityElement(children: .contain)
+        .sheet(isPresented: $showingDetails) { detailView }
         .task {
+            guard !readOnly else { return }
             while !Task.isCancelled {
                 now = .now
                 do { try await Task.sleep(for: .seconds(1)) } catch { break }
             }
         }
-        .onAppear { drafts.show(interaction, for: key) }
-        .onChange(of: key) { _, key in drafts.show(interaction, for: key) }
-        .onChange(of: interaction) { _, next in drafts.show(next, for: key) }
+        .onAppear { if !readOnly { drafts.show(interaction, for: key) } }
+        .onChange(of: key) { _, key in
+            selectedAction = nil
+            if !readOnly { drafts.show(interaction, for: key) }
+        }
+        .onChange(of: interaction) { _, next in
+            if !readOnly { drafts.show(next, for: key) }
+        }
+        .onChange(of: shown.revision) { _, _ in selectedAction = nil }
+        .onChange(of: submission?.phase) { _, phase in
+            if !readOnly, phase == .success { showingDetails = false }
+        }
+    }
+
+    /// A clipped request is read in the sheet before it can be approved.
+    private var summaryActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { summaryButtons; quickApproval }
+                VStack(alignment: .leading, spacing: 8) { summaryButtons }
+            }
+            if !readOnly, card.frozen || card.notice != nil || card.error != nil || localNotice != nil || localError != nil || expired {
+                Button { showingDetails = true } label: {
+                    Text(summaryNotice).riffetFont(.caption).foregroundStyle(palette.warning).lineLimit(2)
+                }.buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// Text that fits at its unwrapped width is completely visible in the summary above.
+    /// The layout probes have zero height and never write measurements into view state.
+    private var quickApproval: some View {
+        ViewThatFits(in: .horizontal) {
+            if !readOnly, shown.kind == .permission, !selectsOptions,
+               shown.message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
+               shown.actions.allSatisfy({ $0.detail?.isEmpty != false }),
+               title.components(separatedBy: .newlines).count <= 2,
+               (shown.message ?? "").components(separatedBy: .newlines).count <= 3,
+               let action = shown.actions.first(where: { ["approve", "accept", "allow-once"].contains($0.id) && $0.detail == nil }) {
+                VStack(spacing: 0) {
+                    Text(title).riffetFont(.headline).fixedSize().hidden().accessibilityHidden(true).frame(height: 0)
+                    if let message = shown.message, !message.isEmpty {
+                        Text(message).riffetFont(.monoSmall, weight: .regular).fixedSize().hidden().accessibilityHidden(true).frame(height: 0)
+                    }
+                    Button { submit(action.id) } label: {
+                        InteractionButtonLabel(text: action.shortLabel ?? action.label, running: inFlightAction == action.id)
+                    }
+                    .buttonStyle(.borderedProminent).tint(palette.accent).disabled(!connected || busy)
+                    .accessibilityIdentifier("interactionAction.\(action.id)")
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
+            Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder
+    private var summaryButtons: some View {
+        Button("详情") { showingDetails = true }.buttonStyle(.borderless).frame(minHeight: 44)
+        if !readOnly, let action = shown.actions.first(where: { ["cancel", "deny", "decline", "reject"].contains($0.id) && $0.detail == nil }) {
+            Button { submit(action.id) } label: { InteractionButtonLabel(text: action.id == "cancel" ? String(localized: "取消", bundle: .riffet) : String(localized: "拒绝", bundle: .riffet), running: inFlightAction == action.id) }
+                .buttonStyle(.bordered).disabled(!connected || busy)
+                .accessibilityIdentifier("interactionAction.\(action.id)")
+        }
+    }
+
+    private var summaryNotice: String {
+        if let localError { return localError }
+        if let localNotice { return localNotice }
+        if let error = card.error { return error.message ?? String(localized: "发送失败", bundle: .riffet) }
+        if expired { return String(localized: "此请求已过期，请同步最新状态。", bundle: .riffet) }
+        if authenticating || submission?.phase == .posting { return String(localized: "提交中…", bundle: .riffet) }
+        if let submission, let message = submissionMessage(submission) { return message }
+        if card.notice == .draftStale { return String(localized: "题目已更新，旧草稿未提交。", bundle: .riffet) }
+        return String(localized: "暂时无法确认回答是否已提交", bundle: .riffet)
+    }
+
+    private var detailView: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(title).riffetFont(.headline).foregroundStyle(palette.fg).textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let message = shown.message, !message.isEmpty { messageView(message) }
+                    if readOnly, let result { Text(result).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled) }
+                    if !readOnly { expiryNotice }
+                    if isInteractionRenderable(interaction: shown) {
+                        if selectsOptions, !shown.options.isEmpty { options }
+                        if (isQuestion || selectsOptions), shown.allowOther?.boolValue == true || (isQuestion && shown.options.isEmpty) {
+                            TextField(shown.options.isEmpty ? "输入回答" : "其他…", text: Binding(get: { current.otherText }, set: changeOther), axis: .vertical)
+                                .textFieldStyle(.roundedBorder)
+                                .disabled(busy || !connected)
+                                .onSubmit(submitOnEnter)
+                            if shown.multiple?.boolValue == true, shown.otherSelected?.boolValue == true {
+                                Text("其他回答暂不能清空。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+                            }
+                        }
+                        if !isQuestion, !selectsOptions { actionOptions }
+                    } else {
+                        Text("这个对话框需要在终端里处理。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+                        if let openTerminal { Button("打开终端", action: openTerminal).buttonStyle(.bordered) }
+                    }
+                    if !readOnly { notices }
+                    if !connected, !readOnly { Text("重连后提交").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
+                }
+                .padding(16)
+            }
+            .background(palette.bg)
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if !readOnly {
+                        if isInteractionRenderable(interaction: shown) {
+                            if !isQuestion, !selectsOptions { detailActions } else { footer }
+                        } else { submissionActions }
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(palette.bg)
+            }
+            .navigationTitle("审批")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { showingDetails = false } } }
+        }
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+    }
+
+    @ViewBuilder
+    private var expiryNotice: some View {
+        if let expires {
+            HStack(alignment: .firstTextBaseline) {
+                Text(expires <= now ? String(localized: "此请求已过期，请同步最新状态。", bundle: .riffet) : String(localized: "剩余等待时间 \(max(0, Int(expires.timeIntervalSince(now)))) 秒", bundle: .riffet))
+                    .riffetFont(.caption).monospacedDigit().foregroundStyle(expires <= now ? palette.danger : palette.fg3)
+                Spacer(minLength: 4)
+                if let until = ServerTime.date(shown.extendableUntil), until > now {
+                    Button(extending ? "延长中…" : "延长等待") { Task { await extend() } }.riffetFont(.caption).disabled(extending || !connected || card.frozen)
+                }
+            }
+            if expired { syncButton }
+        }
+    }
+
+    private var chosenAction: NativeInteractionAction? {
+        shown.actions.first { $0.id == selectedAction } ?? shown.actions.first { ["approve", "accept", "allow-once"].contains($0.id) && $0.detail == nil }
+    }
+
+    /// Selection stays in the row; the chosen rule is separate selectable reading content.
+    private var actionOptions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(shown.actions, id: \.id) { action in
+                Button { selectedAction = action.id } label: {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: chosenAction?.id == action.id ? "largecircle.fill.circle" : "circle")
+                            .riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
+                        Text(action.shortLabel ?? action.label).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }.multilineTextAlignment(.leading).padding(.vertical, 8).contentShape(Rectangle())
+                }.buttonStyle(.plain).disabled(!connected || busy)
+                if readOnly || chosenAction?.id == action.id {
+                    if let detail = action.detail {
+                        Text(detail).riffetFont(.monoSmall).foregroundStyle(palette.fg3).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 25)
+                    } else if action.shortLabel != nil, action.shortLabel != action.label {
+                        Text(action.label).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.leading, 25)
+                    }
+                }
+            }
+        }
+    }
+
+    private var detailActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            submissionActions
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) { detailButtons }
+                VStack(alignment: .leading, spacing: 8) { detailButtons }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var detailButtons: some View {
+        if let action = shown.actions.first(where: { $0.id == "cancel" && $0.detail == nil }), chosenAction?.id != action.id {
+            Button { submit(action.id) } label: { InteractionButtonLabel(text: String(localized: "取消", bundle: .riffet), running: inFlightAction == action.id) }
+                .buttonStyle(.bordered).disabled(!connected || busy)
+        }
+        if let chosen = chosenAction {
+            Button { submit(chosen.id) } label: {
+                InteractionButtonLabel(text: chosen.shortLabel ?? chosen.label, running: inFlightAction == chosen.id, fallback: String(localized: "提交", bundle: .riffet))
+            }
+            .buttonStyle(.borderedProminent).tint(chosen.tone == "danger" ? palette.danger : palette.accent)
+            .disabled(!connected || busy)
+            .accessibilityIdentifier("interactionAction.\(chosen.id)")
+        } else {
+            Button("提交") {}.buttonStyle(.borderedProminent).disabled(true)
+        }
     }
 
     private var title: String {
@@ -285,27 +466,14 @@ struct InteractionCardView: View {
     @ViewBuilder
     private func messageView(_ message: String) -> some View {
         if shown.kind == .plan {
-            ScrollView {
-                ConversationMarkdown(source: message, workbench: workbench, projectID: workbench.selected?.projectId ?? "", compact: true).frame(maxWidth: .infinity, alignment: .leading).padding(10)
-            }
-            .frame(maxHeight: 320)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(palette.press, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        } else if !isQuestion, !selectsOptions {
-            ScrollView {
-                Text(message)
-                    .riffetFont(.monoSmall)
-                    .foregroundStyle(palette.fg3)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 6)
-            }
-            .frame(maxHeight: 220)
-            .fixedSize(horizontal: false, vertical: true)
-            .background(palette.press, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            ConversationMarkdown(source: message, workbench: workbench, projectID: workbench.selected?.projectId ?? "", compact: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            Text(message).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).lineSpacing(3).textSelection(.enabled)
+            Text(message)
+                .riffetFont(isQuestion ? .label : .monoSmall, weight: .regular)
+                .foregroundStyle(palette.fg3)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -362,28 +530,6 @@ struct InteractionCardView: View {
         }
     }
 
-    /// A permission or a menu: one row per choice in the CLI's order, the focused one primary.
-    private var choiceButtons: some View {
-        let focused = shown.options.first { $0.selected }?.id
-        return VStack(alignment: .leading, spacing: 6) {
-            ForEach(shown.actions, id: \.id) { action in
-                let primary = focused != nil && action.id == "option:\(focused!)"
-                Button { submit(action.id) } label: {
-                    HStack(spacing: 8) {
-                        Text(action.label).frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
-                        // Reserved, so the label keeps its wrap when progress appears.
-                        ProgressView().controlSize(.small).opacity(inFlightAction == action.id ? 1 : 0)
-                    }.frame(minHeight: 32)
-                }
-                .buttonStyle(.bordered).tint(action.tone == "danger" ? palette.danger : palette.accent)
-                .disabled(!connected || busy)
-                .accessibilityIdentifier("interactionAction.\(action.id)")
-                .modifier(DefaultActionIf(enabled: primary))
-            }
-            submissionActions
-        }
-    }
-
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
             submissionActions
@@ -392,8 +538,8 @@ struct InteractionCardView: View {
                 let last = (shown.questionIndex?.int64Value ?? 0) >= (shown.questionCount?.int64Value ?? Int64.max)
                 let label = action.id == "previous" ? String(localized: "上一题", bundle: .riffet)
                     : submits ? (last || action.label.contains("提交") ? String(localized: "提交", bundle: .riffet) : String(localized: "下一题", bundle: .riffet))
-                    : action.id == "skip" ? String(localized: "跳过", bundle: .riffet) : action.label
-                Button { submit(action.id) } label: { InteractionButtonLabel(text: label, running: inFlightAction == action.id) }
+                    : action.id == "skip" ? String(localized: "跳过", bundle: .riffet) : action.shortLabel ?? action.label
+                Button { submit(action.id) } label: { InteractionButtonLabel(text: label, running: inFlightAction == action.id, fallback: String(localized: "提交", bundle: .riffet)) }
                     .buttonStyle(.bordered).tint(action.tone == "danger" ? palette.danger : palette.accent)
                     .disabled(!connected || busy || (submits && !answerPresent))
                     .help(action.id == "skip" ? String(localized: "跳过这组问题", bundle: .riffet) : "")
@@ -464,7 +610,7 @@ struct InteractionCardView: View {
 
     /// Verifies the reader when asked to, checks the request still stands, then posts what [transition] sent.
     private func send(retrying: Bool, _ transition: @escaping (InteractionCardState) -> InteractionCardState?) {
-        guard connected, !authenticating, !extending, retrying || !busy,
+        guard !readOnly, connected, !authenticating, !extending, retrying ? card.canRetry : !busy,
               let pending = transition(card)?.submission else { return }
         let submissionKey = key
         guard drafts.beginSubmission(for: submissionKey) else { return }
@@ -568,8 +714,15 @@ struct InteractionCardView: View {
 private struct InteractionButtonLabel: View {
     let text: String
     let running: Bool
+    var fallback: String? = nil
     var body: some View {
-        ZStack { Text(text).opacity(running ? 0 : 1); if running { ProgressView().controlSize(.small) } }
+        ZStack {
+            ViewThatFits(in: .horizontal) {
+                Text(text).lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                if let fallback { Text(fallback).lineLimit(1) }
+            }.opacity(running ? 0 : 1)
+            if running { ProgressView().controlSize(.small) }
+        }
     }
 }
 

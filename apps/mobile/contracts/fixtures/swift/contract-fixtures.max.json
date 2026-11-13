@@ -4509,7 +4509,9 @@
           {
             "id": "text",
             "label": "text",
-            "tone": "primary"
+            "tone": "primary",
+            "shortLabel": "text",
+            "detail": "text"
           }
         ],
         "expiresAt": "text",
@@ -4553,7 +4555,9 @@
         {
           "id": "text",
           "label": "text",
-          "tone": "primary"
+          "tone": "primary",
+          "shortLabel": "text",
+          "detail": "text"
         }
       ],
       "expiresAt": "text",
@@ -4999,7 +5003,9 @@
           {
             "id": "text",
             "label": "text",
-            "tone": "primary"
+            "tone": "primary",
+            "shortLabel": "text",
+            "detail": "text"
           }
         ],
         "expiresAt": "text",
@@ -5046,7 +5052,9 @@
         {
           "id": "text",
           "label": "text",
-          "tone": "primary"
+          "tone": "primary",
+          "shortLabel": "text",
+          "detail": "text"
         }
       ],
       "expiresAt": "text",

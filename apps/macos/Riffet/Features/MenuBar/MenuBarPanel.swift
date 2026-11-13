@@ -72,13 +72,50 @@ struct MenuBarPanel: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.openSettings) private var openSettings
     @State private var windowAnchor = NSView()
+    @State private var approvalSession: Session?
+    @State private var approvalInteraction: NativeInteraction?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             header.padding(.leading, Space.sm)
             ServiceAlertBanner(compact: true)
             if let workbench = model.workbench {
-                sessions(workbench)
+                if let session = approvalSession, let interaction = approvalInteraction {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Button { approvalSession = nil; approvalInteraction = nil } label: { Image(icon: "chevron.left") }
+                                .buttonStyle(IconButtonStyle()).accessibilityLabel(Text("返回"))
+                            Text("审批").font(.riffet(size: S(13), weight: .semibold)).lineLimit(1)
+                            Spacer()
+                        }
+                        .padding(.horizontal, Space.sm).padding(.vertical, Space.xs)
+                        Divider()
+                        InteractionCardView(workbench: workbench, interaction: interaction, sessionID: session.id, detailsOnly: true, onInteractionChange: { fresh in
+                            guard approvalSession?.id == session.id,
+                                  approvalInteraction?.id == interaction.id,
+                                  approvalInteraction?.revision == interaction.revision else { return }
+                            approvalInteraction = fresh
+                            if fresh == nil { approvalSession = nil }
+                        })
+                            .frame(height: min(520, max(280, (NSScreen.main?.visibleFrame.height ?? 800) - 180)))
+                    }
+                    .task(id: workbench.waitingSessions.first(where: { $0.id == session.id })?.updatedAt) {
+                        let requested = approvalInteraction
+                        do {
+                            let fresh = try await workbench.store.currentInteraction(sessionId: session.id)
+                            guard !Task.isCancelled, approvalSession?.id == session.id,
+                                  approvalInteraction?.id == requested?.id,
+                                  approvalInteraction?.revision == requested?.revision else { return }
+                            approvalInteraction = fresh
+                            if fresh == nil { approvalSession = nil }
+                        } catch { /* Keep the request and its retry controls during a transient disconnect. */ }
+                    }
+                    .onChange(of: workbench.waitingSessions.map(\.id)) { _, ids in
+                        if !ids.contains(session.id) { approvalSession = nil; approvalInteraction = nil }
+                    }
+                } else {
+                    sessions(workbench)
+                }
             } else {
                 Text(phaseText).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg3).padding(.horizontal, Space.sm)
             }
@@ -136,7 +173,10 @@ struct MenuBarPanel: View {
                         .transition(.opacity)
                 }
                 ForEach(waiting, id: \.id) { session in
-                    WaitingRow(workbench: workbench, session: session) { open(workbench, session) }
+                    WaitingRow(workbench: workbench, session: session, open: { open(workbench, session) }) { interaction in
+                        approvalSession = session
+                        approvalInteraction = interaction
+                    }
                         .transition(.opacity)
                 }
                 ForEach(running, id: \.id) { session in
@@ -231,72 +271,37 @@ private struct MenuBarWindowAnchor: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {}
 }
 
-/// A conversation waiting for an answer, with the dialog's buttons when buttons can answer it.
+/// Menu approvals expose at most three preview lines; the complete request opens in the panel.
 struct WaitingRow: View {
     let workbench: Workbench
     let session: Session
     let open: () -> Void
+    let showDetails: (NativeInteraction) -> Void
     @Environment(\.palette) private var palette
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var interaction: NativeInteraction?
-    @State private var busy = false
-    @State private var error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: Space.sm) {
             Button(action: open) {
-                HStack(spacing: 8) {
-                    Circle().fill(palette.warning).frame(width: 7, height: 7)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(session.title.ifEmpty(String(localized: "新会话"))).font(RiffetFont.label).lineLimit(1)
-                        Text(interaction?.title ?? String(localized: "等待你确认")).font(.riffet(size: S(11))).foregroundStyle(palette.fg3).lineLimit(2)
-                    }
-                    Spacer()
+                HStack(alignment: .top, spacing: Space.sm) {
+                    Circle().fill(palette.warning).frame(width: 6, height: 6).padding(.top, 6)
+                    Text(session.title.ifEmpty(String(localized: "新会话"))).font(RiffetFont.label).lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             if let interaction {
-                let choices = interactionChoices(interaction: interaction, limit: 3)
-                if !choices.isEmpty {
-                    HStack {
-                        ForEach(choices.indices, id: \.self) { index in
-                            Button(choices[index].label) { answer(choices[index], interaction) }
-                                .buttonStyle(SolidButtonStyle(kind: index == 0 ? .primary : .secondary))
-                                .disabled(busy)
-                        }
-                    }
-                    .padding(.leading, 15)
-                }
-            }
-            if let error {
-                Text(error).font(.riffet(size: S(11))).foregroundStyle(palette.danger).lineLimit(3).padding(.leading, 15)
+                InteractionCardView(workbench: workbench, interaction: interaction, sessionID: session.id, summaryOnly: true, onOpenDetails: { showDetails(interaction) }, summaryTitle: session.title)
+            } else {
+                Text("等待你确认").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
             }
         }
         .padding(Space.sm)
-        .background(palette.warningSoft, in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
-        // The dialog's buttons arrive after the row: the row opens to them instead of jumping.
         .animation(reduceMotion ? nil : Motion.standard, value: interaction?.id)
         .task(id: session.updatedAt) {
             interaction = try? await workbench.store.currentInteraction(sessionId: session.id)
-        }
-    }
-
-    /// Goes through Touch ID like the conversation's own card does; a refusal or a failure is
-    /// shown on the row instead of being dropped.
-    private func answer(_ choice: InteractionChoice, _ interaction: NativeInteraction) {
-        busy = true
-        error = nil
-        Task {
-            do {
-                try await QuickApproval.submit(
-                    workbench: workbench, sessionId: session.id, interactionId: interaction.id, revision: interaction.revision,
-                    permission: interaction.kind == .permission, action: choice.action, selectedIds: choice.selectedIds
-                )
-            } catch {
-                self.error = error.riffetMessage
-            }
-            busy = false
         }
     }
 }

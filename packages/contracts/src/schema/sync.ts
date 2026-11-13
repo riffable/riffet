@@ -157,7 +157,10 @@ export const NativeInteractionSchema = z.object({
   otherSelected: z.boolean().optional(),
   questionIndex: z.number().optional(),
   questionCount: z.number().optional(),
-  actions: z.array(z.object({ id: z.string(), label: z.string(), tone: z.enum(['primary', 'danger']).meta({ open: true }).optional() })),
+  actions: z.array(z.object({
+    id: z.string(), label: z.string(), tone: z.enum(['primary', 'danger']).meta({ open: true }).optional(),
+    shortLabel: z.string().optional(), detail: z.string().optional(),
+  })),
   expiresAt: z.string().optional(),
   extendableUntil: z.string().optional(),
 });

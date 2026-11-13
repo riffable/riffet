@@ -50,9 +50,13 @@ final class ConversationInteractionLedger {
                     records[index].result = nil
                     records[index].confirmed = false
                     records[index].waiting = true
-                } else if !records[index].confirmed {
-                    records[index].waiting = true
-                    records[index].result = nil
+                } else {
+                    // Same identity can gain display metadata without changing its decision.
+                    records[index].interaction = interaction
+                    if !records[index].confirmed {
+                        records[index].waiting = true
+                        records[index].result = nil
+                    }
                 }
             } else { records.append(Record(id: interaction.id, interaction: interaction, afterRow: row)) }
         } else if authoritative {

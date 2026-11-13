@@ -92,6 +92,8 @@
     <string name="timeline_copy_answer">Copy answer</string>
 
     <!-- Interaction cards -->
+    <string name="timeline_interaction_approval">Approval</string>
+    <string name="timeline_interaction_scope">Scope</string>
     <string name="timeline_interaction_draft_stale">The question changed; the old draft was not submitted.</string>
     <string name="timeline_interaction_result_uncertain">Unable to confirm whether the response was submitted</string>
     <string name="timeline_interaction_changed">The question changed. Sync and continue.</string>

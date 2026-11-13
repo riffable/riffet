@@ -780,6 +780,8 @@ data class NativeInteractionAction(
     val id: String,
     val label: String,
     val tone: String? = null,
+    val shortLabel: String? = null,
+    val detail: String? = null,
 )
 
 @Serializable
