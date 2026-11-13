@@ -98,7 +98,7 @@ struct WorkbenchView: View {
                 NavigationSplitView(columnVisibility: $columns) {
                     SidebarView(workbench: workbench)
                         .opacity(sidebarOpacity)
-                        .navigationSplitViewColumnWidth(min: 210, ideal: 268, max: 400)
+                        .navigationSplitViewColumnWidth(min: 210, ideal: StyleSpec.native.layout.sidebarWidth, max: 400)
                 } detail: {
                     workspace.toolbar { toolbar }.toolbarBackgroundVisibility(toolbarBackground, for: .windowToolbar)
                 }
@@ -334,7 +334,7 @@ struct WorkbenchView: View {
     /// The sidebar column's width: the split view's ideal one, or the drawn sidebar's own.
     private var sidebarColumnWidth: CGFloat {
         let style = DisplayPreferences.shared.style
-        return style.backend == .custom ? CustomChrome.sidebarWidth(stored: customSidebarWidth, style: style) : 268
+        return style.backend == .custom ? CustomChrome.sidebarWidth(stored: customSidebarWidth, style: style) : StyleSpec.native.layout.sidebarWidth
     }
 
     /// The drawn title bar of a custom style, over the whole content or the conversation's column.

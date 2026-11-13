@@ -180,7 +180,7 @@ struct TypographySettings: View {
                 }
 
                 SettingsRow("阅读宽度") {
-                    SettingsNumberSlider(value: $prefs.contentWidth, range: 640...1600, step: 20, suffix: " pt", defaultValue: 640)
+                    SettingsNumberSlider(value: $prefs.contentWidth, range: 640...1600, step: 20, suffix: " pt", defaultValue: DisplayPreferences.defaultContentWidth)
                 }
 
                 SettingsRow("章节导航") {

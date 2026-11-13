@@ -69,7 +69,7 @@ struct StyleSpec: Sendable, Equatable {
     static let native = StyleSpec(
         backend: .native, titleBar: .unified, window: .system, sidebar: .systemList, header: .toolbar, rightPanel: .inspector, composer: .card, toolRun: .summary, home: .tiles, approval: .stack, settings: .window, surface: .raised, block: .filled, form: .grouped, menu: .system, selection: .wash,
         radii: Radii(control: 6, container: 10, card: 10, floating: 14),
-        layout: Layout(sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340),
+        layout: Layout(sidebarWidth: 248, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340),
         text: Text(body: 13, secondary: 12, label: 11),
         icons: "sf-symbols",
         fonts: Fonts(ui: "system", mono: "system")
@@ -77,7 +77,7 @@ struct StyleSpec: Sendable, Equatable {
     static let riffet = StyleSpec(
         backend: .custom, titleBar: .unified, window: .insetCard, sidebar: .projectTree, header: .sessionTabs, rightPanel: .outline, composer: .card, toolRun: .summary, home: .tiles, approval: .rows, settings: .modal, surface: .raised, block: .filled, form: .grouped, menu: .drawn, selection: .block,
         radii: Radii(control: 8, container: 10, card: 12, floating: 16),
-        layout: Layout(sidebarWidth: 256, sidebarRow: 30, sidebarGap: 8, header: 44, rightPanel: 320),
+        layout: Layout(sidebarWidth: 236, sidebarRow: 30, sidebarGap: 8, header: 44, rightPanel: 320),
         text: Text(body: 14, secondary: 13, label: 12),
         icons: "web",
         fonts: Fonts(ui: "Inter", mono: "JetBrains Mono")
@@ -85,7 +85,7 @@ struct StyleSpec: Sendable, Equatable {
     static let line = StyleSpec(
         backend: .custom, titleBar: .compact, window: .flat, sidebar: .timeGroups, header: .titleMenu, rightPanel: .panels, composer: .line, toolRun: .list, home: .docked, approval: .inline, settings: .modal, surface: .outlined, block: .outlined, form: .lined, menu: .drawn, selection: .block,
         radii: Radii(control: 8, container: 8, card: 10, floating: 12),
-        layout: Layout(sidebarWidth: 272, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340),
+        layout: Layout(sidebarWidth: 248, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340),
         text: Text(body: 14, secondary: 13, label: 12),
         icons: "lucide",
         fonts: Fonts(ui: "system", mono: "system")

@@ -59,68 +59,6 @@ struct Spinner: NSViewRepresentable {
     }
 }
 
-/// [content] breathing (opacity 1 ↔ 0.4, 1.8 s) on Core Animation: the one looping animation the
-/// native style keeps, for work in progress. A SwiftUI animation would update the view each frame;
-/// the layer animates without SwiftUI. Still under Reduce Motion.
-struct Breathing<Content: View>: NSViewRepresentable {
-    /// Holds still, a little dimmed, while the window is inactive.
-    var paused = false
-    @ViewBuilder var content: Content
-
-    final class Host: NSHostingView<Content> {
-        var paused = false
-
-        /// Only a picture: clicks and menus belong to the row around it.
-        override func hitTest(_ point: NSPoint) -> NSView? { nil }
-
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            breathe()
-        }
-
-        func breathe() {
-            wantsLayer = true
-            guard let layer, window != nil else { return }
-            layer.opacity = paused ? 0.7 : 1
-            if paused {
-                layer.removeAnimation(forKey: "breath")
-                return
-            }
-            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
-                layer.removeAnimation(forKey: "breath")
-                return
-            }
-            guard layer.animation(forKey: "breath") == nil else { return }
-            let animation = CABasicAnimation(keyPath: "opacity")
-            animation.fromValue = 1
-            animation.toValue = 0.4
-            animation.duration = 0.9
-            animation.autoreverses = true
-            // motion-loop: in-progress breathing, removed under Reduce Motion
-            animation.repeatCount = .infinity
-            animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            animation.isRemovedOnCompletion = false
-            layer.add(animation, forKey: "breath")
-        }
-    }
-
-    func makeNSView(context: Context) -> Host {
-        let host = Host(rootView: content)
-        host.paused = paused
-        return host
-    }
-
-    func updateNSView(_ host: Host, context: Context) {
-        host.rootView = content
-        host.paused = paused
-        host.breathe()
-    }
-
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: Host, context: Context) -> CGSize? {
-        nsView.fittingSize
-    }
-}
-
 /// A button drawn by its own label that opens an AppKit menu of [options] under itself. A SwiftUI
 /// `Menu` styled `.borderlessButton` ignores the label's styling on macOS 26 (an accent-coloured
 /// title with the chevron in front), so the look of selects is ours this way.

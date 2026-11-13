@@ -175,8 +175,8 @@ struct CustomSessionRow: View, Equatable {
     /// The hover card's text, composed only as the card is about to show.
     let info: () -> SessionHoverInfo
     let selected: Bool
-    /// The agent's mark leads the row.
-    let leadingAgent: Bool
+    /// The title sits under its project's name, past the icon column.
+    let indented: Bool
     /// The relative time, shown at the trailing edge while no state or mark takes it.
     let activity: String?
     let style: StyleSpec
@@ -188,17 +188,14 @@ struct CustomSessionRow: View, Equatable {
     @State private var hovering = false
 
     static func == (lhs: CustomSessionRow, rhs: CustomSessionRow) -> Bool {
-        lhs.session == rhs.session && lhs.selected == rhs.selected && lhs.leadingAgent == rhs.leadingAgent
+        lhs.session == rhs.session && lhs.selected == rhs.selected && lhs.indented == rhs.indented
             && lhs.activity == rhs.activity && lhs.style == rhs.style
     }
 
     var body: some View {
         Button(action: open) {
             HStack(spacing: Space.sm) {
-                if leadingAgent, let agent = session.agent {
-                    AgentIcon(id: agent, size: 14, color: agentMarkColor(agent, palette) ?? palette.fg3)
-                        .frame(width: iconColumn)
-                }
+                if indented { Color.clear.frame(width: iconColumn, height: 0) }
                 Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
                     .font(.riffet(size: S(style.text.body)))
                     .lineLimit(1)

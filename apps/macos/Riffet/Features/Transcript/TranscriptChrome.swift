@@ -628,7 +628,7 @@ final class WidthHandleView: NSView {
 
     override func mouseDown(with event: NSEvent) {
         if event.clickCount == 2 {
-            MainActor.assumeIsolated { DisplayPreferences.shared.contentWidth = 640 }
+            MainActor.assumeIsolated { DisplayPreferences.shared.contentWidth = DisplayPreferences.defaultContentWidth }
             return
         }
         start = (event.locationInWindow.x, MainActor.assumeIsolated { DisplayPreferences.shared.contentWidth })

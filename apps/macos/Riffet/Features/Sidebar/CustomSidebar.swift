@@ -239,14 +239,14 @@ struct CustomSidebar: View {
 
     private func projectLines(_ style: StyleSpec) -> [SidebarLine] {
         let hidden = Set(collapsed.split(separator: ",").map(String.init))
-        let marked = style.sidebar == .projectTree
+        let tree = style.sidebar == .projectTree
         var lines: [SidebarLine] = []
         for group in workbench.sidebar.groups {
             let open = group.forceOpen || !hidden.contains(group.project.id)
             lines.append(.project(group, open: open))
             guard open else { continue }
             let slice = workbench.sidebar.slice(for: group)
-            lines += slice.sessions.map { .session($0, leadingAgent: marked, timed: marked) }
+            lines += slice.sessions.map { .session($0, indented: tree, timed: tree) }
             if slice.hiddenCount > 0 { lines.append(.expand(group, hidden: slice.hiddenCount)) }
             else if slice.canCollapse { lines.append(.collapse(group)) }
             if group.sessions.isEmpty { lines.append(.empty(group)) }
@@ -287,7 +287,7 @@ struct CustomSidebar: View {
         var lines: [SidebarLine] = []
         for (index, bucket) in buckets.enumerated() where !bucket.sessions.isEmpty {
             lines.append(.label(bucket.label, first: index == 0))
-            lines += bucket.sessions.map { .session($0, leadingAgent: true, timed: true) }
+            lines += bucket.sessions.map { .session($0, indented: false, timed: true) }
         }
         return lines
     }
@@ -319,7 +319,7 @@ struct CustomSidebar: View {
             lines.append(.band(section, open: open, filters: section.id == filtered))
             guard open else { continue }
             let visible = workbench.sidebar.shown(section)
-            lines += visible.sessions.map { .session($0, leadingAgent: false, timed: false) }
+            lines += visible.sessions.map { .session($0, indented: false, timed: false) }
             if visible.more { lines.append(.more) }
         }
         return lines
@@ -360,21 +360,21 @@ struct CustomSidebar: View {
             Text("暂无会话").font(.riffet(size: S(style.text.secondary))).foregroundStyle(palette.fg4)
                 .padding(.leading, Space.sm + Space.xxs + 16 + Space.sm)
                 .frame(height: style.layout.sidebarRow)
-        case let .session(session, leadingAgent, timed):
-            sessionRow(session, style: style, leadingAgent: leadingAgent, timed: timed)
+        case let .session(session, indented, timed):
+            sessionRow(session, style: style, indented: indented, timed: timed)
         }
     }
 
     // MARK: Rows
 
-    private func sessionRow(_ session: Session, style: StyleSpec, leadingAgent: Bool, timed: Bool) -> some View {
+    private func sessionRow(_ session: Session, style: StyleSpec, indented: Bool, timed: Bool) -> some View {
         let project = workbench.project(session.projectId)
         let now = Int64(workbench.minute.timeIntervalSince1970 * 1000)
         return CustomSessionRow(
             session: session,
             info: { sessionHoverInfo(session: session, project: project?.name, models: workbench.catalogs.cached(for: session)?.models ?? [], now: now) },
             selected: workbench.sidebarRowSelected(session),
-            leadingAgent: leadingAgent,
+            indented: indented,
             activity: timed ? relativeLabel(value: activityAt(session: session), now: now) : nil,
             style: style,
             menu: workbench.sidebarRowMenu(for: session, rename: { renameText = session.title; renaming = session }, editTags: { taggingSession = session }),
@@ -427,7 +427,7 @@ private enum SidebarLine: Identifiable {
     case expand(ProjectGroup, hidden: Int)
     case collapse(ProjectGroup)
     case empty(ProjectGroup)
-    case session(Session, leadingAgent: Bool, timed: Bool)
+    case session(Session, indented: Bool, timed: Bool)
 
     var id: String {
         switch self {

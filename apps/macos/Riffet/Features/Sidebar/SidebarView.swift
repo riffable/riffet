@@ -355,10 +355,6 @@ struct SessionRow: View, Equatable {
 
     var body: some View {
         HStack(spacing: Space.sm) {
-            // The agent always leads, so a busy or waiting row still says whose it is; the state
-            // sits at the trailing edge.
-            // A running conversation's own mark breathes; there is no spinner beside it.
-            SessionAgentMark(backend: session.agent, running: SessionStatePill.running(session.state))
             VStack(alignment: .leading, spacing: 1) {
                 Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
                     .font(.riffet(size: S(13), weight: unread ? .semibold : selected ? .medium : .regular))
@@ -384,8 +380,7 @@ struct SessionRow: View, Equatable {
             if SessionStatePill.shows(session.state) {
                 SessionStatePill(state: session.state)
             } else if SessionStatePill.running(session.state) {
-                // The agent mark breathes instead; without one, the spinner still says it runs.
-                if session.agent == nil { Spinner(size: .mini) }
+                Spinner(size: .mini).help("运行中").accessibilityLabel("运行中")
             } else if unread {
                 Circle().fill(palette.fg).frame(width: 6, height: 6).accessibilityLabel("未读")
             } else if session.terminalHold != nil {
@@ -500,22 +495,15 @@ struct SessionStatePill: View {
     }
 }
 
-/// The agent a conversation runs on, in its own colour; it breathes while the agent works.
+/// The agent a conversation runs on, in its own colour.
 struct SessionAgentMark: View {
     let backend: String?
-    var running = false
     @Environment(\.palette) private var palette
-    @Environment(\.appearsActive) private var appearsActive
 
     var body: some View {
         Group {
             if let backend {
-                let icon = AgentIcon(id: backend, size: 12, color: agentMarkColor(backend, palette) ?? palette.fg3)
-                if running {
-                    Breathing(paused: !appearsActive) { icon }.help("运行中").accessibilityLabel("运行中")
-                } else {
-                    icon
-                }
+                AgentIcon(id: backend, size: 12, color: agentMarkColor(backend, palette) ?? palette.fg3)
             } else {
                 Color.clear
             }

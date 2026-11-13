@@ -246,6 +246,8 @@ final class DisplayPreferences {
     var terminalHorizontalPadding: Double { didSet { save(PreferenceKey.terminalHorizontalPadding, terminalHorizontalPadding) } }
     var terminalVerticalPadding: Double { didSet { save(PreferenceKey.terminalVerticalPadding, terminalVerticalPadding) } }
     var contentWidth: Double { didSet { save(PreferenceKey.contentWidth, contentWidth) } }
+    /// The reading column until the reader drags or sets it; 640 is the narrowest it goes.
+    static let defaultContentWidth: Double = 760
     var chapterNavigation: Bool { didSet { save(PreferenceKey.chapterNavigation, chapterNavigation) } }
     var sessionOverview: Bool { didSet { save(PreferenceKey.sessionOverview, sessionOverview) } }
     var railDots: Bool { didSet { save(PreferenceKey.railDots, railDots) } }
@@ -288,7 +290,7 @@ final class DisplayPreferences {
             defaults.object(forKey: PreferenceKey.terminalVerticalPadding),
             defaultValue: Self.defaultTerminalVerticalPadding, in: 0...32
         )
-        contentWidth = defaults.object(forKey: PreferenceKey.contentWidth) as? Double ?? 640
+        contentWidth = defaults.object(forKey: PreferenceKey.contentWidth) as? Double ?? DisplayPreferences.defaultContentWidth
         chapterNavigation = defaults.object(forKey: PreferenceKey.chapterNavigation) as? Bool ?? true
         sessionOverview = defaults.object(forKey: PreferenceKey.sessionOverview) as? Bool ?? true
         railDots = defaults.object(forKey: PreferenceKey.railDots) as? Bool ?? false

@@ -134,7 +134,8 @@ struct CustomWorkbench<Header: View, Content: View>: View {
             .overlay(alignment: .trailing) {
                 SidebarResizeHandle(
                     dragged: $draggedWidth, current: width, drawn: style.window == .flat,
-                    commit: { storedSidebarWidth = CustomChrome.clamp($0) }
+                    commit: { storedSidebarWidth = CustomChrome.clamp($0) },
+                    reset: { storedSidebarWidth = 0 }
                 )
             }
             .shadow(color: .black.opacity(peeking && !sidebarShown ? 0.16 : 0), radius: 12, x: 2)
@@ -200,6 +201,8 @@ private struct SidebarResizeHandle: View {
     let current: CGFloat
     let drawn: Bool
     let commit: (Double) -> Void
+    /// A double-click: back to the style's own width.
+    let reset: () -> Void
     @Environment(\.palette) private var palette
     @State private var start: CGFloat?
     @State private var hovering = false
@@ -214,6 +217,7 @@ private struct SidebarResizeHandle: View {
                     .pointerStyle(.columnResize)
             )
             .onHover { hovering = $0 }
+            .onTapGesture(count: 2, perform: reset)
             .gesture(
                 DragGesture(minimumDistance: 1, coordinateSpace: .global)
                     .onChanged { value in
