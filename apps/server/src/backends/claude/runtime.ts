@@ -988,6 +988,12 @@ export class ClaudeSessionRuntime {
     if (this.disposed) return;
     const id = activityId('claude', `compaction:${deliveryId}`);
     const at = new Date().toISOString();
+    // The `/compact` being sent is running: its rows only come at the boundary, long after the receipt window.
+    const send = this.pendingSend;
+    if (trigger === 'manual' && send?.compact && send.fenced && !send.receiptSettled) {
+      send.compactionStarted = true;
+      send.receiptWake?.();
+    }
     this.transcript.compactionHooked(id, trigger, at);
     await this.host.transcript?.withSource(this.session.id, (source, w) =>
       source instanceof ClaudeTranscriptSource ? source.compactionHooked(w, id, trigger, at) : undefined).catch(() => undefined);
@@ -1436,7 +1442,7 @@ export class ClaudeSessionRuntime {
     // safely requeued CLI_BUSY/TERMINAL_INTERACTION_BUSY does not become an unhandled rejection.
     void receipt.catch(() => undefined);
     const pending: PendingSend = {
-      commandId: request.commandId, runId: request.runId, text, command: isSlashCommand, baselineUserIds, echo,
+      commandId: request.commandId, runId: request.runId, text, command: isSlashCommand, compact, baselineUserIds, echo,
       promptSeen: false, fenced: false, resolveReceipt, rejectReceipt, receipt, receiptSettled: false,
     };
     this.pendingSend = pending;
@@ -1531,8 +1537,8 @@ export class ClaudeSessionRuntime {
     const woken = new Promise<true>(resolve => { pending.receiptWake = () => resolve(true); });
     try {
       // The CLI holding the text in its own queue is a receipt too: it will turn it into a prompt when
-      // it is free, and the row that does is claimed through `queuedSends`.
-      while (!pending.receiptSettled && !pending.queued) {
+      // it is free, and the row that does is claimed through `queuedSends`. So is a `/compact` whose hook fired.
+      while (!pending.receiptSettled && !pending.queued && !pending.compactionStarted) {
         checkSendInterrupt(pending);
         const remaining = deadline - Date.now();
         if (remaining <= 0) {

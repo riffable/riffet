@@ -45,6 +45,10 @@ export interface PendingSend {
   stopRequested?: boolean;
   /** The CLI queued it (a `queue-operation` enqueue): it holds the text, and a prompt row follows when it takes it. */
   queued?: boolean;
+  /** A `/compact`: since 2.1.322 it writes no row until its boundary, so its manual PreCompact hook is the receipt. */
+  compact?: boolean;
+  /** That hook was heard after the fence: the CLI took the command, and the boundary rows confirm the run later. */
+  compactionStarted?: boolean;
   /** Ends the receipt wait early; set while `awaitReceipt` is waiting. */
   receiptWake?: () => void;
   /** A stop preempts waiting for delivery; it does not assert that the CLI stopped. */
