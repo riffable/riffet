@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 724" width="1200" height="724" role="img" aria-label="Riffet layering" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', sans-serif">
+<style>.m{font-family:ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace}</style>
+<rect width="1200" height="724" fill="#ffffff"/>
+<g transform="translate(22 19) scale(0.92)"><path d="M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z" fill="#3867f0" stroke="#3867f0" stroke-width="0.6" stroke-linejoin="round"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8ZM11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z" fill="#15171a" fill-rule="evenodd"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z" fill="none" stroke="#15171a" stroke-width="1" stroke-linejoin="round"/></g>
+<text x="50" y="37" font-size="14" fill="#15171a"><tspan font-weight="600">Riffet</tspan><tspan dx="8" fill="#4c5158">Layering</tspan></text>
+<text x="1176" y="37" font-size="10" font-weight="400" fill="#6e737b" text-anchor="end" class="m">fig. 6 · development view · riffet 0.7.0 · Node.js ≥ 24.19</text>
+<path d="M24 54L1176 54" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="86" font-size="9.5" fill="#6e737b" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">APPS/SERVER/SRC</tspan><tspan dx="8" class="m" font-size="10">scripts/check-layers.mjs</tspan></text>
+<rect x="24" y="98" width="780" height="60" rx="7" fill="#f4f2ee" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="122" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">root</text>
+<text x="76" y="122" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">open</text>
+<text x="790" y="122" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">the only place that knows every module</text>
+<text x="38" y="143" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">app.ts · index.ts · cli*.ts · doctor.ts</text>
+<rect x="24" y="168" width="780" height="60" rx="7" fill="#ffffff" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="192" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">surfaces</text>
+<text x="104" y="192" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">closed</text>
+<text x="790" y="192" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">protocol translation</text>
+<text x="38" y="213" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">routes/ · channels/</text>
+<rect x="24" y="238" width="250" height="60" rx="7" fill="#ffffff" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="262" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">drivers</text>
+<text x="97" y="262" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">closed</text>
+<text x="260" y="262" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">one agent each</text>
+<text x="38" y="283" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">backends/&lt;name&gt;/</text>
+<rect x="286" y="238" width="518" height="60" rx="7" fill="#ffffff" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="300" y="262" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">features</text>
+<text x="366" y="262" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">closed</text>
+<text x="790" y="262" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">one capability each</text>
+<text x="300" y="283" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">git · workspace · orchestration · tasks · stats · search · plugins-host · …</text>
+<rect x="24" y="308" width="780" height="60" rx="7" fill="#f4f2ee" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="332" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">kit</text>
+<text x="69" y="332" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">open</text>
+<text x="790" y="332" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">mechanisms drivers share: subprocess, hooks, waiting</text>
+<text x="38" y="353" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">backends/shared/ · adapters/</text>
+<rect x="24" y="378" width="780" height="60" rx="7" fill="#f4f2ee" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="402" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">kernel</text>
+<text x="90" y="402" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">open</text>
+<text x="790" y="402" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">the read and write spine of a session; names no concrete backend</text>
+<text x="38" y="423" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">store.ts · journal · timeline · sync · native · backends/*.ts · terminal · agent-host · settings · auxiliary</text>
+<rect x="24" y="448" width="780" height="60" rx="7" fill="#f4f2ee" stroke="rgb(21 23 26 / 0.14)" stroke-width="1"/>
+<text x="38" y="472" font-size="12.5" font-weight="600" fill="#15171a" text-anchor="start">base</text>
+<text x="76" y="472" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start" class="m">open</text>
+<text x="790" y="472" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="end">knows nothing of sessions</text>
+<text x="38" y="493" font-size="10" font-weight="400" fill="#4c5158" text-anchor="start" class="m">errors · environment · exec · auth · pairing · discovery · metrics · prompts · …</text>
+<path d="M826 98L826 508" stroke="#15171a" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M822.5 503L826 508L829.5 503" stroke="#15171a" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="850" y="86" font-size="9.5" fill="#6e737b" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">RULES</tspan></text>
+<rect x="896" y="76" width="22" height="14" rx="7" fill="none" stroke="#3867f0" stroke-width="1"/>
+<text x="907" y="86.5" font-size="9" font-weight="600" fill="#3867f0" text-anchor="middle" class="m">P7</text>
+<text x="850" y="112" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">imports</text>
+<text x="850" y="127" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">A file imports its own module and</text>
+<text x="850" y="141" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">modules of lower layers.</text>
+<text x="850" y="169" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">open</text>
+<text x="850" y="184" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">Modules of the layer may import</text>
+<text x="850" y="198" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">each other.</text>
+<text x="850" y="226" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">closed</text>
+<text x="850" y="241" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">No imports between sibling modules.</text>
+<text x="850" y="255" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">What they need from each other is</text>
+<text x="850" y="269" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">passed in by app.ts.</text>
+<text x="850" y="297" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">check</text>
+<text x="850" y="312" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">pnpm check:layers runs in CI. Module</text>
+<text x="850" y="326" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">pairs that cross a layer are counted;</text>
+<text x="850" y="340" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">the count in layers-baseline.json may</text>
+<text x="850" y="354" font-size="10.5" font-weight="400" fill="#4c5158" text-anchor="start">only go down.</text>
+<path d="M24 536L1176 536" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="558" font-size="9.5" fill="#6e737b" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">WORKSPACE</tspan><tspan dx="8" class="m" font-size="10">who imports which shared package</tspan></text>
+<text x="319" y="582" font-size="10" font-weight="400" fill="#4c5158" text-anchor="middle" class="m">packages/contracts</text>
+<text x="469" y="582" font-size="10" font-weight="400" fill="#4c5158" text-anchor="middle" class="m">packages/timeline</text>
+<text x="619" y="582" font-size="10" font-weight="400" fill="#4c5158" text-anchor="middle" class="m">packages/plugin-api</text>
+<text x="769" y="582" font-size="10" font-weight="400" fill="#4c5158" text-anchor="middle" class="m">packages/plugin-web</text>
+<path d="M24 589L844 589" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="604" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">apps/server</text>
+<circle cx="319" cy="600.5" r="3.5" fill="#15171a"/>
+<circle cx="469" cy="600.5" r="3.5" fill="#15171a"/>
+<circle cx="619" cy="600.5" r="3.5" fill="#15171a"/>
+<path d="M24 613L844 613" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="628" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">apps/web</text>
+<circle cx="319" cy="624.5" r="3.5" fill="#15171a"/>
+<circle cx="469" cy="624.5" r="3.5" fill="#15171a"/>
+<circle cx="769" cy="624.5" r="3.5" fill="#15171a"/>
+<path d="M24 637L844 637" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="652" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">plugins/riffet/*</text>
+<circle cx="319" cy="648.5" r="3.5" fill="#15171a"/>
+<circle cx="619" cy="648.5" r="3.5" fill="#15171a"/>
+<circle cx="769" cy="648.5" r="3.5" fill="#15171a"/>
+<path d="M24 661L844 661" stroke="rgb(21 23 26 / 0.14)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="676" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">apps/mobile</text>
+<text x="319" y="676" font-size="10" font-weight="400" fill="#4c5158" text-anchor="middle" class="m">fixtures</text>
+<text x="880" y="582" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="start">apps/server and apps/web do not import each other.</text>
+<text x="880" y="598" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="start">apps/mobile :contracts: hand-written Kotlin DTOs,</text>
+<text x="880" y="614" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="start">checked against fixtures from packages/contracts.</text>
+<text x="880" y="630" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="start">apps/macos links apps/mobile :client as RiffetKit.</text>
+<text x="880" y="646" font-size="10.5" font-weight="400" fill="#6e737b" text-anchor="start">Plugins reach the server through packages/plugin-api.</text>
+</svg>

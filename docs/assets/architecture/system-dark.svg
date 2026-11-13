@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1000" width="1200" height="1000" role="img" aria-label="Riffet system architecture" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', sans-serif">
+<style>.m{font-family:ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace}</style>
+<rect width="1200" height="1000" fill="#0d1117"/>
+<g transform="translate(22 19) scale(0.92)"><path d="M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z" fill="#5b8cff" stroke="#5b8cff" stroke-width="0.6" stroke-linejoin="round"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8ZM11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z" fill="#f4f2ee" fill-rule="evenodd"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z" fill="none" stroke="#f4f2ee" stroke-width="1" stroke-linejoin="round"/></g>
+<text x="50" y="37" font-size="14" fill="#f4f2ee"><tspan font-weight="600">Riffet</tspan><tspan dx="8" fill="#bfc2c8">System architecture</tspan></text>
+<text x="1176" y="37" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">fig. 1 · logical view · riffet 0.7.0 · Node.js ≥ 24.19</text>
+<path d="M24 54L1176 54" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="260" y="72" width="680" height="58" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="272" y="93" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Clients</text>
+<text x="928" y="93" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">Web · macOS · iOS · Android</text>
+<text x="272" y="110" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Render rows, keep a replica and a cache of them, send commands.</text>
+<path d="M420 130L420 204" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M416.5 199L420 204L423.5 199" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="430" y="165" font-size="10.5" font-weight="600" fill="#f4f2ee" text-anchor="start">commands</text>
+<text x="430" y="178" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">idempotent by command id</text>
+<path d="M742 204L742 130" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 135L742 130L745.5 135" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="752" y="165" font-size="10.5" font-weight="600" fill="#5b8cff" text-anchor="start">rows</text>
+<text x="752" y="178" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">resumable from a cursor</text>
+<rect x="24" y="152" width="1152" height="542" rx="12" fill="none" stroke="rgb(255 255 255 / 0.30)" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="40" y="174" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">RIFFET SERVER</tspan><tspan dx="8" class="m" font-size="10">one process · one user</tspan></text>
+<rect x="288" y="164" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="299" y="174.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P6</text>
+<rect x="40" y="204" width="1120" height="58" rx="7" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<rect x="40" y="204" width="1120" height="58" rx="7" fill="none" stroke="none" stroke-width="1"/>
+<text x="52" y="225" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Access</text>
+<text x="1148" y="225" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">auth · pairing · routes/ · channels/</text>
+<text x="52" y="242" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Authenticates devices, terminates client transports, and adapts chat channels to the same commands and rows.</text>
+<text x="1148" y="242" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">Device · token · pairing · HTTP · SSE · WebSocket · channel</text>
+<path d="M420 262L420 322" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M416.5 317L420 322L423.5 317" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M742 322L742 262" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 267L742 262L745.5 267" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="260" y="286" width="680" height="252" rx="9" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="276" y="308" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">SESSION CORE</tspan></text>
+<rect x="372" y="298" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="383" y="308.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P2</text>
+<text x="924" y="308" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end">the same model for every agent</text>
+<rect x="276" y="322" width="224" height="200" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="288" y="343" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Delivery</text>
+<rect x="351.2" y="332" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="362.2" y="342.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P3</text>
+<text x="488" y="343" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">native/</text>
+<text x="288" y="360" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Carries one message into the</text>
+<text x="288" y="374" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">agent and tracks it to a receipt.</text>
+<text x="288" y="392" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Run · queue · admission</text>
+<text x="288" y="406" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">dispatch fence · receipt</text>
+<text x="288" y="420" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m"></text>
+<text x="288" y="434" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">at most one write per message</text>
+<text x="288" y="448" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">one turn at a time</text>
+<text x="288" y="462" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">a held queue states its reason</text>
+<rect x="560" y="322" width="364" height="56" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="572" y="343" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Sync</text>
+<rect x="607.6" y="332" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="618.6" y="342.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P5</text>
+<text x="912" y="343" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">sync/</text>
+<text x="572" y="360" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Streams rows to each client from its cursor.</text>
+<rect x="560" y="394" width="364" height="56" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="572" y="415" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Timeline</text>
+<rect x="635.2" y="404" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="646.2" y="414.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P5</text>
+<text x="912" y="415" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">timeline/</text>
+<text x="572" y="432" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Folds events into the rows every client renders.</text>
+<rect x="560" y="466" width="364" height="56" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="572" y="487" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Journal</text>
+<rect x="628.3" y="476" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="639.3" y="486.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P4</text>
+<text x="912" y="487" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">journal/</text>
+<text x="572" y="504" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Records what the agent did: append-only, ordered per session.</text>
+<path d="M742 466L742 450" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 455L742 450L745.5 455" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M742 394L742 378" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 383L742 378L745.5 383" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M560 494L500 494" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M505 490.5L500 494L505 497.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="530" y="487" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="middle">receipt</text>
+<rect x="40" y="286" width="200" height="118" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="52" y="307" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Automation</text>
+<text x="228" y="307" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">orchestration/</text>
+<text x="52" y="324" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Issues commands without a person:</text>
+<text x="52" y="338" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">schedules, tasks, hand-offs.</text>
+<text x="52" y="356" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Task · Automation</text>
+<text x="52" y="370" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">wake-up · handoff · review</text>
+<path d="M240 345L276 345" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M271 341.5L276 345L271 348.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="40" y="420" width="200" height="262" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="52" y="441" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Platform</text>
+<text x="228" y="441" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">store.ts · …</text>
+<text x="52" y="458" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Runs the server on one machine</text>
+<text x="52" y="472" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">with no external service.</text>
+<text x="52" y="490" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Store: one SQLite file</text>
+<text x="52" y="504" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">settings</text>
+<text x="52" y="518" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">process execution</text>
+<text x="52" y="532" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">worker threads</text>
+<text x="52" y="546" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">service lifecycle</text>
+<text x="52" y="560" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">diagnostics · update</text>
+<rect x="960" y="286" width="200" height="118" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="972" y="307" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Workspace</text>
+<text x="1148" y="307" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">workspace/ · git/</text>
+<text x="972" y="324" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Serves the directories agents</text>
+<text x="972" y="338" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">work in.</text>
+<text x="972" y="356" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Project · files · git</text>
+<text x="972" y="370" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">working tree · preview</text>
+<rect x="960" y="420" width="200" height="118" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="972" y="441" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Derived views</text>
+<text x="1148" y="441" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">stats/ · …</text>
+<text x="972" y="458" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Read models built from the</text>
+<text x="972" y="472" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">journal as it grows.</text>
+<text x="972" y="490" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">usage · search index · title</text>
+<text x="972" y="504" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">summary · share · push</text>
+<path d="M924 494L960 494" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M955 490.5L960 494L955 497.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="260" y="562" width="680" height="120" rx="9" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="276" y="584" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">AGENT INTEGRATION</tspan></text>
+<text x="440" y="584" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">one driver per agent, one contract for all</text>
+<rect x="276" y="596" width="224" height="70" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="288" y="617" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Input</text>
+<text x="488" y="617" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">driver</text>
+<text x="288" y="634" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">send · steer · interrupt · respond</text>
+<text x="288" y="652" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">terminal host | RPC call</text>
+<rect x="560" y="596" width="364" height="70" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="572" y="617" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Observation</text>
+<text x="912" y="617" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">driver</text>
+<text x="572" y="634" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">transcript source · status · interaction · capabilities</text>
+<text x="572" y="652" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">transcript file | protocol stream | hooks | MCP tools</text>
+<path d="M420 522L420 596" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M416.5 591L420 596L423.5 591" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M742 596L742 522" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 527L742 522L745.5 527" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="960" y="562" width="200" height="120" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="972" y="583" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Extension</text>
+<rect x="1042.1" y="572" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="1053.1" y="582.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P7</text>
+<text x="1148" y="583" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">plugins-host/</text>
+<text x="972" y="600" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Loads plugins at declared</text>
+<text x="972" y="614" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">extension points.</text>
+<text x="972" y="632" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">driver · model source</text>
+<text x="972" y="646" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">task provider · publisher</text>
+<text x="972" y="660" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">view · command · channel</text>
+<path d="M960 622L940 622" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M945 618.5L940 622L945 625.5" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M420 666L420 752" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M416.5 747L420 752L423.5 747" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="430" y="721" font-size="10.5" font-weight="600" fill="#f4f2ee" text-anchor="start">input</text>
+<text x="430" y="734" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">through the CLI’s own interface</text>
+<path d="M742 752L742 666" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M738.5 671L742 666L745.5 671" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="752" y="721" font-size="10.5" font-weight="600" fill="#5b8cff" text-anchor="start">events</text>
+<text x="752" y="734" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">transcript, protocol stream, hooks</text>
+<rect x="260" y="752" width="680" height="58" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="272" y="773" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Agent CLI</text>
+<rect x="342.1" y="762" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="353.1" y="772.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P1</text>
+<text x="928" y="773" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">terminal-driven · protocol-driven · in-process</text>
+<text x="272" y="790" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">A vendor program on the same host. It keeps its own credentials and calls its model provider itself.</text>
+<path d="M24 836L50 836" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M45 832.5L50 836L45 839.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="58" y="839.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">command</text>
+<path d="M128 836L154 836" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M149 832.5L154 836L149 839.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="162" y="839.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">event or row</text>
+<path d="M250 836L276 836" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M271 832.5L276 836L271 839.5" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="284" y="839.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">contributes implementations</text>
+<rect x="456" y="830" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="467" y="840.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">Pn</text>
+<text x="488" y="839.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">principle realized here</text>
+<text x="622" y="839.5" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">Position follows the flow of a message. Import direction is the layering view (fig. 6).</text>
+<path d="M24 858L1176 858" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="24" y="879" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">DESIGN PRINCIPLES</tspan></text>
+<text x="24" y="899" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P1</text>
+<text x="52" y="899" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">The vendor CLI is the agent.</tspan><tspan dx="6" fill="#8d929a">Riffet drives the installed program through its own interface and does not reimplement it.</tspan></text>
+<text x="24" y="913.5" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P2</text>
+<text x="52" y="913.5" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">One session model.</tspan><tspan dx="6" fill="#8d929a">Differences between agents end at the driver contract; nothing above it names a vendor.</tspan></text>
+<text x="24" y="928" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P3</text>
+<text x="52" y="928" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">Commands and observations are separate paths.</tspan><tspan dx="6" fill="#8d929a">A message is delivered when its receipt is observed, not when it was written.</tspan></text>
+<text x="24" y="942.5" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P4</text>
+<text x="52" y="942.5" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">The journal is the source of truth.</tspan><tspan dx="6" fill="#8d929a">Timeline, status, usage and search are projections of it.</tspan></text>
+<text x="24" y="957" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P5</text>
+<text x="52" y="957" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">The server folds, clients render.</tspan><tspan dx="6" fill="#8d929a">Every client resumes from a cursor and receives the same rows.</tspan></text>
+<text x="24" y="971.5" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P6</text>
+<text x="52" y="971.5" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">Single node.</tspan><tspan dx="6" fill="#8d929a">One process, one database file, one user; no external service is required.</tspan></text>
+<text x="24" y="986" font-size="10" font-weight="600" fill="#5b8cff" text-anchor="start" class="m">P7</text>
+<text x="52" y="986" font-size="10.5"><tspan font-weight="600" fill="#f4f2ee">Dependencies point inward.</tspan><tspan dx="6" fill="#8d929a">Surfaces and drivers depend on the core, never the reverse; optional capability arrives as a plugin.</tspan></text>
+</svg>

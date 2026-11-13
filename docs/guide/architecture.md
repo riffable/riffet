@@ -2,6 +2,124 @@
 
 返回 [中文 README](../../README.zh-CN.md)。
 
+## 架构视图
+
+七张图由 `scripts/gen-architecture.mjs` 生成，输出在 `docs/assets/architecture/`，浅色与深色各一份。图中的模块、协议或表发生变化时，改脚本后运行 `node scripts/gen-architecture.mjs` 重新生成。图内文字是英文标识符，与代码一致。
+
+| 图 | 视图 | 内容 |
+| --- | --- | --- |
+| 1 | 逻辑视图 | 设计原则，子系统的组成、职责与关系 |
+| 2 | 子系统：Session core | 写路径、读路径、表、投递状态机 |
+| 3 | 子系统：Agent integration | 驱动契约、三种接入模式、共用机制 |
+| 4 | 子系统：Access 与客户端 | 客户端的组成与两套实现，服务端边缘的职责 |
+| 5 | 子系统：Extension | 插件、宿主、执行位置、扩展点 |
+| 6 | 开发视图 | 服务端分层与包之间的导入关系 |
+| 7 | 运行时视图 | 一次部署里的进程、文件、接口 |
+
+### 1. 系统架构
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/system-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/system-light.svg">
+    <img alt="Riffet system architecture: clients, the server's Access, Session core (Delivery, Journal, Timeline, Sync) and Agent integration subsystems with Automation, Workspace, Derived views, Extension and Platform around them, and the agent CLI below; commands flow down, events and rows flow up" src="../assets/architecture/system-light.svg" width="100%">
+  </picture>
+</p>
+
+位置表示一条消息的流向，不表示导入方向；导入方向见图 6。
+
+| 原则 | 内容 | 落点 |
+| --- | --- | --- |
+| P1 厂商 CLI 即 agent | 通过 CLI 自身的接口驱动已安装的程序，不重新实现 | `apps/server/src/backends` 下的各驱动 |
+| P2 单一会话模型 | agent 之间的差异止于驱动契约，契约之上不出现厂商名 | `apps/server/src/backends/types.ts` 的 `NativeBackendDriver` |
+| P3 命令与观测分离 | 消息以观测到回执为送达，不以写入为准 | [DELIVERY.md](../DELIVERY.md) |
+| P4 Journal 是唯一事实来源 | 时间线、状态、用量与搜索都是它的投影 | [SESSION-JOURNAL.md](../SESSION-JOURNAL.md) |
+| P5 服务端折叠，客户端渲染 | 客户端从游标续传，得到同一份行 | [SYNC-V3.md](../SYNC-V3.md) |
+| P6 单节点 | 一个进程、一个数据库文件、一个用户，不依赖外部服务 | `apps/server/src/store.ts` |
+| P7 依赖向内 | 表面与驱动依赖核心，反向不成立；可选能力以插件提供 | `pnpm check:layers`、[PLUGIN_ARCHITECTURE.md](../PLUGIN_ARCHITECTURE.md) |
+
+### 2. Session core
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/session-core-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/session-core-light.svg">
+    <img alt="Session core: the write path from routes/native.ts through admission, NativeDispatcher and the dispatch fence to the driver, the read path from TranscriptSource through TranscriptIngest, Journal and TimelineService to SyncConnection, the tables each writes, and the Run.delivery state machine" src="../assets/architecture/session-core-light.svg" width="100%">
+  </picture>
+</p>
+
+- 写路径：`POST /api/sessions/:id/native/send` 以 `commandId` 去重并写入 `runs`，`NativeDispatcher` 经 `admission()` 放行，提交栅栏后调用驱动。
+- 读路径：驱动的 `TranscriptSource` 由 `TranscriptIngest` 拉取并追加到 `Journal`，`TimelineService` 折叠成行，`SyncConnection` 以 SSE 推送。
+- `JournalFeed` 把 journal 的增量分发给 `DispatchFeed`（回执与回合结束）、用量统计和搜索索引。
+- 投递状态与不变量见 [DELIVERY.md](../DELIVERY.md)，journal 见 [SESSION-JOURNAL.md](../SESSION-JOURNAL.md)，同步协议见 [SYNC-V3.md](../SYNC-V3.md)。
+
+### 3. Agent integration
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/agent-integration-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/agent-integration-light.svg">
+    <img alt="Agent integration: the driver contract with its lifecycle, input, observation, configuration and declared-facts groups; terminal-driven, protocol-driven and in-process integration modes; the shared mechanisms; and the agent CLI" src="../assets/architecture/agent-integration-light.svg" width="100%">
+  </picture>
+</p>
+
+- 驱动契约按能力分组；成组的可选能力放在可选对象上，后端不提供就不设该属性。
+- 接入模式有三种：终端驱动（TUI 运行在 tmux 窗格，读转录文件与 hook）、协议驱动（CLI 自带机器接口）、进程内（无 CLI，服务端调用模型网关）。
+- 驱动共用的机制在 `apps/server/src/backends/shared`、`apps/server/src/terminal`、`apps/server/src/agent-host` 与 `apps/server/src/riffet-mcp`。
+
+### 4. Access 与客户端
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/access-clients-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/access-clients-light.svg">
+    <img alt="Access and clients: the layers of a client in the web and Kotlin Multiplatform implementations, the three wire interfaces, and the identity, pairing, discovery, transport and channel parts of Access" src="../assets/architecture/access-clients-light.svg" width="100%">
+  </picture>
+</p>
+
+- 客户端的组成相同：界面、会话状态、同步引擎、时间线规则、缓存、传输、线上类型；Web 一套实现，Android、iOS、macOS 共用 KMP 的 `:client`。
+- 线上契约由 `packages/contracts` 定义，生成 JSON Schema 快照与 Kotlin、Swift 的 fixture，`pnpm gen:contracts:check` 在 CI 运行。
+- 设备与配对见 [DEVICES.md](../DEVICES.md)，安全模型见 [SECURITY.md](../SECURITY.md)。
+
+### 5. Extension
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/extension-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/extension-light.svg">
+    <img alt="Extension: a plugin with its manifest, the plugin host, in-process and isolated execution, and the extension points grouped by the subsystem they extend" src="../assets/architecture/extension-light.svg" width="100%">
+  </picture>
+</p>
+
+- 插件只经 `PluginHost` 取得核心能力；内置包、开发包与显式可信的包在服务进程内执行，安装包默认在隔离进程内执行。
+- 扩展点按所扩展的子系统分组；接口与执行位置的细节见 [PLUGIN_ARCHITECTURE.md](../PLUGIN_ARCHITECTURE.md)。
+
+### 6. 分层
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/layers-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/layers-light.svg">
+    <img alt="Layering: the six layers of apps/server/src with their modules and import rules, and which apps import which shared packages" src="../assets/architecture/layers-light.svg" width="100%">
+  </picture>
+</p>
+
+规则的完整说明见下文「服务端分层」。
+
+### 7. 运行时
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="../assets/architecture/runtime-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="../assets/architecture/runtime-light.svg">
+    <img alt="Runtime view: clients and external services on the left, the riffet serve process with its network-facing, kernel and process-facing modules, the agent CLI and helper processes with the channel each driver uses, and the files on the host" src="../assets/architecture/runtime-light.svg" width="100%">
+  </picture>
+</p>
+
+- `riffet serve` 以 HTTP/1.1 提供服务，不带 TLS，默认绑定 `127.0.0.1`；远程访问由反向代理终结 TLS，见 [remote-access.md](remote-access.md)。
+- 每个驱动的写通道与读通道画成一对箭头；`riffet-mcp.mjs` 与 `hook-cli.mjs` 由 CLI 启动并回连服务端。
+- 部署与运维见 [operations.md](operations.md)。
+
 ## 代码结构
 
 `apps/server/src/backends` 定义共享 native driver、注册表、profile 和调度接缝，包含 Codex/Claude/DSH/Droid 等适配器（TRAE CLI 是 Codex 驱动的一个 flavor，见 `backends/codex/flavors.ts`），并把插件提供的 Agent 后端挂入同一注册表（`plugin-backend.ts`）；Cursor 是官方插件 `plugins/riffet/cursor/`，转录、交互、模型目录与标题回填都在其中；`apps/server/src/native` 保留跨后端的持久投递调度，`terminal` 管理 tmux 与 PTY（`observe()` 是服务端的终端输出观察接口），`workspace` 处理文件与附件，`git` 处理 Diff、Checkpoint 和 worktree，`settings` 处理配置及 CLI 管理。`store.ts` 保存工作台状态并负责数据库迁移，`app.ts` 组装受认证保护的 API。

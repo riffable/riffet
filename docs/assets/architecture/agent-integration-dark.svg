@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 806" width="1200" height="806" role="img" aria-label="Riffet agent integration" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', sans-serif">
+<style>.m{font-family:ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace}</style>
+<rect width="1200" height="806" fill="#0d1117"/>
+<g transform="translate(22 19) scale(0.92)"><path d="M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z" fill="#5b8cff" stroke="#5b8cff" stroke-width="0.6" stroke-linejoin="round"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8ZM11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z" fill="#f4f2ee" fill-rule="evenodd"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z" fill="none" stroke="#f4f2ee" stroke-width="1" stroke-linejoin="round"/></g>
+<text x="50" y="37" font-size="14" fill="#f4f2ee"><tspan font-weight="600">Riffet</tspan><tspan dx="8" fill="#bfc2c8">Agent integration</tspan></text>
+<text x="1176" y="37" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">fig. 3 · subsystem · riffet 0.7.0 · Node.js ≥ 24.19</text>
+<path d="M24 54L1176 54" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="267" y="72" width="212" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="277" y="89.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Delivery</text>
+<text x="277" y="103" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">session core</text>
+<rect x="494" y="72" width="212" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="504" y="89.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Journal</text>
+<text x="504" y="103" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">session core, through TranscriptIngest</text>
+<rect x="24" y="150" width="1152" height="142" rx="9" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="40" y="172" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">DRIVER CONTRACT</tspan><tspan dx="8" class="m" font-size="10">NativeBackendDriver</tspan></text>
+<rect x="274" y="162" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="285" y="172.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P2</text>
+<text x="1160" y="172" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">implemented once per agent · backends/types.ts</text>
+<rect x="40" y="184" width="212" height="78" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="52" y="205" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Lifecycle</text>
+<text x="52" y="222" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Find the CLI, open or resume.</text>
+<text x="52" y="240" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">available · openOrResume</text>
+<text x="52" y="254" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">dispose · close</text>
+<rect x="267" y="184" width="212" height="78" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="279" y="205" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Input</text>
+<text x="279" y="222" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Write a message, stop a turn.</text>
+<text x="279" y="240" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">send · steer</text>
+<text x="279" y="254" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">interrupt · respond</text>
+<rect x="494" y="184" width="212" height="78" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="506" y="205" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Observation</text>
+<text x="506" y="222" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Expose output and live state.</text>
+<text x="506" y="240" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">transcript · status</text>
+<text x="506" y="254" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">interaction · subscribe</text>
+<rect x="721" y="184" width="212" height="78" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="733" y="205" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Configuration</text>
+<text x="733" y="222" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">Profiles, models and modes.</text>
+<text x="733" y="240" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">profiles · configure</text>
+<text x="733" y="254" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">listModels · usage</text>
+<rect x="948" y="184" width="212" height="78" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="960" y="205" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Declared facts</text>
+<text x="960" y="222" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">What the core may assume.</text>
+<text x="960" y="240" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">traits</text>
+<text x="960" y="254" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">capabilities</text>
+<path d="M373 112L373 184" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M369.5 179L373 184L376.5 179" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M600 184L600 112" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M596.5 117L600 112L603.5 117" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="40" y="281" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">optional groups   extensions · external · stored · admin · projectConfigs</text>
+<rect x="24" y="332" width="370" height="156" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="38" y="355" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Terminal-driven</text>
+<text x="38" y="372" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">The CLI runs as a TUI in a terminal pane.</text>
+<path d="M38 384L380 384" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="38" y="405" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">transport</text>
+<text x="108" y="405" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">tmux pane on a private socket</text>
+<text x="38" y="425" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">input</text>
+<text x="108" y="425" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">paste, then Enter once the prompt shows the text</text>
+<text x="38" y="445" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">observe</text>
+<text x="108" y="445" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">transcript file by offset · hooks · screen</text>
+<text x="38" y="465" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">agents</text>
+<text x="108" y="465" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">Claude Code · Cursor</text>
+<path d="M209 332L209 292" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M205.5 297L209 292L212.5 297" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M209 488L209 526" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M205.5 521L209 526L212.5 521" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="415" y="332" width="370" height="156" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="429" y="355" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Protocol-driven</text>
+<text x="429" y="372" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">The CLI exposes a machine interface.</text>
+<path d="M429 384L771 384" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="429" y="405" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">transport</text>
+<text x="499" y="405" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">unix socket | stdio | loopback TCP</text>
+<text x="429" y="425" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">input</text>
+<text x="499" y="425" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">request: start turn, steer, interrupt</text>
+<text x="429" y="445" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">observe</text>
+<text x="499" y="445" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">notifications on the same connection</text>
+<text x="429" y="465" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">agents</text>
+<text x="499" y="465" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">Codex · TRAE · Droid · pi · DeepSeek Harness</text>
+<path d="M600 332L600 292" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M596.5 297L600 292L603.5 297" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M600 488L600 526" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M596.5 521L600 526L603.5 521" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="806" y="332" width="370" height="156" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="820" y="355" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">In-process</text>
+<text x="820" y="372" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">No CLI: the server holds the conversation.</text>
+<path d="M820 384L1162 384" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="820" y="405" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">transport</text>
+<text x="890" y="405" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">HTTPS to a configured model gateway</text>
+<text x="820" y="425" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">input</text>
+<text x="890" y="425" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">gateway request</text>
+<text x="820" y="445" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">observe</text>
+<text x="890" y="445" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">transcript file the server writes</text>
+<text x="820" y="465" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start" class="m">agents</text>
+<text x="890" y="465" font-size="10.5" font-weight="400" fill="#f4f2ee" text-anchor="start">chat</text>
+<path d="M991 332L991 292" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M987.5 297L991 292L994.5 297" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="24" y="526" width="1152" height="116" rx="9" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="40" y="548" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">SHARED MECHANISMS</tspan><tspan dx="8" class="m" font-size="10">backends/shared · terminal/ · agent-host/ · riffet-mcp/</tspan></text>
+<rect x="40" y="560" width="212" height="66" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="52" y="581" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Terminal host</text>
+<text x="52" y="598" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">tmux on a private socket: panes</text>
+<text x="52" y="612" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">for TUIs and for user shells</text>
+<rect x="267" y="560" width="212" height="66" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="279" y="581" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Process and RPC</text>
+<text x="279" y="598" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">child and detached processes;</text>
+<text x="279" y="612" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">JSON-RPC and JSONL framing</text>
+<rect x="494" y="560" width="212" height="66" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="506" y="581" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Hook bridge</text>
+<text x="506" y="598" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">CLI hooks posted to a loopback</text>
+<text x="506" y="612" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">listener; fails open</text>
+<rect x="721" y="560" width="212" height="66" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="733" y="581" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Tool bridge</text>
+<text x="733" y="598" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">MCP server the CLI spawns; tools</text>
+<text x="733" y="612" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">call back with a per-session key</text>
+<rect x="948" y="560" width="212" height="66" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="960" y="581" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Interaction</text>
+<text x="960" y="598" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">permission prompts and questions</text>
+<text x="960" y="612" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">as one model, protocol or screen</text>
+<path d="M540 642L540 686" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M536.5 681L540 686L543.5 681" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M660 686L660 642" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M656.5 647L660 642L663.5 647" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="530" y="668" font-size="10.5" font-weight="600" fill="#f4f2ee" text-anchor="end">input</text>
+<text x="670" y="668" font-size="10.5" font-weight="600" fill="#5b8cff" text-anchor="start">events</text>
+<rect x="24" y="686" width="1152" height="56" rx="7" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="36" y="707" font-size="12.5" font-weight="600" fill="#f4f2ee" text-anchor="start">Agent CLI</text>
+<rect x="106.1" y="696" width="22" height="14" rx="7" fill="none" stroke="#5b8cff" stroke-width="1"/>
+<text x="117.1" y="706.5" font-size="9" font-weight="600" fill="#5b8cff" text-anchor="middle" class="m">P1</text>
+<text x="1164" y="707" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="end" class="m">claude · cursor-agent · codex · traex · droid · pi · dsh</text>
+<text x="36" y="724" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">A vendor program on the same host, started and observed through the mechanisms above. It calls its model provider itself.</text>
+<path d="M24 772L50 772" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M45 768.5L50 772L45 775.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="58" y="775.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">command</text>
+<path d="M128 772L154 772" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M149 768.5L154 772L149 775.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="162" y="775.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">event</text>
+<path d="M212 772L238 772" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M233 768.5L238 772L233 775.5" stroke="#bfc2c8" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="246" y="775.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">implements, or uses</text>
+<text x="372" y="775.5" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">A plugin driver implements the same contract through PluginBackendDriver and a restricted AgentHost (fig. 5).</text>
+</svg>

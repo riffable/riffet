@@ -1,0 +1,289 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1376 912" width="1376" height="912" role="img" aria-label="Riffet runtime view" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', sans-serif">
+<style>.m{font-family:ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace}</style>
+<rect width="1376" height="912" fill="#0d1117"/>
+<g transform="translate(22 19) scale(0.92)"><path d="M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z" fill="#5b8cff" stroke="#5b8cff" stroke-width="0.6" stroke-linejoin="round"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8ZM11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z" fill="#f4f2ee" fill-rule="evenodd"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z" fill="none" stroke="#f4f2ee" stroke-width="1" stroke-linejoin="round"/></g>
+<text x="50" y="37" font-size="14" fill="#f4f2ee"><tspan font-weight="600">Riffet</tspan><tspan dx="8" fill="#bfc2c8">Runtime view</tspan></text>
+<text x="1352" y="37" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">fig. 7 · processes, files, interfaces · riffet 0.7.0 · Node.js ≥ 24.19</text>
+<path d="M24 54L1352 54" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="416" y="68" width="936" height="722" rx="12" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="432" y="88" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">HOST</tspan><tspan dx="8" class="m" font-size="10">macOS | Linux · one OS user</tspan></text>
+<rect x="432" y="98" width="476" height="593" rx="8" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="444" y="119" font-size="13" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">riffet serve</text>
+<text x="896" y="119" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">Node.js · Fastify 5 · HTTP/1.1 · 127.0.0.1:4337</text>
+<path d="M432 128L908 128" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M582 128L582 691" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M758 128L758 691" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="444" y="143.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">NETWORK-FACING</tspan></text>
+<text x="594" y="143.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">KERNEL</tspan></text>
+<text x="770" y="143.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">PROCESS-FACING</tspan></text>
+<rect x="438" y="151" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="167.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">routes/*</text>
+<text x="447" y="180.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">surfaces</text>
+<rect x="438" y="205" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="221.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">routes/sync.ts</text>
+<text x="447" y="234.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">surfaces</text>
+<rect x="438" y="259" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="275.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">routes/terminals.ts</text>
+<text x="447" y="288.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">surfaces</text>
+<rect x="438" y="313" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="329.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">discovery.ts</text>
+<text x="447" y="342.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">base</text>
+<rect x="438" y="421" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="437.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">channels/feishu</text>
+<text x="447" y="450.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">surfaces</text>
+<rect x="438" y="475" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="491.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">push/apns.ts</text>
+<text x="447" y="504.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">features</text>
+<rect x="438" y="529" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="545.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">auxiliary/gateway</text>
+<text x="447" y="558.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">kernel</text>
+<rect x="438" y="583" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="447" y="599.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">update-npm.ts</text>
+<text x="447" y="612.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">features</text>
+<rect x="764" y="151" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="167.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/claude</text>
+<text x="773" y="180.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver</text>
+<rect x="764" y="205" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="221.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">riffet/cursor</text>
+<text x="773" y="234.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver · built-in plugin</text>
+<rect x="764" y="259" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="275.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/codex</text>
+<text x="773" y="288.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver · flavor traex</text>
+<rect x="764" y="313" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="329.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/droid</text>
+<text x="773" y="342.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver</text>
+<rect x="764" y="367" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="383.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/pi</text>
+<text x="773" y="396.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver</text>
+<rect x="764" y="421" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="437.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/dsh</text>
+<text x="773" y="450.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver</text>
+<rect x="764" y="475" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="491.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">backends/chat</text>
+<text x="773" y="504.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">driver</text>
+<rect x="764" y="529" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="545.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">plugins-host/</text>
+<text x="773" y="558.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">features</text>
+<rect x="764" y="583" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="599.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">riffet-mcp/</text>
+<text x="773" y="612.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">features</text>
+<rect x="764" y="637" width="138" height="38" rx="5" fill="#2b2c31" stroke="none" stroke-width="1"/>
+<text x="773" y="653.5" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">hook-server.ts</text>
+<text x="773" y="666.5" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">plugin-api kit</text>
+<text x="594" y="174" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">native/</text>
+<text x="594" y="187" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">run queue · admission · dispatch</text>
+<text x="594" y="206" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">journal/</text>
+<text x="594" y="219" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">append-only event log</text>
+<text x="594" y="238" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">timeline/</text>
+<text x="594" y="251" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">fold of events into rows</text>
+<text x="594" y="270" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">sync/</text>
+<text x="594" y="283" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">transcript ingest · SSE fan-out</text>
+<text x="594" y="302" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">terminal/</text>
+<text x="594" y="315" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">tmux control-mode client</text>
+<text x="594" y="334" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">store.ts</text>
+<text x="594" y="347" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">node:sqlite DatabaseSync</text>
+<path d="M582 370L758 370" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="594" y="387.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">FEATURES</tspan></text>
+<text x="594" y="405" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">orchestration/  tasks/</text>
+<text x="594" y="419" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">stats/  search/  shares/</text>
+<text x="594" y="433" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">git/  workspace/  plugins/</text>
+<text x="594" y="447" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">previews/  extensions/  …</text>
+<path d="M582 464L758 464" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="594" y="481.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">KIT · BASE</tspan></text>
+<text x="594" y="499" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">backends/shared/  adapters/</text>
+<text x="594" y="513" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">auth.ts  pairing.ts  exec.ts</text>
+<path d="M582 530L758 530" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="594" y="547.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">WORKER THREADS</tspan></text>
+<text x="594" y="567" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">riffet-exec</text>
+<text x="594" y="580" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">tmux, ps, lsof, pgrep off the loop</text>
+<text x="594" y="600" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">riffet-wal</text>
+<text x="594" y="613" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">WAL checkpoint</text>
+<text x="594" y="633" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="start" class="m">previews/browser-pdf.ts</text>
+<text x="594" y="646" font-size="9.5" font-weight="400" fill="#8d929a" text-anchor="start">PDF preview render</text>
+<rect x="16" y="110" width="208" height="252" rx="10" fill="none" stroke="rgb(255 255 255 / 0.30)" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="26" y="127" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">CLIENTS</tspan></text>
+<rect x="24" y="138" width="192" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="157.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Web</text>
+<text x="34" y="171" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">React 19 · apps/web/src/sync</text>
+<rect x="24" y="193" width="192" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="212.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">macOS</text>
+<text x="34" y="226" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">SwiftUI + AppKit · RiffetKit</text>
+<rect x="24" y="248" width="192" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="267.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">iOS</text>
+<text x="34" y="281" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">SwiftUI · RiffetKit</text>
+<rect x="24" y="303" width="192" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="322.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Android</text>
+<text x="34" y="336" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">Compose :shared · :client</text>
+<path d="M224 170L432 170" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M427 166.5L432 170L427 173.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="163" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTP</tspan><tspan dx="6" fill="#bfc2c8">JSON /api/*</tspan></text>
+<text x="234" y="185" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">cookie + CSRF | Bearer wkn_…</text>
+<path d="M432 224L224 224" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 220.5L224 224L229 227.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="217" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">SSE</tspan><tspan dx="6" fill="#bfc2c8">/api/v3/sessions/:id/sync</tspan></text>
+<text x="234" y="239" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Last-Event-ID &lt;gen&gt;:&lt;seq&gt;</text>
+<path d="M224 278L432 278" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M427 274.5L432 278L427 281.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 274.5L224 278L229 281.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="271" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">WS</tspan><tspan dx="6" fill="#bfc2c8">/api/terminals/:id/ws</tspan></text>
+<text x="234" y="293" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">pane bytes · ≤ 256 KiB a message</text>
+<path d="M432 332L224 332" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none" stroke-dasharray="4 3.5"/>
+<path d="M229 328.5L224 332L229 335.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="325" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">mDNS</tspan><tspan dx="6" fill="#bfc2c8">_riffet._tcp</tspan></text>
+<text x="234" y="347" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">wildcard bind only</text>
+<rect x="16" y="392" width="208" height="238" rx="10" fill="none" stroke="rgb(255 255 255 / 0.30)" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="26" y="409" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">EXTERNAL SERVICES</tspan></text>
+<rect x="24" y="421" width="192" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="437.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Feishu / Lark</text>
+<text x="34" y="451" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">Open Platform · bot</text>
+<rect x="24" y="475" width="192" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="491.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">APNs</text>
+<text x="34" y="505" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">api.push.apple.com</text>
+<rect x="24" y="529" width="192" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="545.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Model gateway</text>
+<text x="34" y="559" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">configured base URL</text>
+<rect x="24" y="583" width="192" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="599.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">npm registry</text>
+<text x="34" y="613" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">registry.npmjs.org</text>
+<path d="M432 440L224 440" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 436.5L224 440L229 443.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="433" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">WSS</tspan><tspan dx="6" fill="#bfc2c8">Lark.WSClient · events in</tspan></text>
+<text x="234" y="455" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">HTTPS REST out</text>
+<path d="M432 494L224 494" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 490.5L224 494L229 497.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="487" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTP/2</tspan><tspan dx="6" fill="#bfc2c8">POST /3/device/&lt;token&gt;</tspan></text>
+<text x="234" y="509" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">ES256 JWT from apns-key.json</text>
+<path d="M432 548L224 548" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 544.5L224 548L229 551.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="541" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTPS</tspan><tspan dx="6" fill="#bfc2c8">messages | responses</tspan></text>
+<text x="234" y="563" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">| chat/completions</text>
+<path d="M432 602L224 602" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M229 598.5L224 602L229 605.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="234" y="595" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTPS</tspan><tspan dx="6" fill="#bfc2c8">GET /riffet/latest</tspan></text>
+<text x="234" y="617" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">update check</text>
+<text x="1110" y="106" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">AGENT CLI PROCESSES</tspan></text>
+<rect x="1110" y="116" width="216" height="135" rx="10" fill="none" stroke="rgb(255 255 255 / 0.30)" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="1120" y="137" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">tmux -S &lt;state&gt;/tmux.sock</text>
+<rect x="1118" y="151" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="167.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">claude</text>
+<text x="1128" y="181" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">TUI in a tmux pane</text>
+<rect x="1118" y="205" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="221.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">cursor-agent</text>
+<text x="1128" y="235" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">TUI in a tmux pane</text>
+<rect x="1118" y="259" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="275.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">codex | traex  app-server</text>
+<text x="1128" y="289" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">detached · unix socket | ws loopback</text>
+<rect x="1118" y="313" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="329.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">droid exec</text>
+<text x="1128" y="343" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">child · one per conversation</text>
+<rect x="1118" y="367" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="383.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">pi --mode rpc</text>
+<text x="1128" y="397" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">child</text>
+<rect x="1118" y="421" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="437.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">dsh</text>
+<text x="1128" y="451" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">child · bridge dials back with a token</text>
+<path d="M908 164L1118 164" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 160.5L1118 164L1113 167.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 176L908 176" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 172.5L908 176L913 179.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="157.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">tmux</tspan><tspan dx="6" fill="#bfc2c8">paste-buffer, send-keys</tspan></text>
+<text x="918" y="190" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">file</tspan><tspan dx="6" fill="#bfc2c8">&lt;id&gt;.jsonl by byte offset</tspan></text>
+<path d="M908 218L1118 218" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 214.5L1118 218L1113 221.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 230L908 230" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 226.5L908 230L913 233.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="211.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">tmux</tspan><tspan dx="6" fill="#bfc2c8">paste-buffer, send-keys</tspan></text>
+<text x="918" y="244" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">file</tspan><tspan dx="6" fill="#bfc2c8">store.db (ro), live tap</tspan></text>
+<path d="M908 272L1118 272" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 268.5L1118 272L1113 275.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 284L908 284" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 280.5L908 284L913 287.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="265.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">JSON-RPC</tspan><tspan dx="6" fill="#bfc2c8">turn/start, turn/steer</tspan></text>
+<text x="918" y="298" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">JSON-RPC</tspan><tspan dx="6" fill="#bfc2c8">notifications</tspan></text>
+<path d="M908 326L1118 326" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 322.5L1118 326L1113 329.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 338L908 338" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 334.5L908 338L913 341.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="319.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdin</tspan><tspan dx="6" fill="#bfc2c8">JSON-RPC lines</tspan></text>
+<text x="918" y="352" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdout</tspan><tspan dx="6" fill="#bfc2c8">session_notification</tspan></text>
+<path d="M908 380L1118 380" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 376.5L1118 380L1113 383.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 392L908 392" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 388.5L908 392L913 395.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="373.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdin</tspan><tspan dx="6" fill="#bfc2c8">JSONL commands</tspan></text>
+<text x="918" y="406" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdout</tspan><tspan dx="6" fill="#bfc2c8">JSONL events</tspan></text>
+<path d="M908 434L1118 434" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 430.5L1118 434L1113 437.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 446L908 446" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 442.5L908 446L913 449.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="427.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">tcp</tspan><tspan dx="6" fill="#bfc2c8">127.0.0.1 · JSON-RPC</tspan></text>
+<text x="918" y="460" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">tcp</tspan><tspan dx="6" fill="#bfc2c8">notifications</tspan></text>
+<text x="918" y="497.5" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">in-process · no child</text>
+<text x="1110" y="497.5" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">HELPER PROCESSES</tspan></text>
+<rect x="1118" y="529" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="545.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">plugin runtime</text>
+<text x="1128" y="559" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">child per package · sandbox-exec</text>
+<rect x="1118" y="583" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="599.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">riffet-mcp.mjs</text>
+<text x="1128" y="613" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">MCP on stdio · spawned by the CLI</text>
+<rect x="1118" y="637" width="200" height="38" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="653.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">hook-cli.mjs</text>
+<text x="1128" y="667" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">per claude hook event · fails open</text>
+<path d="M908 542L1118 542" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1113 538.5L1118 542L1113 545.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1118 554L908 554" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 550.5L908 554L913 557.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="535.5" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdin</tspan><tspan dx="6" fill="#bfc2c8">JSON lines · protocol 1</tspan></text>
+<text x="918" y="568" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">stdout</tspan><tspan dx="6" fill="#bfc2c8">JSON lines</tspan></text>
+<path d="M1118 602L908 602" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 598.5L908 602L913 605.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="595" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTP</tspan><tspan dx="6" fill="#bfc2c8">POST /api/riffet-mcp</tspan></text>
+<text x="918" y="617" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">Bearer wkm_… per conversation</text>
+<path d="M1118 656L908 656" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M913 652.5L908 656L913 659.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="918" y="649" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">HTTP</tspan><tspan dx="6" fill="#bfc2c8">POST /hook on 127.0.0.1</tspan></text>
+<text x="918" y="671" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">ephemeral port · Bearer</text>
+<path d="M460 691L460 730" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M456.5 725L460 730L463.5 725" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M456.5 696L460 691L463.5 696" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="472" y="714" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">node:sqlite · fs</text>
+<text x="908" y="714" font-size="9.5" fill="#8d929a" text-anchor="end"><tspan font-weight="600" letter-spacing="0.08em">FILES</tspan></text>
+<rect x="432" y="730" width="232" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="442" y="749.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">workbench.db</text>
+<text x="442" y="763" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">SQLite · WAL</text>
+<rect x="676" y="730" width="232" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="686" y="749.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">~/.local/share/riffet/</text>
+<text x="686" y="763" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">devices.json · daemon.json · server.log</text>
+<rect x="928" y="730" width="178" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="938" y="749.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">project working trees</text>
+<text x="938" y="763" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">cwd of each CLI · git</text>
+<rect x="1118" y="730" width="200" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="749.5" font-size="11" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">CLI-owned state</text>
+<text x="1128" y="763" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">~/.claude · ~/.codex · ~/.cursor</text>
+<path d="M1318 170L1335 170" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1318 224L1335 224" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1318 278L1335 278" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1318 332L1335 332" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1318 386L1335 386" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1318 440L1335 440" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1335 170L1335 810" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1331.5 805L1335 810L1338.5 805" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="1118" y="810" width="234" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1128" y="827.5" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Model provider APIs</text>
+<text x="1128" y="841" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">HTTPS · credentials held by each CLI</text>
+<path d="M24 830L50 830" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M45 826.5L50 830L45 833.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="58" y="833.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">request: initiator → responder</text>
+<path d="M234 830L260 830" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M255 826.5L260 830L255 833.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="268" y="833.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">stream or read: direction of data</text>
+<rect x="452" y="823" width="26" height="14" rx="4" fill="none" stroke="rgb(255 255 255 / 0.30)" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="486" y="833.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">boundary</text>
+<rect x="548" y="823" width="26" height="14" rx="3" fill="#2b2c31" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="582" y="833.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">module and its layer</text>
+<rect x="696" y="823" width="26" height="14" rx="3" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="730" y="833.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">process, file or remote system</text>
+<text x="24" y="864" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">riffet serve speaks HTTP/1.1 without TLS and binds 127.0.0.1 by default; a reverse proxy terminates TLS for remote access.</text>
+<text x="24" y="880" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">Imports inside the server go one way: surfaces → features | drivers → kit → kernel → base, enforced by pnpm check:layers.</text>
+<text x="24" y="896" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">RiffetKit is the KMP :client module built as a static framework: session state, cache, Ktor transport, SSE.</text>
+</svg>

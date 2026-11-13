@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1364 656" width="1364" height="656" role="img" aria-label="Riffet session data path" font-family="-apple-system, BlinkMacSystemFont, 'SF Pro Text', Inter, 'Segoe UI', sans-serif">
+<style>.m{font-family:ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace}</style>
+<rect width="1364" height="656" fill="#0d1117"/>
+<g transform="translate(22 19) scale(0.92)"><path d="M8.77 6.2Q6.51 6.56 5.15 8.55L7.76 8.17Q5.43 9.17 4.26 11.65L6.94 10.68Q4.72 12.24 3.82 15.1L6.42 13.42Z" fill="#5b8cff" stroke="#5b8cff" stroke-width="0.6" stroke-linejoin="round"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8ZM11.5 8.2a1 1 0 1 0 2 0a1 1 0 1 0 -2 0Z" fill="#f4f2ee" fill-rule="evenodd"/><path d="M6 21C5.6 14.4 6.6 9 8.8 5.8L9.4 2.6L11.2 5.4C14.4 6.6 17.4 8.4 20 10.8c1.3 1.2 0.7 3.4 -1 3.4c-1.4 0 -3 -0.3 -4.4 -0.6c-1.4 -0.3 -2.3 0.3 -2.4 1.6c-0.1 2 0.2 4 0.8 5.8Z" fill="none" stroke="#f4f2ee" stroke-width="1" stroke-linejoin="round"/></g>
+<text x="50" y="37" font-size="14" fill="#f4f2ee"><tspan font-weight="600">Riffet</tspan><tspan dx="8" fill="#bfc2c8">Session core</tspan></text>
+<text x="1340" y="37" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end" class="m">fig. 2 · subsystem · riffet 0.7.0 · Node.js ≥ 24.19</text>
+<path d="M24 54L1340 54" stroke="rgb(255 255 255 / 0.12)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="396" y="68" width="768" height="372" rx="12" fill="#17181b" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="410" y="89" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">PROCESS</tspan><tspan dx="8" class="m" font-size="10">riffet serve</tspan></text>
+<text x="1150" y="89" font-size="9.5" fill="#8d929a" text-anchor="end"><tspan font-weight="600" letter-spacing="0.08em">WRITE PATH ABOVE · READ PATH BELOW</tspan></text>
+<rect x="410" y="122" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="419" y="141.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">routes/native.ts</text>
+<text x="419" y="155" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">202 · keyed by commandId</text>
+<rect x="562" y="122" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="571" y="141.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">admission()</text>
+<text x="571" y="155" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">native/lane.ts · S3</text>
+<rect x="714" y="122" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="723" y="141.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">NativeDispatcher</text>
+<text x="723" y="155" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">execute() · observe()</text>
+<rect x="866" y="122" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="875" y="141.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">commitDispatchFence</text>
+<text x="875" y="155" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">binding persisted · S1</text>
+<rect x="1018" y="122" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1027" y="141.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">NativeBackendDriver</text>
+<text x="1027" y="155" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">send() · steer()</text>
+<path d="M542 144L562 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M557 140.5L562 144L557 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M694 144L714 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M709 140.5L714 144L709 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M846 144L866 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M861 140.5L866 144L861 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M998 144L1018 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1013 140.5L1018 144L1013 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="410" y="206" width="284" height="40" rx="0" fill="#212226" stroke="none" stroke-width="1"/>
+<path d="M410 206L694 206M410 246L694 246" stroke="rgb(255 255 255 / 0.30)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="419" y="223.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">runs · run_facts</text>
+<text x="419" y="237" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">the queue: one row per message</text>
+<rect x="714" y="206" width="132" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="723" y="223.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">DispatchFeed</text>
+<text x="723" y="237" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">receipts · turn ends</text>
+<rect x="866" y="206" width="132" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="875" y="223.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">stats/ledger.ts</text>
+<text x="875" y="237" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">tool_calls · usage_steps</text>
+<rect x="1018" y="206" width="132" height="40" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1027" y="223.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">LiveTranscriptIndex</text>
+<text x="1027" y="237" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">message_index · FTS5</text>
+<path d="M476 166L476 206" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M472.5 201L476 206L479.5 201" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="484" y="189.5" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">acceptNativeRun()</text>
+<path d="M628 206L628 166" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M624.5 171L628 166L631.5 171" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="636" y="189.5" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">queued runs</text>
+<path d="M780 206L780 166" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M776.5 171L780 166L783.5 171" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="788" y="189.5" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">observe()</text>
+<rect x="1018" y="300" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1027" y="319.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">TranscriptSource</text>
+<text x="1027" y="333" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">pull() · watch() · drain()</text>
+<rect x="866" y="300" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="875" y="319.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">TranscriptIngest</text>
+<text x="875" y="333" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">sync/ingest.ts</text>
+<rect x="714" y="300" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="723" y="319.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">Journal</text>
+<text x="723" y="333" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">seq · generation</text>
+<rect x="562" y="300" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="571" y="319.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">TimelineService</text>
+<text x="571" y="333" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">LaneFold → rows</text>
+<rect x="410" y="300" width="132" height="44" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="419" y="319.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">SyncConnection</text>
+<text x="419" y="333" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">SSE frames · gzip</text>
+<path d="M1018 322L998 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1003 318.5L998 322L1003 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M866 322L846 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M851 318.5L846 322L851 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M714 322L694 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M699 318.5L694 322L699 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M562 322L542 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M547 318.5L542 322L547 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M780 300L780 273L1084 273" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M780 273L780 246" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M776.5 251L780 246L783.5 251" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M932 273L932 246" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M928.5 251L932 246L935.5 251" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1084 273L1084 246" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1080.5 251L1084 246L1087.5 251" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="788" y="288" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">JournalFeed</text>
+<rect x="562" y="384" width="132" height="40" rx="0" fill="#212226" stroke="none" stroke-width="1"/>
+<path d="M562 384L694 384M562 424L694 424" stroke="rgb(255 255 255 / 0.30)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="571" y="401.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">timeline_rows</text>
+<text x="571" y="415" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">_turns · _heads</text>
+<rect x="714" y="384" width="132" height="40" rx="0" fill="#212226" stroke="none" stroke-width="1"/>
+<path d="M714 384L846 384M714 424L846 424" stroke="rgb(255 255 255 / 0.30)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="723" y="401.5" font-size="10" font-weight="600" fill="#f4f2ee" text-anchor="start" class="m">journal_events</text>
+<text x="723" y="415" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">journal_heads · blobs</text>
+<path d="M628 344L628 384" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M624.5 379L628 384L631.5 379" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="636" y="367.5" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">upsert</text>
+<path d="M780 344L780 384" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M776.5 379L780 384L783.5 379" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="788" y="367.5" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">append</text>
+<text x="866" y="401" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">journal_events: append-only, seq contiguous per session.</text>
+<text x="866" y="415" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">A lane that starts over gets a new generation; clients reset.</text>
+<rect x="24" y="122" width="144" height="222" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="34" y="143" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Client</text>
+<text x="34" y="164" font-size="10" font-weight="400" fill="#f4f2ee" text-anchor="start" class="m">SessionSync</text>
+<text x="34" y="178" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">apps/web/src/sync</text>
+<text x="34" y="192" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">:client ui/state</text>
+<text x="34" y="316" font-size="10" font-weight="400" fill="#f4f2ee" text-anchor="start" class="m">cache</text>
+<text x="34" y="330" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">IndexedDB | files</text>
+<path d="M168 144L410 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M405 140.5L410 144L405 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="178" y="137" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">POST /api/sessions/:id/native/send</text>
+<text x="178" y="159" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">{ commandId, … } → 202 Run</text>
+<path d="M410 322L168 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M173 318.5L168 322L173 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="178" y="315" font-size="10" class="m"><tspan font-weight="600" fill="#f4f2ee">SSE</tspan><tspan dx="6" fill="#bfc2c8">/api/v3/sessions/:id/sync</tspan></text>
+<text x="178" y="337" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">hello · rows · status · caughtUp</text>
+<text x="178" y="351" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">resume: Last-Event-ID &lt;gen&gt;:&lt;seq&gt;</text>
+<rect x="1220" y="122" width="120" height="222" rx="6" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1230" y="143" font-size="12" font-weight="600" fill="#f4f2ee" text-anchor="start">Agent CLI</text>
+<text x="1230" y="158" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">see fig. 3</text>
+<path d="M1150 144L1220 144" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1215 140.5L1220 144L1215 147.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1220 322L1150 322" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1155 318.5L1150 322L1155 325.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="1185" y="137" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="middle" class="m">input</text>
+<text x="1185" y="315" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="middle" class="m">transcript</text>
+<text x="24" y="480" font-size="9.5" fill="#8d929a" text-anchor="start"><tspan font-weight="600" letter-spacing="0.08em">RUN.DELIVERY</tspan></text>
+<text x="24" y="498" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">packages/contracts/src/run.ts</text>
+<text x="24" y="512" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start" class="m">docs/DELIVERY.md §3</text>
+<rect x="410" y="468" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="476" y="485" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">queued</text>
+<rect x="562" y="468" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="628" y="485" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">preparing</text>
+<path d="M542 481L562 481" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M557 477.5L562 481L557 484.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="714" y="468" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="780" y="485" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">dispatching</text>
+<path d="M694 481L714 481" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M709 477.5L714 481L709 484.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="866" y="468" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="932" y="485" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">input_sent</text>
+<path d="M846 481L866 481" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M861 477.5L866 481L861 484.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<rect x="1018" y="468" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="1084" y="485" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">observed</text>
+<path d="M998 481L1018 481" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1013 477.5L1018 481L1013 484.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="410" y="510" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">until admission is clear</text>
+<text x="562" y="510" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">until the fence is committed</text>
+<text x="714" y="510" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">until a receipt: transcript echo | hook with commandId</text>
+<text x="1018" y="510" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">until the turn ends</text>
+<rect x="866" y="528" width="132" height="26" rx="13" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="932" y="545" font-size="10.5" font-weight="500" fill="#f4f2ee" text-anchor="middle" class="m">uncertain</text>
+<path d="M986 494L986 528" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M982.5 523L986 528L989.5 523" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M998 541L1138 541" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1138 541L1138 494" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M1134.5 499L1138 494L1141.5 499" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="1026" y="536" font-size="10" font-weight="400" fill="#bfc2c8" text-anchor="start" class="m">late receipt</text>
+<text x="856" y="538" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end">receipt window ended | CLI exited during the write</text>
+<text x="856" y="552" font-size="10" font-weight="400" fill="#8d929a" text-anchor="end">no rewrite (S1); holds the queue until resolved</text>
+<text x="410" y="580" font-size="10" font-weight="400" fill="#8d929a" text-anchor="start">failed | cancelled are final. preparing → failed after 3 min of CLI_BUSY.</text>
+<path d="M24 628L50 628" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M45 624.5L50 628L45 631.5" stroke="#f4f2ee" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="58" y="631.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">call or write</text>
+<path d="M142 628L168 628" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<path d="M163 624.5L168 628L163 631.5" stroke="#5b8cff" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="176" y="631.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">event or read: direction of data</text>
+<rect x="350" y="621" width="26" height="14" rx="0" fill="#212226" stroke="none" stroke-width="1"/>
+<path d="M350 621L376 621M350 635L376 635" stroke="rgb(255 255 255 / 0.30)" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<text x="384" y="631.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">table in workbench.db</text>
+<rect x="506" y="621" width="26" height="14" rx="3" fill="#212226" stroke="rgb(255 255 255 / 0.12)" stroke-width="1"/>
+<text x="540" y="631.5" font-size="10.5" font-weight="400" fill="#bfc2c8" text-anchor="start">class, function or module</text>
+<text x="682" y="631.5" font-size="10.5" font-weight="400" fill="#8d929a" text-anchor="start">S1 at most one write per message · S3 one turn at a time (docs/DELIVERY.md §2)</text>
+</svg>

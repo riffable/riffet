@@ -8,7 +8,7 @@
 
 ### Keep the riff going.
 
-A self-hosted workbench for coding agents. Run it on any machine, open it on every screen, and shape it to fit.
+Self-hosted server and clients for running coding-agent CLIs.
 
 [![CI](https://github.com/riffable/riffet/actions/workflows/ci.yml/badge.svg)](https://github.com/riffable/riffet/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/riffable/riffet)](https://github.com/riffable/riffet/releases)
@@ -26,13 +26,15 @@ English · [简体中文](README.zh-CN.md) · [Releases](https://github.com/riff
   </picture>
 </p>
 
-A riff is a short phrase one player starts and the next picks up. Riffet keeps work with a coding agent in that shape: every session is a durable workspace on a server you own, and you can start it, read it, step in, and pick it up later from the web, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
+Riffet is a server for macOS and Linux that drives the coding-agent CLIs installed on its host. A session is stored on the server and can be started, read, steered, and resumed from any connected client: the web workbench, the native macOS, iPhone, and Android apps, or a Feishu / Lark bot.
 
-Riffet drives the agent CLIs you already use and pay for, and leaves your code, terminals, credentials, and history on that server. Apache-2.0, no account, no cloud relay, no feature paywall.
+- **Agents.** Riffet drives the official CLIs (Claude Code, Codex, Cursor, TRAE CLI, Factory Droid, DeepSeek Harness, pi) and reads each CLI’s native session store in place. Capabilities per agent are listed in the [agent matrix](#agent-matrix).
+- **Data.** Code, terminals, credentials, and history stay on the server. Clients connect to it directly.
+- **License.** Apache-2.0. Every feature is in the open-source build.
 
-## A quick look
+## Screenshots
 
-**Connect.** Scan once from a phone, and the same session runs live on every screen.
+**Pairing and multi-client sync.** A phone pairs by scanning one code; the session then updates on every connected client.
 
 <p align="center">
   <picture>
@@ -42,7 +44,7 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
   </picture>
 </p>
 
-**Start.** Choose the agent, try several at once, pick up a terminal session, switch models.
+**Starting a session.** Agent selection, parallel attempts, import of a terminal session, model selection.
 
 <p align="center">
   <picture>
@@ -52,7 +54,7 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
   </picture>
 </p>
 
-**Read, share, keep.** A streaming timeline, the canvas, search, highlights in Favorites, and sharing.
+**Reading and keeping.** Streaming timeline, canvas, search, highlights saved to Favorites, sharing.
 
 <p align="center">
   <picture>
@@ -62,7 +64,7 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
   </picture>
 </p>
 
-**Make it yours.** Palettes, light and dark, and plugins.
+**Appearance and plugins.** Palettes, light and dark modes, plugins.
 
 <p align="center">
   <picture>
@@ -72,47 +74,58 @@ Riffet drives the agent CLIs you already use and pay for, and leaves your code, 
   </picture>
 </p>
 
-## What you get
+## Features
 
-### Runs anywhere, pairs in seconds
+### Deployment and pairing
 
-- **Any machine.** Run the server on your Mac, a Linux dev box, or a cloud VM, by hand or as a launchd / systemd service. It listens on loopback by default; open it to your LAN, a VPN, or an HTTPS proxy when other devices need it.
-- **A code or a QR.** `riffet pair` prints a single-use code that lasts five minutes, with a QR code. Type the code into a browser or the Mac app, or scan it with the iPhone or Android app.
-- **More than one server.** The Mac, iPhone, and Android apps keep several servers, say your laptop and a build box, and switch between them.
-- **Nothing to pair on a Mac.** The macOS app bundles the server and opens ready to work.
+- **Host.** The server runs on a Mac, a Linux machine, or a cloud VM, started by hand or as a launchd / systemd service. It listens on loopback by default and can be exposed to a LAN, a VPN, or an HTTPS reverse proxy.
+- **Pairing.** `riffet pair` prints a single-use code valid for five minutes, and a QR code. A browser or the Mac app takes the code; the iPhone and Android apps scan the QR code.
+- **Multiple servers.** The Mac, iPhone, and Android apps store several servers and switch between them.
+- **Bundled server on macOS.** The macOS app bundles the server and connects to it without pairing.
 
-### Start the way you work
+### Sessions
 
-- **An agent per conversation.** Choose the agent and model for each conversation. Riffet drives the official CLI, so its login, rules, skills, MCP servers, and subscription keep working.
-- **Continue a terminal session.** Pick up a Claude Code or Codex session you started in the terminal, and hand it back with **Resume in terminal** or `riffet resume`. Only one side writes at a time, so the transcript never interleaves.
-- **Parallel attempts.** Send one prompt to 2–4 agents or models. Each attempt runs in its own Git worktree (a shadow repo for folders outside Git); compare the changes side by side and adopt one. *(Web, macOS)*
-- **Quick chat.** Ask something that belongs to no project, straight to a model, with web search and attachments. On the Mac it is `⌃⌥Space` away; on Android, a tile, the share sheet, or selected text. *(Web, macOS, Android)*
+- **Agent and model per session.** Each session selects its agent and model. Riffet drives the official CLI, so the CLI’s login, rules, skills, MCP servers, and subscription apply unchanged.
+- **Terminal session import and hand-back.** A Claude Code or Codex session started in a terminal can be continued in Riffet and returned with **Resume in terminal** or `riffet resume`. One side writes at a time, so the transcript does not interleave.
+- **Parallel attempts.** One prompt can be sent to 2–4 agents or models. Each attempt runs in its own Git worktree (a shadow repository for directories outside Git); the changes are compared side by side and one is adopted. *(Web, macOS)*
+- **Steering.** An instruction can be added while a turn is running, without `Ctrl+C`, or queued for the next turn.
+- **Side threads.** A selected part of an answer can be discussed in a side thread that stays out of the main timeline.
+- **Quick chat.** A question that belongs to no project goes directly to a model, with web search and attachments. Entry points: `⌃⌥Space` on macOS; a tile, the share sheet, or selected text on Android. *(Web, macOS, Android)*
+- **Scheduling.** A prompt can run once or on a cron schedule; agents can schedule their own wake-ups.
+- **Search.** `⌘K` searches session titles and content.
 
-### Your models
+### Models
 
-- **Your providers.** Add a provider by endpoint, key, and protocol (OpenAI Chat Completions or Responses, Anthropic Messages, Google Generative AI), or install a model-source plugin. Cursor can run through your own gateway.
-- **Quota in view.** The model picker shows how much of the Codex account’s quota is left, and every conversation shows how much of its context window it has used.
-- **A model for each chore.** Set separate models for session titles, quick chat, handoff summaries, and canvas summaries.
-- **Switch within a family.** Move a conversation to another model or provider of the same family and it continues in place. Across families, hand it off.
+- **Providers.** A provider is added by endpoint, key, and protocol (OpenAI Chat Completions or Responses, Anthropic Messages, Google Generative AI), or through a model-source plugin. Cursor can be routed through a custom gateway.
+- **Quota and context.** The model picker shows the remaining quota of the Codex account; each session shows how much of its context window is used.
+- **Auxiliary models.** Session titles, quick chat, handoff summaries, and canvas summaries each have their own model setting.
+- **Switching.** A session can move to another model or provider of the same family and continue in place; across families it is handed off.
 
-### Take it with you, pass it on
+### Export, references, and handoff
 
-- **Terminal, PDF, or a link.** Resume any conversation in the terminal, export it as a PDF, or publish a read-only snapshot with an expiry through a share plugin. *(PDF and links: Web, macOS)*
-- **@ another session.** Type `@` to cite an earlier conversation. The agent gets a short brief and a snapshot of the transcript it can read further, and the cited session is left untouched. *(Claude Code, Codex)*
-- **Hand off.** Out of quota, or want a second opinion? Hand an idle conversation to another agent with a structured summary.
-- **Favorites.** Highlight passages in four colors with a note, or save a whole reply, an image, or a file. Each keeps its own snapshot and outlives the session it came from. *(Web, macOS)*
+- **Export.** Any session can be resumed in a terminal, exported as a PDF, or published through a share plugin as a read-only snapshot with an expiry. *(PDF and links: Web, macOS)*
+- **Session references.** `@` cites an earlier session. The agent receives a short brief and a snapshot of the transcript that it can read further; the cited session is not modified. *(Claude Code, Codex)*
+- **Handoff.** An idle session can be handed to another agent with a structured summary, for example when quota runs out.
+- **Favorites.** Passages can be highlighted in four colors with a note; whole replies, images, and files can be saved. Each item keeps its own snapshot and stays readable after its session is deleted. *(Web, macOS)*
 
-### Everything is a plugin
+### Timeline, files, and Git
 
-The canvas and the Cursor settings are plugins themselves, built on the same [plugin API](docs/PLUGINS.md) you get. A plugin can contribute:
+- **Timeline.** Tool calls fold into one line, edits open as diffs, and each subagent has its own transcript. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite diagrams render locally, with KaTeX math and syntax highlighting for 45 languages.
+- **Views.** A session can be shown as the timeline, the live terminal, or a canvas that lays out every turn with its commands and files. *(Web, macOS)*
+- **File preview.** More than 20 file types preview locally, including sandboxed HTML, PDF, Office documents, Jupyter notebooks, SQLite, and 3D models.
+- **Git.** Review changes, stage by line, commit, switch branches, pull, push, and open a pull request through `gh`. Every turn records a checkpoint to restore or fork from; comments on diff lines are sent back to the agent.
+
+### Plugins
+
+The canvas and the Cursor settings are plugins built on the public [plugin API](docs/PLUGINS.md). A plugin can contribute:
 
 - agent backends *(experimental)* and model sources;
 - views in the conversation, sidebar, side panel, main area, or settings *(Web, macOS)*;
-- project tasks, such as building an Android app, installing and launching it, and following its Logcat;
+- project tasks, for example building an Android app, installing and launching it, and following its Logcat;
 - share publishers, commands, and actions such as a device-flow sign-in;
 - palettes, icon packs, fonts, and backgrounds.
 
-Plugins run in their own process. Browse the [plugin market](https://riffable.github.io/riffet/plugins/), or build one:
+An installed package runs in an isolated process by default; built-in plugins run in the server process ([Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md)). Published packages are listed in the [plugin market](https://riffable.github.io/riffet/plugins/). The CLI covers development, packaging, and installation:
 
 ```bash
 riffet plugin dev ./my-plugin
@@ -120,36 +133,19 @@ riffet plugin pack ./my-plugin --out my-plugin.tgz
 riffet plugin install my-plugin.tgz
 ```
 
-### Quiet by default, yours to shape
+### Interface
 
-- **Tabs and an aside.** Keep sessions open as tabs. The aside next to the conversation holds the plan, outline, subagents, background tasks, and output files. *(Tabs: Web, and macOS in the Riffet style)*
-- **Themes.** Twelve built-in palettes, near-neutral ink on low-chroma paper, and a theme editor for your own.
-- **Icons and interface styles.** Swap the icon pack, and choose how the app is drawn: Native, Riffet, or Line on macOS; Material 3, iOS, Expressive, Miuix, or Fluent on Android.
+- **Tabs and aside.** Sessions stay open as tabs. The aside next to the conversation shows the plan, outline, subagents, background tasks, and output files. *(Tabs: Web, and macOS in the Riffet style)*
+- **Themes.** Twelve built-in palettes (near-neutral ink on low-chroma paper) and a theme editor for custom ones.
+- **Icons and interface styles.** The icon pack is replaceable. Interface styles: Native, Riffet, or Line on macOS; Material 3, iOS, Expressive, Miuix, or Fluent on Android.
 
-### The basics, done properly
+### Clients
 
-- **A readable timeline.** Tool calls fold into one line, edits open as diffs, and subagents get their own transcript. Mermaid, D2, Graphviz, PlantUML, and Vega-Lite render locally, alongside KaTeX math and highlighting for 45 languages.
-- **Files in place.** More than 20 file types preview locally, including HTML in a sandbox, PDF, Office documents, Jupyter notebooks, SQLite, and 3D models.
-- **Git.** Review changes, stage by line, commit, switch branches, pull, push, and open the PR through `gh`. Every turn leaves a checkpoint to restore or fork from, and comments on diff lines go back to the agent.
-- **Steer and side chats.** Add an instruction while the agent works, without `Ctrl+C`, or queue it for the next turn. Select part of an answer to ask about it in a side thread that stays out of the main timeline.
-- **Search and schedules.** Search session titles and content from `⌘K`. Run a prompt once or on a cron schedule, and let agents schedule their own wake-ups.
-- **Three views.** Switch a conversation between the timeline, the live terminal, and a canvas that lays out every turn with its commands and files. *(Web, macOS)*
-
-### Native on every screen
-
-- **Web.** The complete workbench in any browser, with nothing to install on the client.
-- **macOS.** A native app with its own server. The menu bar shows running sessions and pending approvals; Shortcuts, widgets, and Spotlight reach into it.
-- **iPhone.** Answer permission prompts, read diffs, browse remote folders, and open a terminal.
-- **Android.** Five interface styles, a touch terminal, and quick chat from anywhere. In preview, an agent on your server can read and operate the phone, behind a per-session switch and a biometric opt-in.
-- **Feishu / Lark.** The bot connects outbound over WebSocket, so it needs no public IP, domain, or tunnel. Start or continue a project conversation in a DM or a group topic, and approve actions in the chat.
-
-## What it leaves alone
-
-- **Your agents.** Riffet has no agent or model of its own. It reads each CLI’s native session store in place.
-- **Your editor.** Keep editing in your own IDE. Riffet is where you start, read, review, and steer.
-- **Your data.** No account and no relay. Clients connect to your server directly and hold no agent and no code.
-
-It works today with Claude Code, Codex, Cursor, TRAE CLI, Factory Droid, DeepSeek Harness, and pi, and more are being added. See [what each supports](#agent-matrix).
+- **Web.** The complete workbench in a browser, served by the Riffet server.
+- **macOS.** A native app with a bundled server. The menu bar lists running sessions and pending approvals; Shortcuts, widgets, and Spotlight are supported.
+- **iPhone.** Permission prompts, diffs, remote folder browsing, and a terminal.
+- **Android.** Five interface styles, a touch terminal, and quick chat from system entry points. In preview: an agent on the server can read and operate the phone, gated by a per-session switch and a biometric opt-in on the device.
+- **Feishu / Lark.** The bot connects outbound over WebSocket and needs no public IP, domain, or tunnel. A project session is started or continued in a DM or a group topic, and approvals are answered in the chat.
 
 ---
 
@@ -158,14 +154,14 @@ It works today with Claude Code, Codex, Cursor, TRAE CLI, Factory Droid, DeepSee
 ### Prerequisites
 
 - **macOS or Linux** with **Node.js `>= 24.19.0`** (`pnpm` is also required when building from source).
-- **`tmux >= 3.2`** (needed for Cursor / Claude Code sessions and live terminal views).
-- At least one [supported agent CLI](#agent-matrix) installed and signed in on the host machine.
+- **`tmux >= 3.2`**, required for Cursor and Claude Code sessions and for live terminal views.
+- At least one [supported agent CLI](#agent-matrix), installed and signed in on the host.
 
-### 1. Install Riffet
+### 1. Install
 
 <!-- TODO(release): Uncomment/update download links once npm package and GitHub Release assets are published. -->
 
-**Option A — Build from source (available today)**
+**Option A: build from source (available now)**
 
 ```bash
 git clone https://github.com/riffable/riffet.git ~/.local/src/riffet
@@ -176,59 +172,59 @@ mkdir -p "$HOME/.local/bin"
 ln -s "$HOME/.local/src/riffet/scripts/riffet.mjs" "$HOME/.local/bin/riffet"
 ```
 
-**Option B — npm & prebuilt native apps *(release channels reserved)***
+**Option B: npm and prebuilt apps (not yet published)**
 
-| Surface | Channel | Notes |
+| Component | Channel | Notes |
 | :--- | :--- | :--- |
-| **Server + Web CLI** | `npm install -g riffet` *(upcoming)* | Upgrades via `npm i -g riffet@latest && riffet restart` (avoid `npx` so hook/MCP paths stay permanent) |
-| **macOS App** | [`Riffet.dmg` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime out of the box |
-| **Android App** | [`APK` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | Pairs via QR code or address + one-time code |
-| **iPhone App** | Source build (`apps/mobile/iosApp`) | iOS 18+; sign with your Apple team ID ([guide](apps/mobile/iosApp/README.md)) |
+| Server and web workbench | `npm install -g riffet` *(upcoming)* | Upgrade with `npm i -g riffet@latest && riffet restart`. Do not run it through `npx`: hook and MCP paths must stay permanent |
+| macOS app | [`Riffet.dmg` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime |
+| Android app | [`APK` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | Pairs by QR code, or by address and one-time code |
+| iPhone app | Source build (`apps/mobile/iosApp`) | iOS 18+; signed with your own Apple team ID ([guide](apps/mobile/iosApp/README.md)) |
 
-### 2. Verify your environment & launch
+### 2. Check the environment and start
 
 ```bash
-riffet doctor                  # ✅ / ⚠️ / ❌ checklist for Node, tmux, the agent CLIs, port & permissions
-riffet start --workspace .     # start background daemon and register the current repo
-riffet                         # open http://127.0.0.1:4337/ in your browser
+riffet doctor                  # checklist for Node, tmux, the agent CLIs, port, and permissions
+riffet start --workspace .     # start the background daemon and register the current repository
+riffet                         # open http://127.0.0.1:4337/ in a browser
 ```
 
-### 3. Connect your phone, another Mac, or Feishu
+### 3. Connect other devices
 
-Loopback-only (`127.0.0.1`) is the safe default. When you want to reach your server from other devices on your LAN, Tailscale / VPN, or an HTTPS proxy:
+The server listens on `127.0.0.1` by default. To reach it from other devices over a LAN, Tailscale / VPN, or an HTTPS proxy:
 
 ```bash
 riffet restart --host 0.0.0.0 --auth
-riffet pair                    # prints reachable URLs, a 5-min single-use code, and a QR code
+riffet pair                    # prints reachable URLs, a five-minute single-use code, and a QR code
 ```
 
-Scan the QR code in the iPhone / Android app, enter the 5-minute code in a remote browser or Mac app, or connect a Feishu / Lark bot under **Settings → Bots** (outbound WebSocket, no public endpoint needed). See [Remote Access](docs/guide/remote-access.md) for `--allow-host` and `riffet pair --url` tunnel setups.
+The iPhone and Android apps scan the QR code; a remote browser or the Mac app takes the code. A Feishu / Lark bot is connected under **Settings → Bots** (outbound WebSocket, no public endpoint). `--allow-host` and `riffet pair --url` for tunnels are covered in [Remote Access](docs/guide/remote-access.md).
 
 <details>
-<summary><strong>Common CLI commands &amp; defaults</strong></summary>
+<summary><strong>CLI commands and defaults</strong></summary>
 
 ```bash
-riffet                 # start background server (if stopped) and open browser
+riffet                 # start the background server (if stopped) and open a browser
 riffet status          # show daemon status, listen address, and state directory
-riffet pair            # generate a 5-minute single-use pairing code and QR (--url for tunnels)
+riffet pair            # generate a five-minute single-use pairing code and QR code (--url for tunnels)
 riffet stop            # stop the web server; live tmux agent terminals keep running
-riffet restart         # restart using saved listener & auth settings
-riffet logs -f         # tail server logs with tokens automatically redacted
-riffet token           # print raw admin token to stdout (e.g. riffet token | pbcopy)
+riffet restart         # restart with the saved listener and auth settings
+riffet logs -f         # tail server logs; tokens are redacted
+riffet token           # print the admin token to stdout (e.g. riffet token | pbcopy)
 riffet login-url       # print a one-step browser login URL
-riffet doctor          # inspect environment (--json for machine-readable report)
+riffet doctor          # inspect the environment (--json for a machine-readable report)
 riffet update --check  # check origin for newer stable vX.Y.Z release tags
 riffet update          # update a clean source release checkout and restore the daemon
 riffet plugin --help   # develop, pack, install, and diagnose plugins
 ```
 
-Defaults: `http://127.0.0.1:4337/`, default backend `cursor-agent`, private state directory `~/.local/share/riffet` (`0700` dir / `0600` secrets), token-free on loopback. Override with `--port`, `--host`, `--cli`, `--state-dir`, `--workspace`, or `--allow-host` (`--port`, `--host`, `--cli`, and `--state-dir` also read `RIFFET_PORT`, `RIFFET_HOST`, `RIFFET_CLI`, and `RIFFET_STATE_DIR`).
+Defaults: `http://127.0.0.1:4337/`, default backend `cursor-agent`, private state directory `~/.local/share/riffet` (`0700` directory, `0600` secrets), no token on loopback. Overrides: `--port`, `--host`, `--cli`, `--state-dir`, `--workspace`, `--allow-host`; `--port`, `--host`, `--cli`, and `--state-dir` also read `RIFFET_PORT`, `RIFFET_HOST`, `RIFFET_CLI`, and `RIFFET_STATE_DIR`.
 
 </details>
 
 ---
 
-## Agent Matrix
+## Agent matrix
 
 | Agent | CLI | Structured Chat | Live TUI | Mid-Turn Steer | Subagent View | Riffet MCP & Wakeups | Per-Chat MCP / Skill Toggle | @ Session | Terminal Import / Resume |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
@@ -240,11 +236,52 @@ Defaults: `http://127.0.0.1:4337/`, default backend `cursor-agent`, private stat
 | **TRAE CLI** | `traex` | ✓ | ✓ (native) | ✓ | ✓ | ✓ | MCP | — | — |
 | **pi** | `pi` (`1.4.0+`) | ✓ | — | — | — | ✓ | — | — | — |
 
-> Override any CLI path via `RIFFET_CLI`, `CLAUDE_CLI`, `CODEX_CLI`, `DROID_CLI`, `TRAEX_CLI`, `PI_CLI`, or per-profile settings under **Settings → Models**. Need another provider, custom view, or theme? Build an isolated package with [`@riffet/plugin-api`](docs/PLUGINS.md).
+A CLI path is set with `RIFFET_CLI`, `CLAUDE_CLI`, `CODEX_CLI`, `DROID_CLI`, `TRAEX_CLI`, or `PI_CLI`, or per profile under **Settings → Models**. Other providers, views, and themes are added as plugin packages built with [`@riffet/plugin-api`](docs/PLUGINS.md).
 
 ---
 
-## Development & Building Clients
+## Architecture
+
+Riffet is a single-node server between its clients and the agent CLIs installed on the same host. A command takes one path to the agent; what the agent does returns on another, folded into rows that every client renders alike.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture/system-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/assets/architecture/system-light.svg">
+    <img alt="Riffet system architecture: clients, the server's Access, Session core (Delivery, Journal, Timeline, Sync) and Agent integration subsystems with Automation, Workspace, Derived views, Extension and Platform around them, and the agent CLI below; commands flow down, events and rows flow up" src="docs/assets/architecture/system-light.svg" width="100%">
+  </picture>
+</p>
+
+Design principles:
+
+1. **The vendor CLI is the agent.** Riffet drives the installed program through its own interface and does not reimplement it.
+2. **One session model.** Differences between agents end at the driver contract; nothing above it names a vendor.
+3. **Commands and observations are separate paths.** A message is delivered when its receipt is observed, not when it was written.
+4. **The journal is the source of truth.** Timeline, status, usage and search are projections of it.
+5. **The server folds, clients render.** Every client resumes from a cursor and receives the same rows.
+6. **Single node.** One process, one database file, one user; no external service is required.
+7. **Dependencies point inward.** Surfaces and drivers depend on the core, never the reverse; optional capability arrives as a plugin.
+
+| Subsystem | Responsibility | Code |
+| :--- | :--- | :--- |
+| Clients | Render rows, keep a replica and a cache of them, send commands | `apps/web`, `apps/mobile`, `apps/macos` |
+| Access | Authenticates devices, terminates HTTP, SSE and WebSocket, adapts chat channels | `apps/server/src/auth.ts`, `apps/server/src/routes`, `apps/server/src/channels` |
+| Session core: Delivery | Queues a message, admits one turn at a time, writes it at most once, tracks it to a receipt | `apps/server/src/native` |
+| Session core: Journal | Append-only event log, ordered per session | `apps/server/src/journal` |
+| Session core: Timeline | Folds events into the rows clients render | `apps/server/src/timeline`, `packages/timeline` |
+| Session core: Sync | Streams rows to each client from its cursor | `apps/server/src/sync` |
+| Agent integration | One driver per agent behind one contract; terminal host, hook bridge, tool bridge | `apps/server/src/backends`, `apps/server/src/terminal`, `apps/server/src/riffet-mcp` |
+| Automation | Issues commands without a person: schedules, tasks, hand-offs | `apps/server/src/orchestration`, `apps/server/src/tasks` |
+| Workspace | Files, git and working trees of the directories agents work in | `apps/server/src/workspace`, `apps/server/src/git` |
+| Derived views | Read models built from the journal: usage, search index, titles, shares | `apps/server/src/stats`, `apps/server/src/search`, `apps/server/src/shares` |
+| Extension | Loads plugins at declared extension points; installed packages run isolated | `apps/server/src/plugins-host`, `packages/plugin-api` |
+| Platform | SQLite store, settings, process execution, service lifecycle | `apps/server/src/store.ts`, `apps/server/src/exec.ts` |
+
+Each subsystem, the import layering, and the runtime topology (processes, files, interfaces) have a figure of their own in [docs/guide/architecture.md](docs/guide/architecture.md).
+
+---
+
+## Development
 
 ```bash
 pnpm dev               # API server on :4317
@@ -268,19 +305,19 @@ cd apps/macos
 ./scripts/release.sh          # build signed & notarized DMG
 ```
 
-Automated testing follows [AGENTS.md](AGENTS.md): **do not add tests unless necessary** — tests focus strictly on authentication, data isolation, protocol contracts, idempotency, persistence, concurrency, and failure recovery rather than UI snapshots or styling. See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
+Automated tests follow [AGENTS.md](AGENTS.md): a test is added only when necessary, and tests cover authentication, data isolation, protocol contracts, idempotency, persistence, concurrency, and failure recovery, not UI snapshots or styling. The checks to run before opening a pull request are in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Documentation
 
-Detailed design and operational docs under `docs/` are primarily written in Chinese:
+Design and operations documents under `docs/` are written mainly in Chinese:
 
 - **Guides**: [Conversations, Models & Sessions](docs/guide/conversation.md) · [Cursor CLI & Custom Gateways](docs/guide/cursor.md) · [Workspace, Previews & Git](docs/guide/workspace.md) · [Remote Access](docs/guide/remote-access.md) · [Operations & Deployment](docs/guide/operations.md) · [Architecture](docs/guide/architecture.md)
 - **Workflows**: [Review & Orchestration](docs/ORCHESTRATION.md) · [Mid-Turn Steering](docs/STEER.md) · [Side Chats](docs/DISCUSSIONS.md) · [Quick Chat](docs/QUICK-CHAT.md) · [Bookmarks & Highlights](docs/MARKS.md) · [Session Sharing & PDF](docs/SHARES.md) · [Usage & Throughput Stats](docs/STATS.md)
 - **Surfaces & Channels**: [Web](docs/WEB.md) · [macOS](docs/MACOS.md) · [Android & Mobile](docs/MOBILE.md) · [iPhone](docs/IOS.md) · [Mobile Terminal](docs/MOBILE-TERMINAL.md) · [Feishu / IM Channels](docs/design/channels.md) · [Devices & Riffet MCP](docs/DEVICES.md) · [Themes](docs/THEMES.md)
 - **Extensibility & Ops**: [Agent Extensions](docs/EXTENSIONS.md) · [Plugin Guide](docs/PLUGINS.md) · [Plugin Architecture](docs/PLUGIN_ARCHITECTURE.md) · [TRAE CLI](docs/TRAEX.md) · [pi RPC](docs/PI.md) · [Updates](docs/UPDATE.md) · [Security Model](docs/SECURITY.md)
 
-## Acknowledgements & License
+## Acknowledgements and license
 
 Visual design draws inspiration from [ZCode](https://github.com/zai-org/ZCode) and [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness); the DSH backend bridge adapts portions of DeepSeek Harness's MIT-licensed native interfaces with upstream notices preserved alongside the code.
 
-Licensed under [Apache-2.0](LICENSE). Third-party notices are listed in [NOTICE](NOTICE); please report security vulnerabilities privately via [SECURITY.md](SECURITY.md).
+Licensed under [Apache-2.0](LICENSE). Third-party notices are listed in [NOTICE](NOTICE); security vulnerabilities are reported privately as described in [SECURITY.md](SECURITY.md).
