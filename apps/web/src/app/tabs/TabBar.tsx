@@ -180,7 +180,10 @@ function Zone({ name, variant, onReorder, onOverflow, onDragBegin, className, ch
     if (!node) return;
     // A tab growing in or collapsing out briefly overfills the row; read it once they settle, so
     // the fades and the 全部标签 button do not flash on every switch.
-    const moving = node.getAnimations({ subtree: true }).filter((animation) => (animation.effect as KeyframeEffect | null)?.target?.parentElement === node);
+    // A closed tab's collapse fills forwards, so it stays listed after it finishes; waiting on its
+    // already-settled `finished` would re-measure in a microtask loop that never yields.
+    const moving = node.getAnimations({ subtree: true }).filter((animation) => animation.playState !== 'finished'
+      && (animation.effect as KeyframeEffect | null)?.target?.parentElement === node);
     if (moving.length) {
       if (!settling.current) {
         settling.current = true;
