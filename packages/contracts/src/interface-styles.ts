@@ -57,8 +57,8 @@ export interface DesktopStyleTokens {
   radii: { control: DesktopStyleLength; container: DesktopStyleLength; card: DesktopStyleLength; floating: DesktopStyleLength };
   /** Default sidebar width, a conversation row's height, the space above each of its groups, the content header's height, the right panel's width. */
   layout: { sidebarWidth: number; sidebarRow: number; sidebarGap: number; header: number; rightPanel: number };
-  /** Interface text: rows and controls, secondary text, section labels. */
-  text: { body: DesktopStyleLength; secondary: DesktopStyleLength; label: DesktopStyleLength };
+  /** Interface text: rows and controls, secondary text, section labels, and the sidebar's rows (navigation, projects, conversations). */
+  text: { body: DesktopStyleLength; secondary: DesktopStyleLength; label: DesktopStyleLength; sidebar: DesktopStyleLength };
   /**
    * The icon pack drawn by default (the reader can pick another, as on Android): `sf-symbols`, the
    * system's; `web`, the glyphs the web client draws; or a built-in pack id (`lucide`, `phosphor`…).
@@ -81,8 +81,8 @@ export const DESKTOP_STYLES: readonly DesktopStyle[] = [
     recipes: { backend: 'native', titleBar: 'unified', window: 'system', sidebar: 'systemList', header: 'toolbar', rightPanel: 'inspector', composer: 'card', toolRun: 'summary', approval: 'stack', home: 'tiles', settings: 'window', surface: 'raised', block: 'filled', form: 'grouped', menu: 'system', selection: 'wash' },
     tokens: {
       radii: { control: 6, container: 10, card: 10, floating: 14 },
-      layout: { sidebarWidth: 268, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340 },
-      text: { body: 13, secondary: 12, label: 11 },
+      layout: { sidebarWidth: 248, sidebarRow: 28, sidebarGap: 12, header: 52, rightPanel: 340 },
+      text: { body: 13, secondary: 12, label: 11, sidebar: 13 },
       icons: 'sf-symbols',
       fonts: { ui: 'system', mono: 'system' },
     },
@@ -93,8 +93,9 @@ export const DESKTOP_STYLES: readonly DesktopStyle[] = [
     recipes: { backend: 'custom', titleBar: 'unified', window: 'insetCard', sidebar: 'projectTree', header: 'sessionTabs', rightPanel: 'outline', composer: 'card', toolRun: 'summary', approval: 'rows', home: 'tiles', settings: 'modal', surface: 'raised', block: 'filled', form: 'grouped', menu: 'drawn', selection: 'block' },
     tokens: {
       radii: { control: '--radius-md', container: '--radius-lg', card: '--radius-xl', floating: '--radius-2xl' },
-      layout: { sidebarWidth: 256, sidebarRow: 30, sidebarGap: 8, header: 44, rightPanel: 320 },
-      text: { body: '--text-base', secondary: '--text-sm', label: '--text-xs' },
+      layout: { sidebarWidth: 236, sidebarRow: 30, sidebarGap: 8, header: 44, rightPanel: 320 },
+      // The web's sidebar sets its rows a step below body text.
+      text: { body: '--text-base', secondary: '--text-sm', label: '--text-xs', sidebar: '--text-sm' },
       // The web's desktop typefaces and icons.
       icons: 'web',
       fonts: { ui: 'Inter', mono: 'JetBrains Mono' },
@@ -110,8 +111,8 @@ export const DESKTOP_STYLES: readonly DesktopStyle[] = [
       // Rows a little taller and groups further apart than the system list. The header is the
       // compact title bar's height, so its title sits level with the traffic lights and the window
       // keeps the smaller corner.
-      layout: { sidebarWidth: 272, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340 },
-      text: { body: 14, secondary: 13, label: 12 },
+      layout: { sidebarWidth: 248, sidebarRow: 34, sidebarGap: 18, header: 40, rightPanel: 340 },
+      text: { body: 14, secondary: 13, label: 12, sidebar: 14 },
       // Claude Desktop sets its interface in the system face, with thin outlined icons.
       icons: 'lucide',
       fonts: { ui: 'system', mono: 'system' },

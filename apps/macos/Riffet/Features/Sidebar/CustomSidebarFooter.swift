@@ -67,7 +67,7 @@ struct CustomSidebarFooter: View {
                     BrandMark(front: palette.fg, back: palette.accent).frame(width: S(style.text.body + 6), height: S(style.text.body + 6))
                 }
                 Text(workbench.owner?.name ?? "Riffet")
-                    .font(.riffet(size: S(style.text.body), weight: .medium))
+                    .font(.riffet(size: S(style.text.sidebar), weight: .medium))
                     .foregroundStyle(palette.fg)
                     .lineLimit(1)
                 Text(verbatim: "· \(hostName)")

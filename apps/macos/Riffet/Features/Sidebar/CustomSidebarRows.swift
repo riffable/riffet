@@ -36,7 +36,7 @@ struct CustomNavRow: View {
                     .foregroundStyle(palette.fg2)
                     .frame(width: iconColumn)
                 Text(title)
-                    .font(.riffet(size: S(style.text.body)))
+                    .font(.riffet(size: S(style.text.sidebar)))
                     .foregroundStyle(palette.fg)
                     .lineLimit(1)
                 Spacer(minLength: 0)
@@ -197,7 +197,7 @@ struct CustomSessionRow: View, Equatable {
             HStack(spacing: Space.sm) {
                 if indented { Color.clear.frame(width: iconColumn, height: 0) }
                 Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
-                    .font(.riffet(size: S(style.text.body)))
+                    .font(.riffet(size: S(style.text.sidebar)))
                     .lineLimit(1)
                     .foregroundStyle(session.archivedAt != nil ? palette.fg3 : selected ? palette.fg : palette.fg2)
                 Spacer(minLength: Space.xs)
@@ -260,7 +260,7 @@ struct CustomProjectRow: View {
                         .foregroundStyle(palette.fg2)
                         .frame(width: iconColumn)
                     Text(project.name)
-                        .font(.riffet(size: S(style.text.body)))
+                        .font(.riffet(size: S(style.text.sidebar)))
                         .foregroundStyle(palette.fg)
                         .lineLimit(1)
                     if let worktree = project.worktree {

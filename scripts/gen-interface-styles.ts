@@ -67,7 +67,7 @@ for (const family of families) {
 emit();
 emit('    struct Radii: Sendable, Equatable { let control, container, card, floating: CGFloat }');
 emit('    struct Layout: Sendable, Equatable { let sidebarWidth, sidebarRow, sidebarGap, header, rightPanel: CGFloat }');
-emit('    struct Text: Sendable, Equatable { let body, secondary, label: CGFloat }');
+emit('    struct Text: Sendable, Equatable { let body, secondary, label, sidebar: CGFloat }');
 emit('    struct Fonts: Sendable, Equatable { let ui, mono: String }');
 emit();
 for (const family of families) emit(`    let ${family}: ${pascal(family)}`);
@@ -85,7 +85,7 @@ for (const style of DESKTOP_STYLES) {
   emit(`        ${families.map((family) => `${family}: .${style.recipes[family]}`).join(', ')},`);
   emit(`        radii: Radii(control: ${length(radii.control, at('radii', 'control'))}, container: ${length(radii.container, at('radii', 'container'))}, card: ${length(radii.card, at('radii', 'card'))}, floating: ${length(radii.floating, at('radii', 'floating'))}),`);
   emit(`        layout: Layout(sidebarWidth: ${layout.sidebarWidth}, sidebarRow: ${layout.sidebarRow}, sidebarGap: ${layout.sidebarGap}, header: ${layout.header}, rightPanel: ${layout.rightPanel}),`);
-  emit(`        text: Text(body: ${length(text.body, at('text', 'body'))}, secondary: ${length(text.secondary, at('text', 'secondary'))}, label: ${length(text.label, at('text', 'label'))}),`);
+  emit(`        text: Text(body: ${length(text.body, at('text', 'body'))}, secondary: ${length(text.secondary, at('text', 'secondary'))}, label: ${length(text.label, at('text', 'label'))}, sidebar: ${length(text.sidebar, at('text', 'sidebar'))}),`);
   emit(`        icons: ${JSON.stringify(style.tokens.icons)},`);
   emit(`        fonts: Fonts(ui: ${JSON.stringify(style.tokens.fonts.ui)}, mono: ${JSON.stringify(style.tokens.fonts.mono)})`);
   emit('    )');
