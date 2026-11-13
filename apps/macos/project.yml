@@ -163,7 +163,7 @@ targets:
           - -framework
           - RiffetKit
           - -lsqlite3
-        RIFFET_APPCAST_URL: https://github.com/riffable/riffet/releases/latest/download/appcast.xml
+        RIFFET_APPCAST_URL: https://riffable.github.io/riffet/appcast.xml
         RIFFET_SPARKLE_PUBLIC_KEY: ""
         RIFFET_BUNDLE_SERVER: NO
       configs:

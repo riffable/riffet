@@ -162,19 +162,39 @@ final class ServicesProvider: NSObject {
 @MainActor
 final class Updater {
     static let shared = Updater()
+    private static let betaKey = "receiveBetaUpdates"
     private var controller: SPUStandardUpdaterController?
+    /// SPUStandardUpdaterController holds its delegate weakly.
+    private let channels = UpdateChannels()
 
     var available: Bool { controller != nil }
+
+    var receivesBeta: Bool {
+        get { UserDefaults.standard.bool(forKey: Self.betaKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.betaKey) }
+    }
 
     func start() {
         let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? ""
         let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? ""
         guard !feed.isEmpty, !key.isEmpty else { return }
-        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        controller = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: channels, userDriverDelegate: nil)
     }
 
     func checkForUpdates() {
         controller?.checkForUpdates(nil)
+    }
+
+    /// A prerelease build (`0.8.0-beta.1`) stays on the beta channel whatever the preference says.
+    fileprivate static var wantsBeta: Bool {
+        if UserDefaults.standard.bool(forKey: betaKey) { return true }
+        return AppBuildRecord.bundled?.build.version.contains("-") == true
+    }
+}
+
+private final class UpdateChannels: NSObject, SPUUpdaterDelegate {
+    func allowedChannels(for updater: SPUUpdater) -> Set<String> {
+        Updater.wantsBeta ? ["beta"] : []
     }
 }
 

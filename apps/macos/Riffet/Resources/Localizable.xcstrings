@@ -10919,6 +10919,16 @@
         }
       }
     },
+    "接收测试版更新": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Receive beta updates"
+          }
+        }
+      }
+    },
     "接管终端": {
       "localizations": {
         "en": {

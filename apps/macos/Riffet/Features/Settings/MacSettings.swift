@@ -644,6 +644,7 @@ extension AppBuildRecord {
 /// check and update command.
 struct AboutSettings: View {
     @State private var updates = GitUpdates()
+    @State private var receivesBeta = Updater.shared.receivesBeta
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -684,6 +685,13 @@ struct AboutSettings: View {
 
     @ViewBuilder
     private var updateCard: some View {
+        if usesFeed {
+            Toggle("接收测试版更新", isOn: Binding(
+                get: { receivesBeta },
+                set: { receivesBeta = $0; Updater.shared.receivesBeta = $0 }
+            ))
+        }
+
         HStack(spacing: Space.sm) {
             SettingsActionButton(
                 updates.checking ? "检查中…" : "检查更新…",
