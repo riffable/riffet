@@ -269,7 +269,7 @@ export function Surface({ api, world, overlay, className }: { api: CameraApi; wo
   return (
     <div
       ref={api.ref}
-      className={cn('relative min-h-0 flex-1 cursor-grab touch-none select-none overflow-clip bg-subtle active:cursor-grabbing', className)}
+      className={cn('canvas-plane relative min-h-0 flex-1 cursor-grab touch-none select-none overflow-clip bg-[var(--canvas-desk)] active:cursor-grabbing', className)}
       onPointerDown={api.bind.onPointerDown}
       onPointerMove={api.bind.onPointerMove}
       onPointerUp={api.bind.onPointerUp}

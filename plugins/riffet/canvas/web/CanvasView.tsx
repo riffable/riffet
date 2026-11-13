@@ -686,7 +686,7 @@ function TrackLabels({ api, tracks }: { api: CameraApi; tracks: TrackBand[] }) {
     if (y < 40 || y > api.size.h - 20 || end < 160 || start > api.size.w) return null;
     const Icon = icons[track.kind];
     return (
-      <span key={track.id} className="pointer-events-none absolute flex max-w-[180px] -translate-y-1/2 items-center gap-1.5 rounded-full border border-line-soft bg-subtle/90 px-2 py-0.5 text-[11px] text-fg-3 backdrop-blur" style={{ left: Math.max(12, start), top: y }} title={track.label}>
+      <span key={track.id} className="pointer-events-none absolute flex max-w-[180px] -translate-y-1/2 items-center gap-1.5 rounded-full border border-line-soft bg-[var(--canvas-paper)]/90 px-2 py-0.5 text-[11px] text-fg-3 backdrop-blur" style={{ left: Math.max(12, start), top: y }} title={track.label}>
         <Icon className="size-3 shrink-0 text-fg-4" />
         <span className={cn('truncate', track.kind === 'write' && track.external && 'font-mono text-[10.5px] text-fg-2')} dir={track.external ? 'rtl' : undefined}><bdi>{track.kind === 'write' ? track.label : names[track.kind]}</bdi></span>
       </span>

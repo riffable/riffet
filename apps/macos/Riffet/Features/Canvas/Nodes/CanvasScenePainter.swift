@@ -11,7 +11,7 @@ enum CanvasScenePainter {
     static func draw(in ctx: CGContext, layout: CanvasLayout, paint base: CanvasPaint, camera: Camera, size: CGSize, ground: CanvasGround? = nil) {
         let p = base.with(zoom: camera.k)
         ctx.saveGState()
-        ctx.setFillColor(p.subtle())
+        ctx.setFillColor(p.desk)
         ctx.fill(CGRect(origin: .zero, size: size))
         CanvasGroundPainter.drawDots(in: ctx, paint: p, camera: (camera.x, camera.y, camera.k), size: size)
         let ground = ground ?? CanvasGroundBuilder.make(layout: layout, paint: p)

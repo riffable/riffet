@@ -59,7 +59,7 @@ export const Node = memo(function Node({ node, far, cutoff, now, pulse, fresh, d
   actions: CardActions;
 }) {
   const style: CSSProperties = { left: node.x, top: node.y, width: node.w, height: node.h, transition: SIZE_TRANSITION };
-  const shell = cn('absolute outline-none', fresh && 'canvas-enter', dim && 'opacity-45', selected && 'ring-2 ring-accent/50 ring-offset-2 ring-offset-subtle');
+  const shell = cn('absolute outline-none', fresh && 'canvas-enter', dim && 'opacity-45', selected && 'ring-2 ring-accent/50 ring-offset-2 ring-offset-[var(--canvas-paper)]');
   const press = {
     'data-node': node.id,
     role: 'button' as const, tabIndex: far ? -1 : 0,
@@ -195,7 +195,7 @@ function Signal({ node, far, cutoff, press, className, style }: { node: Extract<
   const m = useMessages(catalogs);
   const arrivals = (node.detail?.arrivals ?? []).filter((arrival) => arrival.at <= cutoff);
   return (
-    <div {...press} className={cn(className, 'flex cursor-pointer flex-col justify-center rounded-[12px] border border-dashed px-3', far ? 'border-fg/20' : 'border-line-strong bg-subtle/60 hover:bg-elevated/60')} style={style}>
+    <div {...press} className={cn(className, 'flex cursor-pointer flex-col justify-center rounded-[12px] border border-dashed px-3', far ? 'border-fg/20' : 'border-line-strong bg-[var(--canvas-paper)]/60 hover:bg-elevated/60')} style={style}>
       {!far && (arrivals.length ? arrivals.map((arrival) => (
         <span key={arrival.id} className="flex min-w-0 items-center gap-1.5 text-[12px] text-fg-2" style={{ height: ROW.signalRow }}>
           {arrival.status === 'failed' ? <IconCircleAlert className="size-3 shrink-0 text-danger" /> : arrival.status === 'running' ? <Spinner className="size-3 shrink-0" /> : <IconCircleCheck className="size-3 shrink-0 text-fg-3" />}
@@ -420,7 +420,7 @@ function FoldPin({ node, far, press, className, style }: { node: Extract<FlowNod
   if (far) return <div {...press} className={cn(className, 'rounded-full bg-fg/[0.05]')} style={style} />;
   return (
     <div {...press} className={cn(className, 'flex cursor-pointer items-center justify-center')} style={style}>
-      <span className="flex h-full items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-line-strong bg-subtle px-2.5 text-[11px] text-fg-3 hover:text-fg-2">
+      <span className="flex h-full items-center gap-1.5 whitespace-nowrap rounded-full border border-dashed border-line-strong bg-[var(--canvas-paper)] px-2.5 text-[11px] text-fg-3 hover:text-fg-2">
         <IconArrowsInLineHorizontal className="size-3.5 text-fg-4" />
         {m.compaction}
         {node.tokens && <span className="font-mono text-[10.5px] tabular-nums text-fg-4">{node.tokens}</span>}
@@ -459,8 +459,8 @@ export function useMarkPointer(marks: readonly Mark[], width: number, inRow: (x:
 }
 
 const DIFF_LINE = { add: 'bg-[var(--diff-add)] text-fg', del: 'bg-[var(--diff-del)] text-fg', same: 'text-fg-3' } as const;
-/** The canvas's own ground under a frame, so a ledger hides the dots and the track's line behind its text. */
-const GROUND = 'color-mix(in oklab, var(--bg-subtle), var(--fg) 1.8%)';
+/** A shade of the paper under a ledger, so it hides the track's line behind its text. */
+const GROUND = 'color-mix(in oklab, var(--canvas-paper), var(--fg) 1.8%)';
 
 /**
  * What an answer wrote under one directory, printed on its track: a rule down the left split green

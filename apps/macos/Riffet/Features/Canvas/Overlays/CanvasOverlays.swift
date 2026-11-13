@@ -129,6 +129,14 @@ struct CanvasTrackLabel: View {
     var kind: CanvasTrackKind
     var external: Bool
     @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var scheme
+
+    /// The paper the label sits on (`--canvas-paper`).
+    private var paper: Color {
+        let dark = scheme == .dark
+        let c = (dark ? palette.values.dark : palette.values.light).canvasPaper(dark: dark)
+        return Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: c.alpha)
+    }
 
     var body: some View {
         HStack(spacing: 6) {
@@ -141,7 +149,7 @@ struct CanvasTrackLabel: View {
         }
         .padding(.horizontal, 8).padding(.vertical, 2)
         .frame(maxWidth: 180)
-        .background(palette.bgSubtle.opacity(0.9), in: Capsule())
+        .background(paper.opacity(0.9), in: Capsule())
         .overlay(Capsule().strokeBorder(palette.lineSoft, lineWidth: 1))
         .fixedSize()
     }

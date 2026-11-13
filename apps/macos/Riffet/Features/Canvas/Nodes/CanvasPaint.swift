@@ -117,15 +117,12 @@ struct CanvasPaint: Sendable {
     var diffAdd: CGColor { color(palette.diffAdd) }
     var diffDel: CGColor { color(palette.diffDel) }
 
-    /// `color-mix(in oklab, var(--bg-subtle), var(--fg) 1.8%)`: the ground a ledger hides the dots with.
-    var ground: CGColor {
-        let a = palette.bgSubtle, b = palette.fg
-        let t = 0.018
-        let la = Oklab(a), lb = Oklab(b)
-        let m = Oklab(l: la.l + (lb.l - la.l) * t, a: la.a + (lb.a - la.a) * t, b: la.b + (lb.b - la.b) * t)
-        let rgb = m.srgb
-        return CGColor(colorSpace: CanvasPaint.srgb, components: [rgb.0, rgb.1, rgb.2, 1])!
-    }
+    /// `--canvas-desk`: under everything, with the dots.
+    var desk: CGColor { color(palette.canvasDesk(dark: dark)) }
+    /// `--canvas-paper`: what a conversation lies on, a step above the desk and below the cards.
+    func paper(_ a: CGFloat = 1) -> CGColor { color(palette.canvasPaper(dark: dark), a) }
+    /// `color-mix(in oklab, var(--canvas-paper), var(--fg) 1.8%)`: the shade of the paper a ledger hides the track's line with.
+    var ground: CGColor { color(Oklab.mix(palette.canvasPaper(dark: dark), palette.fg, 0.018)) }
 
     // MARK: Constants
 
@@ -141,8 +138,21 @@ struct CanvasPaint: Sendable {
     func font(_ font: CanvasFont) -> CanvasFont { font.with(faces) }
 }
 
+extension RiffetPaletteValues {
+    /// The web's `--canvas-desk` (apps/web/src/styles/index.css).
+    func canvasDesk(dark: Bool) -> RiffetRGBA { dark ? bg : bgSubtle }
+    /// The web's `--canvas-paper`.
+    func canvasPaper(dark: Bool) -> RiffetRGBA { dark ? Oklab.mix(bg, bgSubtle, 0.5) : Oklab.mix(bgSubtle, bgElevated, 0.7) }
+}
+
 struct Oklab {
     var l: Double, a: Double, b: Double
+    /// `color-mix(in oklab, [from], [to] t)` of two opaque colours.
+    static func mix(_ from: RiffetRGBA, _ to: RiffetRGBA, _ t: Double) -> RiffetRGBA {
+        let a = Oklab(from), b = Oklab(to)
+        let rgb = Oklab(l: a.l + (b.l - a.l) * t, a: a.a + (b.a - a.a) * t, b: a.b + (b.b - a.b) * t).srgb
+        return RiffetRGBA(rgb.0, rgb.1, rgb.2, 1)
+    }
     init(l: Double, a: Double, b: Double) { self.l = l; self.a = a; self.b = b }
     init(_ c: RiffetRGBA) {
         func lin(_ v: Double) -> Double { v <= 0.04045 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4) }

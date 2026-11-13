@@ -256,10 +256,10 @@ final class CanvasWorldScene: CanvasScene {
             out += edgeDecorations(ground, layout: layout, state: state, paint: paint, now: now)
         }
         if let selected = state.selected, let node = layout.nodes.first(where: { $0.id == selected }) {
-            // `ring-2 ring-accent/50 ring-offset-2 ring-offset-subtle`: two units of the ground colour, then two of the accent.
+            // `ring-2 ring-accent/50 ring-offset-2 ring-offset-[var(--canvas-paper)]`: two units of the paper, then two of the accent.
             let real = CGRect(x: node.x, y: node.y, width: node.w, height: node.h)
             let radius = Self.radius(of: node)
-            out.append(Self.decoration("selection.offset", canvasRoundedRect(real.insetBy(dx: -1, dy: -1), radius + 1), stroke: paint.subtle(), width: 2))
+            out.append(Self.decoration("selection.offset", canvasRoundedRect(real.insetBy(dx: -1, dy: -1), radius + 1), stroke: paint.paper(), width: 2))
             out.append(Self.decoration("selection", canvasRoundedRect(real.insetBy(dx: -3, dy: -3), radius + 3), stroke: paint.accent(0.5), width: 2))
         }
         return out

@@ -17,9 +17,9 @@ export const Frames = memo(function Frames({ frames, far }: { frames: FlowLayout
   return (
     <>
       {frames.map((frame) => (
-        <div key={frame.id} className="pointer-events-none absolute rounded-[26px] border border-fg/[0.06] bg-fg/[0.018] transition-[width,height] duration-[var(--duration-slow)] ease-out-soft motion-reduce:transition-none" style={{ left: frame.x, top: frame.y, width: frame.w, height: frame.h }}>
+        <div key={frame.id} className="pointer-events-none absolute rounded-[26px] border border-fg/[0.06] bg-[var(--canvas-paper)] transition-[width,height] duration-[var(--duration-slow)] ease-out-soft motion-reduce:transition-none" style={{ left: frame.x, top: frame.y, width: frame.w, height: frame.h }}>
           {!far && frame.project && (
-            <span className="absolute left-5 top-0 flex -translate-y-1/2 items-center gap-1.5 rounded-full border border-fg/[0.06] bg-subtle px-2.5 py-0.5 text-[11px] text-fg-3">
+            <span className="absolute left-5 top-0 flex -translate-y-1/2 items-center gap-1.5 rounded-full border border-fg/[0.06] bg-[var(--canvas-paper)] px-2.5 py-0.5 text-[11px] text-fg-3">
               <IconFolderClosed className="size-3 text-fg-4" />
               <span className="max-w-56 truncate">{frame.project}</span>
               {frame.branch && <><IconGitBranch className="ml-1 size-3 text-fg-4" /><span className="max-w-40 truncate font-mono text-[10.5px]">{frame.branch}</span></>}
@@ -57,7 +57,7 @@ export const Silences = memo(function Silences({ edges }: { edges: FlowEdge[] })
   return (
     <>
       {edges.filter((edge) => edge.gap && edge.mid).map((edge) => (
-        <span key={edge.id} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-line-soft bg-subtle px-2 py-px text-[10.5px] text-fg-4" style={{ left: edge.mid![0], top: edge.mid![1] }}>
+        <span key={edge.id} className="pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap rounded-full border border-line-soft bg-[var(--canvas-paper)] px-2 py-px text-[10.5px] text-fg-4" style={{ left: edge.mid![0], top: edge.mid![1] }}>
           {say(edge.gap!)}
         </span>
       ))}
@@ -86,7 +86,7 @@ export const Seams = memo(function Seams({ seams, cutoff, far }: { seams: FlowLa
         {shown.map((seam) => <line key={seam.id} x1={seam.x} x2={seam.x} y1={seam.top} y2={seam.bottom} stroke="var(--fg)" strokeOpacity={0.22} strokeWidth={1} strokeDasharray="4 4" vectorEffect="non-scaling-stroke" />)}
       </svg>
       {!far && shown.filter((seam) => seam.tokens).map((seam) => (
-        <span key={seam.id} className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-line-strong bg-subtle px-1.5 py-px font-mono text-[10px] tabular-nums text-fg-4" style={{ left: seam.x, top: seam.top }}>
+        <span key={seam.id} className="pointer-events-none absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-1 whitespace-nowrap rounded-full border border-dashed border-line-strong bg-[var(--canvas-paper)] px-1.5 py-px font-mono text-[10px] tabular-nums text-fg-4" style={{ left: seam.x, top: seam.top }}>
           <IconArrowsInLineHorizontal className="size-3" />{seam.tokens}
         </span>
       ))}

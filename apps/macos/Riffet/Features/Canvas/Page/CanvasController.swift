@@ -176,7 +176,8 @@ final class CanvasController {
         self.palette = palette
         self.dark = dark
         faces = CanvasFaces.current()
-        container.setGround(background: palette.nsColor(\.bgSubtle), ink: palette.nsColor(\.fg))
+        let desk = (dark ? palette.values.dark : palette.values.light).canvasDesk(dark: dark)
+        container.setGround(background: NSColor(srgbRed: desk.red, green: desk.green, blue: desk.blue, alpha: desk.alpha), ink: palette.nsColor(\.fg))
         scene?.invalidate(palette: dark ? palette.values.dark : palette.values.light, dark: dark, faces: faces)
         if let layout, scene != nil { apply(layout, first: false, refresh: true) }
         if let draftView { styleDraft(draftView) }

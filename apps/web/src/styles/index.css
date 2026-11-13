@@ -2138,8 +2138,18 @@ html.dark {
   animation: pulse-dot 1.4s ease-in-out infinite;
 }
 
-/* The conversation canvas. Edges are drawn with `pathLength="100"`, so one dash pattern fits every
-   length: an edge draws itself in once. */
+/* The conversation canvas. Its ground has three steps: the desk under everything, with the dots; the
+   paper each conversation lies on, a step lighter; and the answer cards, a step above that. In dark
+   mode the desk sinks to the page colour so the paper keeps its step below the cards. */
+.canvas-plane {
+  --canvas-desk: var(--bg-subtle);
+  --canvas-paper: color-mix(in oklab, var(--bg-elevated) 70%, var(--bg-subtle));
+}
+.dark .canvas-plane {
+  --canvas-desk: var(--bg);
+  --canvas-paper: color-mix(in oklab, var(--bg) 50%, var(--bg-subtle));
+}
+/* Edges are drawn with `pathLength="100"`, so one dash pattern fits every length: an edge draws itself in once. */
 @keyframes canvas-draw {
   from {
     stroke-dashoffset: 100;

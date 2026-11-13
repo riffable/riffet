@@ -57,10 +57,10 @@ enum CanvasGroundBuilder {
         var ground = CanvasGround()
         let measure = CanvasPen(ctx: scratch, paint: p)
 
-        // Frames: rounded 26, a hair of ink inside, a hair more on the border.
+        // Frames: rounded 26, the paper inside, a hair of ink on the border.
         for frame in layout.frames {
             let rect = CGRect(x: frame.x, y: frame.y, width: frame.w, height: frame.h)
-            ground.shapes.append(CanvasShape(role: .frame, path: canvasRoundedRect(rect, 26), fill: p.fg(0.018), stroke: nil))
+            ground.shapes.append(CanvasShape(role: .frame, path: canvasRoundedRect(rect, 26), fill: p.paper(), stroke: nil))
             // The border: a ring of 1 unit, as a stroke along the inset line.
             ground.shapes.append(CanvasShape(role: .frame, path: canvasRoundedRect(rect.insetBy(dx: 0.5, dy: 0.5), 25.5), fill: nil, stroke: p.fg(0.06), width: 1))
         }
@@ -153,7 +153,7 @@ enum CanvasDecorationPainter {
         let cy = box.height / 2
         switch d.content {
         case .frameLabel(let project, let branch):
-            canvasCard(ctx, box, radius: box.height / 2, fill: p.subtle(), border: p.fg(0.06))
+            canvasCard(ctx, box, radius: box.height / 2, fill: p.paper(), border: p.fg(0.06))
             var x: CGFloat = 1 + 10
             pen.icon(.folderClosed, x: x, centerY: cy, p.fg4); x += 12 + 6
             let style = p.text(.sans(11), p.fg3)
@@ -170,14 +170,14 @@ enum CanvasDecorationPainter {
             if let day { x += CanvasText.draw(day, p.text(style, p.fg3), in: ctx, x: x, baseline: baseline) + 6 }
             CanvasText.draw(clock, p.text(style, p.fg4), in: ctx, x: x, baseline: baseline)
         case .silence(let text):
-            canvasCard(ctx, box, radius: box.height / 2, fill: p.subtle(), border: p.lineSoft)
+            canvasCard(ctx, box, radius: box.height / 2, fill: p.paper(), border: p.lineSoft)
             pen.text(text, p.text(.sans(10.5), p.fg4), x: 1 + 8, centerY: cy)
         case .seamTokens(let tokens):
-            canvasCard(ctx, box, radius: box.height / 2, fill: p.subtle(), border: p.lineStrong, dashed: true)
+            canvasCard(ctx, box, radius: box.height / 2, fill: p.paper(), border: p.lineStrong, dashed: true)
             pen.icon(.foldHorizontal, x: 1 + 6, centerY: cy, p.fg4)
             pen.text(tokens, p.text(.mono(10, 400, tabular: true), p.fg4), x: 1 + 6 + 12 + 4, centerY: cy)
         case .trackLabel(let kind, let text, let external):
-            canvasCard(ctx, box, radius: box.height / 2, fill: p.subtle(0.9), border: p.lineSoft)
+            canvasCard(ctx, box, radius: box.height / 2, fill: p.paper(0.9), border: p.lineSoft)
             var x: CGFloat = 1 + 8
             if kind == .artifacts {
                 ctx.icon(.image, x: x, y: cy - 6, size: 12, color: p.fg4, zoom: p.zoom, scalingStroke: 2)

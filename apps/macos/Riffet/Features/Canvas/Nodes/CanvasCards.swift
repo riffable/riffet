@@ -142,7 +142,7 @@ enum CanvasSignalPainter {
     static func draw(_ node: CanvasNode.Signal, _ size: CGSize, _ ctx: CGContext, _ p: CanvasPaint) {
         let rect = CGRect(origin: .zero, size: size)
         if p.far { ctx.dashedBorder(rect, 12, p.fg(0.2)); return }
-        canvasCard(ctx, rect, radius: 12, fill: p.subtle(0.6), border: p.lineStrong, dashed: true)
+        canvasCard(ctx, rect, radius: 12, fill: p.paper(0.6), border: p.lineStrong, dashed: true)
         let pen = CanvasPen(ctx: ctx, paint: p)
         let row = p.row("signalRow")
         let arrivals = node.arrivals ?? []
@@ -177,7 +177,7 @@ enum CanvasFoldPainter {
         if !node.tokens.isEmpty { inner += 6 + pen.width(node.tokens, tokens) }
         let pw = inner + 2 * 11
         let rect = CGRect(x: (size.width - pw) / 2, y: 0, width: pw, height: size.height)
-        canvasCard(ctx, rect, radius: size.height / 2, fill: p.subtle(), border: p.lineStrong, dashed: true)
+        canvasCard(ctx, rect, radius: size.height / 2, fill: p.paper(), border: p.lineStrong, dashed: true)
         var x = rect.minX + 11
         let cy = size.height / 2
         pen.icon(.foldHorizontal, x: x, centerY: cy, size: 14, p.fg4)
