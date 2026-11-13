@@ -7,15 +7,22 @@
 //               first line or at most two lines above it (CSS: also just above the rule's selector);
 //               loops are only for in-progress / loading indicators and the ambient brand mark.
 //   web         no `text-[Npx]`, `rounded-[Npx]`, `z-[N]` or `-[#hex]` in apps/web/src tsx; use the tokens.
-//   padding     Mac `.padding(N)` / `.padding(.edge, N)` per file may not grow past
-//               scripts/design-rules-baseline.json; use `Space.*` (Theme/Controls.swift).
+//   ratchets    per file, these counts may not grow past scripts/design-rules-baseline.json (a file new
+//               to it starts at 0); the values come from docs/design/system/foundations.md:
+//                 padding   Mac and iPhone `.padding(N)` / `.padding(.edge, N)` — use `Space.*` (Mac) / `RiffetMetrics`
+//                 radius    Mac and iPhone `cornerRadius: N` / `cornerRadius = N` — use `Radius.*` / `style.radii` / `RiffetMetrics`
+//                 fontSize  Mac `S(N)`, `.riffet(size: N)`, `style.font(N)` and Mac/iPhone `.system(size: N)` — use the
+//                           style's text sizes (`style.text`) / `riffetFont(_:)`
+//   shadow      Mac and iPhone drop shadows come from the elevation tiers: SwiftUI `.elevation(_:)`, AppKit layers
+//               `Elevation.apply(to:dark:)` (Theme/AnchoredPopup.swift); the iPhone's from `RiffetMetrics`. Only the
+//               theme layer and files that draw content (a theme preview, an exported image) write their own.
 //   animation   Mac SwiftUI animations use `Motion.*` (Theme/Controls.swift), not a numeric curve.
 //
 // A deliberate exception carries `design-rules: allow <reason>` on the line or the line above.
 //
 //   node scripts/check-design-rules.mjs            exit 1 and list violations
-//   node scripts/check-design-rules.mjs --update   lower the padding baseline (it never raises an entry)
-//   node scripts/check-design-rules.mjs --update --add <path>   also record <path> at its current count
+//   node scripts/check-design-rules.mjs --update   lower the baselines (they never raise an entry)
+//   node scripts/check-design-rules.mjs --update --add <path>   also record <path> at its current counts
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -154,27 +161,62 @@ for (const file of walk(join(root, 'apps/web/src'), ['.tsx'])) {
   });
 }
 
-// --- Mac padding ratchet and animation tiers -------------------------------------------------------
+// --- Mac and iPhone ratchets, shadows and animation tiers ------------------------------------------
 
 const macRoot = join(root, 'apps/macos/Riffet');
-const PADDING = /\.padding\(\s*(?:\.[a-zA-Z]+\s*,\s*|\[[^\]]*\]\s*,\s*)?(\d+(?:\.\d+)?)\s*\)/g;
+const iosRoot = join(root, 'apps/mobile/iosApp/Riffet');
+const number = String.raw`(\d+(?:\.\d+)?)`;
 const ANIMATION = /\.(easeOut|easeIn|easeInOut|linear|snappy|smooth|spring|bouncy|interactiveSpring|interpolatingSpring|timingCurve)\([^)]*\d/;
-const counts = {};
-for (const file of walk(macRoot, ['.swift'])) {
+const RATCHETS = {
+  padding: {
+    patterns: [new RegExp(String.raw`\.padding\(\s*(?:\.[a-zA-Z]+\s*,\s*|\[[^\]]*\]\s*,\s*)?${number}\s*\)`, 'g')],
+    min: 1,
+    hint: 'numeric paddings — use Space.xxs … Space.xxl (Mac Theme/Controls.swift) or RiffetMetrics (iPhone)',
+  },
+  radius: {
+    patterns: [new RegExp(String.raw`cornerRadius\s*[:=]\s*${number}\b`, 'g')],
+    min: 0,
+    hint: 'numeric corner radii — use Radius.* / style.radii (Mac) or RiffetMetrics (iPhone)',
+  },
+  fontSize: {
+    patterns: [new RegExp(String.raw`\bS\(\s*${number}\s*\)`, 'g'), new RegExp(String.raw`\.riffet\(size:\s*${number}`, 'g'), new RegExp(String.raw`\bstyle\.font\(\s*${number}`, 'g'), new RegExp(String.raw`\.system\(size:\s*${number}`, 'g')],
+    min: 0,
+    hint: 'numeric text or icon sizes — use the style\'s text sizes (style.text) on the Mac, riffetFont(_:) on the iPhone',
+  },
+};
+const SWIFTUI_SHADOW = /\.shadow\(\s*color:/;
+const LAYER_SHADOW = /\bshadow(?:Radius|Opacity)\s*=\s*\d/;
+// The elevation layer itself, and files whose shadows belong to what they draw rather than to the chrome.
+const shadowAllow = [
+  'apps/macos/Riffet/Theme/',
+  'apps/macos/Riffet/Features/Settings/ThemeCanvasView.swift',
+  'apps/macos/Riffet/Features/Share/ShareCard.swift',
+  'apps/mobile/iosApp/Riffet/Design/RiffetDesign.swift',
+];
+const GENERATED = /\.generated\.swift$|\/InterfaceStyles\.swift$/;
+const counts = Object.fromEntries(Object.keys(RATCHETS).map((kind) => [kind, {}]));
+for (const file of [...walk(macRoot, ['.swift']), ...walk(iosRoot, ['.swift'])]) {
   const path = rel(file);
+  if (GENERATED.test(path)) continue;
+  const mac = path.startsWith('apps/macos/');
   const lines = read(file);
-  let padding = 0;
   let animations = 0;
   const animationHits = [];
   lines.forEach((line, index) => {
     if (allowed(lines, index)) return;
-    for (const match of line.matchAll(PADDING)) if (Number(match[1]) > 1) padding += 1;
-    if (path !== 'apps/macos/Riffet/Theme/Controls.swift' && ANIMATION.test(line) && !loopMarked(lines, index, false)) {
+    for (const [kind, { patterns, min }] of Object.entries(RATCHETS)) {
+      for (const pattern of patterns) {
+        for (const match of line.matchAll(pattern)) if (Number(match[1]) > min) counts[kind][path] = (counts[kind][path] ?? 0) + 1;
+      }
+    }
+    if (!shadowAllow.some((prefix) => path.startsWith(prefix)) && (SWIFTUI_SHADOW.test(line) || LAYER_SHADOW.test(line))) {
+      problems.push(`${path}:${index + 1}: hand-written shadow — use .elevation(_:) / Elevation.apply(to:dark:) (Mac) or RiffetMetrics' floating shadow (iPhone)`);
+    }
+    if (mac && path !== 'apps/macos/Riffet/Theme/Controls.swift' && ANIMATION.test(line) && !loopMarked(lines, index, false)) {
       animations += 1;
       animationHits.push(index + 1);
     }
   });
-  if (padding > 0) counts[path] = padding;
   if (animations > (animationAllow[path] ?? 0)) {
     problems.push(...animationHits.map((at) => `${path}:${at}: numeric animation — use Motion.fast / Motion.standard / Motion.expressive (Theme/Controls.swift)`));
   }
@@ -183,21 +225,29 @@ for (const file of walk(macRoot, ['.swift'])) {
 const baseline = existsSync(baselinePath) ? JSON.parse(readFileSync(baselinePath, 'utf8')) : {};
 if (update) {
   const next = {};
-  for (const [path, count] of Object.entries(counts)) {
-    if (path in baseline) next[path] = Math.min(baseline[path], count);
-    else if (added.has(path)) next[path] = count;
+  for (const kind of Object.keys(RATCHETS)) {
+    const recorded = baseline[kind] ?? {};
+    const kept = {};
+    for (const [path, count] of Object.entries(counts[kind])) {
+      if (path in recorded) kept[path] = Math.min(recorded[path], count);
+      else if (added.has(path)) kept[path] = count;
+    }
+    next[kind] = Object.fromEntries(Object.entries(kept).sort(([a], [b]) => a.localeCompare(b)));
   }
-  for (const path of added) if (!(path in counts)) console.warn(`design rules: --add ${path}: no numeric paddings there, nothing recorded`);
-  const sorted = Object.fromEntries(Object.entries(next).sort(([a], [b]) => a.localeCompare(b)));
-  writeFileSync(baselinePath, `${JSON.stringify(sorted, null, 2)}\n`);
-  console.log(`design rules: padding baseline written (${Object.keys(sorted).length} files)`);
+  for (const path of added) if (!Object.values(counts).some((byPath) => path in byPath)) console.warn(`design rules: --add ${path}: no numeric values there, nothing recorded`);
+  writeFileSync(baselinePath, `${JSON.stringify(next, null, 2)}\n`);
+  console.log(`design rules: baselines written (${Object.entries(next).map(([kind, byPath]) => `${kind} ${Object.keys(byPath).length}`).join(', ')} files)`);
 } else {
-  for (const [path, count] of Object.entries(counts)) {
-    const limit = baseline[path] ?? 0;
-    if (count > limit) problems.push(`${path}: ${count} numeric paddings, baseline ${limit} — use Space.xxs … Space.xxl (Theme/Controls.swift)${path in baseline ? '' : '; a file new to the baseline starts at 0 (record a deliberate one with --update --add <path>)'}`);
+  let lowered = 0;
+  for (const [kind, { hint }] of Object.entries(RATCHETS)) {
+    const recorded = baseline[kind] ?? {};
+    for (const [path, count] of Object.entries(counts[kind])) {
+      const limit = recorded[path] ?? 0;
+      if (count > limit) problems.push(`${path}: ${count} ${hint}; baseline ${limit}${path in recorded ? '' : ' — a file new to the baseline starts at 0 (record a deliberate one with --update --add <path>)'}`);
+    }
+    lowered += Object.entries(recorded).filter(([path, limit]) => (counts[kind][path] ?? 0) < limit).length;
   }
-  const lowered = Object.entries(baseline).filter(([path, limit]) => (counts[path] ?? 0) < limit);
-  if (lowered.length && !problems.length) console.log(`design rules: ${lowered.length} file(s) now below the padding baseline; run with --update to lock it in`);
+  if (lowered && !problems.length) console.log(`design rules: ${lowered} baseline entr${lowered === 1 ? 'y is' : 'ies are'} now higher than needed; run with --update to lock it in`);
 }
 
 if (problems.length > 0) {
