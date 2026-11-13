@@ -1327,6 +1327,10 @@ msgstr "Default for new sessions"
 msgid "新建主题"
 msgstr "New theme"
 
+#: src/app/settings/TabsSection.tsx
+msgid "新建会话时"
+msgstr "When creating a session"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "新设置从下一条回复开始生效"
 msgstr "Applies from the next reply"

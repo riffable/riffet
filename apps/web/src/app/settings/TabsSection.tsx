@@ -3,7 +3,7 @@ import { Kbd, Segmented } from '@/components/ui/controls';
 import { useStores } from '../state/stores';
 import { shortcutCaps, tabShortcuts } from '../tabs/keys';
 import { TabStyleSetting } from '../tabs/TabStyleSetting';
-import type { TabOpenMode } from '../tabs/tabsStore';
+import type { TabNewMode, TabOpenMode } from '../tabs/tabsStore';
 import { useTabs } from '../tabs/useTabs';
 import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
 
@@ -13,6 +13,7 @@ export function TabsSection() {
   const { tabs } = useStores();
   const style = useTabs((state) => state.style);
   const openMode = useTabs((state) => state.openMode);
+  const newMode = useTabs((state) => state.newMode);
   const off = style === 'off';
   return <div className="flex flex-col gap-6">
     <p className="text-xs text-fg-3"><Trans>仅保存在这台设备</Trans></p>
@@ -22,6 +23,9 @@ export function TabsSection() {
     <Group>
       <Row title={t`打开会话时`}>
         <Segmented<TabOpenMode> size="xs" value={openMode} onChange={(mode) => tabs.setOpenMode(mode)} ariaLabel={t`打开会话时`} options={[{ value: 'preview', label: t`临时标签`, disabled: off }, { value: 'keep', label: t`直接加入`, disabled: off }, { value: 'manual', label: t`仅手动加入`, disabled: off }]} />
+      </Row>
+      <Row title={t`新建会话时`}>
+        <Segmented<TabNewMode> size="xs" value={openMode === 'keep' ? 'keep' : newMode} onChange={(mode) => tabs.setNewMode(mode)} ariaLabel={t`新建会话时`} options={[{ value: 'preview', label: t`临时标签`, disabled: off || openMode === 'keep' }, { value: 'keep', label: t`直接加入`, disabled: off || openMode === 'keep' }]} />
       </Row>
     </Group>
     <Group title={t`快捷键`}>

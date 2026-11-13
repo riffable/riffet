@@ -1327,6 +1327,10 @@ msgstr "新会话默认"
 msgid "新建主题"
 msgstr "新建主题"
 
+#: src/app/settings/TabsSection.tsx
+msgid "新建会话时"
+msgstr "新建会话时"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "新设置从下一条回复开始生效"
 msgstr "新设置从下一条回复开始生效"

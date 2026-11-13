@@ -17,6 +17,14 @@ enum SessionTabOpenMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+/// 新建会话时: the tab of a conversation Riffet creates or forks. `keep`: kept as it opens.
+/// `preview`: temporary until the reader commits to it. The `keep` open mode overrides it.
+enum SessionTabNewMode: String, CaseIterable, Identifiable {
+    case preview, keep
+
+    var id: String { rawValue }
+}
+
 /// The tab settings of this Mac (the web's `tabsStore` style and open mode).
 @MainActor
 @Observable
@@ -25,14 +33,17 @@ final class SessionTabsPreferences {
 
     var style: SessionTabStyle { didSet { UserDefaults.standard.set(style.rawValue, forKey: Self.styleKey) } }
     var openMode: SessionTabOpenMode { didSet { UserDefaults.standard.set(openMode.rawValue, forKey: Self.openModeKey) } }
+    var newMode: SessionTabNewMode { didSet { UserDefaults.standard.set(newMode.rawValue, forKey: Self.newModeKey) } }
 
     private static let styleKey = "riffet.session-tab-style"
     private static let openModeKey = "riffet.session-tab-open"
+    private static let newModeKey = "riffet.session-tab-new"
 
     private init() {
         let defaults = UserDefaults.standard
         style = defaults.string(forKey: Self.styleKey).flatMap(SessionTabStyle.init) ?? .titleBar
         openMode = defaults.string(forKey: Self.openModeKey).flatMap(SessionTabOpenMode.init) ?? .preview
+        newMode = defaults.string(forKey: Self.newModeKey).flatMap(SessionTabNewMode.init) ?? .keep
     }
 
     /// The tab bar is on screen: the style draws one and the setting has not turned it off.
@@ -204,7 +215,7 @@ final class SessionTabs {
         }
         if !gone.isEmpty { remove(Set(gone.map(\.sessionId))) }
         if let current, current != lastCurrent || !hasTab(current) {
-            select(current, keep: takeLaunched(current) && openMode != .manual)
+            select(current, keep: takeLaunched(current) && SessionTabsPreferences.shared.newMode == .keep)
         }
         lastCurrent = current
     }
@@ -278,7 +289,7 @@ final class SessionTabs {
 
     // MARK: Opening
 
-    /// The conversation Riffet itself just created or launched: its tab is kept as it opens.
+    /// The conversation Riffet itself just created or launched: its tab is kept as it opens, per 新建会话时.
     func launched(_ id: String) {
         launchedSession = (id, .now)
     }

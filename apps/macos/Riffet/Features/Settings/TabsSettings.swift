@@ -23,6 +23,18 @@ struct TabsSettings: View {
                     .labelsHidden()
                     .disabled(prefs.style == .off)
                 }
+
+                SettingsRow("新建会话时") {
+                    FormSegmented("新建会话时", selection: Binding(
+                        get: { prefs.openMode == .keep ? .keep : prefs.newMode },
+                        set: { prefs.newMode = $0 }
+                    )) {
+                        Text("临时标签").tag(SessionTabNewMode.preview)
+                        Text("直接加入").tag(SessionTabNewMode.keep)
+                    }
+                    .labelsHidden()
+                    .disabled(prefs.style == .off || prefs.openMode == .keep)
+                }
             }
 
             SettingsBlock("快捷键") {
