@@ -64,6 +64,7 @@ struct NewTaskOptions: View {
     var toolPlugins: [PluginDescriptor]? = nil
     var toolGroups: [String] = []
     var onPickTools: ([String]) -> Void = { _ in }
+    @Environment(\.palette) private var palette
     /// The MCP and Skill switches of the new task; nil where the backend has none.
     var extensions: ExtensionsPick?
     /// A quick chat has the chat backend's models and nothing else; [selectedModel] is the one it will start with.
@@ -124,7 +125,7 @@ struct NewTaskOptions: View {
             } else if let error {
                 Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red); Button("重新读取", action: { retry?() }) }
             } else if let catalog {
-                if !catalog.available { Section { Label(catalog.reason ?? String(localized: "此 Agent 当前不可用", bundle: .riffet), systemImage: "exclamationmark.triangle").foregroundStyle(.orange) } }
+                if !catalog.available { Section { Label(catalog.reason ?? String(localized: "此 Agent 当前不可用", bundle: .riffet), systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning) } }
                 if catalog.capabilities.supportsModelSelection {
                     Section {
                         NavigationLink {

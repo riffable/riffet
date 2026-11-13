@@ -124,12 +124,12 @@ function ToastRow({ item, onDetails }: { item: ToastItem; onDetails(): void }) {
           onPointerLeave={() => resumeToast(item.id, 'pointer')}
           onFocus={() => pauseToast(item.id, 'focus')}
           onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) resumeToast(item.id, 'focus'); }}
-          className={cn('pointer-events-auto flex max-w-[min(30rem,100%)] items-start gap-2.5 rounded-xl bg-toast py-2 pl-3 pr-2 text-sm text-white shadow-pop', item.leaving ? 'animate-out fade-out-0 duration-[var(--duration-exit-base)] ease-[var(--ease-accelerate)] fill-mode-forwards' : available && 'animate-in fade-in-0 slide-in-from-top-2 duration-[var(--duration-base)] ease-[var(--ease-decelerate)]')}
+          className={cn('pointer-events-auto flex max-w-[min(30rem,100%)] items-start gap-2.5 rounded-xl bg-elevated py-2 pl-3 pr-2 text-sm text-fg shadow-pop', item.leaving ? 'animate-out fade-out-0 duration-[var(--duration-exit-base)] ease-[var(--ease-accelerate)] fill-mode-forwards' : available && 'animate-in fade-in-0 slide-in-from-top-2 duration-[var(--duration-base)] ease-[var(--ease-decelerate)]')}
         >
-          {item.tone === 'success' ? <IconCircleCheck className="mt-0.5 size-4 shrink-0 text-toast-success" /> : item.tone === 'error' ? <IconCircleAlert className="mt-0.5 size-4 shrink-0 text-toast-danger" /> : <IconInfo className="mt-0.5 size-4 shrink-0 text-white/70" />}
+          {item.tone === 'success' ? <IconCircleCheck className="mt-0.5 size-4 shrink-0 text-success" /> : item.tone === 'error' ? <IconCircleAlert className="mt-0.5 size-4 shrink-0 text-danger" /> : <IconInfo className="mt-0.5 size-4 shrink-0 text-fg-3" />}
           <ToastMessage item={item} onDetails={onDetails} />
-          {item.action && <button type="button" onClick={() => runToastAction(item.id)} className="-my-0.5 h-6 shrink-0 rounded-md bg-white/10 px-2 text-sm font-medium text-white transition-colors hover:bg-white/20">{item.action.label}</button>}
-          <button type="button" aria-label={t`关闭通知`} onClick={() => dismissToast(item.id)} className="grid size-5 shrink-0 place-items-center rounded-md text-white/50 hover:bg-white/10 hover:text-white"><IconX className="size-3.5" /></button>
+          {item.action && <button type="button" onClick={() => runToastAction(item.id)} className="-my-0.5 h-6 shrink-0 rounded-md bg-subtle px-2 text-sm font-medium text-fg transition-colors hover:bg-hover">{item.action.label}</button>}
+          <button type="button" aria-label={t`关闭通知`} onClick={() => dismissToast(item.id)} className="grid size-5 shrink-0 place-items-center rounded-md text-fg-3 hover:bg-hover hover:text-fg"><IconX className="size-3.5" /></button>
         </div>
       </div>
     </div>
@@ -152,7 +152,7 @@ function ToastMessage({ item, onDetails }: { item: ToastItem; onDetails(): void 
   return <div className="min-w-0 flex-1">
     <span ref={message} className="line-clamp-2 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{item.message}</span>
     {/* The toast sits outside business dialogs; inspecting an error must not dismiss its form. */}
-    {(item.details || overflow) && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={onDetails} className="mt-1 rounded text-xs text-white/70 underline underline-offset-2 hover:text-white"><Trans>详情</Trans></button>}
+    {(item.details || overflow) && <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={onDetails} className="mt-1 rounded text-xs text-fg-3 underline underline-offset-2 hover:text-fg"><Trans>详情</Trans></button>}
   </div>;
 }
 

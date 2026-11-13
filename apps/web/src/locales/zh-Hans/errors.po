@@ -455,7 +455,7 @@ msgstr "停止请求与原任务不一致，请刷新状态"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
 msgid "error.NATIVE_STOP_TARGET_CHANGED"
-msgstr "原任务已改变，没有停止其他任务"
+msgstr "没能停止，请再试一次"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json

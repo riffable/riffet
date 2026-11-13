@@ -31,7 +31,7 @@ export const THEME_ROLE_GROUPS: readonly ThemeRoleGroup[] = [
   { get title() { return i18n._(msg`强调色`); }, roles: ['accent', 'accent-hover', 'accent-soft', 'accent-fg'] },
   { get title() { return i18n._(msg({ message: '状态', context: 'common-theme-role-state' })); }, roles: ['success', 'success-soft', 'warning', 'warning-soft', 'danger', 'danger-soft', 'danger-fg'] },
   { title: 'Diff', roles: ['diff-add', 'diff-add-gutter', 'diff-add-marker', 'diff-add-strong', 'diff-del', 'diff-del-gutter', 'diff-del-marker', 'diff-del-strong'] },
-  { get title() { return i18n._(msg`提示条`); }, roles: ['toast', 'toast-success', 'toast-danger'] },
+  { get title() { return i18n._(msg`工具提示`); }, roles: ['toast'] },
   { title: 'Agent', roles: ['agent-cursor', 'agent-codex', 'agent-claude', 'agent-dsh'] },
   { get title() { return i18n._(msg`图表`); }, roles: ['chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6', 'chart-7', 'chart-8'] },
 ];
@@ -75,7 +75,7 @@ export const THEME_ROLE_LABELS: Record<ThemeRole, string> = translatedRecord({
   'diff-del-gutter': msg`删除行号`,
   'diff-del-marker': msg`删除标记`,
   'diff-del-strong': msg`删除强调`,
-  toast: msg`提示条`,
+  toast: msg`工具提示`,
   'toast-success': msg`成功提示`,
   'toast-danger': msg`危险提示`,
   'agent-cursor': 'Cursor',
@@ -132,6 +132,4 @@ export const THEME_CONTRAST_CHECKS: readonly ThemeContrastCheck[] = [
   { get label() { return i18n._(msg`成功 / 页面`); }, foreground: 'success', background: 'bg', minimum: 3 },
   { get label() { return i18n._(msg`警告 / 页面`); }, foreground: 'warning', background: 'bg', minimum: 3 },
   { get label() { return i18n._(msg`危险 / 页面`); }, foreground: 'danger', background: 'bg', minimum: 3 },
-  { get label() { return i18n._(msg`成功提示 / 提示条`); }, foreground: 'toast-success', background: 'toast', minimum: 3 },
-  { get label() { return i18n._(msg`危险提示 / 提示条`); }, foreground: 'toast-danger', background: 'toast', minimum: 3 },
 ];

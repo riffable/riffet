@@ -39,10 +39,10 @@
 
 ### 2.2 设计约定
 
-前两条对比度规则由 `scripts/check-theme-contrast.ts` 守护：`pnpm gen:theme` 与 `pnpm gen:theme:check`（CI）对每套内置主题的明暗两半逐条断言，违反即失败，没有豁免名单。校验的是 `--fg` 阶梯严格递减、`--fg`/`--fg-2`/`--fg-3` 对 `--bg` 的 4.5:1、状态色与 agent 色对 `--bg` 的 3:1、三组填充色前景与两个 toast 色；`--fg-4`（占位与禁用）只要求阶梯递减。界面风格不带颜色，不参与。`apps/web/src` 的裸色值与字号/圆角/层级字面量由 `pnpm check:design`（`scripts/check-design-rules.mjs`）拦截。其余几条没有自动校验，改动时需要自觉维持：
+前两条对比度规则由 `scripts/check-theme-contrast.ts` 守护：`pnpm gen:theme` 与 `pnpm gen:theme:check`（CI）对每套内置主题的明暗两半逐条断言，违反即失败，没有豁免名单。校验的是 `--fg` 阶梯严格递减、`--fg`/`--fg-2`/`--fg-3` 对 `--bg` 的 4.5:1、状态色与 agent 色对 `--bg` 的 3:1、三组填充色前景；`--fg-4`（占位与禁用）只要求阶梯递减。界面风格不带颜色，不参与。`apps/web/src` 的裸色值与字号/圆角/层级字面量由 `pnpm check:design`（`scripts/check-design-rules.mjs`）拦截。其余几条没有自动校验，改动时需要自觉维持：
 
 - 文本阶梯严格递减（`--fg` > `--fg-2` > `--fg-3` > `--fg-4`），内置主题的正文与次要文本达到 WCAG AA（≥ 4.5:1），状态色与 agent 色 ≥ 3:1。
-- 填充色上的前景成对达标：`--accent-fg` / `--accent`、`--danger-fg` / `--danger`、`--primary-fg` / `--primary` ≥ 4.5:1；`--toast-success` / `--toast-danger` 在 `--toast` 上 ≥ 3:1。**自定义主题不受此约束**：编辑器只提示，不阻止保存。
+- 填充色上的前景成对达标：`--accent-fg` / `--accent`、`--danger-fg` / `--danger`、`--primary-fg` / `--primary` ≥ 4.5:1。**自定义主题不受此约束**：编辑器只提示，不阻止保存。
 - `--line*` **不受**对比度门禁约束。这个仓库用近乎不可见的 hairline 分隔区域（见 `edge-*` 工具类），3:1 的边框会毁掉该设计。
 - 同一主题同一模式下，四个 `--agent-*` 必须互相可分辨。它们是后端身份而非装饰。
 - 组件里不得出现裸色值；`apps/web/src` 里也不得出现 `text-[Npx]`、`rounded-[Npx]`、`z-[N]`（字号走 `--text-*`，层级走 `--z-*`）。
@@ -162,7 +162,7 @@ interface ThemeLibraryUpdate { expectedRevision: string; themes: CustomTheme[]; 
   注意几乎每一处都停在刚过门槛的位置（3.00 / 3.02 / 4.50 / 4.52）—— 这正是「最小必要压暗」的样子。
   另外：**四套借用主题的浅色 `--warning` 全部不达标**（2.05–2.98:1），Kiln 是唯一例外（取自 Anthropic 设计令牌的 `#966c1e` 直接过线）—— 「浅底上的黄色」是系统性最难的一格，这与 Radix Colors 把 `Yellow`/`Amber` 的 step 9-10 单列出来处理是同一个问题。
 - **填充色上的前景（`--accent-fg` / `--danger-fg`）不是一律白色。** 规则：白色达到 4.5:1 就用白色，否则用该主题深色半套的 `--bg` 作墨色（仍不足时朝黑色做最小必要压暗）。结果是所有深色半套的强调色按钮都用深色字（Catppuccin 深色 `#cba6f7` 上白字只有 2.03:1），Riffet / Rosé Pine / Everforest 浅色的 `--danger` 按钮也用深色字（白字分别为 4.10 / 4.19 / 3.27:1）。约定只管静止态；`hover:bg-accent-hover` 与 `hover:bg-danger/90` 的悬停态未纳入（Kiln / Everforest 浅色的 `--accent-hover` 上白字约 3.9–4.3:1）。
-- **toast 的两个状态图标有自己的角色 `--toast-success` / `--toast-danger`。** toast 底色 `--toast` 不是页面，主题自己的 `--success` / `--danger` 在部分浅色 toast 上几乎不可见（Solarized 浅色 1.41 / 1.01:1）。取值从该主题深色半套的状态色出发，朝白色做最小必要提亮到 3:1；默认主题保持原来的 `#4ade80` / `#ff8a8e`。
+- **提示条跟随主题的浮层底色，`--toast` 只剩 web 工具提示在用。** 提示条与弹层同用 `--bg-elevated`（Mac 为 `bgPopover`）和主题自己的 `--success` / `--danger`。`--toast-success` / `--toast-danger` 不再被任何界面使用，编辑器也不再展示，只为兼容已保存的主题和旧客户端而保留在契约里。
 - **`--agent-*` 是「模式常量」，但浅色下会被逐主题微调。** 基准值按明暗取自 Riffet 的四支后端标识色，对比度守卫只在某套主题的浅色页面会让它掉到 3:1 以下时才动它 —— 实测发生在这几处：`--agent-codex` `#10a37f` → `#0f9c7a`（solarized / catppuccin / rose-pine），`--agent-claude` `#d97757` → `#d07254`（solarized / rose-pine）、`#c86d50`（catppuccin）。**深色下四色在全部主题里都不变**，因为每个深色页面都足够暗。
   之前这里的措辞是「不随主题改变」，与实现不符 —— 需要修正的是文档，不是代码：让一个后端标识色在某套浅色主题上不可读，比让它随主题微调更糟。
 - **没有 GitHub 主题，这是有意的。** Riffet 自己的配色当初就是照着 Primer 调的（浅色侧栏 `#f7f8fa` 与 Primer 的 `#f6f8fa` 每通道只差 1），而且终端 ANSI 本来就是 Primer 的。实测：两者浅色的「页面底色 + 卡片 + 弹层」**逐字节相同**，终端 16 色也完全相同——切过去只有强调色在变。把 GitHub 改得不一样就得偏离它自己发布的配色，那它也就不叫 GitHub 了，所以选择去掉而不是硬凑差异。若要重新加回，必须给出与 Primer 的可见差异，而不是原样收录。

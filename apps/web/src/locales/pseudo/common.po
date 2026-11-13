@@ -204,10 +204,6 @@ msgid "危险提示"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
-msgid "危险提示 / 提示条"
-msgstr ""
-
-#: src/lib/theme-role-labels.ts
 msgid "危险文字"
 msgstr ""
 
@@ -327,6 +323,10 @@ msgstr ""
 msgid "导出失败"
 msgstr ""
 
+#: src/lib/theme-role-labels.ts
+msgid "工具提示"
+msgstr ""
+
 #: src/lib/files.ts
 msgid "已复制"
 msgstr ""
@@ -408,10 +408,6 @@ msgid "成功提示"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
-msgid "成功提示 / 提示条"
-msgstr ""
-
-#: src/lib/theme-role-labels.ts
 msgid "成功浅底"
 msgstr ""
 
@@ -434,10 +430,6 @@ msgstr ""
 
 #: src/lib/extensions.ts
 msgid "描述适用场景"
-msgstr ""
-
-#: src/lib/theme-role-labels.ts
-msgid "提示条"
 msgstr ""
 
 #: src/lib/errors.ts

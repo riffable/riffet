@@ -16,8 +16,6 @@ const pairs: Array<[foreground: string, background: string, minimum: number]> = 
   ['accent-fg', 'accent', AA],
   ['danger-fg', 'danger', AA],
   ['primary-fg', 'primary', AA],
-  ['toast-success', 'toast', NON_TEXT],
-  ['toast-danger', 'toast', NON_TEXT],
 ];
 
 function colorOf(palette: Map<string, string>, role: string): Rgba {

@@ -9,7 +9,8 @@ import { Button } from './button';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from './dialog';
 
 type Tone = ComponentProps<typeof Notice>['tone'];
-export interface FeedbackMessage { id: string; text: string; tone?: Tone; }
+/** `detail` is the original diagnostic behind a plain `text`, shown only when asked for. */
+export interface FeedbackMessage { id: string; text: string; detail?: string; tone?: Tone; }
 
 /** Always mount the owner, including when its source clears; retained rows contain data, not actions. */
 export function FeedbackNotices({ messages, scope, action, renderMessage, className, noticeClassName, icon, floating, recovered = false }: {

@@ -124,8 +124,8 @@
     "en": "This stop request does not match the original task; refresh its status"
   },
   "NATIVE_STOP_TARGET_CHANGED": {
-    "zh": "原任务已改变，没有停止其他任务",
-    "en": "The original task changed; no other task was stopped"
+    "zh": "没能停止，请再试一次",
+    "en": "Could not stop; try again"
   },
   "NATIVE_STOP_TARGET_REQUIRED": {
     "zh": "请更新客户端后停止任务",

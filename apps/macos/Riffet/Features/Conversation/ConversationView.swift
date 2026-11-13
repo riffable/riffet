@@ -370,7 +370,9 @@ struct ConversationView: View {
         FeedbackRegion(value: banner, active: feedbackActive, holding: nativeNoticeDetail != nil) { held, live in
             switch held {
             case let .connection(conflict, detail):
-                NoticeBar(tone: live ? .warning : .neutral, symbol: "wifi.exclamationmark", text: detail ?? (conflict ? String(localized: "另一个连接可能正在使用此会话，Riffet 暂时无法接入。已有历史仍可查看。") : String(localized: "Riffet 暂时无法连接此会话。已有历史仍可查看。")), textLineLimit: 3, onTextDetails: detail.map { text in { nativeNoticeDetail = text } }) {
+                // The backend's reason is an untranslated diagnostic: the bar says what happened, the reason is one click away.
+                NoticeBar(tone: live ? .warning : .neutral, symbol: "wifi.exclamationmark", text: conflict ? String(localized: "另一个连接可能正在使用此会话，Riffet 暂时无法接入。已有历史仍可查看。") : String(localized: "Riffet 暂时无法连接此会话。已有历史仍可查看。"), textLineLimit: 3) {
+                    if let detail { Button("查看详情") { nativeNoticeDetail = detail }.buttonStyle(ChipButtonStyle()) }
                     if live {
                         Button {
                             guard self.banner(self.state) == held else { return }

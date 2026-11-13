@@ -55,7 +55,7 @@ struct PairDeviceView: View {
                     .listRowBackground(palette.groupedRow)
                 if issued.localOnly {
                     Section {
-                        Label("服务器只监听本机，其他设备无法连接。", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                        Label("服务器只监听本机，其他设备无法连接。", systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning)
                     }.listRowBackground(palette.groupedRow)
                 }
             }

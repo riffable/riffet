@@ -57,6 +57,7 @@ import riffet.shared.SyncRejectedException
 import riffet.shared.SyncServerTooOldException
 import riffet.shared.TimelineAnchor
 import riffet.shared.RiffetApi
+import riffet.shared.RiffetHttpException
 import riffet.shared.RiffetUnauthenticatedException
 import riffet.shared.serverSpeaksSync
 import riffet.shared.sessionBlob
@@ -326,7 +327,7 @@ internal class SessionSync(
                 is RiffetUnauthenticatedException -> hooks.signedOut()
                 is SyncServerTooOldException -> tooOld(token)
                 else -> core.reduceDial(token) {
-                    it.withoutOutputRate().copy(connection = RiffetConnectionState.Failed(error.message ?: L10n.uiText("sync.connectionFailed")))
+                    it.withoutOutputRate().copy(connection = RiffetConnectionState.Failed(syncFailureText(error)))
                 }
             }
         }
@@ -795,7 +796,7 @@ internal class SessionSync(
                     throw cancellation
                 } catch (error: Throwable) {
                     if (error is RiffetUnauthenticatedException) hooks.signedOut()
-                    view.update { it.copy(error = error.message ?: L10n.uiText("sync.connectionFailed")) }
+                    view.update { it.copy(error = syncFailureText(error)) }
                 }
             }
         }
@@ -1260,3 +1261,13 @@ private const val REPLY_ROWS = 200
 
 private const val PAGE_ATTEMPTS = 3
 private const val PAGE_RETRY_MILLIS = 1_000L
+
+/**
+ * What a failed sync tells the reader. An HTTP error and a server's refusal carry text the catalogs
+ * localise; a transport exception's message (a socket or TLS diagnostic) is for the log, not the page.
+ */
+internal fun syncFailureText(error: Throwable): String = when (error) {
+    is RiffetHttpException -> error.message
+    is SyncRejectedException -> L10n.serverError(error.code, emptyMap(), error.message.orEmpty())
+    else -> L10n.uiText("sync.serverUnreachable")
+}.ifBlank { L10n.uiText("sync.connectionFailed") }

@@ -173,7 +173,7 @@ struct PluginCommandPresenter: ViewModifier {
                 VStack(spacing: Space.xs) {
                     FeedbackRegion(value: runner.message, active: runner.form == nil && runner.confirmation == nil) { message, live in
                         HStack(alignment: .top, spacing: Space.sm) {
-                            if message.failed && live { Image(icon: "exclamationmark.circle").foregroundStyle(palette.toastDanger) }
+                            if message.failed && live { Image(icon: "exclamationmark.circle").foregroundStyle(palette.danger) }
                             Text(message.text).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                             if message.failed {
                                 Button {
@@ -183,10 +183,10 @@ struct PluginCommandPresenter: ViewModifier {
                                     .buttonStyle(.plain).help("关闭")
                             }
                         }
-                        .font(.riffet(size: S(12.5))).foregroundStyle(.white)
+                        .font(.riffet(size: S(12.5))).foregroundStyle(palette.fg)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 8)
-                        .background(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).fill(palette.toast))
+                        .floatingSurface(cornerRadius: Radius.container)
                         .transition(.opacity.combined(with: .offset(y: 8)))
                     }
                     .id("\(workbench.baseURL.absoluteString)|\(messageDismissal)")

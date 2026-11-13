@@ -146,8 +146,9 @@ struct ConversationView: View {
         let showsConnection = connectionStatus?.connectionNotice == .failed || connectionStatus?.connectionNotice == .conflict
         let connectionMessage = showsConnection ? status?.connection?.message : nil
         var result: [ConversationFeedbackValue] = []
-        if showsConnection, let message = connectionMessage ?? (connectionStatus?.connectionNotice == .conflict ? String(localized: "会话连接失败", bundle: .riffet) : nil) {
-            result.append(.init(key: "connection", text: message, retry: true))
+        // The backend's reason is an untranslated diagnostic: the row says what happened, the reason is in its details.
+        if showsConnection, connectionMessage != nil || connectionStatus?.connectionNotice == .conflict {
+            result.append(.init(key: "connection", text: String(localized: "会话连接失败", bundle: .riffet), detail: connectionMessage, retry: true))
         }
         var historyMessage: String?
         if status?.history?.state == "error" {
@@ -292,8 +293,12 @@ struct ConversationView: View {
         .sheet(item: $feedbackDetail) { entry in
             NavigationStack {
                 ScrollView {
-                    Text(entry.value.text).textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding()
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text(entry.value.text)
+                        if let detail = entry.value.detail { Text(detail).font(.footnote.monospaced()).foregroundStyle(.secondary) }
+                    }
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding()
                 }
                 .navigationTitle(String(localized: "详情", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { feedbackDetail = nil } } }
@@ -512,7 +517,7 @@ struct ConversationView: View {
             Text(supportsTerminal ? "这个交互需要在原生终端里继续。" : "正在同步可处理的交互。若持续等待，可重试同步或到电脑查看。").font(.subheadline).foregroundStyle(.secondary)
             if supportsTerminal { Button("打开终端") { terminal = true } }
             Button("重新同步") { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }
-        }.padding(12).background(Color.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        }.padding(12).background(palette.warningSoft, in: RoundedRectangle(cornerRadius: 12))
     }
     private func composer(_ session: Session, draft: MessageDraft) -> some View {
         VStack(spacing: 0) {
@@ -706,8 +711,8 @@ struct ConversationView: View {
             if !live && entry.recovered {
                 Text("已恢复").font(.caption2).foregroundStyle(.secondary)
             }
-            ConversationFeedbackText(text: entry.value.text, preview: true) { feedbackDetail = entry }
-                .foregroundStyle(live ? (entry.value.error ? Color.red : entry.value.warning ? .orange : .secondary) : .secondary)
+            ConversationFeedbackText(text: entry.value.text, preview: true, hasDetail: entry.value.detail != nil) { feedbackDetail = entry }
+                .foregroundStyle(live ? (entry.value.error ? palette.danger : entry.value.warning ? palette.warning : .secondary) : .secondary)
             if live && entry.value.retry {
                 Button("重试") {
                     if feedbackSource.contains(where: { $0.key == entry.value.key && $0.text == entry.value.text }) { workbench.store.retry() }

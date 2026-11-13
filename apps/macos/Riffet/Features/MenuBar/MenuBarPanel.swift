@@ -282,23 +282,27 @@ struct WaitingRow: View {
     @State private var interaction: NativeInteraction?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            Button(action: open) {
-                HStack(alignment: .top, spacing: Space.sm) {
-                    Circle().fill(palette.warning).frame(width: 6, height: 6).padding(.top, 6)
-                    Text(session.title.ifEmpty(String(localized: "新会话"))).font(RiffetFont.label).lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+        Group {
             if let interaction {
-                InteractionCardView(workbench: workbench, interaction: interaction, sessionID: session.id, summaryOnly: true, onOpenDetails: { showDetails(interaction) }, summaryTitle: session.title)
+                InteractionCardView(workbench: workbench, interaction: interaction, sessionID: session.id, summaryOnly: true,
+                                    onOpenDetails: { showDetails(interaction) }, summaryContext: (session.title, open))
+                    .padding(.bottom, Space.xs)
             } else {
-                Text("等待你确认").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
+                Button(action: open) {
+                    HStack(spacing: Space.sm) {
+                        Circle().fill(palette.warning).frame(width: 6, height: 6).frame(width: 14)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(session.title.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(1)
+                            Text("等待你确认").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, Space.sm)
+                    .padding(.vertical, Space.xs)
+                }
+                .buttonStyle(HoverRowStyle())
             }
         }
-        .padding(Space.sm)
         .animation(reduceMotion ? nil : Motion.standard, value: interaction?.id)
         .task(id: session.updatedAt) {
             interaction = try? await workbench.store.currentInteraction(sessionId: session.id)
@@ -322,65 +326,65 @@ struct ServiceAlertBanner: View {
 
     var body: some View {
         FeedbackRegion(value: shownAlert) { alert, live in
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 8) {
-                    Image(icon: alert == .stopped ? "exclamationmark.triangle.fill" : "info.circle")
-                        .foregroundStyle(live && alert == .stopped ? palette.warning : palette.fg3)
-                    Text(alert.message).font(.riffet(size: S(12.5))).foregroundStyle(palette.fg).lineLimit(2)
-                    Spacer(minLength: 0)
-                    if live && model.recoveringService { Spinner(size: .mini) }
-                    if !live, model.serviceAlert == nil, model.phase == .ready {
-                        Text("已恢复").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
-                    }
-                }
-                if live, let blockers = model.server.restartBlockers, !blockers.isEmpty || model.server.restartProblem != nil {
-                    Text(verbatim: ([model.server.restartProblem].compactMap { $0 } + blockers.map { "\($0.title.isEmpty ? backendLabel($0.backendId) : $0.title) · \($0.reasonLabel)" }).joined(separator: "\n"))
-                        .font(.riffet(size: S(11))).foregroundStyle(palette.fg3).lineLimit(4)
-                }
-                HStack(spacing: Space.xs) {
-                    if live, model.server.restartBlockers?.isEmpty == false || model.server.restartProblem != nil {
-                        // A restart waiting for these conversations: go ahead now, or give it up.
-                        Button("仍然重启") { model.server.restartAnyway() }
-                            .buttonStyle(SolidButtonStyle(kind: .secondary))
-                        Button("取消") { model.server.cancelRestart() }
-                            .buttonStyle(SolidButtonStyle(kind: .secondary))
-                    } else if live && model.canRecoverService {
-                        Button(alert.actionTitle) {
-                            guard shownAlert == alert else { return }
-                            Task { await model.recoverService() }
-                        }
-                            .buttonStyle(SolidButtonStyle(kind: alert == .stopped ? .primary : .secondary))
-                            .disabled(model.recoveringService)
-                    }
-                    Button("查看日志") { model.server.openLog() }
-                        .buttonStyle(SolidButtonStyle(kind: .secondary))
-                    if live && model.server.appAgentStatus == .requiresApproval {
-                        Button("登录项设置") { SMAppService.openSystemSettingsLoginItems() }
-                            .buttonStyle(SolidButtonStyle(kind: .secondary))
-                    }
-                    Spacer(minLength: 0)
-                    if live, case .outdated = alert {
+            NoticeBar(tone: !live ? .neutral : model.serviceError != nil ? .danger : alert == .stopped ? .warning : .neutral,
+                      symbol: alert == .stopped ? "exclamationmark.triangle" : "info.circle",
+                      text: text(alert, live: live), floating: !compact, textLineLimit: 5) {
+                actions(alert, live: live)
+            }
+            .padding(.horizontal, compact ? 0 : Space.md)
+            .padding(.top, compact ? 0 : Space.sm)
+        }
+        .id(dismissal)
+    }
+
+    /// One block of text: what happened, then what stands in the way (conversations a restart waits for, the last error).
+    private func text(_ alert: ServiceAlert, live: Bool) -> String {
+        guard live else { return alert.message }
+        var lines = [alert == .stopped && !model.canRecoverService ? String(localized: "本机服务器已停止，在终端重新运行 riffet start") : alert.message]
+        if let blockers = model.server.restartBlockers, !blockers.isEmpty || model.server.restartProblem != nil {
+            lines += [model.server.restartProblem].compactMap { $0 }
+                + blockers.map { "\($0.title.isEmpty ? backendLabel($0.backendId) : $0.title) · \($0.reasonLabel)" }
+        }
+        if let error = model.serviceError { lines.append(error) }
+        return lines.joined(separator: "\n")
+    }
+
+    @ViewBuilder
+    private func actions(_ alert: ServiceAlert, live: Bool) -> some View {
+        if !live {
+            if model.serviceAlert == nil, model.phase == .ready {
+                Text("已恢复").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+            }
+        } else {
+            HStack(spacing: Space.xs) {
+                if model.recoveringService { Spinner(size: .mini) }
+                if model.server.restartBlockers?.isEmpty == false || model.server.restartProblem != nil {
+                    // A restart waiting for these conversations: go ahead now, or give it up.
+                    Button("取消") { model.server.cancelRestart() }.buttonStyle(ChipButtonStyle())
+                    Button("仍然重启") { model.server.restartAnyway() }.buttonStyle(SolidButtonStyle(kind: .secondary))
+                } else {
+                    if case .outdated = alert {
                         Button("稍后") {
                             guard shownAlert == alert else { return }
                             model.dismissServiceAlert()
                             dismissal = UUID()
-                        }.buttonStyle(.plain).foregroundStyle(palette.fg3)
+                        }.buttonStyle(ChipButtonStyle())
+                    }
+                    Button("查看日志") { model.server.openLog() }.buttonStyle(ChipButtonStyle())
+                    if model.server.appAgentStatus == .requiresApproval {
+                        Button("登录项设置") { SMAppService.openSystemSettingsLoginItems() }.buttonStyle(ChipButtonStyle())
+                    }
+                    if model.canRecoverService {
+                        Button(alert.actionTitle) {
+                            guard shownAlert == alert else { return }
+                            Task { await model.recoverService() }
+                        }
+                        .buttonStyle(SolidButtonStyle(kind: alert == .stopped ? .primary : .secondary))
+                        .disabled(model.recoveringService)
                     }
                 }
-                if live, alert == .stopped, !model.canRecoverService {
-                    Text("这个服务器由终端里的 riffet start 启动，请在终端重新执行。").font(.riffet(size: S(11))).foregroundStyle(palette.fg3)
-                }
-                if live, let error = model.serviceError {
-                    Text(error).font(.riffet(size: S(11))).foregroundStyle(palette.danger).lineLimit(3).textSelection(.enabled)
-                }
             }
-            .padding(compact ? Space.sm : 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(live && alert == .stopped ? palette.warningSoft : palette.bgSubtle, in: RoundedRectangle(cornerRadius: compact ? 10 : 0, style: .continuous))
-            // The soft tints are translucent: in a window the strip needs a solid ground under them,
-            // or the conversation behind a glass window shows through the text.
-            .background(compact ? Color.clear : palette.bg)
+            .fixedSize()
         }
-        .id(dismissal)
     }
 }

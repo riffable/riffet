@@ -257,7 +257,7 @@ struct ConversationRunDocks: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let goal = workbench.goal {
-                DisclosureGroup { VStack(alignment: .leading, spacing: 6) { Text(goal.objective); if goal.status == "blocked", let reason = goal.reason { Text(reason).foregroundStyle(.orange) } }.font(.subheadline).padding(.top, 8) } label: { Label("目标 · \(goalStatusLabel(goal: goal))", systemImage: "target").font(.subheadline) }
+                DisclosureGroup { VStack(alignment: .leading, spacing: 6) { Text(goal.objective); if goal.status == "blocked", let reason = goal.reason { Text(reason).foregroundStyle(palette.warning) } }.font(.subheadline).padding(.top, 8) } label: { Label("目标 · \(goalStatusLabel(goal: goal))", systemImage: "target").font(.subheadline) }
             }
             if !workbench.todos.isEmpty {
                 DisclosureGroup { ConversationTodoList(entries: workbench.todos).padding(.top, 8) } label: { Label(todoProgress(entries: workbench.todos), systemImage: "checklist").font(.subheadline) }
@@ -308,10 +308,11 @@ struct ConversationRunDocks: View {
 struct CatalogStatusSlot: View {
     let loading: Bool
     let failed: Bool
+    @Environment(\.palette) private var palette
     var body: some View {
         Group {
             if loading { ProgressView().controlSize(.mini) }
-            else if failed { Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(.orange) }
+            else if failed { Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(palette.warning) }
             else { Image(systemName: "chevron.down") }
         }.frame(width: 12, height: 12)
     }

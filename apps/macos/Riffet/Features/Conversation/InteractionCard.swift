@@ -50,20 +50,27 @@ struct InteractionCardView: View {
     var summaryOnly = false
     var onOpenDetails: (() -> Void)?
     var onInteractionChange: ((NativeInteraction?) -> Void)?
-    var summaryTitle: String?
+    /// The conversation a summary belongs to, shown on its first line where the summary stands alone (the menu bar).
+    var summaryContext: (title: String, open: () -> Void)?
     @Environment(\.palette) private var palette
     @State private var showingDetails = false
     /// Extending the deadline failed; the platform's own action, outside the shared state machine.
     @State private var extendError: String?
     /// The action selected in the reader; its exact scope stays in the scrollable body.
     @State private var pickedAllow: String?
+    /// Whether the summary's title or command is cut off by its line limit; until measured, it is.
+    @State private var titleClipped = true
+    @State private var messageClipped = true
     @FocusState private var cardFocused: Bool
     @AppStorage("riffet.touchid-approvals") private var requireTouchID = false
     private let drafts = InteractionDrafts.shared
 
     private var currentSessionID: String? { sessionID ?? workbench.selected?.id }
     private var key: String { "\(workbench.baseURL.absoluteString):\(currentSessionID ?? ""):\(interaction.id)" }
-    private var connected: Bool { workbench.connection is RiffetConnectionStateLive }
+    /// The open conversation answers over its live stream; another one (the menu bar) answers over the API.
+    private var connected: Bool {
+        currentSessionID == workbench.selected?.id ? workbench.connection is RiffetConnectionStateLive : workbench.host.api != nil
+    }
     private var state: InteractionCardState {
         drafts.states[key] ?? restoreInteractionCard(interaction: interaction, savedDraft: nil, savedSubmission: nil)
     }
@@ -148,33 +155,33 @@ struct InteractionCardView: View {
         if let onOpenDetails { onOpenDetails() } else { showingDetails = true }
     }
 
-    /// Quick actions are offered only when every source line fits without wrapping or clipping.
-    /// A wrapped preview remains readable, but its decision belongs in the full reader.
+    /// Quick actions are offered only when the request is completely visible: wrapping is fine, cutting
+    /// off at the line limit is not. A request that does not fit is decided in the full reader.
     private var summaryBody: some View {
-        ViewThatFits(in: .horizontal) {
-            if title.components(separatedBy: .newlines).count <= 2,
-               (shown.message ?? "").components(separatedBy: .newlines).count <= 3 {
-                summaryContent(collapsed: false).fixedSize(horizontal: true, vertical: true)
-            }
-            summaryContent(collapsed: true)
-        }
-        .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private func summaryContent(collapsed: Bool) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
-            if summaryTitle != title {
-                HStack(alignment: .top, spacing: Space.sm) {
+            if let context = summaryContext {
+                Button(action: context.open) {
+                    HStack(spacing: Space.xs) {
+                        Circle().fill(palette.warning).frame(width: 6, height: 6)
+                        Text(context.title.ifEmpty(String(localized: "新会话"))).font(.riffet(size: S(12))).foregroundStyle(palette.fg2).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help("打开会话")
+            }
+            if summaryContext?.title != title {
+                HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                     headerIcon
-                    Text(title).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
-                        .lineLimit(collapsed ? 2 : nil).fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+                    ClampedText(text: title, font: .riffet(size: S(13), weight: .medium), color: palette.fg, lines: 2, clipped: $titleClipped)
                 }
             }
             if let message = shown.message, !message.isEmpty {
-                Text(message).font(.riffet(size: S(12), design: .monospaced)).foregroundStyle(palette.fg2)
-                    .lineLimit(collapsed ? 3 : nil).fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ClampedText(text: message, font: .riffet(size: S(12), design: .monospaced), color: palette.fg2, lines: 3, clipped: $messageClipped)
+                    .textSelection(.enabled)
+                    .padding(.horizontal, Space.sm).padding(.vertical, Space.xs)
+                    .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(blockFill))
             }
             if shown.expiresAt != nil, submission?.phase != .success, let sessionID = currentSessionID {
                 ExpiryCountdown(workbench: workbench, sessionID: sessionID, interaction: shown, failed: { extendError = $0 })
@@ -188,8 +195,8 @@ struct InteractionCardView: View {
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
             }
             ViewThatFits(in: .horizontal) {
-                summaryActions(collapsed: collapsed)
-                Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
+                summaryActions
+                HStack { Spacer(minLength: 0); Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle()) }
             }
         }
         .padding(Space.md)
@@ -204,19 +211,22 @@ struct InteractionCardView: View {
         }
     }
 
-    private func summaryActions(collapsed: Bool) -> some View {
-        let complete = !collapsed && shown.message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-            && shown.actions.allSatisfy { $0.detail?.isEmpty != false }
+    /// Details, then the refusal, then the approval on the trailing edge. Options that remember a rule
+    /// show their scope only in the reader, so they are never quick actions.
+    private var summaryActions: some View {
+        let visible = (summaryContext?.title == title || !titleClipped) && !messageClipped && shown.message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let refusals = ["deny", "decline", "reject", "cancel"]
+        let quick = shown.actions.filter {
+            $0.detail == nil && (visible ? ["approve", "allow", "allow-once", "accept"] + refusals : refusals).contains($0.id)
+                && ($0.shortLabel != nil || $0.label.count < 28)
+        }.sorted { refusals.contains($0.id) && !refusals.contains($1.id) }
         return HStack(spacing: Space.sm) {
-            Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
             submissionActions
             Spacer(minLength: 0)
+            Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
             if !busy, !selectsOptions, !isQuestion, isInteractionRenderable(interaction: shown) {
-                ForEach(shown.actions.filter {
-                    $0.detail == nil && (!complete ? ["deny", "decline", "reject", "cancel"] : ["approve", "allow-once", "accept", "deny", "decline", "reject", "cancel"]).contains($0.id)
-                        && ($0.shortLabel != nil || $0.label.count < 28)
-                }, id: \.id) { action in
-                    actionButton(action.shortLabel ?? action.label, action.tone == "danger" ? .secondary : .primary) { submit(action.id) }
+                ForEach(quick, id: \.id) { action in
+                    actionButton(action.shortLabel ?? action.label, refusals.contains(action.id) ? .secondary : .primary) { submit(action.id) }
                         .disabled(!connected || busy)
                 }
             }
@@ -325,7 +335,7 @@ struct InteractionCardView: View {
 
     private var chosenAction: NativeInteractionAction? {
         shown.actions.first { $0.id == pickedAllow }
-            ?? shown.actions.first { $0.detail == nil && ["approve", "accept", "allow-once"].contains($0.id) }
+            ?? shown.actions.first { $0.detail == nil && ["approve", "allow", "accept", "allow-once"].contains($0.id) }
     }
 
     private var expandedCard: some View {
@@ -776,6 +786,31 @@ struct InteractionCardView: View {
             let message = error.riffetMessage
             drafts.update(key) { $0.syncFailed(message: message) }
         }
+    }
+}
+
+/// Text held to a line limit that reports whether the limit cut it off: its height against the same text unlimited.
+private struct ClampedText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let lines: Int
+    @Binding var clipped: Bool
+    @State private var shownHeight: CGFloat = 0
+    @State private var fullHeight: CGFloat = .greatestFiniteMagnitude
+
+    var body: some View {
+        Text(text).font(font).foregroundStyle(color)
+            .lineLimit(lines).fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { shownHeight = $0 }
+            .background(alignment: .topLeading) {
+                Text(text).font(font).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .hidden()
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
+            }
+            .onChange(of: fullHeight > shownHeight + 0.5, initial: true) { _, cut in clipped = cut }
     }
 }
 

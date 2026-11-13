@@ -130,7 +130,7 @@ private struct ShareImageView: View {
             VStack(spacing: Space.xs) {
                 FeedbackRegion(value: toast.map { ToastFeedback(text: $0, failed: toastFailed) }, renewal: toastTicket) { held, _ in
                     HStack(alignment: .top, spacing: Space.sm) {
-                        if held.failed { Image(icon: "exclamationmark.circle").foregroundStyle(palette.toastDanger) }
+                        if held.failed { Image(icon: "exclamationmark.circle").foregroundStyle(palette.danger) }
                         Text(held.text).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
                         if held.failed {
                             Button {
@@ -140,10 +140,10 @@ private struct ShareImageView: View {
                                 .buttonStyle(.plain).help("关闭")
                         }
                     }
-                    .font(.riffet(size: S(12.5))).foregroundStyle(.white)
+                    .font(.riffet(size: S(12.5))).foregroundStyle(palette.fg)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 8)
-                    .background(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).fill(palette.toast))
+                    .floatingSurface(cornerRadius: Radius.container)
                     .transition(.opacity.combined(with: .offset(y: 8)))
                 }
                 .id(toastDismissal)

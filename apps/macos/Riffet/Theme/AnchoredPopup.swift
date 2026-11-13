@@ -67,19 +67,33 @@ private struct PopoverSurface<Content: View>: View {
     static var inset: CGFloat { 44 }
 
     let content: () -> Content
+
+    var body: some View {
+        content()
+            .floatingSurface(cornerRadius: DisplayPreferences.shared.style.radii.floating)
+            .padding(Self.inset)
+    }
+}
+
+/// The floating card shared by drawn menus and toasts: popover fill, hairline and shadow, following the theme.
+private struct FloatingSurface: ViewModifier {
+    let cornerRadius: CGFloat
     @Environment(\.palette) private var palette
     @Environment(\.colorScheme) private var scheme
 
-    var body: some View {
+    func body(content: Content) -> some View {
         let style = DisplayPreferences.shared.style
-        let shape = RoundedRectangle(cornerRadius: style.radii.floating, style: .continuous)
-        content()
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
             .background(palette.bgPopover, in: shape)
             .clipShape(shape)
             .overlay(shape.strokeBorder(style.surface == .outlined ? palette.lineStrong : palette.line, lineWidth: 1))
             .shadow(color: scheme == .dark ? .black.opacity(0.5) : Color(red: 60 / 255, green: 50 / 255, blue: 40 / 255).opacity(0.16), radius: 20, y: 12)
-            .padding(Self.inset)
     }
+}
+
+extension View {
+    func floatingSurface(cornerRadius: CGFloat) -> some View { modifier(FloatingSurface(cornerRadius: cornerRadius)) }
 }
 
 private struct PopupAnchor<Content: View>: NSViewRepresentable {

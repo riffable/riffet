@@ -285,7 +285,7 @@ struct InteractionCardView: View {
                shown.actions.allSatisfy({ $0.detail?.isEmpty != false }),
                title.components(separatedBy: .newlines).count <= 2,
                (shown.message ?? "").components(separatedBy: .newlines).count <= 3,
-               let action = shown.actions.first(where: { ["approve", "accept", "allow-once"].contains($0.id) && $0.detail == nil }) {
+               let action = shown.actions.first(where: { ["approve", "allow", "accept", "allow-once"].contains($0.id) && $0.detail == nil }) {
                 VStack(spacing: 0) {
                     Text(title).riffetFont(.headline).fixedSize().hidden().accessibilityHidden(true).frame(height: 0)
                     if let message = shown.message, !message.isEmpty {
@@ -391,7 +391,7 @@ struct InteractionCardView: View {
     }
 
     private var chosenAction: NativeInteractionAction? {
-        shown.actions.first { $0.id == selectedAction } ?? shown.actions.first { ["approve", "accept", "allow-once"].contains($0.id) && $0.detail == nil }
+        shown.actions.first { $0.id == selectedAction } ?? shown.actions.first { ["approve", "allow", "accept", "allow-once"].contains($0.id) && $0.detail == nil }
     }
 
     /// Selection stays in the row; the chosen rule is separate selectable reading content.

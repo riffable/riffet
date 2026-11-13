@@ -9454,16 +9454,6 @@
         }
       }
     },
-    "重新连接（第 %d 次）" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Reconnecting (attempt %d)"
-          }
-        }
-      }
-    },
     "重新配对" : {
       "localizations" : {
         "en" : {

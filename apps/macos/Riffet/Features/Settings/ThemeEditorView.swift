@@ -557,7 +557,6 @@ private enum ThemeEditorRoles {
         Group(title: String(localized: "强调色"), roles: ["accent", "accent-hover", "accent-soft", "accent-fg"]),
         Group(title: String(localized: "状态"), roles: ["success", "success-soft", "warning", "warning-soft", "danger", "danger-soft", "danger-fg"]),
         Group(title: "Diff", roles: ["diff-add", "diff-add-gutter", "diff-add-marker", "diff-add-strong", "diff-del", "diff-del-gutter", "diff-del-marker", "diff-del-strong"]),
-        Group(title: String(localized: "提示条"), roles: ["toast", "toast-success", "toast-danger"]),
         Group(title: "Agent", roles: ["agent-cursor", "agent-codex", "agent-claude", "agent-dsh"]),
         Group(title: String(localized: "图表"), roles: ["chart-1", "chart-2", "chart-3", "chart-4", "chart-5", "chart-6", "chart-7", "chart-8"]),
     ]
@@ -603,9 +602,6 @@ private enum ThemeEditorRoles {
         "diff-del-gutter": String(localized: "删除行号"),
         "diff-del-marker": String(localized: "删除标记"),
         "diff-del-strong": String(localized: "删除强调"),
-        "toast": String(localized: "提示条"),
-        "toast-success": String(localized: "成功提示"),
-        "toast-danger": String(localized: "危险提示"),
         "agent-cursor": "Cursor",
         "agent-codex": "Codex",
         "agent-claude": "Claude",
@@ -642,8 +638,6 @@ private enum ThemeEditorRoles {
         ContrastCheck(label: String(localized: "成功 / 页面"), foreground: "success", background: "bg", minimum: 3),
         ContrastCheck(label: String(localized: "警告 / 页面"), foreground: "warning", background: "bg", minimum: 3),
         ContrastCheck(label: String(localized: "危险 / 页面"), foreground: "danger", background: "bg", minimum: 3),
-        ContrastCheck(label: String(localized: "成功提示 / 提示条"), foreground: "toast-success", background: "toast", minimum: 3),
-        ContrastCheck(label: String(localized: "危险提示 / 提示条"), foreground: "toast-danger", background: "toast", minimum: 3),
     ]
 
     /// WCAG 2.x, compositing translucent colours as they are actually painted.

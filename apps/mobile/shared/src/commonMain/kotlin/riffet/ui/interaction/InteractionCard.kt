@@ -567,7 +567,7 @@ private fun ApprovalCard(
     val selectsOptions = interactionSelectsOptions(shown)
     val selectedOptions = state.currentDraft.selectedIds.toSet()
     val answerPresent = selectedOptions.isNotEmpty() || state.currentDraft.otherText.isNotBlank()
-    val oneOffActionIds = setOf("approve", "allow-once")
+    val oneOffActionIds = setOf("approve", "allow", "allow-once", "accept")
     val refusalActionIds = setOf("deny", "decline", "reject", "cancel")
     val quickActionIds = oneOffActionIds + refusalActionIds
     val directAuxiliaryActionIds = setOf("cancel", "previous", "skip")

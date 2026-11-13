@@ -2498,6 +2498,11 @@ describe('Claude hook guidance', () => {
     await expect(h.adapter.steer(h.host, request)).rejects.toMatchObject({ statusCode: 409 });
     expect(h.launches).toHaveLength(launches);
     expect(h.adapter.status(h.host, h.getSession()).activeTurn).toBeUndefined();
+    // Still stoppable: the stop names the turn as the status does, without a turn id.
+    const session = h.getSession();
+    const terminal = await h.host.terminal.get(session.terminalId!);
+    await expect(h.adapter.interrupt(h.host, session, h.profile, { expectedStop: { requestId: 'cold-stop', nativeSessionId: session.nativeSessionId!,
+      terminalId: terminal.id, terminalEpoch: terminal.epoch } })).resolves.toBeUndefined();
   });
 
   it('does not fail a receipted guidance input when its observer closes but the CLI stays alive', async () => {

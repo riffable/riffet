@@ -10,6 +10,7 @@ struct TerminalPage: View {
     let projectID: String
     var terminalID: String? = nil
     @Environment(\.scenePhase) private var phase
+    @Environment(\.palette) private var palette
     @State private var controller = IOSTerminalController()
     @State private var terminals: [TerminalInfo] = []
     @State private var selectedID: String?
@@ -26,10 +27,10 @@ struct TerminalPage: View {
                     // The connection status only shows when something is off; a live terminal says nothing.
                     if controller.notice == nil, !controller.live, !controller.exited, controller.reconnectable {
                         Button { reconnect() } label: {
-                            Text(controller.status) + Text(verbatim: " · ") + Text("重新连接").foregroundStyle(Color.accentColor)
+                            Text(controller.status) + Text(verbatim: " · ") + Text("重试").foregroundStyle(Color.accentColor)
                         }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
                     } else if controller.notice != nil || !controller.live {
-                        Text(controller.notice ?? controller.status).font(.caption).foregroundStyle(controller.hasFailure ? Color.red : .secondary)
+                        Text(controller.notice ?? controller.status).font(.caption).foregroundStyle(controller.hasFailure ? palette.danger : .secondary)
                     }
                     if controller.pasting { ProgressView().controlSize(.small) }
                     Spacer()
@@ -204,7 +205,7 @@ final class IOSTerminalController {
             switch onEnum(of: link) {
             case .connecting: status = String(localized: "正在连接…", bundle: .riffet); live = false; exited = false
             case .live: status = String(localized: "已连接", bundle: .riffet); live = true; exited = false
-            case let .reconnecting(state): status = String(localized: "重新连接（第 \(state.attempt) 次）", bundle: .riffet); live = false
+            case .reconnecting: status = String(localized: "正在重新连接", bundle: .riffet); live = false
             case let .exited(exit): status = exit.exitCode.map { String(localized: "进程已退出（\($0.int64Value)）", bundle: .riffet) } ?? String(localized: "进程已退出", bundle: .riffet); live = false; exited = true
             case .unauthenticated: status = String(localized: "授权已失效，请重新配对", bundle: .riffet); live = false
             }

@@ -204,10 +204,6 @@ msgid "危险提示"
 msgstr "Danger toast"
 
 #: src/lib/theme-role-labels.ts
-msgid "危险提示 / 提示条"
-msgstr "Danger toast / Toast"
-
-#: src/lib/theme-role-labels.ts
 msgid "危险文字"
 msgstr "Danger text"
 
@@ -327,6 +323,10 @@ msgstr "Completed"
 msgid "导出失败"
 msgstr "Export failed"
 
+#: src/lib/theme-role-labels.ts
+msgid "工具提示"
+msgstr "Tooltip"
+
 #: src/lib/files.ts
 msgid "已复制"
 msgstr "Copied"
@@ -408,10 +408,6 @@ msgid "成功提示"
 msgstr "Success toast"
 
 #: src/lib/theme-role-labels.ts
-msgid "成功提示 / 提示条"
-msgstr "Success toast / Toast"
-
-#: src/lib/theme-role-labels.ts
 msgid "成功浅底"
 msgstr "Success tint"
 
@@ -435,10 +431,6 @@ msgstr "Queued"
 #: src/lib/extensions.ts
 msgid "描述适用场景"
 msgstr "Describe when to use this skill"
-
-#: src/lib/theme-role-labels.ts
-msgid "提示条"
-msgstr "Toast"
 
 #: src/lib/errors.ts
 msgctxt "common-error-fallback"

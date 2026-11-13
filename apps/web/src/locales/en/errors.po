@@ -455,7 +455,7 @@ msgstr "This stop request does not match the original task; refresh its status"
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json
 msgid "error.NATIVE_STOP_TARGET_CHANGED"
-msgstr "The original task changed; no other task was stopped"
+msgstr "Could not stop; try again"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/native.json

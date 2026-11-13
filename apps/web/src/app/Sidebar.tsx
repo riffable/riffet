@@ -2,7 +2,8 @@ import { memo, useMemo, useState, type KeyboardEvent, type ReactNode } from 'rea
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconTriangleAlert, IconX } from '@/components/icons';
+import { Notice } from '@/components/ui/notice';
+import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -411,10 +412,7 @@ export function Sidebar(props: Props) {
   </>;
 
   const offlineBanner = props.stale?.mode === 'offline' && (
-    <div role="status" className="mx-2 mb-1 flex items-center gap-1.5 rounded-lg bg-warning-soft px-2 py-1.5 text-xs text-warning">
-      <IconTriangleAlert className="size-3.5 shrink-0" />
-      <span className="min-w-0">{offlineLabel(props.stale.savedAt)}</span>
-    </div>
+    <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{offlineLabel(props.stale.savedAt)}</Notice>
   );
   // A network blip folds the banner away; it keeps its text until it has.
   const heldOfflineBanner = useHeld(offlineBanner);

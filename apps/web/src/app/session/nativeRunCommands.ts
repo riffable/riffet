@@ -330,12 +330,24 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
     try {
       const saved = localStorage.getItem(key);
       if (saved && !(await api.sessionCatalog(session.id)).capabilities.supportsTargetedStop) throw new Error(i18n._(msg`服务器版本过旧，请更新后重试`));
-      const target: NativeStopRequest = saved ? JSON.parse(saved) : await stopTarget();
-      localStorage.setItem(key, JSON.stringify(target));
-      if (localStorage.getItem(key) !== JSON.stringify(target)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
-      const result = await api.cancelSession(session.id, target);
-      try { localStorage.removeItem(key); } catch { /* Replaying the same completed operation remains safe. */ }
-      if (result.run) updateRun(result.run);
+      const stopOnce = async (target: NativeStopRequest) => {
+        localStorage.setItem(key, JSON.stringify(target));
+        if (localStorage.getItem(key) !== JSON.stringify(target)) throw new Error(i18n._(msg`无法保存待发送消息，请检查浏览器存储空间`));
+        const result = await api.cancelSession(session.id, target);
+        try { localStorage.removeItem(key); } catch { /* Replaying the same completed operation remains safe. */ }
+        if (result.run) updateRun(result.run);
+      };
+      try {
+        await stopOnce(saved ? JSON.parse(saved) : await stopTarget());
+      } catch (error) {
+        // The server refused because the turn it runs is not the one this request named (a stale status or
+        // a replayed target). Nothing was stopped, so aim at the current turn once; a turn that ended needs nothing.
+        if (!(error instanceof HttpError && error.code === 'NATIVE_STOP_TARGET_CHANGED')) throw error;
+        localStorage.removeItem(key);
+        const phase = store.get().status.phase;
+        if (tracking.sessionId !== session.id || (phase !== 'busy' && phase !== 'attention')) return;
+        await stopOnce(await stopTarget());
+      }
     }
     catch (error) {
       if (!isUncertainRequest(error)) localStorage.removeItem(key);

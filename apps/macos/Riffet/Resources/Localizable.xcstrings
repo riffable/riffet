@@ -6734,26 +6734,6 @@
         }
       }
     },
-    "危险提示": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Danger toast"
-          }
-        }
-      }
-    },
-    "危险提示 / 提示条": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Danger toast / Toast"
-          }
-        }
-      }
-    },
     "危险文字": {
       "localizations": {
         "en": {
@@ -10309,26 +10289,6 @@
         }
       }
     },
-    "成功提示": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Success toast"
-          }
-        }
-      }
-    },
-    "成功提示 / 提示条": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Success toast / toast"
-          }
-        }
-      }
-    },
     "成功浅底": {
       "localizations": {
         "en": {
@@ -11045,16 +11005,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "The provider was removed; cannot continue sending"
-          }
-        }
-      }
-    },
-    "提示条": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Toast"
           }
         }
       }
@@ -13658,6 +13608,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "The local server is not paired yet; connect to it before reading diagnostics."
+          }
+        }
+      }
+    },
+    "本机服务器已停止，在终端重新运行 riffet start": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local server stopped; run riffet start in a terminal again"
           }
         }
       }
@@ -17802,16 +17762,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "This server was started by riffet start in the terminal; run riffet restart in the terminal"
-          }
-        }
-      }
-    },
-    "这个服务器由终端里的 riffet start 启动，请在终端重新执行。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This server was started by riffet start in a terminal; run it in the terminal again."
           }
         }
       }

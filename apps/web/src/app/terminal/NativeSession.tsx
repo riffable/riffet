@@ -701,7 +701,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       const connectionCopy = connectionNotice === 'conflict' ? t`连接冲突` : t`连接已断开`;
       const connectionDetail = native.status.connection?.message;
       if ((connectionNotice === 'conflict' || connectionDetail || mobileViewport) && (!historyNotice || historyNotice !== connectionDetail)) {
-        banners.push({ id: `connection:${connectionDetail || connectionCopy}`, tone: 'warning', text: connectionDetail || connectionCopy });
+        // The backend's reason is an untranslated diagnostic: the notice says what happened, the reason sits behind 详情.
+        banners.push({ id: `connection:${connectionDetail || connectionCopy}`, tone: 'warning', text: connectionCopy, ...(connectionDetail ? { detail: connectionDetail } : {}) });
         if (connectionDetail) displayedNotices.add(connectionDetail);
       }
     } else if (!starting && !sendingInitial && !connectionNotice && (failureNotice || mobileViewport && terminalBound && !live)) {
@@ -1270,7 +1271,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
 
       <ContentColumn outside className={cn('relative flex flex-col gap-2 pb-3 md:pb-5', dots && !composerFullscreen && 'md:pb-1', subagentOpen && 'hidden')}>
         <FeedbackNotices scope={feedbackScope} messages={standingNotices} recovered={native.connected && !connectionNotice && live}
-          renderMessage={message => <FailureDetails text={message.text} />}
+          renderMessage={message => <FailureDetails text={message.text} detail={message.detail} />}
           action={message => message.id.startsWith('connection:')
             ? <Button size="xs" variant="secondary" onClick={native.retryConnection}><IconRotateCw /><Trans>重试连接</Trans></Button>
             : message.id.startsWith('session:') ? <Button size="xs" variant="secondary" disabled={reopenDisabled} onClick={() => void reopen()}>

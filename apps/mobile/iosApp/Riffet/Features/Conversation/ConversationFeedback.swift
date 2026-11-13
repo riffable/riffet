@@ -4,6 +4,8 @@ import RiffetKit
 struct ConversationFeedbackValue: Equatable {
     let key: String
     let text: String
+    /// The original diagnostic behind a plain `text`, shown only in the detail sheet.
+    var detail: String?
     var error = false
     var warning = true
     var retry = false
@@ -219,6 +221,7 @@ private struct ConversationFeedbackProbe: UIViewRepresentable {
 struct ConversationFeedbackText: View {
     let text: String
     let preview: Bool
+    var hasDetail = false
     var onDetails: () -> Void
     @State private var previewHeight: CGFloat = 0
     @State private var fullHeight: CGFloat = 0
@@ -233,7 +236,7 @@ struct ConversationFeedbackText: View {
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
                     }
                 }
-            if preview && fullHeight > previewHeight + 1 {
+            if preview && (hasDetail || fullHeight > previewHeight + 1) {
                 Button("详情", action: onDetails).font(.caption)
             }
         }
