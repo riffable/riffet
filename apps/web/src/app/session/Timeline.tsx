@@ -6,6 +6,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowRightLeft, IconBot, IconBrain, IconMessageCircleQuestion, IconChevronRight, IconCircle, IconCircleAlert, IconCircleCheck, IconCircleDashed, IconDownload, IconFilePenLine, IconFileText, IconGlobe, IconImage, IconListChecks, IconListTodo, IconRepeat, IconSearch, IconSquareArrowOutUpRight, IconSquareTerminal, IconTrash2, IconWrench, IconX } from '@/components/icons';
 import { ZoomableImage } from './ImageViewer';
 import { useImageSource } from './imageSource';
+import { revealOnOwnHover, useRestReveal } from './sessionLayout';
 import { useTranscriptResources } from './transcriptResources';
 import { previewOnPlainClick, useFileAccess } from './fileAccess';
 import type { CapturedSessionReference, NativeJob, NativeRunRecovery, OutputRate, Run, RunMetrics } from '@contracts';
@@ -24,7 +25,7 @@ import { canRestoreFailedSteer, type ReasoningChannel, type TimelineItem, type U
 import { activeToolStates, currentToolActivity, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
 import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
-import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, speedDescription, tokensPerSecond } from './speed';
+import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, tokensPerSecond } from './speed';
 import { MessageAttachments } from './MessageAttachments';
 import { MarkedIndicator, MarkMenuItem, markBodies, type MarkTarget } from './marks';
 import { useAnswerShare } from '../marks/ShareImage';
@@ -39,7 +40,11 @@ export const toolIcons: Record<string, typeof IconWrench> = {
   plan: IconListChecks,
 };
 
-export function nativeDeliveryLabel(run: Run): string {
+/**
+ * What a prompt says about its delivery. A turn stopped after the prompt arrived is the turn's
+ * outcome, not the prompt's: `stopShown` false leaves 已停止 to the row that ends the turn.
+ */
+export function nativeDeliveryLabel(run: Run, stopShown = true): string {
   if (!run.native) return '';
   const native = run.native;
   const received = Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
@@ -50,7 +55,7 @@ export function nativeDeliveryLabel(run: Run): string {
     case 'observed': return '';
     case 'uncertain': return received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`);
     case 'failed': return received ? i18n._(msg`任务失败`) : i18n._(msg`发送失败`);
-    case 'cancelled': return native.stage === 'acknowledged' ? received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`) : native.stage === 'turn_outcome_unknown' ? i18n._(msg`暂时无法获取任务状态`) : native.nativeMessageId || run.state === 'interrupted' ? i18n._(msg`已停止`) : i18n._(msg`已取消`);
+    case 'cancelled': return native.stage === 'acknowledged' ? received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`) : native.stage === 'turn_outcome_unknown' ? i18n._(msg`暂时无法获取任务状态`) : native.nativeMessageId || run.state === 'interrupted' ? stopShown ? i18n._(msg`已停止`) : '' : i18n._(msg`已取消`);
   }
 }
 
@@ -106,7 +111,9 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at }: { text?: 
 const statusRow = 'min-h-lh no-hover:min-h-11';
 const statusAction = 'no-hover:min-h-11';
 
-export const UserMessage = memo(function UserMessage({ text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+  /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
+  stopShown?: boolean;
   text: string;
   attachments: UserAttachment[];
   references?: CapturedSessionReference[];
@@ -129,7 +136,8 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const taskOutcome = run ? nativeTaskOutcome(run) : undefined;
-  const delivery = run?.native && !taskOutcome && !failureShown ? nativeDeliveryLabel(run) : '';
+  const delivery = run?.native && !taskOutcome && !failureShown ? nativeDeliveryLabel(run, stopShown) : '';
+  const rest = useRestReveal();
   const [errorOpen, setErrorOpen] = useRemembered(`delivery-error:${run?.id ?? ''}`, false);
   // While it is on its way the status says enough; the time returns once it has arrived or settled.
   const sending = Boolean(delivery && run && ['submitting', 'queued', 'starting', 'sent'].includes(sendPhase(run) ?? ''));
@@ -142,14 +150,14 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
     ? <button type="button" disabled={runActionPending} onClick={() => onContinueNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}>{recovery.queuedRunIds.length ? <Trans>继续发送 {recovery.queuedRunIds.length} 条消息</Trans> : <Trans>继续对话</Trans>}</button>
     : null;
   return (
-    <div className="group/user flex flex-col items-end gap-1.5">
+    <div className="flex flex-col items-end gap-1.5">
       <div className="flex max-w-[min(82%,560px)] items-start gap-1">
         <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg">{text}</div>
       </div>
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {(text || time || delivery) && (
-        <div data-slot="message-meta" className={cn('flex max-w-[82%] flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/user:opacity-100 can-hover:group-hover/user:pointer-events-auto can-hover:group-focus-within/user:opacity-100 can-hover:group-focus-within/user:pointer-events-auto')}>
+        <div data-slot="message-meta" {...rest} className={cn('flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !resources && revealOnOwnHover)}>
           {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}
           {!taskOutcome && openTerminal}
@@ -159,7 +167,7 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
           {run && inQueue(run) && onSendQueuedNow && <button type="button" disabled={runActionPending} title={t`停止并发送`} onClick={() => onSendQueuedNow(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>停止并发送</Trans></button>}
           {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
           {run && canRestoreFailedSteer(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
-          {time && !sending && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
+          {time && !sending && <time dateTime={time} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
           {text && <CopyButton text={text} label={t`复制消息`} />}
         </div>
       )}
@@ -183,8 +191,8 @@ export const UserMessage = memo(function UserMessage({ text, attachments, refere
  * [mark] makes an answer markable: its body carries the ids a highlight is resolved against
  * (see `MarkLayer`), and its actions offer 收藏回复.
  */
-export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false }: {
-  text: string; showActions: boolean; streaming?: boolean; time?: string; metrics?: RunMetrics; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget;
+export const AssistantMessage = memo(function AssistantMessage({ text, showActions, streaming, time, footerPinned, metrics, runId, onTurnAction, mark, progress, chapters = false, stopped = false }: {
+  text: string; showActions: boolean; stopped?: boolean; streaming?: boolean; time?: string; metrics?: RunMetrics; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget;
   footerPinned?: boolean;
   chapters?: boolean;
   /**
@@ -204,27 +212,31 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
     <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
       <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters && !resources ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters && !resources} /></div>
-      <MessageFooter text={text} showActions={showActions} time={time} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} />
+      <MessageFooter text={text} showActions={showActions} time={time} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} />
     </div>
   );
 });
 
 /** The same turn actions and timestamp belong under an answer or the result that ended it. */
-export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress }: {
-  text?: string; showActions: boolean; time?: string; footerPinned?: boolean; metrics?: RunMetrics;
+export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false }: {
+  text?: string; showActions: boolean; time?: string; footerPinned?: boolean;
+  /** The answer ends a stopped turn: 已停止 leads the time and keeps the line on screen. */
+  stopped?: boolean; metrics?: RunMetrics;
   runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; progress?: ReactNode;
 }) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const rate = tokensPerSecond(metrics);
+  const rest = useRestReveal();
   if (!showActions && !time && progress === undefined) return null;
-  return <div data-slot="message-meta" className={cn('-ml-1.5 flex min-h-6 flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', (showActions || time) && !footerPinned && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/message:opacity-100 can-hover:group-hover/message:pointer-events-auto can-hover:group-focus-within/message:opacity-100 can-hover:group-focus-within/message:pointer-events-auto can-hover:has-[[data-state=open]]:opacity-100 can-hover:has-[[data-state=open]]:pointer-events-auto')}>
+  return <div data-slot="message-meta" {...rest} className={cn('-ml-1.5 flex min-h-6 cursor-default select-none flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
     {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
     {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} {...(time ? { at: time } : {})} />}
     <MarkedIndicator target={mark} />
-    {time && <time dateTime={time} title={formatDateTime(time)} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
+    {stopped && <span role="status" className="shrink-0 px-1 text-2xs text-fg-3">{t`已停止`}</span>}
+    {time && <time dateTime={time} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}
     {time && metrics && rate !== undefined && (
-      <span title={t`本轮 · ${speedDescription(metrics)}`} className={cn('shrink-0 px-1 text-2xs tabular-nums', metrics.tokens === 'provider' ? 'text-fg-3' : 'text-fg-4')}>
+      <span className={cn('shrink-0 px-1 text-2xs tabular-nums', metrics.tokens === 'provider' ? 'text-fg-3' : 'text-fg-4')}>
         {metrics.tokens === 'provider' ? '' : '~'}{formatTokensPerSecond(rate)} tok/s
       </span>
     )}

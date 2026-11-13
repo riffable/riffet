@@ -705,7 +705,24 @@ final class FooterView: FragmentView {
     var revealed = true { didSet { if revealed != oldValue { updateVisibility() } } }
 
     private func updateVisibility() {
-        alphaValue = revealed || spec?.status != nil || spec?.clock != nil ? 1 : 0
+        alphaValue = revealed || spec?.status != nil || spec?.clock != nil || spec?.keepsShown == true ? 1 : 0
+        updateButtons()
+    }
+
+    /// Faded out, the buttons are hidden too: an invisible copy or ⋯ must not turn the pointer
+    /// into a hand or take a click before the line has appeared.
+    private func updateButtons() {
+        let shown = alphaValue > 0
+        copy.isHidden = !shown || spec?.copy.isEmpty != false || leadsWithMore
+        more.isHidden = !shown || !showsMore
+    }
+
+    /// The pieces are placed from the width (a trailing footer from its right edge), and the layer
+    /// redraws only when asked: a new width without a redraw left the time where the old one put it.
+    override func setFrameSize(_ newSize: NSSize) {
+        let resized = newSize.width != frame.width
+        super.setFrameSize(newSize)
+        if resized { needsLayout = true; needsDisplay = true }
     }
     private var clockText: String?
     private let copy = CopyIcon.make()
@@ -714,11 +731,15 @@ final class FooterView: FragmentView {
     /// The answer can be saved (收藏回复) or exported (导出为图片): the "more" button shows the row's menu.
     var hasActions = false {
         didSet {
-            more.isHidden = !hasMore
+            updateButtons()
             if hasActions != oldValue { needsLayout = true; needsDisplay = true }
         }
     }
     private var hasMore: Bool { turnRunId != nil || hasActions }
+    /// An answer's footer is the web's: ⋯ first (copy is its first item), then time and speed.
+    /// A message's keeps copy as a button of its own, after its time.
+    private var leadsWithMore: Bool { spec?.trailing == false }
+    private var showsMore: Bool { hasMore || (leadsWithMore && spec?.copy.isEmpty == false) }
 
     override init(frame: NSRect) {
         super.init(frame: frame)
@@ -734,7 +755,13 @@ final class FooterView: FragmentView {
         more.setAccessibilityRole(.button)
         more.setAccessibilityLabel(String(localized: "回答操作"))
         more.onClick = { [weak self] in
-            guard let self, self.hasMore, let menu = self.host?.messageMenu(selection: nil, in: nil) else { return }
+            guard let self, self.showsMore, let menu = self.host?.messageMenu(selection: nil, in: nil) else { return }
+            // Copy is the menu's first item, as on the web, also on a row whose menu has no message of its own.
+            if let text = self.spec?.copy, !text.isEmpty, !menu.items.contains(where: { $0.title == String(localized: "复制") }) {
+                menu.insertItem(MenuAction.item(String(localized: "复制"), symbol: "doc.on.doc") { copyToPasteboard(text) }, at: 0)
+                if menu.items.count > 1 { menu.insertItem(.separator(), at: 1) }
+            }
+            guard !menu.items.isEmpty else { return }
             menu.popUpStyled(at: NSPoint(x: 0, y: self.more.bounds.height + 4), in: self.more)
         }
     }
@@ -747,7 +774,7 @@ final class FooterView: FragmentView {
     func configure(_ spec: FooterSpec) {
         if let current = self.spec, current.time == spec.time, current.copy == spec.copy, current.trailing == spec.trailing,
            current.speed?.label == spec.speed?.label, current.status?.0 == spec.status?.0, current.status?.1 === spec.status?.1, current.statusSymbol == spec.statusSymbol,
-           current.turnRunId == spec.turnRunId {
+           current.turnRunId == spec.turnRunId, current.keepsShown == spec.keepsShown {
             self.spec = spec
             tick()
             return
@@ -756,8 +783,7 @@ final class FooterView: FragmentView {
         updateVisibility()
         copy.host = host
         more.host = host
-        copy.isHidden = spec.copy.isEmpty
-        more.isHidden = !hasMore
+        updateButtons()
         tick()
         needsLayout = true
         needsDisplay = true
@@ -802,20 +828,37 @@ final class FooterView: FragmentView {
             result.append((label, "status"))
         }
         if let time = formatDateTime(value: spec.time) {
-            result.append((NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: style.color(\.fg4)]), "time"))
+            result.append((NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: style.color(\.fg3)]), "time"))
         }
-        if let clockText { result.append((NSAttributedString(string: clockText, attributes: [.font: font, .foregroundColor: style.color(\.fg4)]), "stats")) }
-        if let speed = spec.speed { result.append((NSAttributedString(string: speed.label, attributes: [.font: font, .foregroundColor: style.color(\.fg4)]), "speed")) }
-        if !spec.copy.isEmpty { result.append((NSAttributedString(string: "\u{FFFC}"), "copy")) }
-        if hasMore { result.append((NSAttributedString(string: "\u{FFFC}"), "more")) }
+        if let clockText { result.append((NSAttributedString(string: clockText, attributes: [.font: font, .foregroundColor: style.color(\.fg3)]), "stats")) }
+        // A provider's own count reads as the time does; an estimate (~) a step quieter.
+        if let speed = spec.speed { result.append((NSAttributedString(string: speed.label, attributes: [.font: font, .foregroundColor: style.color(speed.estimated ? \.fg4 : \.fg3)]), "speed")) }
+        if leadsWithMore {
+            if showsMore { result.insert((NSAttributedString(string: "\u{FFFC}"), "more"), at: 0) }
+        } else {
+            if !spec.copy.isEmpty { result.append((NSAttributedString(string: "\u{FFFC}"), "copy")) }
+            if hasMore { result.append((NSAttributedString(string: "\u{FFFC}"), "more")) }
+        }
         return result
+    }
+
+    /// What the footer draws, in its own coordinates; a trailing footer is mostly empty width.
+    var contentRect: NSRect { frames().reduce(NSRect.null) { $0.union($1.2) } }
+
+    /// The web's spacing: a message's pieces 8 apart; an answer's texts 12 apart (4 of gap and 4 of
+    /// padding each side), the ⋯ glyph 14 from the time, and the glyph on the column's edge — the
+    /// button's 4pt inset hangs outside, as the web's row hangs 6px out under its padded button.
+    private func spacing(after kind: String?) -> CGFloat {
+        guard leadsWithMore else { return 8 }
+        return kind == "more" ? 10 : 12
     }
 
     private func frames() -> [(NSAttributedString, String?, NSRect)] {
         let items = pieces()
         var widths = items.map { $0.1 == "copy" || $0.1 == "more" ? 20 : ceil($0.0.lineWidth) }
-        let gaps = CGFloat(max(0, items.count - 1)) * 8
-        var overflow = max(0, widths.reduce(0, +) + gaps - bounds.width)
+        let gaps = items.dropLast().reduce(CGFloat(0)) { $0 + spacing(after: $1.1) }
+        let hang: CGFloat = leadsWithMore && items.first?.1 == "more" ? -4 : 0
+        var overflow = max(0, widths.reduce(0, +) + gaps + hang - bounds.width)
         // Keep the action reachable when a failure explanation is wider than the column.
         for index in items.indices where items[index].1 != "copy" && items[index].1 != "more" && overflow > 0 {
             let reduction = min(widths[index], overflow)
@@ -823,11 +866,11 @@ final class FooterView: FragmentView {
             overflow -= reduction
         }
         let total = widths.reduce(0, +) + gaps
-        var x = spec?.trailing == true ? bounds.width - total : 0
+        var x = spec?.trailing == true ? bounds.width - total : hang
         var result: [(NSAttributedString, String?, NSRect)] = []
         for (item, width) in zip(items, widths) {
             result.append((item.0, item.1, NSRect(x: x, y: 0, width: width, height: bounds.height)))
-            x += width + 8
+            x += width + spacing(after: item.1)
         }
         return result
     }
@@ -840,8 +883,6 @@ final class FooterView: FragmentView {
         if let moreFrame = frames().first(where: { $0.1 == "more" })?.2 {
             more.frame = NSRect(x: moreFrame.minX, y: (bounds.height - 20) / 2, width: 20, height: 20)
         }
-        let details = [spec?.status?.0, spec?.speed?.description_].compactMap { $0 }
-        help = details.isEmpty ? nil : details.joined(separator: " · ")
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -1537,6 +1578,12 @@ final class ChipButtonView: FragmentView, HoverTarget {
 
     override func draw(_ dirtyRect: NSRect) {
         guard let spec, !spec.loading, let style = host?.style else { return }
+        if spec.compact {
+            // A footer's text action: the footer's size and grey, darker under the pointer.
+            NSAttributedString(string: spec.title, attributes: [.font: style.font(11), .foregroundColor: hovering ? style.color(\.fg) : style.color(\.fg3)])
+                .drawLine(in: bounds.insetBy(dx: 6, dy: 0), optical: true)
+            return
+        }
         if hovering {
             style.color(\.bgHover).setFill()
             let radius = min(8, style.radii.container)

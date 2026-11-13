@@ -49,9 +49,16 @@ export type TranscriptRow =
    * A message or terminal result. A result without a final answer carries the turn's footer and
    * latest prose as `answerText`; `runId` identifies the turn that can fork or rewind.
    */
-  | { type: 'item'; key: string; item: TimelineItem; gap: string; settled: boolean; footer: TurnFooter; metrics: RunMetrics | undefined; runId: string | undefined; answerText?: string }
+  | { type: 'item'; key: string; item: TimelineItem; gap: string; settled: boolean; footer: TurnFooter; metrics: RunMetrics | undefined; runId: string | undefined; answerText?: string;
+    /**
+     * The turn was stopped and this row ends it, so it says so: an answer in its footer, a prompt
+     * that drew no output under itself. The stop is told once, by whatever ends the turn.
+     */
+    stopped: boolean }
   /** Reasoning and structured work folded into one disclosure; `interrupted` also preserves output before steering. */
-  | { type: 'process'; key: string; items: TimelineItem[]; gaps: string[]; spaced: boolean; running: boolean; settled: boolean; footer: TurnFooter; endsTurn: boolean; followedByAnswer: boolean; interrupted: boolean; issueCount: number; answerText: string | undefined; runId: string | undefined }
+  | { type: 'process'; key: string; items: TimelineItem[]; gaps: string[]; spaced: boolean; running: boolean; settled: boolean; footer: TurnFooter; endsTurn: boolean; followedByAnswer: boolean; interrupted: boolean;
+    /** The turn was stopped while this block was its end: the header reads 已停止 rather than 已处理. */
+    stopped: boolean; issueCount: number; answerText: string | undefined; runId: string | undefined }
   /** The notices that woke a turn. */
   | { type: 'trigger'; key: string; notices: TaskNotice[]; gap: string };
 
@@ -291,6 +298,7 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       type: 'process', key, items, gaps: items.map((item, index) => gap(items[index - 1], item)),
       spaced: Boolean(previousItem), running: groupRunning, settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', endsTurn: groupEndsTurn, followedByAnswer,
       interrupted: Boolean(turnKey && (interruptedTurns.has(turnKey) || groupLastIndex < (lastSteerIndexByTurn.get(turnKey) ?? -1))),
+      stopped: Boolean(turnKey && groupEndsTurn && interruptedTurns.has(turnKey)),
       issueCount, answerText, runId: settled && turnKey ? sentRunByTurn.get(turnKey) : undefined,
     }, first, turnKey, items[items.length - 1]!, groupStart, groupKeyBefore);
   };
@@ -338,7 +346,9 @@ export function transcriptTurns(timeline: TimelineItem[], running: boolean, metr
       : item.kind === 'assistant' && finalAnswer === index;
     const settled = carries && !activeTurns.has(turnKey) && turnKey !== processingTurn;
     const answerText = settled && item.kind === 'status' ? answerBefore(index) : undefined;
-    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: settled ? metricsForTurn(turnKey) : undefined, runId: settled ? sentRunByTurn.get(turnKey) : undefined, answerText }, item, turnKey, item, rowStart, before);
+    // A status row (run_cancelled) already says it stopped; an answer or a prompt left last says it here.
+    const stopped = interruptedTurns.has(turnKey) && lastTurnEnd(index) && (item.kind === 'assistant' || item.kind === 'user');
+    add({ type: 'item', key: item.key, item, gap: gap(previousItem, item), settled, footer: !carries ? 'none' : settled ? 'shown' : 'held', metrics: settled ? metricsForTurn(turnKey) : undefined, runId: settled ? sentRunByTurn.get(turnKey) : undefined, answerText, stopped }, item, turnKey, item, rowStart, before);
   }
   flushGroup();
   if (rows.length) grouped.push(rows);

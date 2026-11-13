@@ -371,7 +371,8 @@ function eventRow(event: ProjectedEvent, index: number, context: TimelineContext
       return reuse({ kind: 'status', key, tone: 'danger', text: message, ...(detail ? { detail } : {}), event });
     }
     case 'run_cancelled':
-      return reuse({ kind: 'status', key, tone: 'muted', text: str(event.data.reason) ? `已停止 · ${str(event.data.reason)}` : '已停止', event });
+      // A reason that only repeats the word ("已停止 · 已停止") adds nothing.
+      return reuse({ kind: 'status', key, tone: 'muted', text: str(event.data.reason) && str(event.data.reason) !== '已停止' ? `已停止 · ${str(event.data.reason)}` : '已停止', event });
     case 'run_interrupted':
       return reuse({ kind: 'status', key, tone: 'muted', text: str(event.data.reason) ? `已中断 · ${str(event.data.reason)}` : '已中断', event });
     case 'task_notification': {

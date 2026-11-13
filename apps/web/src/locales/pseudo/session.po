@@ -49,11 +49,6 @@ msgstr ""
 msgid "{0} 条排队消息"
 msgstr ""
 
-#. placeholder {0}: metrics.steps
-#: src/app/session/speed.ts
-msgid "{0} 次模型响应"
-msgstr ""
-
 #. placeholder {0}: formatTime(expiresAt)
 #: src/app/session/NativeInteractionCard.tsx
 msgid "{0} 自动拒绝"
@@ -142,10 +137,6 @@ msgstr ""
 
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」需要你在网页中选择"
-msgstr ""
-
-#: src/app/session/speed.ts
-msgid "1 次模型响应"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
@@ -316,10 +307,6 @@ msgstr ""
 
 #: src/app/session/nativeRunCommands.ts
 msgid "仍无法确认当前状态"
-msgstr ""
-
-#: src/app/session/speed.ts
-msgid "从发起请求到回答结束（含首字延迟）"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
@@ -936,6 +923,7 @@ msgid "已保存"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
+#: src/app/session/TurnProcess.tsx
 msgid "已停止"
 msgstr ""
 
@@ -1148,10 +1136,6 @@ msgstr ""
 
 #: src/app/session/Composer.tsx
 msgid "指令"
-msgstr ""
-
-#: src/app/session/speed.ts
-msgid "按记录时间估算（含首字延迟，只计不调用工具的回答）"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
@@ -1498,11 +1482,6 @@ msgstr ""
 
 #: src/app/session/marks.tsx
 msgid "本会话收藏"
-msgstr ""
-
-#. placeholder {0}: speedDescription(metrics)
-#: src/app/session/Timeline.tsx
-msgid "本轮 · {0}"
 msgstr ""
 
 #: src/app/session/TranscriptView.tsx
@@ -1997,10 +1976,6 @@ msgstr ""
 msgid "输出过大，只显示末尾"
 msgstr ""
 
-#: src/app/session/speed.ts
-msgid "输出速度 · {tokens} · {window} · 合计 {steps}"
-msgstr ""
-
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
@@ -2267,10 +2242,6 @@ msgstr ""
 
 #: src/app/session/NativeInteractionCard.tsx
 msgid "题目已更新，请检查状态"
-msgstr ""
-
-#: src/app/session/speed.ts
-msgid "首字到末字的生成时间"
 msgstr ""
 
 #: src/app/session/MarkLayer.tsx

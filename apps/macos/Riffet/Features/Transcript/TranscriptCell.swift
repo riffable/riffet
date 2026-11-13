@@ -48,6 +48,19 @@ final class TranscriptCell: NSView, FragmentHost {
         for view in subviews { (view as? FooterView)?.revealed = rowHovered || footerPinned }
     }
 
+    /// Whether [windowPoint] is on a footer's own line: over its time and actions or a little
+    /// around them. The message above does not reveal them; only the place they appear in does.
+    func showsFooter(at windowPoint: NSPoint) -> Bool {
+        let point = convert(windowPoint, from: nil)
+        for view in subviews {
+            guard let footer = view as? FooterView else { continue }
+            let drawn = footer.contentRect
+            guard !drawn.isNull else { continue }
+            if drawn.offsetBy(dx: footer.frame.minX, dy: footer.frame.minY).insetBy(dx: -Space.sm, dy: -Space.xs).contains(point) { return true }
+        }
+        return false
+    }
+
     var rowMessage: String? { rowLayout?.message }
     var turnActionsEnabled: Bool { controller?.actions.turn != nil }
 

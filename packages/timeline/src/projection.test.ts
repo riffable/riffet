@@ -427,7 +427,7 @@ const expected: Record<string, Brief[]> = {
   ],
   '回执不在窗口里、只有状态行带着 run id：提示按时间归位，不插到回答与状态行之间': [
     { kind: 'assistant', key: 'event:msg-a1', turn: 'run:claude-turn:t1', pos: 5632, runId: 'claude-turn:t1', text: '部分回答。' },
-    { kind: 'status', key: 'event:6', turn: 'run:run-1', pos: 6656, runId: 'run-1', text: '已停止 · 已停止', tone: 'muted' },
+    { kind: 'status', key: 'event:6', turn: 'run:run-1', pos: 6656, runId: 'run-1', text: '已停止', tone: 'muted' },
   ],
   '已确认仍在执行的回合，回执不在窗口里：按时间插回原位，不排到末尾': [
     { kind: 'user', key: 'user:cmd-run-1', turn: 'run:run-1', pos: 1536, runId: 'run-1', text: 'first' },

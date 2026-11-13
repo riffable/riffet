@@ -49,11 +49,6 @@ msgstr "Auto-deny in {0}"
 msgid "{0} 条排队消息"
 msgstr "{0, plural, one {# queued message} other {# queued messages}}"
 
-#. placeholder {0}: metrics.steps
-#: src/app/session/speed.ts
-msgid "{0} 次模型响应"
-msgstr "{0} model responses"
-
 #. placeholder {0}: formatTime(expiresAt)
 #: src/app/session/NativeInteractionCard.tsx
 msgid "{0} 自动拒绝"
@@ -143,10 +138,6 @@ msgstr "“{title}” needs you in the terminal"
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」需要你在网页中选择"
 msgstr "“{title}” needs your choice on the web page"
-
-#: src/app/session/speed.ts
-msgid "1 次模型响应"
-msgstr "1 model response"
 
 #: src/app/session/Timeline.tsx
 msgid "Agent 附加的图片"
@@ -317,10 +308,6 @@ msgstr "Partial history"
 #: src/app/session/nativeRunCommands.ts
 msgid "仍无法确认当前状态"
 msgstr "Still unable to confirm the current status"
-
-#: src/app/session/speed.ts
-msgid "从发起请求到回答结束（含首字延迟）"
-msgstr "From sending the request to the end of the answer (includes first-token latency)"
 
 #: src/app/session/Timeline.tsx
 msgid "从此处另开会话"
@@ -936,6 +923,7 @@ msgid "已保存"
 msgstr "Saved"
 
 #: src/app/session/Timeline.tsx
+#: src/app/session/TurnProcess.tsx
 msgid "已停止"
 msgstr "Stopped"
 
@@ -1149,10 +1137,6 @@ msgstr "Merge <0>{0}</0> into the original project."
 #: src/app/session/Composer.tsx
 msgid "指令"
 msgstr "Instructions"
-
-#: src/app/session/speed.ts
-msgid "按记录时间估算（含首字延迟，只计不调用工具的回答）"
-msgstr "Estimated from record timestamps (includes time to first token; only answers without tool calls)"
 
 #: src/app/session/Timeline.tsx
 msgid "排队中"
@@ -1499,11 +1483,6 @@ msgstr "This session"
 #: src/app/session/marks.tsx
 msgid "本会话收藏"
 msgstr "Favorites in this session"
-
-#. placeholder {0}: speedDescription(metrics)
-#: src/app/session/Timeline.tsx
-msgid "本轮 · {0}"
-msgstr "This turn · {0}"
 
 #: src/app/session/TranscriptView.tsx
 msgid "本轮已结束"
@@ -1997,10 +1976,6 @@ msgstr "Output token count"
 msgid "输出过大，只显示末尾"
 msgstr "Output is too large; showing the end only"
 
-#: src/app/session/speed.ts
-msgid "输出速度 · {tokens} · {window} · 合计 {steps}"
-msgstr "Output speed · {tokens} · {window} · {steps} total"
-
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
@@ -2268,10 +2243,6 @@ msgstr "The question was updated; the old draft wasn't submitted."
 #: src/app/session/NativeInteractionCard.tsx
 msgid "题目已更新，请检查状态"
 msgstr "The question was updated. Check the status."
-
-#: src/app/session/speed.ts
-msgid "首字到末字的生成时间"
-msgstr "Generation time from first token to last token"
 
 #: src/app/session/MarkLayer.tsx
 msgctxt "session-highlight-action"

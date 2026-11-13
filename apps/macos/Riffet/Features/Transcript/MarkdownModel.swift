@@ -432,8 +432,8 @@ func nativeString(_ value: String) -> String {
 }
 
 /// Show delivery progress and problems; a confirmed send needs no success label.
-func nativeDeliveryLabel(_ run: Run) -> String {
-    TimelineFormatKt.deliveryLabel(run: run) ?? ""
+func nativeDeliveryLabel(_ run: Run, stopShown: Bool = true) -> String {
+    TimelineFormatKt.deliveryLabel(run: run, stopShown: stopShown) ?? ""
 }
 
 /// Running, failed and interrupted process blocks open by default; only work that completed

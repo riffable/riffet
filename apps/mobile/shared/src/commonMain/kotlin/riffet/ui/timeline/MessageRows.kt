@@ -66,14 +66,15 @@ private val IN_FLIGHT = setOf(NativeDeliveryState.QUEUED, NativeDeliveryState.PR
 
 /** The prompt: right-aligned bubble, attachments, delivery state and time. */
 @Composable
-internal fun UserRow(item: TimelineItem.User) {
+internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true) {
     rememberResourceEnvironment()
     val designMetrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
     val colors = TimelineTheme.colors
     val type = TimelineTheme.type
     val time = formatDateTime(timelineItemTime(item))
-    val delivery = if (item.failureShown) null else deliveryLabel(item.run)
+    // A turn stopped after the prompt arrived says so where it ends; only a prompt left with no output says it here.
+    val delivery = if (item.failureShown) null else deliveryLabel(item.run, stopShown)
     val deliveryError = if (item.failureShown) null else deliveryErrorDetails(item.run)
     // While it is on its way the status says enough; the time returns once it has arrived or settled.
     val sending = delivery != null && item.run?.let { run -> run.native?.delivery in IN_FLIGHT && !messageRecovery(run).needsCheck } == true
@@ -246,6 +247,8 @@ internal fun AssistantRow(
     item: TimelineItem.Assistant,
     settled: Boolean,
     speed: SpeedTag?,
+    /** The answer ends a stopped turn: 已停止 leads its time. */
+    stopped: Boolean = false,
 ) {
     val motion = LocalRiffetMotion.current
     val colors = TimelineTheme.colors
@@ -281,6 +284,14 @@ internal fun AssistantRow(
                         contentDescription = null,
                         tint = colors.accent,
                         modifier = Modifier.padding(start = 2.dp).size(14.dp),
+                    )
+                }
+                if (stopped) {
+                    Text(
+                        text = stoppedLabel(),
+                        style = type.caption,
+                        color = colors.fg3,
+                        modifier = Modifier.padding(start = 2.dp, end = 4.dp),
                     )
                 }
                 formatDateTime(timelineItemTime(item))?.let { time ->

@@ -57,6 +57,8 @@ internal fun TurnProcessHeader(
     }
     val label = when {
         running -> stringResource(Res.string.timeline_process_working, formatElapsed(seconds))
+        row.stopped && seconds > 0 -> stringResource(Res.string.timeline_process_stopped_elapsed, formatElapsed(seconds))
+        row.stopped -> stringResource(Res.string.timeline_process_stopped)
         seconds > 0 -> stringResource(Res.string.timeline_process_processed_elapsed, formatElapsed(seconds))
         else -> stringResource(Res.string.timeline_process_processed)
     }

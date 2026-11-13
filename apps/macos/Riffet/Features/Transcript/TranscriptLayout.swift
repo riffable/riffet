@@ -301,7 +301,7 @@ struct RowBuilder {
             case let .single(single):
                 live = !single.settled
                 collectsChapters = single.item is TimelineItemAssistant
-                height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, x: x, y: top, width: w)
+                height = singleItem(single.item, footer: single.footer, answerText: single.answerText, runId: runIdFromTurnKey(turnKey: single.turnKey), speed: speed, stopped: single.stopped, x: x, y: top, width: w)
                 if let user = single.item as? TimelineItemUser { message = user.text }
                 if let assistant = single.item as? TimelineItemAssistant { message = assistant.text }
                 if single.settled, let answer = single.answerText { message = answer }
@@ -334,10 +334,11 @@ struct RowBuilder {
 
     // MARK: Messages
 
-    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, answerText: String?, runId: String?, speed: SpeedTag?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    /// [stopped]: the turn was stopped and this row ends it, so it is the one that says so.
+    private mutating func singleItem(_ item: any TimelineItem, footer: TurnFooter, answerText: String?, runId: String?, speed: SpeedTag?, stopped: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         switch onEnum(of: item) {
-        case let .user(user): return userMessage(user, x: x, y: y, width: width)
-        case let .assistant(assistant): return assistantMessage(assistant, footer: footer, runId: runId, speed: speed, x: x, y: y, width: width)
+        case let .user(user): return userMessage(user, stopShown: stopped, x: x, y: y, width: width)
+        case let .assistant(assistant): return assistantMessage(assistant, footer: footer, runId: runId, speed: speed, stopped: stopped, x: x, y: y, width: width)
         default:
             var height = processItem(item, running: false, turnActive: !stale, x: x, y: y, width: width)
             if footer != .none, footer != .held || !suppressesHeldFooter {
@@ -349,7 +350,7 @@ struct RowBuilder {
         }
     }
 
-    private mutating func userMessage(_ item: TimelineItemUser, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private mutating func userMessage(_ item: TimelineItemUser, stopShown: Bool = true, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let limit = max(120, width - 96)
         var cursor = y
         let attachments = Array(item.attachments)
@@ -440,40 +441,59 @@ struct RowBuilder {
                 }
             }
         }
-        var footerStatus = userStatus(item)
-        if let run = item.run, !item.failureShown, let error = TimelineFormatKt.deliveryErrorDetails(run: run) {
+        // Status, its actions, time and copy share one line at the message's trailing edge; what
+        // does not fit wraps leftwards beneath, and an opened error reads under the line.
+        var footerStatus = userStatus(item, stopShown: stopShown)
+        var actions: [(CGSize, Fragment.Kind)] = []
+        var error: (id: String, text: String)?
+        let metaFont = style.font(11)
+        if let run = item.run, !item.failureShown, let details = TimelineFormatKt.deliveryErrorDetails(run: run) {
             let id = "delivery-error:\(item.key)"
-            let open = ui.isOpen(id)
-            let detailWidth = min(limit, 480)
-            let detailX = x + width - detailWidth
-            fragments.append(Fragment(frame: CGRect(x: detailX, y: cursor, width: detailWidth, height: style.row), kind: .disclosure(DisclosureSpec(
-                icon: .symbol("exclamationmark.circle", size: 12, color: style.color(run.native?.delivery == .failed ? \.danger : \.warning)),
-                title: footerStatus?.0 ?? String(localized: "发送失败"),
-                titleFont: style.font(12),
+            let title = footerStatus?.0 ?? String(localized: "发送失败")
+            let spec = DisclosureSpec(
+                icon: .symbol("exclamationmark.circle", size: 11, color: style.color(run.native?.delivery == .failed ? \.danger : \.warning)),
+                title: title,
+                titleFont: metaFont,
                 danger: run.native?.delivery == .failed,
-                chevron: .always(open: open),
+                chevron: .always(open: ui.isOpen(id)),
                 action: .toggle(id)
-            ))))
+            )
+            // A plain disclosure: the 16pt icon column, 8 to the title, then 6 and the 12pt chevron.
+            actions.append((CGSize(width: ceil(Self.lineWidth(title, font: metaFont)) + 42, height: 20), .disclosure(spec)))
             footerStatus = nil
-            cursor += style.row
-            if open {
-                cursor += textBlock(text.plain(error, size: 12, color: style.color(\.fg3), lineHeight: 18), x: detailX + 24, y: cursor, width: detailWidth - 24) + 6
+            error = (id, details)
+        }
+        if let run = item.run, supportsRecovery {
+            let recovery = SendPhaseKt.messageRecovery(run: run)
+            if recovery.needsCheck {
+                var buttons = [ButtonSpec(title: String(localized: "检查状态"), action: .checkRun(run), loading: false, compact: true)]
+                if recovery.canRetry { buttons.append(ButtonSpec(title: String(localized: "重试发送"), action: .retryRun(run), loading: false, compact: true)) }
+                actions += buttons.map { (buttonSize($0), Fragment.Kind.button($0)) }
             }
         }
-        fragments.append(Fragment(frame: CGRect(x: x, y: cursor, width: width, height: 20), kind: .footer(FooterSpec(status: footerStatus, time: timelineItemTime(item: item), copy: item.text, trailing: true, statusSymbol: item.run?.native?.intent == "steer" ? "arrow.turn.up.right" : nil))))
-        cursor += 20
-        if let run = item.run {
-            let recovery = SendPhaseKt.messageRecovery(run: run)
-            if supportsRecovery && recovery.needsCheck {
-                var buttons = [ButtonSpec(title: String(localized: "检查状态"), action: .checkRun(run), loading: false)]
-                if recovery.canRetry { buttons.append(ButtonSpec(title: String(localized: "重试发送"), action: .retryRun(run), loading: false)) }
-                cursor += flow(buttons.map { (buttonSize($0), Fragment.Kind.button($0)) }, right: x + width, width: width, y: cursor, spacing: 4)
-            }
+        let time = timelineItemTime(item: item)
+        let footer = FooterSpec(status: footerStatus, time: time, copy: item.text, trailing: true, statusSymbol: item.run?.native?.intent == "steer" ? "arrow.turn.up.right" : nil, keepsShown: !actions.isEmpty)
+        if actions.isEmpty {
+            fragments.append(Fragment(frame: CGRect(x: x, y: cursor, width: width, height: 20), kind: .footer(footer)))
+            cursor += 20
+        } else {
+            // The footer takes only its time and copy, so the actions can stand beside it.
+            let timeWidth = formatDateTime(value: time).map { ceil(Self.lineWidth($0, font: NSFont.monospacedDigitSystemFont(ofSize: style.s(11), weight: .regular))) } ?? 0
+            let footerWidth = min(width, timeWidth + (item.text.isEmpty ? 0 : (timeWidth > 0 ? 8 : 0) + 20))
+            fragments.append(Fragment(frame: CGRect(x: x + width - footerWidth, y: cursor, width: footerWidth, height: 20), kind: .footer(footer)))
+            let gap: CGFloat = footerWidth > 0 ? 8 : 0
+            cursor += max(20, flow(actions, right: x + width - footerWidth - gap, width: width - footerWidth - gap, y: cursor, spacing: 8))
+        }
+        if let error, ui.isOpen(error.id) {
+            let detailWidth = min(limit, 480)
+            cursor += 4
+            cursor += textBlock(text.plain(error.text, size: 12, color: style.color(\.fg3), lineHeight: 18), x: x + width - detailWidth, y: cursor, width: detailWidth) + 6
         }
         return cursor - y
     }
 
-    private func userStatus(_ item: TimelineItemUser) -> (String, NSColor)? {
+    /// A turn stopped after the prompt arrived says so where it ends; [stopShown] is false then.
+    private func userStatus(_ item: TimelineItemUser, stopShown: Bool = true) -> (String, NSColor)? {
         guard !item.failureShown else { return nil }
         guard let run = item.run else { return nil }
         guard run.native != nil else {
@@ -484,7 +504,7 @@ struct RowBuilder {
             default: return nil
             }
         }
-        let label = nativeDeliveryLabel(run)
+        let label = nativeDeliveryLabel(run, stopShown: stopShown)
         guard !label.isEmpty else { return nil }
         switch run.native?.delivery {
         case .failed: return (label, style.color(\.danger))
@@ -493,13 +513,15 @@ struct RowBuilder {
         }
     }
 
-    private mutating func assistantMessage(_ item: TimelineItemAssistant, footer: TurnFooter, runId: String? = nil, speed: SpeedTag?, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
+    private mutating func assistantMessage(_ item: TimelineItemAssistant, footer: TurnFooter, runId: String? = nil, speed: SpeedTag?, stopped: Bool = false, x: CGFloat, y: CGFloat, width: CGFloat) -> CGFloat {
         let source = item.text
         var cursor = y + markdown(source, x: x, y: y, width: width, muted: false, compact: false, bodyColor: past ? style.color(\.fg2) : nil)
         if collectsChapters { answerBody = CGRect(x: x, y: y, width: width, height: cursor - y) }
         if footer != .none, footer != .held || !suppressesHeldFooter {
             cursor += style.rhythm.footer
-            turnFooter(footer, FooterSpec(time: timelineItemTime(item: item), speed: speed, copy: source, trailing: false, turnRunId: runId), x: x, y: cursor, width: width)
+            // A stopped turn's answer says so before its time, and keeps the line on screen.
+            let status = stopped && footer == .shown ? (TimelineFormatKt.stoppedLabel(), style.color(\.fg3)) : nil
+            turnFooter(footer, FooterSpec(status: status, time: timelineItemTime(item: item), speed: speed, copy: source, trailing: false, turnRunId: runId), x: x, y: cursor, width: width)
             cursor += 20
         }
         return cursor - y
@@ -524,17 +546,20 @@ struct RowBuilder {
         let running = row.running
         // The list form's summaries are text alone, as its tool runs' are.
         let list = style.toolRun == .list
+        // Quiet, the header names the process without its clock: the working line under the turn
+        // already counts the time, and one turn shows one running state.
+        let live = running && style.ink != .quiet
         let header = DisclosureSpec(
-            icon: .symbol("sparkles", size: 12, color: running ? style.color(style.mark) : style.color(\.fg4)),
-            title: processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000)),
+            icon: .symbol("sparkles", size: 12, color: live ? style.color(style.mark) : style.color(\.fg4)),
+            title: running && !live ? "Working" : processHeaderLabel(row: row, nowMillis: Int64(Date().timeIntervalSince1970 * 1000)),
             titleFont: style.figures(list ? 14 : 13),
             chevron: .always(open: open),
-            shimmer: running,
-            clock: running ? .process(row) : nil,
+            shimmer: live,
+            clock: live ? .process(row) : nil,
             action: .toggleProcess,
             variant: list ? .listSummary : .plain
         )
-        if running { ticking = true }
+        if live { ticking = true }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(header)))
         var cursor = y + style.row
         if open {
@@ -866,7 +891,10 @@ struct RowBuilder {
         } else {
             presentation.detail.map { .init(text: $0, font: style.mono(12), color: style.color(\.fg3)) }
         }
-        let titleFont = list ? style.font(14) : mono ? style.mono(12) : style.font(13)
+        // Labelled, only a command reads in code type: a verb (`Read`) is a name, a description is prose.
+        let titleFont = list ? style.font(14)
+            : style.toolRun == .labelled ? (presentation.isCommand ? style.mono(12) : style.font(13, action == nil ? .regular : .medium))
+            : mono ? style.mono(12) : style.font(13)
         let header = DisclosureSpec(
             icon: presentation.running ? .spinner : .symbol(ToolSymbols.symbol(presentation.kind), size: 12, color: style.color(\.fg4)),
             title: action?.verb ?? presentation.title,
@@ -993,7 +1021,7 @@ struct RowBuilder {
         let running = job.status == .running
         if running { ticking = true }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: rowH), kind: .disclosure(DisclosureSpec(
-            icon: running ? .spinner : .symbol("terminal", size: 12, color: style.color(\.fg4)),
+            icon: running ? .spinner : .symbol("apple.terminal", size: 12, color: style.color(\.fg4)),
             title: job.title,
             titleFont: list ? style.font(14) : style.font(13),
             inline: job.status == .failed ? [outcomePiece(failed: true)] : job.status == .unknown ? [outcomePiece(failed: false)] : [],
@@ -1065,7 +1093,7 @@ struct RowBuilder {
         let open = ui.isOpen(id)
         let running = notice.status == .running
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: width, height: style.row), kind: .disclosure(DisclosureSpec(
-            icon: running ? .spinner : .symbol(notice.taskKind == "subagent" ? "person.crop.square" : "terminal", size: 12, color: style.color(\.fg4)),
+            icon: running ? .spinner : .symbol(notice.taskKind == "subagent" ? "person.crop.square" : "apple.terminal", size: 12, color: style.color(\.fg4)),
             title: notice.title,
             titleFont: style.font(13),
             inline: notice.status == .failed ? [outcomePiece(failed: true)] : notice.status == .unknown ? [outcomePiece(failed: false)] : [],
@@ -1120,7 +1148,7 @@ struct RowBuilder {
         var inline: [DisclosureSpec.Piece] = figures.map { [.init(text: "· \($0)", font: style.figures(13), color: style.color(\.fg3))] } ?? []
         if background, let outcome = outcomePiece(activity) { inline.append(outcome) }
         fragments.append(Fragment(frame: CGRect(x: x, y: y, width: headerWidth, height: style.row), kind: .disclosure(DisclosureSpec(
-            icon: view.running ? .spinner : .symbol(activity.kind == .compaction ? "arrow.down.right.and.arrow.up.left" : view.tone == .failed ? "exclamationmark.circle" : "terminal", size: 12, color: style.color(\.fg4)),
+            icon: view.running ? .spinner : .symbol(activity.kind == .compaction ? "arrow.down.right.and.arrow.up.left" : view.tone == .failed ? "exclamationmark.circle" : "apple.terminal", size: 12, color: style.color(\.fg4)),
             title: background ? (view.subject ?? view.label) : view.label,
             titleFont: style.font(13),
             detail: background ? nil : view.subject.map { .init(text: $0, font: style.font(13), color: style.color(\.fg3)) },
@@ -1242,7 +1270,8 @@ struct RowBuilder {
     // MARK: Markdown
 
     /// An agent's Markdown at [width]; returns its height.
-    mutating func markdown(_ source: String, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, compact: Bool, bodySize: CGFloat = MarkdownStyle.bodySize, bodyLineHeight: CGFloat = MarkdownStyle.bodyLineHeight, bodyColor: NSColor? = nil) -> CGFloat {
+    mutating func markdown(_ source: String, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, compact: Bool, bodySize: CGFloat = MarkdownStyle.bodySize, bodyLineHeight: CGFloat? = nil, bodyColor: NSColor? = nil) -> CGFloat {
+        let bodyLineHeight = bodyLineHeight ?? style.bodyLineHeight
         let gap: CGFloat = compact ? MarkdownStyle.compactBlockGap : MarkdownStyle.blockGap
         var cursor = y
         var first = true
@@ -1285,7 +1314,8 @@ struct RowBuilder {
         return cursor - y
     }
 
-    private mutating func part(_ part: MarkdownPart, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, quoted: Bool, gap: CGFloat, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat = MarkdownStyle.bodyLineHeight, color: NSColor? = nil) -> CGFloat {
+    private mutating func part(_ part: MarkdownPart, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, quoted: Bool, gap: CGFloat, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat? = nil, color: NSColor? = nil) -> CGFloat {
+        let lineHeight = lineHeight ?? style.bodyLineHeight
         switch part {
         case let .prose(run):
             let top: CGFloat = run.leadingHeading ? MarkdownStyle.headingBlockTop : 0
@@ -1296,7 +1326,8 @@ struct RowBuilder {
         }
     }
 
-    private mutating func block(_ block: MarkdownBlock, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, quoted: Bool, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat = MarkdownStyle.bodyLineHeight, color: NSColor? = nil) -> CGFloat {
+    private mutating func block(_ block: MarkdownBlock, x: CGFloat, y: CGFloat, width: CGFloat, muted: Bool, quoted: Bool, size: CGFloat = MarkdownStyle.bodySize, lineHeight: CGFloat? = nil, color: NSColor? = nil) -> CGFloat {
+        let lineHeight = lineHeight ?? style.bodyLineHeight
         switch block {
         case .paragraph, .heading:
             let value = text.prose([block], muted: muted, quoted: quoted, gap: 0, size: size, lineHeight: lineHeight, color: color)
@@ -1587,6 +1618,7 @@ struct RowBuilder {
     }
 
     func buttonSize(_ button: ButtonSpec) -> CGSize {
+        if button.compact { return CGSize(width: ceil(Self.lineWidth(button.title, font: style.font(11)) + 12), height: 20) }
         if button.loading { return CGSize(width: 24, height: style.row) }
         return CGSize(width: ceil(Self.lineWidth(button.title, font: style.font(12.5)) + 24), height: style.row)
     }
@@ -1682,7 +1714,7 @@ enum ToolSymbols {
         case "delete": "trash"
         case "move": "arrow.left.arrow.right"
         case "search": "magnifyingglass"
-        case "execute": "terminal"
+        case "execute": "apple.terminal"
         case "think": "brain"
         case "fetch": "globe"
         case "switch_mode": "repeat"

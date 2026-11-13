@@ -20,20 +20,6 @@ export function formatTokensPerSecond(rate: number): string {
   return rate >= 10 ? String(Math.round(rate)) : rate.toFixed(1);
 }
 
-/**
- * What the number actually covers, so nobody reads an estimate as a measurement or a bracketed
- * response time as pure decode speed.
- */
-export function speedDescription(metrics: RunMetrics): string {
-  const tokens = metrics.tokens === 'provider' ? i18n._(msg`精确 token 数`)
-    : metrics.tokens === 'estimated' ? i18n._(msg`估算 token 数`) : i18n._(msg`部分估算的 token 数`);
-  const window = metrics.window === 'stream' ? i18n._(msg`首字到末字的生成时间`)
-    : metrics.window === 'transcript' ? i18n._(msg`从发起请求到回答结束（含首字延迟）`)
-      : i18n._(msg`按记录时间估算（含首字延迟，只计不调用工具的回答）`);
-  const steps = metrics.steps === 1 ? i18n._(msg`1 次模型响应`) : i18n._(msg`${metrics.steps} 次模型响应`);
-  return i18n._(msg`输出速度 · ${tokens} · ${window} · 合计 ${steps}`);
-}
-
 /** A known quiet window is zero; unavailable or old measurements have no live speed. */
 export function outputTokensPerSecond(sample: OutputRate | undefined, connected = true): number | undefined {
   if (!connected || !sample || (sample.state !== 'live' && sample.state !== 'zero')) return undefined;

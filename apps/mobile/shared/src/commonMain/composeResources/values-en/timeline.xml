@@ -89,6 +89,8 @@
     <string name="timeline_process_working">Working · %1$s</string>
     <string name="timeline_process_processed_elapsed">Processed · %1$s</string>
     <string name="timeline_process_processed">Processed</string>
+    <string name="timeline_process_stopped_elapsed">Stopped · %1$s</string>
+    <string name="timeline_process_stopped">Stopped</string>
     <string name="timeline_copy_answer">Copy answer</string>
 
     <!-- Interaction cards -->

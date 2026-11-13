@@ -91,6 +91,8 @@ sealed interface TimelineRow {
         val answerText: String?,
         /** Explicit stop state also preserves the block when partial prose follows it. */
         val interrupted: Boolean = false,
+        /** The turn was stopped while this block was its end: the header reads Stopped, once for the turn. */
+        val stopped: Boolean = false,
         /** The block carries the footer only when its turn ends on it without an answer. */
         override val footer: TurnFooter = TurnFooter.NONE,
     ) : TimelineRow
@@ -115,6 +117,11 @@ sealed interface TimelineRow {
         override val footer: TurnFooter = TurnFooter.NONE,
         /** The latest prose copied by a terminal result that closes a turn without a final answer. */
         val answerText: String? = null,
+        /**
+         * The turn was stopped and this row ends it, so it says so: an answer in its footer, a
+         * prompt that drew no output under itself. A status row (run_cancelled) says it already.
+         */
+        val stopped: Boolean = false,
     ) : TimelineRow
 }
 
@@ -320,6 +327,8 @@ fun buildTimelineGrouping(
                 settled = settled,
                 footer = footerOf(carries, settled),
                 answerText = if (settled && item is TimelineItem.Status) latestAnswerText(items, turnKeys, index) else null,
+                stopped = turnKey in interruptedTurns && analysis.lastIndexByTurn[turnKey] == index &&
+                    (item is TimelineItem.Assistant || item is TimelineItem.User),
             ),
             index,
             index,
@@ -404,6 +413,7 @@ private fun processRow(
         endedAt = timelineItemTime(grouped.last { it !is TimelineItem.Activity }),
         answerText = answerText,
         interrupted = interrupted,
+        stopped = interrupted && ends,
         footer = footerOf(carries, settled),
     )
 }

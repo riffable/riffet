@@ -448,6 +448,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
           running={running}
           issueCount={row.issueCount}
           interrupted={row.interrupted}
+          stopped={row.stopped}
           startedAt={time(first.event.createdAt)}
           endedAt={time(lastTime)}
           footerTime={row.settled ? lastTime : undefined}
@@ -514,8 +515,8 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   }
   const { item, settled } = row;
   let content: ReactNode = null;
-  if (item.kind === 'user') content = <UserMessage text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
-  else if (item.kind === 'assistant') content = <AssistantMessage chapters text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
+  if (item.kind === 'user') content = <UserMessage stopShown={row.stopped} text={item.text} attachments={item.attachments} references={item.references} recipientSessionId={context.sessionId} onOpenSession={context.onOpenSession} time={timelineItemTime(item) || undefined} footerPinned={footerPinned} run={item.run} failureShown={item.failureShown} runActionPending={actionPending} onOpenTerminal={context.onOpenTerminal} onRetryNativeRun={context.onRetryNativeRun} onCancelNativeRun={context.onCancelNativeRun} onCheckNativeRun={context.onCheckNativeRun} onContinueNativeRun={context.onContinueNativeRun} nativeRecoveries={context.nativeRecoveries} onSendQueuedNow={context.onSendQueuedNow} onRestoreNativeRun={context.onRestoreNativeRun} />;
+  else if (item.kind === 'assistant') content = <AssistantMessage chapters stopped={row.stopped && settled} text={item.text} showActions={settled} streaming={!settled} time={settled ? timelineItemTime(item) || undefined : undefined} footerPinned={footerPinned} metrics={row.metrics} runId={row.runId} onTurnAction={context.onTurnAction} mark={markTarget} {...footerProgress} />;
   else if (item.kind === 'task_notification') content = <TaskNotificationRow item={item} />;
   else if (item.kind === 'activity') content = <ActivityRow item={item} />;
   else if (item.kind === 'status') content = <StatusRow tone={item.tone} text={item.text} detail={item.detail} reveal={reveal?.item === item.key ? reveal.version : undefined}

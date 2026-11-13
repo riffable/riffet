@@ -214,7 +214,11 @@ fun formatDurationMs(millis: Long): String = formatElapsed(millis / 1_000L)
  */
 
 /** Message progress is silent after receipt; execution uncertainty never becomes a failed send. */
-fun deliveryLabel(run: Run?): String? {
+/**
+ * What a prompt says about its delivery. A turn stopped after the prompt arrived is the turn's
+ * outcome, not the prompt's: [stopShown] false leaves 已停止 to the row that ends the turn.
+ */
+fun deliveryLabel(run: Run?, stopShown: Boolean = true): String? {
     val native = run?.native ?: return null
     val recovery = riffet.ui.state.messageRecovery(run)
     if (recovery.needsCheck) return L10n.uiText(if (recovery.taskOutcomeUnknown) "delivery.resultUnknown" else "delivery.unconfirmed")
@@ -225,9 +229,14 @@ fun deliveryLabel(run: Run?): String? {
         NativeDeliveryState.OBSERVED -> if (native.intent == "steer") L10n.uiText("delivery.steer.sent") else null
         NativeDeliveryState.UNCERTAIN -> L10n.uiText("delivery.unconfirmed")
         NativeDeliveryState.FAILED -> L10n.uiText(if (native.nativeMessageId != null || native.stage == "provider_failed") "delivery.sentTurnFailed" else "delivery.sendFailed")
-        NativeDeliveryState.CANCELLED -> L10n.uiText(if (native.nativeMessageId != null || run.state == RunState.INTERRUPTED) "delivery.stopped" else "delivery.cancelled")
+        NativeDeliveryState.CANCELLED -> if (native.nativeMessageId != null || run.state == RunState.INTERRUPTED) {
+            if (stopShown) L10n.uiText("delivery.stopped") else null
+        } else L10n.uiText("delivery.cancelled")
     }
 }
+
+/** 已停止 / Stopped, said once by whatever row ends a stopped turn. */
+fun stoppedLabel(): String = L10n.uiText("delivery.stopped")
 
 /** Raw diagnostic evidence is available only in an explicitly expanded message detail. */
 fun deliveryErrorDetails(run: Run?): String? {

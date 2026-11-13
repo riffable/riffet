@@ -5,7 +5,7 @@ import { Collapse } from '@/components/ui/collapse';
 import { formatDuration } from '@/lib/format-duration';
 import { useNow } from '@/lib/use-now';
 import { cn, formatDateTime } from '@/lib/utils';
-import { ASSEMBLY_MS, useLingering } from './sessionLayout';
+import { ASSEMBLY_MS, revealOnOwnHover, useLingering, useRestReveal } from './sessionLayout';
 import { useTranscriptResources } from './transcriptResources';
 
 /**
@@ -20,6 +20,8 @@ interface Props {
   issueCount: number;
   /** Stopped work and output preceding steering remain expanded unless folded by hand. */
   interrupted: boolean;
+  /** The turn was stopped while this block was its end: the header says so, once, for the turn. */
+  stopped?: boolean;
   startedAt?: number;
   endedAt?: number;
   footerTime?: string;
@@ -47,7 +49,7 @@ interface Props {
  * turn completes normally, and stays open after interruption, steering or a tool failure.
  * Mirrors the visual language of a single lightweight row instead of a boxed card.
  */
-export function TurnProcess({ running, issueCount, interrupted, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, choice, onOpenChange, reveal, following, progress }: Props) {
+export function TurnProcess({ running, issueCount, interrupted, stopped = false, startedAt, endedAt, footerTime, footerPinned, footerActions, children, defaultOpen, choice, onOpenChange, reveal, following, progress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const { quiet } = useContext(TranscriptCatchUp);
@@ -103,7 +105,9 @@ export function TurnProcess({ running, issueCount, interrupted, startedAt, ended
   const now = useNow(running);
   const elapsedMs = startedAt ? Math.max(0, (running ? now : (endedAt ?? now)) - startedAt) : 0;
   const durationLabel = formatDuration(elapsedMs);
-  const label = running ? `${t`处理中`} · ${durationLabel}` : elapsedMs >= 1000 ? `${t`已处理`} · ${durationLabel}` : t`已处理`;
+  const rest = useRestReveal();
+  const done = stopped ? t`已停止` : t`已处理`;
+  const label = running ? `${t`处理中`} · ${durationLabel}` : elapsedMs >= 1000 ? `${done} · ${durationLabel}` : done;
   // A held footer keeps its gap whether or not the working line shows in it, so the line coming and
   // going moves nothing.
   const hasFooter = Boolean(footerTime || progress !== undefined);
@@ -143,10 +147,10 @@ export function TurnProcess({ running, issueCount, interrupted, startedAt, ended
         // `ml-0.5` undoes most of the row's 8px widening, so this row hangs 6px outward exactly
         // like the footer under an answer and the two line up. Keep the normal block gap above
         // both the working line and the settled footer, so changing between them moves nothing.
-        <div className={cn('timeline-gap-block ml-0.5 flex min-h-6 flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', footerTime && !footerPinned && !resources && 'can-hover:opacity-0 can-hover:pointer-events-none can-hover:group-hover/process:opacity-100 can-hover:group-hover/process:pointer-events-auto can-hover:group-focus-within/process:opacity-100 can-hover:group-focus-within/process:pointer-events-auto can-hover:has-[[data-state=open]]:opacity-100 can-hover:has-[[data-state=open]]:pointer-events-auto')}>
+        <div {...rest} className={cn('timeline-gap-block ml-0.5 flex min-h-6 cursor-default select-none flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', footerTime && !footerPinned && !resources && revealOnOwnHover)}>
           {footerTime ? <>
             {footerActions}
-            <time dateTime={footerTime} title={formatDateTime(footerTime)} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(footerTime)}</time>
+            <time dateTime={footerTime} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(footerTime)}</time>
           </> : progress && <div className="ml-1.5 min-w-0">{progress}</div>}
         </div>
       )}

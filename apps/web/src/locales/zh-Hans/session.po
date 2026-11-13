@@ -49,11 +49,6 @@ msgstr "{0} 后自动拒绝"
 msgid "{0} 条排队消息"
 msgstr "{0} 条排队消息"
 
-#. placeholder {0}: metrics.steps
-#: src/app/session/speed.ts
-msgid "{0} 次模型响应"
-msgstr "{0} 次模型响应"
-
 #. placeholder {0}: formatTime(expiresAt)
 #: src/app/session/NativeInteractionCard.tsx
 msgid "{0} 自动拒绝"
@@ -143,10 +138,6 @@ msgstr "「{title}」需要你在终端里操作"
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」需要你在网页中选择"
 msgstr "「{title}」需要你在网页中选择"
-
-#: src/app/session/speed.ts
-msgid "1 次模型响应"
-msgstr "1 次模型响应"
 
 #: src/app/session/Timeline.tsx
 msgid "Agent 附加的图片"
@@ -317,10 +308,6 @@ msgstr "仅含部分历史"
 #: src/app/session/nativeRunCommands.ts
 msgid "仍无法确认当前状态"
 msgstr "仍无法确认当前状态"
-
-#: src/app/session/speed.ts
-msgid "从发起请求到回答结束（含首字延迟）"
-msgstr "从发起请求到回答结束（含首字延迟）"
 
 #: src/app/session/Timeline.tsx
 msgid "从此处另开会话"
@@ -936,6 +923,7 @@ msgid "已保存"
 msgstr "已保存"
 
 #: src/app/session/Timeline.tsx
+#: src/app/session/TurnProcess.tsx
 msgid "已停止"
 msgstr "已停止"
 
@@ -1149,10 +1137,6 @@ msgstr "把 <0>{0}</0> 合并进原项目。"
 #: src/app/session/Composer.tsx
 msgid "指令"
 msgstr "指令"
-
-#: src/app/session/speed.ts
-msgid "按记录时间估算（含首字延迟，只计不调用工具的回答）"
-msgstr "按记录时间估算（含首字延迟，只计不调用工具的回答）"
 
 #: src/app/session/Timeline.tsx
 msgid "排队中"
@@ -1499,11 +1483,6 @@ msgstr "本会话"
 #: src/app/session/marks.tsx
 msgid "本会话收藏"
 msgstr "本会话收藏"
-
-#. placeholder {0}: speedDescription(metrics)
-#: src/app/session/Timeline.tsx
-msgid "本轮 · {0}"
-msgstr "本轮 · {0}"
 
 #: src/app/session/TranscriptView.tsx
 msgid "本轮已结束"
@@ -1997,10 +1976,6 @@ msgstr "输出 token 数"
 msgid "输出过大，只显示末尾"
 msgstr "输出过大，只显示末尾"
 
-#: src/app/session/speed.ts
-msgid "输出速度 · {tokens} · {window} · 合计 {steps}"
-msgstr "输出速度 · {tokens} · {window} · 合计 {steps}"
-
 #: src/app/session/Attempts.tsx
 #: src/app/session/SubagentSession.tsx
 msgid "运行中"
@@ -2268,10 +2243,6 @@ msgstr "题目已更新，旧草稿未提交。"
 #: src/app/session/NativeInteractionCard.tsx
 msgid "题目已更新，请检查状态"
 msgstr "题目已更新，请检查状态"
-
-#: src/app/session/speed.ts
-msgid "首字到末字的生成时间"
-msgstr "首字到末字的生成时间"
 
 #: src/app/session/MarkLayer.tsx
 msgctxt "session-highlight-action"

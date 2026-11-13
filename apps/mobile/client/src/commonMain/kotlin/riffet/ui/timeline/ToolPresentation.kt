@@ -269,7 +269,7 @@ fun toolPresentation(item: TimelineItem.Tool, root: String?, stale: Boolean): To
 /** Delegations stand on their own inside the process, like reasoning, rather than joining tools. */
 fun isToolRunItem(item: TimelineItem): Boolean = item is TimelineItem.Tool && toolKind(item.event.base) != "agent"
 
-/** The process header's label at [nowMillis]: `Working · 12s` while live, `Processed · 1m 3s` once done. */
+/** The process header's label at [nowMillis]: `Working · 12s` while live, `Processed · 1m 3s` once done, `Stopped · 1m 3s` once stopped. */
 fun processHeaderLabel(row: TimelineRow.Process, nowMillis: Long): String {
     val start = instantMillis(row.startedAt)
     val end = instantMillis(row.endedAt)
@@ -278,10 +278,11 @@ fun processHeaderLabel(row: TimelineRow.Process, nowMillis: Long): String {
         row.running -> ((nowMillis - start) / 1_000L).coerceAtLeast(0L)
         else -> (((end ?: nowMillis) - start) / 1_000L).coerceAtLeast(0L)
     }
+    val done = if (row.stopped) "Stopped" else "Processed"
     return when {
         row.running -> "Working · ${formatElapsed(seconds)}"
-        seconds > 0 -> "Processed · ${formatElapsed(seconds)}"
-        else -> "Processed"
+        seconds > 0 -> "$done · ${formatElapsed(seconds)}"
+        else -> done
     }
 }
 

@@ -479,7 +479,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// What the style is made of besides appearance; reading it inside the tracking registers it.
     private static func styleSignature() -> String {
         let preferences = DisplayPreferences.shared
-        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.toolRun.rawValue),\(preferences.style.block.rawValue),\(preferences.style.window.rawValue)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
+        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.toolRun.rawValue),\(preferences.style.block.rawValue),\(preferences.style.window.rawValue),\(preferences.style.inlineCode.rawValue),\(preferences.style.ink.rawValue),\(preferences.style.text.readingLine)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
     }
 
     /// The style changed (appearance, theme, text size, column width): every row lays out again.
@@ -618,7 +618,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
 
     private func restyleIfNeeded() {
         let preferences = DisplayPreferences.shared
-        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.toolRun != style.toolRun || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
+        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.toolRun != style.toolRun || preferences.style.inlineCode != style.inlineCode || preferences.style.text.readingLine != style.bodyLineHeight || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
             style = TranscriptStyle.current(dark: style.dark)
             applyChromeStyle()
         }
@@ -1706,7 +1706,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     override func mouseExited(with event: NSEvent) {
         updateChapterEmphasis()
         setHoverTarget(nil)
-        setHoveredRow(nil)
+        restFooter(on: nil, moved: true)
         if let shown = cursorShown, shown !== NSCursor.arrow { NSCursor.arrow.set() }
         cursorShown = nil
     }
@@ -1723,11 +1723,13 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         let point = location ?? window.mouseLocationOutsideOfEventStream
         guard scrollView.bounds.contains(scrollView.convert(point, from: nil)), let superview = table.superview else {
             setHoverTarget(nil)
-            setHoveredRow(nil)
+            restFooter(on: nil, moved: true)
             return
         }
+        // A footer shows when the pointer is on its own line, not anywhere over the message.
         let row = table.row(at: table.convert(point, from: nil))
-        setHoveredRow(row >= 0 && row < entries.count ? entries[row].key : nil)
+        let cell = row >= 0 && row < entries.count ? table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptCell : nil
+        restFooter(on: cell?.showsFooter(at: point) == true ? entries[row].key : nil, moved: moved)
         var target: (NSView & HoverTarget)?
         var hit = table.hitTest(superview.convert(point, from: nil))
         while let view = hit, view !== table {
@@ -1772,6 +1774,37 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
 
     /// The row under the pointer shows its message footer; the others keep it hidden.
     private var hoveredRow: String?
+
+    /// The footer the pointer is on, until it has rested there long enough to show.
+    private var restingRow: String?
+    private var restTimer: Timer?
+    /// How long the pointer stays still on a footer's line before its time and actions appear.
+    private static let footerRest: TimeInterval = 0.5
+
+    /// A footer shows once the pointer has rested on its line for `footerRest`, and hides as soon
+    /// as the pointer leaves it. Moving along the line starts the wait again; scrolling does not.
+    private func restFooter(on key: String?, moved: Bool) {
+        guard let key else {
+            restTimer?.invalidate()
+            restTimer = nil
+            restingRow = nil
+            setHoveredRow(nil)
+            return
+        }
+        if key == hoveredRow { return }
+        if hoveredRow != nil { setHoveredRow(nil) }
+        if key == restingRow, !moved { return }
+        restingRow = key
+        restTimer?.invalidate()
+        restTimer = Timer.scheduledTimer(withTimeInterval: Self.footerRest, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.restingRow == key else { return }
+                self.restingRow = nil
+                self.restTimer = nil
+                self.setHoveredRow(key)
+            }
+        }
+    }
 
     private func setHoveredRow(_ key: String?) {
         guard key != hoveredRow else { return }
@@ -1878,7 +1911,7 @@ extension TranscriptController: TranscriptBenchTarget {
             end = text.index(end, offsetBy: chunk, limitedBy: text.endIndex) ?? text.endIndex
             let item = TimelineItemAssistant(key: "bench-stream", text: String(text[..<end]), event: event, phase: nil)
             let settled = end == text.endIndex
-            benchSetTail(TimelineRowSingle(key: "bench-stream", item: item, turnKey: "bench-stream", settled: settled, footer: settled ? .shown : .held, answerText: nil))
+            benchSetTail(TimelineRowSingle(key: "bench-stream", item: item, turnKey: "bench-stream", settled: settled, footer: settled ? .shown : .held, answerText: nil, stopped: false))
             try? await Task.sleep(for: .seconds(interval))
         }
         try? await Task.sleep(for: .milliseconds(300))

@@ -141,6 +141,8 @@ struct FooterSpec {
     var turnRunId: String? = nil
     /// A task's live statistics, shown only inside its expanded details.
     var clock: DisclosureSpec.Clock?
+    /// The line holds a delivery status and its actions, so the time stays with them.
+    var keepsShown = false
 }
 
 /// A fenced block's chrome: language, the Markdown and wrap switches, copy.
@@ -226,6 +228,8 @@ struct ButtonSpec {
     let title: String
     let action: TranscriptAction?
     let loading: Bool
+    /// A text action in a message's footer line: footer-sized, without the chip's padding.
+    var compact = false
 }
 
 struct WorkingSpec {
