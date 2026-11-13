@@ -21,7 +21,7 @@ import { CLAUDE_TURN_FAILED, ClaudeTranscript, claudeFailureText, claudePromptKe
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 import type { TurnEndStatus } from '../../journal/ingest.js';
 import { claudeNativeContext } from './context.js';
-import { claudeScreenInteraction, isClaudeScreenInteraction } from './screen-dialog.js';
+import { claudeScreenInteraction, isClaudeScreenInteraction, parseClaudeScreenDialog } from './screen-dialog.js';
 import { parseDialog } from '../../agent-host/interaction-screen.js';
 import { activeTurnOf, initialState, phaseOf, reduce, replay, type ClaudeProcess, type ClaudeSessionState, type ClaudeSignal, type ClaudeTurnOrigin, type Transition } from './session-state.js';
 import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, pause, screenDialogEndorsed, inspectSavedTerminal, permissionArgs, claudeAvailability } from './launch.js';
@@ -45,6 +45,8 @@ const LATE_RECEIPT_RECHECK_MS = [30_000, 120_000];
 export { QUICK_EXIT_MS, QUICK_EXIT_LIMIT } from './launch-guard.js';
 const MAX_REMEMBERED_PROMPTS = 200;
 const MAX_RECENT_SENDS = 8;
+/** Rows a notice form's cursor may cross to reach its Continue row; the auto-mode setup form has four. */
+const CONFIRM_ROW_STEPS = 12;
 
 /**
  * How long `awaitReceipt` keeps reading the composer for a paste that had not shown when its window ran out (several
@@ -1985,6 +1987,25 @@ export class ClaudeSessionRuntime {
         }
         return previous.result;
       }
+      // A form's Enter acts on its focused row (a toggle flips), so Continue is pressed on its own row. Moving
+      // the cursor answers nothing; the fence below is still written before the one key that does.
+      let pressed = current;
+      if (!answer && response.action === 'continue') {
+        let screen = await control.screen() ?? '';
+        for (let step = 0; step < CONFIRM_ROW_STEPS; step++) {
+          const row = parseClaudeScreenDialog(screen)?.confirmRow;
+          if (row === undefined || row === 'focused') break;
+          await control.keys([row === 'below' ? 'Down' : 'Up']);
+          await pause(FOOTER_KEY_MS);
+          screen = await control.screen() ?? '';
+        }
+        const row = parseClaudeScreenDialog(screen)?.confirmRow;
+        const moved = claudeScreenInteraction(screen, terminal);
+        if ((row !== undefined && row !== 'focused') || !moved) {
+          throw new AppError('NATIVE_INTERACTION_STALE', 'Claude Code’s Continue row could not be focused. Sync the current request or open the terminal.', 409);
+        }
+        pressed = moved;
+      }
       // The terminal write can succeed before its acknowledgement or the following read fails.
       // Persist the fence first so retrying this request can never press the key twice.
       this.saveResponse(response, fingerprint, { status: 'uncertain', message: 'Claude Code has not yet confirmed the notice response.' });
@@ -1998,7 +2019,7 @@ export class ClaudeSessionRuntime {
           const screen = await control.screen();
           if (screen === undefined) continue;
           const next = claudeScreenInteraction(screen, terminal);
-          if (next?.id === current.id) continue;
+          if (next?.id === pressed.id) continue;
           if (next) {
             this.screenAttention = true;
             this.setStatus({ ...this.status, interaction: next });

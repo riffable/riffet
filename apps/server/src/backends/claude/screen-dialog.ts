@@ -24,6 +24,7 @@ const MAX_BODY_LINES = 200;
 const UNRULED_BODY_LINES = 40;
 /** Every live decision surface marks its focused row; prose and a clipped frame do not. */
 const FOCUS_ROW = /^\s*(?:❯|›|>)\s+\S/;
+const FOCUS_MARK = /^\s*(?:❯|›|>)?\s*/;
 // The `ctrl+g to edit in Vim` hint joins the footer while the free-text row has focus.
 const QUESTION_FOOTER = /^Enter to select\s+·\s+↑\/↓ to navigate(?:\s+·\s+ctrl\+g to edit in Vim)?\s+·\s+Esc to cancel$/;
 const FREE_TEXT_LABEL = 'Type something.';
@@ -31,7 +32,14 @@ const QUESTION_OPTION = /^(\s*)([❯›]\s*)?(\d+)\.\s+(.+)$/;
 
 const VERB_LABELS: Record<string, string> = { continue: '继续', confirm: '确认', accept: '接受', cancel: '取消', exit: '退出', 'go back': '返回', skip: '跳过' };
 
-export interface ClaudeScreenDialog { body: string; confirm: string; cancel: string }
+export interface ClaudeScreenDialog {
+  body: string; confirm: string; cancel: string;
+  /**
+   * Where a form's own confirm row (`Continue`) is from the focused row. Enter acts on the focused row — on
+   * the auto-mode setup form it flips the toggle under the cursor — so only that row confirms.
+   */
+  confirmRow?: 'focused' | 'above' | 'below';
+}
 
 /**
  * The frame's footer is one hint per control it has, joined by `·`. A card can drive only the Enter
@@ -76,7 +84,10 @@ export function parseClaudeScreenDialog(screen: string): ClaudeScreenDialog | un
   // says the TUI is drawing a decision surface here instead of printing prose.
   if (unruled && !body.some(line => FOCUS_ROW.test(line))) return undefined;
   const indent = Math.min(...body.filter(Boolean).map(line => line.length - line.trimStart().length));
-  return { body: body.map(line => line.slice(indent)).join('\n'), confirm: footer.confirm, cancel: footer.cancel };
+  const focused = body.findIndex(line => FOCUS_ROW.test(line));
+  const target = body.findIndex(line => line.replace(FOCUS_MARK, '').trim().toLowerCase() === footer.confirm);
+  const confirmRow = focused < 0 || target < 0 ? undefined : target === focused ? 'focused' : target > focused ? 'below' : 'above';
+  return { body: body.map(line => line.slice(indent)).join('\n'), confirm: footer.confirm, cancel: footer.cancel, ...(confirmRow ? { confirmRow } : {}) };
 }
 
 /** What Claude Code's own single-select `AskUserQuestion` dialog shows: the choices, the free-text row and where the cursor is. */

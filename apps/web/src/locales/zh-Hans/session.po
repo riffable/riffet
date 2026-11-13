@@ -148,14 +148,6 @@ msgstr "「{title}」需要你在网页中选择"
 msgid "1 次模型响应"
 msgstr "1 次模型响应"
 
-#: src/app/session/NativeInteractionCard.tsx
-msgid "1 选择"
-msgstr "1 选择"
-
-#: src/app/session/NativeInteractionCard.tsx
-msgid "1–{shortcutCount} 选择"
-msgstr "1–{shortcutCount} 选择"
-
 #: src/app/session/Timeline.tsx
 msgid "Agent 附加的图片"
 msgstr "Agent 附加的图片"

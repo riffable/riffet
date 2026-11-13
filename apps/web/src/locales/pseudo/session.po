@@ -148,14 +148,6 @@ msgstr ""
 msgid "1 次模型响应"
 msgstr ""
 
-#: src/app/session/NativeInteractionCard.tsx
-msgid "1 选择"
-msgstr ""
-
-#: src/app/session/NativeInteractionCard.tsx
-msgid "1–{shortcutCount} 选择"
-msgstr ""
-
 #: src/app/session/Timeline.tsx
 msgid "Agent 附加的图片"
 msgstr ""

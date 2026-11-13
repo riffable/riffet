@@ -1,8 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeInteraction, NativeInteractionResponse, NativeInteractionResult } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/controls';
+import { Input, Kbd } from '@/components/ui/controls';
 import { api, HttpError } from '@/lib/api';
 import { formatTime } from '@/lib/i18n/format';
 import { toast } from '@/lib/toast';
@@ -239,7 +239,8 @@ export function NativeInteractionCard({
   const counter = isQuestion && shown.questionCount
     ? `${Math.max(1, shown.questionIndex ?? 1)} / ${shown.questionCount}`
     : '';
-  const shortcutHint = [shortcutCount > 1 ? t`1–${shortcutCount} 选择` : shortcutCount === 1 ? t`1 选择` : '', escapeDenies ? t`Esc 拒绝` : ''].filter(Boolean).join(' · ');
+  // Each row carries its own digit (`ShortcutKey`); the header names only the key no row shows.
+  const shortcutHint = escapeDenies ? t`Esc 拒绝` : '';
   const keyShortcuts = [...Array.from({ length: shortcutCount }, (_, index) => String(index + 1)), ...(escapeDenies ? ['Escape'] : [])].join(' ');
   const actionLabel = (action: NativeInteraction['actions'][number]) => {
     switch (action.id) {
@@ -295,12 +296,13 @@ export function NativeInteractionCard({
         {showsOptions && (
           <fieldset className="flex min-w-0 flex-col gap-0.5" disabled={busy || !connected}>
             <legend className="sr-only">{title}</legend>
-            {shown.options.map((option) => {
+            {shown.options.map((option, index) => {
               const checked = selected.has(option.id);
               return (
                 <label key={option.id} className={cn('flex min-h-11 cursor-pointer items-center gap-2.5 rounded-md px-2 py-1 text-sm transition-colors md:min-h-8', checked ? 'bg-accent-soft/55 text-fg' : 'text-fg-2 hover:bg-hover hover:text-fg', busy && 'cursor-not-allowed opacity-65')}>
                   <input className="size-4 shrink-0 accent-[var(--accent)]" type={shown.multiple ? 'checkbox' : 'radio'} name={`${shown.id}-answer`} checked={checked} disabled={busy || !connected} onChange={() => changeOption(option.id)} />
                   <span className="min-w-0 flex-1">{option.label}</span>
+                  {index < shortcutCount && <ShortcutKey>{index + 1}</ShortcutKey>}
                 </label>
               );
             })}
@@ -334,7 +336,7 @@ export function NativeInteractionCard({
         // One row per choice, in the CLI's own order. The row the CLI has focused leads as the
         // primary action, so the card never restates the choices as text the user cannot press.
         <div className="mt-2 flex flex-col gap-1.5">
-          {shown.actions.map((action) => {
+          {shown.actions.map((action, index) => {
             const focused = Boolean(focusedOptionId) && action.id === `option:${focusedOptionId}`;
             return (
               <Button
@@ -345,7 +347,8 @@ export function NativeInteractionCard({
                 disabled={!connected || busy}
                 onClick={() => { void submit(action.id); }}
               >
-                {actionLabel(action)}
+                <span className="min-w-0 flex-1">{actionLabel(action)}</span>
+                {index < shortcutCount && <ShortcutKey className="bg-transparent text-current opacity-60">{index + 1}</ShortcutKey>}
               </Button>
             );
           })}
@@ -381,4 +384,9 @@ export function NativeInteractionCard({
       </footer>
     </article>
   );
+}
+
+/** A row's digit key, shown while the card has the keyboard on a layout with one. */
+function ShortcutKey({ children, className }: { children: ReactNode; className?: string }) {
+  return <Kbd className={cn('hidden shrink-0 md:group-focus-within:inline-flex', className)}>{children}</Kbd>;
 }

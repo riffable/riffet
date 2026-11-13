@@ -155,7 +155,10 @@ describe('Claude Code screen dialogs', () => {
       ].join('\n'),
       confirm: 'continue',
       cancel: 'cancel',
+      // Enter flips the focused toggle here; only the Continue row below it continues.
+      confirmRow: 'below',
     });
+    expect(parseClaudeScreenDialog(autoModeSetup.replace('> Also scan shell history', '  Also scan shell history').replace('  Continue', '> Continue'))?.confirmRow).toBe('focused');
     expect(claudeScreenInteraction(autoModeSetup, { id: 'term-1', epoch: 3 })).toMatchObject({
       kind: 'confirmation', actions: [{ id: 'continue', label: '继续', tone: 'primary' }, { id: 'cancel', label: '取消' }],
     });
