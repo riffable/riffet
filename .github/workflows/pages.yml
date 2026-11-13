@@ -5,7 +5,9 @@ on:
     branches: [main]
     # The plugin index is built from the registry records, the example packages and the built-in manifests,
     # packed and checked by the plugin tooling and the server's package reader.
-    paths: ['site/**', 'examples/plugins/**', 'plugins/**', 'packages/plugin-api/**', 'apps/server/src/plugins-host/**', 'scripts/build-site.ts', '.github/workflows/pages.yml']
+    paths: ['site/**', 'examples/plugins/**', 'plugins/**', 'packages/plugin-api/**', 'apps/server/src/plugins-host/**', 'scripts/build-site.ts', 'scripts/build-appcast.ts', '.github/workflows/pages.yml']
+  # The release workflow deploys again once a release is published, so its Mac update joins the appcast.
+  workflow_call:
   workflow_dispatch:
 
 concurrency:
@@ -41,6 +43,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Site and plugin index
         run: pnpm build:site --out dist/site
+      # Every deployment replaces the whole site, so the Sparkle feed is rebuilt from the published
+      # releases each time rather than kept anywhere else.
+      - name: Mac update feed
+        run: pnpm exec tsx scripts/build-appcast.ts dist/site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

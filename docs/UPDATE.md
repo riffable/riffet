@@ -8,7 +8,7 @@
 
 沿用根目录 `package.json` 的版本规范，每个源码发布版本对应一个 tag，例如 `v0.5.1`。tag 中的版本必须与该提交的 `package.json.version` 一致。
 
-- 只识别稳定版本 `vMAJOR.MINOR.PATCH`，各段使用无前导零的非负整数。
+- 只识别稳定版本 `vMAJOR.MINOR.PATCH`，各段使用无前导零的非负整数。beta tag（`vMAJOR.MINOR.PATCH-beta.N`，见 [RELEASE.md](RELEASE.md)）不参与比较；从 beta tag 构建的程序按开发构建处理。
 - 按三个版本段的数值比较新旧，例如 `v0.10.0` 高于 `v0.9.0`；提交时间、tag 创建时间和普通字符串排序不参与判断。
 - 同时支持 annotated tag 和 lightweight tag，统一解析到最终 commit。
 - 发布后的 tag 固定到原 commit。源码需要修正时升版本、发布新 tag。

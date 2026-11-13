@@ -5,7 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 // Plain Node, also used before the macOS toolchain or pnpm dependencies are available.
 const root = realpathSync(resolve(dirname(fileURLToPath(import.meta.url)), '..'));
-const stable = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$(?!\s)/;
+// A stable MAJOR.MINOR.PATCH or a MAJOR.MINOR.PATCH-beta.N (scripts/version.ts).
+const release = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-beta\.[1-9]\d*)?$(?!\s)/;
 const env = { ...process.env, GIT_OPTIONAL_LOCKS: '0', GIT_TERMINAL_PROMPT: '0', GCM_INTERACTIVE: 'Never' };
 // Ignore an enclosing repository's location while retaining user Git authentication configuration.
 for (const key of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE', 'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete env[key];
@@ -15,8 +16,8 @@ function git(args) {
 
 function readRecord() {
   const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
-  if (typeof pkg.version !== 'string' || !stable.test(pkg.version) || !Number.isSafeInteger(pkg.buildNumber) || pkg.buildNumber <= 0) {
-    throw new Error('package.json must contain a stable version and a positive buildNumber');
+  if (typeof pkg.version !== 'string' || !release.test(pkg.version) || !Number.isSafeInteger(pkg.buildNumber) || pkg.buildNumber <= 0) {
+    throw new Error('package.json must contain a release version and a positive buildNumber');
   }
   let commit = null;
   let tag = null;

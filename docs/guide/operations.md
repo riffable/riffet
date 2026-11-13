@@ -152,26 +152,20 @@ Web「设置 → 关于」检查 Server 更新；Mac「设置 → 关于」直�
 
 服务端、Web、macOS、iPhone 与 Android 使用同一个版本号，唯一来源是根目录 `package.json`：
 
-- `version`：稳定语义化版本 `MAJOR.MINOR.PATCH`，只接受三段非负整数，不允许前导零、预发布后缀或构建元数据，以兼容 Apple `MARKETING_VERSION`。1.0 之前，新功能或不兼容变化升 MINOR，只含修复升 PATCH。
+- `version`：stable 为 `MAJOR.MINOR.PATCH`，beta 为 `MAJOR.MINOR.PATCH-beta.N`；不允许前导零和其他预发布后缀。Apple `MARKETING_VERSION` 只取三段整数。
 - `buildNumber`：构建号，格式 `yyMMddNN`（例如 `26101601` 表示 2026-10-16 当天第 1 个构建），同时用作 Android `versionCode` 与 Apple `CFBundleVersion`。两个平台都拒绝用更小的值覆盖安装，所以构建号只增不减，同一天最多 99 个。
 
 Android 构建直接读取 `package.json`；XcodeGen 无法读取 JSON，两个 `project.yml` 里的 `MARKETING_VERSION` 与 `CURRENT_PROJECT_VERSION` 由脚本同步，不要手改。
 
 ```bash
-pnpm version:bump          # 版本不变，生成下一个构建号（重新出包前执行）
-pnpm version:bump 0.6.0    # 设置新版本并生成下一个构建号
-pnpm version:check         # 核对各端与 package.json 一致（CI 执行）
-pnpm version:bump --help   # 查看用法，不修改文件
+pnpm version:bump                # 版本不变，生成下一个构建号（只重新出包时执行）
+pnpm version:check               # 核对各端与 package.json 一致（CI 执行）
+pnpm release:notes               # 上一个发布以来面向用户的提交，用来整理变更记录
+pnpm release:prepare 0.8.0       # 预检、改版本、定稿变更记录、提交并打 tag（beta：0.8.0-beta.1）
+git push origin main v0.8.0      # 触发发布工作流
 ```
 
-`version:check` 只读，不接受版本参数；未知选项、多个版本参数或互相冲突的参数会在写入前报错。
-
-发布一个版本：
-
-1. `pnpm version:bump <新版本>`。
-2. 把 `CHANGELOG.md` 的「未发布」改为 `## <版本> - <日期>`，在其上方新建空的「未发布」。
-3. 提交 `chore: release v<版本>`，打标签 `v<版本>`，并把该提交和 tag 推送到用户 clone 使用的仓库。
-4. 从该提交出包：macOS 运行 `apps/macos/scripts/release.sh`（产物 `Riffet-<版本>.dmg`）；Android 与 iPhone 照常构建。对外分发的文件名带上版本和构建号，例如 `riffet-android-<版本>-<构建号>.apk`。
+变更记录分为 `CHANGELOG.md`（英文）和 `CHANGELOG.zh-CN.md`（中文），开发期间同步写在各自的未发布节。推送 tag 后，`.github/workflows/release.yml` 依次构建 npm 包、APK 和 macOS DMG，创建草稿 Release，执行冒烟测试，再发布（stable 需人工批准）。版本升级规则、渠道、各端产物、签名材料与回滚方式见[版本、发布与分发](../RELEASE.md)。
 
 发布后的 tag 保持不可变。源码修正应升版本并创建新 tag。同一版本只修打包问题、重新出包时，只执行 `pnpm version:bump` 换构建号，不移动原 tag；这种重新打包不构成 Git 源码渠道的新版本。
 

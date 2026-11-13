@@ -41,7 +41,7 @@ GitHub API 与官方文档取回核对，取不到或只有二手来源的写明
 - 对话时间线的内容与排序与 web、手机一致，复用同一份投影代码与 fixture。
 - 像一个 Mac 应用：菜单栏常驻、可操作通知、全局快捷提问、⌘K、多窗口、拖放、Quick Look、Spotlight、快捷指令、小组件、共享扩展。
 - 长转录（上千行富文本）滚动不掉帧，流式输出只重绘变化的行。
-- 一条命令出 Release：构建、签名、公证、DMG、appcast。
+- 一条命令出 Release：构建、签名、公证、DMG，以及 Sparkle 更新包和签名后的 appcast 条目（appcast 本身见 [RELEASE.md](RELEASE.md)）。
 
 **非目标**
 
@@ -445,7 +445,7 @@ apps/macos/
     build-server-payload.sh   官方 Node + dist/ + 生产依赖 → build/server-payload
     bundle-server.sh          Xcode 构建阶段：拷贝载荷、写启动器、由内向外签名
     sign-frameworks.sh        Xcode 构建阶段：用本次构建的身份重签 Sparkle，再密封 App
-    release.sh                归档 → 签名 → 公证 → staple → DMG → appcast（输出到 build/dist）
+    release.sh                归档 → 签名 → 公证 → staple → DMG → Sparkle zip 与 appcast 条目（输出到 build/dist）
     check-i18n.mjs            界面语言检查，build.sh test 在构建后运行
     node.entitlements         内置 node 的 hardened runtime 权限
   packaging/homebrew/riffet.rb

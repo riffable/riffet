@@ -1,16 +1,19 @@
 name: Release
 
-# A `vX.Y.Z` tag builds the npm package and the signed Android APK, attaches both to the GitHub
-# release (created from the CHANGELOG section when it does not exist yet) and publishes `riffet`
-# to npm. Run it by hand to rebuild the assets of an existing tag; assets are replaced, and a
-# version already on npm is left alone.
+# A `vX.Y.Z` or `vX.Y.Z-beta.N` tag (made by `pnpm release:prepare`, docs/RELEASE.md) builds every
+# artifact into a draft GitHub release, smoke-tests what was built, then publishes: npm, the release
+# itself, the Homebrew cask (newest stable only) and the Sparkle appcast. A stable release waits for
+# approval in the `release` environment before anything public happens; a beta publishes on its own.
+#
+# Run it by hand to rebuild the assets of an existing tag: assets are replaced, a version already on
+# npm is left alone, and an already published release stays published.
 on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing tag, e.g. v0.7.0
+        description: Existing tag, e.g. v0.8.0
         required: true
 
 concurrency:
@@ -27,20 +30,37 @@ jobs:
   meta:
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.check.outputs.version }}
+      channel: ${{ steps.check.outputs.channel }}
+      npm-tag: ${{ steps.check.outputs.npm-tag }}
+      latest: ${{ steps.check.outputs.latest }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ env.TAG }}
-      - id: version
-        name: The tag matches package.json
-        run: |
-          version="$(node -p 'require("./package.json").version')"
-          [ "$TAG" = "v$version" ] || { echo "::error::$TAG does not match package.json version $version"; exit 1; }
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          # The tag's branch and the previous stable tag are compared with.
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - id: check
+        name: Tag, version, branch, changelogs and the version increment
+        run: node scripts/release.mjs check "$TAG" --notes "$RUNNER_TEMP/notes.md"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: notes
+          path: ${{ runner.temp }}/notes.md
+          if-no-files-found: error
+
+  verify:
+    needs: meta
+    uses: ./.github/workflows/verify.yml
+    with:
+      os: ubuntu-latest
+      ref: ${{ inputs.tag || github.ref_name }}
 
   npm-package:
-    needs: meta
+    needs: [meta, verify]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,8 +86,12 @@ jobs:
           if-no-files-found: error
 
   android:
-    needs: meta
+    needs: [meta, verify]
     runs-on: ubuntu-latest
+    # Signing material is only handed to jobs in this environment, restricted to v* tags. A private
+    # repository on the Free plan has no environments, so until the repository is public the job runs
+    # without one and reads the repository secrets.
+    environment: ${{ !github.event.repository.private && 'signing' || '' }}
     defaults:
       run:
         working-directory: apps/mobile
@@ -105,15 +129,99 @@ jobs:
           path: ${{ runner.temp }}/Riffet-${{ needs.meta.outputs.version }}.apk
           if-no-files-found: error
 
-  publish:
-    needs: [meta, npm-package, android]
+  macos:
+    # Off until the Developer ID certificate, the notary key and the Sparkle key are configured
+    # (docs/RELEASE.md §5): set the repository variable RIFFET_MACOS_RELEASE to `true` then.
+    if: ${{ vars.RIFFET_MACOS_RELEASE == 'true' }}
+    needs: [meta, verify]
+    runs-on: macos-26
+    environment: ${{ !github.event.repository.private && 'signing' || '' }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Signing keychain, notary key and Sparkle key
+        env:
+          CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE_P12_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          NOTARY_KEY: ${{ secrets.APP_STORE_CONNECT_API_KEY }}
+          SPARKLE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          for name in CERTIFICATE CERTIFICATE_PASSWORD NOTARY_KEY SPARKLE_KEY; do
+            [ -n "${!name}" ] || { echo "::error::$name is not set in the signing environment."; exit 1; }
+          done
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(uuidgen)"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          printf '%s' "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          # Searched first, before the existing keychains (xargs unquotes the paths list-keychains prints).
+          security list-keychains -d user | xargs security list-keychains -d user -s "$keychain"
+          printf '%s' "$NOTARY_KEY" > "$RUNNER_TEMP/notary.p8"
+          printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle.key"
+      - name: Signed, notarized DMG and Sparkle update
+        env:
+          RIFFET_PUBLIC_BUILD: '1'
+          RIFFET_SIGN_IDENTITY: ${{ vars.MACOS_SIGN_IDENTITY }}
+          RIFFET_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          RIFFET_NOTARY_KEY: ${{ runner.temp }}/notary.p8
+          RIFFET_NOTARY_KEY_ID: ${{ vars.APP_STORE_CONNECT_KEY_ID }}
+          RIFFET_NOTARY_ISSUER: ${{ vars.APP_STORE_CONNECT_ISSUER_ID }}
+          RIFFET_SPARKLE_KEY_FILE: ${{ runner.temp }}/sparkle.key
+          RIFFET_SPARKLE_PUBLIC_KEY: ${{ vars.RIFFET_SPARKLE_PUBLIC_KEY }}
+        run: apps/macos/scripts/release.sh
+      - name: Gatekeeper accepts what a user downloads
+        working-directory: apps/macos/build/dist
+        run: |
+          xcrun stapler validate "Riffet-$VERSION.dmg"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "Riffet-$VERSION.dmg"
+          spctl --assess --type execute --verbose=2 Riffet.app
+          test -s "Riffet-$VERSION.appcast.json"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: |
+            apps/macos/build/dist/Riffet-${{ needs.meta.outputs.version }}.dmg
+            apps/macos/build/dist/Riffet-${{ needs.meta.outputs.version }}.zip
+            apps/macos/build/dist/Riffet-${{ needs.meta.outputs.version }}.appcast.json
+          if-no-files-found: error
+      - name: Remove the signing material
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/sparkle.key"
+
+  draft:
+    # A skipped Mac job (not configured yet) does not hold the release back; a failed one does.
+    if: ${{ !cancelled() && needs.npm-package.result == 'success' && needs.android.result == 'success' && contains(fromJSON('["success","skipped"]'), needs.macos.result) }}
+    needs: [meta, npm-package, android, macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
       id-token: write
       attestations: write
     env:
-      VERSION: ${{ needs.meta.outputs.version }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
@@ -122,26 +230,104 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           path: assets
+          pattern: '{npm,android,macos}'
           merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: notes
+          path: ${{ runner.temp }}
+      - name: Checksums
+        working-directory: assets
+        run: sha256sum -- * > SHA256SUMS && cat SHA256SUMS
       # Attestations and npm provenance need a public source repository on this plan.
       - uses: actions/attest-build-provenance@v4
         if: ${{ !github.event.repository.private }}
         with:
           subject-path: assets/*
-      - name: GitHub release
+      - name: Draft release with every asset
+        env:
+          CHANNEL: ${{ needs.meta.outputs.channel }}
+          VERSION: ${{ needs.meta.outputs.version }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" assets/* --clobber
           else
-            awk -v v="$VERSION" 'index($0, "## " v " ") == 1 || $0 == "## " v { found = 1; next } /^## / { if (found) exit } found' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
-            [ -s "$RUNNER_TEMP/notes.md" ] || { echo "::error::CHANGELOG.md has no section for $VERSION"; exit 1; }
-            gh release create "$TAG" assets/* --verify-tag --title "Riffet $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+            prerelease=(); [ "$CHANNEL" = beta ] && prerelease=(--prerelease)
+            gh release create "$TAG" assets/* --draft --verify-tag "${prerelease[@]}" \
+              --title "Riffet $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
           fi
+
+  smoke:
+    # What a user installs, installed the way they would: the npm package from its tarball, then the
+    # server it starts must report this version.
+    if: ${{ !cancelled() && needs.draft.result == 'success' }}
+    needs: [meta, draft]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: .node-version
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm
+          path: ${{ runner.temp }}
+      - name: Install the package globally
+        run: npm install --global "$RUNNER_TEMP/riffet-$VERSION.tgz"
+      - name: The CLI and the running server report this version
+        run: |
+          [ "$(riffet-server --version)" = "$VERSION" ] || { echo "::error::riffet-server --version is $(riffet-server --version)"; exit 1; }
+          riffet-server serve --state-dir "$RUNNER_TEMP/state" --port 4399 --no-mdns --no-auth > "$RUNNER_TEMP/server.log" 2>&1 &
+          server=$!
+          for _ in $(seq 60); do
+            health="$(curl -fsS http://127.0.0.1:4399/health 2>/dev/null)" && break
+            sleep 1
+          done
+          kill "$server" || true
+          [ -n "${health:-}" ] || { cat "$RUNNER_TEMP/server.log"; echo "::error::the server did not answer /health"; exit 1; }
+          node -e 'const h = JSON.parse(process.argv[1]); if (h.version !== process.env.VERSION || h.build?.version !== process.env.VERSION) { console.error(h); process.exit(1); }' "$health"
+
+  publish:
+    if: ${{ !cancelled() && needs.smoke.result == 'success' }}
+    needs: [meta, smoke, macos]
+    runs-on: ubuntu-latest
+    # `release` requires a maintainer's approval; `beta` has no protection rules. While the repository
+    # is private nothing here is public (npm and the appcast are skipped), and the Free plan offers no
+    # environments, so there is nothing to approve.
+    environment: ${{ !github.event.repository.private && (needs.meta.outputs.channel == 'stable' && 'release' || 'beta') || '' }}
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.meta.outputs.version }}
+      NPM_TAG: ${{ needs.meta.outputs.npm-tag }}
+      LATEST: ${{ needs.meta.outputs.latest }}
+      TAP: ${{ vars.HOMEBREW_TAP || 'riffable/homebrew-riffet' }}
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          sparse-checkout: |
+            .node-version
+            apps/macos/packaging/homebrew
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4
         if: ${{ !github.event.repository.private }}
         with:
           node-version-file: .node-version
           registry-url: https://registry.npmjs.org
+      # npm first: once the release page is public, people start installing.
       - name: npm
         # Trusted publishing: npm exchanges this job's OIDC token, so no npm token is stored here.
         if: ${{ !github.event.repository.private }}
@@ -149,5 +335,49 @@ jobs:
           if npm view "riffet@$VERSION" version >/dev/null 2>&1; then
             echo "riffet@$VERSION is already on npm."
           else
-            npm publish "assets/riffet-$VERSION.tgz" --access public
+            gh release download "$TAG" --pattern "riffet-$VERSION.tgz" --dir "$RUNNER_TEMP"
+            npm publish "$RUNNER_TEMP/riffet-$VERSION.tgz" --access public --tag "$NPM_TAG"
           fi
+      - name: GitHub release
+        run: |
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = true ]; then
+            gh release edit "$TAG" --draft=false --latest="$LATEST"
+          else
+            echo "$TAG is already published."
+          fi
+      # The tap follows the newest stable only; Homebrew users of a beta get it through Sparkle.
+      - name: Homebrew cask
+        if: ${{ needs.meta.outputs.latest == 'true' && needs.macos.result == 'success' }}
+        run: |
+          if [ -z "$TAP_TOKEN" ]; then
+            echo "::notice::HOMEBREW_TAP_TOKEN is not set; the cask in $TAP was not updated."
+            exit 0
+          fi
+          gh release download "$TAG" --pattern SHA256SUMS --dir "$RUNNER_TEMP"
+          sha="$(awk -v f="Riffet-$VERSION.dmg" '$2 == f { print $1 }' "$RUNNER_TEMP/SHA256SUMS")"
+          [ -n "$sha" ] || { echo "::error::SHA256SUMS has no Riffet-$VERSION.dmg"; exit 1; }
+          # From here on gh, and git through gh's credential helper, act with the tap's token.
+          export GH_TOKEN="$TAP_TOKEN"
+          gh auth setup-git
+          gh repo clone "$TAP" "$RUNNER_TEMP/tap" -- --depth 1
+          mkdir -p "$RUNNER_TEMP/tap/Casks"
+          # The template's leading comment is about the template, not the cask.
+          sed -e '/^cask /,$!d' -e "s/@VERSION@/$VERSION/" -e "s/@SHA256@/$sha/" apps/macos/packaging/homebrew/riffet.rb > "$RUNNER_TEMP/tap/Casks/riffet.rb"
+          cd "$RUNNER_TEMP/tap"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Casks/riffet.rb
+          git diff --cached --quiet && { echo "The cask is already at $VERSION."; exit 0; }
+          git commit -m "riffet $VERSION"
+          git push
+
+  appcast:
+    # Rebuilds the site, whose appcast now lists this release's Mac update. Last, so Sparkle never
+    # offers a download that is not public yet.
+    if: ${{ !cancelled() && needs.publish.result == 'success' && needs.macos.result == 'success' }}
+    needs: [publish, macos]
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/pages.yml

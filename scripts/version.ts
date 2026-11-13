@@ -4,16 +4,19 @@ import { fileURLToPath } from 'node:url';
 
 /**
  * One version for the server, Web, macOS, iPhone and Android, kept in the root package.json:
- * `version` (stable MAJOR.MINOR.PATCH) and `buildNumber` (yyMMddNN, shared by Android `versionCode` and Apple
- * `CFBundleVersion`, which both refuse to install over a larger value).
+ * `version` (MAJOR.MINOR.PATCH, or MAJOR.MINOR.PATCH-beta.N for the beta channel) and `buildNumber`
+ * (yyMMddNN, shared by Android `versionCode` and Apple `CFBundleVersion`, which both refuse to install
+ * over a larger value; Sparkle and TestFlight order builds by it too, across channels).
  *
  * The Android build reads package.json itself. XcodeGen cannot, so the two project.yml files carry
- * a copy that this script rewrites, and `--check` lets CI fail when they drift.
+ * a copy that this script rewrites, and `--check` lets CI fail when they drift. Apple's
+ * `MARKETING_VERSION` takes three integers only, so a beta's copy is its MAJOR.MINOR.PATCH.
  *
- *   pnpm version:bump            next build number, same version
- *   pnpm version:bump 0.6.0      new version and next build number
- *   pnpm version:check           verify the copies match
- *   pnpm version:bump --help     show usage without changing files
+ *   pnpm version:bump                 next build number, same version
+ *   pnpm version:bump 0.8.0           new version and next build number
+ *   pnpm version:bump 0.8.0-beta.1    a beta of 0.8.0
+ *   pnpm version:check                verify the copies match
+ *   pnpm version:bump --help          show usage without changing files
  */
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -21,7 +24,9 @@ const packagePath = resolve(root, 'package.json');
 const appleProjects = ['apps/macos/project.yml', 'apps/mobile/iosApp/project.yml'].map((path) => resolve(root, path));
 
 // `$` alone also matches before a final line break, which is not part of a version.
-const STABLE_VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$(?!\s)/;
+const RELEASE_VERSION = /^((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))(?:-beta\.([1-9]\d*))?$(?!\s)/;
+/** The MAJOR.MINOR.PATCH part, which is what Apple's MARKETING_VERSION accepts. */
+const marketingVersion = (version: string): string => RELEASE_VERSION.exec(version)![1];
 const VERSION_LINE = /("version":\s*")([^"]+)(")/;
 const BUILD_LINE = /("buildNumber":\s*)(\d+)/;
 const MARKETING_LINE = /^(\s*MARKETING_VERSION:\s*).*$/m;
@@ -31,7 +36,7 @@ function readPackage(): { text: string; version: string; build: number } {
   const text = readFileSync(packagePath, 'utf8');
   const version = text.match(VERSION_LINE)?.[2];
   const build = Number(text.match(BUILD_LINE)?.[2]);
-  if (!version || !STABLE_VERSION.test(version)) throw new Error(`package.json: invalid stable MAJOR.MINOR.PATCH "version" ${version}`);
+  if (!version || !RELEASE_VERSION.test(version)) throw new Error(`package.json: invalid "version" ${version}; expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N`);
   if (!Number.isSafeInteger(build) || build <= 0) throw new Error('package.json: missing "buildNumber"');
   return { text, version, build };
 }
@@ -48,7 +53,7 @@ function syncedYaml(text: string, version: string, build: number, path: string):
   if (!MARKETING_LINE.test(text) || !BUILD_SETTING_LINE.test(text)) {
     throw new Error(`${path}: MARKETING_VERSION / CURRENT_PROJECT_VERSION not found`);
   }
-  return text.replace(MARKETING_LINE, `$1${version}`).replace(BUILD_SETTING_LINE, `$1${build}`);
+  return text.replace(MARKETING_LINE, `$1${marketingVersion(version)}`).replace(BUILD_SETTING_LINE, `$1${build}`);
 }
 
 const args = process.argv.slice(2);
@@ -65,7 +70,7 @@ for (const arg of args) {
   } else {
     if (arg.startsWith('-')) throw new Error(`unknown option: ${arg}`);
     if (requested !== undefined) throw new Error('only one version may be specified');
-    if (!STABLE_VERSION.test(arg)) throw new Error(`expected a stable MAJOR.MINOR.PATCH version: ${arg}`);
+    if (!RELEASE_VERSION.test(arg)) throw new Error(`expected MAJOR.MINOR.PATCH or MAJOR.MINOR.PATCH-beta.N: ${arg}`);
     requested = arg;
   }
 }
@@ -73,12 +78,13 @@ if (checkOnly && requested !== undefined) throw new Error('--check does not acce
 if (help && (checkOnly || requested !== undefined)) throw new Error('--help / -h must be used alone');
 if (help) {
   console.log(`Usage:
-  pnpm version:bump [MAJOR.MINOR.PATCH]  Set a stable version and advance the build number
-  pnpm version:check                   Check version copies without changing files
-  pnpm version:bump --help             Show this help
+  pnpm version:bump [VERSION]  Set the version and advance the build number
+  pnpm version:check           Check version copies without changing files
+  pnpm version:bump --help     Show this help
 
-Without a version, version:bump keeps the current version and advances the build number.
-Pre-release versions and build metadata are not supported.`);
+VERSION is MAJOR.MINOR.PATCH, or MAJOR.MINOR.PATCH-beta.N for a beta. Without a version,
+version:bump keeps the current version and advances the build number. Other pre-release
+labels and build metadata are not supported.`);
   process.exit(0);
 }
 

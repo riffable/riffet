@@ -1,17 +1,22 @@
 #!/bin/bash
 # Builds a distributable Riffet.app: Release build with the bundled server, signed, notarized,
-# stapled, packed into a DMG, with a Sparkle appcast and the sha256 the Homebrew cask needs.
+# stapled, packed into a DMG, plus the Sparkle update archive and its signed appcast entry.
 #
 #   RIFFET_SIGN_IDENTITY="Developer ID Application: Name (TEAMID)" \
 #   RIFFET_TEAM_ID=TEAMID \
 #   RIFFET_NOTARY_PROFILE=riffet-notary \
-#   RIFFET_DOWNLOAD_PREFIX=https://github.com/riffable/riffet/releases/download/v0.1.0/ \
 #   apps/macos/scripts/release.sh [--skip-build]
+#
+# Output in build/dist: Riffet-<version>.dmg (download), Riffet-<version>.zip (what Sparkle installs)
+# and Riffet-<version>.appcast.json (its EdDSA signature and requirements). The appcast itself is
+# built from the published releases by scripts/build-appcast.ts (docs/RELEASE.md).
 #
 # Without RIFFET_SIGN_IDENTITY the app is ad-hoc signed and not notarized: fine for this Mac,
 # while another Mac's Gatekeeper asks for an explicit "打开" first (docs/MACOS.md, 需要拍板的决策).
-# The notary profile is created once with `xcrun notarytool store-credentials`. The Sparkle EdDSA
-# key lives in the login keychain (`generate_keys` from Sparkle's artifacts creates it).
+# Notarization uses either a keychain profile (`xcrun notarytool store-credentials`, RIFFET_NOTARY_PROFILE)
+# or an App Store Connect API key (RIFFET_NOTARY_KEY=<.p8 path>, RIFFET_NOTARY_KEY_ID, RIFFET_NOTARY_ISSUER),
+# which is what CI uses. The Sparkle EdDSA key comes from RIFFET_SPARKLE_KEY_FILE, or else the login
+# keychain (`generate_keys` from Sparkle's artifacts creates it).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -53,7 +58,19 @@ xcodebuild -project Riffet.xcodeproj -scheme Riffet -configuration Release -deri
   -archivePath "$ARCHIVE" archive "${settings[@]}" -quiet
 APP="$OUT/Riffet.app"
 ditto "$ARCHIVE/Products/Applications/Riffet.app" "$APP"
-VERSION="$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$APP/Contents/Info.plist")"
+# The full version (a beta's -beta.N included) names the files; the bundle carries MAJOR.MINOR.PATCH.
+VERSION="$(node -p "require('$REPO/package.json').version")"
+plist() { /usr/libexec/PlistBuddy -c "Print $1" "$APP/Contents/Info.plist"; }
+SHORT_VERSION="$(plist CFBundleShortVersionString)"
+BUILD="$(plist CFBundleVersion)"
+[[ "$SHORT_VERSION" == "${VERSION%%-*}" ]] || { echo "release: the app is $SHORT_VERSION, package.json is $VERSION; run pnpm version:check" >&2; exit 1; }
+
+notary=()
+if [[ -n "${RIFFET_NOTARY_KEY:-}" ]]; then
+  notary=(--key "$RIFFET_NOTARY_KEY" --key-id "${RIFFET_NOTARY_KEY_ID:?set RIFFET_NOTARY_KEY_ID}" --issuer "${RIFFET_NOTARY_ISSUER:?set RIFFET_NOTARY_ISSUER}")
+elif [[ -n "${RIFFET_NOTARY_PROFILE:-}" ]]; then
+  notary=(--keychain-profile "$RIFFET_NOTARY_PROFILE")
+fi
 
 if [[ "$IDENTITY" != "-" ]]; then
   # Inside out: each extension (<Name>.appex, entitlements at <Name>/<Name>.entitlements) with its own
@@ -67,9 +84,9 @@ if [[ "$IDENTITY" != "-" ]]; then
 fi
 codesign --verify --deep --strict --verbose=1 "$APP"
 
-if [[ "$IDENTITY" != "-" && -n "${RIFFET_NOTARY_PROFILE:-}" ]]; then
+if [[ "$IDENTITY" != "-" && ${#notary[@]} -gt 0 ]]; then
   ditto -c -k --keepParent "$APP" "$OUT/Riffet-notarize.zip"
-  xcrun notarytool submit "$OUT/Riffet-notarize.zip" --keychain-profile "$RIFFET_NOTARY_PROFILE" --wait
+  xcrun notarytool submit "$OUT/Riffet-notarize.zip" "${notary[@]}" --wait
   xcrun stapler staple "$APP"
   rm "$OUT/Riffet-notarize.zip"
 fi
@@ -84,17 +101,31 @@ hdiutil create -volname "Riffet $VERSION" -srcfolder "$STAGE" -ov -format UDZO "
 rm -rf "$STAGE"
 if [[ "$IDENTITY" != "-" ]]; then
   codesign --force --timestamp --sign "$IDENTITY" "$DMG"
-  if [[ -n "${RIFFET_NOTARY_PROFILE:-}" ]]; then
-    xcrun notarytool submit "$DMG" --keychain-profile "$RIFFET_NOTARY_PROFILE" --wait
+  if [[ ${#notary[@]} -gt 0 ]]; then
+    xcrun notarytool submit "$DMG" "${notary[@]}" --wait
     xcrun stapler staple "$DMG"
   fi
 fi
 
-# Sparkle appcast from the update archives in $OUT (generate_appcast signs them with the EdDSA key).
-GENERATE="$(find "$MACOS/build/DerivedData/SourcePackages/artifacts" -path '*Sparkle*/bin/generate_appcast' -type f 2>/dev/null | head -1)"
-if [[ -n "$GENERATE" && -n "${RIFFET_DOWNLOAD_PREFIX:-}" ]]; then
-  ditto -c -k --keepParent "$APP" "$OUT/Riffet-$VERSION.zip"
-  "$GENERATE" --download-url-prefix "$RIFFET_DOWNLOAD_PREFIX" "$OUT"
+# Sparkle installs the zipped (stapled) app. Its appcast entry is signed here, where the key is; the
+# feed that lists the entries of every published release is built when the site is deployed.
+SIGN="$(find "$MACOS/build/DerivedData/SourcePackages/artifacts" -path '*Sparkle*/bin/sign_update' -type f 2>/dev/null | head -1)"
+if [[ "$IDENTITY" != "-" && -n "$SIGN" ]]; then
+  ZIP="$OUT/Riffet-$VERSION.zip"
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  key=()
+  if [[ -n "${RIFFET_SPARKLE_KEY_FILE:-}" ]]; then key=(--ed-key-file "$RIFFET_SPARKLE_KEY_FILE"); fi
+  # Prints: sparkle:edSignature="…" length="…"
+  signature="$("$SIGN" ${key[@]+"${key[@]}"} "$ZIP")"
+  SIGNATURE="$(sed -n 's/.*edSignature="\([^"]*\)".*/\1/p' <<<"$signature")"
+  LENGTH="$(sed -n 's/.*length="\([0-9]*\)".*/\1/p' <<<"$signature")"
+  [[ -n "$SIGNATURE" && -n "$LENGTH" ]] || { echo "release: sign_update printed no signature" >&2; exit 1; }
+  VERSION="$VERSION" SHORT_VERSION="$SHORT_VERSION" BUILD="$BUILD" MINIMUM="$(plist LSMinimumSystemVersion)" \
+    FILE="$(basename "$ZIP")" SIGNATURE="$SIGNATURE" LENGTH="$LENGTH" node -e '
+      const e = process.env;
+      const entry = { version: e.VERSION, shortVersion: e.SHORT_VERSION, build: e.BUILD, minimumSystemVersion: e.MINIMUM,
+        file: e.FILE, length: Number(e.LENGTH), edSignature: e.SIGNATURE };
+      process.stdout.write(JSON.stringify(entry, null, 2) + "\n");' > "$OUT/Riffet-$VERSION.appcast.json"
 fi
 
 SHA="$(shasum -a 256 "$DMG" | awk '{print $1}')"

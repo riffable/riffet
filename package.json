@@ -56,6 +56,8 @@
     "gen:prompts:check": "tsx scripts/gen-prompts.ts --check",
     "version:bump": "tsx scripts/version.ts",
     "version:check": "tsx scripts/version.ts --check",
+    "release:notes": "node scripts/release.mjs notes",
+    "release:prepare": "node scripts/release.mjs prepare",
     "gen:marks": "tsx scripts/gen-agent-marks.ts",
     "gen:marks:check": "tsx scripts/gen-agent-marks.ts --check",
     "build:plugin-sdk": "node scripts/build-plugin-sdk.mjs",

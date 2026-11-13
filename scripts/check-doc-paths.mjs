@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Keeps repo paths named in Markdown honest: a file that moved or was renamed must not leave a dead
 // reference behind. Usage: `node scripts/check-doc-paths.mjs` (exit 1 on findings).
-// Checks Markdown known to git (tracked, or new and not ignored; not ref/, CHANGELOG.md, third-party notices):
+// Checks Markdown known to git (tracked, or new and not ignored; not ref/, the changelogs, third-party notices):
 // - backtick spans that look like repo paths: they contain `/` and either start with a tracked
 //   top-level entry or end in a source/doc extension; an optional `:line`, `:line-line` or `#anchor`
 //   suffix is ignored; resolved from the repo root, and from the file's directory for `./` `../`.
@@ -25,7 +25,7 @@ const git = (args, input) => execFileSync('git', args, { cwd: root, encoding: 'u
 
 const tracked = git(['ls-files', '-z', '--cached', '--others', '--exclude-standard']).split('\0').filter(Boolean);
 const topLevel = new Set(tracked.map((f) => f.split('/')[0]));
-const EXCLUDED = /^(ref\/|CHANGELOG\.md$)|(^|\/)node_modules\/|(^|\/)(NOTICE|Acknowledgements|THIRD[-_ ]?PARTY|LICENSE)[^/]*$/i;
+const EXCLUDED = /^(ref\/|CHANGELOG(\.zh-CN)?\.md$)|(^|\/)node_modules\/|(^|\/)(NOTICE|Acknowledgements|THIRD[-_ ]?PARTY|LICENSE)[^/]*$/i;
 const docs = tracked.filter((f) => f.endsWith('.md') && !EXCLUDED.test(f) && existsSync(resolve(root, f)));
 
 const EXT = /\.(?:ts|tsx|js|mjs|cjs|jsx|json|kt|kts|swift|md|yml|yaml|sh|css|html|toml|xml|gradle|properties|plist|xcstrings|sql|py|png|svg)$/;

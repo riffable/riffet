@@ -1,41 +1,41 @@
-# 变更记录
+# Changelog
 
-只记录使用者能感知的变化。
+User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
-## 未发布
+## Unreleased
 
 ## 0.7.0 - 2026-11-12
 
-首个公开版本，以 Apache-2.0 开源。
+First public release, open source under Apache-2.0.
 
-### 后端
+### Backends
 
-- 驱动本机已安装、已登录的官方 CLI，并就地读取它们的会话存储：Cursor（`cursor-agent`）、Claude Code（`claude`）、Codex（`codex`）、DeepSeek Harness（`dsh`）、Factory Droid（`droid`）、TRAE CLI（`traex`）、pi（`pi`）。各后端能力见 README 的能力矩阵。
-- 终端里已有的 CLI 会话可以导入后继续；Riffet 里的会话也可以交还到终端继续。
-- `riffet doctor` 显示各 CLI 的版本，并标出低于最低可用版本或高于已验证版本的情况。
+- Drives the official CLIs already installed and signed in on the machine, and reads their session stores in place: Cursor (`cursor-agent`), Claude Code (`claude`), Codex (`codex`), DeepSeek Harness (`dsh`), Factory Droid (`droid`), TRAE CLI (`traex`) and pi (`pi`). See the capability matrix in the README for what each backend supports.
+- A CLI session already running in a terminal can be imported and continued; a Riffet session can be handed back to the terminal.
+- `riffet doctor` shows each CLI's version and flags versions below the minimum supported or above the last verified one.
 
-### 工作台
+### Workbench
 
-- 时间线折叠连续的工具调用，修改可展开为 Diff，子 Agent 有独立的转录页；Mermaid、D2、Graphviz、PlantUML、Vega-Lite 与 KaTeX 在本地渲染。
-- 支持 TUI 的后端可在结构化对话与背后的终端之间切换；关闭客户端后会话在主机上继续运行。
-- 运行中引导、侧边聊天、快速对话、高亮与收藏、会话分享与 PDF 导出、用量统计。
-- 对着 Diff 写审阅批注；2–4 路并行尝试（每路一个 Git worktree）；会话交接给另一个后端、从任意回合分叉、恢复检查点；推送分支与创建 GitHub PR 通过本机 `gh` 完成。
-- 20 多种文件格式本地预览，包括 PDF、Office 文档、Jupyter Notebook、SQLite、3D 模型与压缩包。
-- 插件接口 `@riffet/plugin-api`：模型源、工作台视图、配色主题与原生运行时附属进程。
+- The timeline folds consecutive tool calls, edits expand into diffs, and subagents get their own transcript page; Mermaid, D2, Graphviz, PlantUML, Vega-Lite and KaTeX render locally.
+- Backends with a TUI can switch between the structured conversation and the terminal behind it; sessions keep running on the host after the client closes.
+- Steering a running turn, side chats, quick chats, highlights and bookmarks, session sharing and PDF export, usage statistics.
+- Review comments on diffs; 2–4 parallel attempts, each in its own Git worktree; handing a session to another backend, forking from any turn, restoring checkpoints; pushing branches and opening GitHub pull requests through the local `gh`.
+- Local previews for more than 20 file formats, including PDF, Office documents, Jupyter notebooks, SQLite, 3D models and archives.
+- Plugin API `@riffet/plugin-api`: model sources, workbench views, color themes and native runtime companion processes.
 
-### 客户端与通道
+### Clients and channels
 
-- Web：中英文界面，可安装为 PWA。
-- macOS（15+）：SwiftUI + AppKit 原生应用，内置服务端，菜单栏常驻与全局快速提问。
-- iPhone 与 Android：扫码配对，可在多台服务器间切换；审批、Diff、远端目录与触控终端。
-- 飞书 / Lark 机器人：服务端主动建立出站连接，不需要公网入口；私聊或群话题内新建与续聊会话，审批在聊天里完成。
-- Android 预览：Agent 可在两道确认下读取和操作已配对的手机，并给自己的会话定一次性唤醒。
+- Web: English and Chinese interface, installable as a PWA.
+- macOS (15+): native SwiftUI + AppKit app with a bundled server, a menu bar presence and a global quick-ask shortcut.
+- iPhone and Android: pairing by QR code, switching between several servers; approvals, diffs, remote folders and a touch terminal.
+- Feishu / Lark bot: the server opens the connection outward, so no public endpoint is needed; new and continued sessions in direct messages or group topics, with approvals answered in the chat.
+- Android preview: with two confirmations, an agent can read and operate a paired phone and schedule one-off wake-ups of its own session.
 
-### 安全
+### Security
 
-- 默认只监听本机回环地址；远程设备经一次性配对码接入。令牌权限、局域网明文与密钥存储的边界见 [SECURITY.md](docs/SECURITY.md)。
+- Listens on the loopback address only by default; remote devices join with a one-time pairing code. Token scopes, plain HTTP on the LAN and key storage are described in [SECURITY.md](docs/SECURITY.md).
 
-### 已知限制
+### Known limitations
 
-- 目前只提供源码安装；npm 包、macOS DMG 与 Android APK 尚未发布。
-- 不支持 Windows。
+- Source installation only for now; the npm package, macOS DMG and Android APK are not published yet.
+- Windows is not supported.
