@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdirSync } from 'node:fs';
 import { readFile, readlink, realpath } from 'node:fs/promises';
 import { constants as osConstants, homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type TerminalAppearance, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
+import { TERMINAL_SCROLLBACK_ROWS, type NativeBackendId, type Project, type Session, type TerminalAppearance, type TerminalInfo, type TerminalServerMessage } from '../../../../packages/contracts/src/index.js';
 import { normalizeWarmup } from '../session-identity.js';
 import { terminalEnvironment } from '../environment.js';
 import { AppError, requireString } from '../errors.js';
@@ -207,7 +207,11 @@ const ATTACH_STABLE_MS = 5000;
 const PANE_HANGUP_GRACE_MS = 1000;
 /** tmux option holding a native launch's marker; the name predates other drivers and live panes still carry it. */
 const LAUNCH_MARKER_OPTION = '@riffet-codex-launch';
+/** tmux option holding the pane process the marker was written for; a pane whose process is another one has no record. */
+const LAUNCH_PID_OPTION = '@riffet-launch-pid';
 const LAUNCH_MARKER = /^[a-f0-9]{64}$/;
+/** How long one read of every pane's launch record answers later readers; tmux is asked once for all of them. */
+const LAUNCH_RECORDS_FRESH_MS = 750;
 const MAX_PANE_PROCESSES = 32;
 /**
  * Per-command cap inside a pane lookup's budget. A cold `lsof` or a tmux server busy with a
@@ -224,6 +228,16 @@ function lookupStepTimeout(deadline: number): number {
 export interface PaneProcess {
   pid: number;
   argv: string[];
+  /** The pane's own process, the one tmux started, rather than one of its descendants. */
+  root?: boolean;
+}
+
+/** A pane as tmux reports it, with the launch record written beside it. */
+interface PaneLaunchRecord {
+  panePid: number;
+  dead: boolean;
+  marker?: string;
+  launchPid?: number;
 }
 
 function validDimension(value: number | undefined, fallback: number): number {
@@ -326,6 +340,7 @@ export class TerminalService {
   /** Capability of the tmux server on our socket, not the version of a different CLI binary. */
   private tmuxPaneFeatures?: Promise<boolean>;
   private tmuxVersion?: Promise<string>;
+  private launchRecordRead?: { at: number; read: Promise<Map<string, PaneLaunchRecord> | undefined> };
   /** Kept as a resolved compatibility barrier; restoration is now scoped to one terminal. */
   private readonly ready = Promise.resolve();
   private readonly restorations = new Map<string, Promise<void>>();
@@ -462,14 +477,13 @@ export class TerminalService {
         '-x', String(cols), '-y', String(rows), '-s', terminalName(terminalId), '-c', currentProject.cwd, command, ...args,
         // Per window, never `-g`: tmux 3.6b's server exits when a session is created while the global option is `manual`.
         ';', 'set-option', '-w', '-t', terminalName(terminalId), 'window-size', 'manual',
+        // The driver's opaque launch fingerprint, bound to the pane process it describes in the same
+        // command as the launch, so no reader can see one without the other (`paneLaunchMarker`).
+        ...(launchMarker ? this.launchRecordCommands(terminalId, launchMarker) : []),
         ...(await this.paneFeatures().catch(() => false) ? this.appearanceCommands(terminalId, appearance) : []),
       ],5000,env);
+      if (launchMarker) this.launchRecordRead = undefined;
       await this.runTmux(['set-hook', '-t', terminalName(terminalId), 'pane-died', `detach-client -s ${terminalName(terminalId)}`]);
-      // Retain only the driver's opaque launch fingerprint in tmux. Recovery still requires matching
-      // arguments and process cwd from the live pane; the marker alone proves nothing.
-      if (launchMarker) {
-        await this.runTmux(['set-option', '-t', terminalName(terminalId), LAUNCH_MARKER_OPTION, launchMarker], 500).catch(() => undefined);
-      }
       this.store.saveTerminal(info);
       if (input.sessionId) {
         const linked = this.store.getSession(input.sessionId);
@@ -1155,12 +1169,7 @@ export class TerminalService {
     const { deadline, select } = options;
     await this.ready;
     if (Date.now() >= deadline) return undefined;
-    const linked = () => {
-      const terminal = this.store.getTerminal(terminalId);
-      const session = this.store.getSession(sessionId);
-      return terminal.kind === 'native' && terminal.state !== 'exited' && terminal.sessionId === sessionId
-        && session.kind === 'native' && session.terminalId === terminalId ? session : undefined;
-    };
+    const linked = () => this.linkedNativeSession(terminalId, sessionId);
     const session = linked();
     if (!session) return undefined;
     const expectedCwd = await realpath(this.store.getProject(session.projectId).cwd);
@@ -1186,9 +1195,84 @@ export class TerminalService {
       if (!processCwd) continue;
       const canonicalProcessCwd = await realpath(processCwd).catch(() => undefined);
       if (canonicalProcessCwd !== expectedCwd) continue;
-      found.push({ pid, argv });
+      found.push({ pid, argv, ...(pid === panePid ? { root: true } : {}) });
     }
     return Date.now() < deadline && linked() ? found : undefined;
+  }
+
+  /**
+   * The launch marker of a session's linked native terminal, while the pane still runs the very
+   * process the marker was written for. tmux starts the launch command as the pane's own process,
+   * whose argv does not change, and Riffet never respawns a pane, so the marker and that process
+   * together identify the launch without scanning the process tree. Every caller shares one
+   * `list-panes` for all panes. Undefined when there is no such record, the link does not hold, or
+   * tmux did not answer; a caller that needs certainty then falls back to `inspectPane`.
+   */
+  async paneLaunchMarker(terminalId: string, sessionId: string): Promise<string | undefined> {
+    await this.ready;
+    if (!this.linkedNativeSession(terminalId, sessionId)) return undefined;
+    const record = (await this.launchRecords())?.get(terminalName(terminalId));
+    if (!record || record.dead || !record.marker || record.launchPid !== record.panePid) return undefined;
+    return this.linkedNativeSession(terminalId, sessionId) ? record.marker : undefined;
+  }
+
+  /**
+   * Records [marker] for a pane whose own process [pid] a full `inspectPane` lookup just matched to
+   * it, so later checks of a terminal launched without a record (before records existed, or by an
+   * earlier build) can use `paneLaunchMarker`. Nothing is written once the pane runs another process.
+   */
+  async adoptPaneLaunch(terminalId: string, sessionId: string, marker: string, pid: number): Promise<void> {
+    await this.ready;
+    if (!LAUNCH_MARKER.test(marker) || !this.linkedNativeSession(terminalId, sessionId)) return;
+    if (await this.livePanePid(terminalId, LOOKUP_STEP_MS) !== pid || !this.linkedNativeSession(terminalId, sessionId)) return;
+    const name = terminalName(terminalId);
+    await this.runTmux(['set-option', '-t', name, LAUNCH_MARKER_OPTION, marker, ';', 'set-option', '-t', name, LAUNCH_PID_OPTION, String(pid)], LOOKUP_STEP_MS)
+      .catch(() => undefined);
+    this.launchRecordRead = undefined;
+  }
+
+  private linkedNativeSession(terminalId: string, sessionId: string): Session | undefined {
+    const terminal = this.store.getTerminal(terminalId);
+    const session = this.store.getSession(sessionId);
+    return terminal.kind === 'native' && terminal.state !== 'exited' && terminal.sessionId === sessionId
+      && session.kind === 'native' && session.terminalId === terminalId ? session : undefined;
+  }
+
+  /** Written in the launching tmux command itself, so the marker is never there without the pane process it describes. */
+  private launchRecordCommands(id: string, marker: string): string[] {
+    const name = terminalName(id);
+    return [';', 'set-option', '-t', name, LAUNCH_MARKER_OPTION, marker, ';', 'set-option', '-F', '-t', name, LAUNCH_PID_OPTION, '#{pane_pid}'];
+  }
+
+  /** Every pane's launch record from one tmux read, shared by the callers that ask while it is fresh. */
+  private async launchRecords(): Promise<Map<string, PaneLaunchRecord> | undefined> {
+    const current = this.launchRecordRead;
+    if (current && Date.now() - current.at < LAUNCH_RECORDS_FRESH_MS) return await current.read;
+    const read = this.runTmux(['list-panes', '-a', '-F', `#{session_name}\t#{pane_pid}\t#{pane_dead}\t#{${LAUNCH_MARKER_OPTION}}\t#{${LAUNCH_PID_OPTION}}`], 3000)
+      .then(output => {
+        const records = new Map<string, PaneLaunchRecord>();
+        for (const line of output.split('\n')) {
+          const [name, pane, dead, marker, launch] = line.trim().split('\t');
+          const panePid = Number(pane), launchPid = Number(launch);
+          if (!name || !Number.isSafeInteger(panePid) || panePid < 1) continue;
+          // A session with more than one pane is not a launch this service made; it has no record.
+          if (records.has(name)) { records.set(name, { panePid, dead: true }); continue; }
+          records.set(name, {
+            panePid,
+            dead: dead === '1',
+            ...(marker && LAUNCH_MARKER.test(marker) ? { marker } : {}),
+            ...(Number.isSafeInteger(launchPid) && launchPid > 0 ? { launchPid } : {}),
+          });
+        }
+        return records;
+      })
+      .catch(() => undefined);
+    const entry = { at: Date.now(), read };
+    this.launchRecordRead = entry;
+    const records = await read;
+    // A failed read is not kept: the next caller asks tmux again.
+    if (!records && this.launchRecordRead === entry) this.launchRecordRead = undefined;
+    return records;
   }
 
   private async paneProcessTree(rootPid: number, deadline: number): Promise<number[]> {

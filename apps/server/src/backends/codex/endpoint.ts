@@ -58,23 +58,36 @@ const LOOKUP_BUDGET_MS = 5000;
 
 /**
  * Finds the app-server endpoint used by the Codex TUI inside this conversation's own linked
- * terminal. It only observes the pane's process tree; it never starts, resumes, stops or signals
- * Codex. Any doubt (another thread, a stale launch marker, two endpoints) answers `undefined`.
+ * terminal. It never starts, resumes, stops or signals Codex. Any doubt (another thread, a stale
+ * launch marker, two endpoints) answers `undefined`.
+ *
+ * A pane still running the process Riffet launched with `expected` answers from its launch record
+ * alone: one shared tmux read, rather than a process-tree scan per conversation that a busy tmux
+ * server or event loop turns into a timeout once several run at once. Anything else is scanned, and
+ * a pane whose own process the scan matched gets that record for its next check.
  */
 export async function codexTerminalEndpoint(
   host: Pick<NativeBackendHost, 'getSession' | 'getProject' | 'terminal'>,
-  sessionId: string, terminalId: string, threadId: string, cwd: string,
+  sessionId: string, terminalId: string, threadId: string, cwd: string, expected?: string,
 ): Promise<string | undefined> {
+  const linked = () => {
+    const session = host.getSession(sessionId);
+    return session.kind === 'native' && APP_SERVER_BACKEND_IDS.has(session.backendId ?? '')
+      && session.nativeSessionId === threadId && session.terminalId === terminalId;
+  };
+  if (expected && isAppServerEndpoint(expected) && host.terminal.paneLaunchMarker) {
+    try {
+      if (linked() && resolve(cwd) === resolve(host.getProject(host.getSession(sessionId).projectId).cwd)) {
+        const marker = await host.terminal.paneLaunchMarker(terminalId, sessionId);
+        if (marker && marker === codexInvocationFingerprint({ cwd, threadId, endpoint: expected }) && linked()) return expected;
+      }
+    } catch { /* The scan below decides. */ }
+  }
   const deadline = Date.now() + LOOKUP_BUDGET_MS;
   const inspect = host.terminal.inspectPane;
   if (!inspect) return undefined;
   let timer: NodeJS.Timeout | undefined;
   try {
-    const linked = () => {
-      const session = host.getSession(sessionId);
-      return session.kind === 'native' && APP_SERVER_BACKEND_IDS.has(session.backendId ?? '')
-        && session.nativeSessionId === threadId && session.terminalId === terminalId;
-    };
     if (!linked() || resolve(cwd) !== resolve(host.getProject(host.getSession(sessionId).projectId).cwd)) return undefined;
     const processes = await Promise.race([
       inspect.call(host.terminal, terminalId, sessionId, {
@@ -91,7 +104,14 @@ export async function codexTerminalEndpoint(
     ]);
     if (!processes || Date.now() >= deadline || !linked()) return undefined;
     const endpoints = new Set(processes.map(({ argv }) => codexInvocation(argv, cwd, threadId)?.endpoint).filter(Boolean));
-    return endpoints.size === 1 ? [...endpoints][0] : undefined;
+    if (endpoints.size !== 1) return undefined;
+    const endpoint = [...endpoints][0]!;
+    const root = processes.find(item => item.root);
+    const invocation = root && codexInvocation(root.argv, cwd, threadId);
+    if (invocation && host.terminal.adoptPaneLaunch) {
+      await host.terminal.adoptPaneLaunch(terminalId, sessionId, codexInvocationFingerprint(invocation), root.pid).catch(() => undefined);
+    }
+    return endpoint;
   } catch {
     // This is an advisory recovery hint. Permission errors, races, and stale tmux metadata
     // must not interfere with the session's normal recovery path.

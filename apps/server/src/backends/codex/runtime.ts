@@ -513,13 +513,24 @@ export class CodexSessionRuntime implements CodexThreadReader {
       : `This ${this.label} terminal's backend connection could not be verified.`;
   }
 
+  /**
+   * Writes stay blocked either way, but only a terminal proven to use another app-server is a
+   * conflict. One that could not be verified yet is retried and reads as reconnecting.
+   */
+  private endpointConnection(): NonNullable<NativeStatus['connection']> {
+    return { state: this.terminalEndpointStateValue === 'changed' ? 'conflict' : 'reconnecting', message: this.endpointConflictMessage() };
+  }
+
+  /** Writes wait for the terminal's endpoint to be verified again. */
+  get endpointBlocked(): boolean { return this.endpointWriteConflict; }
+
   private deferForEndpointConflict(): void {
     const message = this.endpointConflictMessage();
     if (!this.endpointWriteConflict || this.status.connection?.message !== message) {
       this.logRecovery('terminal', this.transport?.remoteAddress ?? 'unknown', 'verify', this.terminalEndpointStateValue === 'changed' ? 'changed' : 'unverified', false);
     }
     this.endpointWriteConflict = true;
-    this.setConnection({ state: 'conflict', message }, 'endpoint');
+    this.setConnection(this.endpointConnection(), 'endpoint');
   }
 
   get projectCwd(): string { return this.project.cwd; }
@@ -746,7 +757,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
       // cold history reader remains offline until it explicitly resumes a confirmed loaded owner.
       phase: this.turnPhase('offline'),
       connection: this.endpointWriteConflict
-        ? { state: 'conflict', message: this.endpointConflictMessage() }
+        ? this.endpointConnection()
         : this.bindingScopeMismatch
         ? { state: 'conflict', message: `The ${this.label} profile changed. Restore the previous profile or explicitly end its ${this.label} backend, then retry.` }
         : { state: 'disconnected' },
@@ -1184,6 +1195,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
   }
 
   private confirmTerminalEndpoint(state: 'absent' | 'verified'): 'absent' | 'verified' {
+    const wasBlocked = this.endpointWriteConflict;
     this.endpointWriteConflict = false;
     this.terminalEndpointStateValue = state;
     this.terminalEndpointCheckedAt = Date.now();
@@ -1195,14 +1207,14 @@ export class CodexSessionRuntime implements CodexThreadReader {
         phase: this.status.phase === 'offline' || this.status.phase === 'starting' ? this.activeTurnId ? 'busy' : 'idle' : this.status.phase,
         connection: { state: 'connected' },
       });
-    } else if (this.status.connection?.state === 'conflict') {
+    } else if (this.status.connection?.state === 'conflict' || wasBlocked) {
       this.setStatus({ ...this.status, phase: 'offline', connection: { state: 'disconnected' } });
     }
     return state;
   }
 
   private async terminalEndpoint(terminalId: string, threadId: string): Promise<string | undefined> {
-    return await codexTerminalEndpoint(this.host, this.session.id, terminalId, threadId, this.project.cwd);
+    return await codexTerminalEndpoint(this.host, this.session.id, terminalId, threadId, this.project.cwd, this.transport?.remoteAddress);
   }
 
   private async loadedThread(threadId: string, fresh = false): Promise<boolean | undefined> {
@@ -1992,7 +2004,7 @@ export class CodexSessionRuntime implements CodexThreadReader {
     }
     if (!this.attached && this.nativeSessionId && this.transcriptLoaded) {
       await this.loadedThread(this.nativeSessionId).catch(() => undefined);
-      const connection = this.status.connection?.state === 'conflict'
+      const connection = this.status.connection?.state === 'conflict' || this.endpointWriteConflict
         ? this.status.connection
         : { state: 'disconnected' as const };
       this.setStatus({ ...this.status, phase: 'offline', connection });

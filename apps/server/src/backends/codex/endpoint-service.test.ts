@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import type { ExecFileException } from 'node:child_process';
 import { Store } from '../../store.js';
 import { TerminalService } from '../../terminal/service.js';
-import { codexTerminalEndpoint } from './endpoint.js';
+import { codexInvocationFingerprint, codexTerminalEndpoint } from './endpoint.js';
 
 const state = vi.hoisted(() => ({
   execFile: vi.fn(),
@@ -14,6 +14,8 @@ const state = vi.hoisted(() => ({
   processArgv: {} as Record<string, string[]>,
   processCwd: {} as Record<string, string>,
   marker: undefined as string | undefined,
+  /** The pane process the marker was written for (`@riffet-launch-pid`). */
+  launchPid: undefined as number | undefined,
   panePid: 101,
   calls: [] as Array<{ command: string; args: string[] }>,
 }));
@@ -82,9 +84,15 @@ function fakeExecFile(): void {
     let error: ExecFileException | null = null;
     let stdout = '';
     if (command === 'tmux') {
-      const tmuxCommand = args.find((arg) => ['has-session', 'list-panes', 'show-option'].includes(arg));
+      const tmuxCommand = args.find((arg) => ['has-session', 'list-panes', 'show-option', 'set-option'].includes(arg));
       if (tmuxCommand === 'has-session') stdout = '';
-      else if (tmuxCommand === 'list-panes') stdout = `${state.panePid}\n`;
+      else if (tmuxCommand === 'list-panes' && args.includes('-a')) {
+        stdout = `cw-${terminalId.replaceAll('-', '').slice(0, 20)}\t${state.panePid}\t0\t${state.marker ?? ''}\t${state.launchPid ?? ''}\n`;
+      } else if (tmuxCommand === 'list-panes') stdout = `${state.panePid}\n`;
+      else if (tmuxCommand === 'set-option') {
+        state.marker = args[args.indexOf('@riffet-codex-launch') + 1];
+        state.launchPid = Number(args[args.indexOf('@riffet-launch-pid') + 1]);
+      }
       else if (tmuxCommand === 'show-option') {
         if (state.marker) stdout = `${state.marker}\n`;
         else error = failure();
@@ -133,6 +141,7 @@ describe('codexTerminalEndpoint', () => {
     state.processArgv = {};
     state.processCwd = {};
     state.marker = undefined;
+    state.launchPid = undefined;
     state.panePid = panePid;
     state.calls = [];
     fakeExecFile();
@@ -160,9 +169,10 @@ describe('codexTerminalEndpoint', () => {
     service = new TerminalService(store, { stateDir: join(directory, 'state') });
   });
 
-  const lookup = (thread: string, directory: string) => codexTerminalEndpoint({
+  const lookup = (thread: string, directory: string, expected?: string) => codexTerminalEndpoint({
     getSession: id => store.getSession(id), getProject: id => store.getProject(id), terminal: service,
-  }, sessionId, terminalId, thread, directory);
+  }, sessionId, terminalId, thread, directory, expected);
+  const scanned = () => state.calls.some(({ command }) => command === 'pgrep' || command === 'ps' || command === 'lsof');
 
   afterEach(() => {
     vi.useRealTimers();
@@ -236,6 +246,34 @@ describe('codexTerminalEndpoint', () => {
     state.marker = 'f'.repeat(64);
 
     expect(await lookup(threadId, cwd)).toBeUndefined();
+  });
+
+  it('verifies concurrent checks from one shared read of the launch record, without a process scan', async () => {
+    const endpoint = 'unix:///tmp/codex-owner.sock';
+    state.marker = codexInvocationFingerprint({ cwd, threadId, endpoint });
+    state.launchPid = panePid;
+
+    expect(await Promise.all(Array.from({ length: 8 }, () => lookup(threadId, cwd, endpoint)))).toEqual(Array(8).fill(endpoint));
+    expect(state.calls.filter(({ command, args }) => command === 'tmux' && args.includes('list-panes'))).toHaveLength(1);
+    expect(scanned()).toBe(false);
+    // A record for another endpoint proves nothing about this one: the pane is scanned.
+    expect(await lookup(threadId, cwd, 'unix:///tmp/codex-other.sock')).toBeUndefined();
+    expect(scanned()).toBe(true);
+  });
+
+  it('scans a pane whose process is not the recorded one, then records the matched launch for the next check', async () => {
+    const endpoint = 'unix:///tmp/codex-adopted.sock';
+    addCandidate(panePid, endpoint, cwd);
+    state.marker = codexInvocationFingerprint({ cwd, threadId, endpoint });
+    state.launchPid = panePid + 1000;
+
+    expect(await lookup(threadId, cwd, endpoint)).toBe(endpoint);
+    expect(scanned()).toBe(true);
+    expect(state.launchPid).toBe(panePid);
+
+    state.calls = [];
+    expect(await lookup(threadId, cwd, endpoint)).toBe(endpoint);
+    expect(scanned()).toBe(false);
   });
 
   it('stops the pane scan when its lookup budget expires', async () => {

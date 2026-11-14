@@ -1085,7 +1085,7 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       let endpointChanged = false;
       current?.syncSessionBinding(session, project, profile);
       if (current?.transport?.isOnline && current.projectCwd === project.cwd && current.nativeSessionId === session.nativeSessionId) {
-        const endpointState = await current.terminalEndpointState(forceEndpointCheck || current.status.connection?.state === 'conflict');
+        const endpointState = await current.terminalEndpointState(forceEndpointCheck || current.endpointBlocked || current.status.connection?.state === 'conflict');
         // A cold reader's replacement leaves the dead binding saved; that binding is not a new owner.
         endpointChanged = endpointState === 'changed' || current.bindingMoved(session.nativeRuntime?.address);
         const latest = this.runtimes.get(session.id);

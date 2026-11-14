@@ -14,7 +14,7 @@ import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent
 export type NativeTerminalControls = Pick<TerminalService,
   'get' | 'screen' | 'paste' | 'sendKeys' | 'stop' | 'observe' | 'subscribe' | 'withInteraction' | 'panePid'
   | 'createWarmup' | 'claimWarmup' | 'extendWarmup' | 'listWarmups' | 'stopWarmup'>
-  & Partial<Pick<TerminalService, 'inspectPane'>>;
+  & Partial<Pick<TerminalService, 'inspectPane' | 'paneLaunchMarker' | 'adoptPaneLaunch'>>;
 
 /** Server-only profile settings. Keep secrets and provider command details out of HTTP responses. */
 export interface NativeBackendProfileConfig extends NativeBackendProfile {
@@ -39,8 +39,9 @@ export interface NativePtyLaunchSpec {
   cwd: string;
   title?: string;
   /**
-   * An opaque, secret-free fingerprint (64 hex digits) kept beside the pane, so the driver can tell
-   * its own launch from a look-alike in `inspectPane` later.
+   * An opaque, secret-free fingerprint (64 hex digits) kept beside the pane with the pane process it
+   * was written for, so the driver can tell its own launch from a look-alike later (`paneLaunchMarker`,
+   * `inspectPane`).
    */
   launchMarker?: string;
   /** The terminal kind clients see; `native` unless the backend is the first one Riffet had (`cursor`, the value old clients know). */

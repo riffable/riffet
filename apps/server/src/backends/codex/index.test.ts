@@ -1525,7 +1525,8 @@ describe('Codex native protocol controls', () => {
     await expect(h.send('cmd-terminal-unknown')).rejects.toMatchObject({ code: 'NATIVE_ENDPOINT_CONFLICT' });
     expect(h.factoryCalls).toHaveLength(factoryCallCount);
     expect(current.requestParams.filter(request => ['thread/start', 'thread/resume', 'turn/start'].includes(request.method))).toHaveLength(writerCallCount);
-    expect(h.adapter.status(h.host, h.session).connection?.state).toBe('conflict');
+    // Not verified is not a different owner: writes wait, and the session reads as reconnecting.
+    expect(h.adapter.status(h.host, h.session).connection?.state).toBe('reconnecting');
 
     h.setTerminalEndpoint(current.remoteAddress);
     await h.send('cmd-terminal-verified');
