@@ -288,6 +288,40 @@ describe('NativeDispatcher durable delivery', () => {
   const cleanups: Array<() => Promise<void> | void> = [];
   afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
 
+  it.each([false, true])('retains an offline session message through recovery (fails: %s)', async fails => {
+    const { store, createSession, accept, workspace, makeRuntime } = setup();
+    const session = store.updateSession(createSession().id, { nativeSessionId: 'saved-conversation' });
+    const run = accept(session.id, 'recover-and-send', 'continue the task');
+    const runtime = makeRuntime(), backend = new FakeNative(store), gate = deferred();
+    backend.currentStatus = { phase: 'offline' };
+    backend.argvInitialPrompt = false;
+    runtime.blockedSessionId = session.id;
+    runtime.gate = gate.promise;
+    if (fails) runtime.ensureError = new Error('Saved conversation could not be restored');
+    const send = dispatcher(store, backend, runtime, workspace);
+    cleanups.push(() => store.close(), () => send.close());
+    send.kick();
+    await until(() => runtime.ensureCalls.length === 1, 'pending recovery');
+    expect(store.getRun(run.id)).toMatchObject({
+      commandId: 'recover-and-send', prompt: 'continue the task',
+      native: { delivery: 'preparing', stage: 'resuming', input: input('continue the task') },
+    });
+    expect(backend.writes).toEqual([]);
+    gate.resolve();
+    await until(() => store.getRun(run.id).native?.delivery === (fails ? 'failed' : 'input_sent'), 'recovery result');
+    const retained = accept(session.id, 'recover-and-send', 'continue the task');
+    expect(retained.id).toBe(run.id);
+    send.kick();
+    await pause();
+    expect(runtime.ensureCalls).toEqual([session.id]);
+    expect(backend.writes).toEqual(fails ? [] : [{ sessionId: session.id, text: 'continue the task' }]);
+    expect(store.getRun(run.id)).toMatchObject({
+      commandId: 'recover-and-send', prompt: 'continue the task',
+      native: { input: input('continue the task'), stage: fails ? 'prepare' : 'confirmation' },
+      ...(fails ? { state: 'failed', error: 'Saved conversation could not be restored' } : {}),
+    });
+  });
+
   it.each(['cancel', 'close'] as const)('does not start a CLI when %s happens while its checkpoint is pending', async action => {
     const { store, createSession, accept, workspace, makeRuntime } = setup();
     const session = createSession(), run = accept(session.id, 'checkpoint-pending', 'inspect once');

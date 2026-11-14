@@ -24,9 +24,10 @@ export interface ContextUsage extends Omit<NativeContext, 'breakdown'> {
 }
 
 /** Only an explicit pre-delivery rejection can become a new sendable draft. */
-export function canRestoreFailedSteer(run: Run | undefined): boolean {
+export function canRestoreUnsentRun(run: Run | undefined): boolean {
   const native = run?.native;
   return run?.state === 'failed' && native?.delivery === 'failed'
-    && (native.stage === 'steer_rejected' || native.stage === 'outbox_failure')
+    && (native.stage === 'steer_rejected' || native.stage === 'outbox_failure'
+      || native.stage === 'prepare' && native.timings?.dispatchAt === undefined)
     && !native.nativeMessageId && native.timings?.observedAt === undefined && native.timings?.providerAcceptedAt === undefined;
 }

@@ -23,7 +23,7 @@ import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
 import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
-import { canRestoreFailedSteer, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
+import { canRestoreUnsentRun, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
 import { activeToolStates, currentToolActivity, stripRoot, toolAction, toolDetail, toolDiffStats, toolView, type ToolView } from './toolView';
 import { promptFromTranscript, SubagentContext, specificSubagentLabel, useNativeJob, useSubagentRunning, useSubagentTranscript } from './subagents';
 import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, BackgroundTaskStatus, RowOutcome, StopButton } from './Activities';
@@ -52,7 +52,8 @@ export function nativeDeliveryLabel(run: Run, stopShown = true): string {
   const received = Boolean(native.nativeMessageId || native.timings?.observedAt || native.timings?.providerAcceptedAt) || native.delivery === 'observed' || native.stage === 'provider_failed' || native.stage === 'turn_outcome_unknown';
   switch (native.delivery) {
     case 'queued': return native.stage === 'http_pending' || native.intent === 'steer' ? i18n._(msg`发送中`) : i18n._(msg`排队中`);
-    case 'preparing': case 'dispatching': return i18n._(msg`发送中`);
+    case 'preparing': return native.stage === 'resuming' ? i18n._(msg`恢复中`) : i18n._(msg`发送中`);
+    case 'dispatching': return i18n._(msg`发送中`);
     case 'input_sent': return received || run.state === 'completed' ? '' : i18n._(msg`发送中`);
     case 'observed': return '';
     case 'uncertain': return received ? i18n._(msg`暂时无法获取任务状态`) : i18n._(msg`暂时无法确认是否已发送`);
@@ -168,7 +169,7 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, text, a
           {!taskOutcome && continueAction}
           {run && inQueue(run) && onSendQueuedNow && <button type="button" disabled={runActionPending} title={t`停止并发送`} onClick={() => onSendQueuedNow(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>停止并发送</Trans></button>}
           {(run?.native?.delivery === 'queued' || run?.native?.delivery === 'preparing') && run.native.stage !== 'http_pending' && onCancelNativeRun && <button type="button" disabled={runActionPending} onClick={() => onCancelNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-danger disabled:opacity-50')}><Trans>取消</Trans></button>}
-          {run && canRestoreFailedSteer(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
+          {run && canRestoreUnsentRun(run) && onRestoreNativeRun && <button type="button" disabled={runActionPending} onClick={() => onRestoreNativeRun(run)} className={cn(statusAction, 'text-fg-3 underline underline-offset-2 hover:text-fg disabled:opacity-50')}><Trans>恢复到输入框</Trans></button>}
           {time && !sending && <time dateTime={time} className="shrink-0 tabular-nums">{formatDateTime(time)}</time>}
           {text && <CopyButton text={text} label={t`复制消息`} />}
         </div>

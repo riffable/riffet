@@ -516,7 +516,11 @@ export class NativeDispatcher {
         if (!changed) throw new AppError('RUN_CANCELLED', 'The message was cancelled', 409);
         argvFenced = true;
       };
+      const resuming = Boolean(session.nativeSessionId && this.readStatus(session.id)?.phase === 'offline');
+      if (resuming && !this.store.transitionNativeRun(runId, ['preparing'], { stage: 'resuming' })) return;
       await this.runtime.ensure(session, argvPrompt !== undefined ? { initialPrompt: argvPrompt, beforeSpawn } : {});
+      // A launch-time prompt may already have committed its input fence while ensure was running.
+      if (resuming) this.store.transitionNativeRun(runId, ['preparing'], { stage: 'runtime' });
       if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting', 409);
       session = this.store.getSession(run.sessionId);
       // The launch returned without passing through the fence hook, so whether a CLI got the prompt

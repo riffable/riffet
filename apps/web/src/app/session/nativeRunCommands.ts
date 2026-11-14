@@ -7,7 +7,7 @@ import { onSessionCommand } from '@/lib/session-commands';
 import { errorMessage, newId } from '@/lib/utils';
 import { toast } from '@/lib/toast';
 import { inQueue, nativeTaskOutcome } from './delivery';
-import { canRestoreFailedSteer } from './model';
+import { canRestoreUnsentRun } from './model';
 import { isUncertainRequest, mergeRun, optimisticRun, settleQueuedSource, snapshotWithLocalOutbox } from './nativeOutbox';
 import { setRunActionPending, updateRuns, type NativeSessionLatest, type NativeSessionStore, type NativeSessionTracking } from './nativeSessionStore';
 
@@ -55,7 +55,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
       removeNativeSendRequest(session.id, body.commandId);
       if (tracking.sessionId === session.id) updateRuns(store, tracking, (current) => mergeRun(settleQueuedSource(current, sourceRun?.id), accepted));
       if (steerTarget && accepted.state === 'failed') {
-        const unsent = canRestoreFailedSteer(accepted);
+        const unsent = canRestoreUnsentRun(accepted);
         if (tracking.sessionId === session.id) latest.current.onError(accepted.error ?? (unsent ? i18n._(msg`补充未发送，输入已保留`) : i18n._(msg`任务失败`)));
         return !unsent;
       }
@@ -70,7 +70,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
         removeNativeSendRequest(session.id, body.commandId);
         if (sourceRun) updateRuns(store, tracking, current => settleQueuedSource(current, sourceRun.id));
         if (steerTarget && received.state === 'failed') {
-          const unsent = canRestoreFailedSteer(received);
+          const unsent = canRestoreUnsentRun(received);
           latest.current.onError(received.error ?? (unsent ? i18n._(msg`补充未发送，输入已保留`) : i18n._(msg`任务失败`)));
           return !unsent;
         }
@@ -176,7 +176,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
       removeNativeSendRequest(session.id, entry.body.commandId);
       if (tracking.sessionId === session.id) {
         updateRuns(store, tracking, current => mergeRun(settleQueuedSource(current, entry.sourceRunId), accepted));
-        if (entry.steerTarget && accepted.state === 'failed') latest.current.onError(accepted.error ?? (canRestoreFailedSteer(accepted) ? i18n._(msg`补充未发送，可恢复内容后重试`) : i18n._(msg`任务失败`)));
+        if (entry.steerTarget && accepted.state === 'failed') latest.current.onError(accepted.error ?? (canRestoreUnsentRun(accepted) ? i18n._(msg`补充未发送，可恢复内容后重试`) : i18n._(msg`任务失败`)));
       }
     } catch (error) {
       const received = tracking.sessionId === session.id
@@ -185,7 +185,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
       if (received) {
         removeNativeSendRequest(session.id, entry.body.commandId);
         if (entry.sourceRunId) updateRuns(store, tracking, current => settleQueuedSource(current, entry.sourceRunId));
-        if (entry.steerTarget && received.state === 'failed') latest.current.onError(received.error ?? (canRestoreFailedSteer(received) ? i18n._(msg`补充未发送，可恢复内容后重试`) : i18n._(msg`任务失败`)));
+        if (entry.steerTarget && received.state === 'failed') latest.current.onError(received.error ?? (canRestoreUnsentRun(received) ? i18n._(msg`补充未发送，可恢复内容后重试`) : i18n._(msg`任务失败`)));
         return;
       }
       if (!isUncertainRequest(error)) {
@@ -219,7 +219,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
   }, [session.id, store, tracking, latest, updateRun, hasPendingQueuedSteer]);
 
   const recoverNativeRun = useCallback(async (run: Run) => {
-    if (run.sessionId !== session.id || !run.native || !canRestoreFailedSteer(run) || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id) return;
+    if (run.sessionId !== session.id || !run.native || !canRestoreUnsentRun(run) || store.get().runActionIds.has(run.id) || tracking.sessionId !== session.id) return;
     setRunActionPending(store, run.id, true);
     try {
       const entry = listNativeSendRequests(session.id).find(item => item.body.commandId === run.commandId);
@@ -232,7 +232,7 @@ export function useNativeRunCommands({ session, store, tracking, latest }: Nativ
         const snapshot = await api.runs(session.id);
         if (tracking.sessionId !== session.id) return;
         const accepted = snapshot.find(item => item.commandId === run.commandId);
-        if (accepted && !canRestoreFailedSteer(accepted)) throw new Error(i18n._(msg`消息可能已执行，无法恢复为新消息`));
+        if (accepted && !canRestoreUnsentRun(accepted)) throw new Error(i18n._(msg`消息可能已执行，无法恢复为新消息`));
         const source = snapshot.find(item => item.id === sourceRunId);
         if (source && source.native?.delivery !== 'cancelled' && source.state !== 'cancelled') {
           if (source.state !== 'queued' || source.native?.delivery !== 'queued' || source.native.intent || !await cancelNativeRun(source)) throw new Error(i18n._(msg`无法取回排队消息，请检查状态后重试`));

@@ -1096,6 +1096,10 @@ msgid "思考输出"
 msgstr "Reasoning output"
 
 #: src/app/session/Timeline.tsx
+msgid "恢复中"
+msgstr "Resuming"
+
+#: src/app/session/Timeline.tsx
 msgid "恢复到输入框"
 msgstr "Restore to composer"
 

@@ -462,10 +462,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const slashCommands: SlashCommand[] = slash.catalog?.items ?? backendCapabilities?.slashCommands ?? noCommands;
   const supportsTerminal = backendCapabilities ? hasNativeTerminal(backendCapabilities) : Boolean(session.terminalId);
   const terminalLive = Boolean(terminal && terminal.state !== 'exited');
-  // A conversation that lives in its terminal is live, and takes a message, only while that terminal runs.
+  // Terminal liveness controls terminal actions; durable sends resume the backend on the server.
   const terminalBound = backendCapabilities?.requiresLiveTerminal === true;
   const live = terminalBound ? terminalLive : phase !== 'offline';
-  const canSend = !terminalBound || live;
   // Until the stream reports a status, the session list's state answers, so an open does not start idle.
   const busy = native.statusKnown ? phase === 'busy' : session.state === 'running' || session.state === 'cancelling';
   const working = busy || (native.statusKnown ? phase === 'attention' : session.state === 'waiting');
@@ -802,8 +801,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     return ok;
   }, []);
   const { sending, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer } = native;
-  const queuedPending = useCallback((runId: string) => archived || !canSend || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
-    [archived, canSend, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
+  const queuedPending = useCallback((runId: string) => archived || starting || sending || interrupting || hasUnknownSubmission || runActionIds.has(runId) || hasPendingQueuedSteer(runId),
+    [archived, starting, sending, interrupting, hasUnknownSubmission, runActionIds, hasPendingQueuedSteer]);
   const steerDisabled = !native.connected || Boolean(connectionState && connectionState !== 'connected') || phase !== 'busy' || Boolean(interaction) || native.hasUncertainSubmission || switchingApproval || switchingModel;
   const canSteerQueued = Boolean(backendCapabilities?.supportsSteer && native.status.activeTurn);
   const queueUnconfirmed = native.status.queue?.held?.reason === 'unconfirmed';
@@ -1043,7 +1042,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     ...(quickChat ? {} : { mobileSettingsPrefix: approvalSummary }),
     mobileSettingsLabel: cleanLabel(catalog.find((item) => item.value === parseSelection(backendSelection(backendId, catalog, session.model)).model)?.name ?? t({ message: '选择模型', context: 'terminal-model-picker-label' })),
     disabled: archived,
-    submitDisabled: !canSend || sendingInitial || starting || switchingApproval || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,
+    submitDisabled: held || sendingInitial || starting || switchingApproval || switchingModel || native.sending || native.interrupting || native.hasUnknownSubmission,
     placeholder: archived ? t`会话已归档` : busy ? submitIntent === 'steer' ? t`补充当前任务…` : t`输入下一条消息…` : t`输入消息…`,
     pickersDisabled: pickersBlocked,
     ...(pickerBlocked ? { pickersBlockedReason: pickerBlocked } : {}),

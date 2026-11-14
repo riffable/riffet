@@ -1096,6 +1096,10 @@ msgid "思考输出"
 msgstr ""
 
 #: src/app/session/Timeline.tsx
+msgid "恢复中"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
 msgid "恢复到输入框"
 msgstr ""
 

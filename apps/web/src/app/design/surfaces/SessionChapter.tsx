@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
+import type { Run } from '@contracts';
 import { IconFileText, IconGitBranch, IconSquareTerminal } from '@/components/icons';
 import { Kbd, Spinner } from '@/components/ui/controls';
 import { Button } from '@/components/ui/button';
@@ -185,6 +186,12 @@ const ISO = '2026-11-14T09:41:00';
 
 function Messages() {
   const { t } = useLingui();
+  const resuming: Run = {
+    id: 'resume-example', sessionId: 'design', commandId: 'resume-example',
+    prompt: t`把设置页的焦点顺序修一下`, state: 'queued', createdAt: ISO, updatedAt: ISO,
+    native: { input: { text: '', attachmentIds: [], context: [] }, config: { mode: 'agent' },
+      fingerprint: 'design', delivery: 'preparing', stage: 'resuming', attempt: 1, configRevision: 0 },
+  };
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
       <Frame className="flex flex-col gap-[var(--timeline-gap-turn)] p-8 max-md:p-5">
@@ -196,6 +203,7 @@ function Messages() {
           footerPinned
           metrics={{ outputTokens: 2300, durationMs: 41000, tokens: 'provider', window: 'stream', steps: 3 }}
         />
+        <UserMessage text={resuming.prompt} attachments={[]} time={ISO} run={resuming} footerPinned onCancelNativeRun={() => {}} />
       </Frame>
       <Matrix rows={[
         { label: t`用户消息`, cells: [<Value key="a">rounded-3xl · px 16 · py 10 · bg-bubble</Value>, <Value key="b">max-w min(82%, 560px)</Value>] },
