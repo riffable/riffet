@@ -203,9 +203,7 @@
 **现状**：
 
 - 没有共用的加载延迟阈值；`Spinner` 立即出现。`feedback-presentation.md` 称各入口沿用自身的延迟，代码中未找到共用实现。
-- `toast` 的自定义 `duration` 没有下限（`lib/toast.ts`），与 1500 ms 的最短可见规则不一致。
 - `Field` 已有 `error` 槽；`plugins/PluginFlowDialog.tsx` 的 `<p role="alert">` 是流程级失败，不属字段错误，保持手写。
-- 复制反馈在 `Markdown.tsx`、`SessionInfo.tsx` 中 1400 ms 后复原，低于 1500 ms。
 
 ## 6. 确认与撤销
 
@@ -251,11 +249,6 @@
 ### 7.4 说明文字
 
 - 只写读者推断不出的信息：存储位置（「仅保存在这台设备」）、是否需要重启、是否跨设备、计费与权限；每条一句。不复述控件的名称或显然的行为。
-
-**现状**：
-
-- `Field` 没有错误槽，行内错误各自写（见 §5）。
-- 复选框是裸 `<input type="checkbox">`（`DirectoryPicker.tsx`、`settings/ProviderModelList.tsx`、`plugins/PluginGrantDialog.tsx` 等 9 处），没有共用的 `Checkbox`。
 
 ## 8. 列表
 

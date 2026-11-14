@@ -111,7 +111,7 @@ Radix Dialog：焦点陷在内部，关闭后回到打开前的元素（手机�
 ### 现状
 
 - 弹窗结构的完整说明在页面「模式 · 浮层」章节（`patterns/OverlayChapter.tsx`），本页只复用它的宽度图 `Widths`。
-- 关闭按钮是写在 `DialogContent` 里的原生 `<button>`，桌面 28、手机 44，位置在 `ui-dialog-close` 里由 CSS 随安全区调整。
+- 关闭按钮是写在 `DialogContent` 里的 `Primitive.Close`，样式手写而不是 `Button`，桌面 28、手机 44，位置在 `ui-dialog-close` 里由 CSS 随安全区调整。
 
 ## 手机底部面板
 
@@ -125,4 +125,4 @@ Radix Dialog：焦点陷在内部，关闭后回到打开前的元素（手机�
 
 ### 现状
 
-- 遮罩用 `box-shadow: 0 0 0 100vmax` 画在面板上（`index.css:2451`），不是独立元素。
+- 遮罩用 `box-shadow: 0 0 0 100vmax` 画在面板上（`index.css:2449`），不是独立元素。

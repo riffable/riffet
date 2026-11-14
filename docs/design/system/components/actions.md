@@ -52,7 +52,7 @@
 
 ### 现状
 
-- 原生 `<button>` 约 230 处，`Button` 约 430 处（`components/ui/button` 被 101 个文件导入）；原生按钮各自写样式，如对话框关闭按钮（`components/ui/dialog.tsx` 的 `ui-dialog-close`）、`CopyButton`（`app/session/Markdown.tsx:33`）。
+- 原生 `<button>` 约 230 处，`Button` 约 520 处（`components/ui/button` 被 110 个文件导入）；原生按钮各自写样式，如对话框关闭按钮（`components/ui/dialog.tsx` 的 `ui-dialog-close`）、`CopyButton`（`components/ui/copy-button.tsx`）。
 - 触屏点击区：`Button` 各尺寸在 `no-hover` 下没有最小 44 的约束，手机上靠调用方加 `min-h-11`（如 `SettingsRow` 的 `max-md:[&_button:not([role=switch])]:min-h-11`）。
 - 进行中的 `Button` 已改用 `busy`；非 `Button` 的元素（如 `QuickCreate` 的圆形发送钮、`DirectoryPicker` 的刷新钮）仍自己换 `Spinner`。
 
@@ -91,4 +91,4 @@
 
 ### 现状
 
-- 使用处只有 `Header.tsx`、`terminal/TerminalView.tsx`、`terminal/NativeSession.tsx`、`panels/WorktreeSection.tsx`；插件 SDK 未导出 `StatusPill`，只导出 `Badge` 与 `StatusDot`。
+- 使用处只有 `Header.tsx`、`terminal/TerminalView.tsx`、`terminal/NativeSession.tsx`；插件 SDK 未导出 `StatusPill`，只导出 `Badge` 与 `StatusDot`。

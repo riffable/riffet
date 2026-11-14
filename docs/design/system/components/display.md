@@ -119,10 +119,10 @@
 ### 现状
 
 - `CodeBlock` 与围栏仍是两个组件（头部有无、复制按钮位置不同），只共享尺寸；`CopyButton` 已移到 `components/ui/copy-button.tsx`。
-- `DiffView`（`Timeline.tsx:399`）是第三种代码表面（`bg-subtle`、头部最小 32、`--diff-*` 颜色）。
+- `DiffView`（`Timeline.tsx:401`）是第三种代码表面（`bg-subtle`、头部最小 32、`--diff-*` 颜色）。
 
 ## 标记（Token 式 chip）
 
 ### 现状
 
-没有 `Chip` / `Token` 组件。输入框里的「将调用」标记（`/技能`、`/命令`）是手写的 `<span>`：`rounded-md bg-accent/10 text-xs text-accent`，`min-h-6`（触屏 44），带移除按钮（`app/session/Composer.tsx:1535`）。它是应用里唯一用 `accent/10` 做底的标记，与 `Badge accent` 的 `accent-soft` 是两种写法。其他类似物：`DropdownMenu` 里的当前值文字、Markdown 的 `.md-file-mention`（`Markdown.tsx:389`）。建议：出现第二处需求时抽成 `Chip`（可移除），底色取 `Badge accent` 的 `accent-soft`。
+没有 `Chip` / `Token` 组件。输入框里的「将调用」标记（`/技能`、`/命令`）是手写的 `<span>`：`rounded-md bg-accent/10 text-xs text-accent`，`min-h-6`（触屏 44），带移除按钮（`app/session/Composer.tsx:1534`）。它是应用里唯一用 `accent/10` 做底的标记，与 `Badge accent` 的 `accent-soft` 是两种写法。其他类似物：`DropdownMenu` 里的当前值文字、Markdown 的 `.md-file-mention`（`Markdown.tsx:367`）。建议：出现第二处需求时抽成 `Chip`（可移除），底色取 `Badge accent` 的 `accent-soft`。

@@ -99,7 +99,7 @@ Mac 对没有原生渲染器的仅 Web 视图显示「不可用」，不承诺�
 ## 5. 图标
 
 - 视图和命令的图标用包内 SVG（`icon.svg`，包内路径），可附带供 Mac 使用的 `icon.sfSymbol`；两者都缺时宿主用通用图标。Agent 的 `icon.svg` 至多 64 KB，只当图片画，不执行脚本。
-- 应用内模块从 `PluginIconName`（38 个 Lucide 图标）里选，用 `ui.icon(name)` 取，不引入第二套图标库。`WebPlugin.icons` 给宿主在视图标题旁画的图标。
+- 应用内模块从 `PluginIconName`（39 个 Lucide 图标）里选，用 `ui.icon(name)` 取，不引入第二套图标库。`WebPlugin.icons` 给宿主在视图标题旁画的图标。
 - 尺寸与描边按[基础](foundations.md) §8：Web 按钮、页签 16，行内 14，元信息 12，描边 1.25 且不随尺寸变；颜色跟随所在行的文字，不写固定色。
 - SVG 用 `currentColor` 描边或填充，不带固定色值。
 

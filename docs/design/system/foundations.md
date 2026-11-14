@@ -86,7 +86,7 @@
 - 文案本身（语气、用词、错误、空状态、术语、时间与数字的写法）见 [content.md](content.md)。
 
 现状：
-- Web 没有全局的 `user-select: none`：界面文字不可选只靠 21 处 `select-none`，其余按钮、标签仍可被拖选。
+- Web 没有全局的 `user-select: none`：界面文字不可选只靠 26 处 `select-none`，其余按钮、标签仍可被拖选。
 - Web 没有路径截中间的公共组件，调用处各自处理；需要时抽成一个，同时处理 `Tip`。
 
 ## 3. 间距
@@ -250,8 +250,6 @@
 - 贴着容器边缘的整行（`SettingsLinkRow`）用 `ring-inset`，环画在行内。
 - `Spinner` 是 14 的 `IconLoaderCircle`，颜色 `fg-3`，放在按钮里时用 `text-current`。
 
-现状：
-
 ## 10. 无障碍
 
 设计规范页的「无障碍」一章画出下列各项。
@@ -285,8 +283,8 @@
 
 现状：
 - Web 的文字缩放最大 1.2，没有做到 §10.3 的 1.6 倍。
-- `Tip` 之外仍有约 460 处原生 `title=` 提示，键盘用户看不到。
-- 9 处原生 `type=checkbox`（`DirectoryPicker.tsx`、`settings/ProviderModelList.tsx`、`plugins/PluginGrantDialog.tsx`、`extensions/ExtensionCatalog.tsx`、`shares/ShareDialog.tsx`）没有统一的焦点环和 44 点击区。
+- `Tip` 之外仍有约 150 处原生 `title=` 提示，键盘用户看不到。
+- `session/NativeInteractionCard.tsx` 的选项仍是原生 `<input>`（按题目在多选与单选间切换），没有用 `Checkbox` / `RadioGroup` 的焦点环和 44 点击区。
 
 ## 11. 数值的来源
 

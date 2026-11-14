@@ -31,7 +31,7 @@
 
 ### 现状
 
-- `Tip` 约 113 处，原生 `title=` 约 460 处；`title` 在触屏与键盘上不出现，也没有快捷键位。
+- `Tip` 约 120 处，原生 `title=` 约 150 处；`title` 在触屏与键盘上不出现，也没有快捷键位。
 - 表面用 `bg-toast`（深色底白字），与 `toast`、`Notice` 的 `bg-elevated` / 色调底是两套画法。
 
 ## toast
@@ -131,7 +131,7 @@
 
 ### 用途
 
-进行中且时长不确定的状态。实现 `controls.tsx:93`：`IconLoaderCircle`，`size-3.5`，`animate-spin`，`fg-3`。
+进行中且时长不确定的状态。实现 `controls.tsx:103`：`IconLoaderCircle`，`size-3.5`，`animate-spin`，`fg-3`。
 
 ### 变体与尺寸
 

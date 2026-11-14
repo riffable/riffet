@@ -1,6 +1,6 @@
 # 输入
 
-取得一个值的控件：`Input` `Textarea` `Field` `Select` `Switch` `Segmented`，以及尚未提供的 Checkbox、Radio、Slider。画面在 `/design/components/inputs`，实现在 `apps/web/src/components/ui/controls.tsx`。选用规则（值、视图、对象各用哪个）在 [patterns.md](../patterns.md) 的选择一节。
+取得一个值的控件：`Input` `Textarea` `Field` `Select` `Switch` `Segmented`（`apps/web/src/components/ui/controls.tsx`），以及 `SearchField` `Checkbox` `RadioGroup` `Slider`（同目录各自的文件）。画面在 `/design/components/inputs`。选用规则（值、视图、对象各用哪个）在 [patterns.md](../patterns.md) 的选择一节。
 
 字段共用 `fieldClass`（`controls.tsx:7`）：`rounded-lg`、`border-line-strong`、`bg-elevated`；悬停边框加深；聚焦时边框 `accent`，外加 `ring-3 accent/15`；禁用不透明度 50%。
 
@@ -63,8 +63,8 @@
 
 ### 现状
 
-- 设置页不用 `Field`，用 `SettingsRow`（标题在左、控件在右，`app/settings/SettingsLayout.tsx:5`）；`Field` 用在对话框与编辑页的表单里（`AddProjectDialog.tsx`、`tasks/AutomationEditor.tsx`）。
-- 没有必填与错误态参数。
+- 设置页不用 `Field`，用 `SettingsRow`（标题在左、控件在右，`app/settings/SettingsLayout.tsx:6`）；`Field` 用在对话框与编辑页的表单里（`AddProjectDialog.tsx`、`tasks/AutomationEditor.tsx`）。
+- 没有必填参数；`error` 已有，业务代码还没有调用点。
 
 ## Select
 
@@ -138,9 +138,6 @@ Radix `role="switch"`，`aria-checked`；Space 切换。名称来自 `aria-label
 
 渲染为 `role="radiogroup"` / `role="radio"` + `aria-checked`（它选的是值，不是视图）；roving tabindex，Tab 只停在选中段；左右方向键、Home、End 只移动焦点，Enter、Space 或点击才选中（APG 的手动激活）。很多调用处在改值时保存或跳转，选中跟着焦点走会让方向键逐项提交；忙时禁用选项也会让焦点丢失。
 
-### 现状
-
-
 ## SearchField
 
 ### 用途
@@ -170,7 +167,7 @@ Radix `role="switch"`，`aria-checked`；Space 切换。名称来自 `aria-label
 ### 现状
 
 - `CommandPalette.tsx`、`SessionSearchDialog.tsx`、`ImportSessionDialog.tsx` 用 `QuickInput`（`SessionSearchDialog.tsx:29`）：组合框与列表框键盘模型、无边框的整行外观、Escape 属于浮层，不并入 `SearchField`。
-- `Sidebar.tsx:446` 是打开搜索浮层的按钮，不是输入框。
+- `Sidebar.tsx:445` 是打开搜索浮层的按钮，不是输入框。
 
 ## Checkbox
 
