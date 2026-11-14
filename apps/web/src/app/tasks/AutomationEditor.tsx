@@ -130,7 +130,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
   const projectToken = '{{project}}';
   return (
     <Dialog open={Boolean(state)} onOpenChange={(open) => { if (!open && !busy) close(); }}>
-      <DialogContent className="max-w-lg" aria-describedby={undefined}>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>{editingExisting ? t`编辑定时任务` : t`新建定时任务`}</DialogTitle>
         </DialogHeader>
@@ -142,17 +142,16 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label="Agent">
-                <Select value={fields.backendId} onChange={(event) => set({ backendId: event.target.value as NativeBackendId | '' })}>
-                  <option value=""><Trans>默认 Agent</Trans></option>
-                  {backends.map((entry) => <option key={entry.backendId} value={entry.backendId}>{entry.label}{entry.available ? '' : t`（不可用）`}</option>)}
-                </Select>
+                <Select<string> label="Agent" value={fields.backendId} onChange={(next) => set({ backendId: next as NativeBackendId | '' })}
+                  options={[{ value: '', label: t`默认 Agent` }, ...backends.map((entry) => ({ value: entry.backendId, label: `${entry.label}${entry.available ? '' : t`（不可用）`}` }))]} />
               </Field>
               <Field label={t`项目`}>
-                <Select value={fields.projectId} onChange={(event) => set({ projectId: event.target.value })}>
-                  {!scheduled ? <option value=""><Trans>运行时选择</Trans></option> : !fields.projectId && <option value="" disabled><Trans>选择项目</Trans></option>}
-                  {orphan && <option value={fields.projectId}>{t`已移除的项目`}</option>}
-                  {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </Select>
+                <Select label={t`项目`} value={fields.projectId} onChange={(projectId) => set({ projectId })}
+                  options={[
+                    ...(!scheduled ? [{ value: '', label: t`运行时选择` }] : !fields.projectId ? [{ value: '', label: t`选择项目`, disabled: true }] : []),
+                    ...(orphan ? [{ value: fields.projectId, label: t`已移除的项目` }] : []),
+                    ...projects.map((item) => ({ value: item.id, label: item.name })),
+                  ]} />
               </Field>
             </div>
             <label className="flex items-center justify-between gap-3 text-sm text-fg">

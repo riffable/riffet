@@ -46,7 +46,9 @@ export function QuickInput({ inputRef, trailing, className, ...props }: Componen
 }
 
 /** The list area of either scope: the same height, so switching scope does not resize the dialog. */
-export const quickListClass = 'min-h-0 h-[min(360px,50dvh)] shrink overflow-y-auto p-2';
+export const quickListClass = 'min-h-0 h-[min(480px,56dvh)] shrink overflow-y-auto p-2';
+/** The command scope has no 标题 / 内容 row (h-10), so its list takes that height back. */
+export const quickListTallClass = 'min-h-0 h-[calc(min(480px,56dvh)+2.5rem)] shrink overflow-y-auto p-2';
 
 /**
  * Conversations by title, or by what was said in them. A separate search surface: opening or

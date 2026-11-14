@@ -204,19 +204,17 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
                 <div className="flex items-center gap-3 pb-2 pl-10 pr-3">
                   <span className="text-2xs text-fg-3"><Trans>上下文长度</Trans></span>
                   <Select
-                    aria-label={t`${model.value} 上下文长度`}
-                    wrapperClassName="w-36"
-                    className="h-7 text-xs"
+                    label={t`${model.value} 上下文长度`}
+                    className="h-7 w-36 text-xs"
                     value={String(windows?.[model.value] ?? '')}
                     disabled={disabled}
-                    onChange={(event) => setWindow(model.value, Number(event.target.value) || undefined)}
-                  >
-                    <option value="">{defaultWindow(model.value)}</option>
-                    {/* A stored value outside the presets stays selectable, so saving never rewrites it. */}
-                    {windowChoices(model.value).map((tokens) => (
-                      <option key={tokens} value={tokens}>{formatWindow(tokens)}</option>
-                    ))}
-                  </Select>
+                    onChange={(next) => setWindow(model.value, Number(next) || undefined)}
+                    // A stored value outside the presets stays selectable, so saving never rewrites it.
+                    options={[
+                      { value: '', label: defaultWindow(model.value) },
+                      ...windowChoices(model.value).map((tokens) => ({ value: String(tokens), label: formatWindow(tokens) })),
+                    ]}
+                  />
                 </div>
               )}
             </div>

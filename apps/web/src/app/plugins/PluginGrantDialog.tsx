@@ -49,7 +49,7 @@ export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
   const trustUnavailable = shown?.trustedRequired && shown.trustedAllowed !== true;
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => { if (!open && !busy) onCancel(); }}>
-      <DialogContent className="max-w-sm">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{t`安装 ${id}`}</DialogTitle>
           <DialogDescription className="font-mono">{shown?.version}</DialogDescription>
@@ -69,8 +69,8 @@ export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
           <p className="text-xs text-fg-3"><Trans>安装到当前连接的服务器</Trans></p>
         </DialogBody>
         <DialogFooter>
-          <Button size="sm" variant="secondary" disabled={busy} onClick={onCancel}><Trans>取消</Trans></Button>
-          <Button size="sm" variant="primary" disabled={busy || Boolean(trustUnavailable) || Boolean(shown?.trustedRequired && !trusted)} onClick={() => onConfirm(trusted)}>{busy && <Spinner />}<Trans>安装</Trans></Button>
+          <Button variant="ghost" disabled={busy} onClick={onCancel}><Trans>取消</Trans></Button>
+          <Button variant="primary" disabled={busy || Boolean(trustUnavailable) || Boolean(shown?.trustedRequired && !trusted)} onClick={() => onConfirm(trusted)}>{busy && <Spinner />}<Trans>安装</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

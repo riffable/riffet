@@ -172,10 +172,6 @@ msgid "打开会话"
 msgstr "Open conversation"
 
 #: src/app/tasks/TasksPage.tsx
-msgid "打开侧边栏"
-msgstr "Open sidebar"
-
-#: src/app/tasks/TasksPage.tsx
 msgid "新建"
 msgstr "New"
 

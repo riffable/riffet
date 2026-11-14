@@ -89,8 +89,14 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
     onOpenChange(false);
     await nav.navigate(() => nav.openPlugins(id.split('/')[0], id));
   };
+  const openDesign = async () => {
+    if (!await confirmLeave()) return;
+    onOpenChange(false);
+    await nav.navigate(() => nav.openPage('design'));
+  };
   const clearDirty = () => { setBackendsDirty(false); setFilesDirty(false); };
   const selectSection = async (next: Section) => {
+    if (next === 'design') { await openDesign(); return; }
     if (navigationPending.current) return;
     navigationPending.current = true;
     const generation = navigationGeneration.current;
@@ -162,7 +168,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
       {/* During a section's View Transition the pseudo-element tree covers the page and a click
           resolves to <html>, which Radix reads as outside the dialog. A real outside click lands on
           the overlay, never on <html>, so only that target is ignored. */}
-      <DialogContent mobileFullscreen onEscapeKeyDown={(event) => { if (canGoBack()) { event.preventDefault(); goBack(); } }} onInteractOutside={(event) => { if (event.target === document.documentElement) event.preventDefault(); }} overlayClassName={cn(framed && open && 'animate-none!')} className={cn(SETTINGS_DIALOG_CLASS, 'md:flex-row', framed && open && 'animate-none!')}>
+      <DialogContent size="workspace" mobileFullscreen onEscapeKeyDown={(event) => { if (canGoBack()) { event.preventDefault(); goBack(); } }} onInteractOutside={(event) => { if (event.target === document.documentElement) event.preventDefault(); }} overlayClassName={cn(framed && open && 'animate-none!')} className={cn(SETTINGS_DIALOG_CLASS, 'md:flex-row', framed && open && 'animate-none!')}>
         <DialogTitle className="sr-only"><Trans>设置</Trans></DialogTitle>
         <nav aria-label={t`设置分区`} className="hidden w-52 shrink-0 flex-col gap-px overflow-y-auto edge-r bg-sidebar p-2 md:flex">
           <h2 className="px-2.5 pb-3 pt-2 text-base font-semibold"><Trans>设置</Trans></h2>

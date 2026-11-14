@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { Trans } from '@lingui/react/macro';
 import type { Automation, AutomationRun, NativeBackendCatalogEntry, Session } from '@contracts';
-import { IconArrowLeft, IconBot, IconCalendarClock, IconCircleAlert, IconCircleCheck, IconEllipsis, IconMenu, IconPencilLine, IconPlay, IconPlus, IconRefreshCw, IconTrash2, IconTriangleAlert, IconX } from '@/components/icons';
+import { IconArrowLeft, IconBot, IconCalendarClock, IconCircleAlert, IconCircleCheck, IconEllipsis, IconPencilLine, IconPlay, IconPlus, IconRefreshCw, IconTrash2, IconTriangleAlert, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Select, Spinner, Switch } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -10,10 +10,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Tip } from '@/components/ui/tooltip';
 import { api, type LaunchIds, type ProjectRecord } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
-import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, formatDateTime, newId } from '@/lib/utils';
-import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { PageScaffold } from '../PageScaffold';
 import { automationKind, describeTrigger, formatWhen } from './automation';
 import { AutomationEditor, type AutomationEditorState } from './AutomationEditor';
 import { QuickCreate } from './QuickCreate';
@@ -75,7 +74,6 @@ export function TasksPage({ projects, project, sessions, backends, enterBehavior
   onOpenSession: (id: string) => void;
   onError: (message: string) => void;
 }) {
-  const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
   const { t } = useLingui();
   const [automations, setAutomations] = useState<Automation[]>();
   const [runs, setRuns] = useState<AutomationRun[]>([]);
@@ -193,109 +191,105 @@ export function TasksPage({ projects, project, sessions, backends, enterBehavior
   const loading = !automations;
   const empty = automations?.length === 0;
   return (
-    <OverlayScopeContext.Provider value={overlay.scope}>
-      <div className="flex h-full min-h-0 flex-col bg-bg">
-        <header className="flex h-12 shrink-0 items-center gap-2 px-3 max-md:edge-b md:h-13 md:pl-4">
-          <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
-          {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
-          <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-fg"><Trans>定时任务</Trans></h1>
-          <Tip label={t`新建`}><Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`新建`} onClick={() => setEditing({ seed: { projectId: project?.id } })}><IconPlus /></Button></Tip>
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 pb-12 pt-4 md:pt-8">
-            {loading && !loadError && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
-            {loading && loadError && (
-              <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载任务`} description={loadError}>
-                <Button size="sm" onClick={() => void reload()}><IconRefreshCw /><Trans>重试</Trans></Button>
-              </EmptyState>
-            )}
-            {!loading && (
-              <>
-                <QuickCreate
-                  projects={live}
-                  defaultProjectId={project?.id}
-                  backends={backends}
-                  enterBehavior={enterBehavior}
-                  examples={empty}
-                  onCreated={() => void reload()}
-                  onCustom={setEditing}
-                  onError={onError}
-                />
+    <PageScaffold
+      title={<Trans>定时任务</Trans>}
+      actions={<Tip label={t`新建`}><Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`新建`} onClick={() => setEditing({ seed: { projectId: project?.id } })}><IconPlus /></Button></Tip>}
+      columnClassName="flex flex-col gap-8"
+      sidebarCollapsed={sidebarCollapsed}
+      onClose={onClose}
+      onOpenSidebar={onOpenSidebar}
+      onExpandSidebar={onExpandSidebar}
+    >
+      {loading && !loadError && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
+      {loading && loadError && (
+        <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载任务`} description={loadError}>
+          <Button size="sm" onClick={() => void reload()}><IconRefreshCw /><Trans>重试</Trans></Button>
+        </EmptyState>
+      )}
+      {!loading && (
+        <>
+          <QuickCreate
+            projects={live}
+            defaultProjectId={project?.id}
+            backends={backends}
+            enterBehavior={enterBehavior}
+            examples={empty}
+            onCreated={() => void reload()}
+            onCustom={setEditing}
+            onError={onError}
+          />
 
-                {upcoming.length > 0 && (
-                  <Section title={t`即将运行`}>
-                    <div className={listClass}>
-                      {upcoming.map((item) => (
-                        <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}
-                          lead={<span className={timeColumn}>{formatWhen(item.nextRunAt!)}</span>}>
-                          {!item.followUp && switchOf(item)}
-                          {menu(item)}
-                        </Row>
-                      ))}
-                    </div>
-                  </Section>
-                )}
+          {upcoming.length > 0 && (
+            <Section title={t`即将运行`}>
+              <div className={listClass}>
+                {upcoming.map((item) => (
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}
+                    lead={<span className={timeColumn}>{formatWhen(item.nextRunAt!)}</span>}>
+                    {!item.followUp && switchOf(item)}
+                    {menu(item)}
+                  </Row>
+                ))}
+              </div>
+            </Section>
+          )}
 
-                {manual.length > 0 && (
-                  <Section title={t`手动`}>
-                    <div className={listClass}>
-                      {manual.map((item) => (
-                        <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}>
-                          <Tip label={t`运行`}>
-                            <Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`运行`} disabled={Boolean(running)} onClick={() => item.projectId ? void run(item) : setChoosing(item)}>
-                              {running === item.id ? <Spinner /> : <IconPlay />}
-                            </Button>
-                          </Tip>
-                          {menu(item)}
-                        </Row>
-                      ))}
-                    </div>
-                  </Section>
-                )}
+          {manual.length > 0 && (
+            <Section title={t`手动`}>
+              <div className={listClass}>
+                {manual.map((item) => (
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}>
+                    <Tip label={t`运行`}>
+                      <Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`运行`} disabled={Boolean(running)} onClick={() => item.projectId ? void run(item) : setChoosing(item)}>
+                        {running === item.id ? <Spinner /> : <IconPlay />}
+                      </Button>
+                    </Tip>
+                    {menu(item)}
+                  </Row>
+                ))}
+              </div>
+            </Section>
+          )}
 
-                {paused.length > 0 && (
-                  <Section title={t`已暂停`}>
-                    <div className={listClass}>
-                      {paused.map((item) => (
-                        <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} dim={!item.enabled}>
-                          {item.enabled ? <span className="shrink-0 text-xs text-fg-3"><Trans context="tasks-schedule-ended">已结束</Trans></span> : switchOf(item)}
-                          {menu(item)}
-                        </Row>
-                      ))}
-                    </div>
-                  </Section>
-                )}
+          {paused.length > 0 && (
+            <Section title={t`已暂停`}>
+              <div className={listClass}>
+                {paused.map((item) => (
+                  <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)} dim={!item.enabled}>
+                    {item.enabled ? <span className="shrink-0 text-xs text-fg-3"><Trans context="tasks-schedule-ended">已结束</Trans></span> : switchOf(item)}
+                    {menu(item)}
+                  </Row>
+                ))}
+              </div>
+            </Section>
+          )}
 
-                {runs.length > 0 && (
-                  <Section title={t`最近运行`}>
-                    <div className={listClass}>
-                      {runs.map((item) => {
-                        const reason = reasonText(item);
-                        const openable = hasSession(item.sessionId);
-                        const tone = item.result === 'started' ? 'text-success' : item.result === 'failed' ? 'text-danger' : item.result === 'missed' ? 'text-warning' : 'text-fg-4';
-                        const body = (
-                          <>
-                            {item.result === 'started' ? <IconCircleCheck className={cn('size-4 shrink-0', tone)} /> : item.result === 'failed' ? <IconCircleAlert className={cn('size-4 shrink-0', tone)} /> : <IconTriangleAlert className={cn('size-4 shrink-0', tone)} />}
-                            <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
-                              <span className="truncate text-sm text-fg">{nameById.get(item.automationId) ?? t`已删除的任务`}</span>
-                              {reason && <Tip label={reason.length > 60 ? reason : undefined}><span className="truncate text-xs text-fg-3">{reason}</span></Tip>}
-                            </span>
-                            <span className="shrink-0 text-xs tabular-nums text-fg-3">{formatDateTime(item.at)}</span>
-                          </>
-                        );
-                        const rowClass = 'flex min-h-12 w-full items-center gap-3 px-4 py-2 max-md:px-3';
-                        return openable
-                          ? <button key={item.id} type="button" onClick={() => onOpenSession(item.sessionId!)} className={cn(rowClass, 'transition-colors hover:bg-hover')}>{body}</button>
-                          : <div key={item.id} className={rowClass}>{body}</div>;
-                      })}
-                    </div>
-                  </Section>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+          {runs.length > 0 && (
+            <Section title={t`最近运行`}>
+              <div className={listClass}>
+                {runs.map((item) => {
+                  const reason = reasonText(item);
+                  const openable = hasSession(item.sessionId);
+                  const tone = item.result === 'started' ? 'text-success' : item.result === 'failed' ? 'text-danger' : item.result === 'missed' ? 'text-warning' : 'text-fg-4';
+                  const body = (
+                    <>
+                      {item.result === 'started' ? <IconCircleCheck className={cn('size-4 shrink-0', tone)} /> : item.result === 'failed' ? <IconCircleAlert className={cn('size-4 shrink-0', tone)} /> : <IconTriangleAlert className={cn('size-4 shrink-0', tone)} />}
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-left">
+                        <span className="truncate text-sm text-fg">{nameById.get(item.automationId) ?? t`已删除的任务`}</span>
+                        {reason && <Tip label={reason.length > 60 ? reason : undefined}><span className="truncate text-xs text-fg-3">{reason}</span></Tip>}
+                      </span>
+                      <span className="shrink-0 text-xs tabular-nums text-fg-3">{formatDateTime(item.at)}</span>
+                    </>
+                  );
+                  const rowClass = 'flex min-h-12 w-full items-center gap-3 px-4 py-2 max-md:px-3';
+                  return openable
+                    ? <button key={item.id} type="button" onClick={() => onOpenSession(item.sessionId!)} className={cn(rowClass, 'transition-colors hover:bg-hover')}>{body}</button>
+                    : <div key={item.id} className={rowClass}>{body}</div>;
+                })}
+              </div>
+            </Section>
+          )}
+        </>
+      )}
       <AutomationEditor
         state={editing}
         projects={live}
@@ -312,7 +306,7 @@ export function TasksPage({ projects, project, sessions, backends, enterBehavior
         onClose={() => setChoosing(undefined)}
         onChoose={(item, projectId) => { setChoosing(undefined); void run(item, projectId); }}
       />
-    </OverlayScopeContext.Provider>
+    </PageScaffold>
   );
 }
 
@@ -329,12 +323,10 @@ function ProjectChoice({ automation, projects, defaultProjectId, onClose, onChoo
   }, [automation?.id]);
   return (
     <Dialog open={Boolean(automation)} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-sm" aria-describedby={undefined}>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader><DialogTitle>{automation?.name}</DialogTitle></DialogHeader>
         <DialogBody>
-          <Select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label={t`项目`}>
-            {projects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-          </Select>
+          <Select label={t`项目`} value={projectId} onChange={setProjectId} options={projects.map((item) => ({ value: item.id, label: item.name }))} />
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}><Trans context="tasks-cancel-action">取消</Trans></Button>

@@ -45,7 +45,7 @@ export function ResumeInTerminalDialog({ open, onOpenChange, session }: { open: 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileSheet className="max-w-lg" aria-describedby={undefined}>
+      <DialogContent mobileSheet aria-describedby={undefined}>
         <DialogHeader><DialogTitle><Trans>在终端恢复</Trans></DialogTitle></DialogHeader>
         <DialogBody className="flex flex-col gap-4 pt-1">
           {resume ? <>

@@ -209,7 +209,7 @@ function MessageAttachment({ attachment, variant }: { attachment: UserAttachment
         <DialogTrigger asChild>
           <button type="button" title={name} aria-label={t`预览：${name}`} className={`${attachmentChip} hover:bg-hover`}>{content}</button>
         </DialogTrigger>
-        <DialogContent mobileFullscreen className="h-[min(85dvh,900px)] max-w-5xl overflow-hidden" aria-describedby={undefined}>
+        <DialogContent mobileFullscreen size="workspace" className="h-[min(85dvh,900px)] overflow-hidden" aria-describedby={undefined}>
           <DialogHeader className="flex-row items-center gap-2">
             <DialogTitle className="min-w-0 flex-1 truncate text-sm" title={name}>{name}</DialogTitle>
             <Button size="icon-xs" variant="quiet" asChild>

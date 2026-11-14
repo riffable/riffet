@@ -131,7 +131,8 @@ export function QuickOpen({ open, onOpenChange, projectId, mode: initialMode, re
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="top-[10%] max-h-[calc(88dvh-16px)] max-w-[680px] translate-y-0 gap-0 overflow-hidden p-0"
+        size="content"
+        className="top-[12%] max-h-[calc(88dvh-16px)] translate-y-0 gap-0 overflow-hidden p-0"
         aria-describedby={undefined}
         onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); inputRef.current?.select(); }}
         onEscapeKeyDown={(event) => { if (event.isComposing || event.keyCode === 229) event.preventDefault(); }}
@@ -158,7 +159,7 @@ export function QuickOpen({ open, onOpenChange, projectId, mode: initialMode, re
             <div
               key={row.key} id={optionId(index)} role="option" aria-selected={index === activeIndex} data-index={index}
               onClick={row.run} onPointerMove={() => { if (index !== activeIndex) setActive(index); }}
-              className={cn('flex min-h-9 cursor-default items-center gap-2.5 rounded-lg px-3 py-1', index === activeIndex && 'bg-active')}
+              className={cn('flex min-h-10 cursor-default items-center gap-2.5 rounded-lg px-3 py-1', index === activeIndex && 'bg-active')}
             >{row.body}</div>
           ))}
           {empty && <p className="px-3 py-8 text-center text-sm text-fg-3"><Trans>没有找到匹配项</Trans></p>}

@@ -435,14 +435,14 @@ function AskDialog({ action, text, onConfirm, onCancel }: { action: TaskAction |
   const shown = action ?? last.current;
   return (
     <Dialog open={Boolean(action)} onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{text(shown?.title) ?? shown?.id}</DialogTitle>
           <DialogDescription className="whitespace-pre-line">{text(shown?.confirm)}</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button size="sm" variant="secondary" onClick={onCancel}><Trans>取消</Trans></Button>
-          <Button size="sm" variant="primary" onClick={onConfirm}><Trans>运行</Trans></Button>
+          <Button variant="ghost" onClick={onCancel}><Trans>取消</Trans></Button>
+          <Button variant="primary" onClick={onConfirm}><Trans>运行</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -42,7 +42,7 @@ export function PluginCommandForm({ request, onSubmit, onCancel }: {
   const missing = params.some((field) => field.required && field.kind === 'text' && String(value(field)).trim() === '');
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <DialogContent mobileSheet className="max-w-sm">
+      <DialogContent mobileSheet>
         <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); if (!missing) onSubmit(argsOf(params, values)); }}>
           <DialogHeader>
             <DialogTitle>{shown?.title}</DialogTitle>
@@ -59,16 +59,15 @@ export function PluginCommandForm({ request, onSubmit, onCancel }: {
               : (
                 <Field key={field.key} label={label(field)}>
                   {field.kind === 'choice'
-                    ? <Select value={String(value(field))} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))}>
-                      {(field.options ?? []).map((option) => <option key={option} value={option}>{option}</option>)}
-                    </Select>
+                    ? <Select label={label(field)} value={String(value(field))} onChange={(next) => setValues((current) => ({ ...current, [field.key]: next }))}
+                      options={(field.options ?? []).map((option) => ({ value: option, label: option }))} />
                     : <Input autoFocus={field === params.find((item) => item.kind === 'text')} value={String(value(field))} required={field.required === true} onChange={(event) => setValues((current) => ({ ...current, [field.key]: event.target.value }))} />}
                 </Field>
               ))}
           </DialogBody>
           <DialogFooter>
-            <Button type="button" size="sm" variant="secondary" onClick={onCancel}><Trans>取消</Trans></Button>
-            <Button type="submit" size="sm" variant="primary" disabled={missing}><Trans>运行</Trans></Button>
+            <Button type="button" variant="ghost" onClick={onCancel}><Trans>取消</Trans></Button>
+            <Button type="submit" variant="primary" disabled={missing}><Trans>运行</Trans></Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -37,7 +37,8 @@ export function ImportSessionDialog({ open, onOpenChange, project, onImported, o
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         mobileSheet
-        className="top-[6%] flex max-h-[calc(94dvh-16px)] max-w-[880px] translate-y-0 flex-col gap-0 overflow-hidden p-0"
+        size="content"
+        className="top-[6%] flex max-h-[calc(94dvh-16px)] translate-y-0 flex-col gap-0 overflow-hidden p-0"
         aria-describedby={undefined}
         onOpenAutoFocus={(event) => { event.preventDefault(); inputRef.current?.focus(); }}
       >

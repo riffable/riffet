@@ -63,9 +63,8 @@ export function SharesSection() {
     </div>
     {capability?.publisher && capability.publishers && capability.publishers.length > 1 && (
       <SettingsRow title={t`发布到`}>
-        <Select aria-label={t`发布到`} wrapperClassName="w-56 max-md:w-full" value={capability.publisher.id} onChange={event => void choosePublisher(event.target.value)}>
-          {capability.publishers.map(publisher => <option key={publisher.id} value={publisher.id}>{publisher.label}</option>)}
-        </Select>
+        <Select label={t`发布到`} className="w-56 max-md:w-full" value={capability.publisher.id} onChange={next => void choosePublisher(next)}
+          options={capability.publishers.map(publisher => ({ value: publisher.id, label: publisher.label }))} />
       </SettingsRow>
     )}
     {!items && !error && <div className="flex justify-center p-5"><Spinner /></div>}

@@ -81,7 +81,7 @@ export function WorkbenchOverlays({ addProject, paletteActions, startSessionInDi
   /** The settings dialog's frame, for its loading state and for a failure inside it; the same box as the dialog. */
   const settingsFrame = (children: ReactNode) => (
     <Dialog open={settingsOpen} onOpenChange={(open) => ui.set({ settingsOpen: open })}>
-      <DialogContent mobileFullscreen aria-describedby={undefined} className={SETTINGS_DIALOG_CLASS}>
+      <DialogContent size="workspace" mobileFullscreen aria-describedby={undefined} className={SETTINGS_DIALOG_CLASS}>
         <DialogTitle className="sr-only"><Trans>设置</Trans></DialogTitle>
         {children}
       </DialogContent>

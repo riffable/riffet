@@ -94,7 +94,7 @@ export function FilterBar({ state, options, onChange, onExport }: {
                 <Trans>日期</Trans>
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="start" className="w-[min(22rem,calc(100vw-1rem))] p-3">
+            <PopoverContent mobileSheet align="start" className="w-[min(22rem,calc(100vw-1rem))] p-3">
               <p className="mb-2 text-xs font-medium text-fg-2"><Trans>自定义日期范围</Trans></p>
               <div className="flex items-center gap-2">
                 <input aria-label={t`开始日期`} type="date" value={dateInputValue(state.from)} onChange={(event) => onChange({ ...state, from: event.target.value })} className="h-8 min-w-0 flex-1 rounded-md border border-line-strong bg-elevated px-2 text-xs text-fg" />

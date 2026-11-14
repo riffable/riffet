@@ -23,7 +23,7 @@ import { BackdropLayer } from '@/components/appearance-backdrop';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { useTheme, setThemeId, setThemeMode, resetShareAppearance } from '@/lib/theme';
 import { useThemeOptions } from '@/lib/theme-library';
-import { ChoiceMenu } from '@/components/ui/controls';
+import { Select } from '@/components/ui/controls';
 import { Button } from '@/components/ui/button';
 import { backendLabel } from '@/lib/backends';
 import { PrintImage, PrintRenderingContext } from '@/app/session/printRendering';
@@ -73,8 +73,8 @@ function ReaderAppearance() {
   return <details className="relative text-xs text-fg-3">
     <summary className="cursor-pointer"><Trans>外观</Trans></summary>
     <div className="absolute right-0 top-full z-20 mt-2 flex w-52 flex-col gap-2 rounded-xl border border-line bg-popover p-3 shadow-lg">
-      <ChoiceMenu label={t`主题`} value={themeId} onChange={setThemeId} options={options.map(theme => ({ value: theme.id, label: theme.name }))} />
-      <ChoiceMenu label={t`明暗`} value={mode} onChange={setThemeMode} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
+      <Select label={t`主题`} value={themeId} onChange={setThemeId} options={options.map(theme => ({ value: theme.id, label: theme.name }))} />
+      <Select label={t`明暗`} value={mode} onChange={setThemeMode} options={[{ value: 'system', label: t`跟随系统` }, { value: 'light', label: t`浅色` }, { value: 'dark', label: t`深色` }]} />
       <Button variant="quiet" size="sm" onClick={resetShareAppearance}><Trans>原主题</Trans></Button>
     </div>
   </details>;

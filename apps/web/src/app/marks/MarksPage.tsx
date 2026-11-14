@@ -3,16 +3,15 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { API, type Mark, type MarkListQuery } from '@contracts';
-import { IconBookmark, IconCheck, IconCircleAlert, IconCopy, IconFileText, IconImage, IconImageDown, IconMenu, IconPencilLine, IconRefreshCw, IconSearch, IconSquareCheck, IconTrash2, IconX } from '@/components/icons';
+import { IconBookmark, IconCheck, IconCircleAlert, IconCopy, IconFileText, IconImage, IconImageDown, IconPencilLine, IconRefreshCw, IconSearch, IconSquareCheck, IconTrash2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Badge, EmptyState, Input, Segmented, Select, Spinner, Textarea } from '@/components/ui/controls';
+import { Badge, EmptyState, Input, Select, Spinner, Textarea, UnderlineTabs } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { copyWithToast } from '@/lib/files';
 import { formatDate } from '@/lib/i18n/format';
 import { useLocale } from '@/lib/i18n';
-import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { dismissToast, toast, useToasts, type ToastAction } from '@/lib/toast';
 import { cn, errorMessage, formatDateTime, newId, readSession, timeAgo, writeSession } from '@/lib/utils';
 import { ImageViewer } from '../session/ImageViewer';
@@ -22,7 +21,7 @@ import { useMarks, useStores } from '../state/stores';
 import { WAIT_GRACE_MS, useLingering } from '../session/sessionLayout';
 import { ShareImageDialog, type ShareSource } from './ShareImage';
 import { isComposingKey } from '../session/composerKeyboard';
-import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { PageScaffold } from '../PageScaffold';
 
 const PAGE = 30;
 /** The server's largest page; a re-read of a longer list starts over from its first this many. */
@@ -268,7 +267,6 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
   /** Opens a saved file's conversation with the file in its preview. */
   onOpenMarkFile: (mark: Mark) => void;
 }) {
-  const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
   const { t } = useLingui();
   // `dayLabel` reads the active catalog directly, so the groups must rebuild on a switch.
   const locale = useLocale();
@@ -452,79 +450,72 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
   }, [current]);
   const liveProjects = projects.filter((item) => !item.archivedAt && item.system !== 'quick-chat');
   return (
-    <OverlayScopeContext.Provider value={overlay.scope}>
-      <div className="flex h-full min-h-0 flex-col bg-bg">
-        <header className="flex h-12 shrink-0 items-center gap-2 px-3 max-md:edge-b md:h-13 md:pl-4">
-          <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
-          {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
-          <h1 className="min-w-0 truncate text-sm font-medium text-fg"><Trans>收藏夹</Trans></h1>
-          <div className="ml-auto flex shrink-0 items-center gap-1">
-            {selecting ? (
-              <>
-                <Button size="sm" variant="danger-ghost" className="max-md:size-11 max-md:px-0" aria-label={chosen.size ? t`删除 ${chosen.size} 条收藏` : t`删除收藏`} disabled={!chosen.size} onClick={() => void removeChosen()}><IconTrash2 /><span className="max-md:hidden">{chosen.size ? t`删除 ${chosen.size} 条` : t({ message: '删除', context: 'marks-delete-action' })}</span></Button>
-                <Button size="sm" variant="quiet" onClick={() => { setSelecting(false); setChosen(new Set()); }}><Trans context="marks-done-action">完成</Trans></Button>
-              </>
-            ) : (
-              <>
-                <Button size="sm" variant="quiet" aria-label={t`选择收藏`} disabled={!shown?.length} onClick={() => setSelecting(true)}><IconSquareCheck /><span className="max-sm:hidden"><Trans>选择</Trans></span></Button>
-              </>
-            )}
-          </div>
-        </header>
-        <div ref={scrollRef} onScroll={(event) => { view.current = { ...view.current, scrollTop: event.currentTarget.scrollTop }; }} className="min-h-0 flex-1 overflow-y-auto">
-          <div aria-busy={stale && !error} className="mx-auto flex w-full max-w-[46rem] flex-col px-6 pb-16 pt-6 max-md:px-4 md:pt-10">
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="relative min-w-52 flex-1">
-                  <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-4" />
-                  <Input value={text} onChange={(event) => setText(event.target.value)} placeholder={t`搜索收藏的内容、备注或会话`} aria-label={t`搜索收藏`} className="h-9 rounded-lg pl-9 pr-8" />
-                  {text && <button type="button" aria-label={t`清除搜索`} onClick={() => setText('')} className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-fg-4 hover:text-fg"><IconX className="size-3.5" /></button>}
-                </label>
-                <Select value={projectId} onChange={(event) => setProjectId(event.target.value)} aria-label={t`按项目筛选`} wrapperClassName="w-40 max-md:w-full" className="h-9">
-                  <option value=""><Trans>全部项目</Trans></option>
-                  {liveProjects.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                </Select>
-              </div>
-              <div className="flex items-center justify-between gap-3">
-                <Segmented<Tab> value={tab} onChange={setTab} ariaLabel={t`筛选收藏`} options={[{ value: 'all', label: t`全部` }, { value: 'message', label: t({ message: '回复', context: 'marks-replies-tab' }) }, { value: 'span', label: t({ message: '高亮', context: 'marks-highlights-tab' }) }, { value: 'asset', label: t`图片与文件` }, { value: 'orphaned', label: t`找不到原文` }]} />
-                {current && !stale && <span className="shrink-0 text-xs tabular-nums text-fg-4"><Trans>{total} 条</Trans></span>}
-              </div>
-            </div>
-
-            {waiting && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
-            {!current && error && (
-              <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载收藏`} description={error}>
-                <Button size="sm" onClick={() => store.set((state) => ({ revision: state.revision + 1 }))}><IconRefreshCw /><Trans>重试</Trans></Button>
-              </EmptyState>
-            )}
-            {shown && !shown.length && !stale && (filtered
-              ? <EmptyState className="py-24" icon={<IconSearch />} title={t`没有符合条件的收藏`} />
-              : <EmptyState className="py-24" icon={<IconBookmark />} title={t`还没有收藏`} description={t`在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。`} />)}
-            {days.map((day) => (
-              <section key={day.label} className="mt-8 first-of-type:mt-7">
-                <h2 className="sticky top-0 z-10 -mx-1 mb-3 bg-bg/90 px-1 py-1.5 text-xs font-medium text-fg-3 backdrop-blur">{day.label}</h2>
-                <ul className="flex flex-col gap-3">
-                  {day.marks.map((mark) => (
-                    <MarkCard
-                      key={mark.id}
-                      mark={mark}
-                      projectName={projectName(mark.projectId)}
-                      selecting={selecting}
-                      chosen={chosen.has(mark.id)}
-                      onChoose={(next) => setChosen((set) => { const copy = new Set(set); if (next) copy.add(mark.id); else copy.delete(mark.id); return copy; })}
-                      onOpen={() => onOpenMark(mark.id)}
-                      onOpenFile={() => onOpenMarkFile(mark)}
-                      onNote={(note) => void saveNote(mark, note)}
-                      onDelete={() => void removeOne(mark)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            ))}
-            {current?.nextCursor && !stale && <div ref={sentinelRef} className="flex justify-center py-6">{loadingMore && <Spinner className="size-4" />}</div>}
-          </div>
+    <PageScaffold
+      title={<Trans>收藏夹</Trans>}
+      actions={selecting ? (
+        <>
+          <Button size="sm" variant="danger-ghost" className="max-md:size-11 max-md:px-0" aria-label={chosen.size ? t`删除 ${chosen.size} 条收藏` : t`删除收藏`} disabled={!chosen.size} onClick={() => void removeChosen()}><IconTrash2 /><span className="max-md:hidden">{chosen.size ? t`删除 ${chosen.size} 条` : t({ message: '删除', context: 'marks-delete-action' })}</span></Button>
+          <Button size="sm" variant="quiet" onClick={() => { setSelecting(false); setChosen(new Set()); }}><Trans context="marks-done-action">完成</Trans></Button>
+        </>
+      ) : (
+        <Button size="sm" variant="quiet" className="max-md:size-11 max-md:px-0" aria-label={t`选择收藏`} disabled={!shown?.length} onClick={() => setSelecting(true)}><IconSquareCheck /><span className="max-md:hidden"><Trans>选择</Trans></span></Button>
+      )}
+      columnClassName="flex flex-col"
+      scrollRef={scrollRef}
+      onScroll={(event) => { view.current = { ...view.current, scrollTop: event.currentTarget.scrollTop }; }}
+      scrollerProps={{ 'aria-busy': stale && !error }}
+      sidebarCollapsed={sidebarCollapsed}
+      onClose={onClose}
+      onOpenSidebar={onOpenSidebar}
+      onExpandSidebar={onExpandSidebar}
+    >
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="relative min-w-52 flex-1">
+            <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-4" />
+            <Input value={text} onChange={(event) => setText(event.target.value)} placeholder={t`搜索收藏的内容、备注或会话`} aria-label={t`搜索收藏`} className="h-9 rounded-lg pl-9 pr-8" />
+            {text && <button type="button" aria-label={t`清除搜索`} onClick={() => setText('')} className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-fg-4 hover:text-fg"><IconX className="size-3.5" /></button>}
+          </label>
+          <Select label={t`按项目筛选`} value={projectId} onChange={setProjectId} className="h-9 w-40 max-md:w-full"
+            options={[{ value: '', label: t`全部项目` }, ...liveProjects.map((item) => ({ value: item.id, label: item.name }))]} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <UnderlineTabs<Tab> className="-ml-2 h-10 overflow-x-auto [scrollbar-width:none] max-md:-ml-3" value={tab} onChange={setTab} ariaLabel={t`筛选收藏`} options={[{ value: 'all', label: t`全部` }, { value: 'message', label: t({ message: '回复', context: 'marks-replies-tab' }) }, { value: 'span', label: t({ message: '高亮', context: 'marks-highlights-tab' }) }, { value: 'asset', label: t`图片与文件` }, { value: 'orphaned', label: t`找不到原文` }]} />
+          {current && !stale && <span className="shrink-0 text-xs tabular-nums text-fg-4"><Trans>{total} 条</Trans></span>}
         </div>
       </div>
-    </OverlayScopeContext.Provider>
+
+      {waiting && <div className="flex justify-center py-24"><Spinner className="size-5" /></div>}
+      {!current && error && (
+        <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载收藏`} description={error}>
+          <Button size="sm" onClick={() => store.set((state) => ({ revision: state.revision + 1 }))}><IconRefreshCw /><Trans>重试</Trans></Button>
+        </EmptyState>
+      )}
+      {shown && !shown.length && !stale && (filtered
+        ? <EmptyState className="py-24" icon={<IconSearch />} title={t`没有符合条件的收藏`} />
+        : <EmptyState className="py-24" icon={<IconBookmark />} title={t`还没有收藏`} description={t`在回复菜单里收藏，或选中文字高亮。收藏会保留原文和图片。`} />)}
+      {days.map((day) => (
+        <section key={day.label} className="mt-8 first-of-type:mt-7">
+          <h2 className="sticky top-0 z-10 -mx-1 mb-3 bg-bg/90 px-1 py-1.5 text-xs font-medium text-fg-3 backdrop-blur">{day.label}</h2>
+          <ul className="flex flex-col gap-3">
+            {day.marks.map((mark) => (
+              <MarkCard
+                key={mark.id}
+                mark={mark}
+                projectName={projectName(mark.projectId)}
+                selecting={selecting}
+                chosen={chosen.has(mark.id)}
+                onChoose={(next) => setChosen((set) => { const copy = new Set(set); if (next) copy.add(mark.id); else copy.delete(mark.id); return copy; })}
+                onOpen={() => onOpenMark(mark.id)}
+                onOpenFile={() => onOpenMarkFile(mark)}
+                onNote={(note) => void saveNote(mark, note)}
+                onDelete={() => void removeOne(mark)}
+              />
+            ))}
+          </ul>
+        </section>
+      ))}
+      {current?.nextCursor && !stale && <div ref={sentinelRef} className="flex justify-center py-6">{loadingMore && <Spinner className="size-4" />}</div>}
+    </PageScaffold>
   );
 }

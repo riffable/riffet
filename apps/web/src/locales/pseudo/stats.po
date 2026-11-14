@@ -226,10 +226,6 @@ msgstr ""
 msgid "悬停或选中日期查看用量"
 msgstr ""
 
-#: src/app/stats/StatsPage.tsx
-msgid "打开侧边栏"
-msgstr ""
-
 #: src/app/stats/AreaChart.tsx
 msgid "拆分"
 msgstr ""

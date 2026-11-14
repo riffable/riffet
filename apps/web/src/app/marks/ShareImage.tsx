@@ -213,7 +213,7 @@ function useSize(element: HTMLElement | null) {
 export function ShareImageDialog({ source, open, onOpenChange }: { source: ShareSource; open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent mobileFullscreen aria-describedby={undefined} className="h-[min(760px,calc(100dvh-32px))] max-w-[min(1100px,calc(100vw-32px))] overflow-hidden md:flex-row">
+      <DialogContent size="workspace" mobileFullscreen aria-describedby={undefined} className="h-[min(760px,calc(100dvh-32px))] overflow-hidden md:flex-row">
         <ShareImageContents source={source} open={open} />
       </DialogContent>
     </Dialog>

@@ -9,7 +9,7 @@ import { sortSessionsByActivity } from '@/lib/session-order';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { cn } from '@/lib/utils';
 import { isComposingKey } from './session/composerKeyboard';
-import { QuickInput, quickListClass, SessionSearchResults, type SessionSearchProps } from './SessionSearchDialog';
+import { QuickInput, quickListTallClass, SessionSearchResults, type SessionSearchProps } from './SessionSearchDialog';
 
 /** One thing the palette can do. The workbench owns what a row runs; the palette only lists it. */
 export interface PaletteAction {
@@ -80,7 +80,8 @@ export function CommandPalette({ open, scope, onOpenChange, onScopeChange, searc
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         mobileSheet
-        className="top-[12%] max-h-[calc(88dvh-16px)] max-w-[620px] translate-y-0 gap-0 overflow-hidden p-0"
+        size="content"
+        className="top-[12%] max-h-[calc(88dvh-16px)] translate-y-0 gap-0 overflow-hidden p-0"
         aria-describedby={undefined}
         onOpenAutoFocus={(event) => {
           navigating.current = false;
@@ -200,7 +201,7 @@ function PaletteList({ sessions: liveSessions, projects: liveProjects, actions: 
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={onQueryKeyDown}
       />
-      <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t({ message: '命令', context: 'workbench-command-label' })} className={quickListClass}>
+      <div ref={listRef} id={LIST_ID} role="listbox" aria-label={t({ message: '命令', context: 'workbench-command-label' })} className={quickListTallClass}>
         {matches.length ? matches.map((candidate, index) => (
           <div
             key={candidate.id}

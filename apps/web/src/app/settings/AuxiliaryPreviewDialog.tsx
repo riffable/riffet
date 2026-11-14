@@ -89,7 +89,7 @@ export function AuxiliaryPreviewDialog({ open, purpose, model, onOpenChange }: {
 
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{purpose === 'title' ? t`会话标题` : t`交接摘要`}</DialogTitle>
           <DialogDescription className="truncate font-mono text-xs">{model.model}</DialogDescription>
@@ -115,8 +115,8 @@ export function AuxiliaryPreviewDialog({ open, purpose, model, onOpenChange }: {
             : error && <p role="alert" className="text-sm text-danger">{error}</p>}
         </DialogBody>
         <DialogFooter>
-          <Button size="sm" variant="secondary" onClick={() => changeOpen(false)}>{t`关闭`}</Button>
-          <Button size="sm" variant="primary" disabled={!canGenerate} onClick={() => void generate()}>
+          <Button variant="ghost" onClick={() => changeOpen(false)}>{t`关闭`}</Button>
+          <Button variant="primary" disabled={!canGenerate} onClick={() => void generate()}>
             {generating && <Spinner className="text-current" />}
             {generating ? t`生成中…` : t`生成`}
           </Button>

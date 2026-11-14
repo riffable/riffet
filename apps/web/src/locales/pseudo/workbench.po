@@ -7,6 +7,7 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: pseudo\n"
 
+#. placeholder {0}: agent.label
 #. placeholder {0}: label(backendId)
 #. placeholder {0}: props.backend.label
 #: src/app/ProjectHome.tsx
@@ -62,6 +63,7 @@ msgstr ""
 msgid "Couldn't read Git status"
 msgstr ""
 
+#: src/app/ProjectHome.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "Shell 终端"
 msgstr ""
@@ -203,7 +205,11 @@ msgstr ""
 msgid "侧边聊天"
 msgstr ""
 
+#: src/app/FolderFavorites.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
+#: src/app/WorkbenchHeader.tsx
 msgid "保存"
 msgstr ""
 
@@ -228,6 +234,8 @@ msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/Sidebar.tsx
 msgid "全部"
 msgstr ""
 
@@ -243,6 +251,10 @@ msgstr ""
 msgid "全部标签"
 msgstr ""
 
+#: src/app/plugins/PluginFlowDialog.tsx
+#: src/app/plugins/PluginsPage.tsx
+#: src/app/tabs/TabBar.tsx
+#: src/app/tabs/TabStyleSetting.tsx
 #: src/app/use-terminal-actions.ts
 msgid "关闭"
 msgstr ""
@@ -296,6 +308,8 @@ msgstr ""
 msgid "最后一个标签"
 msgstr ""
 
+#: src/app/ProjectHome.tsx
+#: src/app/QuickChatHistory.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "最近会话"
 msgstr ""
@@ -351,11 +365,6 @@ msgctxt "settings-delete-action"
 msgid "删除"
 msgstr ""
 
-#: src/app/SessionDeletion.tsx
-msgctxt "workbench-delete-action"
-msgid "删除"
-msgstr ""
-
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
 msgid "删除…"
@@ -366,7 +375,7 @@ msgid "删除「{title}」的数据？"
 msgstr ""
 
 #: src/app/SessionDeletion.tsx
-msgid "删除会话？"
+msgid "删除会话"
 msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -375,6 +384,10 @@ msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "删除数据"
+msgstr ""
+
+#: src/app/SessionDeletion.tsx
+msgid "删除这个会话？"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
@@ -455,9 +468,11 @@ msgid "取消置顶"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
+#: src/plugins/hostViews.ts
 msgid "变更"
 msgstr ""
 
+#: src/app/Header.tsx
 #: src/app/WorkbenchPanels.tsx
 msgid "变更与文件"
 msgstr ""
@@ -534,6 +549,7 @@ msgid "在浏览器中打开授权页"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
+#: src/app/Sidebar.tsx
 msgid "在终端中"
 msgstr ""
 
@@ -577,6 +593,7 @@ msgstr ""
 msgid "外部插件已暂停"
 msgstr ""
 
+#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "多个标签用逗号分隔"
 msgstr ""
@@ -802,13 +819,13 @@ msgstr ""
 msgid "打开 Agent 扩展"
 msgstr ""
 
-#: src/app/plugins/PluginsPage.tsx
 #: src/app/Workbench.tsx
 msgid "打开侧栏"
 msgstr ""
 
 #: src/app/Header.tsx
 #: src/app/MobileSidebar.tsx
+#: src/app/PageScaffold.tsx
 msgid "打开侧边栏"
 msgstr ""
 
@@ -947,6 +964,7 @@ msgstr ""
 msgid "搜索结果"
 msgstr ""
 
+#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "撤销"
 msgstr ""
@@ -965,6 +983,8 @@ msgctxt "settings-action-failed"
 msgid "操作失败"
 msgstr ""
 
+#: src/app/tabs/tabsStore.ts
+#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgctxt "workbench-action-failed"
 msgid "操作失败"
@@ -1115,6 +1135,7 @@ msgstr ""
 msgid "无法刷新会话列表"
 msgstr ""
 
+#: src/app/use-project-actions.ts
 #: src/app/use-session-actions.ts
 msgid "无法刷新项目列表"
 msgstr ""
@@ -1297,6 +1318,7 @@ msgstr ""
 msgid "暂无会话"
 msgstr ""
 
+#: src/app/ProjectHome.tsx
 #: src/app/use-session-actions.ts
 msgid "暂时无法确认是否已发送"
 msgstr ""
@@ -1341,6 +1363,8 @@ msgstr ""
 msgid "本机"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginsPage.tsx
 #: src/app/SessionInfo.tsx
 msgid "权限"
 msgstr ""
@@ -1415,8 +1439,10 @@ msgstr ""
 msgid "没有匹配的插件"
 msgstr ""
 
+#: src/app/CommandPalette.tsx
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
 msgid "没有匹配的结果"
 msgstr ""
 
@@ -1745,6 +1771,10 @@ msgstr ""
 msgid "设置和数据会保留"
 msgstr ""
 
+#: src/app/Workbench.tsx
+msgid "设计规范"
+msgstr ""
+
 #: src/app/App.tsx
 msgid "访问令牌"
 msgstr ""
@@ -1843,6 +1873,7 @@ msgid "返回"
 msgstr ""
 
 #: src/app/SessionSearchDialog.tsx
+#: src/app/Sidebar.tsx
 msgid "还没有会话"
 msgstr ""
 
@@ -1921,6 +1952,7 @@ msgstr ""
 msgid "重命名…"
 msgstr ""
 
+#: src/app/Header.tsx
 #: src/app/use-session-actions.ts
 msgid "重命名会话"
 msgstr ""
@@ -1999,4 +2031,8 @@ msgstr ""
 
 #: src/plugins/TaskConfirmDialog.tsx
 msgid "首次运行这条命令"
+msgstr ""
+
+#: src/app/ProjectHome.tsx
+msgid "默认模型"
 msgstr ""

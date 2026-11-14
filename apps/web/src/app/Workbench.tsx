@@ -34,7 +34,7 @@ import { useProjectActions } from './use-project-actions';
 import { useTerminalActions } from './use-terminal-actions';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
 import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useUi, WorkbenchEffects } from './state/stores';
-import { NO_PAGE, STORAGE_KEYS } from './state/navStore';
+import { NO_PAGE, STORAGE_KEYS, type NavPage } from './state/navStore';
 import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sidebarMaxWidth } from './state/uiStore';
 import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
 import { useSessionViews, setViewVisible } from './session/viewPrefs';
@@ -51,6 +51,7 @@ const TasksPage = lazy(() => import('./tasks/TasksPage').then((module) => ({ def
 const ExtensionsPage = lazy(() => import('./extensions/ExtensionsPage').then((module) => ({ default: module.ExtensionsPage })));
 const PluginsPage = lazy(() => import('./plugins/PluginsPage').then((module) => ({ default: module.PluginsPage })));
 const MarksPage = lazy(() => import('./marks/MarksPage').then((module) => ({ default: module.MarksPage })));
+const DesignPage = lazy(() => import('./design/DesignPage').then((module) => ({ default: module.DesignPage })));
 
 const pushError = (message: string) => toast.error(message);
 
@@ -96,6 +97,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const extensionsOpen = useNav((state) => state.extensionsOpen);
   const extensionsMounted = useNav((state) => state.extensionsMounted);
   const marksOpen = useNav((state) => state.marksOpen);
+  const designOpen = useNav((state) => state.designOpen);
   const attemptsGroupId = useNav((state) => state.attemptsGroupId);
   const sessionView = useNav((state) => state.sessionView);
   const statsState = useNav((state) => state.statsState);
@@ -110,7 +112,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const nativeRunSeed = useUi((state) => state.nativeRunSeed);
   const backends = useCatalog((state) => state.backends);
   const homeBackendId = useCatalog((state) => state.homeBackendId);
-  const homeProfileId = useCatalog((state) => state.homeProfileId);
+  // Until the first bootstrap hands it to the store (`initHome`), the agent's saved provider: the
+  // first frames then read that provider's cached catalog instead of painting the default model.
+  const storedHomeProfileId = useCatalog((state) => state.homeProfileId);
+  const homeProfileId = storedHomeProfileId ?? settings.nativeBackendDefaults?.[homeBackendId]?.profileId;
   const catalogResult = useCatalog((state) => state.result);
   const profileCatalogs = useCatalog((state) => state.profileCatalogs);
   const nativeCatalogLoading = useCatalog((state) => state.loading);
@@ -192,20 +197,21 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const standInCatalog = catalogLoading && !catalogSession && held?.agent === catalogAgent ? held.result.entry.models : undefined;
   const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
-  const pageOpen = pluginsOpen || statsOpen || tasksOpen || extensionsOpen || marksOpen;
+  const pageOpen = pluginsOpen || statsOpen || tasksOpen || extensionsOpen || marksOpen || designOpen;
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
-  useDocumentTitle(pageOpen ? undefined : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`定时任务` : marksOpen ? t`收藏夹` : quickChat ? t`快速对话` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`定时任务` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
 
-  const openPage = useCallback((page: 'stats' | 'tasks' | 'extensions' | 'marks' | 'plugins') => {
+  const openPage = useCallback((page: NavPage) => {
     if (page === 'extensions' && nav.get().extensionsOpen || page === 'plugins' && nav.get().pluginsOpen) { ui.setMobileSidebar(false); return; }
     void nav.navigate(() => { nav.openPage(page); ui.setMobileSidebar(false); });
   }, [nav, ui]);
   const openSettingsAt = useCallback((section?: SettingsSection) => {
     if (section === 'integrations') { openPage('plugins'); return; }
+    if (section === 'design') { openPage('design'); return; }
     if (section?.includes('/')) { void nav.navigate(() => nav.openPlugins(section.split('/')[0], section)); return; }
     void nav.navigate(() => { ui.openSettings(section); ui.setMobileSidebar(false); });
   }, [nav, ui]);
@@ -244,6 +250,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const expandSidebar = useCallback(() => ui.setSidebarCollapsed(false), [ui]);
   const setStatsState = useCallback((next: typeof statsState) => nav.set({ statsState: next }), [nav]);
   const closeStats = useCallback(() => nav.set({ statsOpen: false }), [nav]);
+  const closeDesign = useCallback(() => nav.set({ designOpen: false }), [nav]);
   const openStatsSession = useCallback((row: StatsRunRow) => {
     const target = lists.get().sessions.find((item) => item.id === row.sessionId);
     if (target) handlers.selectSession(target);
@@ -263,11 +270,12 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     catalog.setHomeProfile(profileId);
     settingsStore.remember(homeBackendId, { profileId, model });
   };
-  const chooseBackend = (backendId: NativeBackendId, profileId?: string) => {
+  /** `model` comes with an agent picked through one of its models; without one a new provider clears the old model. */
+  const chooseBackend = (backendId: NativeBackendId, profileId?: string, model?: string) => {
     catalog.setHome(backendId, profileId ?? settings.nativeBackendDefaults?.[backendId]?.profileId);
     writeStored(STORAGE_KEYS.backend, backendId);
     const savedProfile = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backends.find((entry) => entry.backendId === backendId)?.profiles.find((entry) => entry.isDefault)?.id;
-    settingsStore.remember(backendId, { ...(profileId ? { profileId } : {}), ...(profileId && profileId !== savedProfile ? { model: '' } : {}) }, true);
+    settingsStore.remember(backendId, { ...(profileId ? { profileId } : {}), ...(model !== undefined ? { model } : profileId && profileId !== savedProfile ? { model: '' } : {}) }, true);
   };
   const rememberModel = (model: string) => settingsStore.remember(homeBackendId, { model });
 
@@ -380,7 +388,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onSelect={(id, tab = 'overview') => nav.set({ pluginId: id, pluginViewId: '', pluginDetailTab: tab })}
       onClose={() => { void nav.navigate(() => nav.set({ pluginsOpen: false })); }}
       onBeforeLeaveChange={nav.registerPluginBeforeLeave}
-      onOpenSidebar={!desktop || sidebarCollapsed ? () => { if (desktop) expandSidebar(); else openMobileSidebar(); } : undefined}
+      sidebarCollapsed={desktop && sidebarCollapsed}
+      onOpenSidebar={openMobileSidebar}
+      onExpandSidebar={expandSidebar}
       onOpenFeature={(view) => { void nav.navigate(() => {
         nav.set({ pluginsOpen: false });
         if (view.locations.includes('session-view') && session) { setViewVisible(view.id, true); nav.set({ sessionView: { sessionId: session.id, view: view.id } }); }
@@ -410,6 +420,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         onExpandSidebar={expandSidebar}
         onOpenMark={(id) => void openMark(id)}
         onOpenMarkFile={(mark) => void openMark(mark.id).then(() => { if (mark.asset?.path) ui.preview(mark.asset.path); })}
+      />
+    );
+  } else if (designOpen) {
+    content = (
+      <DesignPage
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={closeDesign}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
       />
     );
   } else if (attemptsGroupId) {

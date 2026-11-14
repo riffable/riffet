@@ -55,7 +55,7 @@ export function SessionReferences({ references, recipientSessionId, onOpenSessio
       </button>)}
     </div>
     <Dialog open={Boolean(selected)} onOpenChange={open => { if (!open) { requestRevision.current += 1; setLoading(false); setSelected(undefined); } }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent size="content">
         <DialogHeader><DialogTitle>{selected?.title}</DialogTitle></DialogHeader>
         <DialogBody className="flex max-h-[70dvh] flex-col gap-3 overflow-y-auto">
           {selected && <>

@@ -2320,6 +2320,20 @@ html.dark {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
 }
+/* A menu or popover drawn as a bottom sheet carries its scrim as a spread shadow, so it fades with the sheet. */
+@keyframes floating-sheet-enter {
+  from { translate: 0 100%; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0); }
+}
+@keyframes floating-sheet-exit {
+  to { translate: 0 100%; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0); }
+}
+/* Reduced motion: the sheet and its scrim fade in place instead of rising. */
+@keyframes floating-sheet-fade-in {
+  from { opacity: 0; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0); }
+}
+@keyframes floating-sheet-fade-out {
+  to { opacity: 0; box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0); }
+}
 
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .workbench-viewport {
@@ -2406,6 +2420,45 @@ html.dark {
   }
   .mobile-dialog-sheet[data-state="closed"] {
     animation: mobile-sheet-exit var(--duration-base) var(--ease-standard) both;
+  }
+  /* A sheet's actions share the row equally at a finger's height (patterns.md §2.2). */
+  .mobile-dialog-sheet .ui-dialog-footer {
+    flex-wrap: nowrap;
+    padding-inline: 16px;
+  }
+  .mobile-dialog-sheet .ui-dialog-footer > button {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 44px;
+  }
+  /* Menus, and popovers that ask for it, leave their trigger and rise from the bottom edge
+     (patterns.md §2.3). Radix positions the wrapper with inline styles, hence !important. */
+  [data-radix-popper-content-wrapper]:has(> .ui-floating-sheet) {
+    transform: none !important;
+    inset: auto 0 max(0px, calc(100dvh - var(--app-height, 100dvh) - var(--app-top, 0px))) 0 !important;
+    min-width: 0 !important;
+  }
+  .ui-floating-content.ui-floating-sheet {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(var(--app-height, 100dvh) - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    border-radius: 18px 18px 0 0;
+    /* The home indicator's inset, in the sheet's own colour; a popover keeps its own padding. */
+    border-bottom: env(safe-area-inset-bottom, 0px) solid var(--color-popover);
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.25);
+    animation: floating-sheet-enter var(--duration-base) var(--ease-standard) both;
+  }
+  .ui-floating-content.ui-floating-sheet:not(.ui-popover-content) {
+    padding: 8px;
+  }
+  .dark .ui-floating-content.ui-floating-sheet {
+    box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.5);
+  }
+  .ui-floating-content.ui-floating-sheet[data-state="closed"] {
+    animation: floating-sheet-exit var(--duration-base) var(--ease-standard) both;
   }
   .ui-dialog-close {
     top: max(8px, env(safe-area-inset-top, 0px));
@@ -2544,6 +2597,15 @@ html.dark {
   /* motion-loop: replaces the spinner's rotation with a slow fade under reduced motion */
   .ui-spinner {
     animation: spinner-breathe 2.4s ease-in-out infinite !important;
+  }
+}
+/* After the phone sheet rules, which set the rise with the same specificity. */
+@media (prefers-reduced-motion: reduce) and (max-width: 767px), (prefers-reduced-motion: reduce) and (pointer: coarse) and (max-height: 500px) {
+  .ui-floating-content.ui-floating-sheet {
+    animation-name: floating-sheet-fade-in;
+  }
+  .ui-floating-content.ui-floating-sheet[data-state="closed"] {
+    animation-name: floating-sheet-fade-out;
   }
 }
 

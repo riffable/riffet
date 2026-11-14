@@ -1300,6 +1300,10 @@ msgstr "无法加载交互预览，请重试"
 msgid "无法加载更早的历史，未能定位到这条消息"
 msgstr "无法加载更早的历史，未能定位到这条消息"
 
+#: src/app/session/agentModels.ts
+msgid "无法加载模型列表"
+msgstr "无法加载模型列表"
+
 #: src/app/session/TranscriptView.tsx
 msgid "无法加载这处结果所在的历史"
 msgstr "无法加载这处结果所在的历史"

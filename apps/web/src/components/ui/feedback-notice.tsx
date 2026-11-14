@@ -80,7 +80,7 @@ function FeedbackRow({ message, current, revision, onFinished, action, renderMes
     </div>
   </Collapse>
     {floating && <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-      <DialogContent mobileSheet className="max-w-lg" aria-describedby={undefined}>
+      <DialogContent mobileSheet aria-describedby={undefined}>
         <DialogHeader><DialogTitle><Trans>通知详情</Trans></DialogTitle></DialogHeader>
         <DialogBody><div className="max-h-[60dvh] overflow-auto whitespace-pre-wrap break-words text-sm text-fg-2">{message.text}</div>
           <Button variant="quiet" size="xs" className="mt-3" onClick={() => void copyWithToast(message.text)}><Trans>复制</Trans></Button>

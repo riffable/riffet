@@ -323,7 +323,7 @@ function PullRequestDialog({ open, onOpenChange, projectId, branch, onCreated, o
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle><Trans>Create Pull Request</Trans></DialogTitle>
           <DialogDescription>{!branch.upstream || branch.ahead ? <Trans>Pushes {branch.branch} first.</Trans> : <Trans>From {branch.branch}.</Trans>}{' '}<Trans>An empty title is filled in from the commits.</Trans></DialogDescription>
@@ -392,7 +392,7 @@ export function MergeDialog({ open, onOpenChange, branch, into, dirty, directory
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-      <DialogContent className="max-w-lg">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{title ?? t`Merge into ${target}`}</DialogTitle>
           <DialogDescription>{description ?? <Trans>Merges <span className="font-mono text-fg-2">{branch}</span> into the original project.</Trans>}{' '}<Trans>A conflict abandons the whole merge, leaving no half-merged files.</Trans></DialogDescription>

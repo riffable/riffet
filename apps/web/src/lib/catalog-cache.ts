@@ -6,7 +6,8 @@ import type { NativeBackendCatalogEntry } from '@contracts';
  * kept: one that failed or came back empty is something to report, not to replay.
  */
 const STORAGE_KEY = 'riffet.modelCatalogs';
-const MAX_ENTRIES = 12;
+// Room for every agent's providers, which the new-session model menu lists, beside recent conversations'.
+const MAX_ENTRIES = 32;
 /** A stored catalog older than this is only a stale hint; the next open reads it fresh. */
 export const CATALOG_CACHE_TTL_MS = 5 * 60_000;
 

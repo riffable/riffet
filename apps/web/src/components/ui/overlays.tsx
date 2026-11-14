@@ -26,7 +26,7 @@ export function Toaster() {
       {toasts.slice(0, 4).map((item) => <ToastRow key={item.id} item={item} onDetails={() => setDetail({ item, open: true })} />)}
     </div>
     <Dialog open={detail.open} onOpenChange={(open) => setDetail(previous => ({ ...previous, open }))}>
-      <DialogContent mobileSheet className="max-w-lg" aria-describedby={undefined}>
+      <DialogContent mobileSheet aria-describedby={undefined}>
         <DialogHeader><DialogTitle><Trans>通知详情</Trans></DialogTitle></DialogHeader>
         <DialogBody><div className="max-h-[60dvh] overflow-auto whitespace-pre-wrap break-words text-sm text-fg-2">{detail.item?.details ? <><p className="mb-3">{detail.item.message}</p>{detail.item.details}</> : detail.item?.message}</div></DialogBody>
       </DialogContent>
@@ -179,7 +179,7 @@ export function DialogHost() {
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => { if (!open) cancel(); }}>
       {displayed && (
-        <DialogContent mobileSheet className="max-w-[420px]" hideClose onOpenAutoFocus={(event) => { if (displayed.type === 'confirm') { event.preventDefault(); } }}>
+        <DialogContent mobileSheet size="confirm" hideClose onOpenAutoFocus={(event) => { if (displayed.type === 'confirm') { event.preventDefault(); } }}>
           <Fragment key={displayed.id}>
             <DialogHeader className="pr-5">
               <DialogTitle>{displayed.title}</DialogTitle>

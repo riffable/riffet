@@ -80,9 +80,9 @@ export function SessionDeletionDialog() {
   return (
     <Dialog open={Boolean(request)} onOpenChange={(open) => { if (!open && !store.get().busy) store.set({ request: undefined, error: '' }); }}>
       {shown && (
-        <DialogContent mobileSheet className="max-w-[420px]" hideClose onOpenAutoFocus={(event) => event.preventDefault()}>
+        <DialogContent mobileSheet size="confirm" hideClose onOpenAutoFocus={(event) => event.preventDefault()}>
           <DialogHeader className="pr-5">
-            <DialogTitle>{t`删除会话？`}</DialogTitle>
+            <DialogTitle>{t`删除这个会话？`}</DialogTitle>
             <DialogDescription>{t`所有设备都会移除，无法恢复。项目文件和 CLI 历史保留。`}</DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-1.5 text-sm text-fg-3 empty:hidden">
@@ -92,7 +92,7 @@ export function SessionDeletionDialog() {
           </DialogBody>
           <DialogFooter>
             <Button variant="ghost" autoFocus disabled={busy} onClick={() => store.set({ request: undefined, error: '' })}><Trans context="common-cancel-action">取消</Trans></Button>
-            <Button variant="danger" className="min-w-16" disabled={busy} onClick={() => void confirm()}><Trans context="workbench-delete-action">删除</Trans></Button>
+            <Button variant="danger" className="min-w-16" disabled={busy} onClick={() => void confirm()}><Trans>删除会话</Trans></Button>
           </DialogFooter>
         </DialogContent>
       )}

@@ -67,14 +67,13 @@ export function QuickChatSection({ settings, onSaved, onError }: SaveProps) {
     </SettingsRow>
     <SettingsRow title={t`自动归档`}>
       <Select
-        aria-label={t`自动归档`}
-        wrapperClassName="w-40"
+        label={t`自动归档`}
+        className="w-40"
         value={String(retentionDays)}
         disabled={busy}
-        onChange={(event) => void saveRetention(Number(event.target.value))}
-      >
-        {retentionOptions.map((days) => <option key={days} value={String(days)}>{days === 0 ? t`永不` : t`${days} 天`}</option>)}
-      </Select>
+        onChange={(next) => void saveRetention(Number(next))}
+        options={retentionOptions.map((days) => ({ value: String(days), label: days === 0 ? t`永不` : t`${days} 天` }))}
+      />
     </SettingsRow>
   </SettingsGroup>;
 }

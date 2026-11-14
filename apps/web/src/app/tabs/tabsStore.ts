@@ -93,9 +93,9 @@ function insertNormal(tabs: readonly TabEntry[], normal: readonly TabEntry[], en
   return [...tabs.slice(0, at), entry, ...tabs.slice(at)];
 }
 
-/** Statistics, tasks, marks, extensions and attempt pages cover the conversation; the selection underneath stays. */
-export function isPageOpen(state: Pick<NavState, 'statsOpen' | 'tasksOpen' | 'marksOpen' | 'extensionsOpen' | 'attemptsGroupId'>): boolean {
-  return state.statsOpen || state.tasksOpen || state.marksOpen || state.extensionsOpen || Boolean(state.attemptsGroupId);
+/** Statistics, tasks, marks, design, extensions and attempt pages cover the conversation; the selection underneath stays. */
+export function isPageOpen(state: Pick<NavState, 'statsOpen' | 'tasksOpen' | 'marksOpen' | 'designOpen' | 'extensionsOpen' | 'attemptsGroupId'>): boolean {
+  return state.statsOpen || state.tasksOpen || state.marksOpen || state.designOpen || state.extensionsOpen || Boolean(state.attemptsGroupId);
 }
 
 const LAUNCH_WINDOW_MS = 10_000;

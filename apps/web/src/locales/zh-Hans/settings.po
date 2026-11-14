@@ -57,11 +57,28 @@ msgstr "{0} CLI 自带登录"
 msgid "{0} 上下文长度"
 msgstr "{0} 上下文长度"
 
+#. placeholder {0}: GLYPHS.length
+#: src/app/design/IconChapter.tsx
+msgid "{0} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。"
+msgstr "{0} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。"
+
 #. placeholder {0}: profile.enabledModels.length
 #. placeholder {0}: status.count
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "{0} 个模型"
 msgstr "{0} 个模型"
+
+#. placeholder {0}: THEME_ROLES.length
+#: src/app/design/Opening.tsx
+msgid "{0} 个颜色角色"
+msgstr "{0} 个颜色角色"
+
+#. placeholder {0}: THEME_ROLES.length
+#. placeholder {1}: SURFACES.length
+#. placeholder {2}: INKS.length
+#: src/app/design/ColorChapter.tsx
+msgid "{0} 个颜色角色由主题提供：{1} 级底色表达层次，{2} 级墨色表达文字主次，彩色用于状态与 agent 标志。"
+msgstr "{0} 个颜色角色由主题提供：{1} 级底色表达层次，{2} 级墨色表达文字主次，彩色用于状态与 agent 标志。"
 
 #. placeholder {0}: label.minutes
 #: src/app/settings/ServiceCharts.tsx
@@ -72,6 +89,21 @@ msgstr "{0} 分钟前"
 #: src/app/settings/PreferencesSections.tsx
 msgid "{0} 小时"
 msgstr "{0} 小时"
+
+#. placeholder {0}: Object.keys(DESKTOP_TEXT).length
+#: src/app/design/Opening.tsx
+msgid "{0} 档字号"
+msgstr "{0} 档字号"
+
+#. placeholder {0}: Object.keys(MOTION_DURATION).length
+#: src/app/design/Opening.tsx
+msgid "{0} 档时长"
+msgstr "{0} 档时长"
+
+#. placeholder {0}: Object.keys(SPACE).length
+#: src/app/design/Opening.tsx
+msgid "{0} 档间距"
+msgstr "{0} 档间距"
 
 #. placeholder {0}: current.model
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -86,6 +118,10 @@ msgstr "{count} 条"
 #: src/app/settings/QuickChatSection.tsx
 msgid "{days} 天"
 msgstr "{days} 天"
+
+#: src/app/design/Opening.tsx
+msgid "{icons} 个图标"
+msgstr "{icons} 个图标"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "{label} 取色"
@@ -125,9 +161,17 @@ msgstr "/bind <码>"
 msgid "~/.riffet/dsh（默认）"
 msgstr "~/.riffet/dsh（默认）"
 
+#: src/app/design/TypeChapter.tsx
+msgid "12 项通过"
+msgstr "12 项通过"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "2 个文件 · 用时 1 分钟"
 msgstr "2 个文件 · 用时 1 分钟"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "2–4 个，固定，标签简短"
+msgstr "2–4 个，固定，标签简短"
 
 #: src/app/settings/ServiceCharts.tsx
 msgid "2xx 成功"
@@ -141,11 +185,19 @@ msgstr "3xx 重定向"
 msgid "4xx 客户端"
 msgstr "4xx 客户端"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "5 个以上，或数量随数据变化"
+msgstr "5 个以上，或数量随数据变化"
+
 #. placeholder {0}: formatLoad(host.loadAvg[1])
 #. placeholder {1}: formatLoad(host.loadAvg[2])
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "5 分钟 {0} · 15 分钟 {1}"
 msgstr "5 分钟 {0} · 15 分钟 {1}"
+
+#: src/app/design/Opening.tsx
+msgid "5 档阴影"
+msgstr "5 档阴影"
 
 #. placeholder {0}: formatCount(errors)
 #: src/app/settings/ServiceStatusSection.tsx
@@ -156,9 +208,14 @@ msgstr "5xx {0}"
 msgid "5xx 服务器"
 msgstr "5xx 服务器"
 
+#: src/app/design/ColorChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "Agent"
 msgstr "Agent"
+
+#: src/app/design/TypeChapter.tsx
+msgid "Agent 在 3 个文件里做了 12 处修改"
+msgstr "Agent 在 3 个文件里做了 12 处修改"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "CLI 入口"
@@ -176,6 +233,11 @@ msgstr "CLI 自带登录"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "CLI 默认"
 msgstr "CLI 默认"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/OverlayChapter.tsx
+msgid "Codex 本周额度剩余 8%。"
+msgstr "Codex 本周额度剩余 8%。"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "CPU 与内存"
@@ -201,9 +263,41 @@ msgstr "iPhone 在后台将不再收到通知"
 msgid "Server 构建"
 msgstr "Server 构建"
 
+#: src/app/design/ColorChapter.tsx
+msgid "success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。"
+msgstr "success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "Web 构建"
 msgstr "Web 构建"
+
+#: src/app/design/Opening.tsx
+msgid "一处定义，四端生成"
+msgstr "一处定义，四端生成"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "一级视图内部的子视图，2–4 个"
+msgstr "一级视图内部的子视图，2–4 个"
+
+#: src/app/design/Opening.tsx
+msgid "七种浮层"
+msgstr "七种浮层"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "七种浮层按用途区分。一次操作只出现一个浮层，它从触发它的控件展开，关闭时收回同一位置。"
+msgstr "七种浮层按用途区分。一次操作只出现一个浮层，它从触发它的控件展开，关闭时收回同一位置。"
+
+#: src/app/design/Opening.tsx
+msgid "三条原则"
+msgstr "三条原则"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "三条原则与设计决定"
+msgstr "三条原则与设计决定"
+
+#: src/app/design/Opening.tsx
+msgid "三条原则用于取舍。具体规则与原则冲突时以原则为准，结论记入 docs/design/DECISIONS.md。"
+msgstr "三条原则用于取舍。具体规则与原则冲突时以原则为准，结论记入 docs/design/DECISIONS.md。"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "上下文"
@@ -216,6 +310,10 @@ msgstr "上下文占用"
 #: src/app/settings/ProviderModelList.tsx
 msgid "上下文长度"
 msgstr "上下文长度"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "上层引用下层的名字，下层不知道上层。"
+msgstr "上层引用下层的名字，下层不知道上层。"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "上移{name}"
@@ -261,9 +359,18 @@ msgstr "不设置"
 msgid "不限"
 msgstr "不限"
 
+#. placeholder {0}: Object.keys(DESKTOP_TEXT).length
+#: src/app/design/TypeChapter.tsx
+msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍；中西文混排遵循 W3C《中文排版需求》。"
+msgstr "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍；中西文混排遵循 W3C《中文排版需求》。"
+
 #: src/app/settings/settingsSections.ts
 msgid "个人资料"
 msgstr "个人资料"
+
+#: src/app/design/TypeChapter.tsx
+msgid "中文与拉丁字母、数字之间加半角空格"
+msgstr "中文与拉丁字母、数字之间加半角空格"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "中断"
@@ -276,6 +383,14 @@ msgstr "中断按钮"
 #: src/app/settings/TabsSection.tsx
 msgid "临时标签"
 msgstr "临时标签"
+
+#: src/app/design/IconChapter.tsx
+msgid "主导航"
+msgstr "主导航"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "主按钮"
+msgstr "主按钮"
 
 #. placeholder {0}: formatBytes(usedMem)
 #. placeholder {1}: formatBytes(host.totalMemBytes)
@@ -315,6 +430,10 @@ msgstr "主题画板"
 msgid "主题说明"
 msgstr "主题说明"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "主题颜色写入 Mac、Android、iOS 与 Web 的主题文件"
+msgstr "主题颜色写入 Mac、Android、iOS 与 Web 的主题文件"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "事件循环延迟"
 msgstr "事件循环延迟"
@@ -336,6 +455,10 @@ msgstr "二维码"
 msgid "交接摘要"
 msgstr "交接摘要"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "产品功能"
+msgstr "产品功能"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器，不会回显"
 msgstr "仅保存到服务器，不会回显"
@@ -352,6 +475,7 @@ msgstr "仅保存在这个浏览器。"
 msgid "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
 msgstr "仅保存在这个浏览器。已安装的 Web 应用图标不变。"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/TabsSection.tsx
 #: src/app/settings/ViewsSection.tsx
 msgid "仅保存在这台设备"
@@ -368,6 +492,18 @@ msgstr "仅手动加入"
 #: src/app/settings/PreferencesSections.tsx
 msgid "今天的工作"
 msgstr "今天的工作"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "从一个触发点执行操作或选择命令；手机上从底部升起。"
+msgstr "从一个触发点执行操作或选择命令；手机上从底部升起。"
+
+#: src/app/design/TypeChapter.tsx
+msgid "代码"
+msgstr "代码"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "代码块、菜单里的行"
+msgstr "代码块、菜单里的行"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "以本地版本覆盖"
@@ -392,9 +528,17 @@ msgstr "会话「{0}」"
 msgid "会话分享"
 msgstr "会话分享"
 
+#: src/app/design/LayoutChapter.tsx
+msgid "会话区"
+msgstr "会话区"
+
 #: src/app/settings/ViewsSection.tsx
 msgid "会话右侧"
 msgstr "会话右侧"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "会话和它的历史从所有设备移除，无法恢复。"
+msgstr "会话和它的历史从所有设备移除，无法恢复。"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "会话提醒"
@@ -425,14 +569,31 @@ msgstr "使用来源默认地址"
 msgid "例如 公司网关"
 msgstr "例如 公司网关"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "依次实现 Web、Mac、Android、iOS"
+msgstr "依次实现 Web、Mac、Android、iOS"
+
 #: src/app/settings/ViewsSection.tsx
 msgid "侧板视图"
 msgstr "侧板视图"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "侧栏"
+msgstr "侧栏"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "侧栏与面板"
+msgstr "侧栏与面板"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "侧栏按钮 · 标题"
+msgstr "侧栏按钮 · 标题"
 
 #: src/app/settings/ThemeCanvas.tsx
 msgid "侧栏色"
 msgstr "侧栏色"
 
+#: src/app/design/OverlayChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -478,6 +639,18 @@ msgstr "保存的地址和 API Key 会一并删除。"
 msgid "信任"
 msgstr "信任"
 
+#: src/app/design/TypeChapter.tsx
+msgid "修复设置页的焦点顺序"
+msgstr "修复设置页的焦点顺序"
+
+#: src/app/design/Opening.tsx
+msgid "修改 3 个文件"
+msgstr "修改 3 个文件"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "值"
+msgstr "值"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
 msgstr "停止后发消息会接着原对话继续；CLI 里的后台任务会一起结束。"
@@ -490,6 +663,10 @@ msgstr "停止记录"
 msgid "停止进行中的回合"
 msgstr "停止进行中的回合"
 
+#: src/app/design/Opening.tsx
+msgid "允许"
+msgstr "允许"
+
 #: src/app/settings/DevicesSection.tsx
 msgid "允许 Agent 操作"
 msgstr "允许 Agent 操作"
@@ -498,13 +675,26 @@ msgstr "允许 Agent 操作"
 msgid "允许预览项目外的文件"
 msgstr "允许预览项目外的文件"
 
+#: src/app/design/IconChapter.tsx
+msgid "元信息"
+msgstr "元信息"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "先停止 App 托管的服务器并退出 App，再在终端执行。"
 msgstr "先停止 App 托管的服务器并退出 App，再在终端执行。"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "先跑类型检查，再提交。"
+msgstr "先跑类型检查，再提交。"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "全不选"
 msgstr "全不选"
+
+#: src/app/design/ElevationChapter.tsx
+#: src/app/design/LayoutChapter.tsx
+msgid "全屏"
+msgstr "全屏"
 
 #: src/app/settings/ProviderModelList.tsx
 msgid "全选"
@@ -523,6 +713,14 @@ msgstr "全部模型"
 msgid "全部移除"
 msgstr "全部移除"
 
+#: src/app/design/ColorChapter.tsx
+msgid "全部角色"
+msgstr "全部角色"
+
+#: src/app/design/Opening.tsx
+msgid "六层，依赖只向下"
+msgstr "六层，依赖只向下"
+
 #: src/app/settings/settingsSections.ts
 msgid "关于 Riffet"
 msgstr "关于 Riffet"
@@ -536,6 +734,10 @@ msgctxt "option-off"
 msgid "关闭"
 msgstr "关闭"
 
+#: src/app/design/OverlayChapter.tsx
+msgid "关闭 28"
+msgstr "关闭 28"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "关闭自动更新"
 msgstr "关闭自动更新"
@@ -544,6 +746,10 @@ msgstr "关闭自动更新"
 msgid "其他以 / 开头的消息原样发给会话"
 msgstr "其他以 / 开头的消息原样发给会话"
 
+#: src/app/design/SpaceChapter.tsx
+msgid "内圆角 = 外圆角 − 内边距，下限 4。"
+msgstr "内圆角 = 外圆角 − 内边距，下限 4。"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "内存"
 msgstr "内存"
@@ -551,6 +757,34 @@ msgstr "内存"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "内存占用分布"
 msgstr "内存占用分布"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "内容"
+msgstr "内容"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "内容列"
+msgstr "内容列"
+
+#: src/app/design/ColorChapter.tsx
+msgid "内容区"
+msgstr "内容区"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "内容卡、用户消息、设置分组"
+msgstr "内容卡、用户消息、设置分组"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "内边距"
+msgstr "内边距"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "内边距 20"
+msgstr "内边距 20"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "再改规范与代码"
+msgstr "再改规范与代码"
 
 #. placeholder {0}: timeAgo(device.lastSeenAt)
 #: src/app/settings/DevicesSection.tsx
@@ -579,9 +813,41 @@ msgstr "最新发布"
 msgid "最近一次：{0}"
 msgstr "最近一次：{0}"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "写明原因与否决的做法"
+msgstr "写明原因与否决的做法"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "写进 patterns.md"
+msgstr "写进 patterns.md"
+
+#: src/app/design/MotionChapter.tsx
+msgid "减速"
+msgstr "减速"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "凭据由服务器解析。"
 msgstr "凭据由服务器解析。"
+
+#: src/app/design/ColorChapter.tsx
+msgid "出错 · 进程退出码 1"
+msgstr "出错 · 进程退出码 1"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "分层"
+msgstr "分层"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "分段控件的总宽超过所在行的一半，就换成 Select。"
+msgstr "分段控件的总宽超过所在行的一半，就换成 Select。"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "分段控件的选中项、开关滑块"
+msgstr "分段控件的选中项、开关滑块"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "切换下方内容配置的对象"
+msgstr "切换下方内容配置的对象"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "切换模型、推理强度、上下文窗口和速度"
@@ -591,6 +857,14 @@ msgstr "切换模型、推理强度、上下文窗口和速度"
 msgid "切换这个聊天的项目"
 msgstr "切换这个聊天的项目"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "列出不符合的现有实现"
+msgstr "列出不符合的现有实现"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "列表、表单、项目主页"
+msgstr "列表、表单、项目主页"
+
 #: src/app/settings/SupportSections.tsx
 msgid "创建备份"
 msgstr "创建备份"
@@ -599,6 +873,9 @@ msgstr "创建备份"
 msgid "创建应用"
 msgstr "创建应用"
 
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "删除"
 msgstr "删除"
@@ -624,6 +901,14 @@ msgstr "删除「{0}」？"
 msgid "删除主题？"
 msgstr "删除主题？"
 
+#: src/app/design/OverlayChapter.tsx
+msgid "删除会话"
+msgstr "删除会话"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "删除这个会话？"
+msgstr "删除这个会话？"
+
 #. placeholder {0}: formatPercent(eventLoop.utilization)
 #. placeholder {1}: formatDuration(eventLoop.p99Ms)
 #: src/app/settings/ServiceStatusSection.tsx
@@ -638,9 +923,22 @@ msgstr "刷新"
 msgid "刷新页面"
 msgstr "刷新页面"
 
+#: src/app/design/MotionChapter.tsx
+msgid "加速"
+msgstr "加速"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/MotionChapter.tsx
+msgid "动效"
+msgstr "动效"
+
 #: src/app/settings/SupportSections.tsx
 msgid "包含运行环境与设置，API Key 不包含在内。"
 msgstr "包含运行环境与设置，API Key 不包含在内。"
+
+#: src/app/design/IconChapter.tsx
+msgid "单一图形族 Lucide，单一线宽：描边 1.25px，经 non-scaling-stroke 在全部尺寸下恒定；颜色继承所在行的文字色。"
+msgstr "单一图形族 Lucide，单一线宽：描边 1.25px，经 non-scaling-stroke 在全部尺寸下恒定；颜色继承所在行的文字色。"
 
 #. placeholder {0}: host.cpuCount
 #: src/app/settings/ServiceStatusSection.tsx
@@ -651,19 +949,42 @@ msgstr "单核占比 · 主机 {0} 核"
 msgid "单独一条消息，展示思考与工具调用"
 msgstr "单独一条消息，展示思考与工具调用"
 
+#: src/app/design/SpaceChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/channels/CardSettings.tsx
 msgid "卡片"
 msgstr "卡片"
+
+#: src/app/design/ColorChapter.tsx
+msgid "卡片、代码块、用户消息"
+msgstr "卡片、代码块、用户消息"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "卡片、列表、面板"
+msgstr "卡片、列表、面板"
 
 #. placeholder {0}: formatCount(eventLoop.stalls)
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "卡顿 {0}"
 msgstr "卡顿 {0}"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "危险按钮"
+msgstr "危险按钮"
+
 #: src/app/settings/ProfileSection.tsx
 msgid "历史头像"
 msgstr "历史头像"
+
+#: src/app/design/MotionChapter.tsx
+msgid "原位的状态变化"
+msgstr "原位的状态变化"
+
+#: src/app/design/ArchitectureChapter.tsx
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
+msgid "原则"
+msgstr "原则"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "去申请"
@@ -697,6 +1018,15 @@ msgstr "发送诊断"
 msgid "发送诊断失败"
 msgstr "发送诊断失败"
 
+#: src/app/design/Opening.tsx
+msgid "取值只定义一次，由生成器写入各端。"
+msgstr "取值只定义一次，由生成器写入各端。"
+
+#: src/app/design/ColorChapter.tsx
+msgid "取值读自当前主题。"
+msgstr "取值读自当前主题。"
+
+#: src/app/design/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "取消"
 msgstr "取消"
@@ -706,6 +1036,18 @@ msgstr "取消"
 msgctxt "settings-cancel-action"
 msgid "取消"
 msgstr "取消"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "取消在左，主操作在右；危险确认的焦点落在取消上"
+msgstr "取消在左，主操作在右；危险确认的焦点落在取消上"
+
+#: src/app/design/TypeChapter.tsx
+msgid "变化中的数字使用等宽数字"
+msgstr "变化中的数字使用等宽数字"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "叠放顺序"
+msgstr "叠放顺序"
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "只用 CLI 标题"
@@ -734,6 +1076,14 @@ msgstr "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源�
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可选源码 checkout"
 msgstr "可选源码 checkout"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "各端直接引用的常量，由生成器写入"
+msgstr "各端直接引用的常量，由生成器写入"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "同步中"
+msgstr "同步中"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "同步失败排查"
@@ -774,18 +1124,63 @@ msgstr "启用机器人"
 msgid "命令"
 msgstr "命令"
 
+#: src/app/design/Opening.tsx
+msgid "四个客户端共用的颜色、文字、间距、动效与组件。"
+msgstr "四个客户端共用的颜色、文字、间距、动效与组件。"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "四档宽度按内容选择；工作区弹窗带自己的导航。"
+msgstr "四档宽度按内容选择；工作区弹窗带自己的导航。"
+
+#: src/app/design/Opening.tsx
+msgid "回复 Claude Code"
+msgstr "回复 Claude Code"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "回复中"
 msgstr "回复中"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/IconChapter.tsx
+msgid "图标"
+msgstr "图标"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "图标按钮"
+msgstr "图标按钮"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "图标按钮 · 主操作"
+msgstr "图标按钮 · 主操作"
+
+#: src/app/design/IconChapter.tsx
+msgid "图标表"
+msgstr "图标表"
 
 #: src/app/settings/ProviderModelList.tsx
 msgctxt "settings-image-modality"
 msgid "图片"
 msgstr "图片"
 
+#: src/app/design/MotionChapter.tsx
+msgid "图片放大、面板出现"
+msgstr "图片放大、面板出现"
+
 #: src/app/settings/ViewsSection.tsx
 msgid "圆点"
 msgstr "圆点"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "圆角档位"
+msgstr "圆角档位"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "在 DECISIONS.md 追加新决定"
+msgstr "在 DECISIONS.md 追加新决定"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "在 foundations.md 写明用途"
+msgstr "在 foundations.md 写明用途"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "在服务器所在电脑的终端执行。"
@@ -895,6 +1290,12 @@ msgstr "复制 App ID"
 msgid "复制配对码"
 msgstr "复制配对码"
 
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
+msgid "复制链接"
+msgstr "复制链接"
+
 #: src/app/settings/settingsSections.ts
 msgid "外观"
 msgstr "外观"
@@ -903,13 +1304,34 @@ msgstr "外观"
 msgid "大"
 msgstr "大"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "失败"
+msgstr "失败"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "子进程"
 msgstr "子进程"
 
+#: src/app/design/TypeChapter.tsx
+msgid "字体"
+msgstr "字体"
+
+#: src/app/design/OverlayChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "字号"
 msgstr "字号"
+
+#: src/app/design/TypeChapter.tsx
+msgid "字号与行高成对使用，随读者设定的文字大小整体缩放。"
+msgstr "字号与行高成对使用，随读者设定的文字大小整体缩放。"
+
+#: src/app/design/TypeChapter.tsx
+msgid "字重"
+msgstr "字重"
+
+#: src/app/design/TypeChapter.tsx
+msgid "字阶"
+msgstr "字阶"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "它所在的会话"
@@ -923,9 +1345,23 @@ msgstr "完成"
 msgid "定位重定向问题"
 msgstr "定位重定向问题"
 
+#: src/app/design/LayoutChapter.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "定时任务"
 msgstr "定时任务"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "实心与空心区分同色的两种状态。"
+msgstr "实心与空心区分同色的两种状态。"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "容器"
+msgstr "容器"
+
+#. placeholder {0}: panelDockMinWidth(SIDEBAR_DEFAULT, PANEL_DEFAULT)
+#: src/app/design/LayoutChapter.tsx
+msgid "宽度小于 768 时进入手机布局；达到 {0} 时面板停靠，窄于它时悬浮。图中数值由工作台的同一组常量算出。"
+msgstr "宽度小于 768 时进入手机布局；达到 {0} 时面板停靠，窄于它时悬浮。图中数值由工作台的同一组常量算出。"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "宽松"
@@ -935,9 +1371,25 @@ msgstr "宽松"
 msgid "密钥只保存在这台服务器上"
 msgstr "密钥只保存在这台服务器上"
 
+#: src/app/design/ColorChapter.tsx
+msgid "对比度按 WCAG 2 相对亮度计算，底色为 bg。fg-4 用于占位符与快捷键这类可缺省的信息。"
+msgstr "对比度按 WCAG 2 相对亮度计算，底色为 bg。fg-4 用于占位符与快捷键这类可缺省的信息。"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "对比度提示（{modeLabel}）"
 msgstr "对比度提示（{modeLabel}）"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "对话、终端、输入框"
+msgstr "对话、终端、输入框"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "对话内导航"
+msgstr "对话内导航"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "对象名作为下方各组的标题，点开切换；对象再多也放得下。"
+msgstr "对象名作为下方各组的标题，点开切换；对象再多也放得下。"
 
 #: src/app/settings/SupportSections.tsx
 msgid "导出"
@@ -946,6 +1398,10 @@ msgstr "导出"
 #: src/app/settings/SupportSections.tsx
 msgid "导出诊断信息"
 msgstr "导出诊断信息"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "导致重建或逐帧重组的 Compose 写法"
+msgstr "导致重建或逐帧重组的 Compose 写法"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "导航条样式"
@@ -979,13 +1435,59 @@ msgstr "尚未检测"
 msgid "尚未检测到运行环境。"
 msgstr "尚未检测到运行环境。"
 
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/IconChapter.tsx
+msgid "尺寸"
+msgstr "尺寸"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "层次首先由底色表达。阴影分五档，用于脱离文档流的元素；叠放顺序由一组 --z-* 变量定义。"
+msgstr "层次首先由底色表达。阴影分五档，用于脱离文档流的元素；叠放顺序由一组 --z-* 变量定义。"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/ElevationChapter.tsx
+msgid "层级"
+msgstr "层级"
+
+#: src/app/design/MotionChapter.tsx
+msgid "展开、切换、调整大小"
+msgstr "展开、切换、调整大小"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "展示稍后发送按钮"
 msgstr "展示稍后发送按钮"
 
+#: src/app/design/SpaceChapter.tsx
+msgid "嵌套"
+msgstr "嵌套"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "工作区"
+msgstr "工作区"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "工作台"
+msgstr "工作台"
+
+#: src/app/design/Opening.tsx
+msgid "工作台与页面骨架"
+msgstr "工作台与页面骨架"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "工作台分为侧栏、主区、面板与终端四块；页面由页头和一条居中的内容列组成，内容列取三档宽度之一。"
+msgstr "工作台分为侧栏、主区、面板与终端四块；页面由页头和一条居中的内容列组成，内容列取三档宽度之一。"
+
 #: src/app/settings/SupportSections.tsx
 msgid "工作台备份"
 msgstr "工作台备份"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "工作目录"
+msgstr "工作目录"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "左内边距 16 · 手机 12"
+msgstr "左内边距 16 · 手机 12"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "已修复登录页的重定向问题，并补充了对应的回归用例。"
@@ -1005,13 +1507,47 @@ msgstr "已停用"
 msgid "已向 {0}（PID {1}）发送结束信号"
 msgstr "已向 {0}（PID {1}）发送结束信号"
 
+#. placeholder {0}: calls.length
+#: src/app/design/Opening.tsx
+msgid "已处理 · {0} 个工具调用"
+msgstr "已处理 · {0} 个工具调用"
+
+#: src/app/design/TypeChapter.tsx
+msgid "已处理 · 1m 41s"
+msgstr "已处理 · 1m 41s"
+
+#: src/app/design/TypeChapter.tsx
+msgid "已处理 · 1m 41s · 2.3k tokens"
+msgstr "已处理 · 1m 41s · 2.3k tokens"
+
+#: src/app/design/Opening.tsx
+msgid "已处理 · 3 个工具调用"
+msgstr "已处理 · 3 个工具调用"
+
+#: src/app/design/TypeChapter.tsx
+msgid "已处理 | 1m 41s"
+msgstr "已处理 | 1m 41s"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "已复制链接"
+msgstr "已复制链接"
+
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/channels/CardSettings.tsx
 msgid "已完成"
 msgstr "已完成"
 
+#: src/app/design/ColorChapter.tsx
+msgid "已完成 · 12 项检查通过"
+msgstr "已完成 · 12 项检查通过"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "已开启"
 msgstr "已开启"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "已归档"
+msgstr "已归档"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "已拒绝"
@@ -1020,6 +1556,14 @@ msgstr "已拒绝"
 #: src/app/settings/UpdateSection.tsx
 msgid "已是最新发布版本"
 msgstr "已是最新发布版本"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "已暂停"
+msgstr "已暂停"
+
+#: src/app/design/Opening.tsx
+msgid "已替换。motion.ts 里另外两处已在使用常量，保持原样。"
+msgstr "已替换。motion.ts 里另外两处已在使用常量，保持原样。"
 
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "已有会话保持原配置。"
@@ -1064,6 +1608,11 @@ msgstr "已选 {0} / {1} 个"
 msgid "已验证至 {0}"
 msgstr "已验证至 {0}"
 
+#: src/app/design/DesignPage.tsx
+#: src/app/design/LayoutChapter.tsx
+msgid "布局"
+msgstr "布局"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "常驻内存"
 msgstr "常驻内存"
@@ -1081,6 +1630,14 @@ msgstr "平均 · p95 {0}"
 msgid "平均延迟"
 msgstr "平均延迟"
 
+#: src/app/design/ElevationChapter.tsx
+msgid "平面"
+msgstr "平面"
+
+#: src/app/design/TypeChapter.tsx
+msgid "并列的元信息以间隔号分隔"
+msgstr "并列的元信息以间隔号分隔"
+
 #: src/app/settings/settingsSections.ts
 msgid "应用图标"
 msgstr "应用图标"
@@ -1089,13 +1646,29 @@ msgstr "应用图标"
 msgid "底色"
 msgstr "底色"
 
+#: src/app/design/ColorChapter.tsx
+msgid "底色层次"
+msgstr "底色层次"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "底部停靠"
+msgstr "底部停靠"
+
 #: src/app/settings/ViewsSection.tsx
 msgid "底部圆点"
 msgstr "底部圆点"
 
+#: src/app/design/MotionChapter.tsx
+msgid "底部面板"
+msgstr "底部面板"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "延迟"
 msgstr "延迟"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "开关"
+msgstr "开关"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "开发版本"
@@ -1113,6 +1686,22 @@ msgstr "开始记录"
 msgid "开通权限"
 msgstr "开通权限"
 
+#: src/app/design/ElevationChapter.tsx
+msgid "弹出"
+msgstr "弹出"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "弹窗"
+msgstr "弹窗"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "弹窗宽度"
+msgstr "弹窗宽度"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "弹窗结构"
+msgstr "弹窗结构"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "强调色"
 msgstr "强调色"
@@ -1120,6 +1709,10 @@ msgstr "强调色"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "当前不可用"
 msgstr "当前不可用"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "当前为规范取值"
+msgstr "当前为规范取值"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "当前是开发构建"
@@ -1136,6 +1729,10 @@ msgstr "当前版本较新"
 #: src/app/settings/UpdateSection.tsx
 msgid "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
 msgstr "当前页面与 Server 的构建不同，请刷新页面加载对应版本。"
+
+#: src/app/design/Opening.tsx
+msgid "彩色只用来传递信息"
+msgstr "彩色只用来传递信息"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "待完成"
@@ -1197,13 +1794,39 @@ msgstr "恢复默认"
 msgid "恢复默认：{label}"
 msgstr "恢复默认：{label}"
 
+#: src/app/design/MotionChapter.tsx
+msgid "悬停、按下、颜色变化"
+msgstr "悬停、按下、颜色变化"
+
+#: src/app/design/LayoutChapter.tsx
+msgctxt "design-panel-state"
+msgid "悬浮"
+msgstr "悬浮"
+
+#: src/app/design/ElevationChapter.tsx
+msgctxt "elevation"
+msgid "悬浮"
+msgstr "悬浮"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "悬浮面板、全屏预览"
+msgstr "悬浮面板、全屏预览"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "我的主题"
 msgstr "我的主题"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "所属对象"
+msgstr "所属对象"
+
 #: src/app/settings/ProfileSection.tsx
 msgid "所有连接这台服务器的设备共用"
 msgstr "所有连接这台服务器的设备共用"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "手写的字号、圆角、层级、色值与无说明的循环动画"
+msgstr "手写的字号、圆角、层级、色值与无说明的循环动画"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "手动填写"
@@ -1212,6 +1835,11 @@ msgstr "手动填写"
 #: src/app/settings/ProviderModelList.tsx
 msgid "手动添加模型 ID"
 msgstr "手动添加模型 ID"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/LayoutChapter.tsx
+msgid "手机"
+msgstr "手机"
 
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -1227,6 +1855,10 @@ msgstr "打开开发者后台"
 msgid "扫码"
 msgstr "扫码"
 
+#: src/app/design/Opening.tsx
+msgid "把 300 换成共享的时长常量"
+msgstr "把 300 换成共享的时长常量"
+
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "把事件订阅改为长连接"
@@ -1235,6 +1867,46 @@ msgstr "把事件订阅改为长连接"
 #: src/app/settings/ThemeEditor.tsx
 msgid "把配色改成画板"
 msgstr "把配色改成画板"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "报告一次操作的结果，自动消失。"
+msgstr "报告一次操作的结果，自动消失。"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "抬起"
+msgstr "抬起"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "抽屉"
+msgstr "抽屉"
+
+#: src/app/design/Opening.tsx
+msgid "拒绝"
+msgstr "拒绝"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "拖放提示"
+msgstr "拖放提示"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "持续存在的状态，留在内容里，随状态解除。"
+msgstr "持续存在的状态，留在内容里，随状态解除。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "按模板写规范"
+msgstr "按模板写规范"
+
+#: src/app/design/Opening.tsx
+msgid "按钮、输入框、开关、菜单"
+msgstr "按钮、输入框、开关、菜单"
+
+#: src/app/design/IconChapter.tsx
+msgid "按钮、页签"
+msgstr "按钮、页签"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "按钮、页签、列表行"
+msgstr "按钮、页签、列表行"
 
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "换一批"
@@ -1252,6 +1924,7 @@ msgstr "换行"
 msgid "授权失败"
 msgstr "授权失败"
 
+#: src/app/design/TypeChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "排版"
 msgstr "排版"
@@ -1260,6 +1933,14 @@ msgstr "排版"
 msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr "排队"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "控件"
+msgstr "控件"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "推翻一条规则"
+msgstr "推翻一条规则"
 
 #: src/app/settings/PushKeySection.tsx
 msgid "推送"
@@ -1273,10 +1954,32 @@ msgstr "推送失败"
 msgid "提供商来源"
 msgstr "提供商来源"
 
+#: src/app/design/ElevationChapter.tsx
+msgid "提示气泡"
+msgstr "提示气泡"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/OverlayChapter.tsx
+msgid "搜索"
+msgstr "搜索"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "搜索会话"
+msgstr "搜索会话"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "搜索内容"
 msgstr "搜索内容"
 
+#: src/app/design/IconChapter.tsx
+msgid "搜索图标"
+msgstr "搜索图标"
+
+#: src/app/design/MotionChapter.tsx
+msgid "播放"
+msgstr "播放"
+
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "操作"
 msgstr "操作"
@@ -1289,6 +1992,14 @@ msgstr "支持"
 msgid "收到第一条消息"
 msgstr "收到第一条消息"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "改动"
+msgstr "改动"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "改动的顺序"
+msgstr "改动的顺序"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "改动行数"
 msgstr "改动行数"
@@ -1297,9 +2008,21 @@ msgstr "改动行数"
 msgid "改好了，入口在 <0>ThemeCanvas.tsx</0>。"
 msgstr "改好了，入口在 <0>ThemeCanvas.tsx</0>。"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "改源：index.css 或 packages/contracts"
+msgstr "改源：index.css 或 packages/contracts"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "数值越大越靠前。组件引用变量名。"
+msgstr "数值越大越靠前。组件引用变量名。"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
 msgstr "整群一个会话"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "文件"
+msgstr "文件"
 
 #: src/app/settings/settingsSections.ts
 msgid "文件与编辑器"
@@ -1309,6 +2032,11 @@ msgstr "文件与编辑器"
 msgid "文件访问"
 msgstr "文件访问"
 
+#: src/app/design/DesignPage.tsx
+#: src/app/design/TypeChapter.tsx
+msgid "文字"
+msgstr "文字"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "文字大小"
 msgstr "文字大小"
@@ -1316,6 +2044,14 @@ msgstr "文字大小"
 #: src/app/settings/ProviderModelList.tsx
 msgid "文本"
 msgstr "文本"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "文档"
+msgstr "文档"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "新"
+msgstr "新"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "新会话"
@@ -1330,10 +2066,31 @@ msgstr "新会话"
 msgid "新会话默认"
 msgstr "新会话默认"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "新增一个取值"
+msgstr "新增一个取值"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "新增一个组件"
+msgstr "新增一个组件"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "新增一种模式"
+msgstr "新增一种模式"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/LayoutChapter.tsx
+msgid "新建"
+msgstr "新建"
+
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "新建主题"
 msgstr "新建主题"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "新建会话"
+msgstr "新建会话"
 
 #: src/app/settings/TabsSection.tsx
 msgid "新建会话时"
@@ -1532,17 +2289,41 @@ msgstr "无法读取这张图片"
 msgid "无法返回设置分区"
 msgstr "无法返回设置分区"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "无法连接到服务器。"
+msgstr "无法连接到服务器。"
+
 #: src/app/settings/DevicesSection.tsx
 msgid "无障碍已开启"
 msgstr "无障碍已开启"
 
+#: src/app/design/MotionChapter.tsx
+msgid "时长"
+msgstr "时长"
+
+#: src/app/design/MotionChapter.tsx
+msgid "时间"
+msgstr "时间"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "明暗"
 msgstr "明暗"
 
+#: src/app/design/OverlayChapter.tsx
+msgid "显示"
+msgstr "显示"
+
 #: src/app/settings/ViewsSection.tsx
 msgid "显示的视图"
 msgstr "显示的视图"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+msgid "显示行号"
+msgstr "显示行号"
 
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "暂不支持选择"
@@ -1552,6 +2333,13 @@ msgstr "暂不支持选择"
 msgid "暮色"
 msgstr "暮色"
 
+#: src/app/design/MotionChapter.tsx
+msgid "曲线"
+msgstr "曲线"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "更多"
 msgstr "更多"
@@ -1577,6 +2365,10 @@ msgstr "更新于 {0}"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "更新失败，显示的是上一次的数据"
 msgstr "更新失败，显示的是上一次的数据"
+
+#: src/app/design/Opening.tsx
+msgid "替换了一处手写数值，其余调用点保持原样。"
+msgstr "替换了一处手写数值，其余调用点保持原样。"
 
 #. placeholder {0}: formatTime(code.expiresAt)
 #. placeholder {0}: formatTime(new Date(pairing.expiresAt).toISOString())
@@ -1644,6 +2436,10 @@ msgid "未检测到"
 msgstr "未检测到"
 
 #: src/app/settings/BackendProfilesSection.tsx
+msgid "未设置"
+msgstr "未设置"
+
+#: src/app/settings/BackendProfilesSection.tsx
 msgid "未配置 Key"
 msgstr "未配置 Key"
 
@@ -1651,6 +2447,7 @@ msgstr "未配置 Key"
 msgid "本地源码"
 msgstr "本地源码"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "本机服务器"
 msgstr "本机服务器"
@@ -1668,6 +2465,15 @@ msgstr "机器人"
 msgid "来源"
 msgstr "来源"
 
+#: src/app/design/ArchitectureChapter.tsx
+#: src/app/design/DesignPage.tsx
+msgid "架构"
+msgstr "架构"
+
+#: src/app/design/MotionChapter.tsx
+msgid "柔和减速"
+msgstr "柔和减速"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "柔和度"
 msgstr "柔和度"
@@ -1676,9 +2482,14 @@ msgstr "柔和度"
 msgid "查看项目、会话和模型"
 msgstr "查看项目、会话和模型"
 
+#: src/app/design/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "标准"
 msgstr "标准"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "标注"
+msgstr "标注"
 
 #: src/app/settings/TabsSection.tsx
 msgid "标签样式"
@@ -1688,6 +2499,19 @@ msgstr "标签样式"
 msgid "标签页"
 msgstr "标签页"
 
+#: src/app/design/OverlayChapter.tsx
+#: src/app/design/TypeChapter.tsx
+msgid "标题"
+msgstr "标题"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "标题同步到所有设备。"
+msgstr "标题同步到所有设备。"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "标题式选择"
+msgstr "标题式选择"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "标题栏"
 msgstr "标题栏"
@@ -1696,9 +2520,26 @@ msgstr "标题栏"
 msgid "标题栏图标"
 msgstr "标题栏图标"
 
+#: src/app/design/OverlayChapter.tsx
+msgid "标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。"
+msgstr "标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。"
+
+#: src/app/design/TypeChapter.tsx
+msgid "样张文字"
+msgstr "样张文字"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "格式不正确"
 msgstr "格式不正确"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "桌面"
+msgstr "桌面"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgctxt "design-system-checks"
+msgid "检查"
+msgstr "检查"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查中…"
@@ -1730,6 +2571,7 @@ msgstr "检测时间"
 msgid "模型"
 msgstr "模型"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "模型提供商"
 msgstr "模型提供商"
@@ -1742,13 +2584,38 @@ msgstr "模型来源"
 msgid "模型设置"
 msgstr "模型设置"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgctxt "design-system-layer"
+msgid "模式"
+msgstr "模式"
+
+#: src/app/design/MotionChapter.tsx
+msgid "横轴为时间，纵轴为进度。Mac 使用 snappy 与 smooth 弹簧，iOS 使用弹簧，感知时长与此一致。"
+msgstr "横轴为时间，纵轴为进度。Mac 使用 snappy 与 smooth 弹簧，iOS 使用弹簧，感知时长与此一致。"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "次/分"
 msgstr "次/分"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "次级按钮"
+msgstr "次级按钮"
+
+#: src/app/design/TypeChapter.tsx
+msgid "次要"
+msgstr "次要"
+
+#: src/app/design/Opening.tsx
+msgid "正在发生的事最醒目"
+msgstr "正在发生的事最醒目"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "正在读取服务器状态"
 msgstr "正在读取服务器状态"
+
+#: src/app/design/TypeChapter.tsx
+msgid "正文"
+msgstr "正文"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "此浏览器不支持通知。"
@@ -1757,6 +2624,26 @@ msgstr "此浏览器不支持通知。"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "每 10 秒一格"
 msgstr "每 10 秒一格"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "每个区域至多一个。"
+msgstr "每个区域至多一个。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "每个生成命令都有 --check 模式，生成结果过期时以非零状态退出。"
+msgstr "每个生成命令都有 --check 模式，生成结果过期时以非零状态退出。"
+
+#: src/app/design/ColorChapter.tsx
+msgid "每升一层，底色变化一级。层次由底色表达，阴影留给脱离文档流的浮层。"
+msgstr "每升一层，底色变化一级。层次由底色表达，阴影留给脱离文档流的浮层。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "每种组件每端一个实现"
+msgstr "每种组件每端一个实现"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "每种组件每端一个实现。业务代码通过组件使用样式，组件只引用颜色角色与尺寸档位。"
+msgstr "每种组件每端一个实现。业务代码通过组件使用样式，组件只引用颜色角色与尺寸档位。"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "水平边距"
@@ -1769,6 +2656,10 @@ msgstr "永不"
 #: src/app/settings/ThemeCanvas.tsx
 msgid "沙丘"
 msgstr "沙丘"
+
+#: src/app/design/IconChapter.tsx
+msgid "没有匹配的图标"
+msgstr "没有匹配的图标"
 
 #: src/app/settings/ProviderModelList.tsx
 msgid "没有匹配的模型。"
@@ -1786,6 +2677,13 @@ msgstr "没有读取到进程信息"
 msgid "沿用 CLI 默认"
 msgstr "沿用 CLI 默认"
 
+#: src/app/design/TypeChapter.tsx
+msgid "注脚"
+msgstr "注脚"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "浅色"
@@ -1807,10 +2705,43 @@ msgstr "浏览器拒绝了通知权限。"
 msgid "浏览器通知权限"
 msgstr "浏览器通知权限"
 
+#: src/app/design/Opening.tsx
+msgid "浏览组件"
+msgstr "浏览组件"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "浮动"
+msgstr "浮动"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/OverlayChapter.tsx
+#: src/app/design/SpaceChapter.tsx
+msgid "浮层"
+msgstr "浮层"
+
+#: src/app/design/MotionChapter.tsx
+msgid "浮层、弹窗退出"
+msgstr "浮层、弹窗退出"
+
+#: src/app/design/Opening.tsx
+msgid "浮层从触发它的控件展开、收回；切换内容时容器保持尺寸；控件在原位改变状态。"
+msgstr "浮层从触发它的控件展开、收回；切换内容时容器保持尺寸；控件在原位改变状态。"
+
+#: src/app/design/MotionChapter.tsx
+msgid "浮层进入"
+msgstr "浮层进入"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "海"
 msgstr "海"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "消息之外新增的中文字面量"
+msgstr "消息之外新增的中文字面量"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "深色"
@@ -1841,6 +2772,10 @@ msgstr "添加飞书机器人"
 msgid "清除"
 msgstr "清除"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "源"
+msgstr "源"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "源码已切到最新发布，当前 Server 尚未使用该提交；请完成构建并重启。"
 msgstr "源码已切到最新发布，当前 Server 尚未使用该提交；请完成构建并重启。"
@@ -1849,13 +2784,29 @@ msgstr "源码已切到最新发布，当前 Server 尚未使用该提交；请�
 msgid "热门接口"
 msgstr "热门接口"
 
+#: src/app/design/TypeChapter.tsx
+msgid "焦点在弹窗关闭后回到了页面顶部。改为回到打开弹窗的按钮，并补上 Esc 的处理。"
+msgstr "焦点在弹窗关闭后回到了页面顶部。改为回到打开弹窗的按钮，并补上 Esc 的处理。"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "特大"
 msgstr "特大"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "状态与反馈"
+msgstr "状态与反馈"
+
+#: src/app/design/ColorChapter.tsx
+msgid "状态与差异"
+msgstr "状态与差异"
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "状态码分布"
 msgstr "状态码分布"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "状态附带一个可执行的操作。"
+msgstr "状态附带一个可执行的操作。"
 
 #: src/app/settings/ThemeCanvas.tsx
 msgid "玫瑰"
@@ -1865,17 +2816,34 @@ msgstr "玫瑰"
 msgid "现在"
 msgstr "现在"
 
+#: src/app/design/ArchitectureChapter.tsx
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "生成"
 msgstr "生成"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "生成与检查"
+msgstr "生成与检查"
 
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "生成中…"
 msgstr "生成中…"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "生成文件"
+msgstr "生成文件"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "生成配对码"
 msgstr "生成配对码"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "用"
+msgstr "用"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "用于不可逆操作。"
+msgstr "用于不可逆操作。"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "用时"
@@ -1893,13 +2861,37 @@ msgstr "用飞书扫码"
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr "由 Codex 写入 ~/.codex/config.toml"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "由 Tip 提供名称与快捷键。"
+msgstr "由 Tip 提供名称与快捷键。"
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "画布摘要"
 msgstr "画布摘要"
 
+#: src/app/design/TypeChapter.tsx
+msgid "界面"
+msgstr "界面"
+
+#: src/app/design/IconChapter.tsx
+msgid "界面使用 12、14、16、18 四档。尺寸放大时，描边保持 1.25px。"
+msgstr "界面使用 12、14、16、18 四档。尺寸放大时，描边保持 1.25px。"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "界面字体"
 msgstr "界面字体"
+
+#: src/app/design/Opening.tsx
+msgid "界面框架使用灰阶。彩色出现在运行状态、diff、语法高亮和 agent 标志上，每种颜色对应一种含义。"
+msgstr "界面框架使用灰阶。彩色出现在运行状态、diff、语法高亮和 agent 标志上，每种颜色对应一种含义。"
+
+#: src/app/design/TypeChapter.tsx
+msgid "界面用 Inter，代码用 JetBrains Mono，中文回退苹方。字重为 400 与 500；600 仅用于品牌名。"
+msgstr "界面用 Inter，代码用 JetBrains Mono，中文回退苹方。字重为 400 与 500；600 仅用于品牌名。"
+
+#: src/app/design/ColorChapter.tsx
+msgid "界面自有的四种彩色，用于 agent 的头像与名称标记。"
+msgstr "界面自有的四种彩色，用于 agent 的头像与名称标记。"
 
 #. placeholder {0}: addingEntry.source.label
 #: src/app/settings/BackendProfilesSection.tsx
@@ -1930,14 +2922,31 @@ msgstr "登录"
 msgid "直接加入"
 msgstr "直接加入"
 
+#: src/app/design/LayoutChapter.tsx
+msgid "看板"
+msgstr "看板"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "石墨"
 msgstr "石墨"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "确认"
+msgstr "确认"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "确认一次不可逆的操作。"
+msgstr "确认一次不可逆的操作。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "确认现有组件加一个参数能否覆盖"
+msgstr "确认现有组件加一个参数能否覆盖"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
 msgstr "示例会话"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "视图"
 msgstr "视图"
@@ -1946,6 +2955,11 @@ msgstr "视图"
 msgid "视图切换"
 msgstr "视图切换"
 
+#: src/app/design/MotionChapter.tsx
+msgid "移动端的底部面板"
+msgstr "移动端的底部面板"
+
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/DevicesSection.tsx
 #: src/app/settings/ProfileSection.tsx
@@ -1996,9 +3010,26 @@ msgstr "移除推送密钥？"
 msgid "空闲后停止 CLI"
 msgstr "空闲后停止 CLI"
 
+#: src/app/design/LayoutChapter.tsx
+msgid "窗口宽度"
+msgstr "窗口宽度"
+
+#: src/app/design/ColorChapter.tsx
+msgid "窗口底面、侧栏"
+msgstr "窗口底面、侧栏"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "等宽字体"
 msgstr "等宽字体"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+msgid "等待确认"
+msgstr "等待确认"
+
+#: src/app/design/ColorChapter.tsx
+msgid "等待确认 · 将删除 dist/"
+msgstr "等待确认 · 将删除 dist/"
 
 #: src/app/settings/ProviderModelList.tsx
 msgctxt "settings-model-filter"
@@ -2013,6 +3044,10 @@ msgstr "筛选模型"
 msgid "粘贴对话内容"
 msgstr "粘贴对话内容"
 
+#: src/app/design/MotionChapter.tsx
+msgid "系统开启「减少动态效果」时，位移与缩放替换为淡入淡出。"
+msgstr "系统开启「减少动态效果」时，位移与缩放替换为淡入淡出。"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "系统负载"
 msgstr "系统负载"
@@ -2025,6 +3060,10 @@ msgstr "素"
 msgid "紧凑"
 msgstr "紧凑"
 
+#: src/app/design/OverlayChapter.tsx
+msgid "纯图标按钮的名称与快捷键。"
+msgstr "纯图标按钮的名称与快捷键。"
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "纸张"
 msgstr "纸张"
@@ -2033,6 +3072,25 @@ msgstr "纸张"
 msgid "线"
 msgstr "线"
 
+#: src/app/design/ArchitectureChapter.tsx
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/DesignPage.tsx
+msgid "组件"
+msgstr "组件"
+
+#: src/app/design/TypeChapter.tsx
+msgid "组件引用文字角色，字号与行高由角色决定。"
+msgstr "组件引用文字角色，字号与行高由角色决定。"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "组内 4–8，组间 16，页边距 12–16，浮层内边距 4。全部取值来自档位。"
+msgstr "组内 4–8，组间 16，页边距 12–16，浮层内边距 4。全部取值来自档位。"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "组合"
+msgstr "组合"
+
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/ServiceStatusSection.tsx
 #: src/app/settings/settingsSections.ts
 #: src/app/settings/ThemeEditor.tsx
@@ -2081,6 +3139,18 @@ msgstr "结束进程失败"
 msgid "结果"
 msgstr "结果"
 
+#: src/app/design/ArchitectureChapter.tsx
+msgid "绕过 lib/motion.ts 读取动画状态"
+msgstr "绕过 lib/motion.ts 读取动画状态"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "统计、设计规范"
+msgstr "统计、设计规范"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "继续"
+msgstr "继续"
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "继续描述…"
 msgstr "继续描述…"
@@ -2095,6 +3165,7 @@ msgstr "编辑“{0}”"
 msgid "编辑主题"
 msgstr "编辑主题"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "编辑器"
 msgstr "编辑器"
@@ -2102,6 +3173,10 @@ msgstr "编辑器"
 #: src/app/settings/PreferencesSections.tsx
 msgid "编辑器命令"
 msgstr "编辑器命令"
+
+#: src/app/design/Opening.tsx
+msgid "缩放与时长放大 {SLOW} 倍"
+msgstr "缩放与时长放大 {SLOW} 倍"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "缺少"
@@ -2131,9 +3206,17 @@ msgstr "聊天"
 msgid "背景"
 msgstr "背景"
 
+#: src/app/design/SpaceChapter.tsx
+msgid "胶囊与圆形按钮的圆角取高度的一半。"
+msgstr "胶囊与圆形按钮的圆角取高度的一半。"
+
 #: src/app/settings/QuickChatSection.tsx
 msgid "自动归档"
 msgstr "自动归档"
+
+#: src/app/design/Opening.tsx
+msgid "自动编辑"
+msgstr "自动编辑"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "自定义 API"
@@ -2147,13 +3230,59 @@ msgstr "苔藓"
 msgid "获取模型列表"
 msgstr "获取模型列表"
 
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/ElevationChapter.tsx
+#: src/app/design/SpaceChapter.tsx
+msgid "菜单"
+msgstr "菜单"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "菜单、弹出层"
+msgstr "菜单、弹出层"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "菜单、弹出层、提示气泡、弹窗"
+msgstr "菜单、弹出层、提示气泡、弹窗"
+
+#: src/app/design/MotionChapter.tsx
+msgid "菜单、提示气泡退出"
+msgstr "菜单、提示气泡退出"
+
+#: src/app/design/ColorChapter.tsx
+msgid "菜单与弹出层"
+msgstr "菜单与弹出层"
+
 #: src/app/settings/settingsSections.ts
 msgid "行为"
 msgstr "行为"
 
+#: src/app/design/IconChapter.tsx
+msgid "行内"
+msgstr "行内"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "补充到当前任务"
 msgstr "补充到当前任务"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "补充说明"
+msgstr "补充说明"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "表单"
+msgstr "表单"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "规则先于实现：先改规范，再改代码。"
+msgstr "规则先于实现：先改规范，再改代码。"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "规范取值 {spec}px"
+msgstr "规范取值 {spec}px"
+
+#: src/app/design/TypeChapter.tsx
+msgid "角色"
+msgstr "角色"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "解绑"
@@ -2187,6 +3316,7 @@ msgstr "设为默认"
 msgid "设备管理"
 msgstr "设备管理"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/SettingsDialog.tsx
 msgid "设置"
 msgstr "设置"
@@ -2194,6 +3324,24 @@ msgstr "设置"
 #: src/app/settings/SettingsDialog.tsx
 msgid "设置分区"
 msgstr "设置分区"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "设置分组的一行：内边距、图标、间距与行高均取自档位。"
+msgstr "设置分组的一行：内边距、图标、间距与行高均取自档位。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "设计体系在代码里分六层，依赖只向下。颜色在 index.css 里改，其余数值在 packages/contracts 里改，然后重新生成。"
+msgstr "设计体系在代码里分六层，依赖只向下。颜色在 index.css 里改，其余数值在 packages/contracts 里改，然后重新生成。"
+
+#: src/app/design/Opening.tsx
+msgid "设计原则"
+msgstr "设计原则"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
+#: src/app/settings/settingsSections.ts
+msgid "设计规范"
+msgstr "设计规范"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "访问"
@@ -2269,14 +3417,30 @@ msgstr "资源回收"
 msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
 msgstr "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
 
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
+msgid "超时改用共享的时长常量"
+msgstr "超时改用共享的时长常量"
+
 #. placeholder {0}: folded.length
 #: src/app/settings/DevicesSection.tsx
 msgid "超过 7 天未使用 · {0}"
 msgstr "超过 7 天未使用 · {0}"
 
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随系统"
 msgstr "跟随系统"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "跟随系统的深浅色"
+msgstr "跟随系统的深浅色"
+
+#: src/app/design/ColorChapter.tsx
+msgid "轨道、悬停、选中"
+msgstr "轨道、悬停、选中"
 
 #: src/app/settings/settingsSections.ts
 msgid "辅助模型"
@@ -2295,22 +3459,74 @@ msgstr "输入 API Key"
 msgid "输入一条会话消息"
 msgstr "输入一条会话消息"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "输入与选择"
+msgstr "输入与选择"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "输入新 Key 替换现有值"
 msgstr "输入新 Key 替换现有值"
 
+#: src/app/design/SpaceChapter.tsx
+msgid "输入框、悬浮面板"
+msgstr "输入框、悬浮面板"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "输入框；聚焦时加深一级"
+msgstr "输入框；聚焦时加深一级"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "输入类型"
 msgstr "输入类型"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "迁移后删掉对应的现状条目"
+msgstr "迁移后删掉对应的现状条目"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "迁移调用点，删除旧写法"
+msgstr "迁移调用点，删除旧写法"
+
+#: src/app/design/Opening.tsx
+msgid "过渡保留位置关系"
+msgstr "过渡保留位置关系"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "运行 --check 与 check:design"
+msgstr "运行 --check 与 check:design"
 
 #. placeholder {0}: formatCount(sessions.waiting)
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "运行 · {0} 等待"
 msgstr "运行 · {0} 等待"
 
+#: src/app/design/TypeChapter.tsx
+msgid "运行 Codex，改了 3 个文件"
+msgstr "运行 Codex，改了 3 个文件"
+
+#: src/app/design/TypeChapter.tsx
+msgid "运行Codex，改了3个文件"
+msgstr "运行Codex，改了3个文件"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "运行中"
+msgstr "运行中"
+
+#: src/app/design/Opening.tsx
+msgid "运行中、待确认和出错的条目使用正文色；已完成的工具调用和历史轮次降为次要色，或折叠成一行。"
+msgstr "运行中、待确认和出错的条目使用正文色；已完成的工具调用和历史轮次降为次要色，或折叠成一行。"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "运行中发送的消息"
 msgstr "运行中发送的消息"
+
+#: src/app/design/TypeChapter.tsx
+msgid "运行命令"
+msgstr "运行命令"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "运行对应的 gen 命令"
+msgstr "运行对应的 gen 命令"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "运行时长"
@@ -2374,6 +3590,22 @@ msgstr "这套主题"
 msgid "这套主题已经被其他设备删除，请重新加载主题库。"
 msgstr "这套主题已经被其他设备删除，请重新加载主题库。"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "这段历史来自导入的终端会话。"
+msgstr "这段历史来自导入的终端会话。"
+
+#: src/app/design/MotionChapter.tsx
+msgid "进入"
+msgstr "进入"
+
+#: src/app/design/MotionChapter.tsx
+msgid "进入减速，退出加速，原位变化用标准曲线；退出时长约为进入的 70%。动画优先作用于 opacity 与 transform，由合成器执行。"
+msgstr "进入减速，退出加速，原位变化用标准曲线；退出时长约为进入的 70%。动画优先作用于 opacity 与 transform，由合成器执行。"
+
+#: src/app/design/MotionChapter.tsx
+msgid "进度"
+msgstr "进度"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "进程"
 msgstr "进程"
@@ -2416,6 +3648,7 @@ msgstr "连接中"
 msgid "连接其他服务器"
 msgstr "连接其他服务器"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/ChannelsSection.tsx
 msgid "连接失败"
 msgstr "连接失败"
@@ -2425,6 +3658,7 @@ msgstr "连接失败"
 msgid "连接飞书"
 msgstr "连接飞书"
 
+#: src/app/design/MotionChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "退出"
 msgstr "退出"
@@ -2433,21 +3667,66 @@ msgstr "退出"
 msgid "退出登录"
 msgstr "退出登录"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "选中块在选项之间滑动。"
+msgstr "选中块在选项之间滑动。"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选什么"
+msgstr "选什么"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "选哪一种"
+msgstr "选哪一种"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选择"
+msgstr "选择"
+
 #: src/app/settings/PushKeySection.tsx
 msgid "选择 .p8 文件"
 msgstr "选择 .p8 文件"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选择控件的选用"
+msgstr "选择控件的选用"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选项"
+msgstr "选项"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选项列在应用的菜单面板里。"
+msgstr "选项列在应用的菜单面板里。"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "选项超过四个"
+msgstr "选项超过四个"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "透明按钮"
+msgstr "透明按钮"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "逐项调整"
 msgstr "逐项调整"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "通用"
+msgstr "通用"
+
 #: src/app/settings/settingsSections.ts
 msgid "通用设置"
 msgstr "通用设置"
 
+#: src/app/design/ElevationChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "通知"
 msgstr "通知"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "遮罩"
+msgstr "遮罩"
 
 #. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
 #: src/app/settings/DevicesSection.tsx
@@ -2462,6 +3741,11 @@ msgstr "配对新设备"
 #: src/app/settings/PairingDialogs.tsx
 msgid "配对码"
 msgstr "配对码"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "配置的 Agent"
+msgstr "配置的 Agent"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "配置目录"
@@ -2482,6 +3766,16 @@ msgstr "配色模式"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "重启会话后生效"
 msgstr "重启会话后生效"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
+msgid "重命名"
+msgstr "重命名"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "重命名会话"
+msgstr "重命名会话"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "重新加载最新版"
@@ -2507,6 +3801,7 @@ msgstr "重新检测"
 msgid "重新生成"
 msgstr "重新生成"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/shared.tsx
@@ -2517,6 +3812,57 @@ msgstr "重新生成"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "重试"
 msgstr "重试"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "锚定在触发点旁的小块内容，改动即时生效。"
+msgstr "锚定在触发点旁的小块内容，改动即时生效。"
+
+#: src/app/design/ComponentChapter.tsx
+#: src/app/design/Opening.tsx
+#: src/app/design/OverlayChapter.tsx
+#: src/app/design/SpaceChapter.tsx
+msgid "长行自动换行"
+msgstr "长行自动换行"
+
+#: src/app/design/SpaceChapter.tsx
+msgid "间距"
+msgstr "间距"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "间距、字号、圆角、动效写入四端"
+msgstr "间距、字号、圆角、动效写入四端"
+
+#: src/app/design/Opening.tsx
+msgid "间距、字号、圆角与动效以 packages/contracts 为源，颜色以 apps/web/src/styles/index.css 为源。pnpm gen:tokens 与 pnpm gen:theme 把取值写入四端的源文件；生成结果过期时，--check 以非零状态退出。"
+msgstr "间距、字号、圆角与动效以 packages/contracts 为源，颜色以 apps/web/src/styles/index.css 为源。pnpm gen:tokens 与 pnpm gen:theme 把取值写入四端的源文件；生成结果过期时，--check 以非零状态退出。"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/SpaceChapter.tsx
+msgid "间距与圆角"
+msgstr "间距与圆角"
+
+#. placeholder {0}: Object.keys(SPACE).length
+#. placeholder {1}: tiers.length
+#: src/app/design/SpaceChapter.tsx
+msgid "间距取自 {0} 档固定值；圆角分 {1} 档，嵌套时内圆角随内边距递减。"
+msgstr "间距取自 {0} 档固定值；圆角分 {1} 档，嵌套时内圆角随内边距递减。"
+
+#: src/app/design/LayoutChapter.tsx
+msgctxt "content-column"
+msgid "阅读"
+msgstr "阅读"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "阅读列的宽度由读者拖动调整；文档列和看板列固定。"
+msgstr "阅读列的宽度由读者拖动调整；文档列和看板列固定。"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "阴影"
+msgstr "阴影"
+
+#: src/app/design/ElevationChapter.tsx
+msgid "阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。"
+msgstr "阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。"
 
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "随机头像"
@@ -2543,17 +3889,70 @@ msgstr "需要 {0} 或更高"
 msgid "需要包含已构建 lib；也可使用已安装的 dsh 0.2.0-rc.2"
 msgstr "需要包含已构建 lib；也可使用已安装的 dsh 0.2.0-rc.2"
 
+#: src/app/design/ComponentChapter.tsx
+msgid "需要看描述或预览才能选"
+msgstr "需要看描述或预览才能选"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "需要通过 localhost 或 HTTPS 访问才能启用通知。"
 msgstr "需要通过 localhost 或 HTTPS 访问才能启用通知。"
+
+#: src/app/design/OverlayChapter.tsx
+msgid "需要集中处理、有提交和取消的任务。"
+msgstr "需要集中处理、有提交和取消的任务。"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "面板"
+msgstr "面板"
+
+#: src/app/design/DesignPage.tsx
+#: src/app/design/Opening.tsx
+msgid "章节"
+msgstr "章节"
 
 #: src/app/settings/ViewsSection.tsx
 msgid "章节导航"
 msgstr "章节导航"
 
+#: src/app/design/LayoutChapter.tsx
+msgid "页头"
+msgstr "页头"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "页签"
+msgstr "页签"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "页脚"
 msgstr "页脚"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "页面"
+msgstr "页面"
+
+#: src/app/design/MotionChapter.tsx
+msgid "页面与视图之间的转场"
+msgstr "页面与视图之间的转场"
+
+#: src/app/design/LayoutChapter.tsx
+msgid "页面只有一个滚动容器，页头固定在它上方。"
+msgstr "页面只有一个滚动容器，页头固定在它上方。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "页面只经组件和模式使用样式；组件只引用颜色角色和档位。"
+msgstr "页面只经组件和模式使用样式；组件只引用颜色角色和档位。"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "页面的一级视图"
+msgstr "页面的一级视图"
+
+#: src/app/design/ComponentChapter.tsx
+msgid "页面的一级视图。"
+msgstr "页面的一级视图。"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "页面骨架、设置行、弹窗结构、确认与通知"
+msgstr "页面骨架、设置行、弹窗结构、确认与通知"
 
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -2568,6 +3967,8 @@ msgstr "预览"
 msgid "预设"
 msgstr "预设"
 
+#: src/app/design/ColorChapter.tsx
+#: src/app/design/DesignPage.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "颜色"
 msgstr "颜色"
@@ -2575,6 +3976,14 @@ msgstr "颜色"
 #: src/app/settings/ThemeEditor.tsx
 msgid "颜色支持 #rrggbb 与 #rrggbbaa"
 msgstr "颜色支持 #rrggbb 与 #rrggbbaa"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "颜色角色与主题取值；间距、字号、圆角、动效；风格配方"
+msgstr "颜色角色与主题取值；间距、字号、圆角、动效；风格配方"
+
+#: src/app/design/ArchitectureChapter.tsx
+msgid "风格配方写入 Mac 的 InterfaceStyles.swift"
+msgstr "风格配方写入 Mac 的 InterfaceStyles.swift"
 
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -2585,12 +3994,21 @@ msgstr "飞书"
 msgid "飞书里的应用不会被删除"
 msgstr "飞书里的应用不会被删除"
 
+#: src/app/design/LayoutChapter.tsx
+msgid "高 52 · 手机 48"
+msgstr "高 52 · 手机 48"
+
+#: src/app/design/ColorChapter.tsx
+msgid "墨色"
+msgstr "墨色"
+
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderModelList.tsx
 msgid "默认"
 msgstr "默认"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "默认 Agent"
 msgstr "默认 Agent"
@@ -2603,6 +4021,7 @@ msgstr "默认（{size}）"
 msgid "默认使用独立目录；更换后会切换配置与原生历史范围"
 msgstr "默认使用独立目录；更换后会切换配置与原生历史范围"
 
+#: src/app/design/ComponentChapter.tsx
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "默认审批模式"
 msgstr "默认审批模式"

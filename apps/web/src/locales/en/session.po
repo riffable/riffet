@@ -1300,6 +1300,10 @@ msgstr "Couldn't load the interactive preview. Try again."
 msgid "无法加载更早的历史，未能定位到这条消息"
 msgstr "Couldn't load earlier history, so this message couldn't be located"
 
+#: src/app/session/agentModels.ts
+msgid "无法加载模型列表"
+msgstr "Could not load the model list"
+
 #: src/app/session/TranscriptView.tsx
 msgid "无法加载这处结果所在的历史"
 msgstr "Couldn't load the history around this match"

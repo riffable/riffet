@@ -157,10 +157,6 @@ msgid "当前连接不支持复制图片，请改用保存"
 msgstr ""
 
 #: src/app/marks/MarksPage.tsx
-msgid "打开侧边栏"
-msgstr ""
-
-#: src/app/marks/MarksPage.tsx
 msgid "打开原会话"
 msgstr ""
 

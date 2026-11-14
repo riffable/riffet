@@ -128,7 +128,7 @@ export function AttemptsDialog({ open, onOpenChange, projectId, directory, backe
   };
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent size="content">
         <DialogHeader>
           <DialogTitle><Trans>并行尝试</Trans></DialogTitle>
           <DialogDescription>{directory ? <Trans>各尝试从目录当前的内容切出独立 Worktree。</Trans> : <Trans>各尝试从同一次提交切出独立 Worktree。</Trans>}</DialogDescription>

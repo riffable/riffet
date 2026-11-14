@@ -10,47 +10,52 @@ export function Input({ className, ...props }: React.ComponentProps<'input'>) {
   return <input className={cn(fieldClass, 'h-8 no-hover:min-h-11', className)} {...props} />;
 }
 
-/** Native select with the same field styling as Input and a consistently inset chevron. */
-export function Select({ className, wrapperClassName, children, ...props }: React.ComponentProps<'select'> & { wrapperClassName?: string }) {
-  return (
-    <div className={cn('relative w-full min-w-0', wrapperClassName)}>
-      <select className={cn(fieldClass, 'h-8 appearance-none pr-9 max-md:h-11 max-md:rounded-xl max-md:px-3 max-md:pr-10 max-md:text-base', className)} {...props}>
-        {children}
-      </select>
-      <IconChevronDown aria-hidden className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-fg-3" />
-    </div>
-  );
-}
-
-/** A field-sized choice using the app's menu surface, including rich option previews. */
-export function ChoiceMenu<T extends string>({ id, label, value, options, onChange, disabled, className }: {
+/** A field-sized select using the app's menu surface, including rich option previews. */
+export function Select<T extends string>({ id, name, label, value, options, onChange, disabled, placeholder, appearance = 'field', className }: {
   id?: string;
+  /** Renders a hidden input so the value is included in a surrounding form's FormData. */
+  name?: string;
   label: string;
   value: T;
-  options: Array<{ value: T; label: string; icon?: React.ReactNode }>;
+  options: Array<{ value: T; label: string; icon?: React.ReactNode; disabled?: boolean }>;
   onChange: (value: T) => void;
   disabled?: boolean;
+  /** Shown when `value` matches no option. */
+  placeholder?: string;
+  /**
+   * `heading` titles the sections after it and switches what they configure (which Agent, which
+   * project): borderless, set at heading size. `field` is a form value.
+   */
+  appearance?: 'field' | 'heading';
   className?: string;
 }) {
   const valueId = React.useId();
   const selected = options.find(option => option.value === value);
-  return <DropdownMenu>
+  return <>
+    {name !== undefined && <input type="hidden" name={name} value={value} />}
+    <DropdownMenu>
     <DropdownMenuTrigger
       id={id} aria-label={label} aria-describedby={valueId} disabled={disabled}
-      className={cn(fieldClass, 'flex h-8 items-center gap-2 text-left max-md:h-11 max-md:rounded-xl max-md:px-3 max-md:text-base data-[state=open]:border-accent data-[state=open]:ring-3 data-[state=open]:ring-accent/15', className)}
+      className={cn(
+        appearance === 'heading'
+          ? '-mx-2 inline-flex h-9 min-w-0 max-w-full items-center gap-2 rounded-lg px-2 text-left text-base font-medium text-fg outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 data-[state=open]:bg-hover max-md:h-11 [&_svg:not([class*=size-])]:size-4'
+          : cn(fieldClass, 'flex h-8 items-center gap-2 text-left max-md:h-11 max-md:rounded-xl max-md:px-3 max-md:text-base data-[state=open]:border-accent data-[state=open]:ring-3 data-[state=open]:ring-accent/15'),
+        className,
+      )}
     >
       {selected?.icon}
-      <span id={valueId} className="min-w-0 flex-1 truncate">{selected?.label ?? value}</span>
-      <IconChevronDown aria-hidden className="size-3.5 shrink-0 text-fg-3" />
+      <span id={valueId} className={cn('min-w-0 truncate', appearance === 'field' && 'flex-1', !selected && 'text-fg-4')}>{selected ? selected.label : placeholder ?? value}</span>
+      <IconChevronDown aria-hidden className={cn('shrink-0 text-fg-3', appearance === 'heading' ? 'size-4' : 'size-3.5')} />
     </DropdownMenuTrigger>
-    <DropdownMenuContent className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-32">
+    <DropdownMenuContent align="start" className={cn(appearance === 'field' && 'w-[var(--radix-dropdown-menu-trigger-width)]', 'min-w-32', appearance === 'heading' && 'min-w-52')}>
       <DropdownMenuRadioGroup value={value} onValueChange={next => onChange(next as T)}>
-        {options.map(option => <DropdownMenuRadioItem key={option.value} value={option.value} textValue={option.label}>
+        {options.map(option => <DropdownMenuRadioItem key={option.value} value={option.value} textValue={option.label} disabled={option.disabled}>
           {option.icon}<span className="min-w-0 truncate">{option.label}</span>
         </DropdownMenuRadioItem>)}
       </DropdownMenuRadioGroup>
     </DropdownMenuContent>
-  </DropdownMenu>;
+    </DropdownMenu>
+  </>;
 }
 
 export function Textarea({ className, ...props }: React.ComponentProps<'textarea'>) {
@@ -73,8 +78,8 @@ export function Switch({ className, ...props }: React.ComponentProps<typeof Swit
       className={cn('group/switch inline-flex h-[18px] w-8 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 no-hover:size-11', className)}
       {...props}
     >
-      <span className="inline-flex h-[18px] w-8 shrink-0 items-center rounded-full bg-line-strong p-0.5 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-standard)] group-data-[state=checked]/switch:bg-accent">
-        <SwitchPrimitive.Thumb className="block size-3.5 rounded-full bg-white shadow-soft transition-[translate,background-color] duration-[var(--duration-fast)] ease-[var(--ease-standard)] data-[state=checked]:translate-x-3.5 data-[state=checked]:bg-accent-fg" />
+      <span className="inline-flex h-[18px] w-8 shrink-0 items-center rounded-full bg-fg/[0.16] p-0.5 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-standard)] group-data-[state=checked]/switch:bg-primary">
+        <SwitchPrimitive.Thumb className="block size-3.5 rounded-full bg-white shadow-soft transition-[translate,background-color] duration-[var(--duration-fast)] ease-[var(--ease-standard)] data-[state=checked]:translate-x-3.5 data-[state=checked]:bg-primary-fg" />
       </span>
     </SwitchPrimitive.Root>
   );
@@ -118,9 +123,44 @@ export function UnderlineTabs<T extends string>({ value, options, onChange, clas
 }
 
 
+/**
+ * One choice among a few. The selection is a single thumb that slides from the old segment to the
+ * new one (foundations §8: a state changes in place), so a choice reads as one object moving.
+ */
 export function Segmented<T extends string>({ value, options, onChange, size = 'sm', className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; size?: 'xs' | 'sm'; className?: string; ariaLabel?: string }) {
+  const track = React.useRef<HTMLDivElement>(null);
+  const thumb = React.useRef<HTMLSpanElement>(null);
+  const keys = options.map(option => option.value).join('\u0000');
+  // Puts the thumb over the selected segment; `instant` skips the slide (first paint, a resize).
+  const place = React.useCallback((instant: boolean) => {
+    const pill = thumb.current;
+    const active = track.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!pill) return;
+    pill.style.visibility = active ? '' : 'hidden';
+    if (!active) return;
+    if (instant) pill.style.transition = 'none';
+    pill.style.width = `${active.offsetWidth}px`;
+    pill.style.height = `${active.offsetHeight}px`;
+    pill.style.transform = `translate(${active.offsetLeft}px, ${active.offsetTop}px)`;
+    if (instant) { void pill.offsetWidth; pill.style.transition = ''; }
+  }, []);
+  const placed = React.useRef(false);
+  React.useLayoutEffect(() => { place(!placed.current); placed.current = true; }, [value, keys, place]);
+  React.useEffect(() => {
+    const element = track.current;
+    if (!element) return;
+    const observer = new ResizeObserver(() => place(true));
+    // The segments only: the thumb resizes during its own slide, and reacting to that would cut the slide short.
+    for (const child of element.children) if (child !== thumb.current) observer.observe(child);
+    return () => observer.disconnect();
+  }, [keys, place]);
   return (
-    <div role="tablist" aria-label={ariaLabel} className={cn('inline-flex w-fit min-w-0 max-w-full items-center gap-1 overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5 no-hover:min-h-12', className)}>
+    <div ref={track} role="tablist" aria-label={ariaLabel} className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5 shadow-[inset_0_0_0_0.5px_var(--line)] no-hover:min-h-12', className)}>
+      <span
+        ref={thumb}
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 rounded-md bg-elevated shadow-[0_0_0_0.5px_var(--line-strong),var(--shadow-soft)] transition-[transform,width] duration-[var(--duration-base)] ease-[var(--ease-standard)] dark:bg-active"
+      />
       {options.map((option) => (
         <button
           key={option.value}
@@ -132,11 +172,9 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
           className={cn(
             // Each label keeps its own width and padding; narrow tracks scroll instead of
             // squeezing the longest label into an equal-width segment.
-            'inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium text-fg-3 transition-colors hover:text-fg disabled:opacity-40 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
-            size === 'xs' ? 'h-6 px-2 text-xs' : 'h-7 px-2.5 text-sm',
-            // Ring only — a downward drop shadow bleeds past the track's 2px padding
-            // and makes the active pill look glued to the bottom edge.
-            value === option.value && 'bg-elevated text-fg shadow-[0_0_0_0.5px_var(--line-strong)]',
+            'relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium text-fg-3 outline-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:text-fg-2 focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
+            size === 'xs' ? 'h-6 px-2.5 text-xs' : 'h-7 px-3 text-sm',
+            value === option.value && 'text-fg hover:text-fg',
           )}
         >
           {option.icon}

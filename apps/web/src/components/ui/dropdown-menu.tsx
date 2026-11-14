@@ -24,15 +24,18 @@ export const menuItem = "relative flex min-h-11 cursor-default items-center gap-
  * `hide()` middleware switches the surface to `visibility: hidden`. Without it the surface would be
  * re-anchored to a 0×0 rect and visibly flash in the viewport corner. Callers should still keep
  * trigger boxes layout-stable — this is the backstop, not the primary defence.
+ *
+ * On a phone the menu rises from the bottom edge as a sheet (`.ui-floating-sheet`). Pass
+ * `mobileSheet={false}` only for a menu that must stay beside its anchor, such as one tied to the caret.
  */
-export function DropdownMenuContent({ className, children, sideOffset = 6, align = 'start', hideWhenDetached = true, onCloseAutoFocus, onPointerDownCapture, onPointerDownOutside, onKeyDownCapture, onFocusCapture, ...props }: React.ComponentProps<typeof Primitive.Content>) {
+export function DropdownMenuContent({ className, children, sideOffset = 6, align = 'start', hideWhenDetached = true, mobileSheet = true, onCloseAutoFocus, onPointerDownCapture, onPointerDownOutside, onKeyDownCapture, onFocusCapture, ...props }: React.ComponentProps<typeof Primitive.Content> & { mobileSheet?: boolean }) {
   const keyboardInteraction = React.useRef(true);
   const focusReturn = useTypingFocusReturn();
   const shown = useClosingSnapshot(children);
   return (
     <Primitive.Portal>
       <Primitive.Content
-        sideOffset={sideOffset} align={align} collisionPadding={8} hideWhenDetached={hideWhenDetached} className={cn(menuSurface, 'ui-dropdown-content max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-y-auto', className)}
+        sideOffset={sideOffset} align={align} collisionPadding={8} hideWhenDetached={hideWhenDetached} className={cn(menuSurface, 'ui-dropdown-content max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-y-auto', className, mobileSheet && 'ui-floating-sheet')}
         onPointerDownCapture={(event) => { keyboardInteraction.current = false; onPointerDownCapture?.(event); }}
         onPointerDownOutside={(event) => { keyboardInteraction.current = false; onPointerDownOutside?.(event); }}
         onKeyDownCapture={(event) => { keyboardInteraction.current = true; onKeyDownCapture?.(event); }}
@@ -104,7 +107,7 @@ export function MenuSub({ icon, label, value, disabled, children, className, onO
         <IconChevronRight className="size-3.5 text-fg-4" />
       </Primitive.SubTrigger>
       <Primitive.Portal>
-        <Primitive.SubContent sideOffset={4} collisionPadding={8} className={cn(menuSurface, 'max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-y-auto', className)}>
+        <Primitive.SubContent sideOffset={4} collisionPadding={8} className={cn(menuSurface, 'max-h-[var(--radix-dropdown-menu-content-available-height)] max-w-[calc(100vw-16px)] overflow-y-auto', className, 'ui-floating-sheet')}>
           {children}
         </Primitive.SubContent>
       </Primitive.Portal>

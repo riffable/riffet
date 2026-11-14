@@ -31,7 +31,7 @@ export function PluginMarket({ market, error, query, installed, busy, onInstall,
   const action = (entry: PluginMarketEntry, primary = false) => installed.has(entry.id)
     ? <span className="text-xs text-fg-3"><Trans>已安装</Trans></span>
     : !entry.compatible ? <span className="text-xs text-fg-3"><Trans>不兼容</Trans></span>
-    : <Button size="sm" variant={primary ? 'primary' : 'secondary'} disabled={busy} onClick={() => onInstall(entry)}><Trans>安装</Trans></Button>;
+    : <Button size={primary ? undefined : 'sm'} variant={primary ? 'primary' : 'secondary'} disabled={busy} onClick={() => onInstall(entry)}><Trans>安装</Trans></Button>;
 
   if (error) return <div role="alert" className="flex items-center gap-3 rounded-lg border border-line p-3"><span className="min-w-0 flex-1"><span className="block text-sm"><Trans>无法读取插件目录</Trans></span><span className="mt-1 block break-words text-xs text-fg-3">{error}</span></span><Button size="xs" variant="secondary" onClick={onRetry}><Trans>重试</Trans></Button></div>;
   if (!market) return <div className="flex justify-center p-6"><Spinner /></div>;
@@ -51,7 +51,7 @@ export function PluginMarket({ market, error, query, installed, busy, onInstall,
           {action(entry)}
         </div>)}</div>}
     <Dialog open={Boolean(open)} onOpenChange={value => { if (!value) setOpen(undefined); }}>
-      <DialogContent mobileFullscreen className="max-h-[min(42rem,calc(var(--app-height,100dvh)-32px))] max-w-2xl" aria-describedby={undefined}>
+      <DialogContent mobileFullscreen size="content" className="max-h-[min(42rem,calc(var(--app-height,100dvh)-32px))]" aria-describedby={undefined}>
         {open && <>
           <DialogHeader><div className="flex min-w-0 items-center gap-3"><Mark has={key => open.contributes.includes(key)} /><div className="min-w-0"><DialogTitle>{label(open)}</DialogTitle><p className="mt-1 text-xs text-fg-3">{[open.vendor, 'v' + open.version, open.date, open.license].filter(Boolean).join(' · ')}</p></div></div></DialogHeader>
           <DialogBody className="flex flex-col gap-5 py-5">

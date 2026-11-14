@@ -52,7 +52,7 @@ export function PluginVersionsDialog({ plugin, onClose, onChanged }: {
 
   return (
     <Dialog open={Boolean(plugin)} onOpenChange={(open) => { if (!open && !busy) onClose(); }}>
-      <DialogContent className="max-w-md" aria-describedby={undefined}>
+      <DialogContent aria-describedby={undefined}>
         <DialogHeader><DialogTitle>{title}</DialogTitle></DialogHeader>
         <DialogBody className="flex flex-col pb-5">
           <ul className="flex flex-col [&>*+*]:edge-t">

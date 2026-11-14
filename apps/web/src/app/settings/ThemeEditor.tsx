@@ -188,7 +188,7 @@ export function ThemeEditor({ open, target, onOpenChange }: { open: boolean; tar
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (next) onOpenChange(true); else discard.close(finish); }}>
-      <DialogContent className="max-w-3xl" mobileFullscreen>
+      <DialogContent size="content" mobileFullscreen>
         <DialogHeader>
           <DialogTitle>{editing ? t`编辑主题` : t`新建主题`}</DialogTitle>
           <DialogDescription><Trans>保存在服务器；每台设备各自选择。</Trans></DialogDescription>

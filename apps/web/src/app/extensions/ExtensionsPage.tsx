@@ -1,7 +1,7 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ExtensionAction, ExtensionActionRequest, ExtensionActionResult, ExtensionContext, ExtensionKind, ExtensionRuntimeReport, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
-import { IconDownload, IconEllipsis, IconMenu, IconPlus, IconRefreshCw, IconSearch, IconSettings2, IconX } from '@/components/icons';
+import { IconDownload, IconEllipsis, IconPlus, IconRefreshCw, IconSearch, IconSettings2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Field, Input, Kbd, Select, Spinner, UnderlineTabs } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,7 +25,7 @@ import { extensionActions, extensionContextKey, extensionEntryKey, extensionStat
 import { useExtensionSources } from './useExtensionSources';
 import './extensions.css';
 import { isComposingKey } from '../session/composerKeyboard';
-import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { PageHeader } from '../PageScaffold';
 
 interface Props {
   active: boolean;
@@ -372,39 +372,34 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
   </div>;
 
   return <OverlayScopeContext.Provider value={overlay.scope}><div className={cn('extensions-page', (selected || creation) && 'has-inspector')}>
-    <header className="extensions-page-header flex h-13 shrink-0 items-center gap-2 px-4 max-md:h-12 max-md:px-3">
-      <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
-      {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
-      <h1 className="min-w-0 truncate text-sm font-medium text-fg"><Trans>扩展管理</Trans></h1>
-      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+    <PageHeader divided title={<Trans>扩展管理</Trans>} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} actions={<>
         <Button size="icon-sm" variant="quiet" disabled={busy || loading} aria-label={t`刷新目录`} title={t`刷新目录`} onClick={() => void refreshDirectory()}>{loading ? <Spinner /> : <IconRefreshCw />}</Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
           <DropdownMenuItem disabled={busy || !currentSource} onSelect={() => void openPicker('runtime')}><Trans>运行状态与 MCP</Trans></DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => setShowDiagnostics(true)}><Trans>诊断</Trans></DropdownMenuItem>
         </DropdownMenuContent></DropdownMenu>
-      </div>
-    </header>
+    </>} />
     {!selected && !creation && !picker && operationFeedback}
     <div className="extensions-workarea" role="tabpanel" aria-label={t`扩展管理`}>
       <section ref={catalogRef} className="extensions-catalog" aria-label={t`扩展目录`}>
         <div className="extensions-page-nav">
           <div className="extensions-context-controls">
-            <Select wrapperClassName="extensions-agent-filter" aria-label="Agent" value={backend} disabled={busy || !agentOptions.length} onChange={event => void switchContext({ backend: event.target.value as NativeBackendId })}>{agentOptions.map(agent => <option key={agent.backendId} value={agent.backendId}>{agentLabel(agent.backendId)}</option>)}</Select>
-            <Select wrapperClassName="extensions-project-filter" aria-label={t`配置范围`} value={projectId} disabled={busy} onChange={event => void switchContext({ projectId: event.target.value })}><option value=""><Trans>用户配置</Trans></option>{projects.filter(value => !value.archivedAt).map(value => <option key={value.id} value={value.id}>{value.name}</option>)}</Select>
+            <Select<string> className="extensions-agent-filter" label="Agent" value={backend} disabled={busy || !agentOptions.length} onChange={next => void switchContext({ backend: next as NativeBackendId })} options={agentOptions.map(agent => ({ value: agent.backendId, label: agentLabel(agent.backendId) }))} />
+            <Select className="extensions-project-filter" label={t`配置范围`} value={projectId} disabled={busy} onChange={next => void switchContext({ projectId: next })} options={[{ value: '', label: t`用户配置` }, ...projects.filter(value => !value.archivedAt).map(value => ({ value: value.id, label: value.name }))]} />
           </div>
           <div className="extensions-search"><IconSearch /><Input ref={searchRef} className="pl-8 pr-8" aria-label={t`搜索扩展`} placeholder={t`搜索扩展`} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !isComposingKey(event.nativeEvent)) { setQuery(''); event.currentTarget.blur(); } }} />{query ? <Button variant="quiet" size="icon-xs" aria-label={t`清除搜索`} onClick={() => setQuery('')}><IconX /></Button> : <Kbd>/</Kbd>}</div>
         </div>
         <div className="extensions-browse-bar">
           <div className="extensions-kind-tabs"><UnderlineTabs value={kind} onChange={next => { if (next !== kind) void switchContext({ kind: next }); }} ariaLabel={t`扩展类型`} options={kinds.map(value => ({ value, label: <>{extensionKinds[value]}<span className="extensions-kind-count">{counts[value]}</span></>, disabled: busy }))} /></div>
           <div className="extensions-toolbar">
-            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}><PopoverTrigger asChild><Button size="icon-sm" title={t({ message: '筛选', context: 'extensions-filters-label' })} variant={activeFilters.length ? 'secondary' : 'quiet'} aria-label={activeFilters.length ? t`筛选，${activeFilters.length} 项已启用` : t({ message: '筛选', context: 'extensions-filters-label' })}><IconSettings2 />{activeFilters.length > 0 && <span className="text-2xs tabular-nums">{activeFilters.length}</span>}</Button></PopoverTrigger><PopoverContent align="end" className="w-[340px] max-w-[calc(100vw-24px)] p-4">
+            <Popover open={filtersOpen} onOpenChange={setFiltersOpen}><PopoverTrigger asChild><Button size="icon-sm" title={t({ message: '筛选', context: 'extensions-filters-label' })} variant={activeFilters.length ? 'secondary' : 'quiet'} aria-label={activeFilters.length ? t`筛选，${activeFilters.length} 项已启用` : t({ message: '筛选', context: 'extensions-filters-label' })}><IconSettings2 />{activeFilters.length > 0 && <span className="text-2xs tabular-nums">{activeFilters.length}</span>}</Button></PopoverTrigger><PopoverContent mobileSheet align="end" className="w-[340px] max-w-[calc(100vw-24px)] p-4">
               <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-medium"><Trans context="extensions-filters-label">筛选</Trans></h2><Button size="xs" variant="quiet" onClick={resetFilters}><Trans>重置</Trans></Button></div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label={t`作用域`}><Select aria-label={t`作用域筛选`} value={scope} onChange={event => setScope(event.target.value)}><option value="all"><Trans>全部作用域</Trans></option>{Object.entries(extensionScopes).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></Field>
-                <Field label={t({ message: '状态', context: 'extensions-status-filter' })}><Select aria-label={t`扩展状态`} value={status} onChange={event => setStatus(event.target.value as Status)}>{Object.entries(statusLabels).map(([value, label]) => <option key={value} value={value}>{label}{value === 'attention' ? ` · ${attention}` : ''}</option>)}</Select></Field>
-                <Field label={t`来源`}><Select aria-label={t`扩展来源筛选`} value={origin} onChange={event => setOrigin(event.target.value)}><option value="all"><Trans>全部来源</Trans></option><option value="own"><Trans>独立配置</Trans></option><option value="plugin"><Trans>插件提供</Trans></option></Select></Field>
-                <Field label={t({ message: '排序', context: 'extensions-sort-field' })}><Select aria-label={t`排序方式`} value={sort} onChange={event => setSort(event.target.value)}><option value="default"><Trans>默认排序</Trans></option><option value="name"><Trans>名称 A–Z</Trans></option></Select></Field>
+                <Field label={t`作用域`}><Select label={t`作用域筛选`} value={scope} onChange={setScope} options={[{ value: 'all', label: t`全部作用域` }, ...Object.entries(extensionScopes).map(([value, label]) => ({ value, label }))]} /></Field>
+                <Field label={t({ message: '状态', context: 'extensions-status-filter' })}><Select<string> label={t`扩展状态`} value={status} onChange={next => setStatus(next as Status)} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label: `${label}${value === 'attention' ? ` · ${attention}` : ''}` }))} /></Field>
+                <Field label={t`来源`}><Select label={t`扩展来源筛选`} value={origin} onChange={setOrigin} options={[{ value: 'all', label: t`全部来源` }, { value: 'own', label: t`独立配置` }, { value: 'plugin', label: t`插件提供` }]} /></Field>
+                <Field label={t({ message: '排序', context: 'extensions-sort-field' })}><Select label={t`排序方式`} value={sort} onChange={setSort} options={[{ value: 'default', label: t`默认排序` }, { value: 'name', label: t`名称 A–Z` }]} /></Field>
               </div>
               <div className="mt-4 flex justify-end"><Button size="sm" variant="secondary" onClick={() => setFiltersOpen(false)}><Trans context="extensions-done-action">完成</Trans></Button></div>
             </PopoverContent></Popover>
@@ -424,7 +419,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
       </section>
     </div>
     <Dialog open={active && showDiagnostics} onOpenChange={setShowDiagnostics}>
-      <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+      <DialogContent size="content" aria-describedby={undefined}>
         <DialogHeader><DialogTitle><Trans>诊断</Trans></DialogTitle><DialogDescription>{backend ? agentLabel(backend) : 'Agent'} · {projectId ? projects.find(value => value.id === projectId)?.name ?? t`项目配置` : t`用户配置`}</DialogDescription></DialogHeader>
         <DialogBody className="max-h-[55dvh] space-y-4">
           {error && <Notice tone="danger">{errorContent}</Notice>}
@@ -443,10 +438,10 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
       {!picker && operationFeedback}
       {(shownDetail.entry || shownDetail.creation) && <ExtensionInspector key={detailVisit} active={active && detailOpen} entry={shownDetail.entry} creation={shownDetail.creation} runtime={selectedReport ?? (shownDetail.entry ? runtime[extensionContextKey(shownDetail.entry.context)] : undefined)} disabled={operationBusy} onClose={() => { void guard(); }} onOpen={openEntry} onDirtyChange={setDirty} onBusyChange={setEditorBusy} onChanged={changed} onAction={onAction} onCheckRuntime={checkRuntime} />}
     </DialogContent></Dialog>
-    <Dialog open={Boolean(picker)} onOpenChange={value => { if (!value && !busy) setPicker(undefined); }}><DialogContent className="max-w-lg"><DialogHeader><DialogTitle>{shownPicker === 'install' ? t`安装插件` : t`运行状态与 MCP`}</DialogTitle><DialogDescription className="sr-only"><Trans>选择操作的 Agent 配置</Trans></DialogDescription></DialogHeader><DialogBody className="flex flex-col gap-4">
+    <Dialog open={Boolean(picker)} onOpenChange={value => { if (!value && !busy) setPicker(undefined); }}><DialogContent><DialogHeader><DialogTitle>{shownPicker === 'install' ? t`安装插件` : t`运行状态与 MCP`}</DialogTitle><DialogDescription className="sr-only"><Trans>选择操作的 Agent 配置</Trans></DialogDescription></DialogHeader><DialogBody className="flex flex-col gap-4">
       <p className="text-xs text-fg-3">{selectedSource ? agentLabel(selectedSource.context.backendId) : ''}</p>
       {shownPicker === 'install' && <>
-        {!selectedSource?.capabilities && !selectedSource?.capabilityError ? <Spinner /> : !selectedSource?.capabilities?.actions.includes('install') ? <p className="text-xs text-fg-3">{selectedSource?.capabilityError || selectedSource?.capabilities?.reason || t`此配置不支持原生插件安装。`}</p> : <><Field label={t`插件名称`} hint={t`使用原生插件标识，例如 name@marketplace`}><Input aria-label={t`插件名称`} value={target} disabled={busy} onChange={event => setTarget(event.target.value)} /></Field><Field label={t`安装作用域`}><Select value={installScope} disabled={busy} onChange={event => setInstallScope(event.target.value as 'user' | 'project')}><option value="user"><Trans context="extensions-scope-user">用户级</Trans></option>{selectedSource.context.projectId && selectedSource.capabilities.installScopes?.includes('project') && <option value="project"><Trans>当前项目</Trans></option>}</Select></Field></>}
+        {!selectedSource?.capabilities && !selectedSource?.capabilityError ? <Spinner /> : !selectedSource?.capabilities?.actions.includes('install') ? <p className="text-xs text-fg-3">{selectedSource?.capabilityError || selectedSource?.capabilities?.reason || t`此配置不支持原生插件安装。`}</p> : <><Field label={t`插件名称`} hint={t`使用原生插件标识，例如 name@marketplace`}><Input aria-label={t`插件名称`} value={target} disabled={busy} onChange={event => setTarget(event.target.value)} /></Field><Field label={t`安装作用域`}><Select<'user' | 'project'> label={t`安装作用域`} value={installScope} disabled={busy} onChange={setInstallScope} options={[{ value: 'user', label: t({ message: '用户级', context: 'extensions-scope-user' }) }, ...(selectedSource.context.projectId && selectedSource.capabilities.installScopes?.includes('project') ? [{ value: 'project' as const, label: t`当前项目` }] : [])]} /></Field></>}
       </>}
       {shownPicker === 'runtime' && <>
         {selectedSource?.capabilityError && <p role="alert" className="text-xs text-danger">{selectedSource.capabilityError}</p>}

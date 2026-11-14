@@ -50,7 +50,10 @@ export interface CatalogTarget {
  * failed read here is not reported on top of it.
  */
 export function createCatalogStore({ offline }: { offline: () => boolean }) {
-  const store = createStore<CatalogState>({ backends: [], homeBackendId: LEGACY_DEFAULT_BACKEND_ID, loading: true, error: '', loadedKey: '', revision: 0 });
+  // The agent last picked here, from the first frame: the server's settings arrive a render later,
+  // and starting on the built-in default would paint that agent's button and then swap it.
+  const stored = readStored(STORAGE_KEYS.backend);
+  const store = createStore<CatalogState>({ backends: [], homeBackendId: isNativeBackendId(stored) ? stored : LEGACY_DEFAULT_BACKEND_ID, loading: true, error: '', loadedKey: '', revision: 0 });
   let request: AbortController | undefined;
   const cache = new Map<string, NativeBackendCatalogEntry>();
   let initialized = false;

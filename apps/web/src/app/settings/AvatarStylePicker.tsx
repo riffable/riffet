@@ -46,7 +46,7 @@ export function AvatarStylePicker({ name, disabled, onPick }: { name: string | u
   const label = t`随机头像`;
   return <Popover open={open} onOpenChange={(next) => { if (next) { setColors(themeInk()); reroll(); } setOpen(next); }}>
     <Tip label={label}><PopoverTrigger asChild><Button size="icon" disabled={disabled} aria-label={label}><IconDices /></Button></PopoverTrigger></Tip>
-    <PopoverContent className="w-auto p-3">
+    <PopoverContent mobileSheet className="w-auto p-3">
       <div className="grid grid-cols-4 gap-2 max-md:grid-cols-3">
         {shown.map((style) => {
           const seed = seeds[style.id];

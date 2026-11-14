@@ -223,6 +223,10 @@ export interface ComposerProps {
   /** Every provider the new session may draw models from; absent for an open session, whose provider is fixed. */
   providers?: ModelProviderChoices[];
   activeProviderId?: string;
+  /** A provider other than the active one was previewed in the model menu (see `ModelPicker`). */
+  onPreviewModelProvider?: (id: string) => void;
+  /** Before the model's name on its trigger, e.g. the agent's mark when the menu also picks the agent. */
+  modelLeading?: ReactNode;
   /**
    * The left group of pickers: how the agent should behave (mode, approval). The context meter and
    * the model sit on the right, next to the send button, because they describe what the message will
@@ -1289,7 +1293,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     uploading ? t`上传中` : '',
   ].filter(Boolean).join(' · ');
   const renderModelPicker = () => props.onModelChange ? (
-    <ModelPicker align={isMobile ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} />
+    <ModelPicker align={isMobile ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} leading={props.modelLeading} anchorRef={cardRef} />
   ) : null;
 
   return (
@@ -1652,7 +1656,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     onClick={showStop ? props.onStop : () => void submit()}
                     className={cn(
                       'grid size-11 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] duration-[var(--duration-base)] ease-[var(--ease-standard)] active:scale-90 disabled:active:scale-100 md:size-8',
-                      showStop ? 'bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-45' : 'bg-accent text-accent-fg hover:bg-accent-hover disabled:bg-line-strong disabled:text-fg-4',
+                      showStop ? 'bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-45' : 'bg-primary text-primary-fg hover:bg-primary-hover disabled:bg-fg/[0.08] disabled:text-fg-4',
                     )}
                   >
                     {showStop ? props.stopping ? <Spinner className="size-4 text-current" /> : <IconSquare className="size-3 fill-current" /> : submitting ? <Spinner className="size-4 text-current" /> : <IconArrowUp className="size-4" strokeWidth={2.4} />}

@@ -34,7 +34,20 @@ export function DialogTrigger({ onMouseDown, ...props }: React.ComponentProps<ty
 }
 export const DialogClose = Primitive.Close;
 
-export function DialogContent({ className, overlayClassName, children, hideClose, mobileFullscreen, mobileSheet, onOpenAutoFocus, onCloseAutoFocus, ref, ...props }: React.ComponentProps<typeof Primitive.Content> & { overlayClassName?: string; hideClose?: boolean; mobileFullscreen?: boolean; mobileSheet?: boolean }) {
+/** The four dialog widths (docs/design/system/patterns.md §2.2); pick by content, not by eye. */
+const SIZES = {
+  /** confirmDialog, promptDialog and confirmations that wait on their own request. */
+  confirm: 'max-w-[420px]',
+  /** Create, rename, one form. */
+  form: 'max-w-md',
+  /** Previews, diffs, choices from a list. */
+  content: 'max-w-3xl',
+  /** Its own navigation or a large canvas: settings, full previews. */
+  workspace: 'max-w-[1080px]',
+} as const;
+export type DialogSize = keyof typeof SIZES;
+
+export function DialogContent({ className, overlayClassName, children, size = 'form', hideClose, mobileFullscreen, mobileSheet, onOpenAutoFocus, onCloseAutoFocus, ref, ...props }: React.ComponentProps<typeof Primitive.Content> & { overlayClassName?: string; size?: DialogSize; hideClose?: boolean; mobileFullscreen?: boolean; mobileSheet?: boolean }) {
   const { t } = useLingui();
   const shown = useClosingSnapshot(children);
   const contentRef = React.useRef<HTMLDivElement>(null);
@@ -58,7 +71,8 @@ export function DialogContent({ className, overlayClassName, children, hideClose
       <Primitive.Content
         ref={attachContent}
         className={cn(
-          'ui-dialog-content fixed left-1/2 top-[calc(var(--app-top,0px)+var(--app-height,100dvh)/2)] z-(--z-dialog) flex max-h-[calc(var(--app-height,100dvh)-32px)] w-[calc(100vw-32px)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-elevated text-fg shadow-pop outline-none animate-in fill-mode-both fade-in-0 zoom-in-[var(--enter-scale)] duration-[var(--duration-fast)] ease-[var(--ease-decelerate)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[var(--enter-scale)] data-[state=closed]:duration-[var(--duration-exit-fast)] data-[state=closed]:ease-[var(--ease-accelerate)]',
+          'ui-dialog-content fixed left-1/2 top-[calc(var(--app-top,0px)+var(--app-height,100dvh)/2)] z-(--z-dialog) flex max-h-[calc(var(--app-height,100dvh)-32px)] w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-2xl bg-elevated text-fg shadow-pop outline-none animate-in fill-mode-both fade-in-0 zoom-in-[var(--enter-scale)] duration-[var(--duration-fast)] ease-[var(--ease-decelerate)] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[var(--enter-scale)] data-[state=closed]:duration-[var(--duration-exit-fast)] data-[state=closed]:ease-[var(--ease-accelerate)]',
+          SIZES[size],
           className,
           mobileFullscreen && 'mobile-dialog-fullscreen',
           mobileSheet && 'mobile-dialog-sheet',
@@ -126,8 +140,9 @@ export function DialogBody({ className, ...props }: React.ComponentProps<'div'>)
   return <div className={cn('min-h-0 overflow-y-auto overscroll-contain px-5 pb-2', className)} {...props} />;
 }
 
+/** Cancel (`ghost`) sits left of the primary action, both at the default size; a bottom sheet stretches them across the row. */
 export function DialogFooter({ className, ...props }: React.ComponentProps<'div'>) {
-  return <div className={cn('flex shrink-0 flex-wrap items-center justify-end gap-2 px-5 pb-5 pt-4', className)} {...props} />;
+  return <div className={cn('ui-dialog-footer flex shrink-0 flex-wrap items-center justify-end gap-2 px-5 pb-5 pt-4', className)} {...props} />;
 }
 
 export function DialogTitle({ className, ...props }: React.ComponentProps<typeof Primitive.Title>) {

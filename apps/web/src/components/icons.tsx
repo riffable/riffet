@@ -8,7 +8,7 @@ import {
   MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
-  Sparkles, Square, SquareArrowOutUpRight, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
+  Sparkles, Square, SquareArrowOutUpRight, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
@@ -129,6 +129,7 @@ export const IconSquareTerminal = icon(SquareTerminal);
 export const IconStar = icon(Star);
 export const IconStarFilled = filled(Star);
 export const IconSun = icon(Sun);
+export const IconSwatchBook = icon(SwatchBook);
 export const IconTag = icon(Tag);
 export const IconTarget = icon(Target);
 export const IconTerminal = icon(Terminal);

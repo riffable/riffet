@@ -478,20 +478,24 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
     <div className="flex flex-col gap-6">
       <SettingsGroup title={t`Agent`}>
         <SettingsRow title={t`默认 Agent`}>
-          <Select aria-label={t`默认 Agent`} wrapperClassName="w-48" value={settings.defaultBackendId ?? ''} disabled={busy} onChange={(event) => void saveDefaultBackend(event.target.value as NativeBackendId)}>
-            {offered.filter((entry) => entry.backendId !== 'chat' && entry.available !== false).map((entry) => <option key={entry.backendId} value={entry.backendId}>{shortLabel(entry.backendId)}</option>)}
-          </Select>
-        </SettingsRow>
-        <SettingsRow title="CLI" description={cliVersionNote(cliVersion)}>
-          <Segmented<NativeBackendId>
-            className="max-md:[&_button]:min-h-11"
-            value={backendId}
-            onChange={(next) => void changeBackend(next)}
-            ariaLabel={t`Agent`}
-            options={ids.map((id) => ({ value: id, label: shortLabel(id), icon: <AgentMark backend={id} size={14} />, disabled: busy }))}
-          />
+          <Select<string> label={t`默认 Agent`} className="w-48" value={settings.defaultBackendId ?? ''} placeholder={t`未设置`} disabled={busy} onChange={(next) => void saveDefaultBackend(next as NativeBackendId)}
+            // The saved default stays named while it is unavailable, just not offered again.
+            options={offered.filter((entry) => entry.backendId !== 'chat' && (entry.available !== false || entry.backendId === settings.defaultBackendId)).map((entry) => ({ value: entry.backendId, label: shortLabel(entry.backendId), icon: <AgentMark backend={entry.backendId} size={14} />, disabled: entry.available === false }))} />
         </SettingsRow>
       </SettingsGroup>
+
+      {/* What follows configures one Agent: its name heads the sections and switches between them. */}
+      <div className="-mb-3 flex min-w-0 items-center gap-3">
+        <Select<NativeBackendId>
+          appearance="heading"
+          label={t`配置的 Agent`}
+          value={backendId}
+          disabled={busy}
+          onChange={(next) => void changeBackend(next)}
+          options={ids.map((id) => ({ value: id, label: shortLabel(id), icon: <AgentMark backend={id} size={16} /> }))}
+        />
+        <span className="min-w-0 truncate text-xs">{cliVersionNote(cliVersion)}</span>
+      </div>
 
       <SettingsGroup title={t`新会话`}>
         <DefaultApprovalSetting
@@ -569,10 +573,9 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
                       )}
                       {backendId === 'pi' && source === 'custom' && (
                         <SettingsRow title="API">
-                          <Select aria-label="API" wrapperClassName="w-64 max-md:w-full" value={draft.apiProtocol ?? 'openai-completions'} disabled={busy}
-                            onChange={(event) => setDraft((current) => ({ ...current, apiProtocol: event.target.value as NativeModelApiProtocol }))}>
-                            {modelApis.map((protocol) => <option key={protocol.value} value={protocol.value}>{protocol.label}</option>)}
-                          </Select>
+                          <Select<string> label="API" className="w-64 max-md:w-full" value={draft.apiProtocol ?? 'openai-completions'} disabled={busy}
+                            onChange={(next) => setDraft((current) => ({ ...current, apiProtocol: next as NativeModelApiProtocol }))}
+                            options={modelApis.map((protocol) => ({ value: protocol.value, label: protocol.label }))} />
                         </SettingsRow>
                       )}
                       {extra.endpoint !== false && loginRow(namedEntry)}
@@ -702,10 +705,9 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
                 </SettingsRow>
                 {backendId === 'pi' && adding.source === 'custom' && (
                   <SettingsRow title="API">
-                    <Select aria-label="API" wrapperClassName="w-64 max-md:w-full" value={adding.apiProtocol ?? 'openai-completions'} disabled={busy}
-                      onChange={(event) => setAdding((current) => current && { ...current, apiProtocol: event.target.value as NativeModelApiProtocol })}>
-                      {modelApis.map((protocol) => <option key={protocol.value} value={protocol.value}>{protocol.label}</option>)}
-                    </Select>
+                    <Select<string> label="API" className="w-64 max-md:w-full" value={adding.apiProtocol ?? 'openai-completions'} disabled={busy}
+                      onChange={(next) => setAdding((current) => current && { ...current, apiProtocol: next as NativeModelApiProtocol })}
+                      options={modelApis.map((protocol) => ({ value: protocol.value, label: protocol.label }))} />
                   </SettingsRow>
                 )}
                 {addingOverridable.includes('apiEndpoint') && (

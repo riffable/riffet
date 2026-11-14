@@ -1,12 +1,11 @@
 import { memo } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { StatsRunRow } from '@contracts';
-import { IconCircleAlert, IconMenu, IconRefreshCw } from '@/components/icons';
+import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { exportStats } from '@/lib/api';
-import { OverlayScopeContext, useOverlayState } from '@/lib/overlay-navigation';
 import { formatTimestamp } from '@/lib/stats-format';
 import { clientTimeZone, previousWindowLabel, statsFilterKey, statsFilterParams, windowLabel, type StatsUiState } from '@/lib/stats-query';
 import { toast } from '@/lib/toast';
@@ -22,7 +21,7 @@ import { RankChart } from './RankChart';
 import { RunsTable } from './RunsTable';
 import { ReliabilityChart, ToolChart } from './SplitBars';
 import { useStatsData } from './use-stats-data';
-import { ExpandSidebarButton } from '../ExpandSidebarButton';
+import { PageScaffold } from '../PageScaffold';
 
 function Skel({ className }: { className: string }) {
   return <div className={`stats-skel ${className}`} />;
@@ -53,7 +52,6 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
   onExpandSidebar: () => void;
   onOpenSession: (row: StatsRunRow) => void;
 }) {
-  const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
   const { t } = useLingui();
   const data = useStatsData(state);
   const dashboard = data.dashboard;
@@ -72,74 +70,72 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
   const compare = previousWindowLabel(state, new Date());
 
   return (
-    <OverlayScopeContext.Provider value={overlay.scope}>
-      <div className="flex h-full min-h-0 flex-col bg-bg">
-        <header className="flex h-12 shrink-0 items-center gap-2 px-3 max-md:edge-b md:h-13 md:pl-4">
-          <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
-          {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
-          <h1 className="shrink-0 text-sm font-medium text-fg"><Trans>统计</Trans></h1>
-          {dashboard && (
-            <p className="ml-auto min-w-0 truncate text-xs text-fg-4" role="status">
-              <span className="max-md:hidden">{period} · </span>
-              {data.refreshing ? t`更新中` : formatTimestamp(dashboard.generatedAt)}
-            </p>
-          )}
-        </header>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4 px-4 pb-12">
-            <FilterBar state={state} options={dashboard?.options} onChange={onStateChange} onExport={exportFile} />
-            {data.loading && <StatsSkeleton />}
-            {!dashboard && data.error && (
-              <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载统计`} description={data.error}>
-                <Button size="sm" onClick={data.reload}><IconRefreshCw /><Trans>重试</Trans></Button>
-              </EmptyState>
-            )}
-            <FeedbackNotice scope={`stats:${statsFilterKey(state)}`} message={dashboard && series && data.error}
-              action={() => <Button size="xs" onClick={data.reload}><Trans>重试</Trans></Button>}
-              renderMessage={(message, current) => current ? <Trans>{message.text}，仍显示上次的数据。</Trans> : message.text} />
-            {dashboard && series && (
-              <HighlightProvider>
-                {empty && <p className="rounded-xl border border-line bg-subtle px-4 py-3 text-sm text-fg-3"><Trans>还没有可统计的会话。缺失的指标显示为「—」，不是 0。</Trans></p>}
-                <KpiCards summary={dashboard.summary} series={series} compareLabel={compare} />
-                <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
-                  <AreaChart
-                    series={series}
-                    metric={state.metric}
-                    split={state.split}
-                    stale={series.metric !== state.metric || series.split !== state.split}
-                    onMetric={(metric) => onStateChange({ ...state, metric })}
-                    onSplit={(split) => onStateChange({ ...state, split })}
-                    onBrush={(from, to) => onStateChange({ ...state, preset: 'custom', from, to })}
-                  />
-                  <DonutChart breakdown={dashboard.backends} />
-                </div>
-                <CalendarHeatmap heatmap={dashboard.heatmap} />
-                <div className="grid items-start gap-3 lg:grid-cols-2">
-                  <RankChart breakdown={dashboard.models} rank={state.rank} onRank={(rank) => onStateChange({ ...state, rank })} />
-                  <LatencyChart latency={data.latency} kind={state.latency} onKind={(latency) => onStateChange({ ...state, latency })} />
-                </div>
-                <div className="grid items-start gap-3 lg:grid-cols-2">
-                  <WeekHeatmap heatmap={dashboard.heatmap} />
-                  <ReliabilityChart breakdown={dashboard.backends} />
-                </div>
-                <ToolChart breakdown={dashboard.tools} />
-                <RunsTable
-                  rows={data.runs}
-                  page={data.runsPage}
-                  pageSize={data.runsPageSize}
-                  hasNext={data.runsHasNext}
-                  loading={data.runsLoading}
-                  error={data.runsError}
-                  onPageChange={data.goToRunsPage}
-                  onPageSizeChange={data.setRunsPageSize}
-                  onRetry={data.retryRuns}
-                  onOpen={onOpenSession}
-                />
-              </HighlightProvider>
-            )}
+    <PageScaffold
+      title={<Trans>统计</Trans>}
+      actions={dashboard && (
+        <p className="min-w-0 truncate text-xs text-fg-4" role="status">
+          <span className="max-md:hidden">{period} · </span>
+          {data.refreshing ? t`更新中` : formatTimestamp(dashboard.generatedAt)}
+        </p>
+      )}
+      column="board"
+      /* The filter bar sticks to the scroller's top edge and brings its own top padding. */
+      columnClassName="flex flex-col gap-4 pt-0 md:pt-0"
+      sidebarCollapsed={sidebarCollapsed}
+      onClose={onClose}
+      onOpenSidebar={onOpenSidebar}
+      onExpandSidebar={onExpandSidebar}
+    >
+      <FilterBar state={state} options={dashboard?.options} onChange={onStateChange} onExport={exportFile} />
+      {data.loading && <StatsSkeleton />}
+      {!dashboard && data.error && (
+        <EmptyState className="py-16" icon={<IconCircleAlert />} title={t`无法加载统计`} description={data.error}>
+          <Button size="sm" onClick={data.reload}><IconRefreshCw /><Trans>重试</Trans></Button>
+        </EmptyState>
+      )}
+      <FeedbackNotice scope={`stats:${statsFilterKey(state)}`} message={dashboard && series && data.error}
+        action={() => <Button size="xs" onClick={data.reload}><Trans>重试</Trans></Button>}
+        renderMessage={(message, current) => current ? <Trans>{message.text}，仍显示上次的数据。</Trans> : message.text} />
+      {dashboard && series && (
+        <HighlightProvider>
+          {empty && <p className="rounded-xl border border-line bg-subtle px-4 py-3 text-sm text-fg-3"><Trans>还没有可统计的会话。缺失的指标显示为「—」，不是 0。</Trans></p>}
+          <KpiCards summary={dashboard.summary} series={series} compareLabel={compare} />
+          <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
+            <AreaChart
+              series={series}
+              metric={state.metric}
+              split={state.split}
+              stale={series.metric !== state.metric || series.split !== state.split}
+              onMetric={(metric) => onStateChange({ ...state, metric })}
+              onSplit={(split) => onStateChange({ ...state, split })}
+              onBrush={(from, to) => onStateChange({ ...state, preset: 'custom', from, to })}
+            />
+            <DonutChart breakdown={dashboard.backends} />
           </div>
-        </div>
-      </div>
-    </OverlayScopeContext.Provider>
+          <CalendarHeatmap heatmap={dashboard.heatmap} />
+          <div className="grid items-start gap-3 lg:grid-cols-2">
+            <RankChart breakdown={dashboard.models} rank={state.rank} onRank={(rank) => onStateChange({ ...state, rank })} />
+            <LatencyChart latency={data.latency} kind={state.latency} onKind={(latency) => onStateChange({ ...state, latency })} />
+          </div>
+          <div className="grid items-start gap-3 lg:grid-cols-2">
+            <WeekHeatmap heatmap={dashboard.heatmap} />
+            <ReliabilityChart breakdown={dashboard.backends} />
+          </div>
+          <ToolChart breakdown={dashboard.tools} />
+          <RunsTable
+            rows={data.runs}
+            page={data.runsPage}
+            pageSize={data.runsPageSize}
+            hasNext={data.runsHasNext}
+            loading={data.runsLoading}
+            error={data.runsError}
+            onPageChange={data.goToRunsPage}
+            onPageSizeChange={data.setRunsPageSize}
+            onRetry={data.retryRuns}
+            onOpen={onOpenSession}
+          />
+        </HighlightProvider>
+      )}
+    </PageScaffold>
   );
 });

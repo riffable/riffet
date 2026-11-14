@@ -138,7 +138,7 @@ export function HandoffDialog({ open, onOpenChange, session, backends, working, 
     <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
       <DialogContent
         aria-describedby={undefined}
-        className={draft ? 'max-w-2xl' : 'max-w-lg'}
+        size={draft ? 'content' : 'form'}
         onOpenAutoFocus={(event) => {
           // Otherwise Radix focuses the first backend card, and its :focus-visible ring reads as
           // a second selection beside the real one. On phones DialogContent focuses the sheet

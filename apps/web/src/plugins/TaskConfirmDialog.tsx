@@ -24,7 +24,7 @@ export function TaskConfirmDialog({ title, confirmation, onConfirm, onCancel }: 
   const plan = (confirmation ?? last.current)?.plan;
   return (
     <Dialog open={Boolean(confirmation)} onOpenChange={(open) => { if (!open) onCancel(); }}>
-      <DialogContent className="max-w-md">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription><Trans>首次运行这条命令</Trans></DialogDescription>
@@ -37,8 +37,8 @@ export function TaskConfirmDialog({ title, confirmation, onConfirm, onCancel }: 
           </div>
         </DialogBody>
         <DialogFooter>
-          <Button size="sm" variant="secondary" onClick={onCancel}><Trans>取消</Trans></Button>
-          <Button size="sm" variant="primary" onClick={onConfirm}><Trans>运行</Trans></Button>
+          <Button variant="ghost" onClick={onCancel}><Trans>取消</Trans></Button>
+          <Button variant="primary" onClick={onConfirm}><Trans>运行</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

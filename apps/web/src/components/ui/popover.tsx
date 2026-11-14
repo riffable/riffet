@@ -16,7 +16,11 @@ export function PopoverTrigger({ onMouseDown, ...props }: React.ComponentProps<t
 export const PopoverAnchor = Primitive.Anchor;
 export const PopoverClose = Primitive.Close;
 
-export function PopoverContent({ className, children, sideOffset = 6, align = 'start', hideWhenDetached = true, onOpenAutoFocus, onCloseAutoFocus, onFocusCapture, ref, ...props }: React.ComponentProps<typeof Primitive.Content>) {
+/**
+ * `mobileSheet` draws the popover as a bottom sheet on a phone: for a panel of filters or options.
+ * A popover tied to a spot in the content (a selection, the caret, a chart point) stays anchored.
+ */
+export function PopoverContent({ className, children, sideOffset = 6, align = 'start', hideWhenDetached = true, mobileSheet = false, onOpenAutoFocus, onCloseAutoFocus, onFocusCapture, ref, ...props }: React.ComponentProps<typeof Primitive.Content> & { mobileSheet?: boolean }) {
   const contentRef = React.useRef<HTMLDivElement>(null);
   const focusReturn = useTypingFocusReturn();
   const shown = useClosingSnapshot(children);
@@ -25,7 +29,7 @@ export function PopoverContent({ className, children, sideOffset = 6, align = 's
     <Primitive.Portal>
       <Primitive.Content
         ref={contentRef} sideOffset={sideOffset} align={align} collisionPadding={8} hideWhenDetached={hideWhenDetached}
-        className={cn(menuSurface, 'ui-popover-content p-0', className, 'max-w-[calc(100vw-16px)]')}
+        className={cn(menuSurface, 'ui-popover-content p-0', className, 'max-w-[calc(100vw-16px)]', mobileSheet && 'ui-floating-sheet')}
         onOpenAutoFocus={(event) => {
           onOpenAutoFocus?.(event);
           if (!event.defaultPrevented && window.matchMedia(MOBILE_LAYOUT_QUERY).matches) {

@@ -1,17 +1,18 @@
 import type { ComponentType } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { IconActivity, IconBot, IconCornerDownLeft, IconColumns2, IconCpu, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelRight, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSun, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
+import { IconActivity, IconBot, IconCornerDownLeft, IconColumns2, IconCpu, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelRight, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
 
 /** The settings dialog's box, shared with the frame that stands in while its chunk loads. */
-export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] w-[min(1080px,calc(100vw-32px))] max-w-[1080px] flex-col overflow-hidden p-0';
+export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';
 
 /**
  * Shared by the settings navigation and command palette. `appearance` is the theme page: the
  * appearance page it named was split into its group's pages, and links to it keep working. A page
- * a plugin contributes is named by its view id (`<pluginId>/<name>`).
+ * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
+ * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'interaction' | 'notifications' | 'files' | 'backends' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
 /** The navigation's groups. 通用设置 stands alone at the top, untitled; the others are titled. */
@@ -58,6 +59,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'views', label: msg`视图`, group: 'appearance', icon: IconPanelRight },
   { id: 'terminal', label: msg`终端`, group: 'appearance', icon: IconTerminal },
   { id: 'appicon', label: msg`应用图标`, group: 'appearance', icon: IconImage },
+  { id: 'design', label: msg`设计规范`, group: 'appearance', icon: IconSwatchBook },
   { id: 'interaction', label: msg`输入`, group: 'behavior', icon: IconCornerDownLeft },
   { id: 'notifications', label: msg`通知`, group: 'behavior', icon: IconActivity },
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog },

@@ -126,7 +126,7 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
               aria-label={t`创建`}
               disabled={!ready}
               onClick={() => void submit()}
-              className="grid size-11 shrink-0 place-items-center rounded-full bg-accent text-accent-fg transition-[background-color,color,transform] hover:bg-accent-hover active:scale-90 disabled:bg-line-strong disabled:text-fg-4 disabled:active:scale-100 md:size-8"
+              className="grid size-11 shrink-0 place-items-center rounded-full bg-primary text-primary-fg transition-[background-color,color,transform] hover:bg-primary-hover active:scale-90 disabled:bg-fg/[0.08] disabled:text-fg-4 disabled:active:scale-100 md:size-8"
             >
               {busy ? <Spinner className="size-4 text-current" /> : <IconArrowUp className="size-4" strokeWidth={2.4} />}
             </button>

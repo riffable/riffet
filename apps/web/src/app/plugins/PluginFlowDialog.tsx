@@ -92,7 +92,7 @@ export function PluginFlowDialog({ pluginId, action, open, onOpenChange, onDone 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm" {...(phase.kind === 'show-code' ? {} : { 'aria-describedby': undefined })}>
+      <DialogContent {...(phase.kind === 'show-code' ? {} : { 'aria-describedby': undefined })}>
         <DialogHeader>
           <DialogTitle>{action?.label}</DialogTitle>
           {/* Most actions are a sign-in, so its description and body keep their room while it starts. */}
@@ -120,8 +120,8 @@ export function PluginFlowDialog({ pluginId, action, open, onOpenChange, onDone 
           {phase.kind === 'failed' && <p role="alert" className="text-sm text-danger">{phase.text}</p>}
         </DialogBody>
         <DialogFooter>
-          {phase.kind === 'failed' && <Button size="sm" onClick={() => setAttempt((value) => value + 1)}><Trans>重试</Trans></Button>}
-          <Button size="sm" variant="secondary" onClick={() => onOpenChange(false)}><Trans>关闭</Trans></Button>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}><Trans>关闭</Trans></Button>
+          {phase.kind === 'failed' && <Button variant="primary" onClick={() => setAttempt((value) => value + 1)}><Trans>重试</Trans></Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>

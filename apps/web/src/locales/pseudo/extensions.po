@@ -324,10 +324,6 @@ msgid "待加载"
 msgstr ""
 
 #: src/app/extensions/ExtensionsPage.tsx
-msgid "打开侧边栏"
-msgstr ""
-
-#: src/app/extensions/ExtensionsPage.tsx
 msgid "打开授权页面"
 msgstr ""
 

@@ -10,13 +10,15 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/compon
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { api, type NativeSessionCreateInput, type ProjectRecord, type PromptContextReference } from '@/lib/api';
 import { catalogEntry, catalogParams, catalogSelection, parseSelection } from '@/lib/models';
-import { backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
+import { agentMarkStyle, backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
 import { ToolsPicker, lastToolGroups, offersExtensionToggles, offersRiffetTools, phoneGroup, rememberToolGroups, useControllablePhones, useExtensionsOffered, usePluginToolGroups } from './session/ToolsPicker';
+import { AgentLogo } from '@/components/AgentLogo';
 import { BackendPicker } from './session/BackendPicker';
+import { useAgentModels } from './session/agentModels';
 import { DirectoryMenu } from './session/DirectoryMenu';
 import { AttemptsDialog, AttemptsHistory } from './session/Attempts';
 import { Composer, type ComposerProps } from './session/Composer';
@@ -47,6 +49,19 @@ function splitChoice(id: string): { profileId?: string; model: string } {
   return at < 0 ? { model: id } : { profileId: id.slice(0, at), model: id.slice(at + 1) };
 }
 
+/**
+ * Another agent's provider and its models in the model menu's agent column. SOH marks these ids,
+ * so they never meet the active agent's own (`profileId\0model`, or a bare model id).
+ */
+const OTHER_AGENT = '\u0001';
+const otherSource = (backendId: NativeBackendId, profileId?: string) => `${OTHER_AGENT}${backendId}${OTHER_AGENT}${profileId ?? ''}`;
+const otherChoice = (backendId: NativeBackendId, profileId: string | undefined, model: string) => `${otherSource(backendId, profileId)}${OTHER_AGENT}${model}`;
+function splitOther(id: string): { backendId: NativeBackendId; profileId?: string; model: string } | undefined {
+  if (!id.startsWith(OTHER_AGENT)) return undefined;
+  const [backendId = '', profileId = '', ...model] = id.slice(1).split(OTHER_AGENT);
+  return { backendId: backendId as NativeBackendId, ...(profileId ? { profileId } : {}), model: model.join(OTHER_AGENT) };
+}
+
 /** What starting a new conversation takes: its directory, agent, model and first message. */
 export interface NewSessionComposerProps {
   project?: ProjectRecord;
@@ -74,7 +89,8 @@ export interface NewSessionComposerProps {
   backend?: NativeBackendCatalogEntry;
   /** Every provider's models, when the agent has more than one; absent means `catalog` is all of it. */
   profileCatalogs?: ProfileCatalog[];
-  onBackendChange: (backendId: NativeBackendId, profileId?: string) => void;
+  /** `model` is set when the agent was picked through one of its models in the model menu. */
+  onBackendChange: (backendId: NativeBackendId, profileId?: string, model?: string) => void;
   /** Switches provider because a model of theirs was picked, carrying that model along. */
   onProfileChange: (profileId: string, model: string) => void;
   catalog: ModelInfo[];
@@ -218,6 +234,59 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   // anything else about the catalog is said, with its retry, on the model picker.
   const catalogIssue = catalogError.trim();
   const modelsError = catalogIssue !== backendIssue ? catalogIssue : '';
+  /*
+   * On a pointer device the model menu also picks the agent: its column lists every agent (with
+   * its providers), and picking a model saves agent, provider and model in one write. Other agents'
+   * lists paint from the cache and are read when the reader looks at them.
+   */
+  const agentModels = useAgentModels(project?.id ?? '');
+  // Decided by layout alone: the agent list arrives after the first frames, and a choice that
+  // waited for it would draw the separate agent button first and then swap it out.
+  const agentChoices = !quickChat && !mobile;
+  const agentOf = (id: NativeBackendId) => ({ id, label: label(id), icon: <AgentLogo backend={id} size={14} style={agentMarkStyle(id)} /> });
+  /** The active agent's row while its providers are not grouped: the same id it has while another agent is active, so the column keeps its place when it becomes the active one. */
+  const listedProfiles = backends.find((entry) => entry.backendId === backendId)?.profiles ?? [];
+  const activeSourceId = otherSource(backendId, listedProfiles.length ? activeProfileId ?? listedProfiles[0]?.id : undefined);
+  // While every provider's models are listed together, the active provider's row holds only its own.
+  const activeModels = grouped && activeProfileId ? models.filter((item) => item.id.startsWith(`${activeProfileId}${CHOICE_SEPARATOR}`)) : models;
+  const agentSources: ModelProviderChoices[] | undefined = agentChoices ? backends.filter((entry) => entry.backendId !== 'chat').flatMap((entry) => {
+    const agent = agentOf(entry.backendId);
+    if (entry.backendId === backendId && providerChoices) return providerChoices.map((provider) => ({ ...provider, agent }));
+    const profiles: Array<NativeBackendProfile | undefined> = entry.profiles.length ? entry.profiles : [undefined];
+    const saved = settings.nativeBackendDefaults?.[entry.backendId]?.profileId ?? entry.profiles.find((profile) => profile.isDefault)?.id;
+    return profiles.map((profile): ModelProviderChoices => {
+      const id = otherSource(entry.backendId, profile?.id);
+      const label = profile?.name ?? agent.label;
+      // The provider in force lists the composer's own catalog; the others, while it has several
+      // that have not all been read, are listed like another agent's and fill in as they answer.
+      if (id === activeSourceId) return { id, label, agent, models: activeModels, loading: catalogLoading && !models.length, ...(!models.length && (backendIssue || modelsError) ? { issue: backendIssue || modelsError } : {}) };
+      const list = agentModels.read(entry.backendId, profile?.id);
+      const issue = entry.available === false ? entry.reason?.trim() || t`${agent.label} 不可用` : list?.length ? undefined : agentModels.issue(entry.backendId, profile?.id);
+      const loading = !list?.length && agentModels.loading(entry.backendId, profile?.id);
+      // An agent that lists nothing still starts on its own default model, as picking it alone used to.
+      const fallback = entry.available !== false && !loading && !list?.length && (list || issue);
+      return {
+        id,
+        label,
+        agent,
+        preferred: profile?.id === saved,
+        models: fallback
+          ? [{ id: otherChoice(entry.backendId, profile?.id, ''), label: t`默认模型` }]
+          : (list ?? []).map((item) => ({ id: otherChoice(entry.backendId, profile?.id, item.value), label: cleanLabel(item.name) })),
+        loading,
+        ...(issue ? { issue } : {}),
+      };
+    });
+  }) : undefined;
+  /** As the menu opens, reads the other agents nothing is known about yet; the rest are read on preview. */
+  const loadUnknownAgents = () => {
+    for (const source of agentSources ?? []) {
+      const other = splitOther(`${source.id}${OTHER_AGENT}`);
+      const entry = other && backends.find((item) => item.backendId === other.backendId);
+      if (other && source.id !== activeSourceId && entry?.available !== false && !source.models.length) agentModels.load(other.backendId, other.profileId);
+    }
+  };
+
   // A send held for the catalog has no reason of its own on the disabled button.
   const selectionHeld = selectionNeedsCatalog && !catalogLoading;
   // A list that is still loading locks only once the wait outlasts the grace, as its spinner does,
@@ -327,16 +396,31 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         toolsPicker={toolsOffered || extensionsOffered ? <ToolsPicker value={pickedToolGroups} onChange={changeToolGroups} extensions={extensionPick} disabled={busy} onError={onError} /> : undefined}
         mobileSettingsPrefix={quickChat || !capabilities?.permissions.length ? undefined : <ApprovalSummary mode={approval} options={capabilities.permissions} />}
         mobileSettingsLabel={[!quickChat && label(backendId), models.find((item) => item.id === modelChoice)?.label].filter(Boolean).join(' · ')}
-        startPickers={quickChat ? undefined : <BackendPicker backends={backends} backendId={backendId} onChange={onBackendChange} disabled={busy} fullWidth={mobile} />}
+        // The model menu picks the agent too where it has a column for them; a phone keeps its own row.
+        startPickers={quickChat || agentSources ? undefined : <BackendPicker backends={backends} backendId={backendId} onChange={onBackendChange} disabled={busy} fullWidth={mobile} />}
         startPickersLabel={quickChat ? undefined : label(backendId)}
         models={models}
-        providers={providerChoices}
-        activeProviderId={grouped ? activeProfileId : undefined}
+        providers={agentSources ?? providerChoices}
+        // Named the way the rows are: by profile while the providers come grouped, else by the column's own ids.
+        activeProviderId={providerChoices ? activeProfileId : agentSources ? activeSourceId : undefined}
+        modelLeading={agentSources && <><AgentLogo backend={backendId} size={14} className="shrink-0" style={agentMarkStyle(backendId)} /><span className="sr-only">{label(backendId)}</span></>}
+        onPreviewModelProvider={(id) => { const other = splitOther(`${id}${OTHER_AGENT}`); if (other && id !== activeSourceId) agentModels.load(other.backendId, other.profileId); }}
         loadModelUsage={loadModelUsage}
-        refreshCatalog={quickChat ? onRetryCatalog : onRefreshCatalog}
+        refreshCatalog={quickChat ? onRetryCatalog : () => { loadUnknownAgents(); return onRefreshCatalog?.(); }}
         usageScopeKey={`${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}
         model={model ? modelChoice : undefined}
         onModelChange={(id) => {
+          const other = splitOther(id);
+          if (other) {
+            // Another agent's model: the agent, its provider and the model are saved together.
+            // An empty model is that agent's default, for one that lists nothing.
+            const next = other.model ? catalogSelection(agentModels.read(other.backendId, other.profileId) ?? [], other.model) : '';
+            const scope = `${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
+            const previous = choices.current.get(scope);
+            if (previous) choices.current.set(scope, { ...previous, selection: next, edited: true });
+            onBackendChange(other.backendId, other.profileId, next);
+            return;
+          }
           const chosen = splitChoice(id);
           const chosenCatalog = (chosen.profileId && grouped?.find((entry) => entry.profile.id === chosen.profileId)?.models) || activeCatalog;
           const next = catalogSelection(chosenCatalog, chosen.model);

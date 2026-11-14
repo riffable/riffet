@@ -114,10 +114,8 @@ export function BotDetail({ account, state, busy, run, onBack, onOpenCard, onDia
               <Trans>整群一个会话</Trans>
               <Switch aria-label={t`整群一个会话`} checked={chat.flat} disabled={busy} onCheckedChange={(flat) => void run(() => api.updateChannelChat(chat.key, { flat }), t`无法保存`)} />
             </label>}
-            <Select aria-label={t`项目`} wrapperClassName="w-40 max-md:flex-1" value={chat.projectId ?? ''} disabled={busy} onChange={(event) => void run(() => api.updateChannelChat(chat.key, { projectId: event.target.value || null }), t`无法保存`)}>
-              <option value="">—</option>
-              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-            </Select>
+            <Select label={t`项目`} className="w-40 max-md:flex-1" value={chat.projectId ?? ''} disabled={busy} onChange={(projectId) => void run(() => api.updateChannelChat(chat.key, { projectId: projectId || null }), t`无法保存`)}
+              options={[{ value: '', label: '—' }, ...projects.map((project) => ({ value: project.id, label: project.name }))]} />
             <DropdownMenu>
               <DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多`} disabled={busy}><IconEllipsis /></Button></DropdownMenuTrigger>
               <DropdownMenuContent align="end">

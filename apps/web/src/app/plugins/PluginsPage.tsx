@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
-import { IconEllipsis, IconMenu, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload, IconX } from '@/components/icons';
+import { IconEllipsis, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Badge, EmptyState, Field, Input, Kbd, Segmented, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
@@ -20,6 +20,7 @@ import { satisfiesHostApi } from '@riffet/plugin-web';
 import { PLUGIN_WEB_API_VERSION } from '@contracts';
 import { useSettingsPages } from '@/plugins/registry';
 import type { ViewEntry } from '@/plugins/catalog';
+import { PageScaffold } from '../PageScaffold';
 import type { PluginDetailTab } from '../state/navStore';
 import { ExecutableNote, ModelSourceNote, PluginGrantDialog, capabilityLabel } from './PluginGrantDialog';
 import { PluginVersionsDialog } from './PluginVersionsDialog';
@@ -44,7 +45,7 @@ function groupOf(plugin: PluginDescriptor): 'agents' | 'workbench' | 'services' 
 }
 
 /** Workbench-owned management. Reading this page never activates or probes a plugin. */
-export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, onOpenSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels }: {
+export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevision, projectId, sessionId, onSelect, onClose, sidebarCollapsed, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange, onOpenFeature, availableViewIds, commandActions, rejectedKeybindings, onOpenAppearance, onOpenModels }: {
   selectedId: string;
   selectedViewId?: string;
   initialTab?: PluginDetailTab;
@@ -53,7 +54,9 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
   sessionId?: string;
   onSelect(id: string, tab?: PluginDetailTab): void;
   onClose(): void;
-  onOpenSidebar?: () => void;
+  sidebarCollapsed: boolean;
+  onOpenSidebar: () => void;
+  onExpandSidebar: () => void;
   onBeforeLeaveChange(guard: (() => Promise<boolean>) | undefined): void;
   availableViewIds: string[];
   commandActions: Array<{ id: string; run: () => void }> ;
@@ -245,7 +248,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     </div>}
   </div>;
   const configuration = selected && <div className="flex min-w-0 flex-col gap-5">
-    {configurationOptions.length > 1 && <Segmented value={configurationId ?? ''} onChange={value => { if (value !== configurationId) void navigateDetail(() => setCustomView(value)); }} options={configurationOptions.map(option => ({ ...option, disabled: working }))} ariaLabel={t({ message: '配置', context: 'plugin-detail-tab' })} />}
+    {/* The plugin decides how many pages it has: a heading switcher, not a segmented row (patterns.md §3). */}
+    {configurationOptions.length > 1 && <Select appearance="heading" label={t({ message: '配置', context: 'plugin-detail-tab' })} value={configurationId ?? ''} disabled={working} onChange={value => { if (value !== configurationId) void navigateDetail(() => setCustomView(value)); }} options={configurationOptions} />}
       {configurationId === '' && selected.declared?.page && (!selected.enabled || missing
         ? <div className="flex flex-col items-start gap-3 text-sm text-fg-3"><p><Trans>启用插件后可用</Trans></p>{!missing && <Button size="sm" variant="secondary" disabled={working || dirty || !reachable || selected.rejected || Boolean(selected.stopping)} onClick={() => void update({ enablement: 'on' })}><Trans>启用插件</Trans></Button>}</div>
         : <PluginPageView key={selected.id} pluginId={selected.id} disabled={working || !reachable} onChanged={() => { void reloadPlugins().catch(() => undefined); }} />)}
@@ -277,7 +281,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       </dl>
     </div>
 
-        {!selected.rejected && <Field label={t({ message: '启用策略' })}><Select value={selected.enablement} disabled={working || dirty || missing || !reachable} onChange={e => void update({ enablement: e.target.value as PluginUpdate['enablement'] })}><option value="auto"><Trans>自动</Trans></option><option value="on"><Trans>开启</Trans></option><option value="off"><Trans>关闭</Trans></option></Select></Field>}
+        {!selected.rejected && <Field label={t({ message: '启用策略' })}><Select<PluginUpdate['enablement'] & string> label={t({ message: '启用策略' })} value={selected.enablement} disabled={working || dirty || missing || !reachable} onChange={enablement => void update({ enablement })} options={[{ value: 'auto', label: t`自动` }, { value: 'on', label: t`开启` }, { value: 'off', label: t`关闭` }]} /></Field>}
     <section className="flex flex-col gap-3 border-t border-line pt-4">
       <h3 className="text-sm font-medium"><Trans>权限</Trans></h3>
       <div className="flex flex-col gap-3 text-sm">{(selected.capabilities ?? []).map(capability => <p key={capability}>{capabilityLabel(capability)}</p>)}{selected.capabilities?.includes('models.provide') && <ModelSourceNote sources={declarations?.modelSources} />}{selected.capabilities?.includes('process.exec') && <ExecutableNote names={selected.executables} />}<p className="text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>{(selected.source === 'development' || selected.installed?.versions.some(version => version.selected && version.trusted)) && <p className="text-fg-3"><Trans>以服务器进程的权限运行</Trans></p>}</div>
@@ -312,68 +316,66 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
     { value: 'management', label: t({ message: '管理', context: 'plugin-detail-tab' }) },
   ];
   return (
-    <section className="flex min-h-0 flex-1 flex-col bg-bg">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line px-4">
-        {onOpenSidebar && <Button variant="quiet" size="icon-sm" onClick={onOpenSidebar} aria-label={t({ message: '打开侧栏' })}><IconMenu /></Button>}
-        <span className="truncate text-xs text-fg-3">{window.location.host}</span>
-        <Button className="ml-auto" size="icon-sm" variant="quiet" onClick={onClose} aria-label={t({ message: '关闭' })}><IconX /></Button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <main className="mx-auto flex max-w-4xl flex-col gap-7 px-4 py-6 sm:px-8 sm:py-8">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-xl font-semibold"><Trans>插件</Trans></h1>
-            <Segmented className="mr-auto" value={mode} onChange={value => { if (!dirty && !working) { setMode(value); onSelect(''); } }} ariaLabel={t({ message: '插件' })} options={[{ value: 'installed' as const, label: t({ message: '已安装' }) }, { value: 'market' as const, label: t({ message: '浏览', context: 'plugin-market' }) }].map(option => ({ ...option, disabled: dirty || working }))} />
-            <Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} onClick={() => { if (mode === 'market') { setMarket(undefined); void loadMarket(true); } else void run(refreshPlugins); }} aria-label={t({ message: '重新检测' })}><IconRefreshCw /></Button>
-            {!recovery && <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} aria-label={t({ message: '更多操作' })}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void confirmDialog({ title: t({ message: '暂停所有外部插件？' }), description: t({ message: '保留原启用策略，可随时恢复' }), confirmLabel: t({ message: '暂停' }) }).then(ok => { if (ok) void run(() => api.setPluginRecovery(true)); })}><Trans>暂停所有外部插件</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
-            <Button size="sm" disabled={working || !reachable} onClick={() => void chooseInstall()}>{busy ? <Spinner /> : <IconUpload />}<Trans>安装</Trans></Button>
-          </div>
-          {recovery && <div className="flex flex-wrap items-center gap-3 text-sm"><Trans>外部插件已暂停</Trans><Button variant="secondary" size="xs" disabled={working || dirty || !reachable} onClick={() => void run(() => api.setPluginRecovery(false))}><Trans>恢复原启用策略</Trans></Button></div>}
-          {!selected && errorNotice}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            {mode === 'installed' ? <UnderlineTabs className="h-9" value={filter} onChange={value => { if (!dirty && !working) { setFilter(value); onSelect(''); } }} ariaLabel={t({ message: '状态' })} options={[{ value: 'all', label: t({ message: '全部' }) }, { value: 'enabled', label: t({ message: '已启用' }) }, { value: 'disabled', label: t({ message: '已停用' }) }, { value: 'attention', label: t({ message: '异常' }) }].map(option => ({ ...option, disabled: dirty || working }))} /> : <span />}
-            <Input className="w-full sm:w-56" disabled={dirty || working} value={query} onChange={e => { setQuery(e.target.value); onSelect(''); }} placeholder={t({ message: '搜索插件' })} aria-label={t({ message: '搜索插件' })} />
-          </div>
-          {mode === 'market' && <PluginMarket market={market} error={marketError} query={query} installed={installedIds} busy={busy} onInstall={installFromMarket} onRetry={() => void loadMarket(true)} />}
-          {mode === 'installed' && <>
-          {!list && !error && <div className="flex justify-center p-6"><Spinner /></div>}
-          {list && visible.length === 0 && <EmptyState title={query || filter !== 'all' ? t({ message: '没有匹配的插件' }) : t({ message: '没有插件' })} />}
-          {groups.map(group => {
-            const items = visible.filter(plugin => groupOf(plugin) === group.id);
-            if (!items.length) return null;
-            return <section key={group.id} className="flex flex-col gap-2" aria-label={group.title}>
-              <h3 className="flex items-center gap-2 text-sm font-medium">{group.title}<span className="text-xs font-normal text-fg-4">{items.length}</span></h3>
-              <div className="divide-y divide-line">{items.map(plugin =>
-                  <div key={keyOf(plugin)} className="flex min-h-18 items-center gap-3 py-3">
-                    <button type="button" className="group flex min-w-0 flex-1 items-center gap-3 text-left" aria-haspopup="dialog" disabled={working} onClick={() => void select(plugin)}>
-                      <PluginMark plugin={plugin} />
-                      <span className="min-w-0 flex-1">
-                        <span className="flex flex-wrap items-center gap-2"><span className="break-words text-sm font-medium group-hover:text-accent">{label(plugin)}</span><Badge className="font-normal">{source(plugin)}</Badge></span>
-                        {plugin.description && <span className="mt-1 line-clamp-2 break-words text-xs text-fg-3">{localizedText(plugin.description, [i18n.locale])}</span>}
-                        <span className="mt-1 block break-words text-xs text-fg-4">{[plugin.vendor, plugin.version && 'v' + plugin.version].filter(Boolean).join(' · ')}</span>
-                      </span>
-                    </button>
-                    {(plugin.rejected || plugin.stopping || plugin.status?.state === 'attention' || plugin.status?.state === 'unavailable') && <span className="text-xs text-fg-3">{status(plugin)}</span>}
-                    <Button size="icon-sm" variant="quiet" className={hasPage(plugin) ? undefined : 'invisible'} disabled={working || !hasPage(plugin)} aria-hidden={!hasPage(plugin) || undefined} tabIndex={hasPage(plugin) ? undefined : -1} aria-label={t({ message: '设置' }) + ' ' + label(plugin)} aria-haspopup="dialog" onClick={() => void select(plugin, 'page')}><IconSettings2 /></Button>
-                    {!plugin.rejected && <Switch checked={plugin.enabled} disabled={working || dirty || !reachable || Boolean(plugin.stopping)} aria-label={label(plugin) + ' · ' + status(plugin)} onCheckedChange={enabled => void update({ enablement: enabled ? 'on' : 'off' }, plugin)} />}
-                  </div>
-              )}</div>
-            </section>;
-          })}
-          </>}
-          <p className="text-xs text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>
-        </main>
+    <PageScaffold
+      title={<Trans>插件</Trans>}
+      meta={<span className="min-w-0 truncate text-xs text-fg-4 max-md:hidden">{window.location.host}</span>}
+      actions={<>
+        <Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} onClick={() => { if (mode === 'market') { setMarket(undefined); void loadMarket(true); } else void run(refreshPlugins); }} aria-label={t({ message: '重新检测' })}><IconRefreshCw /></Button>
+        {!recovery && <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} aria-label={t({ message: '更多操作' })}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void confirmDialog({ title: t({ message: '暂停所有外部插件？' }), description: t({ message: '保留原启用策略，可随时恢复' }), confirmLabel: t({ message: '暂停' }) }).then(ok => { if (ok) void run(() => api.setPluginRecovery(true)); })}><Trans>暂停所有外部插件</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
+        <Button size="sm" disabled={working || !reachable} onClick={() => void chooseInstall()}>{busy ? <Spinner /> : <IconUpload />}<Trans>安装</Trans></Button>
+      </>}
+      columnClassName="flex flex-col gap-6"
+      sidebarCollapsed={sidebarCollapsed}
+      onClose={onClose}
+      onOpenSidebar={onOpenSidebar}
+      onExpandSidebar={onExpandSidebar}
+    >
+      <UnderlineTabs className="-mx-2 h-10 edge-b max-md:-mx-3" value={mode} onChange={value => { if (!dirty && !working) { setMode(value); onSelect(''); } }} ariaLabel={t({ message: '插件' })} options={[{ value: 'installed' as const, label: t({ message: '已安装' }) }, { value: 'market' as const, label: t({ message: '浏览', context: 'plugin-market' }) }].map(option => ({ ...option, disabled: dirty || working }))} />
+      {recovery && <div className="flex flex-wrap items-center gap-3 text-sm"><Trans>外部插件已暂停</Trans><Button variant="secondary" size="xs" disabled={working || dirty || !reachable} onClick={() => void run(() => api.setPluginRecovery(false))}><Trans>恢复原启用策略</Trans></Button></div>}
+      {!selected && errorNotice}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        {mode === 'installed' ? <Segmented value={filter} onChange={value => { if (!dirty && !working) { setFilter(value); onSelect(''); } }} ariaLabel={t({ message: '状态' })} options={[{ value: 'all', label: t({ message: '全部' }) }, { value: 'enabled', label: t({ message: '已启用' }) }, { value: 'disabled', label: t({ message: '已停用' }) }, { value: 'attention', label: t({ message: '异常' }) }].map(option => ({ ...option, disabled: dirty || working }))} /> : <span />}
+        <Input className="w-full md:w-56" disabled={dirty || working} value={query} onChange={e => { setQuery(e.target.value); onSelect(''); }} onKeyDown={e => { if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); } }} placeholder={t({ message: '搜索插件' })} aria-label={t({ message: '搜索插件' })} />
       </div>
+      {mode === 'market' && <PluginMarket market={market} error={marketError} query={query} installed={installedIds} busy={busy} onInstall={installFromMarket} onRetry={() => void loadMarket(true)} />}
+      {mode === 'installed' && <>
+      {!list && !error && <div className="flex justify-center p-6"><Spinner /></div>}
+      {list && visible.length === 0 && <EmptyState title={query || filter !== 'all' ? t({ message: '没有匹配的插件' }) : t({ message: '没有插件' })} />}
+      {groups.map(group => {
+        const items = visible.filter(plugin => groupOf(plugin) === group.id);
+        if (!items.length) return null;
+        return <section key={group.id} className="flex flex-col gap-2" aria-label={group.title}>
+          <h3 className="flex items-center gap-2 text-sm font-medium">{group.title}<span className="text-xs font-normal text-fg-4">{items.length}</span></h3>
+          <div className="divide-y divide-line">{items.map(plugin =>
+              <div key={keyOf(plugin)} className="flex min-h-18 items-center gap-3 py-3">
+                <button type="button" className="group flex min-w-0 flex-1 items-center gap-3 text-left" aria-haspopup="dialog" disabled={working} onClick={() => void select(plugin)}>
+                  <PluginMark plugin={plugin} />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2"><span className="break-words text-sm font-medium group-hover:text-accent">{label(plugin)}</span><Badge className="font-normal">{source(plugin)}</Badge></span>
+                    {plugin.description && <span className="mt-1 line-clamp-2 break-words text-xs text-fg-3">{localizedText(plugin.description, [i18n.locale])}</span>}
+                    <span className="mt-1 block break-words text-xs text-fg-4">{[plugin.vendor, plugin.version && 'v' + plugin.version].filter(Boolean).join(' · ')}</span>
+                  </span>
+                </button>
+                {(plugin.rejected || plugin.stopping || plugin.status?.state === 'attention' || plugin.status?.state === 'unavailable') && <span className="text-xs text-fg-3">{status(plugin)}</span>}
+                <Button size="icon-sm" variant="quiet" className={hasPage(plugin) ? undefined : 'invisible'} disabled={working || !hasPage(plugin)} aria-hidden={!hasPage(plugin) || undefined} tabIndex={hasPage(plugin) ? undefined : -1} aria-label={t({ message: '设置' }) + ' ' + label(plugin)} aria-haspopup="dialog" onClick={() => void select(plugin, 'page')}><IconSettings2 /></Button>
+                {!plugin.rejected && <Switch checked={plugin.enabled} disabled={working || dirty || !reachable || Boolean(plugin.stopping)} aria-label={label(plugin) + ' · ' + status(plugin)} onCheckedChange={enabled => void update({ enablement: enabled ? 'on' : 'off' }, plugin)} />}
+              </div>
+          )}</div>
+        </section>;
+      })}
+      </>}
+      <p className="text-xs text-fg-3"><Trans>安装和启停影响连接这台服务器的所有客户端</Trans></p>
       <Dialog open={Boolean(selected)} onOpenChange={open => { if (!open) closeSettings(); }}>
-        <DialogContent mobileFullscreen className="h-[min(42rem,calc(var(--app-height,100dvh)-32px))] max-w-3xl" aria-describedby={undefined}>
-          <DialogHeader><div className="flex min-w-0 items-center gap-3">{selected && <PluginMark plugin={selected} />}<div className="min-w-0"><DialogTitle>{selected && label(selected)}</DialogTitle>{selected && <p className="mt-1 text-xs text-fg-3">{[selected.version && 'v' + selected.version, source(selected), status(selected)].filter(Boolean).join(' · ')}</p>}</div></div></DialogHeader>
-          <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={shownTab} onChange={value => { if (value !== shownTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, disabled: working }))} />
-          <DialogBody key={shownTab} className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
+        <DialogContent mobileFullscreen size="content" className="h-[min(42rem,calc(var(--app-height,100dvh)-32px))]" aria-describedby={undefined}>
+      <DialogHeader><div className="flex min-w-0 items-center gap-3">{selected && <PluginMark plugin={selected} />}<div className="min-w-0"><DialogTitle>{selected && label(selected)}</DialogTitle>{selected && <p className="mt-1 text-xs text-fg-3">{[selected.version && 'v' + selected.version, source(selected), status(selected)].filter(Boolean).join(' · ')}</p>}</div></div></DialogHeader>
+      <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={shownTab} onChange={value => { if (value !== shownTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, disabled: working }))} />
+      <DialogBody key={shownTab} className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
         </DialogContent>
         <PluginVersionsDialog plugin={versions ? selected : undefined} onClose={() => setVersions(false)} onChanged={() => { void changed(); }} />
         <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} />
       </Dialog>
       <input ref={fileInput} className="sr-only" type="file" accept=".tgz,.tar.gz,.tar,.zip,application/gzip,application/x-tar,application/zip" tabIndex={-1} aria-hidden onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void install({ file }); }} />
       <PluginGrantDialog request={grant?.request} busy={busy} onCancel={() => setGrant(undefined)} onConfirm={trusted => { if (grant) void install(grant.source, grant.request.capabilities, trusted); }} />
-    </section>
+    </PageScaffold>
   );
 }

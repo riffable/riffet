@@ -23,7 +23,7 @@ export function CustomTimeDialog({ open, onOpenChange, onPick }: { open: boolean
   const valid = Boolean(at && at.getTime() > Date.now());
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent>
         <DialogHeader><DialogTitle><Trans>选择时间</Trans></DialogTitle></DialogHeader>
         <DialogBody>
           <Input autoFocus type="datetime-local" value={value} min={toLocalInput(new Date())} onChange={(event) => setValue(event.target.value)} aria-label={t`选择时间`} />

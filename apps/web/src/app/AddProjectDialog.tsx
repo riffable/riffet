@@ -53,7 +53,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!busy) onOpenChange(next); }}>
-        <DialogContent mobileSheet className="max-w-lg" aria-describedby={undefined}>
+        <DialogContent mobileSheet aria-describedby={undefined}>
           <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
             <DialogHeader>
               <DialogTitle><Trans>添加项目</Trans></DialogTitle>
@@ -83,9 +83,9 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
               )}
               <Field label={t`显示名称`} hint={t`留空时使用目录名`}><Input className="max-md:h-11" value={name} onChange={(event) => setName(event.target.value)} /></Field>
             </DialogBody>
-            <DialogFooter className="max-md:gap-2 max-md:px-4">
-              <Button variant="ghost" className="max-md:h-11 max-md:flex-1" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="workbench-cancel-action">取消</Trans></Button>
-              <Button type="submit" variant="primary" className="max-md:h-11 max-md:flex-1" disabled={!cwd.trim() || busy}>{busy ? <Spinner className="text-current" /> : <IconPlus />}<Trans>添加</Trans></Button>
+            <DialogFooter>
+              <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="workbench-cancel-action">取消</Trans></Button>
+              <Button type="submit" variant="primary" disabled={!cwd.trim() || busy}>{busy ? <Spinner className="text-current" /> : <IconPlus />}<Trans>添加</Trans></Button>
             </DialogFooter>
           </form>
         </DialogContent>

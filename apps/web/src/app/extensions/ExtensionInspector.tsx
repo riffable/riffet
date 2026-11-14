@@ -379,7 +379,7 @@ function InspectorContent({
         </li>)}</ul> : <p className="text-xs text-fg-3"><Trans>此扩展未提供可查看的文件。</Trans></p>}
       </> : <>
         {creating && <div className="flex flex-col gap-3">
-          <label className="flex flex-col gap-1.5 text-xs text-fg-3"><Trans>类型与位置</Trans><Select aria-label={t`新建位置`} value={targetId} disabled={blocked} onChange={event => void changeTarget(event.target.value)}>{creation?.targets.map(value => <option key={value.id} value={value.id}>{value.label} · {extensionScopes[value.scope]}</option>)}</Select></label>
+          <label className="flex flex-col gap-1.5 text-xs text-fg-3"><Trans>类型与位置</Trans><Select label={t`新建位置`} value={targetId} disabled={blocked} onChange={next => void changeTarget(next)} options={(creation?.targets ?? []).map(value => ({ value: value.id, label: `${value.label} · ${extensionScopes[value.scope]}` }))} /></label>
           <label className="flex flex-col gap-1.5 text-xs text-fg-3"><Trans>文件路径</Trans><Input aria-label={t`新建文件路径`} className="font-mono text-xs" value={newPath} disabled={blocked || Boolean(target?.fileName)} onChange={event => { setNewPath(event.target.value); setPreview(false); }} /></label>
           {!target && <p className="text-xs text-fg-3"><Trans>当前配置没有可用的新建位置。</Trans></p>}
         </div>}

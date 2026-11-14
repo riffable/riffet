@@ -1,9 +1,9 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { ModelStatus, NativeBackendUsage } from '@contracts';
 import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
@@ -204,9 +204,34 @@ export interface ModelProviderChoices {
   /** No catalog yet: the row says so instead of looking empty. */
   loading?: boolean;
   issue?: string;
+  /**
+   * The agent this provider runs under, when the column lists several agents (a new session).
+   * Consecutive providers of one agent sit under its name; an agent with one provider is one row.
+   */
+  agent?: { id: string; label: string; icon: ReactNode };
+  /** The provider an agent's column opens on when it is not the one in force (its saved default). */
+  preferred?: boolean;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, loading = false, refreshing = false, error, onRetry }: {
+/** The agents of an agent column, in list order, each with its providers. */
+function agentGroups(providers: ModelProviderChoices[]) {
+  const groups: Array<{ agent: NonNullable<ModelProviderChoices['agent']>; providers: ModelProviderChoices[] }> = [];
+  for (const provider of providers) {
+    if (!provider.agent) continue;
+    const group = groups.find((entry) => entry.agent.id === provider.agent!.id);
+    if (group) group.providers.push(provider); else groups.push({ agent: provider.agent, providers: [provider] });
+  }
+  return groups;
+}
+
+/** What a model found by a search across the column is filed under. */
+function sourceTitle(provider: ModelProviderChoices, providers: ModelProviderChoices[]) {
+  const agent = provider.agent;
+  if (!agent) return provider.label;
+  return providers.filter((other) => other.agent?.id === agent.id).length > 1 ? `${agent.label} · ${provider.label}` : agent.label;
+}
+
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, leading, anchorRef, loading = false, refreshing = false, error, onRetry }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -250,6 +275,15 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   activeProviderId?: string;
   /** The fixed provider of an existing conversation; shown in the menu without offering a switch. */
   providerLabel?: string;
+  /** A provider other than the one in force was brought up in the column, so its list can be read. */
+  onPreviewProvider?: (id: string) => void;
+  /** Before the model's name in the trigger: the agent's mark when the menu also picks the agent. */
+  leading?: ReactNode;
+  /**
+   * The box the column menu lines up with (the composer's card): its edge rather than the trigger's,
+   * and never wider than it, so a menu wider than the trigger cannot run past the composer.
+   */
+  anchorRef?: RefObject<HTMLElement | null>;
 }) {
   const { t } = useLingui();
   const shownPlaceholder = placeholder ?? 'Default model';
@@ -275,6 +309,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   // A provider column needs the width of a pointer device's popover; a phone sheet keeps the one
   // grouped list, whose headings already say which provider each run of models came from.
   const providerColumn = !isMobile && (providers?.length ?? 0) > 1;
+  const agentColumn = providerColumn && Boolean(providers?.some((provider) => provider.agent));
+  const groups = useMemo(() => agentColumn && providers ? agentGroups(providers) : [], [agentColumn, providers]);
+  /** Agents in one column, the previewed agent's providers in a second, its models in the third. */
+  const providerTier = groups.some((group) => group.providers.length > 1);
   const [previewProviderId, setPreviewProviderId] = useState(activeProviderId);
   const previewProvider = providers?.find((provider) => provider.id === previewProviderId) ?? providers?.[0];
   const activeProvider = providers?.find((provider) => provider.id === activeProviderId) ?? providers?.[0];
@@ -288,10 +326,13 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
    */
   const providerListHeight = useMemo(() => {
     if (!providerColumn || !providers) return 0;
-    const column = 8 + providers.length * 34 - 2;
-    const lists = providers.map((provider) => provider.models.length ? modelListHeight(provider.models, providerLabel) : 72);
+    // Each column scrolls on its own; the list is as tall as the tallest of them needs.
+    const rowsOf = (count: number) => 8 + count * 34 - 2;
+    const column = agentColumn ? Math.max(rowsOf(groups.length), ...groups.map((group) => providerTier ? rowsOf(group.providers.length) : 0)) : rowsOf(providers.length);
+    // Another agent's list still on its way may be long; the height is held once the menu opens, so it is allowed for.
+    const lists = providers.map((provider) => provider.models.length ? modelListHeight(provider.models, providerLabel) : agentColumn && !provider.issue ? MODEL_LIST_MAX : 72);
     return Math.min(MODEL_LIST_MAX, Math.max(column, ...lists));
-  }, [providerColumn, providers, providerLabel]);
+  }, [providerColumn, providers, providerLabel, agentColumn, groups, providerTier]);
   // Prefetch independently of the catalog. One scope owns its request, and opening during that
   // read reuses it; a switch aborts it before another scope can receive its answer.
   useEffect(() => {
@@ -349,7 +390,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const catalogError = error?.trim();
   const failure = catalogError ? `Couldn't load models: ${catalogError}` : undefined;
   // Stays the retry while that retry runs, so the focused trigger is not disabled out from under it.
-  const retryOnly = !models.length && !failure && Boolean(onRetry);
+  // Beside other agents the menu always opens: it is also how to leave an agent that lists nothing.
+  const retryOnly = !models.length && !failure && Boolean(onRetry) && !agentColumn;
   const retryHeld = retryOnly && (loading || refreshing);
   const waited = useLingering(loading, WAIT_GRACE_MS);
   const retryTitle = retryOnly && !loading ? failure ?? 'No models available' : undefined;
@@ -357,20 +399,29 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const sorted = useMemo(() => [...params].sort((a, b) => kindOrder[paramKind(a)] - kindOrder[paramKind(b)]), [params]);
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
+    // Beside several agents a search looks through every list the column holds, each run filed
+    // under its agent and provider, so a model is found without knowing who offers it.
+    if (needle && agentColumn && providers) {
+      return providers.flatMap((provider) => provider.models
+        .filter((model) => `${model.label} ${model.id}`.toLowerCase().includes(needle))
+        .map((model) => ({ ...model, group: sourceTitle(provider, providers) })));
+    }
     const source = selectableModels ?? [];
     return needle ? source.filter((model) => `${model.label} ${model.id}`.toLowerCase().includes(needle)) : source;
-  }, [selectableModels, query]);
+  }, [selectableModels, query, agentColumn, providers]);
   /** Runs of one provider, in list order, so each heading can name its group for a screen reader. */
   const sections = useMemo(() => {
     const runs: Array<{ group?: string; start: number; models: Choice[] }> = [];
+    // Beside the columns the list is one provider's, which the column already names; only a search across them is filed by group.
+    const headed = !providerColumn || Boolean(query.trim());
     filtered.forEach((model, index) => {
-      const group = model.group ?? providerLabel;
+      const group = headed ? model.group ?? providerLabel : undefined;
       const last = runs.at(-1);
       if (last && last.group === group) last.models.push(model);
       else runs.push({ group, start: index, models: [model] });
     });
     return runs;
-  }, [filtered, providerLabel]);
+  }, [filtered, providerLabel, providerColumn, query]);
   /*
    * The search field keeps focus while ↑/↓ move the active row and Enter picks it — the combobox the
    * composer's own `/` and `@` menus use (`aria-activedescendant`). A fresh list starts on the current
@@ -461,6 +512,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           })}
         </div>
       ))}
+      {/* Another agent that lists nothing offers only its default model; why it lists nothing stays readable under it. */}
+      {agentColumn && !previewIsActive && !query.trim() && filtered.length > 0 && previewProvider?.issue && (
+        <div role="note" className="break-words px-2 pb-1 pt-2 text-xs text-fg-3">{previewProvider.issue}</div>
+      )}
       {!filtered.length && (
         <div className="px-2 py-6 text-center text-sm text-fg-3">
           {query.trim() ? 'No matching models'
@@ -474,16 +529,67 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
 
   // The providers of the agent being started, beside their models. A click only previews one:
   // picking a model is what commits that provider, so looking around never resets a setting.
-  const providerList = providerColumn ? (
-    <div role="listbox" aria-label="Providers" className="flex w-32 shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1 [contain:size]">
+  const preview = (provider: ModelProviderChoices) => {
+    setPreviewProviderId(provider.id);
+    setQuery('');
+    if (provider.id !== activeProvider?.id) onPreviewProvider?.(provider.id);
+    searchRef.current?.focus({ preventScroll: true });
+  };
+  const columnClass = 'flex shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1 [contain:size]';
+  const rowClass = (shown: boolean, muted?: boolean) => cn('flex min-h-11 w-full shrink-0 items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors md:h-8 md:min-h-0 [&_svg]:shrink-0', shown ? 'bg-hover text-fg' : 'text-fg-2', muted && !shown && 'text-fg-4');
+  const unusable = (provider: ModelProviderChoices) => Boolean(provider.issue) && !provider.models.length;
+  const previewGroup = groups.find((group) => group.agent.id === previewProvider?.agent?.id);
+  const activeAgentId = activeProvider?.agent?.id;
+  /** An agent opens on the provider in force, else its saved default, else its first. */
+  const previewAgent = (group: (typeof groups)[number]) => preview(group.providers.find((provider) => provider.id === activeProvider?.id) ?? group.providers.find((provider) => provider.preferred) ?? group.providers[0]!);
+  const providerList = !providerColumn ? null : agentColumn ? (
+    <>
+      <div role="listbox" aria-label="Agents" className={cn(columnClass, 'w-44')}>
+        {groups.map((group) => (
+          <button
+            key={group.agent.id}
+            type="button"
+            role="option"
+            aria-selected={group.agent.id === activeAgentId}
+            onClick={() => previewAgent(group)}
+            className={rowClass(group.agent.id === previewGroup?.agent.id, group.providers.every(unusable))}
+          >
+            {group.agent.icon}
+            <span className="min-w-0 flex-1 truncate">{group.agent.label}</span>
+            {!providerTier && group.providers.some((provider) => provider.loading) && <Spinner />}
+            {group.agent.id === activeAgentId && <IconCheck className="size-3.5 shrink-0 text-fg-2" />}
+          </button>
+        ))}
+      </div>
+      {providerTier && (
+        <div role="listbox" aria-label="Providers" className={cn(columnClass, 'w-40')}>
+          {previewGroup?.providers.map((provider) => (
+            <button
+              key={provider.id}
+              type="button"
+              role="option"
+              aria-selected={provider.id === activeProvider?.id}
+              onClick={() => preview(provider)}
+              className={rowClass(provider.id === previewProvider?.id, unusable(provider))}
+            >
+              <span className="min-w-0 flex-1 truncate">{provider.label}</span>
+              {provider.loading && <Spinner />}
+              {provider.id === activeProvider?.id && <IconCheck className="size-3.5 shrink-0 text-fg-2" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  ) : (
+    <div role="listbox" aria-label="Providers" className={cn(columnClass, 'w-32')}>
       {providers!.map((provider) => (
         <button
           key={provider.id}
           type="button"
           role="option"
           aria-selected={provider.id === activeProvider?.id}
-          onClick={() => { setPreviewProviderId(provider.id); setQuery(''); searchRef.current?.focus({ preventScroll: true }); }}
-          className={cn('flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm transition-colors md:h-8 md:min-h-0', provider.id === previewProvider?.id ? 'bg-hover text-fg' : 'text-fg-2')}
+          onClick={() => preview(provider)}
+          className={rowClass(provider.id === previewProvider?.id)}
         >
           <span className="min-w-0 flex-1 truncate">{provider.label}</span>
           {provider.loading && <Spinner />}
@@ -491,7 +597,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         </button>
       ))}
     </div>
-  ) : null;
+  );
 
   /*
    * The popover opens above its trigger, so any change in its height moves its top edge — and the
@@ -520,13 +626,14 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         aria-description={retryTitle ?? failure}
         aria-busy={loading || undefined}
         title={retryTitle ?? failure}
-        disabled={disabled || (!models.length && !retryOnly && !failure)}
+        disabled={disabled || (!models.length && !retryOnly && !failure && !agentColumn)}
         // With nothing to list the trigger opens no popup.
         {...(retryOnly ? { 'aria-haspopup': undefined, 'aria-expanded': undefined, 'aria-controls': undefined, 'aria-disabled': retryHeld || undefined } : {})}
         // Radix skips its toggle for a prevented click, so an empty list is read again instead of opened.
         onClick={retryOnly ? (event) => { event.preventDefault(); if (!retryHeld) onRetry?.(); } : undefined}
         className={cn('group/model inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg', inlineParams && mobilePickerTriggerClass, !models.length && failure && 'text-danger hover:text-danger', retryHeld && 'opacity-60 hover:bg-transparent', className)}
       >
+        {leading}
         <span className={cn('max-w-32 truncate sm:max-w-44', inlineParams && 'min-w-0 flex-1 max-w-none text-left sm:max-w-none')}>{label}</span>
         {tags.effort && <span className="shrink-0 text-xs text-fg-3 transition-colors group-hover/model:text-fg-2">{tags.effort}</span>}
         {/* Parameters read as words in the effort's own style: a glyph or chip apiece was noise. */}
@@ -536,6 +643,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         {failure && <StatusDot tone="warning" />}
         {loading ? waited && <Spinner className="size-3 shrink-0 text-fg-4" /> : retryOnly ? <IconRotateCw aria-hidden className="size-3 shrink-0" /> : null}
       </PopoverTrigger>
+      {providerColumn && anchorRef && <PopoverAnchor virtualRef={anchorRef as RefObject<HTMLElement>} />}
       <PopoverContent
         ref={contentRef}
         tabIndex={-1}
@@ -547,9 +655,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
           contentRef.current?.focus({ preventScroll: true });
         }}
         style={lockedHeight ? { height: lockedHeight } : undefined}
-        className={cn('flex max-h-[min(64dvh,420px)] flex-col', providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
+        className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,var(--radix-popper-anchor-width),calc(100vw-24px))]' : 'w-[min(500px,var(--radix-popper-anchor-width),calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
-        {failure && (
+        {/* The failure is the active agent's; another one previewed brings its own note in the list. */}
+        {failure && previewIsActive && (
           <div role="status" className="flex shrink-0 items-center gap-2 edge-b px-3 py-1.5 text-2xs text-fg-3">
             <span className="max-h-24 min-w-0 flex-1 overflow-y-auto break-words">{failure}</span>
             {onRetry && <Button size="xs" variant="quiet" className="-my-1 shrink-0" disabled={loading || refreshing} onClick={onRetry}>Retry</Button>}

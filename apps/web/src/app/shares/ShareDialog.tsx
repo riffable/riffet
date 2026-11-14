@@ -4,7 +4,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { SessionShare, ShareStatus, ShareAppearanceRequest, ShareDraft, ShareDraftProgress, ShareSelection, ShareTurnCatalog } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { ChoiceMenu, Segmented, Spinner, Switch } from '@/components/ui/controls';
+import { Select, Segmented, Spinner, Switch } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { copyWithToast } from '@/lib/files';
 import { confirmDialog } from '@/lib/dialogs';
@@ -240,7 +240,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
   }, false, false);
   return (
     <Dialog open={open} onOpenChange={value => { if (!value) cancel(); onOpenChange(value); }}>
-      <DialogContent mobileFullscreen className={draft ? 'h-[min(92dvh,1000px)] max-w-5xl' : 'max-w-lg'} aria-describedby={undefined}>
+      <DialogContent mobileFullscreen size={draft ? 'workspace' : 'form'} className={draft ? 'h-[min(92dvh,1000px)]' : undefined} aria-describedby={undefined}>
         <DialogHeader className={draft ? 'pb-3' : 'pb-5'}>
           <DialogTitle className="text-base">{pdf ? <Trans>导出为 PDF</Trans> : <Trans>分享会话</Trans>}</DialogTitle>
           {!pdf && !draft && <p className="truncate text-sm text-fg-3" title={title}>{title}</p>}
@@ -276,9 +276,9 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
             <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-4 max-sm:grid-cols-1 max-sm:gap-y-2">
               <label htmlFor="share-selection-mode" className="text-sm text-fg-2">{pdf ? <Trans>导出范围</Trans> : <Trans>分享范围</Trans>}</label>
               <div className="flex min-w-0 items-center gap-2">
-                <ChoiceMenu id="share-selection-mode" label={pdf ? t`导出范围` : t`分享范围`} value={selectionMode} disabled={pending} onChange={setSelectionMode}
+                <Select id="share-selection-mode" label={pdf ? t`导出范围` : t`分享范围`} value={selectionMode} disabled={pending} onChange={setSelectionMode}
                   options={[{ value: 'recent', label: t`最近几轮` }, { value: 'selected', label: t`手动选择` }, { value: 'all', label: t`全部` }]} />
-                {selectionMode === 'recent' && <ChoiceMenu label={pdf ? t`导出轮数` : t`分享轮数`} className="w-24 shrink-0" value={String(recentCount)} disabled={pending} onChange={value => setRecentCount(Number(value))}
+                {selectionMode === 'recent' && <Select label={pdf ? t`导出轮数` : t`分享轮数`} className="w-24 shrink-0" value={String(recentCount)} disabled={pending} onChange={value => setRecentCount(Number(value))}
                   options={[1, 5, 10, 20, 50].map(count => ({ value: String(count), label: t`${count} 轮` }))} />}
               </div>
             </div>
@@ -301,7 +301,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
             </div>}
             <div className="grid grid-cols-[5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-4 border-t border-line pt-4 max-sm:grid-cols-1 max-sm:gap-y-2">
               <label htmlFor="share-theme" className="text-sm text-fg-2"><Trans>主题</Trans></label>
-              <ChoiceMenu id="share-theme" label={t`主题`} value={appearance.themeId} disabled={pending} onChange={themeId => setAppearance(previous => ({ ...previous, themeId }))}
+              <Select id="share-theme" label={t`主题`} value={appearance.themeId} disabled={pending} onChange={themeId => setAppearance(previous => ({ ...previous, themeId }))}
                 options={[
                   ...themeOptions.map(theme => ({ value: theme.id, label: theme.name, icon: <ThemeSwatch id={theme.id} className="h-4 w-6 rounded-sm" /> })),
                   ...pluginPalettes.map(({ palette, key }) => ({ value: key, label: localizedText(palette.title) ?? palette.id, icon: <ThemeSwatch id={key} className="h-4 w-6 rounded-sm" /> })),
@@ -337,7 +337,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
           </> : draft ? <>
             <Button size="sm" variant="quiet" disabled={pending} onClick={() => { setDraft(undefined); setPreviewLoaded(false); }}><Trans>返回</Trans></Button>
             {!localOnly && <>
-              <div className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-fg-3"><span><Trans>有效期</Trans></span><ChoiceMenu label={t`分享有效期`} className="w-24" value={String(expiryDays)} disabled={pending} onChange={value => setExpiryDays(Number(value))} options={[7, 30, 90, 365].map(days => ({ value: String(days), label: t`${days} 天` }))} /></div>
+              <div className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-fg-3"><span><Trans>有效期</Trans></span><Select label={t`分享有效期`} className="w-24" value={String(expiryDays)} disabled={pending} onChange={value => setExpiryDays(Number(value))} options={[7, 30, 90, 365].map(days => ({ value: String(days), label: t`${days} 天` }))} /></div>
               <Button size="sm" disabled={!status?.actions.publish || pending || !previewLoaded} onClick={() => void publish()}>{busy && !checking ? t`发布中…` : published ? t`更新链接` : t`创建链接`}</Button>
             </>}
           </> : <Button size="sm" disabled={(!pdf && (!status?.actions.preview || share === undefined)) || pending || !selectionReady} onClick={() => void prepare()}>{busy ? <Spinner /> : null}{progress ? t`生成中…` : published && !localOnly ? t`更新分享` : t`生成预览`}</Button>}

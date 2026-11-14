@@ -8,7 +8,7 @@ import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
 import { ThemeSwatch } from '@/components/theme-swatch';
 import { Button } from '@/components/ui/button';
-import { ChoiceMenu, Input, Segmented, Switch } from '@/components/ui/controls';
+import { Select, Input, Segmented, Switch } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { appIcons, setAppIcon, useAppIcon } from '@/lib/app-icon';
@@ -76,7 +76,7 @@ function ThemeCard({ theme, selected, onSelect = () => setThemeId(theme.id), onE
 /** The choices of one appearance slot, led by the host's own. */
 function AppearanceChoice({ label, items, value, onChange }: { label: string; items: ReadonlyArray<{ id: string; title: Record<string, string> }>; value: string | undefined; onChange: (id: string) => void }) {
   const { t } = useLingui();
-  return <ChoiceMenu<string>
+  return <Select<string>
     label={label} className="w-48 max-md:w-full" value={value ?? APPEARANCE_DEFAULT} onChange={onChange}
     options={[{ value: APPEARANCE_DEFAULT, label: t`默认` }, ...items.map((item) => ({ value: item.id, label: localizedText(item.title) ?? item.id }))]}
   />;
