@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { AuxiliaryModelPurpose, AuxiliaryModelRef } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Field, Spinner, Textarea } from '@/components/ui/controls';
+import { Field, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { errorMessage } from '@/lib/utils';
@@ -116,9 +116,8 @@ export function AuxiliaryPreviewDialog({ open, purpose, model, onOpenChange }: {
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" onClick={() => changeOpen(false)}>{t`关闭`}</Button>
-          <Button variant="primary" disabled={!canGenerate} onClick={() => void generate()}>
-            {generating && <Spinner className="text-current" />}
-            {generating ? t`生成中…` : t`生成`}
+          <Button variant="primary" disabled={!canGenerate && !generating} busy={generating} onClick={() => void generate()}>
+            {t`生成`}
           </Button>
         </DialogFooter>
       </DialogContent>

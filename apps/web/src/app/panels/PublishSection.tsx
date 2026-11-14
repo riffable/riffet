@@ -209,18 +209,18 @@ export function PublishSection({ project, status, sessionId, active, onError, on
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            {branch.behind > 0 && <Button size="xs" disabled={Boolean(busy)} onClick={() => void pullBranch()}>{busy === 'pull' ? <Spinner /> : <IconArrowDown />}Pull</Button>}
+            {branch.behind > 0 && <Button size="xs" disabled={Boolean(busy) && busy !== 'pull'} busy={busy === 'pull'} onClick={() => void pullBranch()}><IconArrowDown />Pull</Button>}
             {!noRemote && (remoteChoice ? (
               <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button size="xs" disabled={Boolean(busy)}>{busy === 'push' ? <Spinner /> : <IconUpload />}<Trans>Push to…</Trans></Button></DropdownMenuTrigger>
+                <DropdownMenuTrigger asChild><Button size="xs" disabled={Boolean(busy)} busy={busy === 'push'}><IconUpload /><Trans>Push to…</Trans></Button></DropdownMenuTrigger>
                 <DropdownMenuContent>
                   <DropdownMenuLabel><Trans>Remote</Trans></DropdownMenuLabel>
                   {branch.remotes.map((remote) => <DropdownMenuItem key={remote} onSelect={() => void push(remote)}>{remote}</DropdownMenuItem>)}
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button size="xs" disabled={Boolean(busy) || !branch.head || (Boolean(branch.upstream) && !branch.ahead)} onClick={() => void push()}>
-                {busy === 'push' ? <Spinner /> : <IconUpload />}{branch.upstream ? <Trans>Push</Trans> : <Trans>Publish Branch</Trans>}
+              <Button size="xs" disabled={(Boolean(busy) && busy !== 'push') || !branch.head || (Boolean(branch.upstream) && !branch.ahead)} busy={busy === 'push'} onClick={() => void push()}>
+                <IconUpload />{branch.upstream ? <Trans>Push</Trans> : <Trans>Publish Branch</Trans>}
               </Button>
             ))}
             {!noRemote && !pull.unavailable && (pr ? (
@@ -232,7 +232,7 @@ export function PublishSection({ project, status, sessionId, active, onError, on
               <Button size="xs" disabled={Boolean(busy)} onClick={() => setMergeDialog(true)}><IconGitMerge /><Trans>Merge into {mergeTarget}</Trans></Button>
             )}
             {!noRemote && !pull.unavailable && (
-              <Tip label={t`Refresh PR`}><Button size="icon-xs" variant="quiet" className="ml-auto" aria-label={t`Refresh PR`} disabled={pull.loading} onClick={() => void refreshPull()}>{pull.loading ? <Spinner /> : <IconRefreshCw />}</Button></Tip>
+              <Tip label={t`Refresh PR`}><Button size="icon-xs" variant="quiet" className="ml-auto" aria-label={t`Refresh PR`} busy={pull.loading} onClick={() => void refreshPull()}><IconRefreshCw /></Button></Tip>
             )}
           </div>
           {pull.unavailable && <p className="text-xs text-fg-4">{pull.unavailable}</p>}
@@ -269,7 +269,7 @@ export function PublishSection({ project, status, sessionId, active, onError, on
               )}
               {failedCount > 0 && pr.state === 'OPEN' && (
                 <Tip label={sessionId ? t`Send the failed checks to this conversation` : t`Open a conversation first`}>
-                  <span className="self-start"><Button size="xs" variant="ghost" disabled={!sessionId || Boolean(busy)} onClick={() => void fixChecks()}>{busy === 'fix' ? <Spinner /> : <IconSparkles />}<Trans>Ask Agent to Fix</Trans></Button></span>
+                  <span className="self-start"><Button size="xs" variant="ghost" disabled={!sessionId || (Boolean(busy) && busy !== 'fix')} busy={busy === 'fix'} onClick={() => void fixChecks()}><IconSparkles /><Trans>Ask Agent to Fix</Trans></Button></span>
                 </Tip>
               )}
             </div>
@@ -338,7 +338,7 @@ function PullRequestDialog({ open, onOpenChange, projectId, branch, onCreated, o
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans>Cancel</Trans></Button>
-          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitPullRequest />}<Trans>Create</Trans></Button>
+          <Button variant="primary" onClick={() => void submit()} busy={busy}><IconGitPullRequest /><Trans>Create</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -418,7 +418,7 @@ export function MergeDialog({ open, onOpenChange, branch, into, dirty, directory
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans>Cancel</Trans></Button>
-          <Button variant="primary" disabled={busy} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconGitMerge />}<Trans>Merge</Trans></Button>
+          <Button variant="primary" onClick={() => void submit()} busy={busy}><IconGitMerge /><Trans>Merge</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

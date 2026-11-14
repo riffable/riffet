@@ -128,8 +128,8 @@ function ToastRow({ item, onDetails }: { item: ToastItem; onDetails(): void }) {
         >
           {item.tone === 'success' ? <IconCircleCheck className="mt-0.5 size-4 shrink-0 text-success" /> : item.tone === 'error' ? <IconCircleAlert className="mt-0.5 size-4 shrink-0 text-danger" /> : <IconInfo className="mt-0.5 size-4 shrink-0 text-fg-3" />}
           <ToastMessage item={item} onDetails={onDetails} />
-          {item.action && <button type="button" onClick={() => runToastAction(item.id)} className="-my-0.5 h-6 shrink-0 rounded-md bg-subtle px-2 text-sm font-medium text-fg transition-colors hover:bg-hover">{item.action.label}</button>}
-          <button type="button" aria-label={t`关闭通知`} onClick={() => dismissToast(item.id)} className="grid size-5 shrink-0 place-items-center rounded-md text-fg-3 hover:bg-hover hover:text-fg"><IconX className="size-3.5" /></button>
+          {item.action && <Button size="xs" variant="secondary" onClick={() => runToastAction(item.id)} className="-my-0.5 text-sm">{item.action.label}</Button>}
+          <Button size="icon-xs" variant="quiet" aria-label={t`关闭通知`} onClick={() => dismissToast(item.id)} className="size-5"><IconX /></Button>
         </div>
       </div>
     </div>
@@ -213,7 +213,7 @@ export function DialogHost() {
               {/* A destructive confirm starts on 取消, so a reflexive Enter cannot run it. */}
               <Button variant="ghost" onClick={cancel} autoFocus={displayed.type === 'confirm' && displayed.destructive}><Trans context="common-cancel-action">取消</Trans></Button>
               <Button variant={displayed.type === 'confirm' && displayed.destructive ? 'danger' : 'primary'} className={cn(displayed.type === 'confirm' && 'min-w-16')} onClick={accept} autoFocus={displayed.type === 'confirm' && !displayed.destructive}>
-                {displayed.confirmLabel ?? <Trans>确定</Trans>}
+                {displayed.type === 'confirm' ? displayed.confirmLabel : displayed.confirmLabel ?? <Trans>确定</Trans>}
               </Button>
             </DialogFooter>
           </Fragment>

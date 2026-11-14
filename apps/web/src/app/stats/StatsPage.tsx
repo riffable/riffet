@@ -5,6 +5,7 @@ import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/controls';
 import { FeedbackNotice } from '@/components/ui/feedback-notice';
+import { Skeleton } from '@/components/ui/skeleton';
 import { exportStats } from '@/lib/api';
 import { formatTimestamp } from '@/lib/stats-format';
 import { clientTimeZone, previousWindowLabel, statsFilterKey, statsFilterParams, windowLabel, type StatsUiState } from '@/lib/stats-query';
@@ -23,21 +24,17 @@ import { ReliabilityChart, ToolChart } from './SplitBars';
 import { useStatsData } from './use-stats-data';
 import { PageScaffold } from '../PageScaffold';
 
-function Skel({ className }: { className: string }) {
-  return <div className={`stats-skel ${className}`} />;
-}
-
 /** Mirrors the real grid, including card heights, so the page does not jump when data lands. */
 function StatsSkeleton() {
   return (
     <div className="flex flex-col gap-3" aria-hidden>
-      <Skel className="h-[228px] rounded-2xl sm:h-[132px]" />
-      <Skel className="h-[72px] rounded-lg sm:h-[48px]" />
+      <Skeleton className="h-[228px] rounded-2xl sm:h-[132px]" />
+      <Skeleton className="h-[72px] rounded-lg sm:h-[48px]" />
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
-        <Skel className="h-[392px] rounded-xl" />
-        <Skel className="h-[392px] rounded-xl" />
+        <Skeleton className="h-[392px] rounded-xl" />
+        <Skeleton className="h-[392px] rounded-xl" />
       </div>
-      <div className="grid gap-3 lg:grid-cols-2"><Skel className="h-[268px] rounded-xl" /><Skel className="h-[268px] rounded-xl" /></div>
+      <div className="grid gap-3 lg:grid-cols-2"><Skeleton className="h-[268px] rounded-xl" /><Skeleton className="h-[268px] rounded-xl" /></div>
     </div>
   );
 }

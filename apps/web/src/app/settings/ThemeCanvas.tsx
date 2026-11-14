@@ -5,6 +5,7 @@ import { msg } from '@lingui/core/macro';
 import type { ThemeSeed, ThemeSeedPoint } from '@contracts';
 import { IconMinus, IconPlus, IconRepeat } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { Tip } from '@/components/ui/tooltip';
 import { addSeedPoint, nextHarmony, pointColor } from '@/lib/theme-seed';
 import { cn } from '@/lib/utils';
@@ -188,15 +189,13 @@ export function ThemeCanvas({ seed, onChange }: { seed: ThemeSeed; onChange: (se
         })}
       </div>
 
-      <input
-        type="range"
+      <Slider
         min={0}
         max={1}
         step={0.01}
         value={seed.softness}
         aria-label={t`柔和度`}
-        className="w-full accent-[var(--accent)]"
-        onChange={(event) => commit({ ...seed, softness: Number(event.target.value) })}
+        onValueChange={(softness) => commit({ ...seed, softness })}
       />
     </div>
   );

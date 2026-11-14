@@ -2,9 +2,9 @@ import { useLayoutEffect, useRef, type PointerEvent, type ReactNode } from 'reac
 import { cn } from '@/lib/utils';
 import type { PanelFrame } from '../state/uiStore';
 
-const MIN_W = 320, MIN_H = 240;
+export const MIN_W = 320, MIN_H = 240;
 /** An edge this close to where it would rest snaps there. The inset clears the conversation card's own 8px margin. */
-const SNAP = 16, INSET = 16;
+export const SNAP = 16, INSET = 16;
 
 type Edge = 'n' | 's' | 'e' | 'w' | 'ne' | 'nw' | 'se' | 'sw';
 type Gesture = { mode: 'move' | Edge; x: number; y: number; frame: PanelFrame; box: Box; next: PanelFrame; moved: boolean };

@@ -5,7 +5,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { PluginCapability, PluginGrantRequired } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/controls';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 const capabilityLabels: Record<PluginCapability, MessageDescriptor> = {
@@ -60,7 +60,7 @@ export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
           </ul>}
           {shown?.trustedAllowed && <div className="flex flex-col gap-1.5">
             <label className="flex items-center gap-2 text-sm text-fg">
-              <input type="checkbox" className="size-4 shrink-0 accent-accent" checked={trusted} disabled={busy} required={shown.trustedRequired === true} aria-describedby={trustDescriptionId} onChange={event => setTrusted(event.target.checked)} />
+              <Checkbox checked={trusted} disabled={busy} required={shown.trustedRequired === true} aria-describedby={trustDescriptionId} onCheckedChange={checked => setTrusted(checked === true)} />
               <Trans>信任此插件</Trans>
             </label>
             <p id={trustDescriptionId} className="text-xs text-fg-3"><Trans>允许插件使用 Riffet 的文件、网络和进程权限</Trans></p>
@@ -70,7 +70,7 @@ export function PluginGrantDialog({ request, busy, onConfirm, onCancel }: {
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={onCancel}><Trans>取消</Trans></Button>
-          <Button variant="primary" disabled={busy || Boolean(trustUnavailable) || Boolean(shown?.trustedRequired && !trusted)} onClick={() => onConfirm(trusted)}>{busy && <Spinner />}<Trans>安装</Trans></Button>
+          <Button variant="primary" busy={busy} disabled={Boolean(trustUnavailable) || Boolean(shown?.trustedRequired && !trusted)} onClick={() => onConfirm(trusted)}><Trans>安装</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

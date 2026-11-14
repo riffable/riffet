@@ -1,8 +1,9 @@
 import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ExtensionAction, ExtensionActionRequest, ExtensionActionResult, ExtensionContext, ExtensionKind, ExtensionRuntimeReport, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
-import { IconDownload, IconEllipsis, IconPlus, IconRefreshCw, IconSearch, IconSettings2, IconX } from '@/components/icons';
+import { IconDownload, IconEllipsis, IconPlus, IconRefreshCw, IconSettings2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { SearchField } from '@/components/ui/search-field';
 import { EmptyState, Field, Input, Kbd, Select, Spinner, UnderlineTabs } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -24,7 +25,6 @@ import { ExtensionInspector } from './ExtensionInspector';
 import { extensionActions, extensionContextKey, extensionEntryKey, extensionStatus, type ExtensionCreation, type ExtensionEntry } from './model';
 import { useExtensionSources } from './useExtensionSources';
 import './extensions.css';
-import { isComposingKey } from '../session/composerKeyboard';
 import { PageHeader } from '../PageScaffold';
 
 interface Props {
@@ -373,7 +373,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
 
   return <OverlayScopeContext.Provider value={overlay.scope}><div className={cn('extensions-page', (selected || creation) && 'has-inspector')}>
     <PageHeader divided title={<Trans>扩展管理</Trans>} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} actions={<>
-        <Button size="icon-sm" variant="quiet" disabled={busy || loading} aria-label={t`刷新目录`} title={t`刷新目录`} onClick={() => void refreshDirectory()}>{loading ? <Spinner /> : <IconRefreshCw />}</Button>
+        <Button size="icon-sm" variant="quiet" disabled={busy} aria-label={t`刷新目录`} title={t`刷新目录`} onClick={() => void refreshDirectory()} busy={loading}><IconRefreshCw /></Button>
         <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end">
           <DropdownMenuItem disabled={busy || !currentSource} onSelect={() => void openPicker('runtime')}><Trans>运行状态与 MCP</Trans></DropdownMenuItem>
           <DropdownMenuSeparator />
@@ -388,7 +388,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
             <Select<string> className="extensions-agent-filter" label="Agent" value={backend} disabled={busy || !agentOptions.length} onChange={next => void switchContext({ backend: next as NativeBackendId })} options={agentOptions.map(agent => ({ value: agent.backendId, label: agentLabel(agent.backendId) }))} />
             <Select className="extensions-project-filter" label={t`配置范围`} value={projectId} disabled={busy} onChange={next => void switchContext({ projectId: next })} options={[{ value: '', label: t`用户配置` }, ...projects.filter(value => !value.archivedAt).map(value => ({ value: value.id, label: value.name }))]} />
           </div>
-          <div className="extensions-search"><IconSearch /><Input ref={searchRef} className="pl-8 pr-8" aria-label={t`搜索扩展`} placeholder={t`搜索扩展`} value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === 'Escape' && !isComposingKey(event.nativeEvent)) { setQuery(''); event.currentTarget.blur(); } }} />{query ? <Button variant="quiet" size="icon-xs" aria-label={t`清除搜索`} onClick={() => setQuery('')}><IconX /></Button> : <Kbd>/</Kbd>}</div>
+          <SearchField ref={searchRef} className="extensions-search" aria-label={t`搜索扩展`} placeholder={t`搜索扩展`} value={query} onChange={setQuery} hint={<Kbd>/</Kbd>} />
         </div>
         <div className="extensions-browse-bar">
           <div className="extensions-kind-tabs"><UnderlineTabs value={kind} onChange={next => { if (next !== kind) void switchContext({ kind: next }); }} ariaLabel={t`扩展类型`} options={kinds.map(value => ({ value, label: <>{extensionKinds[value]}<span className="extensions-kind-count">{counts[value]}</span></>, disabled: busy }))} /></div>
@@ -429,7 +429,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
         </DialogBody>
         <DialogFooter>
           <Button variant="quiet" disabled={!diagnostics.length && !failed.length} onClick={() => void copyWithToast([backend && agentLabel(backend), ...failed.map(source => source.error), ...diagnostics].filter(Boolean).join('\n'))}><Trans>复制记录</Trans></Button>
-          <Button variant="secondary" disabled={busy || loading} onClick={() => void refreshDirectory()}>{loading && <Spinner />}<Trans>重新读取</Trans></Button>
+          <Button variant="secondary" disabled={busy} busy={loading} onClick={() => void refreshDirectory()}><Trans>重新读取</Trans></Button>
           <Button onClick={() => setShowDiagnostics(false)}><Trans>关闭</Trans></Button>
         </DialogFooter>
       </DialogContent>
@@ -451,7 +451,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
       {result && <Notice tone={result.success ? 'neutral' : 'warning'}><div className="max-h-32 overflow-auto whitespace-pre-wrap break-words text-xs">{[result.applyEffect, result.output, ...(result.diagnostics ?? [])].filter(Boolean).join('\n')}</div>{authUrl && <a className="mt-2 inline-block text-accent underline" href={authUrl} target="_blank" rel="noopener noreferrer"><Trans>打开授权页面</Trans></a>}</Notice>}
     </DialogBody><DialogFooter><Button disabled={busy} onClick={() => setPicker(undefined)}><Trans>关闭</Trans></Button>
       {shownPicker === 'install' && <Button variant="primary" disabled={busy || !target.trim() || !selectedSource?.capabilities?.actions.includes('install')} onClick={() => { if (selectedSource) void apply(selectedSource.context, { action: 'install', target: target.trim(), scope: installScope }, target.trim()); }}>{operationBusy && <Spinner />}<Trans>安装插件</Trans></Button>}
-      {shownPicker === 'runtime' && selectedSource && <><Button disabled={busy} onClick={() => void checkRuntime(selectedSource.context)}>{operationBusy && <Spinner />}<Trans>检查</Trans></Button>{selectedSource.capabilities?.actions.includes('reload') && <Button disabled={busy} onClick={() => void apply(selectedSource.context, { action: 'reload' }, t`MCP 配置`)}><Trans>重载 MCP</Trans></Button>}</>}
+      {shownPicker === 'runtime' && selectedSource && <><Button disabled={editorBusy} busy={operationBusy} onClick={() => void checkRuntime(selectedSource.context)}><Trans>检查</Trans></Button>{selectedSource.capabilities?.actions.includes('reload') && <Button disabled={busy} onClick={() => void apply(selectedSource.context, { action: 'reload' }, t`MCP 配置`)}><Trans>重载 MCP</Trans></Button>}</>}
     </DialogFooter></DialogContent></Dialog>
   </div></OverlayScopeContext.Provider>;
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconFolderOpen, IconPlus } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Spinner } from '@/components/ui/controls';
+import { Field, Input } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { errorMessage, tildePath } from '@/lib/utils';
@@ -62,7 +62,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
               <Field label={t`目录路径`}>
                 <div className="flex items-center gap-2 max-md:flex-col max-md:items-stretch">
                   <Input className="font-mono" value={cwd} onChange={(event) => setCwd(event.target.value)} placeholder="/Users/you/code/project" />
-                  <Button type="button" variant="secondary" className="max-md:h-11" disabled={picking} onClick={() => void browseNative()}>{picking ? <Spinner className="text-current" /> : <IconFolderOpen />}<Trans>浏览…</Trans></Button>
+                  <Button type="button" variant="secondary" className="max-md:h-11" onClick={() => void browseNative()} busy={picking}><IconFolderOpen /><Trans>浏览…</Trans></Button>
                 </div>
               </Field>
               {quickPicks.length > 0 && (
@@ -71,7 +71,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
                   <span className="text-sm font-medium text-fg"><Trans>收藏的目录</Trans></span>
                   <div className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto">
                     {quickPicks.map((favorite) => (
-                      <button key={favorite.id} type="button" disabled={busy} title={favorite.path} onClick={() => void submit(favorite.path)} className="flex h-7 max-w-full items-center gap-1.5 rounded-md bg-subtle px-2 text-xs text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:opacity-60 max-md:h-10 max-md:px-3">
+                      <button key={favorite.id} type="button" disabled={busy} title={favorite.path} onClick={() => void submit(favorite.path)} className="flex h-7 max-w-full items-center gap-1.5 rounded-md bg-subtle px-2 text-xs text-fg-2 transition-colors hover:bg-hover hover:text-fg disabled:opacity-50 max-md:h-10 max-md:px-3">
                         <FavoriteStar className="size-3" />
                         <span className="min-w-0 truncate">{favoriteName(favorite)}</span>
                         <span className="hidden min-w-0 max-w-40 truncate font-mono text-2xs text-fg-4 sm:inline">{tildePath(favorite.path)}</span>
@@ -85,7 +85,7 @@ export function AddProjectDialog({ open, onOpenChange, onSubmit, onError }: { op
             </DialogBody>
             <DialogFooter>
               <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}><Trans context="workbench-cancel-action">取消</Trans></Button>
-              <Button type="submit" variant="primary" disabled={!cwd.trim() || busy}>{busy ? <Spinner className="text-current" /> : <IconPlus />}<Trans>添加</Trans></Button>
+              <Button type="submit" variant="primary" disabled={!cwd.trim()} busy={busy}><IconPlus /><Trans>添加</Trans></Button>
             </DialogFooter>
           </form>
         </DialogContent>

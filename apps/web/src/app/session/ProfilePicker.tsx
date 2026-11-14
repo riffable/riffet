@@ -22,7 +22,7 @@ export function ProfilePicker({ profiles, value, disabled, onChange }: {
         disabled={disabled}
         aria-label={t({ message: '配置', context: 'session-profile-select' })}
         className={cn(
-          'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg',
+          'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg',
         )}
       >
         <span className="max-w-40 truncate">{current?.name ?? t`默认配置`}</span>

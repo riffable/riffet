@@ -7,7 +7,7 @@ import type { SettingsSection } from '../settings/settingsSections';
 import { createStore, resolve } from '@/lib/store';
 import { STORAGE_KEYS } from './navStore';
 
-export const DOCK_MIN = 160, DOCK_MAX = 560;
+export const DOCK_MIN = 160, DOCK_MAX = 560, DOCK_DEFAULT = 280;
 /** The defaults are the widths the layout's breakpoints were drawn for. */
 export const SIDEBAR_MIN = 208, SIDEBAR_MAX = 400, SIDEBAR_DEFAULT = 256;
 export const PANEL_MIN = 320, PANEL_MAX = 720, PANEL_DEFAULT = 380;
@@ -124,7 +124,7 @@ export function createUiStore() {
     panelTab: 'changes',
     dockOpen: false,
     sessionInfoOpen: false,
-    dockHeight: Math.min(DOCK_MAX, Math.max(DOCK_MIN, Number(readStored(STORAGE_KEYS.dock)) || 280)),
+    dockHeight: Math.min(DOCK_MAX, Math.max(DOCK_MIN, Number(readStored(STORAGE_KEYS.dock)) || DOCK_DEFAULT)),
     sidebarWidth: storedWidth(STORAGE_KEYS.sidebarWidth, SIDEBAR_MIN, SIDEBAR_MAX, SIDEBAR_DEFAULT),
     panelWidth: storedWidth(STORAGE_KEYS.panelWidth, PANEL_MIN, PANEL_MAX, PANEL_DEFAULT),
     selectedTerminalId: '',

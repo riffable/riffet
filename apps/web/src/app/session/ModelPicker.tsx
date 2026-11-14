@@ -15,13 +15,13 @@ import { isComposingKey } from './composerKeyboard';
 import { useLingering, WAIT_GRACE_MS } from './sessionLayout';
 
 const kindOrder: Record<ParamKind, number> = { effort: 0, toggle: 1, select: 2, fast: 3, max: 4 };
-const mobilePickerTriggerClass = 'inline-flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-xl border border-line-strong bg-bg px-3 text-base text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg';
+const mobilePickerTriggerClass = 'inline-flex h-11 w-full min-w-0 items-center justify-between gap-1.5 rounded-xl border border-line-strong bg-bg px-3 text-base text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg';
 /**
  * The same control on a pointer device. It is one row tall and sits at the end of the row, exactly
  * like the switches beside it: a labelled box on its own line made the Effort parameter look like a
  * different kind of setting from Thinking, Fast and Max, which are three rows of the same height.
  */
-const desktopPickerTriggerClass = 'inline-flex h-6 min-w-0 items-center justify-between gap-1 rounded-md border border-line-strong bg-bg px-2 text-xs text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg';
+const desktopPickerTriggerClass = 'inline-flex h-6 min-w-0 items-center justify-between gap-1 rounded-md border border-line-strong bg-bg px-2 text-xs text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg';
 
 function SlidingSegments({ param, onChange, disabled, options = param.options, value = param.value, label }: { param: ModelParam; onChange: (value: string) => void; disabled?: boolean; options?: ModelParam['options']; value?: string; label?: string }) {
   const index = Math.max(0, options.findIndex((option) => option.value === value));
@@ -631,7 +631,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         {...(retryOnly ? { 'aria-haspopup': undefined, 'aria-expanded': undefined, 'aria-controls': undefined, 'aria-disabled': retryHeld || undefined } : {})}
         // Radix skips its toggle for a prevented click, so an empty list is read again instead of opened.
         onClick={retryOnly ? (event) => { event.preventDefault(); if (!retryHeld) onRetry?.(); } : undefined}
-        className={cn('group/model inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg', inlineParams && mobilePickerTriggerClass, !models.length && failure && 'text-danger hover:text-danger', retryHeld && 'opacity-60 hover:bg-transparent', className)}
+        className={cn('group/model inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg', inlineParams && mobilePickerTriggerClass, !models.length && failure && 'text-danger hover:text-danger', retryHeld && 'opacity-60 hover:bg-transparent', className)}
       >
         {leading}
         <span className={cn('max-w-32 truncate sm:max-w-44', inlineParams && 'min-w-0 flex-1 max-w-none text-left sm:max-w-none')}>{label}</span>

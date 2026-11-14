@@ -213,7 +213,7 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
   };
 
   const overlay = tone === 'overlay';
-  const control = cn('grid place-items-center rounded-md transition-colors disabled:opacity-40 max-md:size-10 md:size-7', overlay ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-hover hover:text-fg');
+  const control = cn('grid place-items-center rounded-md transition-colors disabled:opacity-50 max-md:size-10 md:size-7', overlay ? 'hover:bg-white/15 hover:text-white' : 'hover:bg-hover hover:text-fg');
 
   return (
     <div className={cn('relative flex min-h-0 flex-col', className)} onKeyDown={onKeyDown}>

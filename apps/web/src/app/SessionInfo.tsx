@@ -5,6 +5,7 @@ import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconTerminal } from '@/components/icons';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
+import { ListRow, listRowClass, rowReveal } from '@/components/ui/list-row';
 import { AgentLogo } from '@/components/AgentLogo';
 import { api, type ProjectRecord } from '@/lib/api';
 import { agentMarkStyle, sessionBackend } from '@/lib/backends';
@@ -12,7 +13,7 @@ import { copyText } from '@/lib/files';
 import { useFeedbackPulse } from '@/lib/feedback';
 import { sessionActivityAt } from '@/lib/session-order';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
-import { cn, formatDateTime, isJustNow, relativeTime, tildePath } from '@/lib/utils';
+import { cn, formatDateTime, relativeTime, tildePath, timeAgo } from '@/lib/utils';
 import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
 import type { ContextUsage } from './session/model';
@@ -27,8 +28,8 @@ export function compactChanges(git?: GitChanges): ReactNode {
   return git.added || git.removed ? <><span className="text-success">+{compactCount(git.added)}</span>{' '}<span className="text-danger">−{compactCount(git.removed)}</span></> : i18n._(msg`${git.changes} 个文件`);
 }
 
-/** One 32px row of a section; a touch screen gets the full target. */
-export const infoRow = 'flex min-h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-left text-sm text-fg hover:bg-hover active:bg-active no-hover:min-h-11 [&_svg]:shrink-0';
+/** The standard row's classes at full text strength, for rows whose content `ListRow` cannot lay out. */
+export const infoRow = cn(listRowClass, 'text-fg');
 
 /**
  * A group in the session-info surface. Its owner decides whether there is anything to show and
@@ -49,22 +50,18 @@ export function InfoSection({ title, summary, children }: { title: string; summa
 /** The row standing in for `hidden` more; selecting it unfolds them in place. */
 export function InfoMore({ hidden, onClick }: { hidden: number; onClick: () => void }) {
   return (
-    <button type="button" onClick={onClick} className={cn(infoRow, 'text-fg-3')}>
-      <span className="min-w-0 flex-1 truncate">{i18n._(msg`其余 ${hidden} 个`)}</span>
-      <IconChevronDown className="size-3.5 text-fg-4" />
-    </button>
+    <ListRow onClick={onClick} className="text-fg-3 hover:text-fg-3" trailing={<IconChevronDown className="size-3.5 text-fg-4" />}>
+      {i18n._(msg`其余 ${hidden} 个`)}
+    </ListRow>
   );
 }
 
 /** A place this session can take you: changes, files, the terminal. A row, so the places stay lighter than the facts above them. */
 function PlaceRow({ icon, label, hint, active, onClick }: { icon: ReactNode; label: string; hint?: ReactNode; active?: boolean; onClick: () => void }) {
   return (
-    <button type="button" aria-pressed={active} onClick={onClick} className={cn(infoRow, active && 'bg-active')}>
-      <span className="flex size-4 items-center justify-center text-fg-3 [&_svg]:size-4">{icon}</span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {hint && <span className="shrink-0 text-xs tabular-nums text-fg-3">{hint}</span>}
-      <IconChevronRight className="size-3.5 text-fg-4" />
-    </button>
+    <ListRow aria-pressed={active} selected={active} onClick={onClick} className="text-fg" leading={icon} meta={hint} trailing={<IconChevronRight className="size-3.5 text-fg-4" />}>
+      {label}
+    </ListRow>
   );
 }
 
@@ -82,12 +79,12 @@ function CopyValue({ value, display, label }: { value: string; display?: ReactNo
         if (!done) return;
         copied.show();
       })}
-      className="group/copy -mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-center gap-1.5 rounded-md px-1 text-left hover:bg-hover"
+      className="group/row -mx-1 flex w-[calc(100%+0.5rem)] min-w-0 items-center gap-1.5 rounded-md px-1 text-left hover:bg-hover"
     >
       <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg">{display ?? value}</span>
       {copied.shown
         ? <IconCheck className="size-3 shrink-0 text-success" />
-        : <IconCopy className="size-3 shrink-0 text-fg-4 opacity-0 transition-opacity group-hover/copy:opacity-100 group-focus-visible/copy:opacity-100 no-hover:opacity-100" />}
+        : <IconCopy className={cn('size-3 shrink-0 text-fg-4', rowReveal)} />}
     </button>
   );
 }
@@ -157,8 +154,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
   const busy = state?.tone === 'accent' || state?.tone === 'warning';
   const since = busy ? relativeTime(session.activeSince ?? sessionActivityAt(session)) : '';
   const activityAt = sessionActivityAt(session);
-  const ago = relativeTime(activityAt);
-  const activity = isJustNow(activityAt) ? ago : t`${ago}前`;
+  const activity = timeAgo(activityAt);
   const facts: [label: string, value: ReactNode][] = [
     ...(model ? [[t`模型`, <span key="model" className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="min-w-0 break-words font-mono text-xs">{model}</span>{modelDetail && <span className="min-w-0 text-xs text-fg-3">{modelDetail}</span>}</span>] as [string, ReactNode]] : []),
     ...(session.approval && !quickChat ? [[t`权限`, approval || session.approval] as [string, ReactNode]] : []),
@@ -235,11 +231,9 @@ export function SessionDiscussions({ parentId, onOpen }: { parentId: string; onO
       <ul>
         {shown.map((thread) => (
           <li key={thread.id}>
-            <button type="button" data-closes-overlay onClick={() => onOpen(thread)} className={infoRow}>
-              <IconMessageSquareText className="size-3.5 text-fg-3" />
-              <span className="min-w-0 flex-1 truncate">{thread.origin?.discussion?.quote.exact || thread.title}</span>
-              <span className="text-xs tabular-nums text-fg-4">{relativeTime(sessionActivityAt(thread))}</span>
-            </button>
+            <ListRow data-closes-overlay onClick={() => onOpen(thread)} className="text-fg" leading={<IconMessageSquareText />} meta={relativeTime(sessionActivityAt(thread))}>
+              {thread.origin?.discussion?.quote.exact || thread.title}
+            </ListRow>
           </li>
         ))}
       </ul>

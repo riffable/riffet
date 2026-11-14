@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { ChannelAccountInfo, ChannelChat, ChannelHealth, ChannelsState } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { IconArrowLeft, IconCopy, IconEllipsis, IconExternalLink, IconKey, IconMessagesSquare, IconRefreshCw, IconRotateCcw, IconTrash2, IconUser } from '@/components/icons';
-import { Select, Spinner, Switch } from '@/components/ui/controls';
+import { Select, Switch } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
@@ -162,7 +162,7 @@ function Checklist({ account, health, loading, onRefresh }: { account: ChannelAc
   const connection = account.status.state;
   const connectionState = health.connected ? 'ok' : connection === 'connecting' ? 'busy' : account.enabled ? 'bad' : 'todo';
   if (health.connected && health.activated !== false && missing.length === 0 && lastEventAt && !health.needsLongConnection) return null;
-  return <SettingsGroup title={t`待完成`} action={<Button size="icon-xs" variant="quiet" aria-label={t`重新检查`} disabled={loading} onClick={onRefresh}>{loading ? <Spinner className="size-3.5" /> : <IconRefreshCw />}</Button>}>
+  return <SettingsGroup title={t`待完成`} action={<Button size="icon-xs" variant="quiet" aria-label={t`重新检查`} onClick={onRefresh} busy={loading}><IconRefreshCw /></Button>}>
     <CheckItem state={connectionState} title={<Trans>连接飞书</Trans>} detail={connectionState === 'bad' ? account.status.error : undefined} />
     {health.activated !== undefined && <CheckItem state={health.activated ? 'ok' : 'bad'} title={<Trans>启用机器人</Trans>} />}
     {health.missingScopes !== undefined && <CheckItem

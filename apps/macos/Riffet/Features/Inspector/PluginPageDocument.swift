@@ -50,9 +50,9 @@ enum PluginPageDocument {
 
     // BEGIN GENERATED plugin-base-style (scripts/gen-plugin-style.ts)
     /// `PLUGIN_BASE_STYLE` of packages/plugin-web: tokens and element rules, the same text as the web page.
-    static let baseStyleVersion = 1
+    static let baseStyleVersion = 2
     static let baseStyle = #"""
-:root{--riffet-space-1:4px;--riffet-space-2:8px;--riffet-space-3:12px;--riffet-space-4:16px;--riffet-space-5:24px;--riffet-radius-control:8px;--riffet-radius-container:10px;--riffet-radius-card:12px;--riffet-font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI","Helvetica Neue",sans-serif;--riffet-font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,"PingFang SC",monospace;--riffet-text-reading:14px;--riffet-leading-reading:23px;--riffet-text-ui:13px;--riffet-leading-ui:20px;--riffet-text-small:12px;--riffet-leading-small:16px;--riffet-control-height:32px;--riffet-border-width:1px;--riffet-focus-ring:color-mix(in srgb,var(--accent) 50%,transparent)}
+:root{--riffet-space-1:4px;--riffet-space-2:8px;--riffet-space-3:12px;--riffet-space-4:16px;--riffet-space-5:24px;--riffet-radius-control:8px;--riffet-radius-container:10px;--riffet-radius-card:12px;--riffet-font-sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang SC","Hiragino Sans GB","Microsoft YaHei","Segoe UI","Helvetica Neue",sans-serif;--riffet-font-mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,"PingFang SC",monospace;--riffet-text-reading:calc(14px*var(--text-scale,1));--riffet-leading-reading:calc(23px*var(--text-scale,1));--riffet-text-ui:calc(13px*var(--text-scale,1));--riffet-leading-ui:calc(20px*var(--text-scale,1));--riffet-text-small:calc(12px*var(--text-scale,1));--riffet-leading-small:calc(16px*var(--text-scale,1));--riffet-control-height:32px;--riffet-border-width:1px;--riffet-focus-ring:color-mix(in srgb,var(--accent) 50%,transparent)}
 :where(html,body){margin:0;height:100%}
 :where(body){background:var(--bg);color:var(--fg);font:var(--riffet-text-ui)/var(--riffet-leading-ui) var(--riffet-font-sans);-webkit-font-smoothing:antialiased}
 :where(a){color:var(--accent);text-decoration:none}
@@ -82,6 +82,7 @@ enum PluginPageDocument {
 :where(*)::-webkit-scrollbar-thumb{border:3px solid transparent;border-radius:999px;background:var(--line-strong) padding-box}
 :where(*)::-webkit-scrollbar-thumb:hover{background:var(--fg-4) padding-box}
 :where(*)::-webkit-scrollbar-track,:where(*)::-webkit-scrollbar-corner{background:transparent}
+@media (prefers-reduced-motion:reduce){:where(*){transition-duration:.01ms!important;animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 """#
     // END GENERATED plugin-base-style
 

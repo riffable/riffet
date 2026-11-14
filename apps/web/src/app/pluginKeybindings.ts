@@ -5,6 +5,8 @@
  * characters with ⌥ still matches the key the plugin named.
  */
 
+import { hostChordBindings } from './hostShortcuts';
+
 const MODIFIERS = ['ctrl', 'alt', 'shift', 'meta'] as const;
 type Modifier = typeof MODIFIERS[number];
 
@@ -61,15 +63,9 @@ export function keybindingCaps(text: string, apple: boolean): string[] {
 export const chordOf = (event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'shiftKey' | 'metaKey' | 'code'>): string =>
   chord(new Set(MODIFIERS.filter((modifier) => event[`${modifier}Key`])), event.code);
 
-/**
- * What the workbench itself answers: `use-global-shortcuts.ts` (search, commands, sidebar, dock, the ⌥ tab keys, 会话信息)
- * and the tab list in `tabs/keys.ts`, plus the browser's own ⌘/Ctrl keys for tabs and windows. Keep it in step with those.
- */
+/** What the workbench itself answers or keeps for the browser (`hostShortcuts.ts`), as chords. */
 function hostChords(apple: boolean): ReadonlySet<string> {
-  const keys = ['Mod+K', 'Mod+Shift+P', 'Mod+B', 'Ctrl+`', 'Alt+[', 'Alt+]', 'Alt+W', 'Alt+T', 'Alt+Shift+T', 'Alt+I'];
-  for (const digit of '123456789') keys.push(`Alt+${digit}`, `Alt+Shift+${digit}`, `Mod+${digit}`);
-  for (const letter of 'TWNQRL') keys.push(`Mod+${letter}`);
-  return new Set(keys.map((key) => parseKeybinding(key, apple)!));
+  return new Set(hostChordBindings.map((key) => parseKeybinding(key, apple)!));
 }
 
 export interface KeybindingRejection { id: string; keybinding: string; reason: 'invalid' | 'host' | 'plugin' }

@@ -44,10 +44,10 @@ function Chip({ icon, children, meta, title, removeLabel, disabled, onRemove, on
   return (
     <span title={title} className="group/chip inline-flex min-h-7 max-w-64 min-w-0 items-center gap-1 rounded-md bg-subtle pl-1.5 pr-0.5 text-xs text-fg-2 md:h-6 md:min-h-0">
       <span className="shrink-0 text-fg-3 [&_svg]:size-3">{icon}</span>
-      {onOpen ? <button type="button" data-attachment-tile disabled={disabled} onClick={onOpen} className="min-h-11 min-w-0 truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:min-h-0">{children}</button> : <span className="min-w-0 truncate">{children}</span>}
+      {onOpen ? <button type="button" data-attachment-tile disabled={disabled} onClick={onOpen} className="min-h-11 min-w-0 truncate rounded text-left hover:underline focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:min-h-0">{children}</button> : <span className="min-w-0 truncate">{children}</span>}
       {meta && <span className="shrink-0 tabular-nums text-fg-3">{meta}</span>}
       {onRemove
-        ? <button type="button" data-attachment-tile aria-label={label} disabled={disabled} onClick={onRemove} className="grid size-11 shrink-0 place-items-center rounded text-fg-4 hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-45 md:size-4"><IconX className="size-3" /></button>
+        ? <button type="button" data-attachment-tile aria-label={label} disabled={disabled} onClick={onRemove} className="grid size-11 shrink-0 place-items-center rounded text-fg-4 hover:bg-hover hover:text-fg disabled:pointer-events-none disabled:opacity-50 md:size-4"><IconX className="size-3" /></button>
         : <span aria-hidden className="size-11 shrink-0 md:size-4" />}
     </span>
   );
@@ -99,7 +99,7 @@ function ImageTile({ attachment, disabled, onRemove, onError }: {
          * the corner: kept inside, it would swallow the taps meant for the preview. The visible
          * chrome stays smaller than the target at every size.
          */
-        className="group/remove absolute -right-5 -top-5 grid size-11 place-items-center rounded-full disabled:pointer-events-none disabled:opacity-45 md:-right-3 md:-top-3 md:size-6"
+        className="group/remove absolute -right-5 -top-5 grid size-11 place-items-center rounded-full disabled:pointer-events-none disabled:opacity-50 md:-right-3 md:-top-3 md:size-6"
       >
         <span aria-hidden className="grid size-6 place-items-center rounded-full border border-line bg-elevated/95 text-fg-2 shadow-soft transition-colors group-hover/remove:bg-hover group-hover/remove:text-fg md:size-5"><IconX className="size-3" /></span>
       </button>

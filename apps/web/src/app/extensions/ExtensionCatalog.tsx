@@ -1,8 +1,9 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ExtensionRuntimeReport } from '@contracts';
 import { IconChevronRight, IconFolder, IconLock, IconPackage, IconPuzzle, IconSearch, IconTrash2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge, EmptyState, Spinner } from '@/components/ui/controls';
 import { useBackendLabel } from '@/lib/backends';
 import { extensionScopes } from '@/lib/extensions';
@@ -29,7 +30,7 @@ const CatalogRow = memo(function CatalogRow({ entry, active, checked, batchMode,
   const skillDeletable = item.kind === 'skill' && extensionActions(entry).includes('uninstall');
   const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'builtin' ? IconPackage : IconFolder;
   return <div role="listitem" aria-posinset={rowIndex} aria-setsize={rowCount} className={cn('extensions-row', active && 'is-active', checked && 'is-checked')}>
-    {batchMode && <label className="extensions-checkbox"><input type="checkbox" checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${label(entry.context.backendId)}`} onChange={() => onSelect(entry.key)} /></label>}
+    {batchMode && <label className="flex h-full w-8 shrink-0 cursor-pointer items-center justify-center"><Checkbox checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${label(entry.context.backendId)}`} onCheckedChange={() => onSelect(entry.key)} /></label>}
     <button type="button" disabled={disabled} className="extensions-open" onClick={event => onOpen(entry.key, event.currentTarget)} aria-expanded={active} aria-label={t`查看 ${item.name}`}>
       <span className="extensions-row-content">
         <span className="extensions-row-heading">
@@ -73,10 +74,8 @@ interface Props {
 export function ExtensionCatalog({ entries, selectedKey, checked, batchMode, hasFilters, runtime, loading, disabled, resetKey, onOpen, onSelect, onSelectAll, onReset, enableCount, disableCount, batchLoading, onBatch, onClearSelection }: Props) {
   const { t } = useLingui();
   const scroller = useRef<HTMLDivElement>(null);
-  const all = useRef<HTMLInputElement>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 600 });
   const selectedCount = entries.reduce((count, entry) => count + Number(checked.has(entry.key)), 0);
-  useEffect(() => { if (all.current) all.current.indeterminate = selectedCount > 0 && selectedCount < entries.length; }, [selectedCount, entries.length]);
   useLayoutEffect(() => {
     const element = scroller.current;
     if (!element) return;
@@ -94,7 +93,7 @@ export function ExtensionCatalog({ entries, selectedKey, checked, batchMode, has
   const end = Math.min(entries.length, start + Math.ceil(viewport.height / rowHeight) + 12);
   return <div className="extensions-table-wrap">
     <div className="extensions-table" aria-busy={loading}>
-      {batchMode && <label className="extensions-table-head"><span className="extensions-checkbox"><input ref={all} type="checkbox" disabled={disabled || !entries.length} aria-label={t`选择本页全部扩展`} checked={entries.length > 0 && selectedCount === entries.length} onChange={event => onSelectAll(event.target.checked)} /></span><span><Trans>全选本页</Trans></span></label>}
+      {batchMode && <label className="extensions-table-head"><span className="flex h-full w-8 shrink-0 items-center justify-center"><Checkbox disabled={disabled || !entries.length} aria-label={t`选择本页全部扩展`} checked={entries.length > 0 && selectedCount === entries.length ? true : selectedCount > 0 ? 'indeterminate' : false} onCheckedChange={checked => onSelectAll(checked === true)} /></span><span><Trans>全选本页</Trans></span></label>}
       <div ref={scroller} className={cn('extensions-list-scroll', selectedCount > 0 && 'has-bulk-selection')} onScroll={event => { const top = event.currentTarget.scrollTop; setViewport(previous => ({ ...previous, top })); }}>
         {entries.length > 0 ? <div role="list" aria-label={t`扩展目录`} style={{ height: entries.length * rowHeight, position: 'relative' }}><div role="presentation" style={{ position: 'absolute', inset: '0 0 auto', transform: `translateY(${start * rowHeight}px)` }}>{entries.slice(start, end).map((entry, index) => <CatalogRow key={entry.key} entry={entry} rowIndex={start + index + 1} rowCount={entries.length} active={selectedKey === entry.key} checked={checked.has(entry.key)} batchMode={batchMode} runtime={runtime[extensionContextKey(entry.context)]} disabled={disabled} onOpen={onOpen} onSelect={onSelect} />)}</div></div>
           : loading ? <div className="flex items-center justify-center gap-2 py-14 text-sm text-fg-3"><Spinner /><Trans>正在读取扩展</Trans></div>

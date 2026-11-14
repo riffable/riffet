@@ -13,6 +13,7 @@ import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { AgentLogo } from '@/components/AgentLogo';
 import { ThemeSwatch } from '@/components/theme-swatch';
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
+import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
@@ -181,29 +182,23 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   const backend = sessionBackend(session);
   const label = useBackendLabel()(backend);
   return (
-    <div
-      role="button"
-      tabIndex={0}
+    <ListRow
       title={`${label} · ${session.title}`}
       onClick={(event) => onSelect(session, event.metaKey || event.ctrlKey)}
-      onKeyDown={(event) => activateOnKey(event, () => onSelect(session))}
+      selected={selected}
+      aria-current={selected ? 'page' : undefined}
+      leading={<SessionIndicator session={session} mobile={mobile} selected={selected} />}
       // The others recede a step so the selected row reads first.
-      className={cn(
-        'group/session flex h-8 cursor-default items-center gap-2 rounded-lg px-2 text-sm outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
-        mobile ? cn('text-fg transition-colors', selected && 'bg-active') : cn('text-fg-2 transition-colors hover:text-fg', selected && 'bg-active text-fg'),
-        session.archivedAt && 'opacity-60',
-      )}
-    >
-      <span className="grid size-4 shrink-0 place-items-center"><SessionIndicator session={session} mobile={mobile} selected={selected} /></span>
-      <span className="min-w-0 flex-1 truncate">{session.title}</span>
+      className={cn('cursor-default', mobile && 'text-fg hover:text-fg', session.archivedAt && 'opacity-60')}
+      actions={<>
       {marked && <span role="img" aria-label={t`已收藏`} title={t`已收藏`} className="inline-flex shrink-0 text-accent"><IconBookmarkFilled className="size-3.5" /></span>}
       {/* Idle, a row is a title and its time: which agent ran it and which directory it belongs to
           are only worth the width once the pointer is on the row (or the keyboard is inside it),
           and on a touch screen there is no hover to wait for, so they simply stay. */}
-      <span role="img" aria-label={label} className="inline-flex shrink-0 items-center text-fg-4 can-hover:hidden can-hover:group-hover/session:inline-flex can-hover:group-focus-within/session:inline-flex">
+      <span role="img" aria-label={label} className="inline-flex shrink-0 items-center text-fg-4 can-hover:hidden can-hover:group-hover/row:inline-flex can-hover:group-focus-within/row:inline-flex">
         <AgentLogo backend={backend} size={11} style={agentMarkStyle(backend)} />
       </span>
-      {projectName && <span className="max-w-[40%] shrink-0 truncate text-2xs text-fg-4 can-hover:hidden can-hover:group-hover/session:block can-hover:group-focus-within/session:block">{projectName}</span>}
+      {projectName && <span className="max-w-[40%] shrink-0 truncate text-2xs text-fg-4 can-hover:hidden can-hover:group-hover/row:block can-hover:group-focus-within/row:block">{projectName}</span>}
       {/* The time and the ⋯ button share one grid cell so the trigger keeps a stable box while
           the menu plays its exit animation. Toggling `display` here would collapse the popper
           anchor to 0×0 and make the closing menu jump to the viewport corner.
@@ -213,8 +208,8 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
           `items-center` is what centers the time: the cell is as tall as the 24px ⋯ button, and a
           stretched 16px line box would otherwise sit 4px above the row's center. */}
       <span className="grid shrink-0 items-center justify-items-end">
-        <span className={cn('col-start-1 row-start-1 text-2xs tabular-nums transition-opacity group-hover/session:pointer-events-none group-hover/session:opacity-0 group-has-[[data-state=open]]/session:pointer-events-none group-has-[[data-state=open]]/session:opacity-0 no-hover:pointer-events-none no-hover:opacity-0', mobile ? 'text-fg-3 opacity-70' : session.state === 'waiting' ? 'text-warning' : 'text-fg-4')}>{!mobile && session.state === 'waiting' ? t({ message: '待确认', context: 'workbench-session-pending' }) : time}</span>
-        <span className="col-start-1 row-start-1 z-10 flex shrink-0 opacity-0 transition-opacity pointer-events-none group-hover/session:opacity-100 group-hover/session:pointer-events-auto group-has-[[data-state=open]]/session:opacity-100 group-has-[[data-state=open]]/session:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto no-hover:opacity-100 no-hover:pointer-events-auto">
+        <span className={cn('col-start-1 row-start-1 text-2xs tabular-nums', rowConceal, mobile ? 'text-fg-3 opacity-70' : session.state === 'waiting' ? 'text-warning' : 'text-fg-4')}>{!mobile && session.state === 'waiting' ? t({ message: '待确认', context: 'workbench-session-pending' }) : time}</span>
+        <span className={cn('col-start-1 row-start-1 z-10 flex shrink-0', rowReveal)}>
         <RowMenu label={t`会话操作`}>
           <DropdownMenuItem onSelect={() => onAction(session, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
           {!hideTags && <DropdownMenuItem onSelect={() => onAction(session, 'tags')}><IconTag /><Trans>编辑标签</Trans></DropdownMenuItem>}
@@ -228,7 +223,10 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
         </RowMenu>
         </span>
       </span>
-    </div>
+      </>}
+    >
+      {session.title}
+    </ListRow>
   );
 });
 

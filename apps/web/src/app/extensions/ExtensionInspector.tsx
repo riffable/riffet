@@ -403,7 +403,7 @@ function InspectorContent({
             : <Suspense fallback={<div className="flex justify-center py-8"><Spinner /></div>}><ExtensionEditor value={text} original={creating ? '' : document?.content ?? ''} preview={preview} readOnly={blocked || !editing || (!creating && !document?.editable)} onChange={setText} /></Suspense>}
           {editing && (creating || document?.editable) && <>
             {document?.applyEffect && <p className="text-xs leading-5 text-fg-3">{document.applyEffect}</p>}
-            <div className="flex justify-end"><Button size="sm" variant="primary" disabled={blocked || readBusy || !dirty || conflict || (creating && (!target || !newPath.trim()))} onClick={() => void save()}>{saving ? <Spinner /> : <IconSave />}{preview ? t`确认保存` : t`预览保存`}</Button></div>
+            <div className="flex justify-end"><Button size="sm" variant="primary" busy={saving} disabled={blocked || readBusy || !dirty || conflict || (creating && (!target || !newPath.trim()))} onClick={() => void save()}><IconSave />{preview ? t`确认保存` : t`预览保存`}</Button></div>
             {document?.validationNote && <details className="text-xs text-fg-3"><summary className="cursor-pointer"><Trans>文件格式</Trans></summary><p className="mt-2 leading-5">{document.validationNote}</p></details>}
           </>}
         </> : <div className="flex flex-col gap-4 text-xs text-fg-3">

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { IconChevronRight, IconFolder, IconFolderOpen, IconHome, IconRefreshCw, IconStar, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Spinner } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tip } from '@/components/ui/tooltip';
@@ -184,7 +185,7 @@ export function DirectoryPicker({ open, onOpenChange, initialPath, onPick, onErr
         </div>
         <DialogFooter className="edge-t px-5 py-3 max-md:flex-col max-md:items-stretch max-md:px-4 max-md:pb-3 max-md:pt-3">
           <label className="mr-auto flex items-center gap-2 text-xs text-fg-3 max-md:mr-0 max-md:min-h-11">
-            <input type="checkbox" checked={showHidden} onChange={(event) => setShowHidden(event.target.checked)} className="size-3.5 accent-accent" />
+            <Checkbox checked={showHidden} onCheckedChange={(checked) => setShowHidden(checked === true)} />
             <Trans>显示隐藏文件</Trans>
           </label>
           <span className="mr-auto min-w-0 truncate font-mono text-xs text-fg-3 max-md:mr-0 max-md:w-full" title={result?.path}>{result ? displayPath(result.path, result.home) : ''}</span>

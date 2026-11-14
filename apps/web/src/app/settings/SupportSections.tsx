@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { AppSettings, MachineReport } from '@contracts';
 import { IconCircleAlert, IconDownload, IconHardDriveDownload, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Spinner, StatusDot } from '@/components/ui/controls';
+import { StatusDot } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { browserDiagnosticsReport, browserDiagnosticsStatus, clearBrowserDiagnostics, startBrowserDiagnostics, stopBrowserDiagnostics, subscribeBrowserDiagnostics } from '@/lib/browser-diagnostics';
 import { toast } from '@/lib/toast';
@@ -40,7 +40,7 @@ export function DiagnosticsSection({ settings }: { settings: AppSettings }) {
     <Group title={t`诊断信息`}>
       <Row title={t`导出诊断信息`} description={t`包含运行环境与设置，API Key 不包含在内。`}><Button size="sm" onClick={() => downloadJson('riffet-diagnostics.json', { checkedAt: new Date().toISOString(), machine, settings })}><IconDownload /><Trans>导出</Trans></Button></Row>
     </Group>
-    <Group title={t`本机环境`} action={<Button size="xs" variant="ghost" disabled={checking} onClick={() => void check(true)}>{checking ? <Spinner /> : <IconRefreshCw />}<Trans>重新检测</Trans></Button>}>
+    <Group title={t`本机环境`} action={<Button size="xs" variant="ghost" onClick={() => void check(true)} busy={checking}><IconRefreshCw /><Trans>重新检测</Trans></Button>}>
       {machine ? <>
         <Row title="tmux"><span className="text-sm text-fg-2">{machine.tmux ? t`可用` : t`未安装`}</span></Row>
         <Row title="Tailscale"><span className="text-sm text-fg-2">{machine.tailscale.present ? machine.tailscale.message : t`未检测到`}</span></Row>
@@ -59,7 +59,7 @@ export function DiagnosticsSection({ settings }: { settings: AppSettings }) {
       </Row>
       <Row title={t`诊断记录`} description={t`发送到当前服务器。发送后记录仍会保留。`}>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" disabled={sending || !count} onClick={() => void send()}>{sending && <Spinner />}{sending ? <Trans>发送中…</Trans> : <Trans>发送诊断</Trans>}</Button>
+          <Button size="sm" disabled={!count} busy={sending} onClick={() => void send()}><Trans>发送诊断</Trans></Button>
           <Button size="sm" variant="ghost" disabled={sending || !count} onClick={clearBrowserDiagnostics}><Trans>清除</Trans></Button>
         </div>
       </Row>
@@ -79,7 +79,7 @@ export function BackupSection({ onError }: { onError: (message: string) => void 
   };
   return <div className="flex flex-col gap-6">
     <Group title={t`工作台备份`}>
-      <Row title={t`创建备份`} description={t`备份包含凭证，请保存在可信位置。`}><Button size="sm" disabled={busy} onClick={() => void create()}>{busy ? <Spinner /> : <IconHardDriveDownload />}{busy ? <Trans>备份中…</Trans> : <Trans>创建备份</Trans>}</Button></Row>
+      <Row title={t`创建备份`} description={t`备份包含凭证，请保存在可信位置。`}><Button size="sm" onClick={() => void create()} busy={busy}><IconHardDriveDownload /><Trans>创建备份</Trans></Button></Row>
       <p className="py-2 text-xs text-fg-3"><Trans>备份不包含项目与任务目录中的工作文件。</Trans></p>
       {result !== undefined && <pre className="max-h-48 overflow-auto py-3 font-mono text-xs text-fg-2">{JSON.stringify(result, null, 2)}</pre>}
     </Group>

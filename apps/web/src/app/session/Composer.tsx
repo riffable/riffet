@@ -139,7 +139,7 @@ export function ModePicker({ modes, value, onChange, disabled, className }: { mo
   const Icon = modeMeta[current?.id ?? '']?.icon ?? IconInfinity;
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger disabled={disabled} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 data-[state=open]:bg-hover data-[state=open]:text-fg", className)}>
+      <DropdownMenuTrigger disabled={disabled} className={cn("inline-flex h-7 items-center gap-1.5 rounded-full px-2.5 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 data-[state=open]:bg-hover data-[state=open]:text-fg", className)}>
         <Icon className="size-3.5" />
         <span>{current?.label ?? t`模式`}</span>
       </DropdownMenuTrigger>
@@ -1362,7 +1362,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     const index = files.length + itemIndex;
                     const selected = references.some(reference => isSessionReference(reference) && reference.sessionId === item.id);
                     const blocked = !selected && references.filter(isSessionReference).length >= 5;
-                    return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} disabled={blocked} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm disabled:opacity-45 md:h-8', index === highlight && 'bg-hover')}>
+                    return <button key={item.id} id={optionId(index)} type="button" tabIndex={-1} role="option" aria-selected={index === highlight} disabled={blocked} onPointerMove={() => setHighlight(index)} onMouseDown={event => { event.preventDefault(); choose(index); }} className={cn('flex h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm disabled:opacity-50 md:h-8', index === highlight && 'bg-hover')}>
                       <AgentLogo backend={sessionBackend(item)} size={14} className="shrink-0 text-fg-3" />
                       <span className="min-w-0 flex-1 truncate text-fg">{item.title}</span>
                       <span className="max-w-[45%] truncate text-2xs text-fg-3">{[browsing ? '' : project, backendLabel(sessionBackend(item)), item.archivedAt ? t`已归档` : '', props.referenceSessions?.some(other => other.id !== item.id && other.title === item.title) ? item.id.slice(0, 8) : ''].filter(Boolean).join(' · ')}</span>
@@ -1551,7 +1551,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 own on the row; the phone's settings sheet keeps its own section for them. */}
             {(attachable || toolsInMenu) && <>{attachable && <input ref={fileInputRef} className="sr-only" type="file" multiple tabIndex={-1} disabled={disabled} onChange={(event) => { const replaceKey = reselectUploadKeyRef.current; reselectUploadKeyRef.current = undefined; void ingestFiles(event.target.files, replaceKey); event.target.value = ''; }} />}
             {sessionMentions || toolsInMenu ? <DropdownMenu>
-              <DropdownMenuTrigger aria-label={attachable ? t`添加附件` : t`技能与工具`} disabled={disabled || (uploading && !toolsInMenu)} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
+              <DropdownMenuTrigger aria-label={attachable ? t`添加附件` : t`技能与工具`} disabled={disabled || (uploading && !toolsInMenu)} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}><IconPlus className="size-[18px]" /></DropdownMenuTrigger>
               <DropdownMenuContent side="top" align="start">
                 {attachable && <DropdownMenuItem disabled={uploading} onSelect={() => fileInputRef.current?.click()}><IconPaperclip /><Trans>添加图片或文件</Trans></DropdownMenuItem>}
                 {sessionMentions && (
@@ -1563,7 +1563,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                 </>}
               </DropdownMenuContent>
             </DropdownMenu> : <Tip label={t`添加图片或文件`}>
-              <button type="button" aria-label={t`添加附件`} disabled={disabled || uploading} onClick={() => fileInputRef.current?.click()} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:size-7', compact ? 'hidden' : toggleEntrance)}>
+              <button type="button" aria-label={t`添加附件`} disabled={disabled || uploading} onClick={() => fileInputRef.current?.click()} className={cn('grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:size-7', compact ? 'hidden' : toggleEntrance)}>
                 <IconPlus className="size-[18px]" />
               </button>
             </Tip>}</>}
@@ -1582,7 +1582,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                       aria-pressed={fullscreen}
                       disabled={disabled}
                       onClick={() => setFullscreen(!fullscreen)}
-                      className="grid size-7 shrink-0 place-items-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45"
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-fg-3 transition-colors hover:bg-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50"
                     >
                       {fullscreen ? <IconMinimize className="size-4" /> : <IconMaximize className="size-4" />}
                     </button>
@@ -1592,7 +1592,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               {hasMobileSettings && <>
                 {isMobile && props.usage && !compact && <ContextMeter usage={props.usage} />}
                 <DialogTrigger asChild>
-                  <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact ? 'hidden' : toggleEntrance)}>
+                  <button type="button" aria-label={t`发送设置`} aria-description={modelsIssue || undefined} aria-busy={props.modelsLoading || undefined} title={modelsIssue || undefined} disabled={disabled} className={cn('inline-flex h-11 min-w-0 max-w-none flex-1 items-center gap-1 rounded-full px-2 text-sm font-medium text-fg-2 outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 md:hidden md:flex-initial', modelsIssue && 'text-danger', compact ? 'hidden' : toggleEntrance)}>
                     {props.mobileSettingsPrefix}
                     <span className="min-w-0 truncate">{settingsSummary}</span>
                     {modelsIssue && <StatusDot tone="warning" />}
@@ -1656,7 +1656,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     onClick={showStop ? props.onStop : () => void submit()}
                     className={cn(
                       'grid size-11 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] duration-[var(--duration-base)] ease-[var(--ease-standard)] active:scale-90 disabled:active:scale-100 md:size-8',
-                      showStop ? 'bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-45' : 'bg-primary text-primary-fg hover:bg-primary-hover disabled:bg-fg/[0.08] disabled:text-fg-4',
+                      showStop ? 'bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-50' : 'bg-primary text-primary-fg hover:bg-primary-hover disabled:bg-fg/[0.08] disabled:text-fg-4',
                     )}
                   >
                     {showStop ? props.stopping ? <Spinner className="size-4 text-current" /> : <IconSquare className="size-3 fill-current" /> : submitting ? <Spinner className="size-4 text-current" /> : <IconArrowUp className="size-4" strokeWidth={2.4} />}

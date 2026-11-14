@@ -10,9 +10,7 @@
 .extensions-kind-tabs [role=tab] { flex-shrink: 0; font-size: var(--text-xs); }
 .extensions-kind-count { margin-left: 2px; font-size: var(--text-2xs); color: var(--fg-3); font-weight: 400; font-variant-numeric: tabular-nums; }
 .extensions-toolbar { display: flex; flex-shrink: 0; align-items: center; gap: 4px; }
-.extensions-search { position: relative; flex: 0 1 280px; min-width: 160px; margin-left: auto; }
-.extensions-search > svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--fg-3); pointer-events: none; }
-.extensions-search > button, .extensions-search > kbd { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); }
+.extensions-search { flex: 0 1 280px; min-width: 160px; margin-left: auto; }
 .extensions-active-filters { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 12px; }
 .extensions-filter-chip { display: inline-flex; max-width: 200px; align-items: center; gap: 6px; border-radius: 6px; background: var(--bg-subtle); padding: 4px 6px 4px 8px; color: var(--fg-3); font-size: var(--text-xs); }
 .extensions-filter-chip:hover { color: var(--fg); background: var(--bg-hover); }
@@ -20,8 +18,6 @@
 .extensions-table-wrap { position: relative; display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .extensions-table { display: flex; flex: 1; min-height: 0; flex-direction: column; }
 .extensions-table-head { display: flex; min-height: 32px; flex-shrink: 0; align-items: center; padding: 0 10px; border-bottom: 1px solid var(--line); color: var(--fg-3); font-size: var(--text-xs); cursor: pointer; }
-.extensions-checkbox { display: flex; width: 32px; height: 100%; flex-shrink: 0; align-items: center; justify-content: center; cursor: pointer; }
-.extensions-checkbox input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); cursor: pointer; }
 .extensions-list-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
 .extensions-list-scroll.has-bulk-selection { padding-bottom: 64px; }
 /* Keep this height in sync with the virtualized rowHeight in ExtensionCatalog. */
@@ -74,4 +70,3 @@
 @media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .extensions-detail-dialog { width: 100vw; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
 }
-@media (pointer: coarse) { .extensions-checkbox input { width: 17px; height: 17px; } }

@@ -161,7 +161,7 @@ export function HistorySection({ project, status, active, onError, onShowFile, o
       <div className="flex h-8 shrink-0 items-center gap-1 px-2.5 pb-1">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <button type="button" disabled={!refs || Boolean(busy)} className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-fg-2 hover:bg-hover disabled:opacity-60">
+            <button type="button" disabled={!refs || Boolean(busy)} className="flex min-w-0 items-center gap-1.5 rounded-md px-1.5 py-1 text-xs text-fg-2 hover:bg-hover disabled:opacity-50">
               {busy === 'switch' ? <Spinner className="size-3.5" /> : <IconGitBranch className="size-3.5 shrink-0 text-fg-3" />}
               <span className="min-w-0 truncate font-mono">{refs ? refs.head ?? 'HEAD' : status?.branch ?? '…'}</span>
               <IconChevronDown className="size-3 shrink-0 text-fg-4" />
@@ -192,7 +192,7 @@ export function HistorySection({ project, status, active, onError, onShowFile, o
           </DropdownMenuContent>
         </DropdownMenu>
         <Segmented size="xs" className="ml-auto" value={all ? 'all' : 'head'} onChange={(value) => setAll(value === 'all')} ariaLabel={t`History scope`} options={[{ value: 'head', label: t`Current` }, { value: 'all', label: t`All` }]} />
-        <Tip label="Fetch"><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label="Fetch" disabled={Boolean(busy)} onClick={() => void act('fetch', () => api.gitFetch(projectId), t`Fetch failed`)}>{busy === 'fetch' ? <Spinner /> : <IconDownload />}</Button></Tip>
+        <Tip label="Fetch"><Button size="icon-xs" variant="quiet" className="max-md:size-10" aria-label="Fetch" disabled={Boolean(busy) && busy !== 'fetch'} busy={busy === 'fetch'} onClick={() => void act('fetch', () => api.gitFetch(projectId), t`Fetch failed`)}><IconDownload /></Button></Tip>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-2">

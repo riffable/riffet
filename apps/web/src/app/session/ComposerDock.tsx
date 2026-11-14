@@ -159,7 +159,7 @@ export function TodoDock({ entries, running }: { entries: Record<string, unknown
   );
 }
 
-const queueAction = 'grid size-11 shrink-0 place-items-center rounded-full text-fg-3 transition-colors hover:bg-hover hover:text-fg disabled:opacity-45 md:size-6.5';
+const queueAction = 'grid size-11 shrink-0 place-items-center rounded-full text-fg-3 transition-colors hover:bg-hover hover:text-fg disabled:opacity-50 md:size-6.5';
 
 export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendNow, onSteer, steerDisabled, onEdit, onRemove }: {
   runs: Run[];

@@ -5,16 +5,17 @@ import remarkCjkFriendly from 'remark-cjk-friendly';
 import remarkCjkFriendlyGfmStrikethrough from 'remark-cjk-friendly-gfm-strikethrough';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
-import { IconCheck, IconCopy, IconEye, IconPencilLine, IconWrapText } from '@/components/icons';
+import { IconEye, IconPencilLine, IconWrapText } from '@/components/icons';
 import { boundedCache } from '@/lib/bounded-cache';
-import { copyText, projectFileUrl } from '@/lib/files';
-import { useFeedbackPulse } from '@/lib/feedback';
+import { CopyButton } from '@/components/ui/copy-button';
+import { projectFileUrl } from '@/lib/files';
 import { cachedHighlight, highlightCode, languageForFence, languageForPath } from '@/lib/highlight';
 import { useInView } from '@/lib/use-in-view';
 import { cn } from '@/lib/utils';
 import { protectBareUrls } from './bareUrls';
 import { relaxUnderscoreEmphasis } from '../../../../../packages/timeline/src/cjkEmphasis';
 import { escapeCurrencyDollars, normalizeSlashMath } from './dollarMath';
+import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { ContentFence } from './ContentFence';
 import { codeFileMention, markdownLinkTarget, previewOnPlainClick, useFileAccess } from './fileAccess';
 import { ZoomableImage } from './ImageViewer';
@@ -29,29 +30,6 @@ import { rewriteVisualizationReferences, visualizationReferenceFromHref } from '
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 type ResourceComponents = Pick<Components, 'a' | 'img'>;
-
-export function CopyButton({ text, className, label }: { text: string; className?: string; label?: string }) {
-  const { t } = useLingui();
-  const shownLabel = label ?? t`复制`;
-  const copied = useFeedbackPulse<HTMLButtonElement>(text);
-  return (
-    <button
-      type="button"
-      ref={copied.ref}
-      aria-label={shownLabel}
-      title={shownLabel}
-      className={cn('inline-flex h-6 shrink-0 items-center gap-1 rounded-md px-1.5 text-xs text-fg-3 transition-colors hover:bg-hover hover:text-fg no-hover:size-11 no-hover:justify-center no-hover:px-0', className)}
-      onClick={() => {
-        void copyText(text).then((done) => {
-          if (!done) return;
-          copied.show();
-        });
-      }}
-    >
-      {copied.shown ? <IconCheck className="size-3.5 text-success" /> : <IconCopy className="size-3.5" />}
-    </button>
-  );
-}
 
 function textOf(node: ReactNode): string {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -217,7 +195,7 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
   const source = (
     <pre
       data-code-wrap={wrapped || undefined}
-      className={cn('px-3.5 py-3 font-mono text-(length:--text-code) leading-(--leading-code) text-fg', wrapped ? 'whitespace-pre-wrap break-words' : 'overflow-x-auto')}
+      className={cn(CODE_PADDING, CODE_TEXT, 'text-fg', wrapped ? 'whitespace-pre-wrap break-words' : 'overflow-x-auto')}
     >
       {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{code}</code>}
     </pre>
@@ -269,7 +247,7 @@ function CodeFence({ info, code, start, end, resourceComponents }: { info: strin
       ) : previewing && markup ? (
         <ContentFence code={code} language={info.toLowerCase()} active={inView} />
       ) : previewing ? (
-        <div className="px-3.5 py-3">
+        <div className={CODE_PADDING}>
           <Markdown text={code} resourceComponents={resourceComponents} streaming={open} />
         </div>
       ) : source}

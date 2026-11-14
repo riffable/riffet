@@ -3,7 +3,6 @@ import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconSquareTerminal } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Spinner } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { HttpError } from '@/lib/errors';
@@ -44,7 +43,7 @@ export function TerminalHoldBar({ session }: { session: Session }) {
     <div role="status" className="flex h-14 items-center gap-3 bg-elevated px-4 max-md:rounded-3xl max-md:border max-md:border-line-strong max-md:shadow-soft md:rounded-2xl md:shadow-composer">
       <IconSquareTerminal aria-hidden className="size-4 shrink-0 text-fg-3" />
       <span className="min-w-0 flex-1 truncate text-sm text-fg-2">{t`在终端中`}</span>
-      <Button size="sm" variant="secondary" disabled={busy} onClick={() => void release()}>{busy && <Spinner className="text-current" />}{t`收回`}</Button>
+      <Button size="sm" variant="secondary" busy={busy} onClick={() => void release()}>{t`收回`}</Button>
     </div>
   );
 }

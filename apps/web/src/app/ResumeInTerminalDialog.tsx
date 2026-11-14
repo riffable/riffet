@@ -69,7 +69,7 @@ function ValueRow({ label, value, copyLabel, busy, onCopy }: { label: string; va
       <span className="text-xs font-medium text-fg-3">{label}</span>
       <div className="flex min-w-0 items-start gap-2 rounded-lg border border-line bg-subtle py-1.5 pl-3 pr-1.5">
         <code className="min-w-0 flex-1 select-text break-all py-0.5 font-mono text-xs text-fg">{value}</code>
-        <Button type="button" variant="quiet" size="icon-sm" aria-label={copyLabel} title={copyLabel} disabled={busy} onClick={onCopy} className="shrink-0">{busy ? <Spinner className="text-current" /> : <IconCopy />}</Button>
+        <Button type="button" variant="quiet" size="icon-sm" aria-label={copyLabel} title={copyLabel} onClick={onCopy} className="shrink-0" busy={busy}><IconCopy /></Button>
       </div>
     </div>
   );

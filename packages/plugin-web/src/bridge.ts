@@ -62,6 +62,8 @@ export interface BridgeHostInfo {
   platform: 'web' | 'macos';
   webApiVersion: number;
   bridgeVersion: number;
+  /** `PLUGIN_BASE_STYLE_VERSION` of the page's base stylesheet. Absent from an older host. */
+  baseStyleVersion?: number;
   renderers: string[];
   methods: string[];
   /** Service code runs on this server; this host describes only the current UI client. */

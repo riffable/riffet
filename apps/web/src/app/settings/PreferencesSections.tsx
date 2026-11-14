@@ -8,6 +8,7 @@ import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
 import { ThemeSwatch } from '@/components/theme-swatch';
 import { Button } from '@/components/ui/button';
+import { Slider } from '@/components/ui/slider';
 import { Select, Input, Segmented, Switch } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
@@ -193,15 +194,14 @@ export function TerminalSettingsSection() {
       ] as const).map(({ key, label, max }) => (
         <Row key={key} title={label}>
           <div className="flex w-64 max-w-full items-center gap-2 max-md:w-full">
-            <input
-              type="range"
+            <Slider
               min={0}
               max={max}
               step={2}
               value={display[key]}
               aria-label={label}
-              className="min-w-0 flex-1 accent-[var(--accent)]"
-              onChange={(event) => setDisplaySettings({ [key]: Number(event.target.value) })}
+              className="min-w-0 flex-1"
+              onValueChange={(value) => setDisplaySettings({ [key]: value })}
             />
             <span className="w-12 shrink-0 text-right text-xs tabular-nums text-fg-3">{display[key]} px</span>
             <Tip label={t`恢复默认`}>

@@ -308,7 +308,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
                     type="button"
                     disabled={action.disabled}
                     onClick={() => { setDetailsOpen(false); action.onSelect(); }}
-                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-fg hover:bg-hover active:bg-active disabled:opacity-45 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-fg-3"
+                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-fg hover:bg-hover active:bg-active disabled:opacity-50 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-fg-3"
                   >
                     {action.icon}<span className="min-w-0 flex-1 truncate">{action.label}</span>
                     {action.hint && <span className="shrink-0 text-sm tabular-nums text-fg-3">{action.hint}</span>}
@@ -332,7 +332,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
                     type="button"
                     disabled={deleteAction.disabled}
                     onClick={() => { setDetailsOpen(false); deleteAction.onSelect(); }}
-                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-danger hover:bg-danger-soft active:bg-danger-soft disabled:opacity-45 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-danger"
+                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-danger hover:bg-danger-soft active:bg-danger-soft disabled:opacity-50 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-danger"
                   >
                     {deleteAction.icon}<span className="min-w-0 flex-1 truncate">{deleteAction.label}</span>
                   </button>

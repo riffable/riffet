@@ -393,8 +393,8 @@ function TruncatedMore({ item, expand }: { item: TimelineItem; expand?: (key: st
   const [busy, setBusy] = useState(false);
   if (!expand || !truncationOf(item)) return null;
   return (
-    <Button size="xs" variant="quiet" className="mt-1 self-start text-fg-3" disabled={busy} onClick={() => { setBusy(true); void expand(item.key).finally(() => setBusy(false)); }}>
-      {busy ? <Spinner className="size-3.5" /> : <IconChevronDown />}{t`显示全部`}
+    <Button size="xs" variant="quiet" className="mt-1 self-start text-fg-3" busy={busy} onClick={() => { setBusy(true); void expand(item.key).finally(() => setBusy(false)); }}>
+      <IconChevronDown />{t`显示全部`}
     </Button>
   );
 }

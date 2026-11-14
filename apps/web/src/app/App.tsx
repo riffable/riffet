@@ -5,7 +5,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowRight } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { Button } from '@/components/ui/button';
-import { Input, Spinner } from '@/components/ui/controls';
+import { Input } from '@/components/ui/controls';
 import { DialogHost, Toaster } from '@/components/ui/overlays';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
@@ -80,7 +80,7 @@ function Login({ onLogin, error, busy }: { onLogin: (credential: AuthLogin) => v
           if(value)onLogin(isCode?{code:value,name:browserDeviceName()}:{token:value});
         }}>
           <Input key={mode} autoFocus className="h-10 rounded-lg px-3 font-mono text-base" type={isCode?'text':'password'} autoComplete={isCode?'one-time-code':'current-password'} autoCapitalize={isCode?'characters':'none'} spellCheck={false} value={credential} onChange={(event) => setCredential(event.target.value)} placeholder={label} aria-label={label} disabled={busy} />
-          <Button type="submit" variant="primary" size="lg" className="h-10" disabled={!credential.trim() || busy}>{busy ? <Spinner className="text-current" /> : <><Trans>继续</Trans><IconArrowRight /></>}</Button>
+          <Button type="submit" variant="primary" size="lg" className="h-10" disabled={!credential.trim()} busy={busy}><Trans>继续</Trans><IconArrowRight /></Button>
           {error && <p role="alert" className="rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">{'text' in error ? error.text : i18n._(error.message)}</p>}
           {isCode && <Button type="button" variant="secondary" size="lg" onClick={() => setScannerOpen(true)}><IconQrCode className="size-4" /><Trans>扫描配对二维码</Trans></Button>}
           <Button type="button" variant="ghost" disabled={busy} onClick={()=>{setMode(isCode?'token':'code');setCredential('');}}>{isCode?t`使用访问令牌登录`:t`使用配对码登录`}</Button>

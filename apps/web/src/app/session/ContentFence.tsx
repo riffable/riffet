@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
+import { cn } from '@/lib/utils';
 import { usePreviewTheme } from '@/lib/content-preview';
+import { CODE_PADDING, CODE_TEXT } from './codeSurface';
 import { useTranscriptResources } from './transcriptResources';
 
 /**
@@ -29,5 +31,5 @@ export function ContentFence({ code, language, active = true }: { code: string; 
   if (request?.key === key) return <iframe title={t`${language} 预览`} src={request.url} sandbox="allow-scripts allow-downloads" referrerPolicy="no-referrer" className="block h-[28rem] w-full border-0 bg-bg" />;
   return page
     ? <div aria-hidden className="h-[28rem] bg-bg" />
-    : <pre className="overflow-auto whitespace-pre-wrap break-words px-3.5 py-3 font-mono text-(length:--text-code)"><code>{code}</code></pre>;
+    : <pre className={cn('overflow-auto whitespace-pre-wrap break-words', CODE_PADDING, CODE_TEXT)}><code>{code}</code></pre>;
 }

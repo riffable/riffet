@@ -1092,7 +1092,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             </ComposerSlotContext.Provider>
           ) : pane || (
             <EmptyState className="flex-1 pb-24" icon={<IconSquareTerminal />} title={t`终端未在运行`} description={t`重新打开 ${backendLabel} 后继续原生会话。`}>
-              <Button variant="primary" disabled={reopenDisabled} onClick={() => void reopen()}>{repairingNativeModel ? <Spinner className="text-current" /> : <IconSquareTerminal />}<Trans>重新打开</Trans></Button>
+              <Button variant="primary" disabled={reopenDisabled} onClick={() => void reopen()} busy={repairingNativeModel}><IconSquareTerminal /><Trans>重新打开</Trans></Button>
             </EmptyState>
           )}
         </div>
@@ -1274,8 +1274,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           renderMessage={message => <FailureDetails text={message.text} detail={message.detail} />}
           action={message => message.id.startsWith('connection:')
             ? <Button size="xs" variant="secondary" onClick={native.retryConnection}><IconRotateCw /><Trans>重试连接</Trans></Button>
-            : message.id.startsWith('session:') ? <Button size="xs" variant="secondary" disabled={reopenDisabled} onClick={() => void reopen()}>
-              {repairingNativeModel ? <Spinner className="text-current" /> : <IconRotateCw />}<Trans context="terminal-resume-session">恢复会话</Trans>
+            : message.id.startsWith('session:') ? <Button size="xs" variant="secondary" disabled={reopenDisabled} busy={repairingNativeModel} onClick={() => void reopen()}>
+              <IconRotateCw /><Trans context="terminal-resume-session">恢复会话</Trans>
             </Button> : undefined} />
         {/* The composer stays mounted, so its draft survives the hold; `contents` keeps its layout as it was. */}
         <div className={held ? 'hidden' : 'contents'} inert={held}>

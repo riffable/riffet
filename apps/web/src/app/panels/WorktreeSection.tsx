@@ -176,7 +176,7 @@ export function WorktreeSection({ project, active, onError, onOpenWorktree }: {
           <Input autoFocus value={branch} onChange={(event) => setBranch(event.target.value)} placeholder={t`New branch name`} aria-label={t`New branch name`} disabled={busy} />
           <div className="flex gap-2">
             <Input value={base} onChange={(event) => setBase(event.target.value)} placeholder={t`Based on (optional)`} aria-label={t`Based on (optional)`} disabled={busy} />
-            <Button type="submit" disabled={!branch.trim() || busy}>{busy ? <Spinner /> : <IconPlus />}<Trans>Create</Trans></Button>
+            <Button type="submit" disabled={!branch.trim()} busy={busy}><IconPlus /><Trans>Create</Trans></Button>
           </div>
         </form>
       )}

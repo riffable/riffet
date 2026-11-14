@@ -1,8 +1,10 @@
+import { createElement } from 'react';
 import type { AppSettings, Run, Session, SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
-import type { PluginAccess, PluginHost, SettingsPageService, ToolCall } from '@riffet/plugin-web';
+import type { ButtonProps as PluginButtonProps, PluginAccess, PluginHost, SegmentedProps, SelectProps, SettingsPageService, ToolCall } from '@riffet/plugin-web';
 import { IconWrench } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Badge, Input, Spinner, StatusDot, Switch } from '@/components/ui/controls';
+import { Badge, EmptyState, Field, Input, Segmented, Select, Spinner, StatusDot, Switch } from '@/components/ui/controls';
+import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
 import { api, request, withClientFeatures, type NativeSessionCreateResult } from '@/lib/api';
 import { backendLabel, sessionBackend } from '@/lib/backends';
@@ -28,6 +30,19 @@ const NO_SETTINGS_PAGE: SettingsPageService = { setDirty: () => undefined, setBu
  * host serves one view instance; `sessionId` is the conversation it shows, which navigation
  * compares against.
  */
+/** The SDK's `accent` variant is deprecated and drawn as `primary`. */
+function PluginButton({ variant, ...props }: PluginButtonProps) {
+  return createElement(Button, { ...props, variant: variant === 'accent' ? 'primary' : variant });
+}
+
+function PluginSelect({ options, ...props }: SelectProps) {
+  return createElement(Select, { ...props, options: [...options] });
+}
+
+function PluginSegmented({ options, ...props }: SegmentedProps) {
+  return createElement(Segmented, { ...props, options: [...options] });
+}
+
 export function createPluginHost({ stores, pluginId, sessionId, locale, access, settingsPage = NO_SETTINGS_PAGE }: {
   stores: WorkbenchStores;
   /** The plugin the view belongs to; absent for the app's own views. */
@@ -139,7 +154,7 @@ export function createPluginHost({ stores, pluginId, sessionId, locale, access, 
       lineDiff: (before, after, context) => lineDiff(before, after, context),
     },
     ui: {
-      Button, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, ModelField,
+      Button: PluginButton, Spinner, Tip, Markdown, DiffView, SettingsGroup, SettingsRow, Input, Switch, StatusDot, Badge, Select: PluginSelect, Segmented: PluginSegmented, Field, Notice, EmptyState, ModelField,
       icon: pluginIcon,
       toolIcon: (kind) => toolIcons[kind] ?? IconWrench,
       copy: copyWithToast,

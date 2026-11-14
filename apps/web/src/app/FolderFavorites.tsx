@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { FolderFavorite } from '@contracts';
 import { IconArrowDown, IconArrowUp, IconEllipsis, IconPencilLine, IconStar, IconStarFilled, IconTrash2 } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
 import { promptDialog } from '@/lib/dialogs';
@@ -142,7 +143,7 @@ export function FavoriteMenu({ favorite, store, triggerClassName }: { favorite: 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" aria-label={t`管理收藏 ${favoriteName(favorite)}`} className={triggerClassName}><IconEllipsis className="size-3.5" /></button>
+        <Button size="icon-sm" variant="quiet" aria-label={t`管理收藏 ${favoriteName(favorite)}`} className={triggerClassName}><IconEllipsis className="size-3.5" /></Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-40">
         <DropdownMenuItem onSelect={() => void store.rename(favorite)}><IconPencilLine /><Trans>重命名…</Trans></DropdownMenuItem>

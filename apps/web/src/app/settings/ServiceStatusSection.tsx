@@ -6,7 +6,7 @@ import type { ServiceMonitorSnapshot, ServiceProcess } from '@contracts';
 import { AgentMark } from '@/components/agent-marks';
 import { IconActivity, IconBot, IconCircleAlert, IconCpu, IconGauge, IconMemoryStick, IconMessagesSquare, IconOctagonX, IconRefreshCw, IconServer, IconSquareTerminal, IconTerminal, IconTimer, IconZap } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Badge, EmptyState, Spinner, StatusDot } from '@/components/ui/controls';
+import { Badge, EmptyState, StatusDot } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { backendLabel } from '@/lib/backends';
@@ -17,6 +17,7 @@ import { toast } from '@/lib/toast';
 import { cn, errorMessage, formatBytes, formatClock } from '@/lib/utils';
 import { Spark } from '../stats/KpiCards';
 import { useAnimatedNumber, useReducedMotion } from '../stats/chart-shared';
+import { Skeleton } from '@/components/ui/skeleton';
 import { RouteRank, StatusDonut, TimeSeriesChart } from './ServiceCharts';
 import { SettingsGroup as Group } from './SettingsLayout';
 
@@ -170,21 +171,17 @@ export function ServiceStatusSection() {
   );
 }
 
-function Skel({ className }: { className: string }) {
-  return <div className={`stats-skel ${className}`} />;
-}
-
 function ServiceSkeleton() {
   const { t } = useLingui();
   return (
     <div className="flex flex-col gap-6" aria-busy aria-label={t`正在读取服务器状态`}>
-      <Skel className="h-5 w-56 rounded-md" />
+      <Skeleton className="h-5 w-56 rounded-md" />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-3">
-        {Array.from({ length: 6 }, (_, index) => <Skel key={index} className="h-[124px] rounded-xl" />)}
+        {Array.from({ length: 6 }, (_, index) => <Skeleton key={index} className="h-[124px] rounded-xl" />)}
       </div>
-      <Skel className="h-[260px] rounded-xl" />
-      <Skel className="h-[260px] rounded-xl" />
-      <Skel className="h-[220px] rounded-xl" />
+      <Skeleton className="h-[260px] rounded-xl" />
+      <Skeleton className="h-[260px] rounded-xl" />
+      <Skeleton className="h-[220px] rounded-xl" />
     </div>
   );
 }
@@ -504,8 +501,8 @@ function ProcessTable({ processes, terminating, onTerminate }: { processes: Serv
                     <td className="text-right tabular-nums text-fg-3">{formatUptime(process.elapsedSec)}</td>
                     <td className="text-right">
                       {process.canTerminate && (
-                        <Button size="xs" variant="danger-ghost" disabled={terminating !== undefined} onClick={() => onTerminate(process)}>
-                          {terminating === process.pid ? <Spinner className="text-current" /> : <IconOctagonX />}<Trans>结束进程</Trans>
+                        <Button size="xs" variant="danger-ghost" disabled={terminating !== undefined && terminating !== process.pid} busy={terminating === process.pid} onClick={() => onTerminate(process)}>
+                          <IconOctagonX /><Trans>结束进程</Trans>
                         </Button>
                       )}
                     </td>

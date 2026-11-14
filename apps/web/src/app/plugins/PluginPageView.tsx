@@ -4,6 +4,7 @@ import type { PluginPage, PluginPageButton, PluginPageChange, PluginPageItem } f
 import { IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input, Spinner, Switch } from '@/components/ui/controls';
+import { RadioGroup } from '@/components/ui/radio-group';
 import { api } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { errorMessage, cn } from '@/lib/utils';
@@ -79,20 +80,25 @@ function PageButton({ button, locked, press }: { button: PluginPageButton; locke
 /** `heading` is the section's title: a choice named the same does not say it again. */
 function PageItem({ item, heading, locked, set, press }: { item: PluginPageItem; heading?: string; locked: boolean; set: (key: string, value: string | boolean | string[] | null) => void; press: (button: PluginPageButton) => void }) {
   switch (item.kind) {
-    case 'choice': return <div role="radiogroup" aria-label={item.label} className="flex flex-col py-2">
+    case 'choice': return <div className="flex flex-col py-2">
       {item.label !== heading && <span className="py-1.5 text-sm font-medium text-fg">{item.label}</span>}
-      {item.options.map(option => {
-        const selected = option.value === item.value;
-        return <div key={option.value} className="flex min-h-9 items-center gap-3">
-          <button type="button" role="radio" aria-checked={selected} disabled={locked || option.disabled} onClick={() => { if (!selected) set(item.key, option.value); }}
-            className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50">
-            <span className={cn('flex size-4 shrink-0 items-center justify-center rounded-full border', selected ? 'border-accent' : 'border-line-strong')}>{selected && <span className="size-2 rounded-full bg-accent" />}</span>
-            <span className="min-w-0 flex-1 truncate text-sm text-fg">{option.label}</span>
+      <RadioGroup<string>
+        ariaLabel={item.label}
+        value={item.value}
+        // Not disabled while a change is saving: arrows select in a radio group, and disabling the
+        // group would drop focus after the first step. Changes are ignored until it settles.
+        busy={locked}
+        onValueChange={value => { if (!locked && value !== item.value) set(item.key, value); }}
+        options={item.options.map(option => ({
+          value: option.value,
+          label: option.label,
+          disabled: option.disabled,
+          trailing: (option.detail || option.button) && <>
             {option.detail && <span className="shrink-0 text-xs text-fg-3">{option.detail}</span>}
-          </button>
-          {option.button && <PageButton button={option.button} locked={locked} press={press} />}
-        </div>;
-      })}
+            {option.button && <PageButton button={option.button} locked={locked} press={press} />}
+          </>,
+        }))}
+      />
     </div>;
     case 'toggle': return <SettingsRow title={item.label} description={item.detail}><Switch checked={item.on} disabled={locked} aria-label={item.label} onCheckedChange={on => set(item.key, on)} /></SettingsRow>;
     case 'text': return <TextItem item={item} locked={locked} set={set} />;

@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { MarkColor, NativeBackendId } from '@contracts';
 import { IconCopy, IconDownload } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Segmented, Spinner, Switch } from '@/components/ui/controls';
+import { Segmented, Switch } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { useBackendLabel } from '@/lib/backends';
 import { formatDate, formatNumber } from '@/lib/i18n/format';
@@ -327,7 +327,7 @@ function ShareImageContents({ source, open }: { source: ShareSource; open: boole
             </span>
             <div className="flex gap-2">
               <Button className="flex-1" disabled={busy || !card} onClick={() => void save()}><IconDownload className="size-3.5" /><Trans>保存 PNG</Trans></Button>
-              <Button variant="primary" className="flex-1" disabled={busy || !card} onClick={copy}>{busy ? <Spinner className="size-3.5" /> : <IconCopy className="size-3.5" />}<Trans>复制图片</Trans></Button>
+              <Button variant="primary" className="flex-1" disabled={!card} onClick={copy} busy={busy}><IconCopy className="size-3.5" /><Trans>复制图片</Trans></Button>
             </div>
           </div>
         </aside>

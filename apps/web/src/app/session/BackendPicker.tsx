@@ -26,7 +26,7 @@ export function BackendPicker({ backends, backendId, disabled, onChange, classNa
         disabled={disabled}
         aria-label={t`选择 Agent`}
         className={cn(
-          'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg',
+          'inline-flex h-7 min-w-0 items-center gap-1.5 rounded-full px-2.5 text-sm text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover data-[state=open]:text-fg',
           fullWidth && 'h-11 w-full rounded-xl border border-line-strong bg-bg px-3 text-base',
           className,
         )}

@@ -6,10 +6,9 @@ import { EmptyState } from '@/components/ui/controls';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { Tip } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
+import { DOCK_MAX, DOCK_MIN } from '@/app/state/uiStore';
 import { TerminalView } from './TerminalView';
 
-export const DOCK_MIN = 160;
-export const DOCK_MAX = 560;
 
 interface Props {
   terminals: TerminalInfo[];

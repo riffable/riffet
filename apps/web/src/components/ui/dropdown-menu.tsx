@@ -14,7 +14,7 @@ export const DropdownMenuGroup = Primitive.Group;
 export const DropdownMenuRadioGroup = Primitive.RadioGroup;
 
 export const menuSurface = 'ui-floating-content z-(--z-menu) min-w-44 overflow-hidden rounded-xl bg-popover p-1 text-fg shadow-pop outline-none origin-(--radix-popper-transform-origin) animate-in fill-mode-both fade-in-0 zoom-in-[var(--enter-scale)] duration-[var(--duration-fast)] ease-[var(--ease-decelerate)] data-[side=bottom]:slide-in-from-top-1 data-[side=top]:slide-in-from-bottom-1 data-[side=left]:slide-in-from-right-1 data-[side=right]:slide-in-from-left-1 data-[side=bottom]:slide-out-to-top-1 data-[side=top]:slide-out-to-bottom-1 data-[side=left]:slide-out-to-right-1 data-[side=right]:slide-out-to-left-1 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-[var(--enter-scale)] data-[state=closed]:duration-[var(--duration-exit-fast)] data-[state=closed]:ease-[var(--ease-accelerate)]';
-export const menuItem = "relative flex min-h-11 cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none select-none md:min-h-8 md:px-2 md:py-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-45 data-[highlighted]:bg-hover [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-fg-3";
+export const menuItem = "relative flex min-h-11 cursor-default items-center gap-2 rounded-lg px-3 py-2 text-sm text-fg outline-none select-none md:min-h-8 md:px-2 md:py-0 data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-hover [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-fg-3";
 
 /**
  * Shared shell for every popover-like surface.

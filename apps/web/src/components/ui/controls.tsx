@@ -62,20 +62,30 @@ export function Textarea({ className, ...props }: React.ComponentProps<'textarea
   return <textarea className={cn(fieldClass, 'min-h-20 resize-y py-2 leading-5', className)} {...props} />;
 }
 
-export function Field({ label, hint, children, className }: { label: React.ReactNode; hint?: React.ReactNode; children: React.ReactNode; className?: string }) {
+export function Field({ label, hint, error, children, className }: { label: React.ReactNode; hint?: React.ReactNode; /** A failed validation, shown under the control and announced. */ error?: React.ReactNode; children: React.ReactNode; className?: string }) {
+  const errorId = React.useId();
+  const invalid = error !== undefined && error !== null && error !== false && error !== '';
+  // A single control gets the error wired to it; a composite child (a fragment) is left as is.
+  const control = invalid && React.isValidElement<Record<string, unknown>>(children) && children.type !== React.Fragment
+    ? React.cloneElement(children, { 'aria-invalid': true, 'aria-describedby': [children.props['aria-describedby'], errorId].filter(Boolean).join(' ') })
+    : children;
+  // The label wraps only its text and the control: an error inside it would join the control's
+  // name and be read twice, once more through aria-describedby.
   return (
-    <label className={cn('flex min-w-0 flex-col gap-1.5', className)}>
-      <span className="text-sm font-medium text-fg">{label}</span>
-      {children}
-      {hint && <span className="text-xs text-fg-3">{hint}</span>}
-    </label>
+    <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
+      <label className="flex min-w-0 flex-col gap-1.5">
+        <span className="text-sm font-medium text-fg">{label}</span>
+        {control}
+      </label>
+      {invalid ? <p id={errorId} role="alert" className="text-xs text-danger">{error}</p> : hint && <p className="text-xs text-fg-3">{hint}</p>}
+    </div>
   );
 }
 
 export function Switch({ className, ...props }: React.ComponentProps<typeof SwitchPrimitive.Root>) {
   return (
     <SwitchPrimitive.Root
-      className={cn('group/switch inline-flex h-[18px] w-8 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 no-hover:size-11', className)}
+      className={cn('group/switch inline-flex h-[18px] w-8 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 no-hover:size-11', className)}
       {...props}
     >
       <span className="inline-flex h-[18px] w-8 shrink-0 items-center rounded-full bg-fg/[0.16] p-0.5 transition-colors duration-[var(--duration-fast)] ease-[var(--ease-standard)] group-data-[state=checked]/switch:bg-primary">
@@ -94,22 +104,59 @@ export function Spinner({ className }: { className?: string }) {
   return <IconLoaderCircle aria-hidden className={cn('ui-spinner size-3.5 animate-spin text-fg-3', className)} />;
 }
 
-export interface SegmentOption<T extends string> { value: T; label: React.ReactNode; icon?: React.ReactNode; disabled?: boolean; }
+export interface SegmentOption<T extends string> {
+  value: T; label: React.ReactNode; icon?: React.ReactNode; disabled?: boolean;
+  /** `UnderlineTabs` only: the id of the panel this tab shows, set as `aria-controls`. */
+  panelId?: string;
+}
+
+/**
+ * Arrow Left/Right/Home/End move focus among the enabled options of a tablist or radiogroup; Enter,
+ * Space or a click selects (APG's manual activation). Selection does not follow focus because many
+ * callers persist or navigate on change, and a busy caller disables its options, which would drop
+ * focus mid-way. Only the selected option is in the Tab order.
+ */
+export function useRoving<T extends string>(options: Array<Pick<SegmentOption<T>, 'value' | 'disabled'>>, value: T) {
+  const group = React.useRef<HTMLDivElement>(null);
+  const hasSelected = options.some(option => option.value === value && !option.disabled);
+  const firstEnabled = options.find(option => !option.disabled)?.value;
+  const tabIndexOf = (option: SegmentOption<T>) => (hasSelected ? option.value === value : option.value === firstEnabled) ? 0 : -1;
+  const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const enabled = options.map((option, index) => ({ option, index })).filter(entry => !entry.option.disabled);
+    if (enabled.length === 0 || event.altKey || event.ctrlKey || event.metaKey) return;
+    const buttons = [...(group.current?.querySelectorAll<HTMLElement>('button') ?? [])];
+    // From the focused option, so a group with nothing selected still steps one at a time.
+    const focused = buttons.indexOf(document.activeElement as HTMLElement);
+    const current = enabled.findIndex(entry => entry.index === focused);
+    let next: number;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % enabled.length;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = current < 0 ? enabled.length - 1 : (current - 1 + enabled.length) % enabled.length;
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = enabled.length - 1;
+    else return;
+    event.preventDefault();
+    buttons[enabled[next]!.index]?.focus();
+  };
+  return { group, tabIndexOf, onKeyDown };
+}
 
 /** Top-level view tabs: plain labels with an underline, so nested `Segmented` controls read as a sub-level. */
 export function UnderlineTabs<T extends string>({ value, options, onChange, className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; className?: string; ariaLabel?: string }) {
+  const roving = useRoving(options, value);
   return (
-    <div role="tablist" aria-label={ariaLabel} className={cn('flex h-full min-w-0 items-stretch gap-1', className)}>
+    <div ref={roving.group} role="tablist" aria-label={ariaLabel} onKeyDown={roving.onKeyDown} className={cn('flex h-full min-w-0 items-stretch gap-1', className)}>
       {options.map((option) => (
         <button
           key={option.value}
           role="tab"
           type="button"
           aria-selected={value === option.value}
+          aria-controls={option.panelId}
+          tabIndex={roving.tabIndexOf(option)}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            'relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 text-sm font-medium text-fg-3 outline-none transition-colors hover:text-fg focus-visible:text-fg disabled:opacity-40 max-md:px-3 max-md:text-base [&_svg]:size-3.5',
+            'relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 text-sm font-medium text-fg-3 outline-none transition-colors hover:text-fg focus-visible:text-fg disabled:opacity-50 max-md:px-3 max-md:text-base [&_svg]:size-3.5',
             'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent after:transition-colors max-md:after:inset-x-3',
             value === option.value && 'text-fg after:bg-fg',
           )}
@@ -128,13 +175,14 @@ export function UnderlineTabs<T extends string>({ value, options, onChange, clas
  * new one (foundations §8: a state changes in place), so a choice reads as one object moving.
  */
 export function Segmented<T extends string>({ value, options, onChange, size = 'sm', className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; size?: 'xs' | 'sm'; className?: string; ariaLabel?: string }) {
-  const track = React.useRef<HTMLDivElement>(null);
+  const roving = useRoving(options, value);
+  const track = roving.group;
   const thumb = React.useRef<HTMLSpanElement>(null);
   const keys = options.map(option => option.value).join('\u0000');
   // Puts the thumb over the selected segment; `instant` skips the slide (first paint, a resize).
   const place = React.useCallback((instant: boolean) => {
     const pill = thumb.current;
-    const active = track.current?.querySelector<HTMLElement>('[aria-selected="true"]');
+    const active = track.current?.querySelector<HTMLElement>('[aria-checked="true"]');
     if (!pill) return;
     pill.style.visibility = active ? '' : 'hidden';
     if (!active) return;
@@ -155,7 +203,11 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
     return () => observer.disconnect();
   }, [keys, place]);
   return (
-    <div ref={track} role="tablist" aria-label={ariaLabel} className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5 shadow-[inset_0_0_0_0.5px_var(--line)] no-hover:min-h-12', className)}>
+    <div
+      ref={track}
+      role="radiogroup" aria-label={ariaLabel} onKeyDown={roving.onKeyDown}
+      className={cn('relative inline-flex w-fit min-w-0 max-w-full items-center overflow-x-auto scrollbar-none rounded-lg bg-muted p-0.5 shadow-[inset_0_0_0_0.5px_var(--line)]', className)}
+    >
       <span
         ref={thumb}
         aria-hidden
@@ -164,15 +216,16 @@ export function Segmented<T extends string>({ value, options, onChange, size = '
       {options.map((option) => (
         <button
           key={option.value}
-          role="tab"
+          role="radio"
           type="button"
-          aria-selected={value === option.value}
+          aria-checked={value === option.value}
+          tabIndex={roving.tabIndexOf(option)}
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
           className={cn(
             // Each label keeps its own width and padding; narrow tracks scroll instead of
             // squeezing the longest label into an equal-width segment.
-            'relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium text-fg-3 outline-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:text-fg-2 focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-40 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
+            'relative inline-flex flex-none items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium text-fg-3 outline-none transition-colors duration-[var(--duration-base)] ease-[var(--ease-standard)] hover:text-fg-2 focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 no-hover:min-h-11 no-hover:min-w-11 [&_svg]:size-3.5',
             size === 'xs' ? 'h-6 px-2.5 text-xs' : 'h-7 px-3 text-sm',
             value === option.value && 'text-fg hover:text-fg',
           )}
@@ -190,7 +243,7 @@ export function StatusDot({ tone, pulse, shape = 'dot', label, className }: { to
   const color = shape === 'ring'
     ? { success: 'border-success', warning: 'border-warning', danger: 'border-danger', accent: 'border-accent', idle: 'border-fg-4' }[tone]
     : { success: 'bg-success', warning: 'bg-warning', danger: 'bg-danger', accent: 'bg-accent', idle: 'bg-fg-4' }[tone];
-  // motion-loop: `pulse` marks a live status (running, recording, reconnecting; waiting also pulses today)
+  // motion-loop: `pulse` marks a live status (running, recording, reconnecting) and a session waiting on the user, whose ring pulses to ask for attention
   return (
     <span
       {...(label ? { role: 'img', 'aria-label': label, title: label } : { 'aria-hidden': true })}
@@ -254,7 +307,7 @@ export function StatusPill({ tone = 'neutral', label, actionLabel, onAction, dis
         aria-label={actionLabel}
         aria-description={title}
         title={title}
-        className={cn(badgeClass, badgeTones[tone], 'group/pill outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-60 aria-disabled:opacity-60', className)}
+        className={cn(badgeClass, badgeTones[tone], 'group/pill outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 aria-disabled:opacity-50', className)}
       >
         {busy && <Spinner className="size-3 text-current" />}
         <span aria-hidden className="grid">

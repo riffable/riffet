@@ -7,6 +7,7 @@ import { isPageOpen } from './tabs/tabsStore';
 const editable = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
 
 /**
+ * The keys it answers are listed in `hostShortcuts.ts`; keep the two in step.
  * ⌘K opens search, ⌘⇧P opens commands, ⌘B toggles the sidebar, and ⌃` toggles the terminal dock.
  * With session tabs on, ⌥ (Alt) drives them by physical key: 1–8 and 9 pick a tab, [ and ] step, W
  * closes, ⇧T reopens, T starts a conversation, I toggles 会话信息. ⌘/Ctrl with T, W and digits belong

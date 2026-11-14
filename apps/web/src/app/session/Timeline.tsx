@@ -18,7 +18,9 @@ import { formatDuration } from '@/lib/format-duration';
 import { useNow } from '@/lib/use-now';
 import { formatNumber } from '@/lib/i18n/format';
 import { cleanLabel, cn, formatBytes, formatDateTime, isRecord, pixelEdge, str } from '@/lib/utils';
-import { CopyButton, Markdown } from './Markdown';
+import { CopyButton } from '@/components/ui/copy-button';
+import { CODE_PADDING, CODE_TEXT } from './codeSurface';
+import { Markdown } from './Markdown';
 import { lineDiff } from './lineDiff';
 import { inQueue, nativeTaskOutcome, sendPhase } from './delivery';
 import { canRestoreFailedSteer, type ReasoningChannel, type TimelineItem, type UserAttachment } from './model';
@@ -365,7 +367,7 @@ export function CodeBlock({ children, className, maxHeight = 'max-h-72', copy, r
   const [full, setFull] = useRemembered(`${remember}:full`, false);
   const clip = useMemo(() => (typeof children === 'string' ? clipOutput(children) : undefined), [children]);
   // The copy button keeps a corner of its own rather than covering the end of the first line.
-  const pre = cn('overflow-auto rounded-lg bg-subtle px-3 py-2 font-mono text-xs leading-[18px] text-fg-2 whitespace-pre-wrap break-words', copy && 'pr-9 no-hover:min-h-11 no-hover:pr-12', maxHeight, className);
+  const pre = cn('overflow-auto rounded-lg bg-subtle text-fg-2 whitespace-pre-wrap break-words', CODE_PADDING, CODE_TEXT, copy && 'pr-9 no-hover:min-h-11 no-hover:pr-12', maxHeight, className);
   const block = !clip || full ? <pre className={pre}>{children}</pre> : (
     <pre className={pre}>
       {clip.head}
@@ -733,11 +735,11 @@ const RegularToolRow = memo(function RegularToolRow({ item, onOpenPath, onOpenIn
       icon={running ? <Spinner className="size-3.5" /> : <Icon />}
       title={mono ? <span className="font-mono text-xs">{action ? action.verb : taskTitle}</span> : taskTitle}
       detail={backgroundTask ? undefined : action ? action.path ? <span className="flex min-w-0"><PathText path={action.object} /></span> : action.object : detail}
-      inline={activity ? <BackgroundTaskOutcome activity={activity} /> : failed && agentCall ? <RowOutcome failed /> : dangling ? <RowOutcome /> : !backgroundTask && !failed && stats ? (
+      inline={activity ? <BackgroundTaskOutcome activity={activity} /> : failed ? <RowOutcome failed /> : dangling ? <RowOutcome /> : !backgroundTask && !failed && stats ? (
         <span className="flex max-w-[50%] shrink-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 font-mono text-xs tabular-nums [overflow-wrap:anywhere]">
           {stats.files > 1 && <span className="font-sans text-fg-3"><Trans>{stats.files} 个文件</Trans></span>}
-          {stats.added > 0 && <span className="text-success">+{stats.added}</span>}
-          {stats.removed > 0 && <span className="text-danger">−{stats.removed}</span>}
+          {stats.added > 0 && <span className="text-[var(--diff-add-marker)]">+{stats.added}</span>}
+          {stats.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{stats.removed}</span>}
         </span>
       ) : undefined}
       status={activity ? <BackgroundTaskStatus activity={activity} /> : undefined}

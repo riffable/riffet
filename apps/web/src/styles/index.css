@@ -1785,11 +1785,9 @@ html.dark {
   border: 0;
   border-top: 1px solid var(--line);
 }
+/* Riffet style's `inlineCode: plain`: no chip, the monospace face and one ink step lighter set it apart. */
 .md :not(pre) > code {
-  padding: 1.5px 5px;
-  border-radius: 5px;
-  background: var(--bg-subtle);
-  color: var(--fg);
+  color: var(--fg-2);
   font-family: var(--font-mono);
   font-size: var(--text-code);
 }
@@ -1856,7 +1854,7 @@ html.dark {
 .md th {
   background: var(--bg-subtle);
   color: var(--fg-2);
-  font-weight: 600;
+  font-weight: 500;
 }
 .md tr:last-child td {
   border-bottom: 0;
@@ -2412,7 +2410,7 @@ html.dark {
     width: 100%;
     max-width: none;
     max-height: calc(var(--app-height, 100dvh) - 12px);
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
     padding-left: env(safe-area-inset-left, 0px);
     padding-right: env(safe-area-inset-right, 0px);
     padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -2445,7 +2443,7 @@ html.dark {
     max-height: calc(var(--app-height, 100dvh) - 48px);
     overflow-y: auto;
     overscroll-behavior: contain;
-    border-radius: 18px 18px 0 0;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
     /* The home indicator's inset, in the sheet's own colour; a popover keeps its own padding. */
     border-bottom: env(safe-area-inset-bottom, 0px) solid var(--color-popover);
     box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.25);
@@ -3149,24 +3147,24 @@ html[data-settings-transition='pop']::view-transition-new(settings-list) {
   animation: riffet-settings-pop-in var(--duration-medium) var(--ease-sheet) both;
 }
 
-/* Stats charts. The skeleton is a sheen, not a spinner; reduced motion keeps a static block. */
+/* Stats charts. The `Skeleton` primitive is a sheen, not a spinner; reduced motion keeps a static block. */
 .stats-chart:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
   border-radius: 8px;
 }
-/* motion-loop: loading placeholder shimmer */
-.stats-skel {
+.ui-skeleton {
   background: linear-gradient(100deg, var(--bg-muted) 30%, var(--bg-subtle) 50%, var(--bg-muted) 70%);
   background-size: 200% 100%;
-  animation: stats-skel 1.4s ease-in-out infinite;
+  /* motion-loop: loading placeholder shimmer */
+  animation: ui-skeleton 1.4s ease-in-out infinite;
 }
-@keyframes stats-skel {
+@keyframes ui-skeleton {
   from { background-position: 100% 0; }
   to { background-position: -100% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .stats-skel { animation: none; }
+  .ui-skeleton { animation: none; }
 }
 
 /* Derive selection from the palette without changing its shared colour-role contract. */

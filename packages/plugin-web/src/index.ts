@@ -229,8 +229,11 @@ export type PluginIconName =
 export type IconComponent = ComponentType<{ className?: string }>;
 
 export interface ButtonProps extends ComponentProps<'button'> {
+  /** `accent` is deprecated: it is accepted for older plugins and drawn as `primary`. */
   variant?: 'primary' | 'accent' | 'secondary' | 'ghost' | 'quiet' | 'danger' | 'danger-ghost' | 'link';
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'icon-xs' | 'icon-sm' | 'icon';
+  /** In progress: the width is kept, a spinner shows in place and clicks are ignored. */
+  busy?: boolean;
 }
 
 export interface TipProps {
@@ -256,6 +259,53 @@ export interface SettingsRowProps { title: ReactNode; description?: ReactNode; c
 export interface SwitchProps { checked?: boolean; onCheckedChange?: (checked: boolean) => void; disabled?: boolean; className?: string; 'aria-label'?: string }
 export interface StatusDotProps { tone: 'success' | 'warning' | 'danger' | 'accent' | 'idle'; pulse?: boolean; shape?: 'dot' | 'ring'; label?: string; className?: string }
 export interface BadgeProps { children: ReactNode; tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger'; className?: string; title?: string }
+
+export interface SelectOption { value: string; label: string; icon?: ReactNode; disabled?: boolean }
+/** A choice among several values, as a menu; three or fewer short values read better as `Segmented`. */
+export interface SelectProps {
+  value: string;
+  options: readonly SelectOption[];
+  onChange(value: string): void;
+  /** The control's accessible name. */
+  label: string;
+  id?: string;
+  /** Adds a hidden input so the value is part of a surrounding form's data. */
+  name?: string;
+  disabled?: boolean;
+  /** Shown when `value` matches no option. */
+  placeholder?: string;
+  className?: string;
+}
+export interface SegmentedOption { value: string; label: ReactNode; icon?: ReactNode; disabled?: boolean }
+export interface SegmentedProps {
+  value: string;
+  options: readonly SegmentedOption[];
+  onChange(value: string): void;
+  size?: 'xs' | 'sm';
+  className?: string;
+  ariaLabel?: string;
+}
+/** A label above a control, with an optional line of hint under it. */
+export interface FieldProps {
+  label: ReactNode;
+  hint?: ReactNode;
+  /** Shown under the control as an alert, and marks a single child control invalid. */
+  error?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}
+/** A standing notice inside the view: a degraded state, a stale result. Operation results go through `notify`. */
+export interface NoticeProps {
+  tone?: 'neutral' | 'accent' | 'warning' | 'danger';
+  /** Replaces the tone's glyph; `null` draws none. */
+  icon?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  role?: 'status' | 'alert';
+}
+/** Nothing to show yet: what is missing, and at most one next step as `children`. */
+export interface EmptyStateProps { icon?: ReactNode; title: ReactNode; description?: ReactNode; children?: ReactNode; className?: string }
 
 export interface ModelFieldProps {
   /** The selection: a model id, with its options when it has any. Empty for none. */
@@ -285,6 +335,15 @@ export interface UiKit {
   Switch: ComponentType<SwitchProps>;
   StatusDot: ComponentType<StatusDotProps>;
   Badge: ComponentType<BadgeProps>;
+  /**
+   * Added after web API 1 without a version bump, so a host from before 2026-11 lacks them: test
+   * for the member (`if (ui.Select)`) and fall back. `Button`'s `busy` is likewise ignored there.
+   */
+  Select?: ComponentType<SelectProps>;
+  Segmented?: ComponentType<SegmentedProps>;
+  Field?: ComponentType<FieldProps>;
+  Notice?: ComponentType<NoticeProps>;
+  EmptyState?: ComponentType<EmptyStateProps>;
   /** Chooses a model, and its options, from a list. */
   ModelField: ComponentType<ModelFieldProps>;
   icon(name: PluginIconName): IconComponent;
@@ -376,6 +435,33 @@ export function StatusDot(props: StatusDotProps) {
 
 export function Badge(props: BadgeProps) {
   return createElement(usePluginHost().ui.Badge, props);
+}
+
+// A host from before these members renders nothing for the pickers and plain text for the rest,
+// so an older Riffet shows the plugin's content without its styling instead of failing to render.
+export function Select(props: SelectProps) {
+  const component = usePluginHost().ui.Select;
+  return component ? createElement(component, props) : null;
+}
+
+export function Segmented(props: SegmentedProps) {
+  const component = usePluginHost().ui.Segmented;
+  return component ? createElement(component, props) : null;
+}
+
+export function Field(props: FieldProps) {
+  const component = usePluginHost().ui.Field;
+  return component ? createElement(component, props) : createElement('label', { className: props.className }, props.label, props.children, props.error ?? props.hint);
+}
+
+export function Notice(props: NoticeProps) {
+  const component = usePluginHost().ui.Notice;
+  return component ? createElement(component, props) : createElement('div', { className: props.className, role: 'status' }, props.children, props.action);
+}
+
+export function EmptyState(props: EmptyStateProps) {
+  const component = usePluginHost().ui.EmptyState;
+  return component ? createElement(component, props) : createElement('div', { className: props.className }, props.title, props.description, props.children);
 }
 
 export function ModelField(props: ModelFieldProps) {

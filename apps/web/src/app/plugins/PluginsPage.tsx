@@ -3,6 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { PluginDescriptor, PluginDiagnostic, PluginLogEntry, PluginGrantRequired, PluginMarketEntry, PluginMarketList, PluginUpdate, ViewDeclaration } from '@contracts';
 import { IconEllipsis, IconRefreshCw, IconSettings2, IconSquareArrowOutUpRight, IconUpload } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { SearchField } from '@/components/ui/search-field';
 import { Badge, EmptyState, Field, Input, Kbd, Segmented, Select, Spinner, Switch, UnderlineTabs } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -322,7 +323,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       actions={<>
         <Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} onClick={() => { if (mode === 'market') { setMarket(undefined); void loadMarket(true); } else void run(refreshPlugins); }} aria-label={t({ message: '重新检测' })}><IconRefreshCw /></Button>
         {!recovery && <DropdownMenu><DropdownMenuTrigger asChild><Button size="icon-sm" variant="quiet" disabled={working || dirty || !reachable} aria-label={t({ message: '更多操作' })}><IconEllipsis /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem onSelect={() => void confirmDialog({ title: t({ message: '暂停所有外部插件？' }), description: t({ message: '保留原启用策略，可随时恢复' }), confirmLabel: t({ message: '暂停' }) }).then(ok => { if (ok) void run(() => api.setPluginRecovery(true)); })}><Trans>暂停所有外部插件</Trans></DropdownMenuItem></DropdownMenuContent></DropdownMenu>}
-        <Button size="sm" disabled={working || !reachable} onClick={() => void chooseInstall()}>{busy ? <Spinner /> : <IconUpload />}<Trans>安装</Trans></Button>
+        <Button size="sm" disabled={customBusy || !reachable} onClick={() => void chooseInstall()} busy={busy}><IconUpload /><Trans>安装</Trans></Button>
       </>}
       columnClassName="flex flex-col gap-6"
       sidebarCollapsed={sidebarCollapsed}
@@ -335,7 +336,7 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       {!selected && errorNotice}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {mode === 'installed' ? <Segmented value={filter} onChange={value => { if (!dirty && !working) { setFilter(value); onSelect(''); } }} ariaLabel={t({ message: '状态' })} options={[{ value: 'all', label: t({ message: '全部' }) }, { value: 'enabled', label: t({ message: '已启用' }) }, { value: 'disabled', label: t({ message: '已停用' }) }, { value: 'attention', label: t({ message: '异常' }) }].map(option => ({ ...option, disabled: dirty || working }))} /> : <span />}
-        <Input className="w-full md:w-56" disabled={dirty || working} value={query} onChange={e => { setQuery(e.target.value); onSelect(''); }} onKeyDown={e => { if (e.key === 'Escape' && query) { e.preventDefault(); setQuery(''); } }} placeholder={t({ message: '搜索插件' })} aria-label={t({ message: '搜索插件' })} />
+        <SearchField className="w-full md:w-56" disabled={dirty || working} value={query} onChange={value => { setQuery(value); onSelect(''); }} placeholder={t({ message: '搜索插件' })} aria-label={t({ message: '搜索插件' })} />
       </div>
       {mode === 'market' && <PluginMarket market={market} error={marketError} query={query} installed={installedIds} busy={busy} onInstall={installFromMarket} onRetry={() => void loadMarket(true)} />}
       {mode === 'installed' && <>
@@ -368,8 +369,8 @@ export function PluginsPage({ selectedId, selectedViewId, initialTab, openRevisi
       <Dialog open={Boolean(selected)} onOpenChange={open => { if (!open) closeSettings(); }}>
         <DialogContent mobileFullscreen size="content" className="h-[min(42rem,calc(var(--app-height,100dvh)-32px))]" aria-describedby={undefined}>
       <DialogHeader><div className="flex min-w-0 items-center gap-3">{selected && <PluginMark plugin={selected} />}<div className="min-w-0"><DialogTitle>{selected && label(selected)}</DialogTitle>{selected && <p className="mt-1 text-xs text-fg-3">{[selected.version && 'v' + selected.version, source(selected), status(selected)].filter(Boolean).join(' · ')}</p>}</div></div></DialogHeader>
-      <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={shownTab} onChange={value => { if (value !== shownTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, disabled: working }))} />
-      <DialogBody key={shownTab} className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
+      <UnderlineTabs className="mx-5 h-10 shrink-0 overflow-x-auto border-b border-line" value={shownTab} onChange={value => { if (value !== shownTab) void navigateDetail(() => setDetailTab(value)); }} ariaLabel={t({ message: '插件' })} options={detailTabs.map(tab => ({ ...tab, panelId: 'plugin-detail-panel', disabled: working }))} />
+      <DialogBody key={shownTab} id="plugin-detail-panel" className="flex flex-1 flex-col gap-5 py-5" role="tabpanel" aria-label={detailTabs.find(tab => tab.value === shownTab)?.label}>{errorNotice}{(missing || (dirty || working) && unavailable || keepPage && configurationUnavailable) && <p role="status" className="text-sm text-fg-3"><Trans>插件已不可用，当前内容会保留到关闭</Trans></p>}{shownTab === 'overview' ? overview : shownTab === 'page' ? configuration : management}</DialogBody>
         </DialogContent>
         <PluginVersionsDialog plugin={versions ? selected : undefined} onClose={() => setVersions(false)} onChanged={() => { void changed(); }} />
         <PluginFlowDialog pluginId={flow?.pluginId} action={flow?.action} open={Boolean(flow)} onOpenChange={open => { if (!open) { setFlow(undefined); void changed(); } }} />

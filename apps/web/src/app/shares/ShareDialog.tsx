@@ -4,6 +4,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { SessionShare, ShareStatus, ShareAppearanceRequest, ShareDraft, ShareDraftProgress, ShareSelection, ShareTurnCatalog } from '@contracts';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, Segmented, Spinner, Switch } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { copyWithToast } from '@/lib/files';
@@ -251,8 +252,8 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
           <div className="ml-auto flex items-center gap-2">
             {!pdf && printStatus === 'loading' && <span role="status" className="flex items-center gap-2"><Spinner /><Trans>正在准备 PDF…</Trans></span>}
             {!pdf && printStatus === 'error' && <><span role="alert"><Trans>PDF 准备失败</Trans></span><Button variant="quiet" size="sm" disabled={pending} onClick={() => { setPrintStatus('loading'); setPrintRevision(value => value + 1); }}><Trans>重试</Trans></Button></>}
-            <Button className="shrink-0" size="sm" disabled={pending || !printLoaded} title={t`打开系统打印窗口，选择“保存为 PDF”`} onClick={() => void print()}>
-              {busy && !progress ? <Spinner /> : null}<Trans>导出为 PDF</Trans>
+            <Button className="shrink-0" size="sm" disabled={(pending && !(busy && !progress)) || !printLoaded} busy={busy && !progress} title={t`打开系统打印窗口，选择“保存为 PDF”`} onClick={() => void print()}>
+              <Trans>导出为 PDF</Trans>
             </Button>
           </div>
           <p className="basis-full text-right"><Trans>在打印窗口选择“保存为 PDF”，并关闭“页眉和页脚”。</Trans></p>
@@ -292,7 +293,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
                   </div>
                   <div className="max-h-72 overflow-y-auto divide-y divide-line">
                     {turnCatalog.turns.map(turn => <label key={turn.id} className="flex cursor-pointer items-start gap-3 px-3 py-2.5 hover:bg-subtle">
-                      <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-accent" checked={selectedTurnIdSet.has(turn.id)} disabled={pending} onChange={event => setSelectedTurnIds(previous => event.target.checked ? [...previous, turn.id] : previous.filter(id => id !== turn.id))} />
+                      <Checkbox className="mt-0.5" checked={selectedTurnIdSet.has(turn.id)} disabled={pending} onCheckedChange={checked => setSelectedTurnIds(previous => checked === true ? [...previous, turn.id] : previous.filter(id => id !== turn.id))} />
                       <span className="min-w-0 flex-1 space-y-1"><span className="line-clamp-2 block whitespace-pre-wrap break-words text-sm text-fg">{turn.text || t`无文字提问`}</span><span className="block text-xs text-fg-3">{formatDateTime(turn.createdAt)}</span></span>
                     </label>)}
                     {!turnCatalog.turns.length && <p className="p-3 text-sm text-fg-3">{pdf ? <Trans>没有可导出的会话记录</Trans> : <Trans>没有可分享的会话记录</Trans>}</p>}
@@ -340,7 +341,7 @@ export function ShareDialog({ sessionId, title, open, onOpenChange, purpose = 's
               <div className="inline-flex shrink-0 items-center gap-2 whitespace-nowrap text-xs text-fg-3"><span><Trans>有效期</Trans></span><Select label={t`分享有效期`} className="w-24" value={String(expiryDays)} disabled={pending} onChange={value => setExpiryDays(Number(value))} options={[7, 30, 90, 365].map(days => ({ value: String(days), label: t`${days} 天` }))} /></div>
               <Button size="sm" disabled={!status?.actions.publish || pending || !previewLoaded} onClick={() => void publish()}>{busy && !checking ? t`发布中…` : published ? t`更新链接` : t`创建链接`}</Button>
             </>}
-          </> : <Button size="sm" disabled={(!pdf && (!status?.actions.preview || share === undefined)) || pending || !selectionReady} onClick={() => void prepare()}>{busy ? <Spinner /> : null}{progress ? t`生成中…` : published && !localOnly ? t`更新分享` : t`生成预览`}</Button>}
+          </> : <Button size="sm" busy={busy} disabled={(!pdf && (!status?.actions.preview || share === undefined)) || (pending && !busy) || !selectionReady} onClick={() => void prepare()}>{published && !localOnly ? t`更新分享` : t`生成预览`}</Button>}
           </div>
         </DialogFooter>
       </DialogContent>

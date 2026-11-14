@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowRightLeft, IconCheck, IconRotateCw, IconSparkles } from '@/components/icons';
 import type { HandoffDraft, NativeBackendCatalogEntry, NativeBackendId, Session } from '@contracts';
 import { Button } from '@/components/ui/button';
-import { Field, Spinner, Textarea } from '@/components/ui/controls';
+import { Field, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, HttpError, type NativeSessionCreateResult } from '@/lib/api';
 import { sessionBackend, useBackendLabel } from '@/lib/backends';
@@ -37,7 +37,7 @@ export function BackendCards({ backends, selected, onToggle }: {
             aria-pressed={on}
             onClick={() => onToggle(entry.backendId)}
             className={cn(
-              'flex min-h-11 items-center gap-3 rounded-lg border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-55',
+              'flex min-h-11 items-center gap-3 rounded-lg border px-2.5 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50',
               on ? 'border-accent bg-accent-soft' : 'border-line enabled:hover:bg-hover',
             )}
           >
@@ -171,11 +171,11 @@ export function HandoffDialog({ open, onOpenChange, session, backends, working, 
         </DialogBody>
         <DialogFooter>
           {draft ? <>
-            <Button variant="ghost" disabled={busy || generating || working} onClick={() => void generate()}>{generating ? <Spinner /> : <IconRotateCw />}<Trans>重新生成</Trans></Button>
-            <Button variant="primary" disabled={busy || generating || working || !text.trim()} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconArrowRightLeft />}<Trans>交接</Trans></Button>
+            <Button variant="ghost" disabled={busy || working} onClick={() => void generate()} busy={generating}><IconRotateCw /><Trans>重新生成</Trans></Button>
+            <Button variant="primary" disabled={generating || working || !text.trim()} onClick={() => void submit()} busy={busy}><IconArrowRightLeft /><Trans>交接</Trans></Button>
           </> : <>
             <Button variant="ghost" onClick={() => onOpenChange(false)}><Trans context="session-cancel-action">取消</Trans></Button>
-            <Button variant="primary" disabled={generating || working || !target.backendId} onClick={() => void generate()}>{generating ? <Spinner className="text-primary-fg" /> : <IconSparkles />}<Trans>生成</Trans></Button>
+            <Button variant="primary" disabled={working || !target.backendId} onClick={() => void generate()} busy={generating}><IconSparkles /><Trans>生成</Trans></Button>
           </>}
         </DialogFooter>
       </DialogContent>

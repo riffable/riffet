@@ -4,7 +4,7 @@ import { IconChevronRight } from '@/components/icons';
 import { Collapse } from '@/components/ui/collapse';
 import { cn } from '@/lib/utils';
 import { describeFailure } from '../../../../../packages/timeline/src/failures';
-import { CopyButton } from './Markdown';
+import { CopyButton } from '@/components/ui/copy-button';
 import { useRemembered } from './rememberedState';
 
 /** A readable reason stays visible; provider diagnostics are available without filling the page. */

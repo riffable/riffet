@@ -33,7 +33,7 @@ export const CHANNEL_SCRIPT = `(function(w){var p=new Promise(function(r){w.addE
 /** A colour value that is safe to write into a style rule: the palette's own forms, nothing that could close the rule or the element. */
 const SAFE_VALUE = /^[#(),.%\w\s/+-]{1,80}$/;
 
-/** The colour roles of the palette in effect on the app's document element. */
+/** The colour roles of the palette in effect on the app's document element, and the text scale. */
 export function readTheme(root: HTMLElement = document.documentElement): BridgeTheme {
   const style = getComputedStyle(root);
   const vars: Record<string, string> = {};
@@ -41,6 +41,9 @@ export function readTheme(root: HTMLElement = document.documentElement): BridgeT
     const value = style.getPropertyValue(`--${role}`).trim();
     if (SAFE_VALUE.test(value)) vars[`--${role}`] = value;
   }
+  // The reader's text size: the page's text tokens multiply by it (`PLUGIN_BASE_STYLE`).
+  const scale = style.getPropertyValue('--text-scale').trim();
+  if (SAFE_VALUE.test(scale)) vars['--text-scale'] = scale;
   return { scheme: root.classList.contains('dark') ? 'dark' : 'light', vars };
 }
 

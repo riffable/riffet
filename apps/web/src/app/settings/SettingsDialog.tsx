@@ -3,6 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowLeft, IconChevronRight } from '@/components/icons';
 import type { AppSettings } from '@contracts';
 import { Button } from '@/components/ui/button';
+import { ListRow } from '@/components/ui/list-row';
 import { Spinner } from '@/components/ui/controls';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import type { ProjectRecord } from '@/lib/api';
@@ -175,9 +176,9 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
           {navigationGroups.map((group) => <div key={group} className="mb-3 flex flex-col gap-px">
             {settingsGroupTitle(group) && <h3 className="px-2.5 pb-1 pt-2 text-2xs font-medium text-fg-4">{settingsGroupTitle(group)}</h3>}
             {navigationItems(group).map((item) => (
-              <button key={item.id} type="button" aria-current={selected(item.id) ? 'page' : undefined} onClick={() => void selectSection(item.id)} className={cn('flex min-h-9 items-center gap-2 rounded-lg px-2.5 text-left text-sm text-fg-2 hover:bg-hover hover:text-fg', selected(item.id) && 'bg-active text-fg')}>
-                <item.icon className="size-4 shrink-0 text-fg-3" />{item.label}
-              </button>
+              <ListRow key={item.id} aria-current={selected(item.id) ? 'page' : undefined} selected={selected(item.id)} onClick={() => void selectSection(item.id)} leading={<item.icon />}>
+                {item.label}
+              </ListRow>
             ))}
           </div>)}
         </nav>

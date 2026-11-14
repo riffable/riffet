@@ -680,7 +680,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
                           ? <span className="inline-flex items-center gap-1.5 text-xs text-fg-2"><StatusDot tone="success" /><Trans>新会话默认</Trans></span>
                           : <Button size="sm" variant="secondary" disabled={busy || dirty} onClick={() => void makeDefault(provider)}><Trans>设为默认</Trans></Button>}
                         <Button size="sm" variant="danger-ghost" disabled={busy} onClick={() => void remove(provider)}><IconTrash2 /><Trans context="settings-delete-action">删除</Trans></Button>
-                        <Button size="sm" variant="primary" className="ml-auto" disabled={busy || !dirty || (source === 'custom' && !draft.apiEndpoint?.trim())} onClick={() => void save()}>{saving ? <Spinner /> : <IconSave />}<Trans>保存</Trans></Button>
+                        <Button size="sm" variant="primary" className="ml-auto" disabled={loading || !dirty || (source === 'custom' && !draft.apiEndpoint?.trim())} onClick={() => void save()} busy={saving}><IconSave /><Trans>保存</Trans></Button>
                       </div>
                     </div>
                   )}
@@ -722,7 +722,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
                 )}
                 {loginRow(addingEntry)}
                 <div className="flex items-center gap-2 py-3">
-                  <Button size="sm" variant="primary" disabled={busy || !adding.name.trim() || (adding.source === 'custom' && !adding.apiEndpoint.trim())} onClick={() => void create()}>{saving ? <Spinner /> : <IconPlus />}<Trans>添加</Trans></Button>
+                  <Button size="sm" variant="primary" disabled={loading || !adding.name.trim() || (adding.source === 'custom' && !adding.apiEndpoint.trim())} onClick={() => void create()} busy={saving}><IconPlus /><Trans>添加</Trans></Button>
                   <Button size="sm" variant="ghost" disabled={busy} onClick={() => void leave().then((ok) => { if (ok) setAdding(undefined); })}><Trans context="settings-cancel-action">取消</Trans></Button>
                 </div>
               </div>

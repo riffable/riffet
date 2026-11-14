@@ -3,9 +3,10 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { API, type Mark, type MarkListQuery } from '@contracts';
-import { IconBookmark, IconCheck, IconCircleAlert, IconCopy, IconFileText, IconImage, IconImageDown, IconPencilLine, IconRefreshCw, IconSearch, IconSquareCheck, IconTrash2, IconX } from '@/components/icons';
+import { IconBookmark, IconCheck, IconCircleAlert, IconCopy, IconFileText, IconImage, IconImageDown, IconPencilLine, IconRefreshCw, IconSearch, IconSquareCheck, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Badge, EmptyState, Input, Select, Spinner, Textarea, UnderlineTabs } from '@/components/ui/controls';
+import { SearchField } from '@/components/ui/search-field';
+import { Badge, EmptyState, Select, Spinner, Textarea, UnderlineTabs } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
@@ -471,11 +472,7 @@ export function MarksPage({ projects, sidebarCollapsed, onClose, onOpenSidebar, 
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="relative min-w-52 flex-1">
-            <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-4" />
-            <Input value={text} onChange={(event) => setText(event.target.value)} placeholder={t`搜索收藏的内容、备注或会话`} aria-label={t`搜索收藏`} className="h-9 rounded-lg pl-9 pr-8" />
-            {text && <button type="button" aria-label={t`清除搜索`} onClick={() => setText('')} className="absolute right-2 top-1/2 grid size-5 -translate-y-1/2 place-items-center rounded text-fg-4 hover:text-fg"><IconX className="size-3.5" /></button>}
-          </label>
+          <SearchField size="lg" value={text} onChange={setText} placeholder={t`搜索收藏的内容、备注或会话`} aria-label={t`搜索收藏`} className="min-w-52 flex-1" />
           <Select label={t`按项目筛选`} value={projectId} onChange={setProjectId} className="h-9 w-40 max-md:w-full"
             options={[{ value: '', label: t`全部项目` }, ...liveProjects.map((item) => ({ value: item.id, label: item.name }))]} />
         </div>

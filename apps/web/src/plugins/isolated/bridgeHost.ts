@@ -1,6 +1,6 @@
 import type { SyncLane, TimelinePage, TurnOutlineV3 } from '@contracts';
 import {
-  BRIDGE_CAPABILITY, BRIDGE_LIMITS, BRIDGE_VERSION,
+  BRIDGE_CAPABILITY, BRIDGE_LIMITS, BRIDGE_VERSION, PLUGIN_BASE_STYLE_VERSION,
   type BridgeHostInfo, type BridgePage, type BridgeProject, type BridgeRun, type BridgeCommandResult, type BridgeErrorBody, type BridgeErrorCode, type BridgeEvent, type BridgeEvents, type BridgeMethod, type BridgeMethods, type BridgeSession, type BridgeTheme, type BridgeViewContext,
 } from '@riffet/plugin-web';
 
@@ -127,7 +127,7 @@ function page<T>(params: unknown, keys: string[], values: readonly T[]): BridgeP
 }
 function hostInfo(services: BridgeServices): BridgeHostInfo {
   const methods = Object.keys(BRIDGE_CAPABILITY).filter(method => method !== 'projects.list' || services.projects).filter(method => method !== 'sessions.list' || services.sessions).filter(method => method !== 'sessions.runs' || services.runs).filter(method => !method.startsWith('sessions.turnSummar') || services.turnSummary);
-  return { platform: 'web', webApiVersion: 1, bridgeVersion: BRIDGE_VERSION, renderers: ['tasks', 'list', 'form', 'detail'], methods, execution: { server: services.context().serviceId, client: 'web' } };
+  return { platform: 'web', webApiVersion: 1, bridgeVersion: BRIDGE_VERSION, baseStyleVersion: PLUGIN_BASE_STYLE_VERSION, renderers: ['tasks', 'list', 'form', 'detail'], methods, execution: { server: services.context().serviceId, client: 'web' } };
 }
 
 const methods: Methods = {

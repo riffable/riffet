@@ -13,7 +13,8 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { ModelContextWindows, ModelInfo, ModelInputModalities, ModelInputModality, NativeBackendId, NativeModelApiProtocol, NativeModelSource } from '@contracts';
 import { IconPlus, IconRefreshCw, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Input, Select, Spinner } from '@/components/ui/controls';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input, Select } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { formatTokens } from '@/lib/stats-format';
 import { cleanLabel, errorMessage } from '@/lib/utils';
@@ -149,7 +150,7 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         {(apiEndpoint.trim() || modelSource) && (
-          <Button size="xs" variant="secondary" disabled={disabled || probing} onClick={() => void probe()}>{probing ? <Spinner /> : <IconRefreshCw />}<Trans>获取模型列表</Trans></Button>
+          <Button size="xs" variant="secondary" disabled={disabled} onClick={() => void probe()} busy={probing}><IconRefreshCw /><Trans>获取模型列表</Trans></Button>
         )}
         <span className="text-xs text-fg-3">{value === null ? t`全部 ${candidates.length} 个` : t`已选 ${value.length} / ${candidates.length} 个`}</span>
         <div className="ml-auto flex items-center gap-1">
@@ -171,7 +172,7 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
             <div key={model.value} className="[&:not(:last-child)]:edge-b hover:bg-hover">
               <div className="flex items-center gap-3 px-3 py-2">
                 <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
-                  <input type="checkbox" className="size-4 shrink-0 accent-accent" checked={isOn(model.value)} disabled={disabled} onChange={() => toggle(model.value)} />
+                  <Checkbox checked={isOn(model.value)} disabled={disabled} onCheckedChange={() => toggle(model.value)} />
                   <span className="min-w-0 flex-1 truncate text-sm text-fg">{cleanLabel(model.name)}</span>
                   {model.name !== model.value && <span className="shrink-0 truncate font-mono text-2xs text-fg-3">{model.value}</span>}
                 </label>
@@ -186,13 +187,11 @@ export function ProviderModelList({ backendId, profileId, apiEndpoint, apiKey, c
                     const on = inputsOf(model.value).includes(modality);
                     return (
                       <label key={modality} className="flex cursor-pointer items-center gap-1.5 text-xs text-fg-2">
-                        <input
-                          type="checkbox"
-                          className="size-3.5 accent-accent"
+                        <Checkbox
                           checked={on}
                           // The backend reads a missing entry as text-only, so the last box must stay on.
                           disabled={disabled || (on && inputsOf(model.value).length === 1)}
-                          onChange={() => toggleInput(model.value, modality)}
+                          onCheckedChange={() => toggleInput(model.value, modality)}
                         />
                         {INPUT_LABELS[modality]}
                       </label>

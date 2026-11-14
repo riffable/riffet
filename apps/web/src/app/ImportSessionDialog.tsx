@@ -241,7 +241,7 @@ function ImportList({ project, inputRef, onImported, onError, onDone }: {
               data-index={index}
               onClick={() => void choose(index)}
               onPointerMove={() => { if (index !== activeIndex) setActive(index); }}
-              className={cn('flex h-9 cursor-default items-center gap-3 rounded-lg px-3', index === activeIndex && 'bg-active', !directory.exists && 'opacity-45')}
+              className={cn('flex h-9 cursor-default items-center gap-3 rounded-lg px-3', index === activeIndex && 'bg-active', !directory.exists && 'opacity-50')}
             >
               <IconFolder aria-hidden className="size-4 shrink-0 text-fg-4" />
               <span className="min-w-0 flex-1 truncate text-sm text-fg" title={directory.cwd}>{tildePath(directory.cwd)}</span>
@@ -263,7 +263,7 @@ function ImportList({ project, inputRef, onImported, onError, onDone }: {
                 data-index={index}
                 onClick={() => void choose(index)}
                 onPointerMove={() => { if (index !== activeIndex) setActive(index); }}
-                className={cn('flex h-9 cursor-default items-center gap-3 rounded-lg px-3', index === activeIndex && 'bg-active', !item.cwdExists && 'opacity-45', importing === item.nativeSessionId && 'opacity-70')}
+                className={cn('flex h-9 cursor-default items-center gap-3 rounded-lg px-3', index === activeIndex && 'bg-active', !item.cwdExists && 'opacity-50', importing === item.nativeSessionId && 'opacity-70')}
               >
                 <span className="shrink-0" title={label(item.backendId)}><AgentLogo backend={item.backendId} size={14} className="text-fg-3" style={agentMarkStyle(item.backendId)} /></span>
                 {/* One line per conversation, so a screen holds a long stretch of history. */}

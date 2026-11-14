@@ -1,6 +1,7 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type { StatsGranularity, StatsTokens } from '@contracts';
+import { formatDuration as formatElapsed } from './format-duration';
 import { formatNumber } from './i18n/format';
 
 export type KpiFormat = 'tokens' | 'count' | 'days' | 'percent' | 'duration' | 'speed';
@@ -49,14 +50,17 @@ export function formatPercent(value: number | null | undefined): string {
   return `${Number.isInteger(pct) ? String(pct) : pct.toFixed(1)}%`;
 }
 
+/**
+ * A measured duration. Under a minute keeps the precision a latency needs (`340ms`, `4.2s`); from a
+ * minute on it is the same `1m 41s` as everywhere else (`format-duration.ts`).
+ */
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null || !Number.isFinite(ms)) return UNAVAILABLE;
   const sign = ms < 0 ? '-' : '';
   const abs = Math.abs(ms);
   if (abs < 1000) return `${sign}${Math.round(abs)}ms`;
   if (abs < 60_000) return `${sign}${trimNumber(abs / 1000, abs >= 10_000 ? 1 : 2)}s`;
-  const minutes = abs / 60_000;
-  return `${sign}${trimNumber(minutes, minutes >= 10 ? 0 : 1)}min`;
+  return `${sign}${formatElapsed(abs)}`;
 }
 
 export function formatSpeed(value: number | null | undefined): string {

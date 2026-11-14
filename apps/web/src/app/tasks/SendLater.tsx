@@ -30,7 +30,7 @@ export function CustomTimeDialog({ open, onOpenChange, onPick }: { open: boolean
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}><Trans context="tasks-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={!valid} onClick={() => { if (at && valid) { onOpenChange(false); onPick(at); } }}><Trans>确定</Trans></Button>
+          <Button variant="primary" disabled={!valid} onClick={() => { if (at && valid) { onOpenChange(false); onPick(at); } }}><Trans>设为发送时间</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -51,7 +51,7 @@ export function SendLaterMenu({ disabled, onPick }: { disabled?: boolean; onPick
                 type="button"
                 aria-label={t`稍后发送`}
                 disabled={disabled}
-                className="grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-45 disabled:hover:bg-transparent data-[state=open]:bg-hover md:size-7"
+                className="grid size-11 shrink-0 place-items-center rounded-md text-fg-3 outline-none transition-colors hover:bg-hover hover:text-fg focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 disabled:hover:bg-transparent data-[state=open]:bg-hover md:size-7"
               >
                 <IconCalendarClock className="size-[18px]" />
               </button>

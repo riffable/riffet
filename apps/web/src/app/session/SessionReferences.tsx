@@ -4,7 +4,6 @@ import type { CapturedSessionReference } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Spinner } from '@/components/ui/controls';
 import { api } from '@/lib/api';
 import { errorMessage, formatDateTime } from '@/lib/utils';
 import { Markdown } from './Markdown';
@@ -62,7 +61,7 @@ export function SessionReferences({ references, recipientSessionId, onOpenSessio
             <div className="text-xs text-fg-3"><Trans>引用于 {formatDateTime(selected.capturedAt)}</Trans>{selected.coverage.completeness === 'partial' && <> · <Trans>仅含部分历史</Trans></>}{selected.coverage.activeTurnIncomplete && <> · <Trans>引用时本轮尚未结束</Trans></>}</div>
             <p className="text-xs text-fg-3"><Trans>原文副本随本会话保存</Trans></p>
             <p className="text-xs text-fg-3"><Trans>仅保存提问和回答文字，不含工具记录和附件内容</Trans></p>
-            <div className="flex gap-2"><Button size="xs" variant="quiet" disabled={loading} onClick={() => void read()}>{loading ? <Spinner /> : null}<Trans>查看引用时的记录</Trans></Button>{onOpenSession && <Button size="xs" variant="quiet" onClick={() => { requestRevision.current += 1; setLoading(false); onOpenSession(selected.sessionId); setSelected(undefined); }}><Trans>打开原会话</Trans></Button>}</div>
+            <div className="flex gap-2"><Button size="xs" variant="quiet" busy={loading} onClick={() => void read()}><Trans>查看引用时的记录</Trans></Button>{onOpenSession && <Button size="xs" variant="quiet" onClick={() => { requestRevision.current += 1; setLoading(false); onOpenSession(selected.sessionId); setSelected(undefined); }}><Trans>打开原会话</Trans></Button>}</div>
             {error && <p role="status" className="text-sm text-danger">{error}</p>}
             {original ? <>
               <div className="flex items-center gap-2 text-xs text-fg-3"><Button size="xs" variant="quiet" disabled={page === 0} onClick={() => setPage(current => current - 1)}><Trans>上一页</Trans></Button><span>{page + 1} / {Math.max(1, Math.ceil(original.length / 20))}</span><Button size="xs" variant="quiet" disabled={(page + 1) * 20 >= original.length} onClick={() => setPage(current => current + 1)}><Trans>下一页</Trans></Button></div>

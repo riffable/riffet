@@ -88,7 +88,7 @@ export function PairDeviceDialog({ open, onOpenChange }: { open: boolean; onOpen
           <span className="break-all text-center font-mono text-xs text-fg-2">{pairing.baseUrl}</span>
           <span role="status" className="text-xs text-fg-3">{expired ? t`已过期` : t`有效至 ${formatTime(new Date(pairing.expiresAt).toISOString())}`}</span>
           {pairing.localOnly && <Notice tone="warning" className="w-full"><Trans>服务器只监听本机，其他设备无法连接。</Trans></Notice>}
-          <Button variant={expired ? 'primary' : 'secondary'} disabled={busy} onClick={() => void generate()}>{busy ? <Spinner className="text-current" /> : <IconRefreshCw />}<Trans>重新生成</Trans></Button>
+          <Button variant={expired ? 'primary' : 'secondary'} onClick={() => void generate()} busy={busy}><IconRefreshCw /><Trans>重新生成</Trans></Button>
         </> : !error && <Spinner className="my-16 size-5" />}
       </DialogBody>
     </DialogContent>

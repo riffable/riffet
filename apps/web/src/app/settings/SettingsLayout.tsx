@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { IconChevronRight } from '@/components/icons';
+import { useRoving } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 
 export function SettingsRow({ title, description, children }: { title: ReactNode; description?: ReactNode; children: ReactNode }) {
@@ -43,13 +44,17 @@ export function SettingsGroup({ title, action, note, children }: { title?: strin
 
 /** A choice between layouts, each shown as a miniature drawn by `thumb` and named under it. */
 export function SettingsThumbChoice<T extends string>({ label, value, options, onChange, thumb }: { label: string; value: T; options: { value: T; label: string }[]; onChange: (value: T) => void; thumb: (value: T, selected: boolean) => ReactNode }) {
+  // Same manual activation as `Segmented`: arrows move focus, Enter, Space or a click selects.
+  const roving = useRoving(options, value);
   return (
-    <div role="group" aria-label={label} className="flex gap-3 py-4 max-md:flex-col">
+    <div ref={roving.group} role="radiogroup" aria-label={label} onKeyDown={roving.onKeyDown} className="flex gap-3 py-4 max-md:flex-col">
       {options.map((option) => (
         <button
           key={option.value}
           type="button"
-          aria-pressed={value === option.value}
+          role="radio"
+          aria-checked={value === option.value}
+          tabIndex={roving.tabIndexOf(option)}
           onClick={() => onChange(option.value)}
           className={cn('flex flex-1 flex-col items-center gap-2 rounded-xl text-xs outline-none focus-visible:ring-2 focus-visible:ring-focus', value === option.value ? 'font-medium text-fg' : 'text-fg-2')}
         >

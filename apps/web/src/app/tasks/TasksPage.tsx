@@ -239,8 +239,8 @@ export function TasksPage({ projects, project, sessions, backends, enterBehavior
                 {manual.map((item) => (
                   <Row key={item.id} title={item.name} mark={agentMark(item)} sub={subOf(item)}>
                     <Tip label={t`运行`}>
-                      <Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`运行`} disabled={Boolean(running)} onClick={() => item.projectId ? void run(item) : setChoosing(item)}>
-                        {running === item.id ? <Spinner /> : <IconPlay />}
+                      <Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`运行`} disabled={Boolean(running)} busy={running === item.id} onClick={() => item.projectId ? void run(item) : setChoosing(item)}>
+                        <IconPlay />
                       </Button>
                     </Tip>
                     {menu(item)}

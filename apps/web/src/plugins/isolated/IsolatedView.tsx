@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { BridgeViewContext, ViewContext } from '@riffet/plugin-web';
 import { Spinner } from '@/components/ui/controls';
+import { useDisplaySettings } from '@/lib/display-settings';
 import { useTheme } from '@/lib/theme';
 import { useStores } from '../../app/state/stores';
 import type { IsolatedSource } from '../catalog';
@@ -22,6 +23,7 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
   const stores = useStores();
   const { i18n } = useLingui();
   const theme = useTheme();
+  const { textSize } = useDisplaySettings();
   const frame = useRef<HTMLIFrameElement>(null);
   const channel = useRef<FrameChannel | undefined>(undefined);
   const loads = useRef(0);
@@ -77,7 +79,7 @@ export function IsolatedView({ source, context }: { source: IsolatedSource; cont
     // The document has applied the new palette by the next frame.
     const id = requestAnimationFrame(() => channel.current?.push('theme', readTheme()));
     return () => cancelAnimationFrame(id);
-  }, [theme.resolved, theme.themeId, theme.revision, theme.paletteKey]);
+  }, [theme.resolved, theme.themeId, theme.revision, theme.paletteKey, textSize]);
 
   if (page === undefined) return <div className="flex min-h-0 flex-1 items-center justify-center"><Spinner /></div>;
   return (

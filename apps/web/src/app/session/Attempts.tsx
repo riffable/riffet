@@ -227,7 +227,7 @@ export function AttemptStrip({ session, findSession, onOpenSession, onAdopted, o
   if (!groupId) return null;
   if (!data) {
     // Reserve the strip's height while its first read is in flight; the transcript must not jump.
-    return <div data-content-column className="mx-auto w-full max-w-(--content-width) shrink-0 px-3 pt-3 sm:px-5 md:px-12"><div className="h-7" /></div>;
+    return <div data-content-column className="mx-auto w-full max-w-(--content-width) shrink-0 px-3 pt-3 sm:px-4 md:px-12"><div className="h-7" /></div>;
   }
   const { group } = data;
   const attempts = aliveAttempts(group, data.attempts);
@@ -247,7 +247,7 @@ export function AttemptStrip({ session, findSession, onOpenSession, onAdopted, o
   };
 
   return (
-    <div data-content-column className="mx-auto flex w-full max-w-(--content-width) shrink-0 items-center gap-2 px-3 pt-3 sm:px-5 md:px-12">
+    <div data-content-column className="mx-auto flex w-full max-w-(--content-width) shrink-0 items-center gap-2 px-3 pt-3 sm:px-4 md:px-12">
       <Tip label={group.prompt.length > 160 ? `${group.prompt.slice(0, 160)}…` : group.prompt}>
         <button type="button" onClick={() => onOpenGroup?.(group)} className="hidden shrink-0 items-center gap-1.5 text-xs text-fg-3 hover:text-fg sm:inline-flex">
           <IconColumns2 className="size-3.5" /><Trans>并行尝试</Trans>
@@ -289,8 +289,8 @@ export function AttemptStrip({ session, findSession, onOpenSession, onAdopted, o
             {current && (
               <Tip label={activeStates.has(currentState) ? t`等这个尝试完成后再采用` : undefined}>
                 <span>
-                  <Button size="xs" variant="secondary" disabled={preparing || activeStates.has(currentState) || !current.comparison?.files.length} onClick={() => void adopt(current)}>
-                    {preparing ? <Spinner /> : <IconGitMerge />}<Trans>采用此方案</Trans>
+                  <Button size="xs" variant="secondary" disabled={activeStates.has(currentState) || !current.comparison?.files.length} busy={preparing} onClick={() => void adopt(current)}>
+                    <IconGitMerge /><Trans>采用此方案</Trans>
                   </Button>
                 </span>
               </Tip>

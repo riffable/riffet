@@ -4,7 +4,7 @@ import { createStore, useStore } from './store';
 import { toast } from './toast';
 
 export type DialogRequest =
-  | { id: number; type: 'confirm'; title: string; description?: string; detail?: string; confirmLabel?: string; destructive?: boolean; resolve: (value: boolean) => void }
+  | { id: number; type: 'confirm'; title: string; description?: string; detail?: string; confirmLabel: string; destructive?: boolean; resolve: (value: boolean) => void }
   | { id: number; type: 'prompt'; title: string; description?: string; label?: string; initial?: string; placeholder?: string; confirmLabel?: string; multiline?: boolean; resolve: (value: string | null) => void };
 
 const store = createStore<{ current?: DialogRequest }>({});
@@ -21,7 +21,8 @@ export function closeDialog(): void {
   store.set({ current: undefined });
 }
 
-export function confirmDialog(options: { title: string; description?: string; detail?: string; confirmLabel?: string; destructive?: boolean }): Promise<boolean> {
+/** `confirmLabel` names the result (「删除会话」), never 「确定」. */
+export function confirmDialog(options: { title: string; description?: string; detail?: string; confirmLabel: string; destructive?: boolean }): Promise<boolean> {
   return new Promise((resolve) => open({ id: ++sequence, type: 'confirm', ...options, resolve }));
 }
 

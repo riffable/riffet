@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { Automation, AutomationTrigger, LaunchTarget, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
 import { IconCalendarClock } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Field, Input, Segmented, Select, Spinner, Switch, Textarea } from '@/components/ui/controls';
+import { Field, Input, Segmented, Select, Switch, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { api, HttpError, type ProjectRecord } from '@/lib/api';
 import { useDiscardGuard } from '@/lib/dialogs';
@@ -197,7 +197,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
         </DialogBody>
         <DialogFooter>
           <Button variant="ghost" disabled={busy} onClick={close}><Trans context="tasks-cancel-action">取消</Trans></Button>
-          <Button variant="primary" disabled={busy || !complete} onClick={() => void submit()}>{busy ? <Spinner className="text-primary-fg" /> : <IconCalendarClock />}<Trans>保存</Trans></Button>
+          <Button variant="primary" disabled={!complete} onClick={() => void submit()} busy={busy}><IconCalendarClock /><Trans>保存</Trans></Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
