@@ -1087,9 +1087,22 @@ describe('Claude protocol interaction acknowledgement', () => {
     tool_name: 'ExitPlanMode', tool_use_id: id, tool_input: toolInput, tool_response: { ok: true },
   });
 
-  it('fences a screen response before its key write so a lost acknowledgement cannot resend it', async () => {
+  const autoModeUnavailable = [
+    '─'.repeat(80),
+    "Auto mode can't check actions in this session",
+    '',
+    "Auto mode's safety check runs on the server. Your requests go through 127.0.0.1:19090, and the check isn't getting through.",
+    '',
+    'Enter to stay in auto mode · shift+Tab to leave for accept edits mode and stop · Esc to cancel',
+  ].join('\n');
+
+  it.each([
+    { action: 'continue', key: 'Enter', screen: ['─'.repeat(80), 'A notice from Claude', 'Enter to continue · Esc to cancel'].join('\n') },
+    { action: 'continue', key: 'Enter', screen: autoModeUnavailable },
+    { action: 'accept-edits', key: 'BTab', screen: autoModeUnavailable },
+    { action: 'cancel', key: 'Escape', screen: autoModeUnavailable },
+  ])('fences a screen $action response before its key write so a lost acknowledgement cannot resend it', async ({ action, key, screen }) => {
     const h = await start();
-    const screen = ['─'.repeat(80), 'A notice from Claude', 'Enter to continue · Esc to cancel'].join('\n');
     const terminal = await h.terminals.get(h.getSession().terminalId!);
     const interaction = claudeScreenInteraction(screen, terminal)!;
     h.control.screens = [screen];
@@ -1098,14 +1111,29 @@ describe('Claude protocol interaction acknowledgement', () => {
       keys: async keys => { h.control.keys.push(keys); throw new Error('write acknowledgement lost'); },
       paste: async () => undefined,
     });
-    const response = { interactionId: interaction.id, revision: interaction.revision, requestId: 'notice-once', action: 'continue' };
+    const response = { interactionId: interaction.id, revision: interaction.revision, requestId: 'notice-once', action };
     const result = await h.adapter.respond(h.host, h.getSession(), h.profile, response);
     expect(result.status).toBe('uncertain');
     expect(await h.adapter.respond(h.host, h.getSession(), h.profile, response)).toEqual(result);
-    expect(h.control.keys).toEqual([['Enter']]);
-    await expect(h.adapter.respond(h.host, h.getSession(), h.profile, { ...response, action: 'cancel' }))
+    expect(h.control.keys).toEqual([[key]]);
+    await expect(h.adapter.respond(h.host, h.getSession(), h.profile, { ...response, action: action === 'cancel' ? 'continue' : 'cancel' }))
       .rejects.toMatchObject({ code: 'NATIVE_INTERACTION_REQUEST_CONFLICT' });
     expect(h.control.keys).toHaveLength(1);
+  });
+
+  it('rejects an auto-mode response when the terminal no longer shows that notice', async () => {
+    const h = await start();
+    const terminal = await h.terminals.get(h.getSession().terminalId!);
+    const interaction = claudeScreenInteraction(autoModeUnavailable, terminal)!;
+    h.host.terminal.withInteraction = async (_terminalId, task) => task({
+      screen: async () => IDLE_SCREEN,
+      keys: async keys => { h.control.keys.push(keys); },
+      paste: async () => undefined,
+    });
+    await expect(h.adapter.respond(h.host, h.getSession(), h.profile, {
+      interactionId: interaction.id, revision: interaction.revision, requestId: 'auto-mode-stale', action: 'accept-edits',
+    })).rejects.toMatchObject({ code: 'NATIVE_INTERACTION_STALE' });
+    expect(h.control.keys).toEqual([]);
   });
 
   it('answers Claude Code’s own question by moving its cursor, then presses Enter exactly once', async () => {

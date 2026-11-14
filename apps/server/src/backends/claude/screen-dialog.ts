@@ -5,6 +5,8 @@ import { parseDialog } from '../../agent-host/interaction-screen.js';
 const ID_PREFIX = 'claude-screen:';
 /** One hint in the frame's `·`-joined footer: the key or chord, `to`, and what it does. */
 const FOOTER_HINT = /^\S+ to \w+(?: \w+)?$/i;
+const AUTO_MODE_TITLE = "Auto mode can't check actions in this session";
+const AUTO_MODE_FOOTER = 'Enter to stay in auto mode · shift+Tab to leave for accept edits mode and stop · Esc to cancel';
 const RULE = /^\s*─{20,}\s*$/;
 /** A numbered list means Enter picks whichever row is highlighted, which a confirm button must not do blindly. */
 const NUMBERED_OPTION = /^\s*(?:[❯›]\s*)?\d+\.\s/;
@@ -33,7 +35,8 @@ const QUESTION_OPTION = /^(\s*)([❯›]\s*)?(\d+)\.\s+(.+)$/;
 const VERB_LABELS: Record<string, string> = { continue: '继续', confirm: '确认', accept: '接受', cancel: '取消', exit: '退出', 'go back': '返回', skip: '跳过' };
 
 export interface ClaudeScreenDialog {
-  body: string; confirm: string; cancel: string;
+  body: string;
+  actions: Array<NativeInteraction['actions'][number] & { key: 'Enter' | 'Escape' | 'BTab' }>;
   /**
    * Where a form's own confirm row (`Continue`) is from the focused row. Enter acts on the focused row — on
    * the auto-mode setup form it flips the toggle under the cursor — so only that row confirms.
@@ -71,7 +74,19 @@ function parseFooter(line: string): { confirm: string; cancel: string } | undefi
 export function parseClaudeScreenDialog(screen: string): ClaudeScreenDialog | undefined {
   const lines = screen.split(/\r?\n/).map(line => line.trimEnd());
   while (lines.length && !lines.at(-1)) lines.pop();
-  const footer = parseFooter(lines.at(-1)?.trim() ?? '');
+  // This notice has three direct actions, with long descriptions that may wrap. Keep the
+  // generic footer grammar strict: navigation surfaces must not become confirmation cards.
+  const boundary = lines.findLastIndex(line => RULE.test(line));
+  const title = lines.findIndex((line, index) => index > boundary && line.trim() === AUTO_MODE_TITLE);
+  let autoMode = false;
+  if (boundary >= 0 && title >= 0 && lines.slice(boundary + 1, title).every(line => !line.trim())) {
+    const footerStart = lines.findLastIndex(line => /^Enter to(?:\s|$)/.test(line.trim()));
+    if (footerStart > title && lines.slice(footerStart).join(' ').replace(/\s+/g, ' ').trim() === AUTO_MODE_FOOTER) {
+      lines.splice(footerStart, lines.length - footerStart, AUTO_MODE_FOOTER);
+      autoMode = true;
+    }
+  }
+  const footer = autoMode ? { confirm: 'stay in auto mode', cancel: 'cancel' } : parseFooter(lines.at(-1)?.trim() ?? '');
   if (!footer) return undefined;
   let start = lines.length - 2;
   while (start >= 0 && !RULE.test(lines[start]!)) start -= 1;
@@ -87,7 +102,18 @@ export function parseClaudeScreenDialog(screen: string): ClaudeScreenDialog | un
   const focused = body.findIndex(line => FOCUS_ROW.test(line));
   const target = body.findIndex(line => line.replace(FOCUS_MARK, '').trim().toLowerCase() === footer.confirm);
   const confirmRow = focused < 0 || target < 0 ? undefined : target === focused ? 'focused' : target > focused ? 'below' : 'above';
-  return { body: body.map(line => line.slice(indent)).join('\n'), confirm: footer.confirm, cancel: footer.cancel, ...(confirmRow ? { confirmRow } : {}) };
+  return {
+    body: body.map(line => line.slice(indent)).join('\n'),
+    actions: autoMode ? [
+      { id: 'continue', label: '保持自动模式', tone: 'primary', key: 'Enter' },
+      { id: 'accept-edits', label: '切换到接受编辑并停止', key: 'BTab' },
+      { id: 'cancel', label: '取消', key: 'Escape' },
+    ] : [
+      { id: 'continue', label: VERB_LABELS[footer.confirm] ?? footer.confirm, tone: 'primary', key: 'Enter' },
+      { id: 'cancel', label: VERB_LABELS[footer.cancel] ?? footer.cancel, key: 'Escape' },
+    ],
+    ...(confirmRow ? { confirmRow } : {}),
+  };
 }
 
 /** What Claude Code's own single-select `AskUserQuestion` dialog shows: the choices, the free-text row and where the cursor is. */
@@ -198,13 +224,10 @@ export function claudeScreenInteraction(screen: string, terminal: Pick<TerminalI
   if (!dialog) return undefined;
   // The terminal epoch moves whenever a browser takes control, so it is carried but kept out of the
   // identity; otherwise opening the terminal drawer would invalidate an answer in flight.
-  const digest = createHash('sha256').update(`${terminal.id}\0${dialog.confirm}\0${dialog.cancel}\0${dialog.body}`).digest('hex').slice(0, 24);
+  const digest = createHash('sha256').update(`${terminal.id}\0${JSON.stringify(dialog.actions)}\0${dialog.body}`).digest('hex').slice(0, 24);
   return {
     id: `${ID_PREFIX}${digest}`, revision: '1', transport: 'terminal', terminalId: terminal.id, epoch: terminal.epoch,
     kind: 'confirmation', title: 'Claude Code 需要确认', message: dialog.body, options: [],
-    actions: [
-      { id: 'continue', label: VERB_LABELS[dialog.confirm] ?? dialog.confirm, tone: 'primary' },
-      { id: 'cancel', label: VERB_LABELS[dialog.cancel] ?? dialog.cancel },
-    ],
+    actions: dialog.actions.map(({ key: _key, ...action }) => action),
   };
 }

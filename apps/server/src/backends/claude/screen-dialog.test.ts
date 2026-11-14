@@ -114,6 +114,27 @@ const captured = (focus: number, typed?: string) => {
 };
 
 describe('Claude Code screen dialogs', () => {
+  it('recognizes the complete auto-mode fallback decision, including wrapped hints, but rejects clipped or unrelated screens', () => {
+    const footer = 'Enter to stay in auto mode · shift+Tab to leave for accept edits mode and stop · Esc to cancel';
+    const screen = [rule, "Auto mode can't check actions in this session", '',
+      "Your requests go through gateway.example:48080, and the check isn't getting through.", '', footer].join('\n');
+    const terminal = { id: 'term-1', epoch: 3 };
+    const parsed = parseClaudeScreenDialog(screen)!;
+    expect(parsed.actions.map(({ id, key }) => ({ id, key }))).toEqual([
+      { id: 'continue', key: 'Enter' }, { id: 'accept-edits', key: 'BTab' }, { id: 'cancel', key: 'Escape' },
+    ]);
+    const interaction = claudeScreenInteraction(screen, terminal)!;
+    expect(interaction.kind).toBe('confirmation');
+    expect(interaction.actions.some(action => 'key' in action)).toBe(false);
+    const wrapped = screen.replace(footer, footer.replace('stay in', 'stay\n in').replace('edits mode', 'edits\n mode'));
+    expect(claudeScreenInteraction(wrapped, terminal)?.id).toBe(interaction.id);
+    for (const invalid of [screen.replace(' · Esc to cancel', ''), screen.replace(rule, ''),
+      screen.replace("Auto mode can't check actions in this session", 'Another screen'),
+      screen.replace('Enter to stay in auto mode', 'Enter to select this option')]) {
+      expect(claudeScreenInteraction(invalid, terminal)).toBeUndefined();
+    }
+  });
+
   it('reads a notice the TUI draws on its own', () => {
     expect(parseClaudeScreenDialog(billingNotice)).toEqual({
       body: [
@@ -124,8 +145,7 @@ describe('Claude Code screen dialogs', () => {
         '',
         'Nothing breaks: auto mode keeps working, and its classifier requests are billed as before.',
       ].join('\n'),
-      confirm: 'continue',
-      cancel: 'cancel',
+      actions: [{ id: 'continue', label: '继续', tone: 'primary', key: 'Enter' }, { id: 'cancel', label: '取消', key: 'Escape' }],
     });
   });
 
@@ -153,8 +173,7 @@ describe('Claude Code screen dialogs', () => {
         '',
         '  Continue',
       ].join('\n'),
-      confirm: 'continue',
-      cancel: 'cancel',
+      actions: [{ id: 'continue', label: '继续', tone: 'primary', key: 'Enter' }, { id: 'cancel', label: '取消', key: 'Escape' }],
       // Enter flips the focused toggle here; only the Continue row below it continues.
       confirmRow: 'below',
     });
@@ -173,8 +192,7 @@ describe('Claude Code screen dialogs', () => {
   it('reads a fullscreen dialog the frame draws without its rule', () => {
     expect(parseClaudeScreenDialog(autoModeProposal)).toMatchObject({
       body: expect.stringContaining('Review proposed auto-mode setup'),
-      confirm: 'confirm',
-      cancel: 'cancel',
+      actions: [{ id: 'continue', label: '确认', tone: 'primary', key: 'Enter' }, { id: 'cancel', label: '取消', key: 'Escape' }],
     });
     expect(parseClaudeScreenDialog(autoModeProposal)?.body).toContain('❯ Looks good — save it');
     expect(claudeScreenInteraction(autoModeProposal, { id: 'term-1', epoch: 3 })).toMatchObject({

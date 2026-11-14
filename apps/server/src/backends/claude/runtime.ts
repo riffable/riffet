@@ -1971,12 +1971,12 @@ export class ClaudeSessionRuntime {
    */
   private async respondScreenDialog(response: NativeInteractionResponse, fingerprint: string): Promise<NativeInteractionResult> {
     const answering = response.action === 'answer';
-    if (!answering && response.action !== 'continue' && response.action !== 'cancel') throw new AppError('INVALID_NATIVE_INTERACTION', 'Continue or cancel this Claude Code notice');
     const terminalId = this.terminalId;
     if (!terminalId || this.terminalExited) throw new AppError('TERMINAL_NOT_RUNNING', 'Claude Code is not running', 409);
     const result = await this.host.terminal.withInteraction(terminalId, async control => {
       const terminal = await this.host.terminal.get(terminalId);
-      const current = claudeScreenInteraction(await control.screen() ?? '', terminal);
+      const initialScreen = await control.screen() ?? '';
+      const current = claudeScreenInteraction(initialScreen, terminal);
       if (current?.id !== response.interactionId || current.revision !== response.revision) {
         throw new AppError('NATIVE_INTERACTION_STALE', 'Claude Code’s notice changed. Sync the current request before answering.', 409);
       }
@@ -1987,6 +1987,8 @@ export class ClaudeSessionRuntime {
         throw new AppError('INVALID_NATIVE_INTERACTION', 'This Claude Code dialog must be answered in the terminal');
       }
       const answer = answering ? screenAnswer(current, response) : undefined;
+      const key = answering ? undefined : parseClaudeScreenDialog(initialScreen)?.actions.find(action => action.id === response.action)?.key;
+      if (!answering && !key) throw new AppError('INVALID_NATIVE_INTERACTION', 'This Claude Code dialog must be answered in the terminal');
       const previous = this.host.getInteractionReceipt(this.session.id, response.requestId);
       if (previous) {
         if (previous.fingerprint !== fingerprint || previous.interactionId !== response.interactionId || previous.revision !== response.revision) {
@@ -2020,7 +2022,7 @@ export class ClaudeSessionRuntime {
         if (answer) {
           const failure = await this.composer.answerScreenQuestion(control, answer);
           if (failure) return { status: 'uncertain', message: failure } satisfies NativeInteractionResult;
-        } else await control.keys([response.action === 'continue' ? 'Enter' : 'Escape']);
+        } else await control.keys([key!]);
         for (let attempt = 0; attempt < 50; attempt++) {
           await new Promise(resolvePause => setTimeout(resolvePause, 60));
           const screen = await control.screen();
