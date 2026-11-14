@@ -202,7 +202,7 @@ SQLite 处理不了时区。客户端在请求中带 IANA 时区 `tz`，服务�
 
 ## 4. Web
 
-- **入口**：侧栏底部、命令面板、深链 `?view=stats`。统计页占满主区域，与 `ProjectHome` 同级。
+- **入口**：侧栏底部、命令面板、地址 `/stats`。统计页占满主区域，与 `ProjectHome` 同级。
 - **布局**（自上而下）：
   1. 过滤栏：时间范围分段（今天 / 7 天 / 30 天 / 90 天 / 全部 / 自定义），agent 与模型 chip 多选，项目选择。
   2. KPI 卡：数字滚动、迷你趋势线、与上一周期的差值。
@@ -305,7 +305,7 @@ SQLite 处理不了时区。客户端在请求中带 IANA 时区 `tz`，服务�
 | 查询与接口 | `apps/server/src/stats/query.ts`、`routes.ts`（另有 `GET /api/stats/stream` SSE，节流 1 秒） |
 | 补录 | `apps/server/src/stats/backfill.ts`；driver 的 `usageTranscript()`：Claude 在 `backends/claude/index.ts`，Codex 在 `backends/codex/rollout-usage.ts` |
 | 实时写入 | 各后端 `host.stats`；工具调用由 `NativeBackendService` 与 Cursor watch 从事件流里取 |
-| Web | `apps/web/src/app/stats/`、`apps/web/src/lib/stats-*.ts`；入口为侧栏、命令面板、`?view=stats` |
+| Web | `apps/web/src/app/stats/`、`apps/web/src/lib/stats-*.ts`；入口为侧栏、命令面板、`/stats` |
 | App | `apps/mobile/shared/src/commonMain/kotlin/riffet/ui/stats/`、`riffet/stats/`；契约 `apps/mobile/contracts/.../Stats.kt` |
 
 ### 与方案不同的地方

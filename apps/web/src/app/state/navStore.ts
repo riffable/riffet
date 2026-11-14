@@ -4,9 +4,10 @@ import type { Session } from '@contracts';
 import type { ProjectRecord } from '@/lib/api';
 import { toast } from '@/lib/toast';
 import { errorMessage, isRecord, readStored, writeStored } from '@/lib/utils';
-import { readStatsSearch, type StatsUiState } from '@/lib/stats-query';
+import type { StatsUiState } from '@/lib/stats-query';
 import type { MessageFocus } from '../session/focus-message';
 import { createStore } from '@/lib/store';
+import { readPageAddress, type PageAddress } from './page-url';
 
 export const STORAGE_KEYS = {
   project: 'riffet.selectedProjectId',
@@ -54,11 +55,7 @@ export interface NavState {
 /** One way a conversation is shown, by view id: `chat`, `terminal`, or a plugin's `<pluginId>/<name>`. */
 export type SessionView = string;
 
-/**
- * The deep link the workbench mirrors its selection into: `#s=<sessionId>&p=<projectId>`. The app
- * deliberately has no router, so this is only a hash — read once at startup and rewritten with
- * `replaceState`, never `pushState`. Overlays keep their navigation state inside the page.
- */
+/** The conversation or project an address names (`page-url.ts`), and a 收藏 to locate in it. */
 type DeepLink = { sessionId?: string; projectId?: string; markId?: string };
 type Selection = { projectId: string; sessionId: string };
 
@@ -76,17 +73,12 @@ function readProjectVisits(): Record<string, number> {
  */
 export interface StartingLink { link: DeepLink; stored: Selection; opened: Selection }
 
-function readDeepLink(): DeepLink | undefined {
-  const params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  const sessionId = params.get('s') ?? undefined;
-  const projectId = params.get('p') ?? undefined;
-  // `m=<markId>`: a 收藏 to locate and scroll to once its conversation is open.
-  const markId = params.get('m') ?? undefined;
-  return sessionId || projectId || markId ? { ...(sessionId ? { sessionId } : {}), ...(projectId ? { projectId } : {}), ...(markId ? { markId } : {}) } : undefined;
+function deepLink({ sessionId, projectId, markId }: PageAddress): DeepLink | undefined {
+  return sessionId || projectId ? { ...(sessionId ? { sessionId } : {}), ...(projectId ? { projectId } : {}), ...(markId ? { markId } : {}) } : undefined;
 }
 
 /**
- * Where the page opens: a link's conversation (it carries its own project, so `#s=` alone is enough)
+ * Where the page opens: a link's conversation (it carries its own project)
  * or project, judged against [lists] when there are any; else the selection the last visit stored.
  * A link the lists do not hold is kept as given, for the bootstrap to check against the server's lists.
  */
@@ -107,11 +99,10 @@ export const NO_PAGE = { statsOpen: false, tasksOpen: false, marksOpen: false, p
  * one, so a reload paints the linked conversation before anything is fetched.
  */
 export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessions: Session[] }) {
-  const search = new URLSearchParams(window.location.search);
-  const view = search.get('view');
+  const address = readPageAddress(window.location);
+  const view = address.page;
   const extensionsOpen = view === 'extensions';
-  const stats = readStatsSearch(window.location.search);
-  const link = readDeepLink();
+  const link = deepLink(address);
   const stored = { projectId: readStored(STORAGE_KEYS.project), sessionId: readStored(STORAGE_KEYS.session) };
   const opened = startingSelection(link, cachedLists, stored);
   const store = createStore<NavState>({
@@ -121,16 +112,16 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
       catch { return undefined; }
     })(),
     projectVisits: readProjectVisits(),
-    statsOpen: stats.open,
+    statsOpen: view === 'stats',
     tasksOpen: view === 'tasks',
     extensionsOpen,
     extensionsMounted: extensionsOpen,
     marksOpen: view === 'marks',
     pluginsOpen: view === 'plugins',
-    pluginId: search.get('plugin') ?? '',
+    pluginId: address.pluginId ?? '',
     pluginViewId: '',
     attemptsGroupId: '',
-    statsState: stats.state,
+    statsState: address.stats,
   });
   /**
    * The link is judged once, by the first bootstrap that gets the lists (an offline start keeps it

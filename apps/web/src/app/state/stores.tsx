@@ -3,7 +3,6 @@ import { isUnread, type AppSettings, type Session } from '@contracts';
 import { api } from '@/lib/api';
 import { sessionActivityAt } from '@/lib/session-order';
 import { loadCachedLists } from '@/lib/list-cache';
-import { writeStatsSearch } from '@/lib/stats-query';
 import { onSessionsDeleted } from '@/lib/session-deletion';
 import { writeStored } from '@/lib/utils';
 import { replacePageUrl } from '@/lib/overlay-navigation';
@@ -11,6 +10,7 @@ import { createCatalogStore, type CatalogState } from './catalogStore';
 import { createListsStore, type ListsState } from './listsStore';
 import { createMarksStore, type MarksState } from './marksStore';
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
+import { pageAddressUrl } from './page-url';
 import { createSettingsStore } from './settingsStore';
 import { createUiStore, paintPaneWidth, type UiState } from './uiStore';
 import { createTabsStore } from '../tabs/tabsStore';
@@ -142,22 +142,8 @@ export function WorkbenchEffects() {
    */
   useEffect(() => {
     if (!loaded) return;
-    const params = new URLSearchParams();
-    if (sessionId) params.set('s', sessionId);
-    if (projectId) params.set('p', projectId);
-    const link = params.toString();
-    const search = new URLSearchParams(writeStatsSearch(window.location.search, statsOpen, statsState));
-    // Space links from 0.5 no longer have a destination; drop their parameters.
-    if (search.get('view') === 'spaces') search.delete('view');
-    search.delete('space');
-    search.delete('plugin');
-    if (pluginsOpen) { search.set('view', 'plugins'); if (pluginId) search.set('plugin', pluginId); }
-    else if (extensionsOpen) search.set('view', 'extensions');
-    else if (marksOpen) search.set('view', 'marks');
-    else if (tasksOpen) search.set('view', 'tasks');
-    const query = search.toString();
-    const next = `${window.location.pathname}${query ? `?${query}` : ''}${link ? `#${link}` : ''}`;
-    replacePageUrl(next);
+    const page = pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : tasksOpen ? 'tasks' : undefined;
+    replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, stats: statsState }));
   }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, tasksOpen, pluginsOpen, pluginId, statsState]);
 
   return null;

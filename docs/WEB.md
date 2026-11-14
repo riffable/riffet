@@ -303,7 +303,7 @@ Web 的分享预览和 PDF 预览都在预览上方右侧提供「导出为 PDF�
 
 - **不丢内容**：`authStatus` 不可达（网络错误、5xx、超时）且有本机列表副本时进入离线工作台，不再落到登录页；401 路径不变。bootstrap 失败按 `reconnectDelay` 退避自动重试，`online` 与页面恢复可见时立即重试；成功后补取缺失的 capabilities / backends；轮询结果去抖写回列表副本（`list-cache.ts` 的 `refreshCachedLists`，只更新已有副本）。
 - **草稿**：存储值改为 `{ text, attachments, references, projectId }`，兼容旧的纯字符串；附件恢复时按 `attachmentMetadata` 校验，只有 404 才移除；引用只在项目一致时恢复。首页 hero 输入框的 draftKey 为 `new:home`，`NewSessionComposer` 的 key 只用 project id，换 Agent / profile 时在渲染期重置模型与审批，不再靠重挂载。
-- **深链**：`createNavStore` 同步读取链接并对照本机副本解析初值。链接由第一次**成功**的 bootstrap 按服务端列表判定一次（离线启动时保留到恢复），条件是读者还停在打开时的位置；链接指向的会话不存在或已归档时退回上次存储的选择，`#m=` 也在这时才打开；`?view=tasks` 进 URL。
+- **深链**：`createNavStore` 同步读取链接并对照本机副本解析初值。链接由第一次**成功**的 bootstrap 按服务端列表判定一次（离线启动时保留到恢复），条件是读者还停在打开时的位置；链接指向的会话不存在或已归档时退回上次存储的选择，`?mark=` 也在这时才打开。地址格式见 `app/state/page-url.ts`：`/c/<sessionId>`、`/p/<projectId>`，各页 `/tasks`、`/marks`、`/stats?…`、`/extensions`、`/design`、`/plugins?id=<pluginId>`（插件 ID 含点，服务端把带扩展名的路径当文件，所以放 query）；页面地址不带下层会话，刷新时由存储的选择恢复。
 - **转录**：窗口化（`virtualRows.ts`，150 行起）下行内展开状态由 `rememberedState.ts` 的 `useRemembered(key, initial)` 按"行 key + 子 key"记住，切会话清空。⌘F / Ctrl+F 在内存里的行上查找（消息、思考、工具标题与命令、计划、任务、后台活动），markdown 按 `markdownSource.ts` 的 `visibleText` 近似成页面上可见的文字再计数；跳转复用 `focus` 的定位链路，渲染文本里找不到第 k 处时整行闪烁；查找框已聚焦时再按一次交给浏览器。跟随底部时，scroller 内出现非折叠选区即释放跟随；`MarkLayer` 只在用户滚动时收起工具条。
 - **Markdown**：`streaming` 让最后一块成为 live 块：超过 2000 字符时按 `max(100ms, 字符数/64)`（最长 1s）节流重解析，未闭合围栏不高亮、图表与 HTML 预览等闭合后再渲染。react-markdown 的元素树（500 条 / 50 万字符）、`highlightCode`（256 条 / 200 万字符）与 Mermaid blob URL（32 条 / 1600 万字符）都有模块级 LRU；带 `resourceComponents` 的实例与 live 块不进缓存。
 - **本机副本与预取**：超过 5000 事件时按服务端窗口起点裁剪并带上该窗口的 history 游标（`transcript-store.ts` 的 `recentTranscript`），没有窗口装得下时只存最后 5000 条且不带游标。预取跳过运行中的会话，每会话至少间隔 30 秒（间隔内变化的会话在间隔结束时补一次），在 idle 回调里执行，优先用内存副本，未变化不写 IDB。
@@ -335,8 +335,8 @@ Kotlin 端（`apps/mobile/core` 的 `Model.kt`）早先加入、web 缺的规则
 
 - 回复下方菜单「收藏回复 / 取消收藏」；只对已结束的回答开放（`marks.tsx` 的 `markTargetOf`，生成中的 Claude `:run:` id 不可作锚点）。被收藏的回答显示书签标识。
 - 选中回答里的文字弹出浮动条，四色高亮；`MarkLayer.tsx` 用 CSS Custom Highlight API（`::highlight(mark-<color>)`）绘制，不改 DOM，随虚拟列表的行挂载重新解析区间。引文按 `textQuote.ts` 的 exact + prefix / suffix 在渲染后的纯文本里定位，空白归一化兜底。点击高亮可改颜色、写备注、删除。不支持 Highlight API 的浏览器只缺绘制，收藏页照常可用。
-- 会话头部「本会话收藏」弹层；侧边栏顶部「收藏夹」页（`app/marks/MarksPage.tsx`，`?view=marks`）：搜索、按项目 / 类型 / 失联筛选、就地编辑备注、多选删除。
-- 跳回原会话：`GET /api/marks/:id/locate` 后沿用搜索结果的 `focusMessage`；目标不在已加载历史时 `TranscriptView` 逐页向前加载（至多 30 页，显示「正在定位…」），仍找不到则停在会话并提示。深链 `#s=<sessionId>&m=<markId>`。
+- 会话头部「本会话收藏」弹层；侧边栏顶部「收藏夹」页（`app/marks/MarksPage.tsx`，`/marks`）：搜索、按项目 / 类型 / 失联筛选、就地编辑备注、多选删除。
+- 跳回原会话：`GET /api/marks/:id/locate` 后沿用搜索结果的 `focusMessage`；目标不在已加载历史时 `TranscriptView` 逐页向前加载（至多 30 页，显示「正在定位…」），仍找不到则停在会话并提示。地址 `/c/<sessionId>?mark=<markId>`。
 - 图片与文件：过程块里每一项由 `MarkSourceContext` 提供来源事件；`ZoomableImage` / `ImageBlock` 悬停出现收藏按钮（取图转 base64 上传），读写文件的工具行右侧有收藏按钮。收藏页「图片与文件」显示服务端副本与文件卡片，「打开文件」跳回会话并在文件面板预览。
 - 跳转落点：`settleOn` 在约 1.5 秒内逐帧校正，高亮滚到引文区间（`::highlight(mark-focus)` 闪烁），过程块内的目标先经 `TurnProcess.reveal` 展开。
 - 同步：`marksStore.ts` 监听 `/api/lists/stream` 的 `changed.marks` 修订号，带 ETag 条件重读；收藏变化不触发会话列表重读。
@@ -458,7 +458,7 @@ web 已经有一份本机副本（IndexedDB `riffet/transcripts`，8 个会话 /
 这些是 web 相对原生客户端的**结构性优势**，是"提高品质"里最该被用足的部分：
 
 - **URL 即状态 / 深链**（已落地）。原本只有登录时解析并剥掉 `?token=`（`App.tsx:41-47`），会话与项目选择只写 state + localStorage，所以刷新靠"上次选中"，链接不可分享。
-  现在用 `history.replaceState` 把选择镜像成 `#s=<sessionId>&p=<projectId>`（绝不 `pushState`——覆盖层返回栈每个覆盖层只压一条历史），启动时读一次并覆盖存储值。**验收**：把 URL 贴到另一台已配对的设备上能直接打开同一会话。
+  现在用 `history.replaceState` 把选择镜像成路径地址 `/c/<sessionId>`、`/p/<projectId>`（服务端与 Service Worker 对无扩展名路径都回 `index.html`；绝不 `pushState`——覆盖层返回栈每个覆盖层只压一条历史），启动时读一次并覆盖存储值。**验收**：把 URL 贴到另一台已配对的设备上能直接打开同一会话。
 
 - **键盘优先：命令面板**（已落地）。原本全局只有三个快捷键（`⌘K` 搜索、`⌘B` 侧栏、`Ctrl+\`` 终端）。现在 `⌘K` 打开搜索、`⌘⇧P` 打开命令面板（搜索框输入 `>` 也会进入命令面板）：动作、会话、项目一起过滤，↑↓ 选择、Enter 执行、Esc 关闭，焦点留在输入框（活动行用 `aria-activedescendant` 跟踪），并复用覆盖层栈处理返回。
   **未做**：`?` 快捷键帮助页；设置项的逐行直达（面板目前能跳到分区，不能跳到某一行——那需要设置搜索）。

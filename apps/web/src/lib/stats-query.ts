@@ -3,8 +3,6 @@ import { msg } from '@lingui/core/macro';
 import { isNativeBackendId, type NativeBackendId, type StatsGranularity, type StatsSeriesMetric, type StatsSplit } from '@contracts';
 import { formatDate } from './i18n/format';
 
-export const STATS_QUERY_KEYS = ['view', 'range', 'from', 'to', 'backend', 'model', 'project', 'estimated', 'metric', 'split', 'rank', 'latency'] as const;
-
 export type StatsRangePreset = 'today' | '7d' | '30d' | '90d' | '1y' | 'all' | 'custom';
 export type RankMetric = 'tokens' | 'runs' | 'speed';
 export type LatencyMetric = 'ttft' | 'duration' | 'speed';
@@ -68,7 +66,8 @@ export function clientTimeZone(): string {
   }
 }
 
-export function readStatsSearch(search: string): { open: boolean; state: StatsUiState } {
+/** The stats page's filters, from the query of its `/stats` address. */
+export function readStatsSearch(search: string): StatsUiState {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
   const state = defaultStatsUi();
   const range = params.get('range');
@@ -90,18 +89,12 @@ export function readStatsSearch(search: string): { open: boolean; state: StatsUi
   if (rank && RANKS.has(rank as RankMetric)) state.rank = rank as RankMetric;
   const latency = params.get('latency');
   if (latency && LATENCIES.has(latency as LatencyMetric)) state.latency = latency as LatencyMetric;
-  return { open: params.get('view') === 'stats', state };
+  return state;
 }
 
-/** Rewrite the stats keys and leave every other query parameter where it was. */
-export function writeStatsSearch(current: string, open: boolean, state: StatsUiState): string {
-  const params = new URLSearchParams(current.startsWith('?') ? current.slice(1) : current);
-  for (const key of STATS_QUERY_KEYS) params.delete(key);
-  if (!open) {
-    const rest = params.toString();
-    return rest ? `?${rest}` : '';
-  }
-  params.set('view', 'stats');
+/** The query of the `/stats` address: only the filters that differ from the defaults. */
+export function writeStatsSearch(state: StatsUiState): string {
+  const params = new URLSearchParams();
   if (state.preset !== '30d') params.set('range', state.preset);
   if (state.preset === 'custom') {
     if (state.from) params.set('from', state.from);

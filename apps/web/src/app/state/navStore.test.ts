@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createNavStore, NO_PAGE, STORAGE_KEYS } from './navStore';
 
 beforeEach(() => {
-  vi.stubGlobal('window', { location: { search: '', hash: '' } });
+  vi.stubGlobal('window', { location: { pathname: '/', search: '', hash: '' } });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -24,7 +24,7 @@ describe('automatic navigation receipt', () => {
 
   it('restores an explicit projectless choice independently from the selected conversation project', () => {
     const values = new Map<string, string>([[STORAGE_KEYS.project, 'conversation-project']]);
-    vi.stubGlobal('window', { location: { search: '', hash: '' }, localStorage: {
+    vi.stubGlobal('window', { location: { pathname: '/', search: '', hash: '' }, localStorage: {
       getItem: (key: string) => values.get(key) ?? null,
       setItem: (key: string, value: string) => values.set(key, value),
       removeItem: (key: string) => values.delete(key),
