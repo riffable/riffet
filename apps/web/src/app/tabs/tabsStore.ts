@@ -32,7 +32,8 @@ const DEFAULT_TAB_OPEN_MODE: TabOpenMode = 'preview';
 
 /**
  * 新建会话时: the tab of a conversation Riffet creates or forks. `keep`: kept as it opens. `preview`:
- * temporary, kept only once the reader sends there. The `keep` open mode overrides it.
+ * temporary until the reader keeps it by hand; sending there or a run starting does not. The `keep`
+ * open mode overrides it.
  */
 export type TabNewMode = 'preview' | 'keep';
 
@@ -42,6 +43,12 @@ export interface TabEntry {
   sessionId: string;
   /** The tab the next conversation opened from anywhere replaces. */
   preview: boolean;
+  /**
+   * A conversation Riffet created into this temporary tab (新建会话时 is 临时标签): only the reader's
+   * own keep (double-click, 加入标签栏, ⌘-click, pin) makes it a kept tab. Stored with the tab, so a
+   * reload or a server restart, whose runs look like the reader's, does not lose it.
+   */
+  created?: true;
 }
 
 export interface TabsState {
@@ -118,14 +125,14 @@ function readTabs(): TabEntry[] {
     for (const item of value) {
       if (!isRecord(item) || typeof item.sessionId !== 'string' || !item.sessionId || seen.has(item.sessionId)) continue;
       seen.add(item.sessionId);
-      tabs.push({ sessionId: item.sessionId, preview: item.preview === true });
+      tabs.push(item.preview === true ? { sessionId: item.sessionId, preview: true, ...(item.created === true ? { created: true as const } : {}) } : { sessionId: item.sessionId, preview: false });
       if (tabs.length >= TAB_LIMIT) break;
     }
     // At most one preview: the rest were kept.
     let previewSeen = false;
     return tabs.map((tab) => {
       if (!tab.preview) return tab;
-      if (previewSeen) return { ...tab, preview: false };
+      if (previewSeen) return { sessionId: tab.sessionId, preview: false };
       previewSeen = true;
       return tab;
     });
@@ -151,11 +158,6 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   let pendingKeep = '';
   /** The conversation the workbench itself just created or launched, until it is selected. */
   let launched: { sessionId: string; at: number } | undefined;
-  /**
-   * A conversation Riffet created into a preview tab, until the reader sends there. Its runs until
-   * then are the launch: the server may report it idle and running again while the CLI attaches.
-   */
-  let fresh = '';
   /** The conversation on screen whose tab another window closed: it is not given a new one until the reader opens it again. */
   let detached = '';
 
@@ -163,14 +165,12 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   const sessionOf = (id: string) => lists.get().sessions.find((session) => session.id === id);
   const zonesNow = () => tabZones(store.get().tabs, sessionMap());
   const orderedIds = () => { const zones = zonesNow(); return [...zones.pinned, ...zones.normal].map((entry) => entry.sessionId); };
-  /** Whether [sessionId] is the conversation Riffet just created and its tab is kept as it opens. */
-  const takeLaunched = (sessionId: string) => {
+  /** How [sessionId] opens if Riffet just created it: kept, or a temporary tab per 新建会话时. */
+  const takeLaunched = (sessionId: string): 'keep' | 'created' | undefined => {
     const hit = launched?.sessionId === sessionId && Date.now() - launched.at < LAUNCH_WINDOW_MS;
-    if (!hit) return false;
+    if (!hit) return undefined;
     launched = undefined;
-    if (store.get().newMode === 'keep') return true;
-    fresh = sessionId;
-    return false;
+    return store.get().newMode === 'keep' ? 'keep' : 'created';
   };
   const withoutUnread = (unread: TabsState['unread'], ids: readonly string[]) => {
     if (!ids.some((id) => unread[id])) return unread;
@@ -179,8 +179,11 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     return next;
   };
 
-  /** Makes sure [sessionId] has a tab, as a preview unless [keep] (or the reader keeps every opened one), and marks it read. */
-  const select = (sessionId: string, wantKeep: boolean) => {
+  /**
+   * Makes sure [sessionId] has a tab, as a preview unless [wantKeep] (or the reader keeps every opened
+   * one), and marks it read. A preview of a conversation Riffet [created] waits for an explicit keep.
+   */
+  const select = (sessionId: string, wantKeep: boolean, created = false) => {
     const sessions = sessionMap();
     const session = sessions.get(sessionId);
     if (!session || session.archivedAt) return;
@@ -189,27 +192,26 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       const unread = withoutUnread(state.unread, [sessionId]);
       const existing = state.tabs.find((tab) => tab.sessionId === sessionId);
       if (existing) {
-        const tabs = keep && existing.preview ? state.tabs.map((tab) => tab === existing ? { ...tab, preview: false } : tab) : state.tabs;
+        const tabs = keep && existing.preview ? state.tabs.map((tab) => tab === existing ? { sessionId, preview: false } : tab) : state.tabs;
         return { tabs, unread, anchor: sessionId };
       }
-      const entry: TabEntry = { sessionId, preview: !keep };
+      const entry: TabEntry = keep ? { sessionId, preview: false } : { sessionId, preview: true, ...(created ? { created: true as const } : {}) };
       const previewAt = keep ? -1 : state.tabs.findIndex((tab) => tab.preview);
       if (previewAt >= 0) return { tabs: state.tabs.map((tab, index) => index === previewAt ? entry : tab), unread, anchor: sessionId };
       const zones = tabZones(state.tabs, sessions);
       return { tabs: insertNormal(state.tabs, zones.normal, entry, normalInsertIndex(zones, state.anchor)), unread, anchor: sessionId };
     });
-    // Another conversation took the fresh one's preview tab.
-    if (fresh && !store.get().tabs.some((tab) => tab.sessionId === fresh)) fresh = '';
   };
+
+  const createdTab = (sessionId: string) => store.get().tabs.some((tab) => tab.sessionId === sessionId && tab.created);
 
   const keepTab = (sessionId: string) => {
     store.set((state) => state.tabs.some((tab) => tab.sessionId === sessionId && tab.preview)
-      ? { tabs: state.tabs.map((tab) => tab.sessionId === sessionId ? { ...tab, preview: false } : tab) }
+      ? { tabs: state.tabs.map((tab) => tab.sessionId === sessionId ? { sessionId, preview: false } : tab) }
       : state);
   };
 
   const remove = (ids: ReadonlySet<string>) => {
-    if (ids.has(fresh)) fresh = '';
     store.set((state) => ({ tabs: state.tabs.filter((tab) => !ids.has(tab.sessionId)), unread: withoutUnread(state.unread, [...ids]) }));
   };
 
@@ -221,9 +223,10 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     lastSelected = sessionId;
     detached = '';
     if (!sessionId || store.get().style === 'off') return;
-    const keep = takeLaunched(sessionId) || pendingKeep === sessionId;
+    const launch = takeLaunched(sessionId);
+    const keep = launch === 'keep' || pendingKeep === sessionId;
     pendingKeep = '';
-    select(sessionId, keep);
+    select(sessionId, keep, launch === 'created');
   });
 
   let lastSeed = ui.get().nativeRunSeed;
@@ -253,14 +256,14 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       if (!before || !tabbed.has(session.id)) continue;
       if (session.id === selected) {
         // Only `running` is a turn: opening a conversation with a terminal passes through `starting` while its runtime attaches.
-        if (session.state === 'running' && before.state !== 'running' && session.id !== fresh) started = true;
+        if (session.state === 'running' && before.state !== 'running') started = true;
       } else if (isActiveSession({ state: before.state }) && session.state === 'idle') unread.push(session.id);
       if (before.pinned && !pinned) unpinned.push(session.id);
       else if (!before.pinned && pinned) pinnedNow.push(session.id);
     }
     seen = next;
     if (store.get().style === 'off') return;
-    if (started && store.get().openMode === 'preview') keepTab(selected);
+    if (started && store.get().openMode === 'preview' && !createdTab(selected)) keepTab(selected);
     // A pinned conversation is one the reader keeps, so its tab is no longer the one the next open replaces.
     for (const id of pinnedNow) keepTab(id);
     if (unread.length) store.set((state) => ({ unread: { ...state.unread, ...Object.fromEntries(unread.map((id) => [id, true as const])) } }));
@@ -275,7 +278,10 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     const known = new Map(sessions.map((session) => [session.id, session]));
     const dropped = new Set(store.get().tabs.filter((tab) => { const session = known.get(tab.sessionId); return session ? Boolean(session.archivedAt) : status === 'fresh'; }).map((tab) => tab.sessionId));
     if (dropped.size) remove(dropped);
-    if (selected && selected !== detached && !store.get().tabs.some((tab) => tab.sessionId === selected)) select(selected, takeLaunched(selected));
+    if (selected && selected !== detached && !store.get().tabs.some((tab) => tab.sessionId === selected)) {
+      const launch = takeLaunched(selected);
+      select(selected, launch === 'keep', launch === 'created');
+    }
   };
   lists.subscribe(onLists);
   onLists();
@@ -362,11 +368,9 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       else pendingKeep = sessionId;
     },
     keep: keepTab,
-    /** The reader sent a message in [sessionId]: a preview tab becomes a kept one, as when its run starts. */
+    /** The reader sent a message in [sessionId]: a preview tab becomes a kept one, as when its run starts, unless Riffet created it. */
     sent(sessionId: string) {
-      if (sessionId !== fresh) return;
-      fresh = '';
-      if (store.get().style !== 'off' && store.get().openMode === 'preview') keepTab(sessionId);
+      if (store.get().style !== 'off' && store.get().openMode === 'preview' && !createdTab(sessionId)) keepTab(sessionId);
     },
     activate,
     close(sessionId: string) {

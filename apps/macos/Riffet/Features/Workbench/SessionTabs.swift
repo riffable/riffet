@@ -18,7 +18,8 @@ enum SessionTabOpenMode: String, CaseIterable, Identifiable {
 }
 
 /// 新建会话时: the tab of a conversation Riffet creates or forks. `keep`: kept as it opens.
-/// `preview`: temporary until the reader commits to it. The `keep` open mode overrides it.
+/// `preview`: temporary until the reader keeps it by hand; sending there does not. The `keep` open
+/// mode overrides it.
 enum SessionTabNewMode: String, CaseIterable, Identifiable {
     case preview, keep
 
@@ -57,6 +58,10 @@ struct SessionTabEntry: Codable, Equatable {
     var sessionId: String
     /// The tab the next conversation opened from anywhere replaces.
     var preview: Bool
+    /// A conversation Riffet created into this temporary tab (新建会话时 is 临时标签): only the
+    /// reader's own keep (double-click, 加入标签栏, pin) makes it a kept tab, not a send. Stored with
+    /// the tab so a relaunch does not lose it.
+    var created: Bool? = nil
 }
 
 /// A tab with its conversation.
@@ -135,6 +140,7 @@ final class SessionTabs {
         var result: [SessionTabEntry] = []
         for var entry in stored where !entry.sessionId.isEmpty && ids.insert(entry.sessionId).inserted {
             if entry.preview { if previewSeen { entry.preview = false } else { previewSeen = true } }
+            if !entry.preview { entry.created = nil }
             result.append(entry)
             if result.count >= tabLimit { break }
         }
@@ -215,7 +221,9 @@ final class SessionTabs {
         }
         if !gone.isEmpty { remove(Set(gone.map(\.sessionId))) }
         if let current, current != lastCurrent || !hasTab(current) {
-            select(current, keep: takeLaunched(current) && SessionTabsPreferences.shared.newMode == .keep)
+            let launched = takeLaunched(current)
+            let newMode = SessionTabsPreferences.shared.newMode
+            select(current, keep: launched && newMode == .keep, created: launched && newMode == .preview)
         }
         lastCurrent = current
     }
@@ -246,16 +254,17 @@ final class SessionTabs {
     }
 
     /// Makes sure [id] has a tab, a preview unless [keep] or the open mode keeps every one, and marks it read.
-    private func select(_ id: String, keep wanted: Bool) {
+    /// A preview of a conversation Riffet [created] waits for an explicit keep.
+    private func select(_ id: String, keep wanted: Bool, created: Bool = false) {
         guard let session = session(id), session.archivedAt == nil else { return }
         let keep = wanted || openMode == .keep
         unread.remove(id)
         anchor = id
         if let at = entries.firstIndex(where: { $0.sessionId == id }) {
-            if keep, entries[at].preview { entries[at].preview = false }
+            if keep, entries[at].preview { entries[at].preview = false; entries[at].created = nil }
             return
         }
-        let entry = SessionTabEntry(sessionId: id, preview: !keep)
+        let entry = SessionTabEntry(sessionId: id, preview: !keep, created: !keep && created ? true : nil)
         if !keep, let preview = entries.firstIndex(where: \.preview) {
             entries[preview] = entry
         } else {
@@ -300,15 +309,18 @@ final class SessionTabs {
         return Date.now.timeIntervalSince(launchedSession.at) < Self.launchWindow
     }
 
-    /// The reader sent a message in [id]: a preview tab becomes a kept one (unless tabs are added by hand).
+    /// The reader sent a message in [id]: a preview tab becomes a kept one, unless tabs are added by
+    /// hand or Riffet created the conversation into it.
     func sent(_ id: String) {
-        if openMode == .preview { keep(id) }
+        guard openMode == .preview, entries.first(where: { $0.sessionId == id })?.created != true else { return }
+        keep(id)
     }
 
     /// Makes a preview tab a kept one.
     func keep(_ id: String) {
         guard let at = entries.firstIndex(where: { $0.sessionId == id && $0.preview }) else { return }
         entries[at].preview = false
+        entries[at].created = nil
     }
 
     /// 加入标签栏: a kept tab for [id], without opening it.
