@@ -718,9 +718,9 @@ final class FooterView: FragmentView {
     }
 
     /// The pieces are placed from the width (a trailing footer from its right edge), and the layer
-    /// redraws only when asked: a new width without a redraw left the time where the old one put it.
+    /// redraws only when asked: a new size needs to reposition and redraw its centred contents.
     override func setFrameSize(_ newSize: NSSize) {
-        let resized = newSize.width != frame.width
+        let resized = newSize != frame.size
         super.setFrameSize(newSize)
         if resized { needsLayout = true; needsDisplay = true }
     }

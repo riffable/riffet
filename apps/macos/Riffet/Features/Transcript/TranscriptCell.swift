@@ -56,7 +56,11 @@ final class TranscriptCell: NSView, FragmentHost {
             guard let footer = view as? FooterView else { continue }
             let drawn = footer.contentRect
             guard !drawn.isNull else { continue }
-            if drawn.offsetBy(dx: footer.frame.minX, dy: footer.frame.minY).insetBy(dx: -Space.sm, dy: -Space.xs).contains(point) { return true }
+            // A turn's surrounding whitespace reveals it too; compact footers keep their existing padding.
+            let turnFooter = footer.bounds.height >= style.rhythm.footerHeight
+            let horizontalPadding = turnFooter ? style.rhythm.footerHoverPadding : Space.sm
+            let verticalPadding = turnFooter ? style.rhythm.footerHoverPadding : Space.xs
+            if drawn.offsetBy(dx: footer.frame.minX, dy: footer.frame.minY).insetBy(dx: -horizontalPadding, dy: -verticalPadding).contains(point) { return true }
         }
         return false
     }

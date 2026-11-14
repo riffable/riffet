@@ -2745,6 +2745,31 @@ html[data-density='relaxed'] {
   margin-top: var(--timeline-gap-tight);
 }
 
+/* The footer's surrounding whitespace reveals it too. Negative margins keep its 36px layout
+ * slot and text position; the row's compensated padding contains the full hit area even with
+ * content-visibility paint containment. Hover changes opacity only, never this geometry. */
+@media (hover: hover) {
+  .turn-footer {
+    min-height: 68px;
+    width: fit-content;
+    max-width: calc(100% + 32px);
+    padding: 16px;
+    margin-top: -16px;
+    margin-right: -16px;
+    margin-bottom: -16px;
+  }
+  .turn-footer.timeline-gap-block {
+    --footer-hover-top: min(16px, var(--timeline-gap-block));
+    min-height: calc(52px + var(--footer-hover-top));
+    padding-top: var(--footer-hover-top);
+    margin-top: calc(var(--timeline-gap-block) - var(--footer-hover-top));
+  }
+  .turn-footer-row {
+    padding-bottom: 16px;
+    margin-bottom: -16px;
+  }
+}
+
 /*
  * 内容宽度: the cap every session column shares, written by `lib/content-width.ts` when the
  * transcript's side handle is dragged. It lives on the root element because the transcript, the

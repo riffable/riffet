@@ -303,7 +303,10 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
     const sizes = rows.map(({ key, element, known }) => {
       if (observed.get(key) !== element) return undefined;
       const style = getComputedStyle(element);
-      return style.contentVisibility === 'auto' ? Math.max(0, known - extent(element, 0, style)) : undefined;
+      // The remembered extent includes the border box; contain-intrinsic-size takes its content box.
+      const edges = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+        + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.borderBottomWidth) || 0);
+      return style.contentVisibility === 'auto' ? Math.max(0, known - extent(element, 0, style) - edges) : undefined;
     });
     rows.forEach(({ element }, index) => {
       const size = sizes[index];
@@ -330,7 +333,7 @@ function createRowObserver(heights: Map<string, number>, markDirty: () => void) 
         for (const entry of entries) {
           const target = entry.target as HTMLElement;
           const rowKey = target.dataset.rowKey;
-          if (rowKey && target.isConnected) changed = record(rowKey, extent(target, entry.borderBoxSize?.[0]?.blockSize ?? entry.contentRect.height)) || changed;
+          if (rowKey && target.isConnected) changed = record(rowKey, extent(target, entry.borderBoxSize?.[0]?.blockSize ?? target.getBoundingClientRect().height)) || changed;
         }
         if (changed) markDirty();
       });
@@ -423,6 +426,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
   // Off-screen rows are skipped by the browser in a whole list. A windowed one unmounts them
   // instead, and measuring needs every mounted row at its real size.
   const contained = context.virtual ? '' : '[content-visibility:auto] [contain-intrinsic-size:auto_88px]';
+  const hasTurnFooter = row.type !== 'trigger' && row.footer !== 'none' && (row.footer !== 'held' || !suppressHeldFooter);
   const footerProgress = row.type !== 'trigger' && row.footer === 'held' && !suppressHeldFooter ? { progress: progress ?? null } : {};
   if (row.type === 'process') {
     const { items, gaps, running } = row;
@@ -441,6 +445,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
         // and rounded corners while the icon stays on the text column. `TurnProcess` cancels it
         // for the expanded contents.
         '-mx-2 min-w-0', contained,
+        hasTurnFooter && 'turn-footer-row can-hover:-mx-6 can-hover:px-4',
         row.spaced ? 'timeline-gap-block' : '',
         highlighted && 'timeline-focus-hit',
       )}>
@@ -529,7 +534,7 @@ const TranscriptRowView = memo(function TranscriptRowView({ row, highlighted, re
       // `-ml-1.5 pl-1.5` widens the contained row by 6px on the left without moving its content,
       // so an action row that hangs 6px outward (the answer's copy button) keeps its rounded
       // hover pill: paint containment from `content-visibility` clips anything that overhangs.
-      className={cn('-ml-1.5 min-w-0 pl-1.5', contained, row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
+      className={cn('-ml-1.5 min-w-0 pl-1.5', hasTurnFooter && 'turn-footer-row can-hover:-ml-5.5 can-hover:-mr-4 can-hover:pl-5.5 can-hover:pr-4', contained, row.gap, highlighted && 'timeline-focus-hit', isFresh(fresh, item.key, row.key) && enter)}
     >
       {content}
       <TruncatedMore item={item} expand={context.onExpandRow} />

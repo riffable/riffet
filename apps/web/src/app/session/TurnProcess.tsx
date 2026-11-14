@@ -147,7 +147,7 @@ export function TurnProcess({ running, issueCount, interrupted, stopped = false,
         // `ml-0.5` undoes most of the row's 8px widening, so this row hangs 6px outward exactly
         // like the footer under an answer and the two line up. Keep the normal block gap above
         // both the working line and the settled footer, so changing between them moves nothing.
-        <div {...rest} className={cn('timeline-gap-block ml-0.5 flex min-h-6 cursor-default select-none flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', footerTime && !footerPinned && !resources && revealOnOwnHover)}>
+        <div {...rest} className={cn('turn-footer timeline-gap-block ml-0.5 flex min-h-9 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-3.5 no-hover:min-h-11', footerTime && !footerPinned && !resources && revealOnOwnHover)}>
           {footerTime ? <>
             {footerActions}
             <time dateTime={footerTime} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(footerTime)}</time>

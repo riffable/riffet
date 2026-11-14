@@ -167,9 +167,14 @@ struct TranscriptRhythm {
     /// from the centre of the nearest line, as the next paragraph's first line would.
     var proseRow: CGFloat { (bodyLineBox / 2 + prose - style.row / 2).rounded() }
 
-    /// From the last line of an answer to its footer (time, copy, actions): the footer's 20-point
-    /// slot centres a 12-point line, so the gap reads as a paragraph break, not as a line of the text.
+    /// From the last line of an answer to its footer (time, copy, actions).
     var footer: CGFloat { 14 }
+
+    /// The web's 36-point content slot, held for both the working line and the settled footer.
+    var footerHeight: CGFloat { 36 }
+
+    /// Invisible slack around a turn footer, without changing its content slot or the row's height.
+    var footerHoverPadding: CGFloat { 16 }
 
     /// What a user message keeps under its bubble for its hover footer. It counts towards the space
     /// to the answer, which is measured from the bubble.

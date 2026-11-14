@@ -344,7 +344,7 @@ struct RowBuilder {
             if footer != .none, footer != .held || !suppressesHeldFooter {
                 height += style.rhythm.footer
                 turnFooter(footer, FooterSpec(time: timelineItemTime(item: item), speed: speed, copy: answerText ?? "", trailing: false, turnRunId: runId), x: x, y: y + height, width: width)
-                height += 20
+                height += style.rhythm.footerHeight
             }
             return height
         }
@@ -522,7 +522,7 @@ struct RowBuilder {
             // A stopped turn's answer says so before its time, and keeps the line on screen.
             let status = stopped && footer == .shown ? (TimelineFormatKt.stoppedLabel(), style.color(\.fg3)) : nil
             turnFooter(footer, FooterSpec(status: status, time: timelineItemTime(item: item), speed: speed, copy: source, trailing: false, turnRunId: runId), x: x, y: cursor, width: width)
-            cursor += 20
+            cursor += style.rhythm.footerHeight
         }
         return cursor - y
     }
@@ -530,7 +530,7 @@ struct RowBuilder {
     /// A turn's footer: its time and actions once the turn settles, and until then a slot of the
     /// same height for the working line, so settling swaps what the slot shows and moves nothing.
     private mutating func turnFooter(_ footer: TurnFooter, _ spec: @autoclosure () -> FooterSpec, x: CGFloat, y: CGFloat, width: CGFloat) {
-        let frame = CGRect(x: x, y: y, width: width, height: 20)
+        let frame = CGRect(x: x, y: y, width: width, height: style.rhythm.footerHeight)
         if footer == .held {
             ticking = true
             fragments.append(Fragment(frame: frame, kind: .progress))
@@ -596,7 +596,7 @@ struct RowBuilder {
             cursor += style.rhythm.block
             // A turn with no prose to copy still shows its time and turn actions.
             turnFooter(row.footer, FooterSpec(time: row.endedAt, speed: speed, copy: row.answerText ?? "", trailing: false, turnRunId: runId), x: x, y: cursor, width: width)
-            cursor += 20
+            cursor += style.rhythm.footerHeight
         }
         return cursor - y
     }

@@ -3,11 +3,10 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeActivity, NativeJob, SessionGoal } from '@contracts';
 import { IconCheck } from '@/components/icons';
 import { Spinner, StatusDot } from '@/components/ui/controls';
-import { projectFileUrl } from '@/lib/files';
 import { cn } from '@/lib/utils';
+import { FileDiffDialog } from '../panels/FileDiffDialog';
 import { BackgroundTaskItem, BackgroundTasksNotLoaded } from './Activities';
 import { goalStatusLabel, todoEntries, todoSettled, type TodoEntry } from './ComposerDock';
-import { previewOnPlainClick } from './fileAccess';
 import type { TimelineItem } from './model';
 import { formatDuration, subagentTitle, transcriptDuration, backgroundTaskSummary, type SubagentBrief } from './SessionWorkActions';
 import { sessionOutputs, type EditRecord } from './sessionAsideModel';
@@ -145,6 +144,7 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
   const cache = useRef(new WeakMap<object, EditRecord>());
   const outputs = useMemo(() => sessionOutputs(timeline, root, cache.current), [timeline, timelineVersion, root]);
   const [expanded, setExpanded] = useState(false);
+  const [diffPath, setDiffPath] = useState<string>();
   if (!outputs.length) return null;
   const shown = expanded ? outputs : outputs.slice(0, OUTPUT_LIMIT);
   return (
@@ -154,19 +154,20 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
           const name = output.path.split('/').at(-1) ?? output.path;
           return (
             <li key={output.path}>
-              <a href={projectFileUrl(projectId, output.path)} target="_blank" rel="noopener" onClick={onOpenPath && previewOnPlainClick(onOpenPath, output.path)} title={output.path} className="flex h-7 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-hover">
+              <button type="button" onClick={() => setDiffPath(output.path)} title={output.path} className="flex h-7 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
                 <span className="min-w-0 flex-1 truncate font-mono text-xs text-fg-2">{name}</span>
                 <span className="flex shrink-0 items-center gap-1.5 font-mono text-2xs tabular-nums">
                   {output.created && !output.removed ? <span className="font-sans text-fg-4"><Trans>新建</Trans></span> : null}
                   {output.added > 0 && <span className="text-[var(--diff-add-marker)]">+{output.added}</span>}
                   {output.removed > 0 && <span className="text-[var(--diff-del-marker)]">−{output.removed}</span>}
                 </span>
-              </a>
+              </button>
             </li>
           );
         })}
       </ul>
       {outputs.length > OUTPUT_LIMIT && <button type="button" onClick={() => setExpanded((value) => !value)} className={foldButton}>{expanded ? <Trans>收起</Trans> : <Trans>还有 {outputs.length - OUTPUT_LIMIT} 个文件</Trans>}</button>}
+      <FileDiffDialog projectId={projectId} path={diffPath} onClose={() => setDiffPath(undefined)} onOpenPath={onOpenPath} />
     </Section>
   );
 }
@@ -201,7 +202,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} />
-      <Outputs projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />
+      <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />
     </aside>
   );
 });

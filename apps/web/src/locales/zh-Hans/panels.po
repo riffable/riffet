@@ -134,7 +134,9 @@ msgstr "Base Branch"
 msgid "Based on (optional)"
 msgstr "Based on (optional)"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
+#: src/app/panels/MergeDiff.tsx
 msgid "Binary file"
 msgstr "Binary file"
 
@@ -295,6 +297,7 @@ msgstr "Couldn't load history"
 msgid "Couldn't load the checkpoint"
 msgstr "Couldn't load the checkpoint"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Couldn't load the diff"
 msgstr "Couldn't load the diff"
@@ -566,6 +569,7 @@ msgstr "No commits yet"
 msgid "No differences from {0}"
 msgstr "No differences from {0}"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "No file differences"
 msgstr "No file differences"
@@ -590,6 +594,7 @@ msgstr "Not a Git repository"
 msgid "Not pushed yet"
 msgstr "Not pushed yet"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/PublishSection.tsx
 msgid "Open"
 msgstr "Open"
@@ -616,6 +621,7 @@ msgstr "Other"
 msgid "Path copied"
 msgstr "Path copied"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Preview truncated"
 msgstr "Preview truncated"
@@ -649,6 +655,7 @@ msgstr "Pushed to {pushedTo}"
 msgid "Pushes {0} first."
 msgstr "Pushes {0} first."
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 #: src/app/panels/WorktreeSection.tsx
 msgid "Refresh"
@@ -753,6 +760,7 @@ msgstr "Showing the first {count} of {total} files"
 msgid "Showing the first {FILES_SHOWN} of {0} files"
 msgstr "Showing the first {FILES_SHOWN} of {0} files"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Side"
 msgstr "Side"
@@ -774,6 +782,7 @@ msgstr "Stage"
 msgid "Stage All"
 msgstr "Stage All"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Staged"
 msgstr "Staged"
@@ -838,6 +847,7 @@ msgstr "Unstage"
 msgid "Unstage All"
 msgstr "Unstage All"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Unstaged"
 msgstr "Unstaged"
@@ -854,6 +864,7 @@ msgstr "What should the agent change? (⌘↵ to add)"
 msgid "Whole file"
 msgstr "Whole file"
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Working tree changes"
 msgstr "Working tree changes"

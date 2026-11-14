@@ -134,7 +134,9 @@ msgstr ""
 msgid "Based on (optional)"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
+#: src/app/panels/MergeDiff.tsx
 msgid "Binary file"
 msgstr ""
 
@@ -295,6 +297,7 @@ msgstr ""
 msgid "Couldn't load the checkpoint"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Couldn't load the diff"
 msgstr ""
@@ -566,6 +569,7 @@ msgstr ""
 msgid "No differences from {0}"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "No file differences"
 msgstr ""
@@ -590,6 +594,7 @@ msgstr ""
 msgid "Not pushed yet"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/PublishSection.tsx
 msgid "Open"
 msgstr ""
@@ -616,6 +621,7 @@ msgstr ""
 msgid "Path copied"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Preview truncated"
 msgstr ""
@@ -649,6 +655,7 @@ msgstr ""
 msgid "Pushes {0} first."
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 #: src/app/panels/WorktreeSection.tsx
 msgid "Refresh"
@@ -753,6 +760,7 @@ msgstr ""
 msgid "Showing the first {FILES_SHOWN} of {0} files"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Side"
 msgstr ""
@@ -774,6 +782,7 @@ msgstr ""
 msgid "Stage All"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Staged"
 msgstr ""
@@ -838,6 +847,7 @@ msgstr ""
 msgid "Unstage All"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Unstaged"
 msgstr ""
@@ -854,6 +864,7 @@ msgstr ""
 msgid "Whole file"
 msgstr ""
 
+#: src/app/panels/FileDiffDialog.tsx
 #: src/app/panels/GitPanel.tsx
 msgid "Working tree changes"
 msgstr ""

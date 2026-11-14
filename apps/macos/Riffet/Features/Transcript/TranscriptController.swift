@@ -1726,10 +1726,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             restFooter(on: nil, moved: true)
             return
         }
-        // A footer shows when the pointer is on its own line, not anywhere over the message.
-        let row = table.row(at: table.convert(point, from: nil))
-        let cell = row >= 0 && row < entries.count ? table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptCell : nil
-        restFooter(on: cell?.showsFooter(at: point) == true ? entries[row].key : nil, moved: moved)
+        restFooter(on: footerKey(at: point), moved: moved)
         var target: (NSView & HoverTarget)?
         var hit = table.hitTest(superview.convert(point, from: nil))
         while let view = hit, view !== table {
@@ -1754,6 +1751,27 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             cursor.set()
             cursorShown = cursor
         }
+    }
+
+    /// A footer's invisible padding may cross into the next row's gap. Check only nearby,
+    /// already materialised cells, keeping the current target when padded regions overlap.
+    private func footerKey(at windowPoint: NSPoint) -> String? {
+        let point = table.convert(windowPoint, from: nil)
+        let padding = style.rhythm.footerHoverPadding
+        let rows = table.rows(in: CGRect(x: table.bounds.minX, y: point.y - padding, width: table.bounds.width, height: padding * 2))
+        guard rows.location != NSNotFound, rows.length > 0, rows.location < entries.count else { return nil }
+        let end = rows.location + min(rows.length, entries.count - rows.location)
+        var first: String?
+        var resting: String?
+        for row in rows.location..<end {
+            guard let cell = table.view(atColumn: 0, row: row, makeIfNecessary: false) as? TranscriptCell,
+                  cell.showsFooter(at: windowPoint) else { continue }
+            let key = entries[row].key
+            if key == hoveredRow { return key }
+            if key == restingRow { resting = key }
+            if first == nil { first = key }
+        }
+        return resting ?? first
     }
 
     /// The prose, its navigation and their narrow connecting gutter are one hover region.

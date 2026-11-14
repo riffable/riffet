@@ -205,10 +205,8 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
   const resources = useTranscriptResources();
   const markBody = useCallback((element: HTMLDivElement | null) => { if (element && mark) markBodies.set(element, mark); }, [mark]);
   return (
-    // The copy/timestamp row sits under the answer. The turn gap above the answer is 16px, which
-    // reads as ~22px of whitespace once the prose line box is accounted for; at `gap-1` the 24px
-    // row plus its internal centering left only ~15px below the last line, so the timestamp looked
-    // glued to the answer. `gap-2.5` lands the two optical gaps within a pixel of each other.
+    // The 36px slot stays reserved while the turn runs; its transparent hover padding borrows
+    // the surrounding whitespace without moving the prose or the next row.
     <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
       <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters && !resources ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters && !resources} /></div>
@@ -229,7 +227,7 @@ export function MessageFooter({ text, showActions, time, footerPinned, metrics, 
   const rate = tokensPerSecond(metrics);
   const rest = useRestReveal();
   if (!showActions && !time && progress === undefined) return null;
-  return <div data-slot="message-meta" {...rest} className={cn('-ml-1.5 flex min-h-6 cursor-default select-none flex-wrap items-center gap-1 transition-opacity no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
+  return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-9 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
     {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
     {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} {...(time ? { at: time } : {})} />}
     <MarkedIndicator target={mark} />
