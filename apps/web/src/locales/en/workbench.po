@@ -30,10 +30,6 @@ msgstr "{0} not signed in"
 msgid "{0} 读取失败"
 msgstr "{0} could not be read"
 
-#: src/app/SessionInfo.tsx
-msgid "{ago}前"
-msgstr "{ago} ago"
-
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, one {Also deletes # side chat.} other {Also deletes # side chats.}}"
@@ -68,7 +64,7 @@ msgstr "Couldn't read Git status"
 msgid "Shell 终端"
 msgstr "Shell terminal"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "上一个标签"
 msgstr "Previous tab"
 
@@ -88,7 +84,7 @@ msgstr "Context length"
 msgid "上移"
 msgstr "Move up"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "下一个标签"
 msgstr "Next tab"
 
@@ -165,7 +161,7 @@ msgid "会话 ID"
 msgstr "Session ID"
 
 #: src/app/Header.tsx
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "会话信息"
 msgstr "Session info"
 
@@ -200,6 +196,10 @@ msgstr "Sign in with an access token"
 #: src/app/App.tsx
 msgid "使用配对码登录"
 msgstr "Sign in with a pairing code"
+
+#: src/app/hostShortcuts.ts
+msgid "侧栏"
+msgstr "Sidebar"
 
 #: src/app/SessionInfo.tsx
 msgid "侧边聊天"
@@ -280,7 +280,7 @@ msgstr "Close other tabs"
 msgid "关闭右侧标签"
 msgstr "Close tabs to the right"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "关闭标签"
 msgstr "Close tab"
 
@@ -304,7 +304,7 @@ msgstr "Built-in"
 msgid "内置插件不可卸载"
 msgstr "Built-in plugins cannot be uninstalled"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "最后一个标签"
 msgstr "Last tab"
 
@@ -339,7 +339,7 @@ msgstr "Sharing"
 msgid "分支"
 msgstr "Branch"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换到第 1–8 个标签"
 msgstr "Go to tab 1–8"
 
@@ -347,7 +347,7 @@ msgstr "Go to tab 1–8"
 msgid "切换浅色 / 深色"
 msgstr "Toggle light / dark"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换视图"
 msgstr "Switch view"
 
@@ -524,6 +524,7 @@ msgid "命令已复制，但 Riffet 中的会话进程未停止"
 msgstr "The command was copied, but the session process in Riffet was not stopped"
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "命令面板"
 msgstr "Command palette"
 
@@ -921,6 +922,7 @@ msgid "搜索中…"
 msgstr "Searching…"
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "搜索会话"
 msgstr "Search sessions"
 
@@ -1050,7 +1052,7 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr "Files"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
 msgstr "New session"
@@ -1668,6 +1670,7 @@ msgstr "Manage plugins"
 msgid "管理收藏 {0}"
 msgstr "Manage favorite {0}"
 
+#: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx
 msgid "终端"
 msgstr "Terminal"
@@ -1965,7 +1968,7 @@ msgstr "Rename favorite"
 msgid "重命名项目"
 msgstr "Rename project"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "重新打开关闭的标签"
 msgstr "Reopen closed tab"
 

@@ -298,6 +298,7 @@ msgstr "图表 8"
 msgid "在这里编写操作说明。"
 msgstr "在这里编写操作说明。"
 
+#: src/components/ui/copy-button.tsx
 #: src/components/ui/feedback-notice.tsx
 msgid "复制"
 msgstr "复制"
@@ -577,6 +578,10 @@ msgstr "浮层背景"
 #: src/lib/theme-role-labels.ts
 msgid "淡分隔线"
 msgstr "淡分隔线"
+
+#: src/components/ui/search-field.tsx
+msgid "清除搜索"
+msgstr "清除搜索"
 
 #: src/lib/theme-role-labels.ts
 msgid "激活背景"

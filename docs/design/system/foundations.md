@@ -73,16 +73,21 @@
 
 ### 2.4 排版
 
-中文排版参照 [中文排版需求](https://www.w3.org/TR/clreq/)。
+中文排版参照 [中文排版需求](https://www.w3.org/TR/clreq/)。设计规范页的「排版」一章逐条画出对错对照。
 
-- **中英混排**：文案里中文与英文、中文与数字之间加一个半角空格（「运行 Codex」「3 个文件」）；紧挨全角标点的一侧不加。代码在字体切换处加空格，不靠字距。
-- **标点**：中文用全角标点。并列的元信息用前后带空格的间隔号 ` · ` 分开（「已处理 · 1m 41s」）。省略号用单字符 `…`。不用感叹号。
-- **数字**：会变化的数字（时间、计数、速度、表格列）用等宽数字（Web `tabular-nums`，Mac/iOS `monospacedDigit()`，Android `fontFeatureSettings = "tnum"`）。
-- **截断**：单行标签截尾，加 `…`。路径截中间，保留文件名。截断的文字在悬停或长按时能看到全文。会话标题、文件名不截到只剩几个字：容器给不出最小宽度时换布局，不压缩文字。
-- **行高**：正文至少 1.6 倍；多行中文段落不低于 1.5 倍。单行控件的文字在容器里垂直居中，按字体的视觉中心对齐，不按行框。
+- **中英混排**：文案里中文与英文、中文与数字之间加一个半角空格（「运行 Codex」「3 个文件」）；紧挨全角标点的一侧不加（「先运行 Codex，再提交。」）。代码在字体切换处加空格，不靠字距。
+- **标点**：中文用全角标点。并列的元信息用前后带空格的间隔号 ` · ` 分开（「已处理 · 1m 41s」），不用竖线。省略号用单字符 `…`，不写三个点。不用感叹号。
+- **数字**：会变化的数字（时间、计数、速度、表格列）用等宽数字（Web `tabular-nums`，Mac/iOS `monospacedDigit()`，Android `fontFeatureSettings = "tnum"`）。表格列右对齐。
+- **截断**：单行标签截尾，加 `…`（Web `truncate`）。路径截中间，保留文件名：目录段 `truncate`，文件名段 `shrink-0`。截断的文字在悬停或长按时能看到全文（Web `Tip`）。会话标题、文件名不截到只剩几个字：容器给不出最小宽度时换布局，不压缩文字。
+- **行高**：正文至少 1.6 倍；多行中文段落不低于 1.5 倍。单行控件的文字在容器里垂直居中（`items-center`），按字体的视觉中心对齐，不按行框。
 - **换行**：长 URL、路径、无空格的英文串允许任意处断行（Web `overflow-wrap: anywhere`）。行首不出现句号、逗号这类标点（平台默认的禁则即可，不自己断行）。
-- **行内代码**：不加底色，用等宽字体，字号 0.86em，颜色同正文。
-- **选中**：内容可以选中复制（正文、代码、错误原因）；界面文字和元信息不可选中，光标不变成文字光标。
+- **行内代码**：不加底色和内边距，用等宽字体，字号 0.86em，颜色比正文弱一档（`fg-2`）。这是 Riffet 风格的配方 `inlineCode: plain`（`docs/design/riffet-style.md` §2，`packages/contracts/src/interface-styles.ts`）；原生和线条风格仍是 `chip`。
+- **选中**：内容可以选中复制（正文、代码、错误原因）；界面文字和元信息不可选中，光标不变成文字光标（Web `select-none cursor-default`）。
+- 文案本身（语气、用词、错误、空状态、术语、时间与数字的写法）见 [content.md](content.md)。
+
+现状：
+- Web 没有全局的 `user-select: none`：界面文字不可选只靠 21 处 `select-none`，其余按钮、标签仍可被拖选。
+- Web 没有路径截中间的公共组件，调用处各自处理；需要时抽成一个，同时处理 `Tip`。
 
 ## 3. 间距
 
@@ -112,7 +117,24 @@
 | 导航栏 / 卡片头 | 44 | 56 | 64 |
 
 - 点击区和视觉尺寸分开：图形可以小，点击区不缩。最小点击区：桌面 24，iOS 44pt，Android 48dp。
-- 对话列宽默认 680（桌面），输入框比列宽多 24；移动端内容最大宽度 760（iOS）、840（Android）。
+- **Web 按钮**（`apps/web/src/components/ui/button.tsx`）：
+
+| `size` | 高 | 圆角 | 文字 | 图标 |
+|---|---|---|---|---|
+| `xs` | 24 | `rounded-md` | `text-xs` | 14 |
+| `sm` | 28 | `rounded-lg` | `text-sm` | 14 |
+| `md`（默认） | 32 | `rounded-lg` | `text-sm` | 16 |
+| `lg` | 36 | `rounded-lg` | `text-base` | 16 |
+| `icon-xs` | 24 × 24 | `rounded-md` | | 14 |
+| `icon-sm` | 28 × 28 | `rounded-lg` | | 16 |
+| `icon` | 32 × 32 | `rounded-lg` | | 16 |
+
+- **Web 的触摸点击区**：指针是手指的设备（`@media (hover: none)`，Tailwind 变体 `no-hover:`）上，`Button` 通过 `.ui-button` 取 44 × 44 的最小尺寸，`Input` 是 `no-hover:min-h-11`，`Switch` 是 `no-hover:size-11`（轨道仍画 32 × 18）。判断依据是指针而不是视口宽度：窄的桌面窗口保持鼠标尺寸。手写的可点元素自己加 `no-hover:min-h-11`。
+- **阅读列宽**：Web 的对话列宽可由用户拖动，默认 920，范围 640–1600（`apps/web/src/lib/content-width.ts`，存在 `localStorage` 的 `riffet.contentWidth`，CSS 变量 `--content-width`）；Mac 默认 760，范围 640–1600（[决定](../DECISIONS.md) 2026-11-13，[macos.md](macos.md) §3.1）。输入框比列宽多 24。移动端内容最大宽度 760（iOS）、840（Android）。
+
+现状：
+- 手写的 `<button>` 约 230 处没有走 `Button`，不带 `.ui-button`，触摸设备上的点击区要靠各处自己加 `no-hover:min-h-11`。
+- 设置页的 `SettingsLinkRow` 行高 48（`min-h-12`），高于桌面的列表行 30，这是设置页自己的行；是否并入列表行的取值待定。
 
 ## 5. 圆角
 
@@ -125,7 +147,7 @@
 | 浮层 | 输入框、悬浮面板 | 16 | 14 | 20 |
 
 - 嵌套时内圆角 = 外圆角 − 内边距，小于 4 时取 4。
-- 胶囊和圆形按钮取高度的一半。
+- 胶囊和圆形按钮取高度的一半（Web `rounded-full`）。例：高 26 的胶囊半径 13。
 - 圆角用连续曲线（Apple 的 `.continuous`），Web 用普通圆角。
 - iOS 原生的分组 16、输入框 24，比 Android 的 ios 风格（12、14）圆：Liquid Glass 的形状与屏幕圆角同心，Compose 的模仿不需要。这是 iOS 原生端有意的覆盖，同样写在 `IOS_NATIVE_OVERRIDES`。
 
@@ -197,13 +219,13 @@
 
 ## 9. 状态
 
-所有可交互的组件从这套状态里取，组件规范只列自己有的。
+所有可交互的组件从这套状态里取，组件规范只列自己有的。设计规范页的「状态」一章把它们画成矩阵。
 
 | 状态 | 桌面 | 移动 · material3 | 移动 · ios / iOS 原生 |
 |---|---|---|---|
 | 默认 | | | |
 | 悬停 | 底色 `bg-hover`，文字升一级 | 无 | 无（iPad 指针用系统悬停效果） |
-| 按下 | 底色 `bg-active` | 水波纹 | 降低透明度（按钮 0.55），列表行用 `press` 底色 |
+| 按下 | 底色 `bg-active`；按钮缩放到 0.97 | 水波纹 | 降低透明度（按钮 0.55），列表行用 `press` 底色 |
 | 键盘焦点 | 2px `focus` 焦点环，只在键盘操作时显示 | 焦点覆盖色 | 系统焦点 |
 | 选中 | 底色 `bg-active`，文字 `fg` | `selected` 底色 | 行尾勾选 |
 | 禁用 | 透明度 0.5，不响应 | 内容色 `disabledContent`，透明度 0.38 | 系统禁用样式 |
@@ -212,15 +234,59 @@
 
 - 状态变化不改变组件尺寸：加载时文字换成 spinner，宽度保持；选中加粗时预留粗体的宽度。
 - 禁用的原因看不出来时，在旁边说明或在悬停提示里写原因。
-- 现状：Web 的禁用透明度有 0.4、0.45、0.5、0.55、0.6 五种，统一为 0.5。
+
+### 9.1 Web 的写法
+
+| 状态 | `Button`（`secondary`） | 列表行 | 输入框（`fieldClass`） | `Switch` |
+|---|---|---|---|---|
+| 悬停 | `hover:bg-fg/[0.11]` | `hover:bg-hover`，文字 `text-fg` | `hover:border-fg-4/60` | 无 |
+| 按下 | `active:scale-[0.97]` | `bg-active` | 无 | 无 |
+| 键盘焦点 | `focus-visible:ring-2 ring-focus` | `focus-visible:ring-2 ring-inset ring-focus` | `focus:border-accent focus:ring-3 ring-accent/15` | `focus-visible:ring-2 ring-focus` |
+| 选中 | `data-[state=open]` 同悬停底色 | `bg-active text-fg` | 无 | 轨道 `bg-primary` |
+| 禁用 | `disabled:opacity-50`，`pointer-events-none` | `opacity-50` | `disabled:opacity-50` | `disabled:opacity-50` |
+| 加载 | 文字换成 `Spinner`，宽度固定 | 行尾换成 `Spinner` | 无 | 无 |
+
+- 全局的 `:focus-visible` 是 `outline: 2px solid var(--focus-ring)`、偏移 1px（`index.css`）；输入框和文本域去掉轮廓，改用边框加光晕。组件的 `ring-2 ring-focus` 覆盖全局的轮廓。`lib/focus-ring.ts` 保证只按修饰键（⇧⌘ 截图、⌘ 选菜单）时不在指针刚聚焦的元素上画环，Tab、回车、输入仍显示。
+- 贴着容器边缘的整行（`SettingsLinkRow`）用 `ring-inset`，环画在行内。
+- `Spinner` 是 14 的 `IconLoaderCircle`，颜色 `fg-3`，放在按钮里时用 `text-current`。
+
+现状：
 
 ## 10. 无障碍
 
-- 每个可交互元素都有名称；只有图标的按钮必须有无障碍名称（Web `aria-label`，Mac/iOS `accessibilityLabel`，Android `contentDescription`）。
-- 键盘能到达所有操作；Tab 顺序与视觉顺序一致；Esc 关闭最上层的浮层，焦点回到打开它的控件。
-- 文字随系统或用户的字号设置缩放：Web 的 `--text-scale`，Mac 的文字缩放，iOS 的 Dynamic Type，Android 的字体倍率。布局在 1.6 倍时不重叠、不截断关键信息。
+设计规范页的「无障碍」一章画出下列各项。
+
+### 10.1 名称与键盘
+
+- 每个可交互元素都有名称；只有图标的按钮必须有无障碍名称（Web `aria-label`，Mac/iOS `accessibilityLabel`，Android `contentDescription`）。Web 同时用 `Tip` 把名称显示给指针和键盘用户。
+- 键盘能到达所有操作，指针能做的键盘都能做：悬停才出现的操作在 `focus-within` 时同样出现（`group-focus-within:opacity-100`）；右键菜单有对应的「更多操作」按钮；`Tip` 在键盘焦点时显示。
+- Tab 顺序与视觉顺序一致；Esc 关闭最上层的浮层，焦点回到打开它的控件。
+- 焦点环在所有主题下与底色的对比度至少 3:1（`scripts/check-theme-contrast.ts`）。
+
+### 10.2 对比度
+
+- 文字与底色至少 4.5:1，非文字（图标、边框、焦点环）至少 3:1，见 §1。
+- `fg-4` 只给占位、快捷键和行尾时间，不承载需要读清的信息（§1）。
 - 状态不只靠颜色表达：出错同时有图标或文字。
-- 系统「减少动态效果」见 §7.3。
+
+### 10.3 文字缩放
+
+- 文字随系统或用户的字号设置缩放：Web 的 `--text-scale`，Mac 的文字缩放，iOS 的 Dynamic Type，Android 的字体倍率。
+- Web 的设置项「文字大小」是 0.9 / 1 / 1.1 / 1.2 四档（`apps/web/src/lib/display-settings.ts` 的 `textScales`）；字号与行高一起乘以该值，间距和控件高度不缩放。
+- 布局在 1.6 倍时不重叠、不截断关键信息。
+
+### 10.4 减少动态效果
+
+系统开启「减少动态效果」时：位移、缩放换成淡入淡出；过渡缩短为 100ms 线性，只保留 `opacity`、颜色类属性；循环动画（spinner）换成缓慢的淡入淡出。写在 `index.css` 的 `@media (prefers-reduced-motion: reduce)`；规则见 §7.3。
+
+### 10.5 触摸
+
+触摸设备上的点击区见 §4，最小 44（iOS）、48（Android）。
+
+现状：
+- Web 的文字缩放最大 1.2，没有做到 §10.3 的 1.6 倍。
+- `Tip` 之外仍有约 460 处原生 `title=` 提示，键盘用户看不到。
+- 9 处原生 `type=checkbox`（`DirectoryPicker.tsx`、`settings/ProviderModelList.tsx`、`plugins/PluginGrantDialog.tsx`、`extensions/ExtensionCatalog.tsx`、`shares/ShareDialog.tsx`）没有统一的焦点环和 44 点击区。
 
 ## 11. 数值的来源
 

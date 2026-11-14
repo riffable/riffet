@@ -7,7 +7,7 @@ import { errorMessage, isRecord, readStored, writeStored } from '@/lib/utils';
 import type { StatsUiState } from '@/lib/stats-query';
 import type { MessageFocus } from '../session/focus-message';
 import { createStore } from '@/lib/store';
-import { readPageAddress, type PageAddress } from './page-url';
+import { readPageAddress, type DesignPlatform, type PageAddress } from './page-url';
 
 export const STORAGE_KEYS = {
   project: 'riffet.selectedProjectId',
@@ -37,6 +37,10 @@ export interface NavState {
   marksOpen: boolean;
   /** The design system's specimen page (docs/design/system). */
   designOpen: boolean;
+  /** The platform that page shows; kept while it is closed, so reopening returns to it. */
+  designPlatform: DesignPlatform;
+  /** The design page's chapter id; empty is its overview. */
+  designChapter: string;
   pluginsOpen: boolean;
   pluginId: string;
   pluginViewId: string;
@@ -123,6 +127,8 @@ export function createNavStore(cachedLists?: { projects: ProjectRecord[]; sessio
     extensionsMounted: extensionsOpen,
     marksOpen: view === 'marks',
     designOpen: view === 'design',
+    designPlatform: address.designPlatform ?? 'web',
+    designChapter: address.designChapter ?? '',
     pluginsOpen: view === 'plugins',
     pluginId: address.pluginId ?? '',
     pluginViewId: '',

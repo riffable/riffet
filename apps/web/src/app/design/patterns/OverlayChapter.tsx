@@ -10,7 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tip } from '@/components/ui/tooltip';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
-import { Chapter, Family, Frame, Plate, Specimen } from './specimen';
+import { Chapter, Family, Frame, Plate, Specimen } from '../specimen';
 
 function MenuDemo() {
   const { t } = useLingui();
@@ -92,8 +92,8 @@ function Anatomy() {
   );
 }
 
-/** The four dialog widths, nested on one sheet. */
-function Widths() {
+/** The four dialog widths, nested on one sheet; the Mac's sheets take the same four. */
+export function Widths() {
   const { t } = useLingui();
   const tiers: Array<[string, number]> = [[t`确认`, 420], [t`表单`, 448], [t`内容`, 768], [t`工作区`, 1080]];
   return (
@@ -114,7 +114,7 @@ function Widths() {
 export function OverlayChapter() {
   const { t } = useLingui();
   return (
-    <Chapter id="overlays" number="10" title={t`浮层`} lede={t`七种浮层按用途区分。一次操作只出现一个浮层，它从触发它的控件展开，关闭时收回同一位置。`} tone="canvas" source="docs/design/system/patterns.md">
+    <Chapter title={t`浮层的选用`} lede={t`七种浮层按用途区分。一次操作只出现一个浮层，它从触发它的控件展开，关闭时收回同一位置。`} tone="canvas" source="docs/design/system/patterns.md">
       <Family title={t`选哪一种`}>
         <Specimen name="Tip" note={t`纯图标按钮的名称与快捷键。`}>
           <Tip label={t`搜索`} kbd="⌘K"><Button size="icon" variant="secondary" aria-label={t`搜索`}><IconSearch /></Button></Tip>
@@ -132,10 +132,10 @@ export function OverlayChapter() {
           <div className="w-full max-w-md"><Notice tone="warning">{t`Codex 本周额度剩余 8%。`}</Notice></div>
         </Specimen>
       </Family>
-      <Plate number="10.2" title={t`弹窗结构`} note={t`标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。`}>
+      <Plate number={2} title={t`弹窗结构`} note={t`标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。`}>
         <Anatomy />
       </Plate>
-      <Plate number="10.3" title={t`弹窗宽度`} note={t`四档宽度按内容选择；工作区弹窗带自己的导航。`}>
+      <Plate number={3} title={t`弹窗宽度`} note={t`四档宽度按内容选择；工作区弹窗带自己的导航。`}>
         <Widths />
       </Plate>
     </Chapter>

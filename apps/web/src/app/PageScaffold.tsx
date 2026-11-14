@@ -46,7 +46,7 @@ export function PageHeader({ title, meta, actions, divided, sidebarCollapsed, on
  * A workbench page: a fixed header over one scroller holding a centred column. The page is a
  * Back-closable layer, so the browser's Back and Escape-to-close reach `onClose`.
  */
-export function PageScaffold({ title, meta, actions, column = 'document', divided, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, scrollRef, onScroll, scrollerProps, columnClassName, pinned, children }: HeaderProps & {
+export function PageScaffold({ title, meta, actions, column = 'document', divided, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, scrollRef, onScroll, scrollerProps, columnClassName, pinned, aside, children }: HeaderProps & {
   column?: PageColumn;
   onClose: () => void;
   scrollRef?: Ref<HTMLDivElement>;
@@ -56,6 +56,8 @@ export function PageScaffold({ title, meta, actions, column = 'document', divide
   columnClassName?: string;
   /** Drawn over the scroller and outside it, so it stays put while the page scrolls (positioned against the page root). */
   pinned?: ReactNode;
+  /** A contents column left of the scroller, scrolling on its own (patterns.md §1.2, 目录加正文). */
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   const overlay = useOverlayState({ open: true, onOpenChange: (next) => { if (!next) onClose(); } });
@@ -63,10 +65,13 @@ export function PageScaffold({ title, meta, actions, column = 'document', divide
     <OverlayScopeContext.Provider value={overlay.scope}>
       <div className="relative flex h-full min-h-0 flex-col bg-bg">
         <PageHeader title={title} meta={meta} actions={actions} divided={divided} sidebarCollapsed={sidebarCollapsed} onOpenSidebar={onOpenSidebar} onExpandSidebar={onExpandSidebar} />
-        <div ref={scrollRef} onScroll={onScroll} className="min-h-0 flex-1 overflow-y-auto" {...scrollerProps}>
-          {column === 'none' ? children : (
-            <div className={cn('mx-auto box-content px-4 pb-16 pt-6 md:px-8 md:pt-10', COLUMNS[column], columnClassName)}>{children}</div>
-          )}
+        <div className="flex min-h-0 flex-1">
+          {aside}
+          <div ref={scrollRef} onScroll={onScroll} className="min-h-0 min-w-0 flex-1 overflow-y-auto" {...scrollerProps}>
+            {column === 'none' ? children : (
+              <div className={cn('mx-auto box-content px-4 pb-16 pt-6 md:px-8 md:pt-10', COLUMNS[column], columnClassName)}>{children}</div>
+            )}
+          </div>
         </div>
         {pinned}
       </div>

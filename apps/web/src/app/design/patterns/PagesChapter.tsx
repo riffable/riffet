@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconPanelLeft, IconPlus, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { DEFAULT_CONTENT_WIDTH, MAX_CONTENT_WIDTH, MIN_CONTENT_WIDTH } from '@/lib/content-width';
 import { cn } from '@/lib/utils';
-import { COLUMN_GUTTER_TOTAL } from '../session/ContentWidthHandle';
-import { PANEL_DEFAULT, panelDockMinWidth, SIDEBAR_DEFAULT } from '../state/uiStore';
-import { Chapter, Frame, Plate, Scrubber } from './specimen';
+import { COLUMN_GUTTER_TOTAL } from '../../session/ContentWidthHandle';
+import { PANEL_DEFAULT, panelDockMinWidth, SIDEBAR_DEFAULT } from '../../state/uiStore';
+import { Bar, Mark, Sketch, SketchHeader } from './parts';
+import { Chapter, Frame, Plate, Scrubber } from '../specimen';
 
 /** The widest window the figure draws, and the height every window is drawn at. */
 const WIDEST = 1920;
@@ -130,18 +131,114 @@ function PageHeader() {
   );
 }
 
-export function LayoutChapter() {
+/** One page type: its wireframe at the proportions of a 1440 window, then what it is built from. */
+function PageType({ name, scaffold, uses, children }: { name: string; scaffold: string; uses: string; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <Sketch>{children}</Sketch>
+      <div className="flex flex-col gap-0.5">
+        <span className="text-sm font-medium text-fg">{name}</span>
+        <span className="font-mono text-2xs text-fg-3">{scaffold}</span>
+        <span className="text-xs text-fg-3">{uses}</span>
+      </div>
+    </div>
+  );
+}
+
+/** A column of rows, as the lists in a document page draw. */
+function Rows({ count = 5 }: { count?: number }) {
+  return <>{Array.from({ length: count }, (_, index) => <span key={index} className="flex h-[9%] items-center gap-[3%] rounded-sm bg-fg/[0.04] px-[3%]"><span className="size-2 rounded-sm bg-fg/[0.12]" /><Bar w={[55, 40, 62, 35, 48][index % 5]} /></span>)}</>;
+}
+
+const MAIN = 1176;
+const share = (width: number) => `${(width / MAIN) * 100}%`;
+
+/** The page types of the workbench, each drawn at its real column. */
+function PageTypes() {
+  const { t } = useLingui();
+  const body = 'mx-auto flex flex-1 flex-col gap-[3%] pt-[5%]';
+  return (
+    <Frame className="grid grid-cols-3 gap-x-6 gap-y-8 p-8 max-md:grid-cols-1 max-md:p-4">
+      <PageType name={t`会话页`} scaffold="Workbench · --content-width" uses={t`对话与它的面板`}>
+        <SketchHeader />
+        <div className={cn(body, 'justify-between pb-[3%]')} style={{ width: share(DEFAULT_CONTENT_WIDTH) }}>
+          <div className="flex flex-col gap-[4%]"><span className="ml-auto h-3 w-1/3 rounded-lg bg-fg/[0.08]" /><Bar w={90} /><Bar w={70} /><Bar w={82} /></div>
+          <span className="h-[18%] rounded-lg bg-fg/[0.06] shadow-[inset_0_0_0_1px_var(--line-strong)]" />
+        </div>
+      </PageType>
+      <PageType name={t`文档页`} scaffold={'PageScaffold column="document"'} uses={t`收藏、任务、插件`}>
+        <SketchHeader title={14} />
+        <div className={body} style={{ width: share(768) }}><Rows /></div>
+      </PageType>
+      <PageType name={t`看板页`} scaffold={'PageScaffold column="board"'} uses={t`统计`}>
+        <SketchHeader title={14} />
+        <div className={cn(body, 'grid grid-cols-3 content-start gap-[2%] px-[2%]')} style={{ width: share(1176) }}>
+          {Array.from({ length: 3 }, (_, index) => <span key={index} className="h-[18%] rounded-md bg-fg/[0.06]" />)}
+          <span className="col-span-2 h-[34%] rounded-md bg-fg/[0.06]" /><span className="h-[34%] rounded-md bg-fg/[0.06]" />
+        </div>
+      </PageType>
+      <PageType name={t`目录加正文`} scaffold={'PageScaffold aside={…}'} uses={t`设计规范；扩展管理用 PageHeader 自建`}>
+        <SketchHeader title={14} />
+        <div className="flex min-h-0 flex-1">
+          <div className="flex flex-col gap-[6%] bg-sidebar px-[1.5%] pt-[4%] edge-r" style={{ width: share(224) }}>{[70, 50, 62, 44].map((w, index) => <Bar key={index} w={w} />)}</div>
+          <div className={cn(body, 'min-w-0')} style={{ width: share(1176 - 224) }}><div className="mx-auto flex w-[80%] flex-col gap-[5%]"><Bar w={40} /><Bar w={90} /><Bar w={76} /><Bar w={84} /></div></div>
+        </div>
+      </PageType>
+      <PageType name={t`项目主页`} scaffold="NewSession" uses={t`新会话的起始页，输入框居中`}>
+        <SketchHeader title={18} />
+        <div className="flex flex-1 items-center justify-center"><span className="h-[22%] rounded-lg bg-fg/[0.06] shadow-[inset_0_0_0_1px_var(--line-strong)]" style={{ width: share(DEFAULT_CONTENT_WIDTH) }} /></div>
+      </PageType>
+      <div className="flex flex-col justify-end gap-2 text-xs text-fg-3 max-md:hidden">
+        <Mark>{t`页头 52 · 内容列居中`}</Mark>
+        <Mark>{t`图中宽度按 1440 窗口的主区 ${MAIN} 折算`}</Mark>
+      </div>
+    </Frame>
+  );
+}
+
+/** The settings dialog on a desktop window and on a phone. */
+function SettingsSketch() {
   const { t } = useLingui();
   return (
-    <Chapter id="layout" number="09" title={t`布局`} lede={t`工作台分为侧栏、主区、面板与终端四块；页面由页头和一条居中的内容列组成，内容列取三档宽度之一。`} source="docs/design/system/patterns.md">
-      <Plate number="9.1" title={t`工作台`} note={t`宽度小于 768 时进入手机布局；达到 ${panelDockMinWidth(SIDEBAR_DEFAULT, PANEL_DEFAULT)} 时面板停靠，窄于它时悬浮。图中数值由工作台的同一组常量算出。`}>
+    <Frame className="flex items-end justify-center gap-10 p-8 max-md:p-4">
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex aspect-[1080/820] w-full overflow-hidden rounded-2xl bg-elevated shadow-pop">
+          <div className="flex flex-col gap-[4%] bg-sidebar px-[2%] pt-[6%]" style={{ width: `${(208 / 1080) * 100}%` }}>{[60, 48, 55, 40, 52, 44].map((w, index) => <Bar key={index} w={w} className={index === 1 ? 'bg-fg/[0.3]' : undefined} />)}</div>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex items-center px-[4%] edge-b" style={{ height: `${(56 / 820) * 100}%` }}><Bar w={20} /></div>
+            <div className="flex flex-1 flex-col gap-[4%] px-[4%] pt-[5%]">
+              {[0, 1].map((group) => <div key={group} className="flex flex-col gap-[6%]"><Bar w={14} />{[0, 1, 2].map((row) => <span key={row} className="flex h-3 items-center justify-between rounded-sm bg-fg/[0.04] px-[2%]"><Bar w={30} /><span className="h-1.5 w-4 rounded-full bg-fg/[0.2]" /></span>)}</div>)}
+            </div>
+          </div>
+        </div>
+        <Mark>{t`min(1080, 100vw − 32) × min(820, 100dvh − 32)`}</Mark>
+      </div>
+      <div className="flex w-28 shrink-0 flex-col gap-2 max-md:w-20">
+        <div className="flex aspect-[390/844] w-full flex-col gap-[6%] rounded-lg bg-elevated p-[10%] shadow-[0_0_0_1px_var(--line-strong)]">{[60, 48, 55, 40, 52].map((w, index) => <Bar key={index} w={w} />)}</div>
+        <Mark>{t`手机：先分类，再全屏`}</Mark>
+      </div>
+    </Frame>
+  );
+}
+
+export function PagesChapter() {
+  const { t } = useLingui();
+  return (
+    <Chapter title={t`页面`} lede={t`工作台分为侧栏、主区、面板与终端四块；页面由页头和一条居中的内容列组成，内容列取三档宽度之一。页面共有五种类型。`} source="docs/design/system/patterns.md">
+      <Plate number={1} title={t`工作台`} note={t`宽度小于 768 时进入手机布局；达到 ${panelDockMinWidth(SIDEBAR_DEFAULT, PANEL_DEFAULT)} 时面板停靠，窄于它时悬浮。图中数值由工作台的同一组常量算出。`}>
         <Workbench />
       </Plate>
-      <Plate number="9.2" title={t`内容列`} note={t`阅读列的宽度由读者拖动调整；文档列和看板列固定。`}>
+      <Plate number={2} title={t`内容列`} note={t`阅读列的宽度由读者拖动调整；文档列和看板列固定。`}>
         <Columns />
       </Plate>
-      <Plate number="9.3" title={t`页头`} note={t`页面只有一个滚动容器，页头固定在它上方。`}>
+      <Plate number={3} title={t`页头`} note={t`页面只有一个滚动容器，页头固定在它上方。`}>
         <PageHeader />
+      </Plate>
+      <Plate number={4} title={t`页面类型`} note={t`类型决定骨架与内容列；同一类型的页面不另起布局。`}>
+        <PageTypes />
+      </Plate>
+      <Plate number={5} title={t`设置`} note={t`设置是弹窗，不是页面，用工作区一档。`}>
+        <SettingsSketch />
       </Plate>
     </Chapter>
   );

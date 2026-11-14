@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import { THEME_ROLES, type ThemeRole } from '@contracts';
 import { IconCircleAlert, IconCircleCheck, IconTriangleAlert } from '@/components/icons';
 import { cn } from '@/lib/utils';
-import { Chapter, display, ease, Frame, Plate, readFill, readInk, Token, usePainted, useScrollProgress, Value } from './specimen';
+import { Chapter, display, ease, Frame, Plate, readFill, readInk, Token, usePainted, useScrollProgress, Value } from '../specimen';
 
 const ofGroup = (prefix: RegExp) => THEME_ROLES.filter((role) => prefix.test(role));
 const SURFACES = ofGroup(/^bg/);
@@ -184,23 +184,21 @@ export function ColorChapter() {
   const { t } = useLingui();
   return (
     <Chapter
-      id="colors"
-      number="02"
       title={t`颜色`}
       lede={t`${THEME_ROLES.length} 个颜色角色由主题提供：${SURFACES.length} 级底色表达层次，${INKS.length} 级墨色表达文字主次，彩色用于状态与 agent 标志。`}
       source="apps/web/src/styles/index.css"
     >
       <SurfaceStack />
-      <Plate number="2.2" title={t`墨色`} note={t`对比度按 WCAG 2 相对亮度计算，底色为 bg。fg-4 用于占位符与快捷键这类可缺省的信息。`}>
+      <Plate number={2} title={t`墨色`} note={t`对比度按 WCAG 2 相对亮度计算，底色为 bg。fg-4 用于占位符与快捷键这类可缺省的信息。`}>
         <div className="grid grid-cols-4 max-md:grid-cols-2">{INKS.map((role) => <Ink key={role} role={role} />)}</div>
       </Plate>
-      <Plate number="2.3" title={t`Agent`} note={t`界面自有的四种彩色，用于 agent 的头像与名称标记。`}>
+      <Plate number={3} title={t`Agent`} note={t`界面自有的四种彩色，用于 agent 的头像与名称标记。`}>
         <div className="flex gap-4 max-md:flex-wrap">{AGENTS.map((role) => <AgentPlate key={role} role={role} />)}</div>
       </Plate>
-      <Plate number="2.4" title={t`状态与差异`} note={t`success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。`}>
+      <Plate number={4} title={t`状态与差异`} note={t`success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。`}>
         <Frame className="p-6 max-md:p-4"><StatusSpecimen /></Frame>
       </Plate>
-      <Plate number="2.5" title={t`全部角色`} note={t`取值读自当前主题。`}>
+      <Plate number={5} title={t`全部角色`} note={t`取值读自当前主题。`}>
         <div className="grid gap-x-8 edge-t sm:grid-cols-2 lg:grid-cols-3">
           {THEME_ROLES.map((role) => <IndexRow key={role} role={role} />)}
         </div>

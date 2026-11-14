@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { DESKTOP_TEXT } from '@contracts';
-import { IconCheck, IconSquareTerminal, IconX } from '@/components/icons';
+import { IconSquareTerminal } from '@/components/icons';
 import { Segmented } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
-import { Chapter, display, Frame, Plate, Token, usePainted, Value } from './specimen';
+import { Chapter, display, Frame, Plate, Token, usePainted, Value } from '../specimen';
 
 type Step = keyof typeof DESKTOP_TEXT;
 
@@ -134,7 +134,7 @@ function Annotated() {
           {keyed(4, <code className="font-mono text-sm text-fg">pnpm vitest run settings</code>)}
           {keyed(5, <span className="text-xs text-fg-3">apps/web · {t`12 项通过`}</span>)}
         </div>
-        {keyed(6, <span className="text-2xs text-fg-3">{t`已处理 · 1m 41s · 2.3k tokens`}</span>)}
+        {keyed(6, <span className="text-2xs text-fg-3">{t`已处理 · 1m 41s · 2.3K tokens`}</span>)}
       </Frame>
       <ol className="flex flex-col justify-center edge-t">
         {roles.map((role, index) => (
@@ -149,35 +149,18 @@ function Annotated() {
   );
 }
 
-function Rule({ title, good, bad }: { title: string; good: ReactNode; bad: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-5 edge-t pt-4">
-      <span className="text-sm text-fg-3">{title}</span>
-      <div className="flex items-start gap-3 text-lg text-fg"><IconCheck className="mt-1.5 size-4 shrink-0 text-fg-3" />{good}</div>
-      <div className="flex items-start gap-3 text-lg text-fg-4"><IconX className="mt-1.5 size-4 shrink-0" /><span className="line-through decoration-1">{bad}</span></div>
-    </div>
-  );
-}
-
 export function TypeChapter() {
   const { t } = useLingui();
   return (
-    <Chapter id="type" number="03" title={t`文字`} lede={t`两种字体、${Object.keys(DESKTOP_TEXT).length} 档字号、两种字重。行高取 2px 的整数倍；中西文混排遵循 W3C《中文排版需求》。`} tone="canvas" source="packages/contracts/src/design-tokens.ts">
-      <Plate number="3.1" title={t`字体`} note={t`界面用 Inter，代码用 JetBrains Mono，中文回退苹方。字重为 400 与 500；600 仅用于品牌名。`}>
+    <Chapter title={t`文字`} lede={t`两种字体、${Object.keys(DESKTOP_TEXT).length} 档字号、两种字重。行高取 2px 的整数倍。`} tone="canvas" source="packages/contracts/src/design-tokens.ts">
+      <Plate number={1} title={t`字体`} note={t`界面用 Inter，代码用 JetBrains Mono，中文回退苹方。字重为 400 与 500；600 仅用于品牌名。`}>
         <FaceSpecimen />
       </Plate>
-      <Plate number="3.2" title={t`字阶`} note={t`字号与行高成对使用，随读者设定的文字大小整体缩放。`}>
+      <Plate number={2} title={t`字阶`} note={t`字号与行高成对使用，随读者设定的文字大小整体缩放。`}>
         <Tester />
       </Plate>
-      <Plate number="3.3" title={t`角色`} note={t`组件引用文字角色，字号与行高由角色决定。`}>
+      <Plate number={3} title={t`角色`} note={t`组件引用文字角色，字号与行高由角色决定。`}>
         <Annotated />
-      </Plate>
-      <Plate number="3.4" title={t`排版`}>
-        <div className="grid gap-x-8 gap-y-10 md:grid-cols-3">
-          <Rule title={t`中文与拉丁字母、数字之间加半角空格`} good={t`运行 Codex，改了 3 个文件`} bad={t`运行Codex，改了3个文件`} />
-          <Rule title={t`并列的元信息以间隔号分隔`} good={t`已处理 · 1m 41s`} bad={t`已处理 | 1m 41s`} />
-          <Rule title={t`变化中的数字使用等宽数字`} good={<span className="tabular-nums">1,111 → 8,888</span>} bad={<span className="[font-variant-numeric:proportional-nums]">1,111 → 8,888</span>} />
-        </div>
       </Plate>
     </Chapter>
   );

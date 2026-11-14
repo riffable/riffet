@@ -644,10 +644,6 @@ msgstr ""
 msgid "清除"
 msgstr ""
 
-#: src/app/extensions/ExtensionsPage.tsx
-msgid "清除搜索"
-msgstr ""
-
 #: src/app/extensions/ExtensionCatalog.tsx
 msgctxt "extensions-clear-filters"
 msgid "清除筛选"

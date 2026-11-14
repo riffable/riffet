@@ -30,10 +30,6 @@ msgstr "{0} 未登录"
 msgid "{0} 读取失败"
 msgstr "{0} 读取失败"
 
-#: src/app/SessionInfo.tsx
-msgid "{ago}前"
-msgstr "{ago}前"
-
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
@@ -68,7 +64,7 @@ msgstr "Couldn't read Git status"
 msgid "Shell 终端"
 msgstr "Shell 终端"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "上一个标签"
 msgstr "上一个标签"
 
@@ -88,7 +84,7 @@ msgstr "上下文长度"
 msgid "上移"
 msgstr "上移"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "下一个标签"
 msgstr "下一个标签"
 
@@ -165,7 +161,7 @@ msgid "会话 ID"
 msgstr "会话 ID"
 
 #: src/app/Header.tsx
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "会话信息"
 msgstr "会话信息"
 
@@ -200,6 +196,10 @@ msgstr "使用访问令牌登录"
 #: src/app/App.tsx
 msgid "使用配对码登录"
 msgstr "使用配对码登录"
+
+#: src/app/hostShortcuts.ts
+msgid "侧栏"
+msgstr "侧栏"
 
 #: src/app/SessionInfo.tsx
 msgid "侧边聊天"
@@ -280,7 +280,7 @@ msgstr "关闭其他标签"
 msgid "关闭右侧标签"
 msgstr "关闭右侧标签"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "关闭标签"
 msgstr "关闭标签"
 
@@ -304,7 +304,7 @@ msgstr "内置"
 msgid "内置插件不可卸载"
 msgstr "内置插件不可卸载"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "最后一个标签"
 msgstr "最后一个标签"
 
@@ -339,7 +339,7 @@ msgstr "分享"
 msgid "分支"
 msgstr "分支"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换到第 1–8 个标签"
 msgstr "切换到第 1–8 个标签"
 
@@ -347,7 +347,7 @@ msgstr "切换到第 1–8 个标签"
 msgid "切换浅色 / 深色"
 msgstr "切换浅色 / 深色"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换视图"
 msgstr "切换视图"
 
@@ -524,6 +524,7 @@ msgid "命令已复制，但 Riffet 中的会话进程未停止"
 msgstr "命令已复制，但 Riffet 中的会话进程未停止"
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "命令面板"
 msgstr "命令面板"
 
@@ -921,6 +922,7 @@ msgid "搜索中…"
 msgstr "搜索中…"
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "搜索会话"
 msgstr "搜索会话"
 
@@ -1050,7 +1052,7 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr "文件"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
 msgstr "新会话"
@@ -1668,6 +1670,7 @@ msgstr "管理插件"
 msgid "管理收藏 {0}"
 msgstr "管理收藏 {0}"
 
+#: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx
 msgid "终端"
 msgstr "终端"
@@ -1965,7 +1968,7 @@ msgstr "重命名收藏"
 msgid "重命名项目"
 msgstr "重命名项目"
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "重新打开关闭的标签"
 msgstr "重新打开关闭的标签"
 

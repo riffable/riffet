@@ -298,6 +298,7 @@ msgstr "Chart 8"
 msgid "在这里编写操作说明。"
 msgstr "Write instructions here."
 
+#: src/components/ui/copy-button.tsx
 #: src/components/ui/feedback-notice.tsx
 msgid "复制"
 msgstr "Copy"
@@ -577,6 +578,10 @@ msgstr "Elevated background"
 #: src/lib/theme-role-labels.ts
 msgid "淡分隔线"
 msgstr "Subtle divider"
+
+#: src/components/ui/search-field.tsx
+msgid "清除搜索"
+msgstr "Clear search"
 
 #: src/lib/theme-role-labels.ts
 msgid "激活背景"

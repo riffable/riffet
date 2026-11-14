@@ -154,20 +154,26 @@ export const PAGE = 'mx-auto w-full max-w-[1200px] px-12 max-md:px-5';
 type Tone = 'paper' | 'canvas';
 const ChapterTone = createContext<Tone>('paper');
 
-/** The element id a chapter is reached by; prefixed, so it cannot collide with the workbench's own. */
-export const chapterAnchor = (id: string) => `design-${id}`;
+/** Where the chapter being drawn sits in the catalogue: its number and the group it belongs to. */
+export interface ChapterPlace { number: string; group: string }
+export const ChapterPlaceContext = createContext<ChapterPlace>({ number: '', group: '' });
 
-/** One chapter: a band of its own paper, its number and source, its title and a one-line thesis. */
-export function Chapter({ id, number, title, lede, source, tone = 'paper', children }: { id: string; number: string; title: string; lede: ReactNode; source?: string; tone?: Tone; children: ReactNode }) {
+/** The element id a section of the chapter is reached by; prefixed, so it cannot collide with the workbench's own. */
+export const sectionAnchor = (key: string | number) => `design-section-${key}`;
+
+/** One chapter: its own paper, its number, group and source, its title and a one-line thesis. */
+export function Chapter({ title, lede, source, tone = 'paper', children }: { title: string; lede: ReactNode; source?: string; tone?: Tone; children: ReactNode }) {
+  const place = useContext(ChapterPlaceContext);
   return (
     <ChapterTone.Provider value={tone}>
-      <section id={chapterAnchor(id)} data-design-chapter data-number={number} data-title={title} className={cn(tone === 'canvas' ? 'bg-sidebar' : 'bg-bg')}>
-        <div className={cn(PAGE, 'flex flex-col gap-24 py-32 max-md:gap-16 max-md:py-20')}>
+      <section data-design-chapter className={cn('min-h-full', tone === 'canvas' ? 'bg-sidebar' : 'bg-bg')}>
+        <div className={cn(PAGE, 'flex flex-col gap-24 pb-32 pt-20 max-md:gap-16 max-md:pb-20 max-md:pt-12')}>
           <header className="flex max-w-[48rem] flex-col">
             <Reveal className="flex items-center gap-3 font-mono text-xs text-fg-4">
-              <span className="tabular-nums text-fg-3">{number}</span>
+              <span className="tabular-nums text-fg-3">{place.number}</span>
               <span className="h-px w-6 bg-line-strong" />
-              {source && <span className="min-w-0 truncate">{source}</span>}
+              <span className="shrink-0 font-sans text-fg-3">{place.group}</span>
+              {source && <span className="min-w-0 truncate max-md:hidden">{source}</span>}
             </Reveal>
             <Reveal delay={60}><h2 className="mt-5 font-semibold leading-[1.05] tracking-tight text-fg" style={display(36, '5vw', 64)}>{title}</h2></Reveal>
             <Reveal delay={120}><p className="mt-5 max-w-[36em] text-lg text-fg-2">{lede}</p></Reveal>
@@ -180,11 +186,13 @@ export function Chapter({ id, number, title, lede, source, tone = 'paper', child
 }
 
 /** A numbered figure: its caption in the first three columns, the figure in the other nine. */
-export function Plate({ number, title, note, action, children }: { number: string; title: string; note?: ReactNode; action?: ReactNode; children: ReactNode }) {
+export function Plate({ number, title, note, action, children }: { number: number; title: string; note?: ReactNode; action?: ReactNode; children: ReactNode }) {
+  const place = useContext(ChapterPlaceContext);
+  const label = `${place.number}.${number}`;
   return (
-    <div className="grid grid-cols-12 gap-x-6 gap-y-6">
+    <div id={sectionAnchor(number)} data-design-section={label} data-title={title} className="grid scroll-mt-8 grid-cols-12 gap-x-6 gap-y-6">
       <Reveal className="col-span-12 flex flex-col gap-2 md:col-span-3">
-        <span className="font-mono text-xs text-fg-4">{number}</span>
+        <span className="font-mono text-xs text-fg-4">{label}</span>
         <h3 className="text-base font-medium text-fg">{title}</h3>
         {note && <p className="text-sm text-fg-3">{note}</p>}
         {action && <div className="mt-3">{action}</div>}
@@ -295,10 +303,11 @@ export function readFill(element: HTMLElement): string | undefined {
 }
 
 /** One component on its own stage, named underneath with the prop that selects it. */
-export function Specimen({ name, prop, note, wide, children }: { name: string; prop?: string; note?: string; wide?: boolean; children: ReactNode }) {
+/** `wide` spans two columns; `full` the whole row, for a table of variants. */
+export function Specimen({ name, prop, note, wide, full, children }: { name: string; prop?: string; note?: string; wide?: boolean; full?: boolean; children: ReactNode }) {
   const tone = useContext(ChapterTone);
   return (
-    <Reveal className={cn('flex min-w-0 flex-col gap-3', wide && 'md:col-span-2')}>
+    <Reveal className={cn('flex min-w-0 flex-col gap-3', wide && 'md:col-span-2', full && 'md:col-span-2 lg:col-span-3')}>
       <div className={cn('flex min-h-52 flex-wrap items-center justify-center gap-3 rounded-2xl p-8 max-md:min-h-40 max-md:p-5', tone === 'canvas' ? 'bg-bg shadow-[0_0_0_1px_var(--line)]' : 'bg-sidebar')}>{children}</div>
       <div className="flex flex-col gap-0.5 px-1">
         <span className="flex items-baseline justify-between gap-3">
@@ -314,7 +323,7 @@ export function Specimen({ name, prop, note, wide, children }: { name: string; p
 /** A family of components: a heading, then their stages. */
 export function Family({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-6">
+    <div id={sectionAnchor(title)} data-design-section="" data-title={title} className="flex scroll-mt-8 flex-col gap-6">
       <Reveal><h3 className="text-xl font-semibold tracking-tight text-fg">{title}</h3></Reveal>
       <div className="grid gap-x-5 gap-y-10 md:grid-cols-2 lg:grid-cols-3">{children}</div>
     </div>

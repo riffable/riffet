@@ -787,7 +787,6 @@ msgstr ""
 msgid "备注"
 msgstr ""
 
-#: src/app/session/Markdown.tsx
 #: src/app/session/MarkLayer.tsx
 #: src/app/session/Timeline.tsx
 msgid "复制"

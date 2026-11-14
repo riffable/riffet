@@ -1,6 +1,6 @@
 # 模式
 
-[基础](foundations.md)定义取值，[组件](components/)定义单个控件。本文定义多个组件如何组成页面、浮层和选择。取值以 Web 为准，Mac 与移动端按 [README](README.md) §3 的平台分工映射。
+[基础](foundations.md)定义取值，[组件](components/)定义单个控件。本文定义多个组件如何组成页面、浮层和选择。取值以 Web 为准，Mac 与移动端按 [README](README.md) §3 的平台分工映射；Mac 的对应写法见 [macOS](macos.md)。
 
 每节末尾的「现状」列出与规则不符的实现，迁移时逐项消掉。
 
@@ -29,21 +29,40 @@
 | 档 | 宽度 | 用于 |
 |---|---|---|
 | 阅读 | `--content-width`，默认 920，读者可拖到 640–1600 | 对话、终端、输入框 |
-| 文档 | 768（`max-w-3xl`） | 列表、表单、项目主页、收藏、任务、插件 |
-| 看板 | 1200 | 统计、设计规范这类并排放图的页面 |
+| 文档 | 768（`max-w-3xl`） | 列表、表单、收藏、任务、插件 |
+| 看板 | 1200 | 统计这类并排放图的页面 |
 
-- **内边距**：内容列左右 16（手机）/ 32（桌面）；顶部 24 / 40；底部 64，给最后一项留出滚动余量。内容列的宽度不含内边距。
+- **内边距**：内容列左右 16（手机）/ 32（桌面）；顶部 24 / 40；底部 64，给最后一项留出滚动余量。文档、看板两档的宽度不含内边距；阅读档是例外，`--content-width` 含左右各 48 的内边距，文字宽是它减 96（[界面](surfaces.md) §1）。
 - 一个页面只有一个滚动容器。页头固定，滚动区占满剩余高度。
 - **实现**：Web 的页面用 `app/PageScaffold.tsx`：`PageScaffold` 给出页头、滚动区和内容列档位（`column="document" | "board" | "none"`），并把页面登记为可用返回键关闭的一层；只需要页头的页面用 `PageHeader`。
 - 页面的一级视图用 `UnderlineTabs`，放在内容列顶部；视图内的筛选用 `Segmented`（§3）。
 
-**例外**：扩展管理是目录加检查器的双栏页，只用 `PageHeader`，目录自带 1080 的上限。项目主页是新会话的起始页，输入框居中，宽度跟随输入框。
+**例外**：扩展管理是目录加检查器的双栏页，只用 `PageHeader`，目录自带 1080 的上限。项目主页是新会话的起始页，输入框居中，宽度跟随输入框（720，[界面](surfaces.md) §2）。
 
 ### 1.3 设置页
 
 - 设置是一个大弹窗：`min(1080px, 100vw − 32)` × `min(820px, 100dvh − 32)`，左侧 208 宽的分类导航，右侧是标题栏（高 56）加滚动区。手机上先显示分类列表，进入分类后全屏显示。
 - 分类内容由 `SettingsGroup`（组标题 + 一张卡片）和 `SettingsRow`（左侧名称与说明，右侧控件）组成。进入二级页用 `SettingsLinkRow`。
 - 分类保持原有的分组，新设置放进已有分类。说明文字只写读者推断不出的信息：存储位置、是否需要重启、是否跨设备、计费与权限。
+
+### 1.4 页面类型
+
+工作台里的页面只有五种，每种对应一个骨架；新页面先归入其中一种，不另起布局。
+
+| 类型 | 骨架 | 内容列 | 用于 |
+|---|---|---|---|
+| 会话页 | `Workbench` 的会话区 | 阅读 | 会话；页头是标签栏或标题行，底部是输入框 |
+| 文档页 | `PageScaffold column="document"` | 768 | 收藏、任务、插件 |
+| 看板页 | `PageScaffold column="board"` | 1200 | 统计 |
+| 目录加正文 | `PageScaffold` 的 `aside` | 正文按文档或阅读列 | 设计规范；扩展管理（见现状） |
+| 项目主页 | 新会话页 | 输入框居中，宽度同阅读列 | 选定项目后的起始页 |
+
+- **目录加正文**：`aside` 是滚动区左侧一列，宽 224（`w-56`），底 `bg-sidebar`、右边线 `edge-r`，自己滚动；窄于 `lg` 时隐藏，目录收进页头的菜单。正文仍是 `PageScaffold` 的唯一滚动容器。
+- 页面与会话页共用页头规则（§1.2）。设置不是页面，是 §1.3 的工作区弹窗。
+
+**现状**：
+
+- 扩展管理（`extensions/ExtensionsPage.tsx`）仍用 `PageHeader` 自建双栏，目录带 1080 的上限；尚未改用 `aside`。
 
 ## 2. 浮层
 
@@ -117,3 +136,175 @@
 - 同一行只放一种选择控件。同一种选择在不同页面用同一种控件。
 
 - 插件详情的「配置」页由插件决定有几个，用标题式 `Select` 切换。
+
+在选择控件的选用上，2026-11-14 的决定见 [DECISIONS](../DECISIONS.md)「选项多或切换所属对象时改用 Select」。
+
+## 4. 导航
+
+读者经过四层：会话、盖在会话上的页面、浮层，以及通往会话的两条路径（侧栏与标签页）。上层关闭后回到下层，不改变下层的状态。
+
+| 层 | 组件 | 地址 | 关闭或离开 |
+|---|---|---|---|
+| 侧栏 | `Sidebar.tsx`：会话按项目或时间分组，项目可折叠 | 无 | ⌘B 收起；收起后悬停边缘浮出；手机上是抽屉 |
+| 会话标签页 | `tabs/TabBar.tsx`、`tabs/tabsStore.ts` | 当前会话的 `/c/<sessionId>` | ⌥W；点标签的关闭按钮 |
+| 页面 | `PageScaffold` | `/tasks`、`/marks`、`/stats`、`/extensions`、`/plugins?id=…`、`/design/<章节>` | Back、Escape |
+| 浮层 | 搜索、命令面板与 §2 的各种浮层 | 无 | Escape、Back |
+
+### 4.1 会话标签页
+
+- 标签有两种：**已保留**（实线）和**临时**（虚线）。临时标签被下一个打开的会话替换，所以浏览不会留下一排标签。
+- 两项设置决定新标签的状态（`tabs/tabsStore.ts`）：「打开会话时」`preview`（默认，发送消息后保留）、`keep`、`manual`（只有读者手动加入才保留）；「新建会话时」`keep`（默认）、`preview`。
+- 「新建会话时」为 `preview` 时，Riffet 新建或分叉的会话是临时标签，**发送消息不保留它**，只有读者自己的保留动作才算：双击、「加入标签栏」、⌘ 点击、固定。该标记随标签一起存储，刷新页面或重启服务后不丢失（`8da1e3c`）。「打开会话时」为 `keep` 时覆盖它。
+- 标签栏有三种样式：关闭、标题栏（标签取代标题行）、独立一行（标签在主区上方的画布上）。
+
+### 4.2 页面与地址
+
+- 页面盖在会话上，地址不含会话 ID；刷新后下层的会话由上次的选择恢复。会话是 `/c/<sessionId>`（`?mark=<markId>` 定位到一条收藏），项目主页是 `/p/<projectId>`。地址由 `state/page-url.ts` 的 `readPageAddress` / `pageAddressUrl` 读写，用 `replaceState` 同步，不为每次切换增加历史记录。
+- 插件 ID 含点，服务端把带扩展名的路径当文件，所以 ID 放在查询参数里（`/plugins?id=…`）。
+- 页面经 `PageScaffold` 登记为一层，Back 与 Escape 都到 `onClose`（`lib/overlay-navigation.ts`）。
+
+### 4.3 视图层级
+
+- 页面的一级视图用 `UnderlineTabs`，放在内容列顶部；视图内的筛选与子视图用 `Segmented`。两层不用同一种控件，才读得出层级。选用规则见 §3。
+
+### 4.4 搜索与命令面板
+
+- 同一个浮层（`CommandPalette.tsx`）有两个范围：⌘K 是「会话」，按标题或内容找会话；⌘⇧P 是「命令」，动作、会话和项目排在一个列表里，排序规则在 `lib/command-search.ts`。
+- 焦点始终在查询框里，当前行用 `aria-activedescendant` 标出，所以输入不被打断。切换范围时列表高度不变（§2.2）。侧栏的「搜索内容」是同一入口。
+
+## 5. 反馈与加载
+
+### 5.1 反馈放在哪里
+
+| 情形 | 用 | 位置与时长 |
+|---|---|---|
+| 字段或步骤的错误 | 行内 `<p role="alert" class="text-danger">` | 紧挨出错处，随修正消失 |
+| 一次操作的结果 | `toast` | 顶部居中，最多 4 条；成功 2.8 s、信息 3.5 s、错误 6.5 s，带撤销的至少 6 s，悬停暂停 |
+| 持续存在的状态 | `Notice`（行内） | 留在所属内容里，状态解除才消失 |
+| 输入框里的提示 | `FeedbackNotices`（`components/ui/feedback-notice.tsx`） | 输入框上方；出现后至少可见 1500 ms |
+| 会话中的失败 | `FailureDetails`（`session/FailureDetails.tsx`） | 在时间线的失败记录里；原因可见，诊断折叠在 `Collapse` 里 |
+
+- **同一次失败只显示一处**（DECISIONS 2026-11-12）：已加载的失败记录负责展示，消息下方不重复。
+- **提示条跟随主题**（DECISIONS 2026-11-13）：`toast` 与提示条用浮层底色、细描边与阴影；成功与失败只体现在图标颜色上，失败时整条不染红。`Notice` 是行内的浅色底，不是浮层。
+- 正常操作不增加成功通知；展示时序、最短时长与适用范围见 [feedback-presentation.md](../feedback-presentation.md)，不在此重复。
+- 等待不是提示：加载、保存、同步这类状态只由正在等待的控件表达，结束后不留下「已完成」。
+
+### 5.2 加载
+
+- **原地**：`Spinner`（14）放在正在等待的控件内，替换它的图标位；按钮宽度不变，邻近控件不移动。
+- **骨架**：`Skeleton`（`components/ui/skeleton.tsx`），尺寸与真实内容一致，数据到达时页面不跳动；目前用在统计页与服务状态页。
+- **会话里**：`WorkingIndicator`（`session/Timeline.tsx`）：一个脉动圆点、「正在处理」的流光文字与已用时间；已用时间的槽位一开始就存在，计时增长不挤动旁边的输出速率。
+- 整页加载时，`Spinner` 居中，不带文字。
+
+### 5.3 空状态
+
+- 用 `EmptyState`：图标块、标题（现状是什么）、可选一句说明、可选一个下一步按钮。失败的空状态（无法读取设备）附「重试」；没有下一步时只有标题。
+
+**现状**：
+
+- 没有共用的加载延迟阈值；`Spinner` 立即出现。`feedback-presentation.md` 称各入口沿用自身的延迟，代码中未找到共用实现。
+- `toast` 的自定义 `duration` 没有下限（`lib/toast.ts`），与 1500 ms 的最短可见规则不一致。
+- `Field` 已有 `error` 槽；`plugins/PluginFlowDialog.tsx` 的 `<p role="alert">` 是流程级失败，不属字段错误，保持手写。
+- 复制反馈在 `Markdown.tsx`、`SessionInfo.tsx` 中 1400 ms 后复原，低于 1500 ms。
+
+## 6. 确认与撤销
+
+按「能否取回」选：
+
+| 操作 | 用 |
+|---|---|
+| 可恢复 | 立即执行，`toast` 带「撤销」 |
+| 不可恢复 | `confirmDialog({ destructive: true })` |
+| 会丢失未保存的输入 | `useDiscardGuard`：干净时直接关闭，有改动时确认「放弃修改」 |
+| 输入一个值 | `promptDialog`（重命名） |
+
+- Git 面板的丢弃是同一动作两条路径：能先备份检查点时，立即丢弃并给「撤销」（`panels/GitPanel.tsx` 的 `discarded`）；无法备份（`DISCARD_UNRECOVERABLE`）时先 `confirmDialog`，说明「无法恢复」。清空评论同理，立即清空并给「撤销」。
+- `confirmDialog` 的 `destructive: true` 使用 `danger` 按钮，打开时焦点落在取消上；非危险确认的焦点在主操作上。
+- **措辞**：标题陈述要发生的事（「删除这个会话？」），说明写后果与范围，主按钮是动词加对象（「删除会话」「放弃修改」），不写「确定」「确认」。取消永远叫「取消」。
+- 需要等待请求结果、并在弹窗里显示错误的确认自己写弹窗（§2.2）。
+
+**现状**：
+
+- `promptDialog` 不传 `confirmLabel` 时主按钮仍默认「确定」（`confirmDialog` 已要求必填）。
+
+## 7. 表单与设置
+
+### 7.1 设置行
+
+- `SettingsGroup`：组标题（`text-xs font-medium fg-3`，高 28）加一张卡片（`rounded-xl border-line bg-elevated`，横向内边距 16，手机 12，行间 `edge-t`），卡片下可有一行 `note`（`text-xs fg-3`）。无标题的组直接以卡片开始。
+- `SettingsRow`：左侧名称（`text-sm font-medium`）与可选说明（`text-xs fg-3`），右侧控件；纵向内边距 14。手机上纵向堆叠，控件行高至少 44，开关除外。
+- `SettingsLinkRow`：进入二级页，高 48，右侧 `IconChevronRight`（`fg-4`）。
+- 这三个组件由 `app/settings/SettingsLayout.tsx` 导出，同时供插件页使用。
+
+### 7.2 字段
+
+- `Field` 是标签（`text-sm font-medium`）、控件、可选提示（`text-xs fg-3`）的纵向组合，间距 6。
+- 校验在提交时进行，错误显示在字段下方，用 `role="alert"`，字段带 `aria-invalid`；错误文字说明如何修正。离开字段时不弹出错误。
+
+### 7.3 保存
+
+| 位置 | 保存 | 离开时 |
+|---|---|---|
+| 设置页、`Popover` | 改动立即生效 | 无需确认 |
+| `Dialog` 表单 | 提交时保存，页脚「取消」与主操作 | 有改动时经 `useDiscardGuard` 确认 |
+
+### 7.4 说明文字
+
+- 只写读者推断不出的信息：存储位置（「仅保存在这台设备」）、是否需要重启、是否跨设备、计费与权限；每条一句。不复述控件的名称或显然的行为。
+
+**现状**：
+
+- `Field` 没有错误槽，行内错误各自写（见 §5）。
+- 复选框是裸 `<input type="checkbox">`（`DirectoryPicker.tsx`、`settings/ProviderModelList.tsx`、`plugins/PluginGrantDialog.tsx` 等 9 处），没有共用的 `Checkbox`。
+
+## 8. 列表
+
+- **行**：`ListRow`（`components/ui/list-row.tsx`）：高 32（触屏 44），横向内边距 10，圆角 `lg`；依次是前置图标（16，`fg-3`）、标题（单行截断）、元信息（`text-xs fg-4`，`tabular-nums`）、尾部操作。
+- **尾部操作**：指针停留（`group-hover`）或键盘进入（`group-focus-within`）时出现，触屏（`no-hover`）上常驻。用 `RowActions`（或 `rowReveal`），分组名固定 `group/row`，菜单打开时也保持显示。操作藏起来时仍占位，行宽不变，也不拦截点击。
+- **更多**：溢出操作收进 `IconEllipsis` 的 `Button size="icon-sm" variant="quiet"`，`aria-label` 为「更多操作」，菜单靠右对齐；删除放在最后，用分隔线隔开（§2.3）。
+- **当前行**：`bg-active`，文字 `fg`；悬停行 `bg-hover`。当前与悬停不同时靠描边或阴影表示。
+- **空列表**：`EmptyState`（§5.3）。
+
+## 9. 搜索与筛选
+
+- **搜索框**：`SearchField`（`components/ui/search-field.tsx`）：`Input` 加左侧 `IconSearch`（16，`fg-4`），`pl-8 pr-8`；右侧空时显示聚焦键 `Kbd`，有内容时换成清除按钮（`IconX`，`Button size="icon-xs" variant="quiet"`，`aria-label` 为「清除搜索」）。
+- **Escape**：有内容时先清空；已空时失焦，浮层里的查询行按浮层规则关闭。输入法组词期间不响应（`isComposingKey`）。
+- **筛选**：固定且少的选项用 `Segmented`；更多条件收进 `IconListFilter` 图标按钮的弹出层，有启用项时按钮变 `secondary` 并显示数量。
+- **无结果**：`EmptyState`，标题写明没有符合什么（「没有符合条件的收藏」），不重复输入的关键词。
+- **匹配**：`lib/command-search.ts` 的 `matchCommands` 要求每个以空白分隔的词都命中标签或关键词，标签前缀命中排最前；当前不在结果里高亮命中的文字。
+
+**现状**：
+
+- 浮层里的查询行（`CommandPalette.tsx`、`SessionSearchDialog.tsx`、`ImportSessionDialog.tsx` 的 `QuickInput`）是组合框，外观与 Escape（关闭浮层）都不同于 `SearchField`。
+- `Sidebar.tsx` 的「搜索内容」是打开浮层的按钮，不是输入框。
+
+## 10. 键盘
+
+### 10.1 快捷键
+
+| 范围 | 键 | 来源 |
+|---|---|---|
+| 工作台 | ⌘K 搜索会话 · ⌘⇧P 命令面板 · ⌘B 侧栏 · Ctrl+\` 终端 | `app/use-global-shortcuts.ts` |
+| 会话标签页 | ⌥1–8 · ⌥9 · ⌥[ · ⌥] · ⌥W · ⌥⇧T · ⌥T · ⌥I · ⌥⇧1–3 | `app/tabs/keys.ts`（显示）、`use-global-shortcuts.ts`（实现） |
+| 输入框 | 发送 ⌘↵ 或 ↵（随「回车键行为」）· ⇧↵ 换行 · Esc 关闭菜单 | `session/composerKeyboard.ts` |
+
+- Mac 的命令键是 ⌘，其他平台是 Ctrl。Mac 上 Ctrl+K、Ctrl+B 是文本框自己的编辑键，只有 ⌘ 能触发工作台快捷键。标签页用 ⌥（Alt），因为浏览器占着 ⌘/Ctrl 加 T、W、数字；终端内的 ⌥ 留给终端。
+- 快捷键按物理键（`event.code`）匹配，使用 ⌥ 输入字符的键盘布局仍然有效。输入法组词期间一律不触发。
+- **显示**：纯图标按钮的 `Tip` 带 `kbd`；列表中的快捷键用 `Kbd`；行文里用 `shortcutLabel`（Mac「⌘K」，其他「Ctrl+K」）。
+
+### 10.2 焦点与 Escape
+
+- 键盘焦点显示 2px 的焦点环（`:focus-visible`，偏移 1px）；输入框改用强调色边框加 3px 的 15% 光晕。指针点击不显示焦点环，单独按下修饰键也不触发（`lib/focus-ring.ts`）。
+- Escape 关闭最上面的一层，一次只关一层：菜单、弹窗、页面，依次向下（`lib/overlay-navigation.ts`）；输入框里先关闭菜单，再轮到下一层（`resolveEscapeLayer`）。浏览器的 Back 走同一栈。
+- 浮层在用户正输入时打开，关闭后把光标还给原来的输入框，而不是触发它的按钮，否则下一次空格会再次打开它（`components/ui/focus-return.ts`）；手机上沿用各浮层原本的归还，避免弹出键盘。
+- 弹窗按 Tab 在其内部循环；危险确认的初始焦点在取消上（§2.2）。
+
+### 10.3 插件快捷键
+
+- 插件命令只声明默认组合（`Mod+Shift+K` 的写法，`Mod` 即 ⌘ 或 Ctrl），必须含 Ctrl、Alt 或 ⌘ 之一。工作台已占用的组合（上表，加浏览器的 ⌘/Ctrl 加 T、W、N、Q、R、L 与数字）和先注册的命令占用的组合会被拒绝并记录原因（`app/pluginKeybindings.ts` 的 `registerKeybindings`）；插件不能覆盖工作台的键。
+
+**现状**：
+
+- 输入框的键（`composerKeyboard.ts`）不在登记表里，随「回车键行为」设置变化。
+- 登记表（`app/hostShortcuts.ts`）只记键位，处理仍分在 `use-global-shortcuts.ts` 与 `session/ViewDots.tsx`（⌥⇧1–3）；新增工作台快捷键要在两处同时加。
+

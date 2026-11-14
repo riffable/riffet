@@ -30,10 +30,6 @@ msgstr ""
 msgid "{0} 读取失败"
 msgstr ""
 
-#: src/app/SessionInfo.tsx
-msgid "{ago}前"
-msgstr ""
-
 #: src/app/SessionDeletion.tsx
 msgid "{discussions, plural, other {同时删除 # 个侧边聊天。}}"
 msgstr ""
@@ -68,7 +64,7 @@ msgstr ""
 msgid "Shell 终端"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "上一个标签"
 msgstr ""
 
@@ -88,7 +84,7 @@ msgstr ""
 msgid "上移"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "下一个标签"
 msgstr ""
 
@@ -165,7 +161,7 @@ msgid "会话 ID"
 msgstr ""
 
 #: src/app/Header.tsx
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "会话信息"
 msgstr ""
 
@@ -199,6 +195,10 @@ msgstr ""
 
 #: src/app/App.tsx
 msgid "使用配对码登录"
+msgstr ""
+
+#: src/app/hostShortcuts.ts
+msgid "侧栏"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
@@ -280,7 +280,7 @@ msgstr ""
 msgid "关闭右侧标签"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "关闭标签"
 msgstr ""
 
@@ -304,7 +304,7 @@ msgstr ""
 msgid "内置插件不可卸载"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "最后一个标签"
 msgstr ""
 
@@ -339,7 +339,7 @@ msgstr ""
 msgid "分支"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换到第 1–8 个标签"
 msgstr ""
 
@@ -347,7 +347,7 @@ msgstr ""
 msgid "切换浅色 / 深色"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "切换视图"
 msgstr ""
 
@@ -524,6 +524,7 @@ msgid "命令已复制，但 Riffet 中的会话进程未停止"
 msgstr ""
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "命令面板"
 msgstr ""
 
@@ -921,6 +922,7 @@ msgid "搜索中…"
 msgstr ""
 
 #: src/app/CommandPalette.tsx
+#: src/app/hostShortcuts.ts
 msgid "搜索会话"
 msgstr ""
 
@@ -1050,7 +1052,7 @@ msgctxt "workbench-files-panel"
 msgid "文件"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 #: src/app/tabs/TabBar.tsx
 msgid "新会话"
 msgstr ""
@@ -1668,6 +1670,7 @@ msgstr ""
 msgid "管理收藏 {0}"
 msgstr ""
 
+#: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx
 msgid "终端"
 msgstr ""
@@ -1965,7 +1968,7 @@ msgstr ""
 msgid "重命名项目"
 msgstr ""
 
-#: src/app/tabs/keys.ts
+#: src/app/hostShortcuts.ts
 msgid "重新打开关闭的标签"
 msgstr ""
 

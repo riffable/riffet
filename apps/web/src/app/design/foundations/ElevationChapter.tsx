@@ -1,6 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
 import { cn } from '@/lib/utils';
-import { Chapter, display, Frame, Plate, Token, useInView, useRootValue } from './specimen';
+import { Chapter, display, Frame, Plate, Token, useInView, useRootValue } from '../specimen';
 
 /** The five tiers as sheets laid over one another, each casting its own shadow. */
 function Sheets() {
@@ -69,11 +69,11 @@ export function ElevationChapter() {
     ['rail', t`对话内导航`],
   ];
   return (
-    <Chapter id="elevation" number="05" title={t`层级`} lede={t`层次首先由底色表达。阴影分五档，用于脱离文档流的元素；叠放顺序由一组 --z-* 变量定义。`} tone="canvas" source="apps/web/src/styles/index.css">
-      <Plate number="5.1" title={t`阴影`} note={t`阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。`}>
+    <Chapter title={t`层级`} lede={t`层次首先由底色表达。阴影分五档，用于脱离文档流的元素；叠放顺序由一组 --z-* 变量定义。`} tone="canvas" source="apps/web/src/styles/index.css">
+      <Plate number={1} title={t`阴影`} note={t`阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。`}>
         <Sheets />
       </Plate>
-      <Plate number="5.2" title={t`叠放顺序`} note={t`数值越大越靠前。组件引用变量名。`}>
+      <Plate number={2} title={t`叠放顺序`} note={t`数值越大越靠前。组件引用变量名。`}>
         <ol className="flex flex-col edge-t">
           {floors.map(([token, name], index) => <Floor key={token} token={token} name={name} index={index} />)}
         </ol>

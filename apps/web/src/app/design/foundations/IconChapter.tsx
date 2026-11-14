@@ -4,7 +4,7 @@ import * as icons from '@/components/icons';
 import { IconSearch, IconSparkles } from '@/components/icons';
 import { Input } from '@/components/ui/controls';
 import { copyWithToast } from '@/lib/files';
-import { Chapter, Frame, Plate, Scrubber, Value } from './specimen';
+import { Chapter, Frame, Plate, Scrubber, Value } from '../specimen';
 
 type Glyph = ComponentType<{ className?: string; style?: CSSProperties }>;
 
@@ -59,12 +59,12 @@ export function IconChapter() {
     return needle ? GLYPHS.filter(([name]) => name.toLowerCase().includes(needle)) : GLYPHS;
   }, [query]);
   return (
-    <Chapter id="icons" number="07" title={t`图标`} lede={t`单一图形族 Lucide，单一线宽：描边 1.25px，经 non-scaling-stroke 在全部尺寸下恒定；颜色继承所在行的文字色。`} tone="canvas" source="apps/web/src/components/icons.tsx">
-      <Plate number="7.1" title={t`尺寸`} note={t`界面使用 12、14、16、18 四档。尺寸放大时，描边保持 1.25px。`}>
+    <Chapter title={t`图标`} lede={t`单一图形族 Lucide，单一线宽：描边 1.25px，经 non-scaling-stroke 在全部尺寸下恒定；颜色继承所在行的文字色。`} tone="canvas" source="apps/web/src/components/icons.tsx">
+      <Plate number={1} title={t`尺寸`} note={t`界面使用 12、14、16、18 四档。尺寸放大时，描边保持 1.25px。`}>
         <Stroke />
       </Plate>
       <Plate
-        number="7.2"
+        number={2}
         title={t`图标表`}
         note={t`${GLYPHS.length} 个图标，复制内容为组件名。各端按同一套语义名映射到各自的图形资源。`}
         action={(

@@ -269,10 +269,6 @@ msgid "清空"
 msgstr "清空"
 
 #: src/app/shares/ShareDialog.tsx
-msgid "生成中…"
-msgstr "生成中…"
-
-#: src/app/shares/ShareDialog.tsx
 msgid "生成预览"
 msgstr "生成预览"
 

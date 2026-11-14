@@ -4,7 +4,7 @@ import { MOTION_DURATION, MOTION_EASING } from '@contracts';
 import { IconPlay } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { Chapter, Frame, Plate, reducedMotion, Token, useInView, Value } from './specimen';
+import { Chapter, Frame, Plate, reducedMotion, Token, useInView, Value } from '../specimen';
 
 type Curve = readonly [number, number, number, number];
 type CurveName = keyof typeof MOTION_EASING;
@@ -209,11 +209,11 @@ function Timeline() {
 export function MotionChapter() {
   const { t } = useLingui();
   return (
-    <Chapter id="motion" number="06" title={t`动效`} lede={t`进入减速，退出加速，原位变化用标准曲线；退出时长约为进入的 70%。动画优先作用于 opacity 与 transform，由合成器执行。`} source="packages/contracts/src/design-tokens.ts">
-      <Plate number="6.1" title={t`曲线`} note={t`横轴为时间，纵轴为进度。Mac 使用 snappy 与 smooth 弹簧，iOS 使用弹簧，感知时长与此一致。`}>
+    <Chapter title={t`动效`} lede={t`进入减速，退出加速，原位变化用标准曲线；退出时长约为进入的 70%。动画优先作用于 opacity 与 transform，由合成器执行。`} source="packages/contracts/src/design-tokens.ts">
+      <Plate number={1} title={t`曲线`} note={t`横轴为时间，纵轴为进度。Mac 使用 snappy 与 smooth 弹簧，iOS 使用弹簧，感知时长与此一致。`}>
         <CurvePlot />
       </Plate>
-      <Plate number="6.2" title={t`时长`} note={t`系统开启「减少动态效果」时，位移与缩放替换为淡入淡出。`}>
+      <Plate number={2} title={t`时长`} note={t`系统开启「减少动态效果」时，位移与缩放替换为淡入淡出。`}>
         <Timeline />
       </Plate>
     </Chapter>

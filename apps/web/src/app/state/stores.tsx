@@ -82,7 +82,7 @@ export function WorkbenchEffects() {
   useEffect(() => {
     return onSessionsDeleted((ids) => { tabs.retire(ids); lists.removeSessions(ids); });
   }, [tabs, lists]);
-  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, tasksOpen, pluginsOpen, pluginId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId);
+  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, pluginsOpen, pluginId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId);
   const sidebarCollapsed = useStore(ui, (state) => state.sidebarCollapsed);
   const dockHeight = useStore(ui, (state) => state.dockHeight);
   const sidebarWidth = useStore(ui, (state) => state.sidebarWidth);
@@ -143,8 +143,8 @@ export function WorkbenchEffects() {
   useEffect(() => {
     if (!loaded) return;
     const page = pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : designOpen ? 'design' : tasksOpen ? 'tasks' : undefined;
-    replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, stats: statsState }));
-  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, tasksOpen, pluginsOpen, pluginId, statsState]);
+    replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, stats: statsState, designPlatform, designChapter }));
+  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, pluginsOpen, pluginId, statsState]);
 
   return null;
 }

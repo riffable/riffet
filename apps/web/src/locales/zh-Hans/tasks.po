@@ -304,10 +304,6 @@ msgid "添加计划"
 msgstr "添加计划"
 
 #: src/app/tasks/SendLater.tsx
-msgid "确定"
-msgstr "确定"
-
-#: src/app/tasks/SendLater.tsx
 msgid "稍后发送"
 msgstr "稍后发送"
 
@@ -342,6 +338,10 @@ msgstr "要做什么…"
 #: src/app/tasks/AutomationEditor.tsx
 msgid "让 Agent 做什么"
 msgstr "让 Agent 做什么"
+
+#: src/app/tasks/SendLater.tsx
+msgid "设为发送时间"
+msgstr "设为发送时间"
 
 #: src/app/tasks/QuickCreate.tsx
 msgid "跑一遍测试并汇报失败"

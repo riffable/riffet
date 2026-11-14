@@ -644,10 +644,6 @@ msgstr "No matching extensions"
 msgid "清除"
 msgstr "Clear"
 
-#: src/app/extensions/ExtensionsPage.tsx
-msgid "清除搜索"
-msgstr "Clear search"
-
 #: src/app/extensions/ExtensionCatalog.tsx
 msgctxt "extensions-clear-filters"
 msgid "清除筛选"

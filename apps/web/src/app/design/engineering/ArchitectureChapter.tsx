@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import { cn } from '@/lib/utils';
-import { Chapter, Frame, Plate, Reveal } from './specimen';
+import { Chapter, Frame, Plate, Reveal } from '../specimen';
+import { Pipeline } from './Pipeline';
 
 interface Layer { name: string; holds: string; paths: string[] }
 
@@ -59,11 +60,14 @@ export function ArchitectureChapter() {
     { title: t`推翻一条规则`, items: [t`在 DECISIONS.md 追加新决定`, t`写明原因与否决的做法`, t`再改规范与代码`] },
   ];
   return (
-    <Chapter id="architecture" number="11" title={t`架构`} lede={t`设计体系在代码里分六层，依赖只向下。颜色在 index.css 里改，其余数值在 packages/contracts 里改，然后重新生成。`} source="docs/design/system/architecture.md">
-      <Plate number="11.1" title={t`分层`} note={t`页面只经组件和模式使用样式；组件只引用颜色角色和档位。`}>
+    <Chapter title={t`架构`} lede={t`设计体系在代码里分六层，依赖只向下。颜色在 index.css 里改，其余数值在 packages/contracts 里改，然后重新生成。`} source="docs/design/system/architecture.md">
+      <Plate number={1} title={t`分层`} note={t`页面只经组件和模式使用样式；组件只引用颜色角色和档位。`}>
         <Layers layers={layers} />
       </Plate>
-      <Plate number="11.2" title={t`生成与检查`} note={t`每个生成命令都有 --check 模式，生成结果过期时以非零状态退出。`}>
+      <Plate number={2} title={t`一处定义，四端生成`} note={t`间距、字号、圆角、动效以 packages/contracts 为源；颜色以 index.css 为源。`}>
+        <Pipeline />
+      </Plate>
+      <Plate number={3} title={t`生成与检查`} note={t`每个生成命令都有 --check 模式，生成结果过期时以非零状态退出。`}>
         <Frame className="grid gap-6 p-6 md:grid-cols-2 max-md:p-4">
           <Commands title={t`生成`} rows={[
             ['pnpm gen:theme', t`主题颜色写入 Mac、Android、iOS 与 Web 的主题文件`],
@@ -78,7 +82,7 @@ export function ArchitectureChapter() {
           ]} />
         </Frame>
       </Plate>
-      <Plate number="11.3" title={t`改动的顺序`} note={t`规则先于实现：先改规范，再改代码。`}>
+      <Plate number={4} title={t`改动的顺序`} note={t`规则先于实现：先改规范，再改代码。`}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, index) => (
             <Reveal key={step.title} delay={index * 80}>

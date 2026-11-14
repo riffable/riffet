@@ -42,7 +42,7 @@ export * from './icon-pack.js';
 // The design system's values (docs/design/system/foundations.md), for its specimen page.
 export { DESKTOP_TEXT, MAC_MOTION, MOTION_DURATION, MOTION_EASING, SPACE } from './design-tokens.js';
 export { MOBILE_EASING, MOBILE_SHARED_MOTION } from './mobile-styles.js';
-export { DESKTOP_STYLES } from './interface-styles.js';
-export type { DesktopStyle } from './interface-styles.js';
+export { DESKTOP_STYLE_RECIPES, DESKTOP_STYLES } from './interface-styles.js';
+export type { DesktopStyle, DesktopStyleLength, DesktopStyleRecipes } from './interface-styles.js';
 
 export { satisfies, validRange } from './semver.js';

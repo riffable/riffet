@@ -298,6 +298,7 @@ msgstr ""
 msgid "在这里编写操作说明。"
 msgstr ""
 
+#: src/components/ui/copy-button.tsx
 #: src/components/ui/feedback-notice.tsx
 msgid "复制"
 msgstr ""
@@ -576,6 +577,10 @@ msgstr ""
 
 #: src/lib/theme-role-labels.ts
 msgid "淡分隔线"
+msgstr ""
+
+#: src/components/ui/search-field.tsx
+msgid "清除搜索"
 msgstr ""
 
 #: src/lib/theme-role-labels.ts
