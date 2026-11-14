@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { WorkspaceObserver } from './workspace-observer.js';
+import { readsOnly, WorkspaceObserver } from './workspace-observer.js';
 
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', '-c', 'core.hooksPath=/dev/null', ...args], { cwd, encoding: 'utf8' });
 
@@ -65,5 +65,23 @@ describe('WorkspaceObserver', () => {
     const observer = new WorkspaceObserver(state);
     await observer.begin('plain', base);
     expect(await observer.end('plain')).toBeUndefined();
+  });
+});
+
+describe('readsOnly', () => {
+  it('leaves only commands that cannot write the working tree unobserved', () => {
+    const reads = [
+      'git diff -U0 -- a.swift b.kt | grep "^[+-]" | grep -v "^+++\\|^---" | cut -c1-170',
+      'cd apps/web && git -C . --no-pager log --oneline -5 2>/dev/null || true',
+      "sed -n '1,40p' src/a.ts", 'rg -n "foo|bar" src 2>&1 | head', 'find . -name "*.ts" | wc -l',
+      "GIT_PAGER=cat git show HEAD:README.md | awk '{print $1}'",
+    ];
+    const writes = [
+      'git diff > out.patch', 'sed -i "" s/a/b/ f', 'sed "s/a/b/w out" f', 'cat a | tee b', 'echo $(touch x)', 'echo `touch x`',
+      'git commit -m x', 'git diff --output=x', 'find . -delete', 'sort -o f f', 'uniq in out', 'npm test',
+      `awk '{ print > "f" }' a`, 'cat <<EOF > f\nx\nEOF', 'ls &', 'ls; rm -rf x', 'bash -c "ls"', '(ls)', 'echo "x', 'rg --pre ./x foo', 'X=1 Y=2',
+    ];
+    expect(reads.filter(command => !readsOnly(command))).toEqual([]);
+    expect(writes.filter(command => readsOnly(command))).toEqual([]);
   });
 });

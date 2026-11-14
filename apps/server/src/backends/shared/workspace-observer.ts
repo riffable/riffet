@@ -11,8 +11,8 @@ import { splitUnifiedDiff } from './unified-diff.js';
  * each takes a snapshot of the repository the command runs in, and `end` returns the difference as
  * the `diff` blocks an edit tool's call carries, marked `observed`. The difference is the whole
  * working tree's, so a write another process makes during the command is counted too; keeping the
- * window to one command keeps that rare. Files an edit tool reported meanwhile (`noteEdit`) are left
- * to that tool.
+ * window to one command keeps that rare, and a command that only reads (`readsOnly`) opens none. Files
+ * an edit tool is changing or changed meanwhile (`noteEdit`), in any conversation, are left to that tool.
  *
  * Windows of one working tree overlap when commands run in parallel. The snapshots, taken in order,
  * cut time into intervals, and each interval is reported once: by the first window that ends after
@@ -83,6 +83,90 @@ interface Repo {
 /** `shown` is the working tree as the command's directory spells it; git reports it with links resolved. */
 interface Window { key: string; repo: Repo; seq: number; shown: string; startedAt: number }
 
+/** Programs that write nothing in the working tree, given none of the arguments `readerArgsWrite` refuses. */
+const READERS = new Set([
+  'cat', 'head', 'tail', 'ls', 'pwd', 'wc', 'grep', 'egrep', 'fgrep', 'rg', 'cut', 'tr', 'nl', 'file', 'stat', 'du',
+  'which', 'type', 'echo', 'printf', 'true', 'test', 'basename', 'dirname', 'realpath', 'readlink', 'jq', 'diff',
+  'cmp', 'comm', 'cd', 'sort', 'uniq', 'sed', 'awk', 'find', 'git', 'od', 'shasum', 'md5',
+]);
+const GIT_READERS = new Set([
+  'diff', 'status', 'log', 'show', 'blame', 'grep', 'rev-parse', 'rev-list', 'ls-files', 'ls-tree', 'cat-file',
+  'describe', 'shortlog', 'merge-base', 'diff-tree', 'diff-index', 'diff-files', 'for-each-ref', 'show-ref', 'check-ignore',
+]);
+
+function readerArgsWrite(program: string, args: string[]): boolean {
+  const operands = args.filter(arg => !arg.startsWith('-'));
+  switch (program) {
+    // `w file` and `s///w file` write; a script merely containing "w " stays observed too.
+    case 'sed': return args.some(arg => /^(-[a-zA-Z]*i|--in-place)/.test(arg) || /[wWe]\s/.test(arg));
+    case 'awk': return args.some(arg => arg === '-i' || /system|getline|[>|]/.test(arg));
+    case 'sort': return args.some(arg => /^(-[a-zA-Z]*o|--output)/.test(arg));
+    case 'uniq': return operands.length > 1;
+    case 'rg': return args.some(arg => arg.startsWith('--pre'));
+    case 'find': return args.some(arg => /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/.test(arg));
+    case 'git': {
+      let index = 0;
+      // Options before the subcommand; the ones naming a directory or a setting take the next word.
+      while (index < args.length && args[index]!.startsWith('-')) index += ['-C', '-c'].includes(args[index]!) ? 2 : 1;
+      return !GIT_READERS.has(args[index] ?? '') || args.some(arg => arg.startsWith('--output'));
+    }
+    default: return false;
+  }
+}
+
+/**
+ * Whether a shell command is a pipeline of readers that cannot change the working tree. Conservative:
+ * anything not recognized (a substitution, a background job, a redirection to a file, an unknown
+ * program) is taken to write, so the command stays observed.
+ */
+export function readsOnly(command: string): boolean {
+  const segments: string[][] = [[]];
+  let word: string | undefined;
+  let quote = '';
+  const finish = () => { if (word !== undefined) segments.at(-1)!.push(word); word = undefined; };
+  for (let index = 0; index < command.length; index += 1) {
+    const char = command[index]!;
+    const next = command[index + 1];
+    if (quote === "'") { if (char === "'") quote = ''; else word += char; continue; }
+    if (char === '`' || (char === '$' && next === '(')) return false;
+    if (char === '\\') { word = (word ?? '') + (next ?? ''); index += 1; continue; }
+    if (quote === '"') { if (char === '"') quote = ''; else word += char; continue; }
+    if (char === "'" || char === '"') { quote = char; word ??= ''; continue; }
+    if (char === ' ' || char === '\t') { finish(); continue; }
+    if (char === '\n' || char === ';' || char === '|' || (char === '&' && next === '&')) {
+      finish();
+      if ((char === '|' || char === '&') && (next === '|' || next === '&')) index += 1;
+      segments.push([]);
+      continue;
+    }
+    if (char === '(' || char === ')') return false;
+    if (char === '>' || char === '<' || char === '&') {
+      // A file descriptor written before the operator (`2>`) belongs to it.
+      if (word !== undefined && /^\d+$/.test(word)) word = undefined;
+      finish();
+      let operator = char;
+      while (operator.length < 3 && index + 1 < command.length && '<>&|'.includes(command[index + 1]!)) operator += command[++index];
+      if (operator === '&' || operator.startsWith('<<') || /[<>]\($/.test(operator + (command[index + 1] ?? ''))) return false;
+      while (command[index + 1] === ' ') index += 1;
+      let target = '';
+      while (index + 1 < command.length && !' \t\n;|&<>()'.includes(command[index + 1]!)) target += command[++index];
+      const writes = operator !== '<';
+      if (operator.endsWith('&') && writes ? !/^(\d+|-)$/.test(target) : writes && target !== '/dev/null') return false;
+      continue;
+    }
+    word = (word ?? '') + char;
+  }
+  if (quote) return false;
+  finish();
+  const commands = segments.filter(segment => segment.length);
+  return commands.length > 0 && commands.every(segment => {
+    const start = segment.findIndex(item => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(item));
+    const words = start < 0 ? [] : segment.slice(start);
+    const program = words[0]?.split('/').at(-1);
+    return Boolean(program && READERS.has(program) && !readerArgsWrite(program, words.slice(1)));
+  });
+}
+
 const deadline = <T>(task: Promise<T>, ms: number): Promise<T | undefined> => new Promise(resolve => {
   const timer = setTimeout(() => resolve(undefined), ms);
   timer.unref?.();
@@ -127,9 +211,13 @@ export class WorkspaceObserver {
 
   constructor(private readonly dir: string) {}
 
-  /** Snapshots the working tree `cwd` belongs to before command `key` runs. Resolves once taken or given up on. */
-  async begin(key: string, cwd: string): Promise<void> {
+  /**
+   * Snapshots the working tree `cwd` belongs to before command `key` runs. Resolves once taken or given up on.
+   * A `command` that only reads opens no window: what changes meanwhile is another writer's.
+   */
+  async begin(key: string, cwd: string, command?: string): Promise<void> {
     this.discard(key);
+    if (command !== undefined && readsOnly(command)) return;
     this.sweep();
     // A snapshot that finishes after the command was let go opens nothing: no `end` will come for it.
     let gaveUp = false;

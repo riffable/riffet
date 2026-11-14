@@ -162,6 +162,13 @@ function screenAnswer(question: NativeInteraction, response: NativeInteractionRe
   return { text, choice };
 }
 
+/** The file an edit tool's call writes, from its hook payload. */
+function editedPath(payload: Record<string, unknown>): string | undefined {
+  if (!['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(string(payload.tool_name) ?? '')) return undefined;
+  const input = asRecord(payload.tool_input);
+  return string(input?.file_path) ?? string(input?.notebook_path);
+}
+
 function stableJson(value: unknown): string {
   const sort = (item: unknown): unknown => {
     if (Array.isArray(item)) return item.map(sort);
@@ -2278,8 +2285,7 @@ export class ClaudeSessionRuntime {
       // transcript mapping appends what was recorded here to that row.
       const observedId = string(payload.tool_use_id);
       // A file an edit tool changed is that tool's to report, not a command's that ran beside it.
-      const edited = event === 'PostToolUse' && ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(string(payload.tool_name) ?? '')
-        ? string(asRecord(payload.tool_input)?.file_path) ?? string(asRecord(payload.tool_input)?.notebook_path) : undefined;
+      const edited = event === 'PostToolUse' ? editedPath(payload) : undefined;
       if (edited) this.observer?.noteEdit(edited);
       if (observedId && event === 'PermissionDenied') this.observer?.discard(observedId);
       else if (observedId && this.observer) {
@@ -2321,10 +2327,13 @@ export class ClaudeSessionRuntime {
         this.announcedToolUses.set(this.toolFingerprint(toolName, asRecord(payload.tool_input) ?? {}), toolId);
         while (this.announcedToolUses.size > 256) this.announcedToolUses.delete(this.announcedToolUses.keys().next().value!);
       }
+      // Noted before the edit as well: a command in another conversation that ends before this PostToolUse leaves the file alone.
+      const editing = editedPath(payload);
+      if (editing) this.observer?.noteEdit(editing);
       // A shell command reports no edits; what it changed is seen around it, a subagent's as well as the main thread's.
       // One left running in the background outlives its call, so it is not observed.
       if (toolId && toolName === 'Bash' && asRecord(payload.tool_input)?.run_in_background !== true) {
-        await this.observer?.begin(toolId, string(payload.cwd) ?? this.project.cwd);
+        await this.observer?.begin(toolId, string(payload.cwd) ?? this.project.cwd, string(asRecord(payload.tool_input)?.command));
       }
     }
     return {};
@@ -2489,7 +2498,7 @@ export class ClaudeSessionRuntime {
     const behavior = string(asRecord(asRecord(decision.hookSpecificOutput)?.decision)?.behavior);
     if (!toolId || !behavior) return;
     if (behavior === 'deny') this.observer.discard(toolId);
-    else if (behavior === 'allow' && input.run_in_background !== true) await this.observer.begin(toolId, string(payload.cwd) ?? this.project.cwd);
+    else if (behavior === 'allow' && input.run_in_background !== true) await this.observer.begin(toolId, string(payload.cwd) ?? this.project.cwd, string(input.command));
   }
 
   private toolFingerprint(toolName: string, toolInput: Record<string, unknown>): string {

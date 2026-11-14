@@ -24,9 +24,10 @@ import { asArray, asRecord, str } from './util.js';
  *   the thread as `session_id`.
  * - PostToolUse runs after `item/completed` has been sent, and the model waits for it. So a completion
  *   is held back (`NotificationGate`) until the PostToolUse hook has recorded, or a short deadline.
- * - Hooks given with `-c` are untrusted until the user confirms them, and an untrusted hook does not
- *   run. `probe` says which it is; `trust` writes the confirmation through the CLI's own
- *   `config/batchWrite`, which is what its `/hooks` review does. The confirmation is keyed by the
+ * - Hooks given with `-c` are untrusted until confirmed, an untrusted hook does not run, and the TUI
+ *   asks about it each time it starts. `probe` says which it is; `trust` writes the confirmation
+ *   through the CLI's own `config/batchWrite`, which is what its `/hooks` review does, and every
+ *   conversation's server is confirmed before its TUI attaches. The confirmation is keyed by the
  *   hook's position and content, so the command below must not change from launch to launch: the hook
  *   scripts are copied to a fixed place and find this process through the descriptor file.
  */
@@ -105,12 +106,16 @@ export class CodexObservation {
     } catch { return 'unsupported'; }
   }
 
-  /** The user's confirmation of the hooks, written the way the CLI's own review writes it. */
+  /**
+   * Confirms these hooks the way the CLI's own review does, on a server started with them. Each
+   * conversation's server does this before its TUI attaches, so the TUI never asks: the confirmation
+   * in `config.toml` is not relied on to survive, since it has been seen to go missing from that file.
+   */
   async trust(transport: CodexAppServerClient, cwd: string): Promise<CodexObservationState> {
-    const mine = await this.listed(transport, cwd);
-    if (mine.length) {
+    const pending = (await this.listed(transport, cwd)).filter(hook => hook.trustStatus !== 'trusted');
+    if (pending.length) {
       await transport.request('config/batchWrite', {
-        edits: mine.map(hook => ({ keyPath: 'hooks.state', value: { [hook.key]: { trusted_hash: hook.currentHash } }, mergeStrategy: 'upsert' })),
+        edits: pending.map(hook => ({ keyPath: 'hooks.state', value: { [hook.key]: { trusted_hash: hook.currentHash } }, mergeStrategy: 'upsert' })),
       });
     }
     return await this.probe(transport, cwd);
@@ -133,10 +138,18 @@ export class CodexObservation {
     return this.observer.changes(sessionId, toolCallId);
   }
 
-  /** Whether a notification must wait for its PostToolUse record, and until when. */
+  /** Takes what a notification says about edits, and whether it must wait for its PostToolUse record, and until when. */
   hold(method: string, params: Record<string, unknown>): Promise<void> | undefined {
-    if (method !== 'item/completed') return undefined;
     const item = asRecord(params.item);
+    // A patch's files are its own to report: noted as it starts and ends, so a command running beside it,
+    // in this conversation or another, leaves them alone.
+    if (item?.type === 'fileChange' && (method === 'item/started' || method === 'item/completed')) {
+      for (const change of asArray<Record<string, unknown>>(item.changes)) {
+        const path = str(change.path);
+        if (path) this.observer.noteEdit(path);
+      }
+    }
+    if (method !== 'item/completed') return undefined;
     const id = item?.type === 'commandExecution' ? str(item.id) : undefined;
     const window = id ? this.windows.get(id) : undefined;
     if (!window || window.settled) return undefined;
@@ -222,7 +235,7 @@ export class CodexObservation {
       const done = new Promise<void>(resolveWindow => { settle = resolveWindow; });
       const window: Window = { threadId, settled: false, done, settle: () => { if (window.settled) return; window.settled = true; this.windows.delete(id); settle(); } };
       this.windows.set(id, window);
-      await this.observer.begin(id, str(payload.cwd) ?? '/');
+      await this.observer.begin(id, str(payload.cwd) ?? '/', str(asRecord(payload.tool_input)?.command));
     } else if (event === 'PostToolUse') {
       const window = this.windows.get(id);
       try {

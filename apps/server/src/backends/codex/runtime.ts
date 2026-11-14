@@ -738,6 +738,8 @@ export class CodexSessionRuntime implements CodexThreadReader {
       const value = await owned.hook.recover({ ...this.runtimeContext(binding.fingerprint), id: saved.id, address: this.transport.remoteAddress }).catch(() => undefined);
       if (value) this.attachment = { owner: owned.owner, value };
     }
+    // Riffet's observation hooks run only once confirmed; a conversation without a TUI is confirmed here.
+    await this.observation?.trust(this.transport, this.project.cwd).catch(() => undefined);
     await this.terminalEndpointState(true);
     this.status = {
       // Opening the app-server socket is not proof that this client owns the native thread. A
@@ -1030,9 +1032,12 @@ export class CodexSessionRuntime implements CodexThreadReader {
     if (shared === 'ws' ? !address.startsWith('ws:') || !this.transport.authToken : !address.startsWith('unix:')) return undefined;
     const token = shared === 'ws' ? this.transport.authToken : undefined;
     const command = executableOf(this.profile, this.flavor);
-    // Directory trust is a global override, so it stays ahead of `resume`. Hook review remains
-    // the CLI's own prompt, lifted into Riffet by TerminalDialogObserver; the CLI persists each
-    // trusted hook hash. Disable the separate startup update prompt, which otherwise returns
+    // Riffet's own observation hooks are confirmed on the server first, so the TUI does not ask
+    // about them each time it starts; a failure leaves the CLI's prompt as the fallback.
+    await this.observation?.trust(this.transport, this.project.cwd).catch(() => undefined);
+    // Directory trust is a global override, so it stays ahead of `resume`. Review of other hooks
+    // remains the CLI's own prompt, lifted into Riffet by TerminalDialogObserver; the CLI persists
+    // each trusted hook hash. Disable the separate startup update prompt, which otherwise returns
     // after every Codex release until the reader dismisses it in the terminal.
     const args = [
       ...this.flavor.args(this.profileConfig), ...codexTrustArgs(this.project.cwd), '-c', 'check_for_update_on_startup=false',

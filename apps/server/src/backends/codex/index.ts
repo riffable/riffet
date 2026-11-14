@@ -141,18 +141,19 @@ export class CodexBackendAdapter implements NativeBackendDriver {
       const observation = this.observation;
       // A read starts a server, so a settings page shown again within a few minutes is answered from the last one.
       const read = new Map<string, { at: number; state: CommandObservation['state'] }>();
+      const cacheKey = (profile: NativeBackendProfileConfig) => JSON.stringify([executableOf(profile, this.flavor), resolvePath(this.flavor.stateHome(profile.config))]);
       const through = async (profile: NativeBackendProfileConfig, act: (transport: CodexAppServerClient, cwd: string) => Promise<CommandObservation['state']>): Promise<CommandObservation> => {
         const executable = executableOf(profile, this.flavor);
         const hooks = await observation.launchArgs(executable);
         if (!hooks.length) return { state: 'unsupported' };
         const cwd = await queryDirectory(undefined, profile);
         const state = await this.withTransport(undefined, profile, undefined, transport => act(transport, cwd), hooks);
-        read.set(executable, { at: Date.now(), state });
+        read.set(cacheKey(profile), { at: Date.now(), state });
         return { state };
       };
       this.commandObservation = {
         state: async (_host, profile) => {
-          const known = read.get(executableOf(profile, this.flavor));
+          const known = read.get(cacheKey(profile));
           if (known && Date.now() - known.at < OBSERVATION_READ_MS) return { state: known.state };
           return await through(profile, (transport, cwd) => observation.probe(transport, cwd));
         },
