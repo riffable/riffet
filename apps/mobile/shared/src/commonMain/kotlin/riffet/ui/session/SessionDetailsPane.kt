@@ -150,6 +150,7 @@ internal fun SessionDetailsPane(
             subtitle = if (shownAll != null) current.title else subtitle,
             onClose = onClose,
             onBack = if (shownAll != null) ({ showAll = null }) else null,
+            contentTitle = shownAll == null,
         )
         Column(
             modifier = Modifier

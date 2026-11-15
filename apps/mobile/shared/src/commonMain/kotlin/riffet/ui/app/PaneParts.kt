@@ -40,6 +40,8 @@ import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet_mobile.shared.generated.resources.*
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 
 /*
  * The parts both side panels are built from (mobile.md §2.7). A panel is the same app as the page
@@ -49,7 +51,12 @@ import riffet_mobile.shared.generated.resources.*
  * status dot. Object rows (a subagent, a favourite) are one line and truncate.
  */
 
-/** The panel's fixed header: [leading] (an avatar) or a back arrow, a one-line title and status, then [actions] and close. */
+/**
+ * The panel's fixed header: [leading] (an avatar) or a back arrow, a one-line title and status, then
+ * [actions] and close. A [contentTitle] is text someone else wrote (a conversation's title): the
+ * conversation bar beside the panel cuts it short, so here it is whole, wrapping at the row-title
+ * size; its first line keeps the bar's centre line, and the controls stay level with that line.
+ */
 @Composable
 internal fun PaneHeader(
     title: String,
@@ -60,27 +67,33 @@ internal fun PaneHeader(
     onBack: (() -> Unit)? = null,
     leading: (@Composable () -> Unit)? = null,
     onTitleClick: (() -> Unit)? = null,
+    contentTitle: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val type = LocalRiffetTypography.current
+    val titleStyle = if (contentTitle) type.headline else type.barTitle
+    // A wrapped title grows downward from the bar's row; a one-line one sits centred in it.
+    val barInset = (metrics.barHeight - metrics.controlHeight).coerceAtLeast(0.dp) / 2
+    val firstLineInset = with(LocalDensity.current) { (metrics.controlHeight - titleStyle.lineHeight.toDp()).coerceAtLeast(0.dp) / 2 }
     Row(
         modifier.fillMaxWidth().heightIn(min = metrics.barHeight)
-            .padding(start = if (onBack != null) metrics.controlInset / 3 else metrics.pageInset, end = metrics.controlInset / 3),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(start = if (onBack != null) metrics.controlInset / 3 else metrics.pageInset, end = metrics.controlInset / 3)
+            .padding(top = if (contentTitle) barInset else 0.dp),
+        verticalAlignment = if (contentTitle) Alignment.Top else Alignment.CenterVertically,
     ) {
         if (onBack != null) PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_back), onBack)
         Row(
             Modifier.weight(1f)
                 .then(if (onTitleClick != null) Modifier.clip(RoundedCornerShape(metrics.controlRadius)).clickable(role = Role.Button, onClick = onTitleClick) else Modifier)
-                .padding(vertical = metrics.controlInset / 3),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(top = if (contentTitle) firstLineInset else metrics.controlInset / 3, bottom = metrics.controlInset / 3),
+            verticalAlignment = if (contentTitle) Alignment.Top else Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(metrics.controlInset),
         ) {
             leading?.invoke()
             Column(Modifier.weight(1f)) {
-                Text(title, style = type.barTitle, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(title, style = titleStyle, color = colors.fg, maxLines = if (contentTitle) Int.MAX_VALUE else 1, overflow = TextOverflow.Ellipsis)
                 if (!subtitle.isNullOrEmpty()) Text(subtitle, style = type.bodySmall, color = subtitleColor ?: colors.fg3,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
