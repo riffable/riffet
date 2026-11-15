@@ -3,37 +3,31 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconSquareKanban, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconPuzzle, IconSearch, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { BrandMark } from '@/components/BrandMark';
-import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { AgentLogo } from '@/components/AgentLogo';
-import { ThemeSwatch } from '@/components/theme-swatch';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
 import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
-import { copyWithToast } from '@/lib/files';
-import { palettesOf, selectAppearanceItem, useAppearance } from '@/lib/appearance';
-import { localizedText } from '@/lib/plugins';
-import { setThemeId, setThemeMode, useTheme, type ThemeMode } from '@/lib/theme';
-import { useThemeOptions } from '@/lib/theme-library';
 import { cn, isJustNow, readStored, relativeTime, writeStored } from '@/lib/utils';
 import { isActiveSession, sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { sidebarProjectMap } from '@/lib/project-family';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { useLocale } from '@/lib/i18n';
-import { hostInfo, shortcutLabel } from '@/lib/platform';
+import { shortcutLabel } from '@/lib/platform';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
 import { useLists, useStores } from './state/stores';
 import { useTabs } from './tabs/useTabs';
+import { SidebarUserMenu } from './SidebarUserMenu';
 import { TaskSessionTitle } from './work-items/TaskSessionTitle';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
@@ -133,9 +127,6 @@ function SessionIndicator({ session, mobile, selected }: { session: Session; mob
   if (unread) return <StatusDot tone="accent" label={t`未读`} />;
   return null;
 }
-
-/** Fetches the settings chunk while the pointer is on its button, so the first open is not a blank wait. */
-const preloadSettings = () => void import('./settings/SettingsDialog');
 
 const navRow = 'flex h-8 w-full items-center gap-[9px] rounded-lg px-2 text-sm text-fg-2 transition-colors hover:bg-hover hover:text-fg';
 const mobileNavRow = 'flex h-10 items-center gap-2 rounded-lg px-2.5 text-sm font-medium text-fg transition-colors hover:bg-hover';
@@ -237,48 +228,10 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   );
 });
 
-/**
- * The machine behind this page, told as a glyph: a laptop for the reader's own, a rack for one
- * reached over the network. The footer says nothing else about it — the address is on the tooltip,
- * and one click away in the menu for a pointer that cannot hover. A connection that is not healthy
- * only tints the glyph, since the sidebar already carries the sentence for that.
- */
-function HostButton({ stale }: { stale?: Props['stale'] }) {
-  const { t } = useLingui();
-  const { local, address } = hostInfo();
-  const offline = stale?.mode === 'offline';
-  // A healthy connection to this computer's own server is the normal case and shows nothing.
-  if (local && !offline) return null;
-  const label = [offline ? t`无法连接服务器` : stale ? t`正在同步` : undefined, local ? t`本机` : t({ message: '远端', context: 'workbench-remote-host' }), address].filter(Boolean).join(' · ');
-  const Icon = local ? IconLaptop : IconServer;
-  return (
-    <DropdownMenu>
-      <Tip label={label} side="top">
-        <DropdownMenuTrigger asChild>
-          <Button size="icon-sm" variant="quiet" aria-label={label} className={cn(offline && 'text-warning hover:text-warning')}>
-            <Icon />
-          </Button>
-        </DropdownMenuTrigger>
-      </Tip>
-      <DropdownMenuContent side="top" align="start" className="w-56">
-        <DropdownMenuLabel className="flex items-center gap-1.5"><Icon className="size-3.5" />{local ? t`本机` : t({ message: '远端', context: 'workbench-remote-host' })}</DropdownMenuLabel>
-        <p className="px-2 pb-1 font-mono text-xs text-fg-2 wrap-anywhere">{address}</p>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void copyWithToast(window.location.origin, t`已复制地址`)}><IconCopy /><Trans>复制地址</Trans></DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
 export function Sidebar(props: Props) {
   const { t } = useLingui();
   // `timeBucket` reads the active catalog directly, so the timeline must recompute on a switch.
   const locale = useLocale();
-  const themeOptions: { value: ThemeMode; label: string; icon: typeof IconSun }[] = [
-    { value: 'system', label: t`跟随系统`, icon: IconMonitor },
-    { value: 'light', label: t`浅色`, icon: IconSun },
-    { value: 'dark', label: t`深色`, icon: IconMoon },
-  ];
   const { projects, sessions, selectedProjectId, selectedSessionId } = props;
   // The phone drawer keeps its own established look; the desktop restyle stops at the breakpoint.
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
@@ -303,9 +256,6 @@ export function Sidebar(props: Props) {
   const pinnedOrder = sort === 'tabs' ? 'rank' : 'time';
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(readStored(COLLAPSED_KEY).split(',').filter(Boolean)));
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
-  const { mode, themeId, resolved, paletteKey } = useTheme();
-  const themes = useThemeOptions();
-  const pluginPalettes = palettesOf(useAppearance().catalog);
 
   const toggleProject = (id: string) => setCollapsed((current) => {
     const next = new Set(current);
@@ -373,48 +323,7 @@ export function Sidebar(props: Props) {
     />
   );
 
-  const theme = themeOptions.find((option) => option.value === mode) ?? themeOptions[0]!;
-  const ThemeIcon = mode === 'system' ? (resolved === 'dark' ? IconMoon : IconSun) : theme.icon;
-  /**
-   * Backend health beside the settings button, and only when there is something to act on: a CLI
-   * that is missing or one that is not signed in. The happy path (a backend's name) said nothing
-   * the reader could use and turned the settings row into a status bar.
-   */
-  const backendNotice = props.backend?.needsLogin
-    ? { tone: 'warning' as const, label: t`${props.backend.label} 未登录`, title: props.backend.reason }
-    : props.backend && !props.backend.available
-      ? { tone: 'warning' as const, label: t`${props.backend.label} 不可用`, title: props.backend.reason }
-      : undefined;
   const owner = useLists((state) => state.owner);
-  const ownerLabel = owner?.name || t`个人资料`;
-  // Icon-only settings buttons carry the backend notice in their tooltip and warning dot.
-  const settingsLabel = backendNotice ? t`设置 · ${[backendNotice.label, backendNotice.title].filter(Boolean).join(' · ')}` : t`设置`;
-
-  // Both footers offer theme choices from their page menu.
-  const themeItems = <>
-    {/* Mode first, palette second, and neither writes the other: "跟随系统" stays a mode. */}
-    <DropdownMenuLabel><Trans>明暗</Trans></DropdownMenuLabel>
-    <DropdownMenuRadioGroup value={mode} onValueChange={(value) => setThemeMode(value as ThemeMode)}>
-      {themeOptions.map((option) => <DropdownMenuRadioItem key={option.value} value={option.value}><option.icon />{option.label}</DropdownMenuRadioItem>)}
-    </DropdownMenuRadioGroup>
-    <DropdownMenuSeparator />
-    <DropdownMenuLabel><Trans>主题</Trans></DropdownMenuLabel>
-    <DropdownMenuRadioGroup value={paletteKey ?? themeId} onValueChange={(value) => {
-      const plugin = pluginPalettes.find((item) => item.key === value);
-      if (plugin) selectAppearanceItem('palette', plugin.palette.id); else setThemeId(value);
-    }}>
-      {themes.map((theme) => (
-        <DropdownMenuRadioItem key={theme.id} value={theme.id}>
-          <ThemeSwatch id={theme.id} className="h-4 w-6 rounded-sm" />{theme.name}
-        </DropdownMenuRadioItem>
-      ))}
-      {pluginPalettes.map(({ palette, key }) => (
-        <DropdownMenuRadioItem key={key} value={key}>
-          <ThemeSwatch id={key} className="h-4 w-6 rounded-sm" />{localizedText(palette.title) ?? palette.id}
-        </DropdownMenuRadioItem>
-      ))}
-    </DropdownMenuRadioGroup>
-  </>;
 
   const offlineBanner = props.stale?.mode === 'offline' && (
     <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{offlineLabel(props.stale.savedAt)}</Notice>
@@ -633,35 +542,20 @@ export function Sidebar(props: Props) {
       </div>
 
       <div data-touch-bar className={cn('flex h-12 shrink-0 items-center gap-1 px-2', mobile && 'edge-t')}>
-        <Tip label={ownerLabel} side="top">
-          <Button size="icon-sm" variant="quiet" aria-label={ownerLabel} onClick={props.onOpenProfile} onPointerEnter={preloadSettings} onFocus={preloadSettings} className="rounded-full"><OwnerAvatar owner={owner} size={24} /></Button>
-        </Tip>
-        <div className="ml-auto flex items-center gap-1">
-          {!mobile && <HostButton stale={props.stale} />}
-          {/* The pages visited now and then, and the theme. */}
-          <DropdownMenu>
-            <Tip label={t`更多`} side="top">
-              <DropdownMenuTrigger asChild>
-                <Button size="icon-sm" variant="quiet" aria-label={t`更多`} className={cn((props.extensionsActive || props.statsActive || (mobile && props.pluginsActive)) && 'bg-active text-fg')}><IconEllipsis /></Button>
-              </DropdownMenuTrigger>
-            </Tip>
-            <DropdownMenuContent side="top" align="end" className="w-52">
-              <DropdownMenuItem aria-current={props.extensionsActive ? 'page' : undefined} onSelect={props.onOpenExtensions}><IconPuzzle /><Trans>Agent 扩展</Trans></DropdownMenuItem>
-              {mobile && <DropdownMenuItem aria-current={props.pluginsActive ? 'page' : undefined} onSelect={props.onOpenPlugins}><IconPuzzle /><Trans>插件</Trans></DropdownMenuItem>}
-              <DropdownMenuItem aria-current={props.statsActive ? 'page' : undefined} onSelect={props.onOpenStats}><IconChartColumn /><Trans>数据统计</Trans></DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <MenuSub icon={<ThemeIcon />} label={t`主题`} className="w-52">{themeItems}</MenuSub>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          {/* The gear is a glyph: what it opens onto, and how the backend is doing, are in its
-              tooltip, and a warning dot is what keeps the second one visible without hovering. */}
-          <Tip label={settingsLabel} side="top">
-            <Button size="icon-sm" variant="quiet" aria-label={settingsLabel} onClick={props.onOpenSettings} onPointerEnter={preloadSettings} onFocus={preloadSettings} className="relative">
-              <IconSettings />
-              {backendNotice && <StatusDot tone={backendNotice.tone} className={cn('absolute right-0.5 bottom-0.5 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')} />}
-            </Button>
-          </Tip>
-        </div>
+        <SidebarUserMenu
+          owner={owner}
+          backend={props.backend}
+          stale={props.stale}
+          mobile={mobile}
+          onOpenProfile={props.onOpenProfile}
+          onOpenSettings={props.onOpenSettings}
+          onOpenExtensions={props.onOpenExtensions}
+          onOpenStats={props.onOpenStats}
+          onOpenPlugins={props.onOpenPlugins}
+          extensionsActive={props.extensionsActive}
+          statsActive={props.statsActive}
+          pluginsActive={props.pluginsActive}
+        />
       </div>
     </nav>
   );

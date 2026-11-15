@@ -735,8 +735,13 @@ msgstr ""
 msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 msgstr ""
 
+#: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "个人资料"
+msgstr ""
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "个人资料与更多"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx
@@ -4935,6 +4940,10 @@ msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "无法连接到服务器。"
+msgstr ""
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "无法连接服务器"
 msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx

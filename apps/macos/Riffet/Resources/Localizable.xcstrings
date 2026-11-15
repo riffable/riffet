@@ -1,6 +1,26 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "个人资料与更多": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal info and more"
+          }
+        }
+      }
+    },
+    "复制地址": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy address"
+          }
+        }
+      }
+    },
     "后退": {
       "localizations": {
         "en": {
@@ -10685,16 +10705,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Extension files"
-          }
-        }
-      }
-    },
-    "扩展管理、数据统计、活动与外观": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Extensions, Stats, Activity and Appearance"
           }
         }
       }

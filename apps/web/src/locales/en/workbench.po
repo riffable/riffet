@@ -8,10 +8,10 @@ msgstr ""
 "Language: en\n"
 
 #. placeholder {0}: agent.label
+#. placeholder {0}: backend.label
 #. placeholder {0}: label(backendId)
-#. placeholder {0}: props.backend.label
 #: src/app/ProjectHome.tsx
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "{0} 不可用"
 msgstr "{0} unavailable"
 
@@ -20,8 +20,8 @@ msgstr "{0} unavailable"
 msgid "{0} 个文件"
 msgstr "{0, plural, one {# file} other {# files}}"
 
-#. placeholder {0}: props.backend.label
-#: src/app/Sidebar.tsx
+#. placeholder {0}: backend.label
+#: src/app/SidebarUserMenu.tsx
 msgid "{0} 未登录"
 msgstr "{0} not signed in"
 
@@ -47,7 +47,7 @@ msgstr "\"{0}\" {body}"
 msgid "Agent 与模型"
 msgstr "Agents and models"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "Agent 扩展"
 msgstr "Agent extensions"
 
@@ -109,15 +109,19 @@ msgstr "Unavailable"
 msgid "不存在"
 msgstr "Missing"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "个人资料"
 msgstr "Personal info"
+
+#: src/app/SidebarUserMenu.tsx
+msgid "个人资料与更多"
+msgstr "Personal info and more"
 
 #: src/app/DirectoryPicker.tsx
 msgid "主目录"
 msgstr "Home"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "Theme"
 
@@ -605,7 +609,7 @@ msgstr "Copy command"
 msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 msgstr "Copying the command stops this session's process in Riffet. You can't send here while the terminal is running."
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "复制地址"
 msgstr "Copy address"
 
@@ -704,7 +708,7 @@ msgstr "Cancelled"
 msgid "已启用"
 msgstr "Enabled"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "已复制地址"
 msgstr "Address copied"
 
@@ -932,6 +936,7 @@ msgstr "Provide model sources"
 
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 #: src/app/Workbench.tsx
 msgid "插件"
 msgstr "Plugins"
@@ -1066,7 +1071,7 @@ msgstr "Close changes panel"
 msgid "收起文件面板"
 msgstr "Close files panel"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "数据统计"
 msgstr "Stats"
 
@@ -1296,7 +1301,7 @@ msgstr "Couldn't reorder favorites"
 msgid "无法连接 Riffet 服务器"
 msgstr "Couldn't connect to the Riffet server"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "无法连接服务器"
 msgstr "Couldn't connect to the server"
 
@@ -1314,7 +1319,7 @@ msgstr "Couldn't reopen the terminal"
 msgid "日志"
 msgstr "Log"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "明暗"
 msgstr "Color mode"
 
@@ -1373,7 +1378,6 @@ msgstr "Can't confirm whether it was sent yet"
 msgid "暂时无法确认是否已发送，请先检查状态"
 msgstr "Can't confirm whether it was sent yet. Check the status first."
 
-#: src/app/Sidebar.tsx
 #: src/plugins/TasksView.tsx
 msgid "更多"
 msgstr "More"
@@ -1405,7 +1409,7 @@ msgstr "No project"
 msgid "未读"
 msgstr "Unread"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "本机"
 msgstr "This machine"
 
@@ -1476,7 +1480,7 @@ msgstr "Stopping"
 msgid "正在取消"
 msgstr "Cancelling"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "正在同步"
 msgstr "Syncing"
 
@@ -1513,7 +1517,7 @@ msgstr "No plugins"
 msgid "没有符合筛选的记录"
 msgstr "No records match the filter"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "浅色"
 msgstr "Light"
 
@@ -1526,7 +1530,7 @@ msgstr "Browse"
 msgid "浏览…"
 msgstr "Browse…"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "深色"
 msgstr "Dark"
 
@@ -1799,7 +1803,7 @@ msgid "要在 {0} 做什么？"
 msgstr "What do you want to do in {0}?"
 
 #: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 #: src/app/WorkbenchOverlays.tsx
 msgid "设置"
 msgstr "Settings"
@@ -1808,11 +1812,6 @@ msgstr "Settings"
 msgctxt "plugin-detail-tab"
 msgid "设置"
 msgstr "Settings"
-
-#. placeholder {0}: [backendNotice.label, backendNotice.title].filter(Boolean).join(' · ')
-#: src/app/Sidebar.tsx
-msgid "设置 · {0}"
-msgstr "Settings · {0}"
 
 #: src/app/Workbench.tsx
 msgid "设置：{label}"
@@ -1871,7 +1870,7 @@ msgstr "Adjust panel width"
 msgid "警告"
 msgstr "Warning"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "跟随系统"
 msgstr "System"
 
@@ -1945,7 +1944,7 @@ msgctxt "workbench-session-status-active"
 msgid "进行中"
 msgstr "Active"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgctxt "workbench-remote-host"
 msgid "远端"
 msgstr "Remote"

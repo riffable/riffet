@@ -735,9 +735,14 @@ msgstr "Discard files that cannot be backed up, delete a conversation"
 msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 msgstr "Two typefaces, {0} font sizes, two weights. Line height is a multiple of 2px."
 
+#: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "个人资料"
 msgstr "Personal info"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "个人资料与更多"
+msgstr "Personal info and more"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "中"
@@ -4936,6 +4941,10 @@ msgstr "Couldn't connect to the server"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "无法连接到服务器。"
 msgstr "Can't reach the server."
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "无法连接服务器"
+msgstr "Couldn't connect to the server"
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "无结果"

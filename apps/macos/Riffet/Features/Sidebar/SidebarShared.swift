@@ -274,15 +274,9 @@ enum SidebarFilterMenu {
     }
 }
 
-/// The sidebar footer's server status and its pages-and-appearance menu.
+/// The sidebar footer's server status and personal menu.
 @MainActor
 enum SidebarFooterSupport {
-    struct Entry {
-        let title: String
-        let symbol: String
-        let action: () -> Void
-    }
-
     /// The list is a saved copy or failed to load.
     static func unhealthy(_ workbench: Workbench) -> Bool { workbench.list.cachedAt != nil || workbench.list.error != nil }
 
@@ -304,16 +298,23 @@ enum SidebarFooterSupport {
         return [notice.label, notice.detail].compactMap { $0 }.joined(separator: "\n")
     }
 
+    static func menuHelp(_ workbench: Workbench) -> String {
+        let name = String(localized: "个人资料与更多")
+        if unhealthy(workbench) { return [name, statusText(workbench)].joined(separator: "\n") }
+        guard let notice = workbench.backendNotice else { return name }
+        return [name, notice.label, notice.detail].compactMap { $0 }.joined(separator: "\n")
+    }
+
     static func openSettings(_ open: OpenSettingsAction, on section: SettingsSection) {
         UserDefaults.standard.set(section.rawValue, forKey: PreferenceKey.settingsSection)
         open()
     }
 
-    /// [entries], then 外观: light, dark or the system's, and the palette. The chosen action runs
-    /// after the menu closes.
-    static func popUp(_ anchor: MenuAnchor, scheme: ColorScheme, entries: [Entry]) {
+    /// Identity, page destinations, then appearance and settings. Chosen actions run after dismissal.
+    static func popUp(_ anchor: MenuAnchor, scheme: ColorScheme, workbench: Workbench, openSettings: OpenSettingsAction) {
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.minimumWidth = Space.xxl * 8
         var chosen: (() -> Void)?
         func item(_ title: String, _ symbol: String?, on: Bool = false, _ action: @escaping () -> Void) -> NSMenuItem {
             let item = MenuAction.item(title) { chosen = action }
@@ -321,8 +322,18 @@ enum SidebarFooterSupport {
             item.state = on ? .on : .off
             return item
         }
-        for entry in entries { menu.addItem(item(entry.title, entry.symbol, entry.action)) }
-        if !entries.isEmpty { menu.addItem(.separator()) }
+        let ownerName = workbench.owner?.name.flatMap { $0.isEmpty ? nil : $0 }
+        let profile = item(ownerName ?? String(localized: "个人资料"), "person.crop.circle") {
+            Self.openSettings(openSettings, on: .profile)
+        }
+        if ownerName != nil { profile.subtitle = String(localized: "个人资料") }
+        let renderer = ImageRenderer(content: OwnerAvatar(workbench: workbench, size: Space.xxl + Space.xs).environment(\.palette, ThemeStore.shared.palette))
+        renderer.scale = anchor.view?.window?.backingScaleFactor ?? 2
+        if let image = renderer.cgImage { profile.image = NSImage(cgImage: image, size: NSSize(width: Space.xxl + Space.xs, height: Space.xxl + Space.xs)) }
+        menu.addItem(profile)
+        menu.addItem(.separator())
+        for page in WorkbenchPage.footerMenu { menu.addItem(item(page.title, page.symbol) { workbench.page = page }) }
+        menu.addItem(.separator())
         let prefs = DisplayPreferences.shared
         let theme = ThemeStore.shared
         let appearance = NSMenu()
@@ -340,8 +351,32 @@ enum SidebarFooterSupport {
         appearanceItem.image = NSImage.icon("paintpalette", accessibilityDescription: nil)
         appearanceItem.submenu = appearance
         menu.addItem(appearanceItem)
+        let settings = item(String(localized: "设置"), "gearshape") { openSettings() }
+        settings.keyEquivalent = ","
+        settings.keyEquivalentModifierMask = .command
+        if let notice = workbench.backendNotice {
+            settings.subtitle = notice.label
+            settings.toolTip = notice.detail
+        }
+        menu.addItem(settings)
+        if !workbench.local || unhealthy(workbench) {
+            menu.addItem(.separator())
+            let connection = NSMenu()
+            connection.autoenablesItems = false
+            connection.addItem(.sectionHeader(title: workbench.baseURL.absoluteString))
+            connection.addItem(item(String(localized: "复制地址"), "doc.on.doc") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(workbench.baseURL.absoluteString, forType: .string)
+            })
+            let host = NSMenuItem(title: hostName(workbench), action: nil, keyEquivalent: "")
+            host.image = NSImage.icon(workbench.local ? "laptopcomputer" : "server.rack", accessibilityDescription: nil)
+            host.submenu = connection
+            if unhealthy(workbench) { host.subtitle = statusText(workbench) }
+            host.toolTip = workbench.baseURL.absoluteString
+            menu.addItem(host)
+        }
         // A pick inside the 外观 submenu may not count as the menu's own selection; `chosen` is only ever set by a pick.
-        _ = anchor.popUp(menu)
+        _ = anchor.popUp(menu, aboveAnchor: true)
         chosen?()
     }
 }

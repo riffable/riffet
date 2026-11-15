@@ -116,9 +116,9 @@ final class MenuAnchor {
 
     @MainActor
     @discardableResult
-    func popUp(_ menu: NSMenu) -> Bool {
+    func popUp(_ menu: NSMenu, aboveAnchor: Bool = false) -> Bool {
         guard let view, let window = view.window else { return false }
-        let selected = menu.popUpStyled(at: NSPoint(x: 0, y: view.isFlipped ? view.bounds.height + 4 : -4), in: view)
+        let selected = menu.popUpStyled(at: NSPoint(x: 0, y: view.isFlipped ? view.bounds.height + 4 : -4), in: view, aboveAnchor: aboveAnchor)
         // A page or terminal can change while the menu's nested event loop is running.
         return selected && view.window === window
     }

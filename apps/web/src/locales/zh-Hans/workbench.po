@@ -8,10 +8,10 @@ msgstr ""
 "Language: zh-Hans\n"
 
 #. placeholder {0}: agent.label
+#. placeholder {0}: backend.label
 #. placeholder {0}: label(backendId)
-#. placeholder {0}: props.backend.label
 #: src/app/ProjectHome.tsx
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "{0} 不可用"
 msgstr "{0} 不可用"
 
@@ -20,8 +20,8 @@ msgstr "{0} 不可用"
 msgid "{0} 个文件"
 msgstr "{0} 个文件"
 
-#. placeholder {0}: props.backend.label
-#: src/app/Sidebar.tsx
+#. placeholder {0}: backend.label
+#: src/app/SidebarUserMenu.tsx
 msgid "{0} 未登录"
 msgstr "{0} 未登录"
 
@@ -47,7 +47,7 @@ msgstr "「{0}」{body}"
 msgid "Agent 与模型"
 msgstr "Agent 与模型"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "Agent 扩展"
 msgstr "Agent 扩展"
 
@@ -109,15 +109,19 @@ msgstr "不可用"
 msgid "不存在"
 msgstr "不存在"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "个人资料"
 msgstr "个人资料"
+
+#: src/app/SidebarUserMenu.tsx
+msgid "个人资料与更多"
+msgstr "个人资料与更多"
 
 #: src/app/DirectoryPicker.tsx
 msgid "主目录"
 msgstr "主目录"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "主题"
 msgstr "主题"
 
@@ -605,7 +609,7 @@ msgstr "复制命令"
 msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 msgstr "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "复制地址"
 msgstr "复制地址"
 
@@ -704,7 +708,7 @@ msgstr "已取消"
 msgid "已启用"
 msgstr "已启用"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "已复制地址"
 msgstr "已复制地址"
 
@@ -932,6 +936,7 @@ msgstr "提供模型源"
 
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 #: src/app/Workbench.tsx
 msgid "插件"
 msgstr "插件"
@@ -1066,7 +1071,7 @@ msgstr "收起变更面板"
 msgid "收起文件面板"
 msgstr "收起文件面板"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "数据统计"
 msgstr "数据统计"
 
@@ -1296,7 +1301,7 @@ msgstr "无法调整收藏顺序"
 msgid "无法连接 Riffet 服务器"
 msgstr "无法连接 Riffet 服务器"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "无法连接服务器"
 msgstr "无法连接服务器"
 
@@ -1314,7 +1319,7 @@ msgstr "无法重新打开终端"
 msgid "日志"
 msgstr "日志"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "明暗"
 msgstr "明暗"
 
@@ -1373,7 +1378,6 @@ msgstr "暂时无法确认是否已发送"
 msgid "暂时无法确认是否已发送，请先检查状态"
 msgstr "暂时无法确认是否已发送，请先检查状态"
 
-#: src/app/Sidebar.tsx
 #: src/plugins/TasksView.tsx
 msgid "更多"
 msgstr "更多"
@@ -1405,7 +1409,7 @@ msgstr "未关联项目"
 msgid "未读"
 msgstr "未读"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "本机"
 msgstr "本机"
 
@@ -1476,7 +1480,7 @@ msgstr "正在停止"
 msgid "正在取消"
 msgstr "正在取消"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "正在同步"
 msgstr "正在同步"
 
@@ -1513,7 +1517,7 @@ msgstr "没有插件"
 msgid "没有符合筛选的记录"
 msgstr "没有符合筛选的记录"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "浅色"
 msgstr "浅色"
 
@@ -1526,7 +1530,7 @@ msgstr "浏览"
 msgid "浏览…"
 msgstr "浏览…"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "深色"
 msgstr "深色"
 
@@ -1799,7 +1803,7 @@ msgid "要在 {0} 做什么？"
 msgstr "要在 {0} 做什么？"
 
 #: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 #: src/app/WorkbenchOverlays.tsx
 msgid "设置"
 msgstr "设置"
@@ -1808,11 +1812,6 @@ msgstr "设置"
 msgctxt "plugin-detail-tab"
 msgid "设置"
 msgstr "设置"
-
-#. placeholder {0}: [backendNotice.label, backendNotice.title].filter(Boolean).join(' · ')
-#: src/app/Sidebar.tsx
-msgid "设置 · {0}"
-msgstr "设置 · {0}"
 
 #: src/app/Workbench.tsx
 msgid "设置：{label}"
@@ -1871,7 +1870,7 @@ msgstr "调整面板宽度"
 msgid "警告"
 msgstr "警告"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgid "跟随系统"
 msgstr "跟随系统"
 
@@ -1945,7 +1944,7 @@ msgctxt "workbench-session-status-active"
 msgid "进行中"
 msgstr "进行中"
 
-#: src/app/Sidebar.tsx
+#: src/app/SidebarUserMenu.tsx
 msgctxt "workbench-remote-host"
 msgid "远端"
 msgstr "远端"

@@ -553,33 +553,24 @@ struct SidebarFooter: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        HStack(spacing: Space.xs) {
-            Button { SidebarFooterSupport.openSettings(openSettings, on: .profile) } label: { OwnerAvatar(workbench: workbench, size: 22) }
-                .buttonStyle(.plain)
-                .help(workbench.owner?.name ?? String(localized: "个人资料"))
-            Spacer(minLength: 0)
-            if showsHost {
-                Image(icon: workbench.local ? "laptopcomputer" : "server.rack")
-                    .font(.riffet(size: S(12.5)))
-                    .foregroundStyle(unhealthy ? palette.warning : palette.fg3)
-                    .frame(width: 26, height: 26)
-                    .help(statusText)
-            }
-            // A native menu like the session ⋯: monochrome symbols on every item.
-            Button { pagesMenu() } label: { Image(icon: "ellipsis").font(.riffet(size: S(12.5))) }
-                .buttonStyle(IconButtonStyle())
-                .background(MenuAnchorView(anchor: menuAnchor))
-                .accessibilityLabel("扩展管理、数据统计、活动与外观")
-                .help("扩展管理、数据统计、活动与外观")
-            Button { openSettings() } label: { Image(icon: "gearshape").font(.riffet(size: S(12.5))) }
-                .buttonStyle(IconButtonStyle())
-                .overlay(alignment: .topTrailing) {
-                    if workbench.backendNotice != nil {
-                        Circle().fill(palette.warning).frame(width: 6, height: 6).padding(5).allowsHitTesting(false)
+        HStack {
+            Button { SidebarFooterSupport.popUp(menuAnchor, scheme: scheme, workbench: workbench, openSettings: openSettings) } label: {
+                OwnerAvatar(workbench: workbench, size: Space.xl)
+                    .overlay(alignment: .bottomTrailing) {
+                        if SidebarFooterSupport.unhealthy(workbench) || workbench.backendNotice != nil {
+                            Circle()
+                                .fill(palette.warning)
+                                .frame(width: Space.sm, height: Space.sm)
+                                .overlay(Circle().strokeBorder(palette.bgSidebar, lineWidth: 1))
+                                .allowsHitTesting(false)
+                        }
                     }
-                }
-                .help(settingsHelp)
-                .accessibilityLabel(settingsHelp)
+            }
+            .buttonStyle(IconButtonStyle())
+            .background(MenuAnchorView(anchor: menuAnchor))
+            .help(SidebarFooterSupport.menuHelp(workbench))
+            .accessibilityLabel(SidebarFooterSupport.menuHelp(workbench))
+            Spacer(minLength: 0)
         }
         .padding(.leading, Space.md)
         .padding(.trailing, Space.xs)
@@ -589,17 +580,6 @@ struct SidebarFooter: View {
         .padding(.bottom, Space.xs)
     }
 
-    private func pagesMenu() {
-        let entries = WorkbenchPage.footerMenu.map { page in
-            SidebarFooterSupport.Entry(title: page.title, symbol: page.symbol) { workbench.page = page }
-        }
-        SidebarFooterSupport.popUp(menuAnchor, scheme: scheme, entries: entries)
-    }
-
-    private var unhealthy: Bool { SidebarFooterSupport.unhealthy(workbench) }
-    private var showsHost: Bool { !workbench.local || unhealthy }
-    private var settingsHelp: String { SidebarFooterSupport.settingsHelp(workbench) }
-    private var statusText: String { SidebarFooterSupport.statusText(workbench) }
 }
 
 /// Light, dark or the system's, then the palette; neither choice writes the other (the web's

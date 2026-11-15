@@ -14,11 +14,16 @@ extension NSMenu {
     /// custom item view (`NSMenuItem.view`) stays the system's.
     @MainActor
     @discardableResult
-    func popUpStyled(at point: NSPoint, in view: NSView) -> Bool {
+    func popUpStyled(at point: NSPoint, in view: NSView, aboveAnchor: Bool = false) -> Bool {
         if DisplayPreferences.shared.style.menu == .drawn, view.window != nil, !DrawnMenu.hasCustomView(self) {
-            return DrawnMenu.popUp(self, at: point, in: view)
+            return DrawnMenu.popUp(self, at: point, in: view, aboveAnchor: aboveAnchor)
         }
-        return popUp(positioning: nil, at: point, in: view)
+        var origin = point
+        if aboveAnchor {
+            update()
+            origin.y = view.isFlipped ? view.bounds.minY - MenuMetric.anchorGap - size.height : view.bounds.maxY + MenuMetric.anchorGap + size.height
+        }
+        return popUp(positioning: nil, at: origin, in: view)
     }
 }
 
@@ -30,9 +35,9 @@ enum DrawnMenu {
 
     /// Shows [menu] under [point] in [view] (the NSMenu convention: the menu's top left corner) and
     /// returns whether an item was chosen. The item's action has run by then.
-    static func popUp(_ menu: NSMenu, at point: NSPoint, in view: NSView) -> Bool {
+    static func popUp(_ menu: NSMenu, at point: NSPoint, in view: NSView, aboveAnchor: Bool = false) -> Bool {
         guard let window = view.window else { return false }
-        let session = MenuSession(root: menu, view: view, window: window, point: point)
+        let session = MenuSession(root: menu, view: view, window: window, point: point, aboveAnchor: aboveAnchor)
         return session.run()
     }
 }
@@ -46,6 +51,9 @@ private enum MenuMetric {
     static let inset: CGFloat = 10
     static let gap: CGFloat = 10
     static let icon: CGFloat = 14
+    static let largeImage: CGFloat = 36
+    static let largeImageRowHeight: CGFloat = 60
+    static let anchorGap: CGFloat = 6
     static let minWidth: CGFloat = 176
     static let maxWidth: CGFloat = 360
     /// Room around the card for its shadow, which the panel draws itself.
@@ -120,6 +128,7 @@ private struct MenuRow {
     var subtitleText: NSAttributedString?
     var keyText: NSAttributedString?
     var icon: NSImage?
+    var iconSize: CGFloat = MenuMetric.icon
     var y: CGFloat = 0
     var height: CGFloat = 0
 
@@ -330,12 +339,12 @@ private final class MenuRowsView: NSView {
         if hasIcons {
             if let icon = row.icon {
                 let image = look.tinted(icon, row.enabled ? look.fg3 : look.fg4)
-                let scale = min(MenuMetric.icon / max(image.size.width, 1), MenuMetric.icon / max(image.size.height, 1), 1.2)
+                let scale = min(row.iconSize / max(image.size.width, 1), row.iconSize / max(image.size.height, 1), 1.2)
                 let size = NSSize(width: image.size.width * scale, height: image.size.height * scale)
-                let box = NSRect(x: left + (MenuMetric.icon - size.width) / 2, y: r.midY - size.height / 2, width: size.width, height: size.height)
+                let box = NSRect(x: left + (row.iconSize - size.width) / 2, y: r.midY - size.height / 2, width: size.width, height: size.height)
                 image.draw(in: box, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true, hints: nil)
             }
-            left += MenuMetric.icon + MenuMetric.gap
+            left += row.iconSize + MenuMetric.gap
         }
         var right = r.maxX - MenuMetric.inset
         if trailingWidth > 0 {
@@ -418,6 +427,11 @@ private final class MenuLevel {
                 } else {
                     row.height = MenuMetric.rowHeight
                 }
+                if let image = item.image, !image.isTemplate, image.size.width == image.size.height, image.size.width >= MenuMetric.largeImage {
+                    row.iconSize = MenuMetric.largeImage
+                    row.height = max(row.height, MenuMetric.largeImageRowHeight)
+                    width += row.iconSize - MenuMetric.icon
+                }
                 textWidth = max(textWidth, width)
                 if let key = Self.keyText(item) {
                     row.keyText = look.attributed(key, font: look.small, color: look.fg4)
@@ -434,7 +448,7 @@ private final class MenuLevel {
         let contentHeight = y + 2 * MenuMetric.pad
         trailing = ceil(trailing)
         var width = 2 * MenuMetric.pad + 2 * MenuMetric.inset + ceil(textWidth) + (hasIcons ? MenuMetric.icon + MenuMetric.gap : 0) + (trailing > 0 ? trailing + MenuMetric.gap : 0)
-        width = min(max(width, MenuMetric.minWidth), MenuMetric.maxWidth)
+        width = min(max(width, menu.minimumWidth, MenuMetric.minWidth), MenuMetric.maxWidth)
         let size = CGSize(width: width, height: min(contentHeight, maxHeight))
 
         let margin = MenuMetric.shadowMargin
@@ -537,6 +551,7 @@ private final class MenuSession {
     private weak var anchor: NSView?
     private let window: NSWindow
     private let point: NSPoint
+    private let aboveAnchor: Bool
     private let look = MenuLook()
     private let visible: NSRect
     private var levels: [MenuLevel] = []
@@ -547,11 +562,12 @@ private final class MenuSession {
     private var observers: [NSObjectProtocol] = []
     private var globalMonitor: Any?
 
-    init(root: NSMenu, view: NSView, window: NSWindow, point: NSPoint) {
+    init(root: NSMenu, view: NSView, window: NSWindow, point: NSPoint, aboveAnchor: Bool) {
         self.root = root
         anchor = view
         self.window = window
         self.point = point
+        self.aboveAnchor = aboveAnchor
         visible = ((window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame).insetBy(dx: 8, dy: 8)
     }
 
@@ -561,7 +577,7 @@ private final class MenuSession {
         let origin = window.convertPoint(toScreen: anchor.convert(point, to: nil))
         let anchorRect = window.convertToScreen(anchor.convert(anchor.bounds, to: nil))
         let size = level.size
-        var top = origin.y
+        var top = aboveAnchor ? min(anchorRect.maxY + MenuMetric.anchorGap + size.height, visible.maxY) : origin.y
         if top - size.height < visible.minY {
             // No room below: above the anchor, or pinned to the screen's bottom if that does not fit either.
             let above = anchorRect.maxY + 4 + size.height

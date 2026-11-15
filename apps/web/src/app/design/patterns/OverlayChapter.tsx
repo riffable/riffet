@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tip } from '@/components/ui/tooltip';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
+import { SidebarUserMenu } from '../../SidebarUserMenu';
 import { Chapter, Family, Frame, Plate, Specimen } from '../specimen';
 
 function MenuDemo() {
@@ -130,6 +131,14 @@ export function OverlayChapter() {
         </Specimen>
         <Specimen name="Notice" note={t`持续存在的状态，留在内容里，随状态解除。`} wide>
           <div className="w-full max-w-md"><Notice tone="warning">{t`Codex 本周额度剩余 8%。`}</Notice></div>
+        </Specimen>
+      </Family>
+      <Family title={t`个人资料与更多`}>
+        <Specimen name={t`个人资料`}>
+          <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenExtensions={() => {}} onOpenStats={() => {}} />
+        </Specimen>
+        <Specimen name={t`无法连接服务器`}>
+          <SidebarUserMenu stale={{ mode: 'offline' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenExtensions={() => {}} onOpenStats={() => {}} />
         </Specimen>
       </Family>
       <Plate number={2} title={t`弹窗结构`} note={t`标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。`}>

@@ -735,9 +735,14 @@ msgstr "丢弃无法备份的文件、删除会话"
 msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 msgstr "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 
+#: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "个人资料"
 msgstr "个人资料"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "个人资料与更多"
+msgstr "个人资料与更多"
 
 #: src/app/design/android/StylesChapter.tsx
 msgid "中"
@@ -4936,6 +4941,10 @@ msgstr "无法连接到服务器"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "无法连接到服务器。"
 msgstr "无法连接到服务器。"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "无法连接服务器"
+msgstr "无法连接服务器"
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "无结果"
