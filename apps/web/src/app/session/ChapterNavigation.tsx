@@ -293,10 +293,10 @@ export function ChapterNavigation({ scrollRef, columnRef, onNavigate, scope }: {
                 aria-label={heading.text}
                 aria-current={selected ? 'location' : undefined}
                 onClick={() => onNavigate(reading.row, heading.key)}
-                className={cn('group/chapter flex shrink-0 items-center rounded-md text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus', reading.compact ? 'h-[11px] justify-center' : 'min-h-7 px-2 py-1 text-xs hover:bg-hover', selected ? 'text-fg' : 'text-fg-4 hover:text-fg-2')}
+                className={cn('group/chapter flex shrink-0 items-center rounded-md text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus', reading.compact ? 'h-[11px] justify-start px-0.5' : 'min-h-7 px-2 py-1 text-xs hover:bg-hover', selected ? 'text-fg' : 'text-fg-4 hover:text-fg-2')}
               >
                 {reading.compact
-                  ? <span className={cn('block rounded-full transition-[width,height,background-color] duration-[var(--duration-slow)] ease-[var(--ease-standard)]', selected ? 'size-1.5 bg-fg' : 'size-1 bg-fg-4/55 group-hover/chapter:size-[5px] group-hover/chapter:bg-fg-3')} />
+                  ? <span className={cn('block h-0.5 rounded-full transition-[width,background-color] duration-[var(--duration-slow)] ease-[var(--ease-standard)] motion-reduce:transition-none', selected ? 'w-5 bg-fg' : 'w-3 bg-fg-4/55 group-hover/chapter:w-4 group-hover/chapter:bg-fg-3')} />
                   : <span className={cn('min-w-0 truncate', selected && 'font-medium')}>{heading.text}</span>}
               </button>
             </Tip>

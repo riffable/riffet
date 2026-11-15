@@ -17,7 +17,7 @@ import { IconChevronRight, IconCircleAlert, IconPlus, IconRefreshCw, IconSave, I
 import { Button } from '@/components/ui/button';
 import { Input, Select, Segmented, Spinner, StatusDot, Switch } from '@/components/ui/controls';
 import { api, type ProjectRecord } from '@/lib/api';
-import { backendLabel } from '@/lib/backends';
+import { agentMarkStyle, backendLabel } from '@/lib/backends';
 import { confirmDialog, useDiscardGuard } from '@/lib/dialogs';
 import { loadPlugins, modelSourcesFor, usePlugins, type ModelSourceEntry } from '@/lib/plugins';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -480,7 +480,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
         <SettingsRow title={t`默认 Agent`}>
           <Select<string> label={t`默认 Agent`} className="w-48" value={settings.defaultBackendId ?? ''} placeholder={t`未设置`} disabled={busy} onChange={(next) => void saveDefaultBackend(next as NativeBackendId)}
             // The saved default stays named while it is unavailable, just not offered again.
-            options={offered.filter((entry) => entry.backendId !== 'chat' && (entry.available !== false || entry.backendId === settings.defaultBackendId)).map((entry) => ({ value: entry.backendId, label: shortLabel(entry.backendId), icon: <AgentMark backend={entry.backendId} size={14} />, disabled: entry.available === false }))} />
+            options={offered.filter((entry) => entry.backendId !== 'chat' && (entry.available !== false || entry.backendId === settings.defaultBackendId)).map((entry) => ({ value: entry.backendId, label: shortLabel(entry.backendId), icon: <AgentMark backend={entry.backendId} size={14} style={agentMarkStyle(entry.backendId)} />, disabled: entry.available === false }))} />
         </SettingsRow>
       </SettingsGroup>
 
@@ -492,7 +492,7 @@ export function BackendProfilesSection({ settings, project, onSaved, onRefresh, 
           value={backendId}
           disabled={busy}
           onChange={(next) => void changeBackend(next)}
-          options={ids.map((id) => ({ value: id, label: shortLabel(id), icon: <AgentMark backend={id} size={16} /> }))}
+          options={ids.map((id) => ({ value: id, label: shortLabel(id), icon: <AgentMark backend={id} size={16} style={agentMarkStyle(id)} /> }))}
         />
         <span className="min-w-0 truncate text-xs">{cliVersionNote(cliVersion)}</span>
       </div>
