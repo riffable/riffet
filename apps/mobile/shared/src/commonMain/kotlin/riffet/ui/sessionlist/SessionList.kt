@@ -133,6 +133,10 @@ import riffet.ui.timeline.rememberTickingNow
 import riffet_mobile.shared.generated.resources.*
 import riffet.ui.design.agentMarkTint
 import androidx.compose.ui.graphics.isSpecified
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import riffet.ui.design.SearchReveal
+import riffet.ui.design.rememberSearchRevealState
+import riffet.ui.app.SearchRevealAction
 
 /** Typing pauses this long before the message index is read. */
 private const val SEARCH_DEBOUNCE_MILLIS = 150L
@@ -244,11 +248,11 @@ fun SessionList(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     var requestSearchFocus by remember { mutableStateOf(false) }
-    val searchOffscreen by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
     val browseAnchor = remember { IntArray(2) }
     // Capture the browse position only while the search field is idle.
     val searchActive = searchFocused || query.isNotEmpty() || requestSearchFocus
     val searchingNow by rememberUpdatedState(searchActive)
+    val searchReveal = rememberSearchRevealState(listState, pinned = searchActive)
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
             .collect { (index, offset) ->
@@ -448,18 +452,11 @@ fun SessionList(
             onOpenMenu = onOpenMenu,
             background = if (materialBackdropEnabled) Color.Transparent else null,
             actions = {
-                if (searchOffscreen) {
-                    PageBarAction(
-                        RiffetIcons.Search,
-                        stringResource(Res.string.session_search_placeholder),
-                        onClick = {
-                            coroutineScope.launch {
-                                requestSearchFocus = true
-                                listState.scrollToItem(0)
-                            }
-                        },
-                        tint = colors.fg,
-                    )
+                SearchRevealAction(searchReveal, stringResource(Res.string.session_search_placeholder), tint = colors.fg) {
+                    coroutineScope.launch {
+                        requestSearchFocus = true
+                        listState.scrollToItem(0)
+                    }
                 }
                 ListMenu(
                     layout = layout,
@@ -520,19 +517,23 @@ fun SessionList(
             RiffetMaterialSourceContent {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.fillMaxSize().then(if (LocalPageActive.current) Modifier.riffetMaterialSource(key = listState) else Modifier),
+                    modifier = Modifier.fillMaxSize().nestedScroll(searchReveal.connection)
+                        .then(if (LocalPageActive.current) Modifier.riffetMaterialSource(key = listState) else Modifier),
                     contentPadding = PaddingValues(top = chromeInsets.calculateTopPadding(), bottom = chromeInsets.calculateBottomPadding() + designMetrics.controlInset + LocalTabContentBottomPadding.current),
                 ) {
                     item(key = ITEM_SEARCH, contentType = ITEM_SEARCH) {
-                        SearchField(
-                            query = query,
-                            onQueryChange = { query = it },
-                            onFocusChange = { focused ->
-                                searchFocused = focused
-                                if (focused) requestSearchFocus = false
-                            },
-                            requestFocus = requestSearchFocus,
-                        )
+                        SearchReveal(searchReveal) {
+                            SearchField(
+                                query = query,
+                                onQueryChange = { query = it },
+                                onFocusChange = { focused ->
+                                    searchFocused = focused
+                                    if (focused) requestSearchFocus = false
+                                },
+                                requestFocus = requestSearchFocus,
+                                reveal = { searchReveal.fraction },
+                            )
+                        }
                     }
                     item(key = ITEM_CHIPS, contentType = ITEM_CHIPS) {
                         ChipRow(
@@ -606,9 +607,11 @@ private fun SearchField(
     onQueryChange: (String) -> Unit,
     onFocusChange: (Boolean) -> Unit,
     requestFocus: Boolean,
+    reveal: () -> Float,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     RiffetSearchField(
+        reveal = reveal,
         query = query,
         onQueryChange = onQueryChange,
         placeholder = stringResource(Res.string.session_search_placeholder),

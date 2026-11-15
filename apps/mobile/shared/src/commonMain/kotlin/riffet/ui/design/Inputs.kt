@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 
 /** Filled search surface shared by lists and settings; callers own the surrounding page inset. */
 @Composable
@@ -85,6 +87,8 @@ internal fun RiffetSearchField(
     modifier: Modifier = Modifier,
     onFocusChange: (Boolean) -> Unit = {},
     requestFocus: Boolean = false,
+    /** How far a [SearchReveal] has unfolded it, read while drawing: the pill shortens about its middle, its fill fades in first, then its contents. */
+    reveal: (() -> Float)? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -100,11 +104,20 @@ internal fun RiffetSearchField(
     val ring by animateColorAsState(if (focused) LocalRiffetSurfaces.current.focus else Color.Transparent, motion.effects(), label = "search-ring")
     val shape = RoundedCornerShape(LocalInterfaceStyle.current.controlRadius)
     val text = remember(typography, colors.fg) { typography.input.copy(color = colors.fg) }
+    val radius = with(LocalDensity.current) { LocalInterfaceStyle.current.controlRadius.toPx() }
+    val pill = if (reveal == null) Modifier else Modifier.graphicsLayer {
+        val unfolded = reveal()
+        this.shape = RevealPillShape(unfolded, radius)
+        clip = true
+        alpha = revealRamp(unfolded, 0f, 0.5f)
+    }
+    val contents = if (reveal == null) Modifier else Modifier.graphicsLayer { alpha = revealRamp(reveal(), 0.45f, 1f) }
     Row(
         modifier = modifier
             .onFocusChanged { focusChanged(it.hasFocus) }
             .fillMaxWidth()
             .heightIn(min = metrics.controlHeight)
+            .then(pill)
             .clip(shape)
             // The chips' fill rather than the card's: it reads on a page and on a sheet alike.
             .background(LocalRiffetSurfaces.current.press)
@@ -114,14 +127,14 @@ internal fun RiffetSearchField(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(metrics.controlInset * 2 / 3),
     ) {
-        Icon(RiffetIcons.Search, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(metrics.smallIconSize))
+        Icon(RiffetIcons.Search, contentDescription = null, tint = colors.fg3, modifier = contents.size(metrics.smallIconSize))
         BasicTextField(
             value = query, onValueChange = onQueryChange, singleLine = true, textStyle = text,
             cursorBrush = SolidColor(colors.accent),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = { focus.clearFocus() }),
             interactionSource = source,
-            modifier = Modifier.weight(1f).heightIn(min = metrics.controlHeight).focusRequester(requester)
+            modifier = contents.weight(1f).heightIn(min = metrics.controlHeight).focusRequester(requester)
                 .semantics { contentDescription = placeholder },
             decorationBox = { field ->
                 Box(contentAlignment = Alignment.CenterStart) {

@@ -21,7 +21,6 @@ import riffet.shared.appIconSupported
 import riffet.shared.supported
 import riffet.ui.app.LocalPageActive
 import riffet.ui.design.LocalInterfaceStyle
-import riffet.ui.design.RiffetSearchField
 import riffet.ui.icons.Icon
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.platform.VerificationAvailability
@@ -168,16 +167,11 @@ internal fun settingsSearchResults(query: String): List<SettingsSearchResult> {
     }.sortedBy { it.first }.map { it.second }
 }
 
+/** What the settings page's drawer search ([riffet.ui.app.PageSearch]) finds, in place of the sections. */
 @Composable
-internal fun SettingsSearch(query: String, onQueryChange: (String) -> Unit, onSelect: (SettingsSearchEntry) -> Unit) {
+internal fun SettingsSearchResults(query: String, onSelect: (SettingsSearchEntry) -> Unit) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
-    val label = stringResource(Res.string.settings_search)
-    RiffetSearchField(
-        query = query, onQueryChange = onQueryChange, placeholder = label,
-        clearDescription = stringResource(Res.string.settings_clear),
-        modifier = Modifier.padding(bottom = metrics.controlInset / 3),
-    )
     if (query.isNotBlank()) {
         val results = settingsSearchResults(query)
         if (results.isEmpty()) Text(stringResource(Res.string.settings_search_empty), style = LocalRiffetTypography.current.body,

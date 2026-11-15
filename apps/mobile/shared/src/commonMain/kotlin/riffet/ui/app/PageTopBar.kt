@@ -53,6 +53,13 @@ import riffet.ui.design.LargeTitleBar
 import riffet.ui.design.LargeTitleState
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
+import riffet.ui.design.SearchReveal
+import riffet.ui.design.rememberSearchRevealState
+import riffet.ui.design.SearchRevealState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 
 /**
@@ -154,10 +161,23 @@ internal fun PageBarAction(
 }
 
 /**
- * A search the page offers from its top bar (mobile.md §4): an icon among the actions that turns the
- * bar into a search field; back or the arrow closes it and clears the query.
+ * A search the page offers (mobile.md §4). By default an icon among the bar's actions that turns the
+ * bar into a search field; back or the arrow closes it and clears the query. A [drawer] search is a
+ * field above the content instead, folded until the page is pulled down at its top (a root page's
+ * search, as iPhone's navigation bar drawer).
  */
-internal class PageSearch(val query: String, val onQueryChange: (String) -> Unit, val placeholder: String)
+internal class PageSearch(val query: String, val onQueryChange: (String) -> Unit, val placeholder: String, val drawer: Boolean = false)
+
+/**
+ * The bar's search icon for a [SearchReveal] field: it fades by as much as the field shows, handing
+ * over to it as it unfolds and taking back as it scrolls away, and is gone while the field is all in view.
+ */
+@Composable
+internal fun SearchRevealAction(state: SearchRevealState, description: String, tint: Color? = null, onClick: () -> Unit) {
+    val inView by remember(state) { derivedStateOf { state.visible() >= 1f } }
+    if (inView) return
+    Box(Modifier.graphicsLayer { alpha = 1f - state.visible() }) { PageBarAction(RiffetIcons.Search, description, onClick, tint = tint) }
+}
 
 /** What the leading icon of a pushed page does: go back, or (an edit page) cancel. */
 internal enum class PageNavigation { BACK, CLOSE }
@@ -205,11 +225,20 @@ internal fun ScrollablePage(
     val nativeLargeTitle = style.components.navigation.largeTitle == riffet.ui.design.ComponentBackend.MATERIAL
     val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val largeState = rememberLargeTitleState(scroll)
-    var searching by rememberSaveable { mutableStateOf(search?.query?.isNotEmpty() == true) }
+    val barSearch = search?.takeIf { !it.drawer }
+    var searching by rememberSaveable { mutableStateOf(barSearch?.query?.isNotEmpty() == true) }
     val closeSearch: () -> Unit = { searching = false; search?.onQueryChange?.invoke("") }
-    PageBackHandler(enabled = searching && search != null) { closeSearch() }
+    PageBackHandler(enabled = searching && barSearch != null) { closeSearch() }
+    var drawerFocused by remember { mutableStateOf(false) }
+    var drawerFocusRequest by remember { mutableStateOf(false) }
+    val drawer = rememberSearchRevealState(scroll, pinned = search?.drawer == true && (drawerFocused || drawerFocusRequest || search.query.isNotEmpty()))
+    val scope = rememberCoroutineScope()
     val barActions: @Composable RowScope.() -> Unit = {
-        if (search != null) PageBarAction(RiffetIcons.Search, search.placeholder, { searching = true })
+        if (barSearch != null) PageBarAction(RiffetIcons.Search, barSearch.placeholder, { searching = true })
+        if (search?.drawer == true) SearchRevealAction(drawer, search.placeholder) {
+            drawerFocusRequest = true
+            scope.launch { scroll.animateScrollTo(0) }
+        }
         actions()
     }
     RiffetPageScaffold(
@@ -224,7 +253,7 @@ internal fun ScrollablePage(
                     else -> PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_back), onBack)
                 }
             }
-            if (searching && search != null) SearchTopBar(search, closeSearch)
+            if (searching && barSearch != null) SearchTopBar(barSearch, closeSearch)
             else if (showLargeTitle && nativeLargeTitle) RiffetMaterialContent {
                 LargeTopAppBar(
                     title = { Text(title, style = LocalRiffetTypography.current.largeTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
@@ -243,12 +272,26 @@ internal fun ScrollablePage(
             state = pull, contentAlignment = Alignment.TopCenter,
             indicator = { if (onRefresh != null) PullToRefreshDefaults.Indicator(state = pull, isRefreshing = refreshing,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = contentInsets.calculateTopPadding())) }) {
-            Column(Modifier.widthIn(max = style.metrics.contentMaxWidth).fillMaxWidth().verticalScroll(scroll)
+            // The drawer's connection stays in the chain without a drawer search, so adding one never remounts the page.
+            Column(Modifier.widthIn(max = style.metrics.contentMaxWidth).fillMaxWidth().nestedScroll(drawer.connection).verticalScroll(scroll)
                 .padding(contentInsets)
                 .padding(start = style.metrics.pageInset, end = style.metrics.pageInset,
                     top = style.metrics.sectionGap / 2,
                     bottom = style.metrics.sectionGap + LocalTabContentBottomPadding.current)) {
                 if (showLargeTitle && !nativeLargeTitle) LargeTitle(title, largeState, horizontalInset = 0.dp)
+                if (search?.drawer == true) SearchReveal(drawer) {
+                    riffet.ui.design.RiffetSearchField(
+                        query = search.query, onQueryChange = search.onQueryChange, placeholder = search.placeholder,
+                        clearDescription = stringResource(Res.string.session_clear_search),
+                        onFocusChange = { focused ->
+                            drawerFocused = focused
+                            if (focused) drawerFocusRequest = false
+                        },
+                        requestFocus = drawerFocusRequest,
+                        reveal = { drawer.fraction },
+                        modifier = Modifier.padding(bottom = style.metrics.controlInset / 3),
+                    )
+                }
                 content()
             }
         }

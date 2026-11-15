@@ -136,8 +136,9 @@ internal fun SettingsScreen(
     val keyboard = LocalSoftwareKeyboardController.current
     PageHost(pages, modifier) { route, back ->
         when (route) {
-            SettingsPageRoute.Home -> SettingsPage(stringResource(Res.string.settings_title), onBack, large = true) {
-                SettingsSearch(searchQuery, { searchQuery = it }) { entry ->
+            SettingsPageRoute.Home -> SettingsPage(stringResource(Res.string.settings_title), onBack, large = true,
+                search = riffet.ui.app.PageSearch(searchQuery, { searchQuery = it }, stringResource(Res.string.settings_search), drawer = true)) {
+                SettingsSearchResults(searchQuery) { entry ->
                     focusManager.clearFocus()
                     keyboard?.hide()
                     pages.push(SettingsPageRoute.Section(entry.section, entry.id))

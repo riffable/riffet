@@ -104,7 +104,7 @@
 - **正文**包在 `PageBody` 里：转场结束后再组合，然后淡入。页面不自己写 `LocalPageContentReady` 判断。
 - **边距**：左右 `pageInset`（16），宽屏内容不超过 `contentMaxWidth`（840），标题与正文之间 `pageTitleGap`。
 - **一页一个滚动区**。只滚动设置项的页面用 `ScrollablePage`（设置里是包了它的 `SettingsPage`）。
-- **顶栏操作**：`ScrollablePage` / `SettingsPage` 的 `actions` 放最多两个 `PageBarAction`，再多的收进 `PageMoreAction`（⋯）；`search` 传 `PageSearch` 后顶栏多一个搜索图标，点开顶栏变成搜索框，返回收起；`onRefresh` 打开下拉刷新；操作进行中放 `PageBarProgress`。页面里不再放搜索框、刷新按钮和添加按钮（[移动端页面](mobile.md) §4）。
+- **顶栏操作**：`ScrollablePage` / `SettingsPage` 的 `actions` 放最多两个 `PageBarAction`，再多的收进 `PageMoreAction`（⋯）；`search` 传 `PageSearch` 后顶栏多一个搜索图标，点开顶栏变成搜索框，返回收起；根页传 `PageSearch(drawer = true)`，搜索框在内容上方，下拉露出（[移动端页面](mobile.md) §4）；`onRefresh` 打开下拉刷新；操作进行中放 `PageBarProgress`。页面里不再放搜索框、刷新按钮和添加按钮（[移动端页面](mobile.md) §4）。
 - **编辑页**：`EditPage`（`settings/SettingsScreen.kt`），顶栏左侧 ✕ 取消、右侧保存动词，没有改动时保存不可用；自带未保存保护。
 - **页面下面还有页面**（目录 → 详情 → 编辑）：页面内建一个 `PageStack` 交给 `PageHost`，每一层是自己的 `SettingsPage`，不在同一页里切换状态。
 - **一级视图**（2–5 个）：首页的模式切换按 `variants.homeTabs` 画成下划线页签或分段控件；页面内的筛选用 `SegmentedControl`。
@@ -187,7 +187,7 @@
 | 图标按钮 | `RiffetIconButton` | |
 | 胶囊 | `ChipRow`（筛选）、`ChipButton`（菜单）、`ToggleChip`（开关），同一尺寸（[移动端页面](mobile.md) §1.1） | 输入框里的模型、权限胶囊按 [界面](surfaces.md) 另画，高 28 |
 | `Input` / `Textarea` / `Field` | `RiffetTextField`（`Inputs.kt`）；分组卡片里的字段用 `GroupField`（无边框，卡片即容器）；占位符一律 `fg3` | 输入框、终端输入、会话内查找、问答卡片里还有 5 处 `BasicTextField`，有的是有意为之，未逐个核对 |
-| `SearchField` | `RiffetSearchField` | 设置搜索（`settings/SettingsSearch.kt`）另有实现 |
+| `SearchField` | `RiffetSearchField`；根页下拉露出的放在 `SearchReveal` 里 | — |
 | `Switch` · `Checkbox` · `Slider` · `Segmented` | 见 §5 | |
 | `ListRow` · `SettingsGroup` / `SettingsRow` | `GroupRow` · `Group` | 两个文件仍用 Material 的 `ListItem` |
 | `CopyButton` | `CopyTextButton`（`ui/timeline/TimelinePrimitives.kt`） | 不在 `ui/design/` |
