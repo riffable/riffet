@@ -218,6 +218,7 @@ import riffet_mobile.shared.generated.resources.session_terminal
 import riffet_mobile.shared.generated.resources.session_switch_project
 import riffet_mobile.shared.generated.resources.session_task_placeholder
 import riffet_mobile.shared.generated.resources.session_reference_limit
+import riffet.ui.design.agentMarkTint
 
 /*
  * The workbench with no session open: `apps/web/src/app/ProjectHome.tsx`.
@@ -961,7 +962,7 @@ private fun HomeContent(
         if (!chat && config.backends.size > 1) {
             val mark = config.backendId.name.lowercase()
             add(SendSettingRow(label = "Agent", value = backendName(config.backendId), icon = AgentMarks.vector(mark),
-                iconTint = if (mark == "codex") Color.Unspecified else null) { sheet = HomeSheet.Agent })
+                iconTint = colors.agentMarkTint(mark)) { sheet = HomeSheet.Agent })
         }
         if (!chat) caps?.modes?.takeIf { it.size > 1 }?.let { modes ->
             add(SendSettingRow(label = stringResource(Res.string.session_mode), value = optionLabelOf(modes, config.mode, stringResource(Res.string.session_mode))) { sheet = HomeSheet.Mode })
@@ -1043,7 +1044,7 @@ private fun HomeContent(
                         settings = ComposerSettings(
                             label = modelSummary,
                             icon = if (chat) RiffetIcons.Message else AgentMarks.vector(agentMark) ?: RiffetIcons.Bot,
-                            iconTint = if (!chat && agentMark == "codex") Color.Unspecified else null,
+                            iconTint = if (chat) null else colors.agentMarkTint(agentMark),
                             enabled = controlsEnabled,
                             onOpen = { sheet = if (rooted) HomeSheet.Settings else HomeSheet.Model },
                             loading = config.catalogLoading,
@@ -1095,7 +1096,7 @@ private fun HomeContent(
                                 OptionRow(
                                     label = entry.label.ifBlank { backendName(entry.backendId) },
                                     icon = AgentMarks.vector(entry.backendId.name.lowercase()),
-                                    iconTint = if (entry.backendId.name.lowercase() == "codex") Color.Unspecified else null,
+                                    iconTint = colors.agentMarkTint(entry.backendId.name),
                                     description = entry.reason?.takeIf { !entry.available },
                                     selected = entry.backendId == config.backendId,
                                     onClick = {

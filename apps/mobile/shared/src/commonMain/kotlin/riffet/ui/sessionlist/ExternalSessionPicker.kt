@@ -23,7 +23,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -71,6 +70,7 @@ import riffet_mobile.shared.generated.resources.external_scope_directory
 import riffet_mobile.shared.generated.resources.external_scope_project
 import riffet_mobile.shared.generated.resources.external_search_placeholder
 import riffet_mobile.shared.generated.resources.session_clear_search
+import riffet.ui.design.agentMarkTint
 
 private const val PAGE_SIZE = 30
 private const val SEARCH_DEBOUNCE_MILLIS = 300L
@@ -271,7 +271,7 @@ internal fun ExternalSessionPickerSheet(
                                 label = entry.title,
                                 description = listOfNotNull(where, entry.gitBranch, time).joinToString(" · "),
                                 icon = AgentMarks.vector(agentKey) ?: RiffetIcons.Message,
-                                iconTint = if (agentKey == "codex" || agentKey == "pi") Color.Unspecified else null,
+                                iconTint = colors.agentMarkTint(agentKey),
                                 selected = false,
                                 disabledReason = if (entry.cwdExists) null else stringResource(Res.string.external_directory_missing),
                                 onClick = { choose(entry) },

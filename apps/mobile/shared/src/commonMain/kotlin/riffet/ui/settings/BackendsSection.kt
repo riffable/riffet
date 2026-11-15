@@ -29,6 +29,7 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.timeline.Spinner
 import riffet_mobile.shared.generated.resources.*
 import kotlin.random.Random
+import riffet.ui.design.agentMarkTint
 
 /*
  * Agent backends: one CLI at a time, one provider card at a time, exactly the shape of the web's
@@ -112,12 +113,11 @@ internal fun BackendsSection(controller: SettingsController, onSelect: (NativeBa
     SettingsGroup(stringResource(Res.string.settings_agent_backends)) {
         backendOrder.forEach { id ->
             val isDefault = (settings.defaultBackendId ?: NativeBackendId.CURSOR) == id
-            // The brand mark stays neutral rather than sitting on a coloured tile, which would
-            // recolour every agent's own mark.
+            // The mark sits bare in its own colour, not on a coloured tile.
             SettingsLinkRow(
                 title = backendLabel(id),
                 subtitle = if (isDefault) stringResource(Res.string.settings_new_session_default) else null,
-                leading = AgentMarks.vector(id.name.lowercase())?.let { { AgentMark(backendId = id.name.lowercase(), size = 20.dp, tint = colors.fg2) } },
+                leading = AgentMarks.vector(id.name.lowercase())?.let { { AgentMark(backendId = id.name.lowercase(), size = 20.dp, tint = colors.agentMarkTint(id.name) ?: colors.fg2) } },
                 onClick = { onSelect(id) },
             )
         }

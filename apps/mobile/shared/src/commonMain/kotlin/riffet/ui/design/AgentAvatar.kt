@@ -29,11 +29,26 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import riffet.theme.RiffetColors
 import riffet.ui.icons.AgentMark
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.rememberVisualWorkVisibility
 import riffet.ui.theme.visualWorkActive
 import riffet.ui.theme.visualWorkVisibility
+
+/**
+ * The colour an agent's mark is drawn in, the same wherever the mark appears: the palette's agent
+ * role, [Color.Unspecified] for marks that carry their own artwork (Codex, pi, Antigravity), or
+ * null for a mark with no brand colour, which then follows the surrounding text.
+ */
+internal fun RiffetColors.agentMarkTint(backendId: String): Color? = when (backendId.lowercase()) {
+    "claude" -> agentClaude
+    "dsh", "deepseek" -> agentDsh
+    "cursor" -> agentCursor
+    "traex", "trae" -> Color(0xFF00A862) // design-rules: allow TRAE brand green, no palette role yet
+    "codex", "pi", "antigravity" -> Color.Unspecified
+    else -> null
+}
 
 /** What an [AgentAvatar] says about its conversation; settled conversations say nothing. */
 internal enum class AvatarStatus { NONE, RUNNING, WAITING, FAILED }

@@ -131,6 +131,8 @@ import riffet.ui.timeline.instantMillis
 import riffet.ui.timeline.localDayStart
 import riffet.ui.timeline.rememberTickingNow
 import riffet_mobile.shared.generated.resources.*
+import riffet.ui.design.agentMarkTint
+import androidx.compose.ui.graphics.isSpecified
 
 /** Typing pauses this long before the message index is read. */
 private const val SEARCH_DEBOUNCE_MILLIS = 150L
@@ -922,7 +924,7 @@ internal fun SessionRow(
         ) {
             AgentAvatar(
                 backendId = backendId.name.lowercase(),
-                tint = agentMarkTint(backendId, colors),
+                tint = avatarTint(backendId, colors),
                 status = avatarStatus(session.state),
                 // The colour the status dot is cut out of: the page, or the selected row's fill on it.
                 ring = if (selected) container.compositeOver(page) else page,
@@ -1030,18 +1032,9 @@ private fun avatarStatus(state: SessionState): AvatarStatus = when (state) {
 }
 
 /**
- * The palette's agent colour for a row's mark. Codex ignores it (its mark keeps the brand
- * gradient inside [AgentMark]); droid, traex and pi have no palette role yet, so droid takes
- * the foreground, traex its brand green, and pi its shipped colours.
+ * The avatar's tint, which also colours its disc: the mark's own colour, or a neutral for marks
+ * that carry their artwork or have no brand colour (droid takes the foreground).
  */
-private fun agentMarkTint(backendId: NativeBackendId, colors: RiffetColors): Color = when (backendId) {
-    NativeBackendId.CURSOR -> colors.agentCursor
-    NativeBackendId.CLAUDE -> colors.agentClaude
-    NativeBackendId.DSH -> colors.agentDsh
-    NativeBackendId.TRAEX -> Color(0xFF00A862)
-    NativeBackendId.DROID -> colors.fg
-    NativeBackendId.CODEX -> colors.fg2
-    NativeBackendId.CHAT -> colors.fg2
-    NativeBackendId.PI -> colors.fg2
-    NativeBackendId.ANTIGRAVITY -> colors.fg2
-}
+private fun avatarTint(backendId: NativeBackendId, colors: RiffetColors): Color =
+    colors.agentMarkTint(backendId.name)?.takeIf { it.isSpecified }
+        ?: if (backendId == NativeBackendId.DROID) colors.fg else colors.fg2
