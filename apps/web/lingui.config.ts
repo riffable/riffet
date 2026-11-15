@@ -18,7 +18,8 @@ export const areas: Record<string, string[]> = {
   settings: ['src/app/settings', 'src/app/design'],
   shares: ['src/app/shares'],
   stats: ['src/app/stats'],
-  tasks: ['src/app/tasks'],
+  automations: ['src/app/automations'],
+  'work-items': ['src/app/work-items'],
   terminal: ['src/app/terminal'],
   share: ['src/share'],
 };

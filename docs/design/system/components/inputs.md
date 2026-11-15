@@ -63,7 +63,7 @@
 
 ### 现状
 
-- 设置页不用 `Field`，用 `SettingsRow`（标题在左、控件在右，`app/settings/SettingsLayout.tsx:6`）；`Field` 用在对话框与编辑页的表单里（`AddProjectDialog.tsx`、`tasks/AutomationEditor.tsx`）。
+- 设置页不用 `Field`，用 `SettingsRow`（标题在左、控件在右，`app/settings/SettingsLayout.tsx:6`）；`Field` 用在对话框与编辑页的表单里（`AddProjectDialog.tsx`、`automations/AutomationEditor.tsx`）。
 - 没有必填参数；`error` 已有，业务代码还没有调用点。
 
 ## Select

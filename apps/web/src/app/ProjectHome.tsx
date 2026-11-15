@@ -12,6 +12,7 @@ import { api, type NativeSessionCreateInput, type ProjectRecord, type PromptCont
 import { catalogEntry, catalogParams, catalogSelection, parseSelection } from '@/lib/models';
 import { agentMarkStyle, backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
+import { isAssistantProject } from '@/lib/project-family';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
@@ -30,6 +31,8 @@ import { useGitStatus } from './state/gitStatusStore';
 import { useStores } from './state/stores';
 import { QuickChatHistory } from './QuickChatHistory';
 import type { SessionAction } from './Sidebar';
+import { QuickAction } from './QuickAction';
+import { AssistantSetup } from './work-items/AssistantSetup';
 
 export interface ProfileCatalog { profile: NativeBackendProfile; models: ModelInfo[] }
 
@@ -123,24 +126,14 @@ interface Props extends NewSessionComposerProps {
   header: ReactNode;
 }
 
-function QuickAction({ icon, title, note, onClick, disabled }: { icon: ReactNode; title: string; note?: string; onClick: () => void; disabled?: boolean }) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled} className="group/action flex min-w-0 items-center gap-3 rounded-xl border border-line bg-elevated px-3.5 py-3 text-left transition-[border-color,background-color] hover:border-line-strong hover:bg-subtle disabled:opacity-50">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-fg-2 [&_svg]:size-4">{icon}</span>
-      <span className="flex min-w-0 flex-col gap-0.5">
-        <span className="truncate text-sm font-medium text-fg">{title}</span>
-        {note && <span className="truncate text-xs text-fg-3">{note}</span>}
-      </span>
-    </button>
-  );
-}
-
 /**
  * The directory, agent, model and first message of a new conversation: the project page's hero.
  */
 export function NewSessionComposer({ project, referenceProjectId, recentModel, directories, onSelectProject, onSelectNoProject, onCreationPersisted, creationRestore, pendingCreations, onRecoverCreation, onChooseDirectory, onOpenDirectory, onCreateWorktree, isolating, settings, backends, backendId, profileId, backend, profileCatalogs, onBackendChange, onProfileChange, catalog, catalogLoading, catalogError, onRetryCatalog, onRefreshCatalog, busy, references, sessionReferences, referenceSessions, onOpenReferenceSession, onReferencesChange, onCreate, onError, onRememberModel }: NewSessionComposerProps) {
   const { t } = useLingui();
   const quickChat = backendId === 'chat';
+  // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
+  const assistant = isAssistantProject(project);
   const label = useBackendLabel();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const capabilities = backend?.capabilities;
@@ -174,7 +167,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
    * The composer survives tab/provider switches. Each target keeps its own model and approval;
    * returning to it restores explicit picks while untouched controls follow their saved defaults.
    */
-  const choiceScope = `${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
+  // The 助理 keeps a choice of its own (docs/TASK-BOARD.md §5), apart from the same agent's elsewhere.
+  const choiceScope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${backendId}${CHOICE_SEPARATOR}${profileId ?? ''}`;
   const [selectionScope, setSelectionScope] = useState(choiceScope);
   const choices = useRef(new Map<string, { selection: string; approval: string; edited: boolean }>());
   if (selectionScope !== choiceScope) {
@@ -336,7 +330,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           it is offered right where the request is written — and only here, so that clicking
           "new session" in the sidebar stays a plain navigation step. */}
       <div className="mb-1.5 flex h-7 items-center gap-1">
-        {!quickChat && <DropdownMenu>
+        {!quickChat && !assistant && <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" title={project?.cwd} className="flex h-7 max-w-full items-center gap-1.5 rounded-lg px-2 text-xs text-fg-2 transition-colors outline-none hover:bg-hover hover:text-fg data-[state=open]:bg-active data-[state=open]:text-fg focus-visible:ring-2 focus-visible:ring-focus">
               <IconFolderClosed className="size-3.5 shrink-0 text-fg-3" />
@@ -371,7 +365,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         commands={(!quickChat ? slash.catalog?.items : undefined) ?? capabilities?.slashCommands ?? []}
         inlineSkills={!quickChat && (slash.catalog?.inlineSkills ?? capabilities?.inlineSkills)}
         onSlashMenuOpen={quickChat ? undefined : slash.refresh}
-        fileMentions={!quickChat && Boolean(project)}
+        fileMentions={!quickChat && !assistant && Boolean(project)}
         sessionMentions={!quickChat && sessionReferences && capabilities?.supportsSessionReferences === true}
         referenceSessions={referenceSessions}
         referenceProjects={directories}
@@ -415,7 +409,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
             // Another agent's model: the agent, its provider and the model are saved together.
             // An empty model is that agent's default, for one that lists nothing.
             const next = other.model ? catalogSelection(agentModels.read(other.backendId, other.profileId) ?? [], other.model) : '';
-            const scope = `${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
+            const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
             const previous = choices.current.get(scope);
             if (previous) choices.current.set(scope, { ...previous, selection: next, edited: true });
             onBackendChange(other.backendId, other.profileId, next);
@@ -427,7 +421,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           // Picking another provider's model is also how that provider gets selected, and the
           // two have to be saved together or the model would be dropped as a stale override.
           if (chosen.profileId && chosen.profileId !== activeProfileId) {
-            const scope = `${backendId}${CHOICE_SEPARATOR}${chosen.profileId}`;
+            const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${backendId}${CHOICE_SEPARATOR}${chosen.profileId}`;
             const previous = choices.current.get(scope);
             if (previous) choices.current.set(scope, { ...previous, selection: next, edited: true });
             onProfileChange(chosen.profileId, next);
@@ -487,14 +481,15 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
         <div className="mx-auto flex w-full max-w-[720px] flex-col px-4 pb-6 pt-6 md:px-8 md:pb-16 md:pt-[max(48px,14vh)]">
           <div className="mb-4 flex min-h-7 flex-col items-center gap-2 text-center md:mb-6 md:min-h-8">
             <LiveBrandMark className="mb-1 size-12 text-fg md:mb-2 md:size-16" />
-            {!quickChat && project && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
+            {!quickChat && project && !isAssistantProject(project) && <h1 className="max-w-full truncate text-xl font-semibold tracking-tight text-fg md:text-2xl">{t`要在 ${project.name} 做什么？`}</h1>}
           </div>
 
           <NewSessionComposer {...composer} onCreateWorktree={noRepository ? undefined : composer.onCreateWorktree} />
 
           <div key={quickChat ? 'chat' : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]">
             {quickChat && project ? <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} /> : <>
-              {project && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">
+              {project && isAssistantProject(project) && <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} backends={backends} />}
+              {project && !isAssistantProject(project) && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">
                 <QuickAction icon={<IconTerminal />} title={t`Shell 终端`} onClick={onOpenShell} />
                 <QuickAction icon={<IconColumns2 />} title={t`并行尝试`} note={t`各自在独立 Worktree`} disabled={busy || Boolean(project.system)} onClick={() => setAttemptsOpen(true)} />
                 <QuickAction icon={<IconHistory />} title={t`继续终端会话`} disabled={Boolean(project.system)} onClick={() => ui.openImportSession(project.id)} />

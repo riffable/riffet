@@ -238,7 +238,7 @@ export function QueueDock({ runs, running, unconfirmed, onRevealUnconfirmed, pen
 }
 
 /** Everything rendered above the composer card, in dock order: the goal, the todos, then the queue. */
-export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todos, runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendQueuedNow, onSteerQueued, steerDisabled, onEditQueued, onRemoveQueued, onQueueShown, followUps }: {
+export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todos, runs, running, unconfirmed, onRevealUnconfirmed, pending, onSendQueuedNow, onSteerQueued, steerDisabled, onEditQueued, onRemoveQueued, onQueueShown, followUps, plans }: {
   /** The session's side column lists the goal and todos whenever it is on screen, so these stand down then. */
   planInAside?: boolean;
   goal?: SessionGoal;
@@ -257,6 +257,8 @@ export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todo
   onQueueShown?: (shown: boolean) => void;
   /** The conversation's pending send-later messages, drawn above the queue. */
   followUps?: ReactNode;
+  /** The 助理's tasks waiting for 开始, drawn first; the card decides by itself whether it shows. */
+  plans?: ReactNode;
 }): ReactNode {
   const queue = runs ?? [];
   // The side column lists the plan whenever it is on screen; here it would only repeat it.
@@ -271,6 +273,7 @@ export const ComposerDock = memo(function ComposerDock({ planInAside, goal, todo
   // Each card carries the space below it, so the space leaves with the card instead of after it.
   return (
     <div className="flex max-h-[min(calc(var(--app-height,100dvh)*0.22),180px)] flex-col overflow-y-auto md:max-h-none md:overflow-visible">
+      {plans && <div className="empty:hidden [&>*]:mb-1.5">{plans}</div>}
       <Collapse open={Boolean(showGoal)}>{heldGoal && <div className="pb-1.5"><GoalDock goal={heldGoal} /></div>}</Collapse>
       <Collapse open={Boolean(showTodos)}>{heldTodos && <div className="pb-1.5"><TodoDock entries={heldTodos} running={running} /></div>}</Collapse>
       <Collapse open={Boolean(followUps)}>{heldFollowUps && <div className="pb-1.5">{heldFollowUps}</div>}</Collapse>

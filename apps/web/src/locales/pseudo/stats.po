@@ -162,6 +162,13 @@ msgctxt "stats-status-completed"
 msgid "完成"
 msgstr ""
 
+#. placeholder {0}: total((day) => day.decisions)
+#. placeholder {1}: total((day) => day.questions)
+#. placeholder {2}: total((day) => day.reviews)
+#: src/app/stats/NorthStar.tsx
+msgid "审批与确认 {0} · 提问 {1} · 待验收 {2}"
+msgstr ""
+
 #: src/app/stats/KpiCards.tsx
 msgid "对比 {compareLabel}"
 msgstr ""
@@ -320,6 +327,14 @@ msgstr ""
 
 #: src/app/stats/RunsTable.tsx
 msgid "正在读取轮次"
+msgstr ""
+
+#: src/app/stats/NorthStar.tsx
+msgid "每天 Agent 等你"
+msgstr ""
+
+#: src/app/stats/NorthStar.tsx
+msgid "每天打扰你"
 msgstr ""
 
 #: src/app/stats/Heatmaps.tsx

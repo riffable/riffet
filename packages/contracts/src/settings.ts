@@ -63,7 +63,23 @@ export interface AppSettings {
    */
   maxLiveAgents?: number;
   quickChat?: QuickChatSettings;
+  /**
+   * 新建任务时建卡片 (docs/TASK-BOARD.md §4.3): a conversation opened from a composer, on any client,
+   * also creates a work item it belongs to. Unset means on.
+   */
+  workItemCards?: boolean;
+  assistant?: AssistantSettings;
 }
+/**
+ * The agent and model a client's 助理 composer starts with (docs/TASK-BOARD.md §5), on every device.
+ * Unset, it follows the composer's own choice. The 助理's instructions are the `AGENTS.md` of its
+ * project (`/api/assistant/instructions`), not a setting.
+ */
+export interface AssistantSettings { backendId?: NativeBackendId; profileId?: string; model?: string; }
+/** Each field given replaces its own; `null` clears it. */
+export type AssistantSettingsUpdate = { [K in keyof AssistantSettings]?: AssistantSettings[K] | null };
+/** `GET`/`PUT /api/assistant/instructions`; `custom` is false while the file holds Riffet's own text. A `PUT` of `null` restores it. */
+export interface AssistantInstructions { text: string; custom: boolean; }
 export interface QuickChatSettings {
   /**
    * Days a quick chat may go without a new message before it is archived; unset means
@@ -99,4 +115,4 @@ export type AuxiliaryModels = Partial<Record<AuxiliaryModelPurpose, AuxiliaryMod
 export type AuxiliaryModelsUpdate = Partial<Record<AuxiliaryModelPurpose, AuxiliaryModelRef | null>>;
 /** Each field given replaces its own; `presets: null` restores the defaults. */
 export type QuickChatSettingsUpdate = Omit<QuickChatSettings, 'presets'> & { presets?: QuickChatPreset[] | null };
-export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'quickChat'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; quickChat?: QuickChatSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };
+export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'quickChat' | 'assistant'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };

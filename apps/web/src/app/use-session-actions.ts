@@ -11,6 +11,7 @@ import { sortSessionsByActivity } from '@/lib/session-order';
 import { acknowledgeRecoveredCreationDraft, type ComposerProps } from './session/Composer';
 import { requestSessionDeletion } from './SessionDeletion';
 import type { SessionAction } from './Sidebar';
+import { isAssistantProject } from '@/lib/project-family';
 import { NO_PAGE } from './state/navStore';
 import { useStores } from './state/stores';
 import type { UiState, UiStore } from './state/uiStore';
@@ -53,7 +54,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
   loadBootstrap: () => Promise<Bootstrap>;
 }) {
   const { t } = useLingui();
-  const { lists, nav, ui, handlers, settings: settingsStore } = useStores();
+  const { lists, nav, ui, handlers, settings: settingsStore, workItems } = useStores();
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
   const acceptedCreation = useRef<NativeSessionCreateInput | undefined>(undefined);
@@ -238,7 +239,11 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
 
   /** Native creation and first-message acceptance share one idempotent request. */
   /** `projectId` defaults to the selected project. */
-  const createNative = async ({ projectId, projectless, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId }: { projectId?: string; projectless?: boolean; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null }) => {
+  /**
+   * `mode` absent takes the backend's saved default. `workItemId` starts that 任务; `follow: false`
+   * keeps the reader where they are (the board) instead of opening the new conversation.
+   */
+  const createNative = async ({ projectId, projectless, title, prompt, attachments, context, mode, model, approval, toolGroups, extensionsOff, backendId, backendProfileId, workItemId, follow = true }: { projectId?: string; projectless?: boolean; title?: string; prompt: string; attachments: Attachment[]; context: PromptContextReference[]; mode?: string; model?: string; approval?: string; toolGroups?: ToolGroupId[]; extensionsOff?: string[]; backendId?: NativeBackendId; backendProfileId?: string | null; workItemId?: string; follow?: boolean }) => {
     const targetProjectId = projectless ? undefined : projectId ?? project?.id;
     if (!targetProjectId && !projectless) return false;
     const targetBackendId = backendId ?? homeBackendId;
@@ -249,13 +254,15 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       const candidate: NativeSessionCreateInput = {
         clientSessionId: newId(),
         ...(targetProjectId ? { projectId: targetProjectId } : { projectless: true }),
+        ...(title ? { title } : {}),
         backendId: targetBackendId,
         ...(targetProfileId ? { backendProfileId: targetProfileId } : {}),
-        mode,
+        ...(mode ? { mode } : {}),
         ...(model ? { model } : {}),
         ...(approval ? { approval } : {}),
         ...(toolGroups ? { toolGroups } : {}),
         ...(extensionsOff ? { extensionsOff } : {}),
+        ...(workItemId ? { workItemId } : {}),
         initialMessage: {
           commandId: newId(),
           text: prompt.trim(),
@@ -279,12 +286,14 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         acceptedCreation.current = body;
         if (result.project) lists.upsertProject(result.project);
         // Persist the full accepted selector, including effort, even when the first turn used a catalog default.
-        if (!matching && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
+        // A 助理 conversation's choice is the 助理's (docs/TASK-BOARD.md §5), not the composer's everywhere else.
+        if (!matching && targetBackendId !== 'chat' && body.model && isAssistantProject(lists.get().projects.find((item) => item.id === targetProjectId))) settingsStore.rememberAssistant({ backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model });
+        else if (!matching && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
         upsertSession(result.session);
         ui.set({ nativeRunSeed: { sessionId: result.session.id, run: result.run } });
         // The reader may have moved on while the request was in flight; only follow it if not.
         const current = nav.get();
-        if (nav.getNavigationRevision() === navigationRevision && current.projectId === origin.projectId && current.sessionId === origin.sessionId) {
+        if (follow && nav.getNavigationRevision() === navigationRevision && current.projectId === origin.projectId && current.sessionId === origin.sessionId) {
           handlers.selectSession(result.session);
         }
       } catch (error) {
@@ -390,6 +399,13 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         upsertSession(await api.updateSession(target.id, { tags: parseTags(value) }));
       } else if (action === 'delete') {
         await requestSessionDeletion(target);
+      } else if (action === 'work-item') {
+        const result = await api.setSessionWorkItem(target.id, { workItemId: 'new' });
+        upsertSession(result.session);
+        if (result.workItem) {
+          workItems.accept(result.workItem);
+          toast.success(t`已转为任务 #${result.workItem.number}`, { action: { label: t`查看`, onClick: () => { void nav.navigate(() => nav.openPage('tasks')); } } });
+        }
       } else {
         const archiving = !target.archivedAt;
         const wasSelected = nav.get().sessionId === target.id;

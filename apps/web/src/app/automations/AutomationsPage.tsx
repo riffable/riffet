@@ -60,7 +60,7 @@ const timeColumn = 'w-24 shrink-0 text-xs tabular-nums text-fg-3 max-sm:w-20';
  * asked, what is paused, and what just ran. Making one is the bar at the top; the full editor is
  * for what the bar does not say.
  */
-export function TasksPage({ projects, project, sessions, backends, enterBehavior, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, onOpenSession, onError }: {
+export function AutomationsPage({ projects, project, sessions, backends, enterBehavior, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, onOpenSession, onError }: {
   projects: ProjectRecord[];
   /** Where a new task goes unless told otherwise; the project the reader came from. */
   project?: ProjectRecord;

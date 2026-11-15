@@ -1424,6 +1424,9 @@
               "updatedAt"
             ]
           },
+          "workItemId": {
+            "type": "string"
+          },
           "createdAt": {
             "type": "string"
           },
@@ -2911,6 +2914,9 @@
                       "status",
                       "updatedAt"
                     ]
+                  },
+                  "workItemId": {
+                    "type": "string"
                   },
                   "createdAt": {
                     "type": "string"
@@ -9931,6 +9937,9 @@
                       "status",
                       "updatedAt"
                     ]
+                  },
+                  "workItemId": {
+                    "type": "string"
                   },
                   "createdAt": {
                     "type": "string"

@@ -23,7 +23,7 @@ const SAVE_DEBOUNCE_MS = 2_000;
 export type ListsStatus = 'fresh' | 'syncing' | 'offline';
 
 /** Revisions a `changed` push carries for data outside the session and terminal lists. */
-export interface ChangeRevisions { marks?: number; favorites?: number }
+export interface ChangeRevisions { marks?: number; favorites?: number; workItems?: number }
 
 export interface ListsState {
   /** False until the first lists (cached or fetched) exist; the workbench shows a spinner until then. */
@@ -380,16 +380,18 @@ export function createListsStore(deps: ListsDeps) {
         let pushedRevision: number | undefined;
         let marksRevision: number | undefined;
         let favoritesRevision: number | undefined;
+        let workItemsRevision: number | undefined;
         let projectsRevision: number | undefined;
         try {
           const parsed: unknown = data ? JSON.parse(data) : undefined;
           if (parsed && typeof (parsed as { revision?: unknown }).revision === 'number') pushedRevision = (parsed as { revision: number }).revision;
           if (parsed && typeof (parsed as { marks?: unknown }).marks === 'number') marksRevision = (parsed as { marks: number }).marks;
           if (parsed && typeof (parsed as { favorites?: unknown }).favorites === 'number') favoritesRevision = (parsed as { favorites: number }).favorites;
+          if (parsed && typeof (parsed as { workItems?: unknown }).workItems === 'number') workItemsRevision = (parsed as { workItems: number }).workItems;
           if (parsed && typeof (parsed as { projects?: unknown }).projects === 'number') projectsRevision = (parsed as { projects: number }).projects;
         } catch { /* legacy payload */ }
         // Before the list check: a mark change pushes without moving the lists' revision.
-        announce({ ...(marksRevision === undefined ? {} : { marks: marksRevision }), ...(favoritesRevision === undefined ? {} : { favorites: favoritesRevision }) });
+        announce({ ...(marksRevision === undefined ? {} : { marks: marksRevision }), ...(favoritesRevision === undefined ? {} : { favorites: favoritesRevision }), ...(workItemsRevision === undefined ? {} : { workItems: workItemsRevision }) });
         if (projectsRevision !== undefined) { wantedProjectsVersion = projectsRevision; refreshProjects(); }
         if (pushedRevision !== undefined && pushedRevision === knownRevision()) return;
         if (inFlight) again = true; else poll();

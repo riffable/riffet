@@ -1,6 +1,7 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
+  AssistantInstructions, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -139,7 +140,7 @@ export interface ProjectRecord {
   /** Present when this directory is a git worktree cut from another project. */
   worktree?: { originProjectId: string; branch: string };
   /** The workbench's own project, e.g. the one holding every quick chat; never listed as a project. */
-  system?: 'quick-chat' | 'task-workspace';
+  system?: 'quick-chat' | 'task-workspace' | 'assistant';
 }
 
 export interface Bootstrap {
@@ -258,6 +259,8 @@ export interface NativeSessionCreateInput {
   toolGroups?: ToolGroupId[];
   /** MCP servers and skills switched off for this conversation, `mcp:<name>` / `skill:<name>`; absent or empty means all on. */
   extensionsOff?: string[];
+  /** The 任务 this conversation starts; absent lets the server's `workItemCards` setting decide. */
+  workItemId?: string;
   initialMessage: NativeMessageInput;
 }
 
@@ -882,6 +885,24 @@ export const api = {
     }
     return requestList<MarkListPage>(`${API.marks}?${params}`, etag, signal);
   },
+  /** 任务 (docs/TASK-BOARD.md). Read conditionally under the work items revision, like 收藏. */
+  workItems: (etag?: string, signal?: AbortSignal) => requestList<WorkItemList>('/api/work-items', etag, signal),
+  /** Idempotent on the client-generated `id`. */
+  createWorkItem: (body: WorkItemCreate) => request<WorkItem>('/api/work-items', json('POST', body)),
+  updateWorkItem: (id: string, body: WorkItemPatch) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}`, json('PATCH', body)),
+  deleteWorkItem: (id: string) => request<void>(`/api/work-items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  workItemEvents: (id: string, signal?: AbortSignal) => request<WorkItemEvent[]>(`/api/work-items/${encodeURIComponent(id)}/events`, { signal }),
+  northStar: (params: { from: string; to: string; tz: string }, signal?: AbortSignal) => request<NorthStarReport>(`/api/work-items/north-star?${new URLSearchParams(params)}`, { signal }),
+  workItemBrief: (id: string) => request<WorkItemBrief>(`/api/work-items/${encodeURIComponent(id)}/brief`),
+  /** 开始 done by the server; the 助理's planned tasks start this way. */
+  assistantInstructions: () => request<AssistantInstructions>('/api/assistant/instructions'),
+  /** `null` restores Riffet's own text. */
+  saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
+  startWorkItem: (id: string) => request<{ item: WorkItem; sessionId: string }>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),
+  answerWorkItem: (id: string, questionId: string, body: WorkItemAnswer) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/questions/${encodeURIComponent(questionId)}/answer`, json('POST', body)),
+  reworkWorkItem: (id: string, body: WorkItemRework) => request<WorkItem>(`/api/work-items/${encodeURIComponent(id)}/rework`, json('POST', body)),
+  commentWorkItem: (id: string, body: { id: string; text: string }) => request<WorkItemEvent>(`/api/work-items/${encodeURIComponent(id)}/comments`, json('POST', body)),
+  setSessionWorkItem: (sessionId: string, body: SessionWorkItemRequest) => request<{ session: Session; workItem?: WorkItem }>(`/api/sessions/${encodeURIComponent(sessionId)}/work-item`, json('POST', body)),
   /** Idempotent on the client-generated `id`; the same message again answers with the existing mark. */
   createMark: (body: MarkCreateRequest) => request<Mark>(API.marks, json('POST', body)),
   updateMark: (id: string, body: MarkUpdateRequest) => request<Mark>(`${API.marks}/${encodeURIComponent(id)}`, json('PATCH', body)),

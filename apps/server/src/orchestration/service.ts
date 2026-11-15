@@ -222,6 +222,28 @@ export class OrchestrationService {
 
   // ---- Review feedback -------------------------------------------------------------------------
 
+  /** A plain message into a conversation, as the owner would send it; `commandId` makes a retry send nothing new. */
+  message(sessionId: string, text: string, commandId: string): Run {
+    return this.send(sessionId, text, commandId);
+  }
+
+  /**
+   * A new conversation in [projectId] on [backendId] (else the owner's default) with the owner's saved
+   * defaults, opened with [text], as the composer would. [attach] runs in the same write, before the
+   * conversation's CLI can start, so whatever it records is there from its first turn.
+   */
+  async open(target: { projectId: string; backendId?: string; title?: string }, text: string, attach: (sessionId: string) => void): Promise<Session> {
+    if (this.closed) throw new AppError('SERVICE_CLOSED', 'The workbench is shutting down', 503);
+    const input = await resolveNativeSessionInput(this.deps, { projectId: target.projectId, ...(target.backendId ? { backendId: target.backendId } : {}), ...(target.title ? { title: target.title } : {}) });
+    const result = this.deps.store.transaction(() => {
+      const created = this.deps.store.createNativeSubmission(randomUUID(), input, randomUUID(), textInput(text));
+      attach(created.session.id);
+      return created;
+    });
+    this.deps.dispatch.kick();
+    return this.deps.store.getSession(result.session.id);
+  }
+
   review(sessionId: string, commandId: string, comments: ReviewComment[], note?: string): Run {
     return this.send(sessionId, reviewMessage(comments, note), commandId);
   }

@@ -4661,6 +4661,10 @@ msgstr ""
 msgid "新会话的起始页，输入框居中"
 msgstr ""
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "新会话自动建任务"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 msgid "新会话页"
 msgstr ""

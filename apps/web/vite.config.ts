@@ -140,6 +140,11 @@ export default defineConfig(({ command, mode }): UserConfig => {
         target: 'http://127.0.0.1:4317',
         changeOrigin: false,
       },
+      // The sync engine reads the server's protocol version here; unproxied, it would get index.html and call the server outdated.
+      '/health': {
+        target: 'http://127.0.0.1:4317',
+        changeOrigin: false,
+      },
       '/api': {
         target: 'http://127.0.0.1:4317',
         changeOrigin: false,

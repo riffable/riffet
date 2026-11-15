@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChartColumn, IconChevronRight, IconCopy, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconLaptop, IconPuzzle, IconMonitor, IconMoon, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconSquareKanban, IconServer, IconSettings, IconSquarePen, IconSquareTerminal, IconSun, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -34,9 +34,10 @@ import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
 import { useLists, useStores } from './state/stores';
 import { useTabs } from './tabs/useTabs';
+import { TaskSessionTitle } from './work-items/TaskMark';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
-export type SessionAction = EntityAction | 'pin' | 'delete';
+export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';
 
 interface Props {
   projects: ProjectRecord[];
@@ -56,14 +57,19 @@ interface Props {
   /** Opens settings on the personal info page. */
   onOpenProfile: () => void;
   onOpenStats: () => void;
-  onOpenTasks: () => void;
+  /** 任务 (docs/TASK-BOARD.md); absent on a server without work items. */
+  onOpenTasks?: () => void;
+  /** What the 任务 inbox holds, shown at the end of its row. */
+  tasksCount?: number;
+  tasksActive?: boolean;
+  onOpenAutomations: () => void;
   onOpenMarks: () => void;
   onOpenExtensions: () => void;
   onOpenPlugins: () => void;
   pluginsActive?: boolean;
   onOpenSearch: () => void;
   statsActive?: boolean;
-  tasksActive?: boolean;
+  automationsActive?: boolean;
   marksActive?: boolean;
   extensionsActive?: boolean;
   onCollapse?: () => void;
@@ -213,6 +219,7 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
         <RowMenu label={t`会话操作`}>
           <DropdownMenuItem onSelect={() => onAction(session, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
           {!hideTags && <DropdownMenuItem onSelect={() => onAction(session, 'tags')}><IconTag /><Trans>编辑标签</Trans></DropdownMenuItem>}
+          {!hideTags && !session.workItemId && <DropdownMenuItem onSelect={() => onAction(session, 'work-item')}><IconSquareKanban /><Trans>转为任务</Trans></DropdownMenuItem>}
           <DropdownMenuItem onSelect={() => onAction(session, 'pin')}>{session.pinnedAt ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶会话</Trans></>}</DropdownMenuItem>
           {tabsOn && !mobile && !session.archivedAt && (kept
             ? <DropdownMenuItem onSelect={() => tabs.close(session.id)}><IconX /><Trans>移出标签栏</Trans></DropdownMenuItem>
@@ -225,7 +232,7 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       </span>
       </>}
     >
-      {session.title}
+      {session.workItemId ? <TaskSessionTitle workItemId={session.workItemId} title={session.title} /> : session.title}
     </ListRow>
   );
 });
@@ -316,7 +323,7 @@ export function Sidebar(props: Props) {
   // Quick chats live on their own page; the sidebar lists only the ordinary conversations.
   const listedSessions = useMemo(() => sessions.filter((session) => sessionBackend(session) !== 'chat'), [sessions]);
   const tags = useMemo(() => [...new Set(listedSessions.filter((session) => !session.archivedAt).flatMap((session) => session.tags ?? []))].sort(), [listedSessions]);
-  const visibleProjects = useMemo(() => sidebarProjectMap(projects, showArchived, t`未关联项目`), [projects, showArchived, t]);
+  const visibleProjects = useMemo(() => sidebarProjectMap(projects, showArchived, t`未关联项目`, t`助理`), [projects, showArchived, t]);
   const selectedSidebarProjectId = visibleProjects.get(selectedProjectId)?.id;
   const groups = useMemo(() => {
     if (layout !== 'project') return [];
@@ -445,15 +452,28 @@ export function Sidebar(props: Props) {
           <span><Trans>搜索内容</Trans></span>
           <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{shortcutLabel('K')}</span>
         </button>
+        {props.onOpenTasks && (
+          <button
+            type="button"
+            aria-current={props.tasksActive ? 'page' : undefined}
+            onClick={props.onOpenTasks}
+            className={mobile
+              ? cn(mobileNavRow, props.tasksActive && 'bg-active')
+              : cn(navRow, props.tasksActive && 'bg-active text-fg')}
+          >
+            <IconSquareKanban className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>任务看板</Trans>
+            {props.tasksCount ? <span className="ml-auto text-2xs tabular-nums text-fg-4">{props.tasksCount}</span> : null}
+          </button>
+        )}
         {/* A destination like a conversation, not a tool like the footer's stats: templates and
             schedules are where work starts, so the row sits with 新会话 and search. */}
         <button
           type="button"
-          aria-current={props.tasksActive ? 'page' : undefined}
-          onClick={props.onOpenTasks}
+          aria-current={props.automationsActive ? 'page' : undefined}
+          onClick={props.onOpenAutomations}
           className={mobile
-            ? cn(mobileNavRow, props.tasksActive && 'bg-active')
-            : cn(navRow, props.tasksActive && 'bg-active text-fg')}
+            ? cn(mobileNavRow, props.automationsActive && 'bg-active')
+            : cn(navRow, props.automationsActive && 'bg-active text-fg')}
         >
           <IconCalendarClock className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>定时任务</Trans>
         </button>

@@ -133,6 +133,7 @@ function normalizedNativeSessionInput(input: NativeSessionInput) {
   if (input.model !== undefined && (typeof input.model !== 'string' || !input.model || input.model.length > 200 || /[\0\r\n]/.test(input.model))) throw new AppError('INVALID_NATIVE_MODEL', 'Native model selection is invalid');
   if (input.mode !== undefined && (typeof input.mode !== 'string' || !input.mode || input.mode.length > 100 || /[\0\r\n]/.test(input.mode))) throw new AppError('INVALID_NATIVE_MODE', 'Native mode is invalid');
   if (input.approval !== undefined && (typeof input.approval !== 'string' || !input.approval || input.approval.length > 100 || /[\0\r\n]/.test(input.approval))) throw new AppError('INVALID_NATIVE_APPROVAL', 'Native permission setting is invalid');
+  if (input.workItemId !== undefined && (typeof input.workItemId !== 'string' || !input.workItemId || input.workItemId.length > 100)) throw new AppError('INVALID_WORK_ITEM', 'workItemId must be a string of 1 to 100 characters');
   return {
     projectId: input.projectId,
     title: input.title || 'New conversation',
@@ -150,6 +151,7 @@ function normalizedNativeSessionInput(input: NativeSessionInput) {
     ...(input.origin ? { origin: { ...input.origin } } : {}),
     ...(input.toolGroups?.length ? { toolGroups: [...input.toolGroups] } : {}),
     ...(input.extensionsOff?.length ? { extensionsOff: [...input.extensionsOff] } : {}),
+    ...(input.workItemId ? { workItemId: input.workItemId } : {}),
   };
 }
 
@@ -166,6 +168,7 @@ export class Store {
   private runListeners = new Set<(run: Run) => void>();
   private pendingRuns = new Map<string, Run>();
   private listListeners = new Set<() => void>();
+  private stateListeners = new Set<(session: Session, from: Session['state']) => void>();
   private deletionListeners = new Map<string, Set<() => void>>();
   private listsDirty = false;
   /** Told how the open transaction ended; see {@link afterTransaction}. */
@@ -180,6 +183,8 @@ export class Store {
   private projectRevisionValue = Date.now();
   /** The same for saved replies, behind the marks ETag; it moves without the list revision, so a mark never refetches the sidebar. */
   private marksRevisionValue = Date.now();
+  /** Work items (任务), behind their own ETag like marks. */
+  private workItemsRevisionValue = Date.now();
   /** Folder favorites (every scope); like marks it moves without the list revision. */
   private favoritesRevisionValue = Date.now();
   private sessionSnapshotAppends = new Map<string, number>();
@@ -465,6 +470,14 @@ export class Store {
     if (!this.runListeners.size) return;
     if (this.depth) this.pendingRuns.set(run.id, run); else this.emitRun(run);
   }
+  /**
+   * A conversation's `state` changed, told inside the write that changed it so a listener's own
+   * write commits or rolls back with it. Listener errors are swallowed.
+   */
+  onSessionState(listener: (session: Session, from: Session['state']) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => { this.stateListeners.delete(listener); };
+  }
   /** Committed changes to projects, sessions, terminals or saved replies — what the sidebar lists. Listener errors are swallowed. */
   onListsChanged(listener: () => void): () => void {
     this.listListeners.add(listener);
@@ -473,6 +486,7 @@ export class Store {
   get listRevision(): number { return this.listRevisionValue; }
   get projectRevision(): number { return this.projectRevisionValue; }
   get marksRevision(): number { return this.marksRevisionValue; }
+  get workItemsRevision(): number { return this.workItemsRevisionValue; }
   get favoritesRevision(): number { return this.favoritesRevisionValue; }
   private listsChanged(projects = false) {
     this.listRevisionValue += 1;
@@ -482,6 +496,11 @@ export class Store {
   /** Called by every committed mark write, and when a conversation holding marks is renamed (marks show its current title). */
   marksChanged() {
     this.marksRevisionValue += 1;
+    this.notifyLists();
+  }
+  /** Called by every committed work item write; the lists stream carries it as `workItems`. */
+  workItemsChanged() {
+    this.workItemsRevisionValue += 1;
     this.notifyLists();
   }
   /** Called by every committed folder-favorite write; the lists stream carries it as `favorites`. */
@@ -695,6 +714,7 @@ export class Store {
       }
       this.replace('sessions', id, item);
       this.listsChanged();
+      if (item.state !== current.state) for (const listener of this.stateListeners) { try { listener(item, current.state); } catch { /* derived records must not fail the write */ } }
       if (item.title !== current.title && this.sql('SELECT 1 AS found FROM marks WHERE session_id=? LIMIT 1').get(id)) this.marksChanged();
       return item;
     });
@@ -849,7 +869,8 @@ export class Store {
     const normalized = normalizedNativeSessionInput(sessionInput);
     const normalizedInput = normalizeNativeInput(input);
     // Resolved from server settings, not the request: a retry after a settings change is the same creation.
-    const { terminalAppearance: _terminalAppearance, toolGroups: _toolGroups, extensionsOff: _extensionsOff, ...creationIdentity } = normalized;
+    // The same goes for the task: a retry after it was detached or deleted must not conflict.
+    const { terminalAppearance: _terminalAppearance, toolGroups: _toolGroups, extensionsOff: _extensionsOff, workItemId: _workItemId, ...creationIdentity } = normalized;
     const creationFingerprint = fingerprint({ session: creationIdentity, commandId, input: normalizedInput });
     const config = normalizeNativeConfig({
       ...(normalized.model !== undefined ? { model: normalized.model } : {}),
@@ -868,8 +889,12 @@ export class Store {
       } else {
         this.getProject(normalized.projectId);
         const stamp = now();
+        // A fork or handoff stays on the task of the conversation it came from; not part of the creation identity.
+        const originId = normalized.origin?.kind === 'fork' || normalized.origin?.kind === 'handoff' ? normalized.origin.sessionId : undefined;
+        const inherited = !normalized.workItemId && originId ? this.get<Session>('sessions', originId)?.workItemId : undefined;
         session = {
           ...normalized,
+          ...(inherited ? { workItemId: inherited } : {}),
           ...clientTitleSource(normalized.title),
           id: clientSessionId,
           kind: 'native',

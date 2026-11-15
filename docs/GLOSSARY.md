@@ -27,6 +27,11 @@ Claude、Droid、DSH、TRAE、Git、JSON、Markdown、URL。
 | 收藏 | Favorite | |
 | 分享 | Share | |
 | 发布 | Publish | 分享到外部 |
+| 任务 | Task | 一件跨会话跟踪的工作（docs/TASK-BOARD.md），代码名 `WorkItem` |
+| 收件箱 | Inbox | 唯一会打扰用户的地方：要回答的、要验收的、督办推不动的 |
+| 任务看板 | Task board | 任务的页面，导航和标题都用这个名字 |
+| 助理 | Assistant | 用户说要做什么、它派出任务的 Agent；包括主对话和督办 |
+| 督办 | Supervisor | 助理在后台盯进行中任务的部分，不占主对话 |
 | 定时任务 | Schedule | 不译成 cron job |
 | 扩展 | Extension | Agent 插件体系 |
 | 插件 | Plugin | |

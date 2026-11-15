@@ -1,12 +1,12 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { NativeBackendId, Session, StatsRunRow } from '@contracts';
+import type { NativeBackendId, Session, StatsRunRow, WorkItem } from '@contracts';
 import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { UnderlineTabs } from '@/components/ui/controls';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { IconArchive, IconBookmark, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal } from '@/components/icons';
+import { IconArchive, IconSquareKanban, IconBookmark, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal } from '@/components/icons';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery, useMobileViewport } from '@/lib/use-media-query';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
 import { api, type PromptContextReference } from '@/lib/api';
@@ -33,7 +33,8 @@ import { useSessionActions } from './use-session-actions';
 import { useProjectActions } from './use-project-actions';
 import { useTerminalActions } from './use-terminal-actions';
 import { settingsSections, type SettingsSection } from './settings/settingsSections';
-import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useUi, WorkbenchEffects } from './state/stores';
+import { createWorkbenchStores, StoresProvider, useCatalog, useLists, useNav, useSettings, useStores, useUi, useWorkItems, WorkbenchEffects } from './state/stores';
+import { viewWorkItems } from './work-items/model';
 import { NO_PAGE, STORAGE_KEYS, type NavPage } from './state/navStore';
 import { paintPaneWidth, panelDockMinWidth, SIDEBAR_DEFAULT, SIDEBAR_MIN, sidebarMaxWidth } from './state/uiStore';
 import { togglePanelTab, WorkbenchHeader } from './WorkbenchHeader';
@@ -45,9 +46,11 @@ import { TabBar } from './tabs/TabBar';
 import { useTabs } from './tabs/useTabs';
 import { AppearanceBackdrop } from '@/components/appearance-backdrop';
 import { WorkbenchOverlays } from './WorkbenchOverlays';
-import { isQuickChatProject, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
+import { isAssistantProject, isQuickChatProject, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
+import { assistantChoice, withAssistantDefaults } from './work-items/assistant';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
-const TasksPage = lazy(() => import('./tasks/TasksPage').then((module) => ({ default: module.TasksPage })));
+const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
+const AutomationsPage = lazy(() => import('./automations/AutomationsPage').then((module) => ({ default: module.AutomationsPage })));
 const ExtensionsPage = lazy(() => import('./extensions/ExtensionsPage').then((module) => ({ default: module.ExtensionsPage })));
 const PluginsPage = lazy(() => import('./plugins/PluginsPage').then((module) => ({ default: module.PluginsPage })));
 const MarksPage = lazy(() => import('./marks/MarksPage').then((module) => ({ default: module.MarksPage })));
@@ -64,6 +67,9 @@ const noReferences = () => undefined;
  * component wires them to the server and to the pages; panels, dock and dialogs read their own
  * slices, so toggling one does not re-render the page.
  */
+/** The new-conversation page's three targets: a task in a project, a quick chat, the 助理. */
+type HomeTab = 'task' | 'chat' | 'assistant';
+
 export function Workbench({ onLogout }: { onLogout?: () => void }) {
   const [stores] = useState(createWorkbenchStores);
   return <StoresProvider stores={stores}><WorkbenchShell onLogout={onLogout} /><WorkbenchEffects /></StoresProvider>;
@@ -94,6 +100,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const pluginOpenRevision = useNav((state) => state.pluginOpenRevision);
   const statsOpen = useNav((state) => state.statsOpen);
   const tasksOpen = useNav((state) => state.tasksOpen);
+  const automationsOpen = useNav((state) => state.automationsOpen);
+  const workItemList = useWorkItems((state) => state.items);
+  const workItemsSupported = useWorkItems((state) => state.supported);
   const extensionsOpen = useNav((state) => state.extensionsOpen);
   const extensionsMounted = useNav((state) => state.extensionsMounted);
   const marksOpen = useNav((state) => state.marksOpen);
@@ -106,16 +115,17 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const mobileSidebar = useUi((state) => state.mobileSidebar);
   const panelFullscreen = useUi((state) => state.panelFullscreen);
   const references = useUi((state) => state.references);
+  const extensionsFocus = useUi((state) => state.extensionsFocus);
   const creating = useUi((state) => state.creating);
   const creatingWorktree = useUi((state) => state.creatingWorktree);
   const startingNativeId = useUi((state) => state.startingNativeId);
   const nativeRunSeed = useUi((state) => state.nativeRunSeed);
   const backends = useCatalog((state) => state.backends);
-  const homeBackendId = useCatalog((state) => state.homeBackendId);
+  const pickedBackendId = useCatalog((state) => state.homeBackendId);
   // Until the first bootstrap hands it to the store (`initHome`), the agent's saved provider: the
   // first frames then read that provider's cached catalog instead of painting the default model.
   const storedHomeProfileId = useCatalog((state) => state.homeProfileId);
-  const homeProfileId = storedHomeProfileId ?? settings.nativeBackendDefaults?.[homeBackendId]?.profileId;
+  const pickedProfileId = storedHomeProfileId ?? settings.nativeBackendDefaults?.[pickedBackendId]?.profileId;
   const catalogResult = useCatalog((state) => state.result);
   const profileCatalogs = useCatalog((state) => state.profileCatalogs);
   const nativeCatalogLoading = useCatalog((state) => state.loading);
@@ -146,9 +156,21 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const recentDirectories = useMemo(() => sortProjectsByRecentUse(regular, sessions, projectVisits), [regular, sessions, projectVisits]);
   const lastTaskProject = useMemo(() => recentDirectories.filter((item) => !item.archivedAt).sort((a, b) => (projectVisits[b.id] ?? 0) - (projectVisits[a.id] ?? 0))[0], [recentDirectories, projectVisits]);
   const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
+  const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
+  // The 助理's directory has extensions of its own, reached from its page.
+  const extensionProjects = useMemo(() => assistantProject ? [...regular, { ...assistantProject, name: t`助理` }] : regular, [regular, assistantProject, t]);
   const project = projects.find((item) => item.id === selectedProjectId);
   const quickChat = isQuickChatProject(project);
+  const homeTab: HomeTab = quickChat ? 'chat' : isAssistantProject(project) ? 'assistant' : 'task';
   const session = sessions.find((item) => item.id === selectedSessionId && item.projectId === selectedProjectId);
+  // The 助理 page's composer starts with the 助理's own agent and model, and a pick made there is the
+  // 助理's, not the composer's everywhere else (docs/TASK-BOARD.md §5).
+  const assistantHome = isAssistantProject(project) && !session;
+  const assistantPick = useMemo(() => assistantHome ? assistantChoice(settings.assistant, backends) : undefined, [assistantHome, settings.assistant, backends]);
+  const homeBackendId = assistantPick?.backendId ?? pickedBackendId;
+  const homeProfileId = assistantPick ? assistantPick.profileId : pickedProfileId;
+  /** The model the composer opens with: under the 助理, its own. */
+  const composerSettings = useMemo(() => assistantPick ? withAssistantDefaults(settings, assistantPick) : settings, [settings, assistantPick]);
   const sidebarViews = useSidebarViews(project, session?.id);
   const sessionViews = useSessionViews({ hasProject: Boolean(project), hasSession: Boolean(session), capabilities: new Set() });
   const catalogProject = project;
@@ -197,10 +219,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const standInCatalog = catalogLoading && !catalogSession && held?.agent === catalogAgent ? held.result.entry.models : undefined;
   const backend = currentCatalog ? currentCatalog.entry : backends.find((entry) => entry.backendId === catalogBackendId);
   const nativeCatalog = currentCatalog ? currentCatalog.entry.models : [];
-  const pageOpen = pluginsOpen || statsOpen || tasksOpen || extensionsOpen || marksOpen || designOpen;
+  const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || extensionsOpen || marksOpen || designOpen;
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
-  useDocumentTitle(pageOpen ? undefined : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`定时任务` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : project?.name);
+  useDocumentTitle(pageOpen ? undefined : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`定时任务` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -227,14 +249,27 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const { creationRestore, pendingCreations, recoverCreation, newSession, selectProject, selectNoProject, acknowledgeCreation, selectSession, openMessageHit, openMark, openLaunched, findSession, openSessionById, openImported, onAttemptsStarted, createNative, reopenNative, sessionAction } = useSessionActions({ loaded, project, session, sessions, terminals, nativeRunSeed, homeBackendId, homeProfileId, loadBootstrap });
   useGlobalShortcuts(desktop, newSession);
   const pluginCommands = usePluginCommands({ project: quickChat ? undefined : project, sessionId: session?.id, openSession: openSessionById });
-  const selectHomeTab = (tab: 'task' | 'chat') => {
-    if (tab === (quickChat ? 'chat' : 'task')) return;
-    const target = tab === 'chat' ? quickChatProject : projectlessTasks ? regular.find((item) => item.id === taskProjectId && !item.archivedAt) : lastTaskProject;
+  const selectHomeTab = (tab: HomeTab) => {
+    if (tab === homeTab) return;
+    const target = tab === 'chat' ? quickChatProject : tab === 'assistant' ? assistantProject : projectlessTasks ? regular.find((item) => item.id === taskProjectId && !item.archivedAt) : lastTaskProject;
     // These are two launch targets for one draft. Task references stay parked while chat is active.
     void nav.navigate(() => {
       nav.set({ projectId: target?.id ?? '', sessionId: '', ...NO_PAGE });
       ui.set({ previewTarget: undefined });
     });
+  };
+  const inboxCount = useMemo(() => workItemList ? viewWorkItems(workItemList, sessions).filter((entry) => entry.inInbox).length : 0, [workItemList, sessions]);
+  /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
+  const startWorkItem = async (item: WorkItem): Promise<boolean> => {
+    if (item.assignee.kind !== 'agent') return false;
+    const target = item.projectId ? regular.find((entry) => entry.id === item.projectId && !entry.archivedAt) : undefined;
+    if (item.projectId && !target) { toast.error(t`这个任务的项目已移除或归档`); return false; }
+    if (!target && !projectlessTasks) { toast.error(t`先为这个任务选一个项目`); return false; }
+    // The server writes the first message: what the task is, what done means, what came before (docs/TASK-BOARD.md §6).
+    let prompt: string;
+    try { prompt = (await api.workItemBrief(item.id)).text; }
+    catch (error) { toast.error(errorMessage(error, t`无法开始这个任务`)); return false; }
+    return Boolean(await createNative({ ...(target ? { projectId: target.id } : { projectless: true }), title: item.title, prompt, attachments: [], context: [], backendId: item.assignee.backendId, workItemId: item.id, follow: false }));
   };
   const { projectAction, addProject, startSessionInDirectory, startIsolatedDirectory, openWorktreeProject, onWorktreeMerged, chooseSessionDirectory, openInEditor } = useProjectActions({ project, loadBootstrap, selectProject });
   const { createShell, closeTerminal } = useTerminalActions();
@@ -267,17 +302,21 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
    * same write; `chooseBackend` deliberately clears the model instead, having no replacement.
    */
   const chooseHomeProfile = (profileId: string, model: string) => {
+    if (assistantHome) { settingsStore.rememberAssistant({ backendId: homeBackendId, profileId, model }); return; }
     catalog.setHomeProfile(profileId);
     settingsStore.remember(homeBackendId, { profileId, model });
   };
   /** `model` comes with an agent picked through one of its models; without one a new provider clears the old model. */
   const chooseBackend = (backendId: NativeBackendId, profileId?: string, model?: string) => {
+    if (assistantHome) { settingsStore.rememberAssistant({ backendId, profileId: profileId ?? null, model: model || null }); return; }
     catalog.setHome(backendId, profileId ?? settings.nativeBackendDefaults?.[backendId]?.profileId);
     writeStored(STORAGE_KEYS.backend, backendId);
     const savedProfile = settings.nativeBackendDefaults?.[backendId]?.profileId ?? backends.find((entry) => entry.backendId === backendId)?.profiles.find((entry) => entry.isDefault)?.id;
     settingsStore.remember(backendId, { ...(profileId ? { profileId } : {}), ...(model !== undefined ? { model } : profileId && profileId !== savedProfile ? { model: '' } : {}) }, true);
   };
-  const rememberModel = (model: string) => settingsStore.remember(homeBackendId, { model });
+  const rememberModel = (model: string) => assistantHome
+    ? settingsStore.rememberAssistant({ backendId: homeBackendId, profileId: homeProfileId ?? null, model: model || null })
+    : settingsStore.remember(homeBackendId, { model });
 
   // The stores, the notification click and the header reach these through the handlers bag.
   useEffect(() => {
@@ -322,14 +361,15 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onOpenSettings={() => openSettingsAt()}
       onOpenProfile={() => openSettingsAt('profile')}
       onOpenStats={() => openPage('stats')}
-      onOpenTasks={() => openPage('tasks')}
+      {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
+      onOpenAutomations={() => openPage('automations')}
       onOpenExtensions={() => openPage('extensions')}
       onOpenPlugins={() => openPage('plugins')}
       pluginsActive={pluginsOpen}
       onOpenMarks={() => openPage('marks')}
       onOpenSearch={ui.openSearch}
       statsActive={statsOpen}
-      tasksActive={tasksOpen}
+      automationsActive={automationsOpen}
       extensionsActive={extensionsOpen}
       marksActive={marksOpen}
       {...(listsState === 'fresh' ? {} : { stale: { mode: listsState, savedAt: listsSavedAt } })}
@@ -342,7 +382,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   /** What every new-conversation composer shares: the project page's. */
   const composerProps = {
     directories: recentDirectories,
-    settings,
+    settings: composerSettings,
     backends,
     backendId: homeBackendId,
     profileId: homeProfileId,
@@ -374,12 +414,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     onRememberModel: rememberModel,
   };
 
-  const homeHeader = <WorkbenchHeader center={quickChatProject && <UnderlineTabs
-    value={quickChat ? 'chat' : 'task'}
+  const homeHeader = <WorkbenchHeader center={(quickChatProject || assistantProject) && <UnderlineTabs
+    value={homeTab}
     onChange={selectHomeTab}
     ariaLabel={t`新建会话`}
     className="h-9"
-    options={[{ value: 'task', label: t`新建任务` }, { value: 'chat', label: t`快速对话` }]}
+    options={[
+      ...(assistantProject ? [{ value: 'assistant' as const, label: t`助理` }] : []),
+      { value: 'task' as const, label: t`新建任务` },
+      ...(quickChatProject ? [{ value: 'chat' as const, label: t`快速对话` }] : []),
+    ]}
   />} />;
 
   let content: ReactNode;
@@ -444,14 +488,28 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     );
   } else if (tasksOpen) {
     content = (
-      <TasksPage
+      <WorkItemsPage
+        projects={regular}
+        sessions={sessions}
+        backends={backends}
+        sidebarCollapsed={desktop && sidebarCollapsed}
+        onClose={() => nav.set({ tasksOpen: false })}
+        onOpenSidebar={openMobileSidebar}
+        onExpandSidebar={expandSidebar}
+        onOpenSession={openSessionById}
+        onStart={startWorkItem}
+      />
+    );
+  } else if (automationsOpen) {
+    content = (
+      <AutomationsPage
         projects={regular}
         project={project && !project.system ? project : undefined}
         sessions={sessions}
         backends={backends}
         enterBehavior={settings.composerEnterBehavior}
         sidebarCollapsed={desktop && sidebarCollapsed}
-        onClose={() => nav.set({ tasksOpen: false })}
+        onClose={() => nav.set({ automationsOpen: false })}
         onOpenSidebar={openMobileSidebar}
         onExpandSidebar={expandSidebar}
         onOpenSession={openSessionById}
@@ -538,7 +596,9 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const paletteActions = (): PaletteAction[] => [
     { id: 'new-session', label: t`新建会话`, keywords: 'new conversation', icon: <IconMessageCirclePlus className="size-4 shrink-0 text-fg-3" />, run: newSession },
     { id: 'open-stats', label: t`打开统计`, keywords: 'stats statistics 统计 用量', icon: <IconChartColumn className="size-4 shrink-0 text-fg-3" />, run: () => openPage('stats') },
-    { id: 'open-tasks', label: t`打开定时任务`, keywords: 'tasks templates schedules cron 任务 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('tasks') },
+    // i18n-ignore: search keywords in both languages, not interface text
+    ...(workItemsSupported ? [{ id: 'open-work-items', label: t`打开任务看板`, keywords: 'tasks board kanban inbox 任务 看板 收件箱', icon: <IconSquareKanban className="size-4 shrink-0 text-fg-3" />, run: () => openPage('tasks') }] : []),
+    { id: 'open-automations', label: t`打开定时任务`, keywords: 'automations templates schedules cron 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('automations') },
     { id: 'open-marks', label: t`打开收藏夹`, keywords: 'marks bookmarks highlights saved 收藏 收藏夹 高亮 书签', icon: <IconBookmark className="size-4 shrink-0 text-fg-3" />, run: () => openPage('marks') },
     { id: 'open-plugins', label: t`管理插件`, keywords: 'plugins install packages', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('plugins') },
     { id: 'open-extensions', label: t`打开 Agent 扩展`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },
@@ -650,9 +710,10 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         {extensionsMounted && <div className={cn('min-h-0 flex-1 flex-col', extensionsOpen ? 'flex' : 'hidden')} aria-hidden={!extensionsOpen || undefined} inert={!extensionsOpen}>
           <ErrorBoundary resetKey={String(extensionsOpen)}><Suspense fallback={loadingPanel}><ExtensionsPage
             active={extensionsOpen}
-            projects={regular}
+            projects={extensionProjects}
             backends={backends}
             initialBackend={catalogBackendId}
+            focus={extensionsFocus}
             sidebarCollapsed={desktop && sidebarCollapsed}
             onClose={nav.closeExtensions}
             onOpenSidebar={openMobileSidebar}

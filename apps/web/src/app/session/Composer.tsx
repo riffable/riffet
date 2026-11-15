@@ -24,7 +24,7 @@ import { ModelPicker, type ModelProviderChoices } from './ModelPicker';
 import { clipboardFiles, readUploadData, uploadName } from './image-upload';
 import { classifyEnterGesture, isComposingKey, primaryEnterHint, readEnterKeyBehavior, resolveEnter, resolveEscapeLayer, type EnterKeyBehavior } from './composerKeyboard';
 import { ComposerFullscreen } from './ComposerFullscreen';
-import { SendLaterMenu } from '../tasks/SendLater';
+import { SendLaterMenu } from '../automations/SendLater';
 import { useComposerAutosize } from './useComposerAutosize';
 import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { Collapse } from '@/components/ui/collapse';

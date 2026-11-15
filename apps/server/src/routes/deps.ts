@@ -25,6 +25,7 @@ import type { NoticeLog } from '../riffet-mcp/notices.js';
 import type { SessionReferenceService } from '../context-references/service.js';
 import type { DeviceChannel } from '../riffet-mcp/devices.js';
 import type { DeviceAdb } from '../riffet-mcp/adb.js';
+import type { WorkItemService } from '../work-items/index.js';
 import type { ChannelService } from '../channels/service.js';
 
 export type NativeMessageBody = { commandId?: string; text: string; attachments?: Array<{id?:string}>; context?: Array<{path?:string;line?:number}>; references?: unknown; expectedConfigRevision?: number };
@@ -34,6 +35,8 @@ export interface RouteDeps {
   /** IM channels: accounts, bound users and chats (docs/design/channels.md). */
   channels: ChannelService;
   stateDir: string;
+  /** Tasks (docs/TASK-BOARD.md). */
+  workItems: WorkItemService;
   contextReferences: SessionReferenceService;
   store: Store;
   auth: Auth;

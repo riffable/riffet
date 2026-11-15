@@ -8,7 +8,7 @@ import {
   MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
-  Sparkles, Square, SquareArrowOutUpRight, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
+  Sparkles, Square, SquareArrowOutUpRight, SquareKanban, List, Inbox, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
   Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
@@ -122,6 +122,9 @@ export const IconSparkles = icon(Sparkles);
 /** The stop control, wherever a run can be stopped. */
 export const IconSquare = filled(Square);
 export const IconSquareArrowOutUpRight = icon(SquareArrowOutUpRight);
+export const IconSquareKanban = icon(SquareKanban);
+export const IconList = icon(List);
+export const IconInbox = icon(Inbox);
 export const IconSquarePen = icon(SquarePen);
 export const IconMessageCirclePlus = icon(MessageCirclePlus);
 /** Commands, background tasks and native sessions; `IconTerminal` is the shell itself. */

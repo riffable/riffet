@@ -1,4 +1,4 @@
-import type { AppSettings, NativeBackendDefaults, NativeBackendId } from '@contracts';
+import type { AppSettings, AssistantSettings, AssistantSettingsUpdate, NativeBackendDefaults, NativeBackendId } from '@contracts';
 import { api } from '@/lib/api';
 import { mergeSavedSettings, preserveNewerDefaultModel } from '@/lib/reconcile';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -124,6 +124,18 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
         pendingKeys.clear();
         await api.updateSettings(body);
       }).catch((error) => { console.warn('无法保存后端默认值', error); });
+    },
+    /** The 助理's agent, provider and model: shown at once, saved in the background. `null` clears a field. */
+    rememberAssistant(patch: AssistantSettingsUpdate): void {
+      const latest = get();
+      const next: Record<string, unknown> = { ...latest.assistant };
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null || value === undefined || value === '') delete next[key];
+        else next[key] = value;
+      }
+      put({ ...latest, assistant: next as AssistantSettings });
+      const body = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === '' ? null : value])) as AssistantSettingsUpdate;
+      void enqueue(() => api.updateSettings({ assistant: body })).catch((error) => { console.warn('Could not save the assistant settings', error); });
     },
   };
 }

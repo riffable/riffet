@@ -149,6 +149,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr "Tasks"
 
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "任务看板"
+msgstr "Task board"
+
 #: src/app/CommandPalette.tsx
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -232,6 +237,10 @@ msgstr "Stop current run"
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr "Allow the plugin to use Riffet’s file, network and process permissions"
+
+#: src/app/Workbench.tsx
+msgid "先为这个任务选一个项目"
+msgstr "Choose a project for this task first"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -399,6 +408,11 @@ msgstr "Refresh"
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
 msgstr "Add to tab bar"
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "助理"
+msgstr "Assistant"
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "卸载"
@@ -722,6 +736,11 @@ msgstr "Updated; refresh to continue"
 msgid "已设置"
 msgstr "Configured"
 
+#. placeholder {0}: result.workItem.number
+#: src/app/use-session-actions.ts
+msgid "已转为任务 #{0}"
+msgstr "Made task #{0}"
+
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "已过期"
 msgstr "Expired"
@@ -819,6 +838,10 @@ msgstr "The selected backend is unavailable"
 #: src/app/Workbench.tsx
 msgid "打开 Agent 扩展"
 msgstr "Open Agent extensions"
+
+#: src/app/Workbench.tsx
+msgid "打开任务看板"
+msgstr "Open task board"
 
 #: src/app/Workbench.tsx
 msgid "打开侧栏"
@@ -1099,6 +1122,10 @@ msgstr "Couldn't save the outgoing message. Check the browser's storage space."
 msgid "无法保存项目"
 msgstr "Could not save project"
 
+#: src/app/state/workItemsStore.ts
+msgid "无法修改任务"
+msgstr "Couldn’t update the task"
+
 #: src/app/state/marksStore.ts
 msgid "无法修改收藏"
 msgstr "Couldn't update the favorite"
@@ -1121,9 +1148,17 @@ msgctxt "workbench-worktree-create-failed"
 msgid "无法创建 Worktree"
 msgstr "Couldn't create the Worktree"
 
+#: src/app/state/workItemsStore.ts
+msgid "无法创建任务"
+msgstr "Couldn’t create the task"
+
 #: src/app/use-session-actions.ts
 msgid "无法创建会话"
 msgstr "Couldn't create the session"
+
+#: src/app/state/workItemsStore.ts
+msgid "无法删除任务"
+msgstr "Couldn’t delete the task"
 
 #: src/app/state/marksStore.ts
 msgid "无法删除收藏"
@@ -1178,6 +1213,10 @@ msgstr "Couldn't locate this favorite"
 #: src/app/ImportSessionDialog.tsx
 msgid "无法导入会话"
 msgstr "Could not import the conversation"
+
+#: src/app/Workbench.tsx
+msgid "无法开始这个任务"
+msgstr "Couldn't start this task"
 
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
@@ -1374,6 +1413,10 @@ msgstr "Permissions"
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
 msgstr "Source"
+
+#: src/app/use-session-actions.ts
+msgid "查看"
+msgstr "View"
 
 #: src/app/App.tsx
 msgid "查看访问令牌"
@@ -1827,6 +1870,10 @@ msgstr "Warning"
 msgid "跟随系统"
 msgstr "System"
 
+#: src/app/Sidebar.tsx
+msgid "转为任务"
+msgstr "Make a task"
+
 #: src/app/ProjectHome.tsx
 msgid "输入消息…"
 msgstr "Type a message…"
@@ -1883,6 +1930,10 @@ msgstr "No sessions yet"
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
 msgstr "No projects yet"
+
+#: src/app/Workbench.tsx
+msgid "这个任务的项目已移除或归档"
+msgstr "This task’s project was removed or archived"
 
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"

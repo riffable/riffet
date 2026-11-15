@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AgentToolGroup } from '@riffet/plugin-api';
 import sharp from 'sharp';
-import type { DeviceCapability, Session, RiffetWakeup } from '../../../../packages/contracts/src/index.js';
+import type { DeviceCapability, Session, RiffetWakeup, WorkItem, WorkItemQuestion } from '../../../../packages/contracts/src/index.js';
 import type { SessionReferenceService } from '../context-references/service.js';
 import type { Auth } from '../auth.js';
 import { materializeAttachment } from '../backends/attachments.js';
@@ -83,6 +83,54 @@ const TOOLS: readonly ToolDefinition[] = [
     inputSchema: object(),
   },
 ];
+
+/*
+ * A conversation that belongs to a task (`Session.workItemId`) also reports on it (docs/TASK-BOARD.md
+ * §6). Listed only for such a conversation, as it is when its CLI starts; one attached later gets
+ * them at its next launch.
+ */
+const TASK_TOOLS: readonly ToolDefinition[] = [
+  {
+    name: 'task_submit',
+    description: "Deliver the task this conversation works on: a summary of what was done, and for each of the task's acceptance criteria, in order, whether it is met and on what evidence. Riffet attaches the files changed and the commands run (with their results) from this conversation's own record, so do not paste logs. The user then reviews it. Submit when the work is done, not for progress.",
+    inputSchema: object({
+      summary: { type: 'string', description: 'What was done and what is left, at most 20000 characters.' },
+      criteria: { type: 'array', description: "One entry per acceptance criterion, in the task's order.", items: object({ met: { type: 'boolean' }, note: { type: 'string', description: 'The evidence or the reason, at most 2000 characters.' } }) },
+    }, ['summary']),
+  },
+  {
+    name: 'task_ask',
+    description: 'Ask the user something only they can decide for the task this conversation works on (a choice between approaches, information you cannot find). Offer options when there are clear choices. After asking, end your turn: the answer arrives as your next message. Do not use it for tool permission; those prompts reach the user on their own.',
+    inputSchema: object({
+      question: { type: 'string', description: 'The question, at most 4000 characters.' },
+      options: { type: 'array', items: { type: 'string' }, description: 'Up to 6 short choices.' },
+    }, ['question']),
+  },
+];
+const TASK_NAMES = new Set(TASK_TOOLS.map(tool => tool.name));
+
+/** The 助理's tools (docs/TASK-BOARD.md §5), listed only to conversations in its project. */
+const TASK_REF = { type: 'string', description: 'The task number, like "12".' };
+const ASSISTANT_TOOLS: readonly ToolDefinition[] = [
+  { name: 'list_projects', description: "The owner's projects a task can belong to: id, name and directory.", inputSchema: object({}, []) },
+  { name: 'task_list', description: 'The tasks on the board, most recently changed first: open ones and those done in the last three days, with their status, project, agent and any question waiting on the owner.', inputSchema: object({}, []) },
+  { name: 'task_get', description: "One task in full: description, acceptance criteria, its latest delivery (the agent's account, each criterion, the commands run and their results) and recent comments.", inputSchema: object({ task: TASK_REF }, ['task']) },
+  {
+    name: 'task_create',
+    description: 'Plan a task on the board. With start false it waits in this conversation as a card the owner starts; with start true an agent starts on it at once, which is only for work that changes nothing (research, reading code, a review).',
+    inputSchema: object({
+      title: { type: 'string', description: 'Short, at most 200 characters.' },
+      description: { type: 'string', description: 'The goal and what is known of the background, in Markdown.' },
+      criteria: { type: 'array', items: { type: 'string' }, description: 'Acceptance criteria, one checkable statement each, at most 10.' },
+      project: { type: 'string', description: 'The project id or name, from list_projects.' },
+      agent: { type: 'string', description: 'Only when the owner named one: claude, codex, cursor and so on. Otherwise the owner\'s default.' },
+      start: { type: 'boolean', description: 'Start an agent on it now. Only for work that changes nothing.' },
+    }, ['title', 'project', 'start']),
+  },
+  { name: 'task_start', description: 'Start an agent on a planned task, when the owner says so in this conversation.', inputSchema: object({ task: TASK_REF }, ['task']) },
+  { name: 'task_comment', description: "Add a comment to a task: a decision or context for it. Its next conversation reads it in the task's brief.", inputSchema: object({ task: TASK_REF, text: { type: 'string', description: 'At most 10000 characters.' } }, ['task', 'text']) },
+];
+const ASSISTANT_NAMES = new Set(ASSISTANT_TOOLS.map(tool => tool.name));
 
 export interface McpToolResult { content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>; structuredContent?: Record<string, unknown>; isError?: boolean }
 
@@ -189,9 +237,18 @@ export interface PluginToolSource {
   declaredAgentTools(): ReadonlyArray<{ owner: string; declaration: { id: string; toolPrefix: string } }>;
 }
 
-export interface RiffetMcpDeps { contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined }
+/** What a task's conversation reports through (the work items service, given by `app.ts`). */
+export interface TaskReports {
+  submit(sessionId: string, input: Record<string, unknown>): WorkItem;
+  ask(sessionId: string, input: Record<string, unknown>): WorkItemQuestion;
+}
 
-const CORE_NAMES = new Set(TOOLS.map(tool => tool.name));
+/** What the 助理's tools do (the work items side, given by `app.ts`). */
+export interface AssistantTools { call(name: string, args: Record<string, unknown>): Promise<Record<string, unknown>> }
+
+export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; assistant?: () => AssistantTools | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined }
+
+const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...ASSISTANT_TOOLS].map(tool => tool.name));
 
 /**
  * The Riffet MCP server behind each conversation's stdio shim (docs/DEVICES.md §2). A request is
@@ -244,7 +301,7 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
   }
 
   tools(session: Session): Array<Omit<ToolDefinition, 'group'>> {
-    const core = [...TOOLS, ...this.pluginTools(session)];
+    const core = [...TOOLS, ...(session.workItemId ? TASK_TOOLS : []), ...(this.inAssistant(session) ? ASSISTANT_TOOLS : []), ...this.pluginTools(session)];
     const devices = this.devicesOf(session);
     if (!devices.length) return core;
     const names = Object.fromEntries(devices.map(id => [id, this.deps.auth.device(id)!.name]));
@@ -289,6 +346,22 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     const screenTool = SCREEN_TOOLS.find(item => item.name === raw.name);
     const deviceTool = DEVICE_TOOLS.find(item => item.name === raw.name) ?? screenTool;
     const tool = TOOLS.find(item => item.name === raw.name);
+    if (typeof raw.name === 'string' && ASSISTANT_NAMES.has(raw.name)) {
+      const assistant = this.deps.assistant?.();
+      if (!assistant || !this.inAssistant(session)) return errorResult('TOOL_NOT_AVAILABLE', `${raw.name} is available only to the assistant`);
+      try { return textResult(await assistant.call(raw.name, args)); }
+      catch (error) {
+        if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
+        throw error;
+      }
+    }
+    if (typeof raw.name === 'string' && TASK_NAMES.has(raw.name)) {
+      try { return this.callTask(session, raw.name, args); }
+      catch (error) {
+        if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
+        throw error;
+      }
+    }
     // A group removed from the conversation stops working at once, even in a CLI launched with it.
     const available = screenTool || raw.name === SCREEN_HELP_TOOL.name ? this.screenTools(session)
       : deviceTool ? this.devicesOf(session).length > 0 : Boolean(tool);
@@ -330,6 +403,22 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
       if (error instanceof AppError && error.statusCode < 500) return errorResult(error.code, error.message);
       throw error;
     } finally { signal?.removeEventListener('abort', abort); owned.signal.removeEventListener('abort', abort); }
+  }
+
+  private inAssistant(session: Session): boolean {
+    try { return this.deps.store.getProject(session.projectId).system === 'assistant'; } catch { return false; }
+  }
+
+  private callTask(session: Session, name: string, args: Record<string, unknown>): McpToolResult {
+    const workItems = this.deps.workItems?.();
+    if (!workItems || !session.workItemId) return errorResult('TOOL_NOT_AVAILABLE', `${name} is available only in a conversation that belongs to a task`);
+    if (name === 'task_submit') {
+      const item = workItems.submit(session.id, args);
+      const evidence = item.submission!.evidence;
+      return textResult({ submitted: { task: item.number, status: item.status, filesSeen: evidence.files.length, commandsSeen: evidence.commands.length } });
+    }
+    const question = workItems.ask(session.id, args);
+    return textResult({ asked: { id: question.id }, next: 'End your turn now. The answer will arrive as your next message.' });
   }
 
   private call(session: Session, name: string, args: Record<string, unknown>): McpToolResult {

@@ -32,6 +32,8 @@ interface Props {
   projects: ProjectRecord[];
   backends: NativeBackendCatalogEntry[];
   initialBackend?: NativeBackendId;
+  /** A request to show one kind of one agent in one project, e.g. the 助理's skills; applied each time `at` changes. */
+  focus?: { projectId: string; backendId: NativeBackendId; kind: ExtensionKind; at: number };
   sidebarCollapsed: boolean;
   onClose(): void;
   onOpenSidebar(): void;
@@ -50,7 +52,7 @@ function authorizationLink(value?: string): string | undefined {
   catch { return undefined; }
 }
 
-export function ExtensionsPage({ active, projects, backends, initialBackend, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange }: Props) {
+export function ExtensionsPage({ active, projects, backends, initialBackend, focus, sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar, onBeforeLeaveChange }: Props) {
   const { t } = useLingui();
   const agentLabel = useBackendLabel();
   const { ui } = useStores();
@@ -181,6 +183,15 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, sid
     discardSelection(); setPicker(undefined); setChecked(new Set()); setBatchMode(false);
     setBackend(nextAgent?.backendId ?? ''); setProfileId(nextProfile?.id ?? '');
   }, [backend, profileId, agentOptions, initialBackend, dirty, busy, discardSelection]);
+  const appliedFocus = useRef(0);
+  useEffect(() => {
+    if (!focus || focus.at === appliedFocus.current || dirty || busy) return;
+    appliedFocus.current = focus.at;
+    const agent = agentOptions.find(value => value.backendId === focus.backendId);
+    discardSelection(); setPicker(undefined); setChecked(new Set()); setBatchMode(false);
+    setProjectId(focus.projectId); setKind(focus.kind); setScope('all'); setOrigin('all'); setStatus('all'); setQuery('');
+    if (agent) { setBackend(agent.backendId); setProfileId(agent.profiles[0]?.id ?? ''); }
+  }, [focus, agentOptions, dirty, busy, discardSelection]);
   useEffect(() => { setChecked(new Set()); }, [filterKey, page]);
   useEffect(() => { setRuntime({}); setResult(undefined); setError(''); }, [projectId]);
   useEffect(() => {

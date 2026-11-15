@@ -149,6 +149,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "任务看板"
+msgstr ""
+
 #: src/app/CommandPalette.tsx
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -231,6 +236,10 @@ msgstr ""
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "先为这个任务选一个项目"
 msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
@@ -398,6 +407,11 @@ msgstr ""
 #: src/app/Sidebar.tsx
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "助理"
 msgstr ""
 
 #: src/app/plugins/PluginVersionsDialog.tsx
@@ -722,6 +736,11 @@ msgstr ""
 msgid "已设置"
 msgstr ""
 
+#. placeholder {0}: result.workItem.number
+#: src/app/use-session-actions.ts
+msgid "已转为任务 #{0}"
+msgstr ""
+
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "已过期"
 msgstr ""
@@ -818,6 +837,10 @@ msgstr ""
 
 #: src/app/Workbench.tsx
 msgid "打开 Agent 扩展"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "打开任务看板"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -1099,6 +1122,10 @@ msgstr ""
 msgid "无法保存项目"
 msgstr ""
 
+#: src/app/state/workItemsStore.ts
+msgid "无法修改任务"
+msgstr ""
+
 #: src/app/state/marksStore.ts
 msgid "无法修改收藏"
 msgstr ""
@@ -1121,8 +1148,16 @@ msgctxt "workbench-worktree-create-failed"
 msgid "无法创建 Worktree"
 msgstr ""
 
+#: src/app/state/workItemsStore.ts
+msgid "无法创建任务"
+msgstr ""
+
 #: src/app/use-session-actions.ts
 msgid "无法创建会话"
+msgstr ""
+
+#: src/app/state/workItemsStore.ts
+msgid "无法删除任务"
 msgstr ""
 
 #: src/app/state/marksStore.ts
@@ -1177,6 +1212,10 @@ msgstr ""
 
 #: src/app/ImportSessionDialog.tsx
 msgid "无法导入会话"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "无法开始这个任务"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
@@ -1373,6 +1412,10 @@ msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
+msgstr ""
+
+#: src/app/use-session-actions.ts
+msgid "查看"
 msgstr ""
 
 #: src/app/App.tsx
@@ -1827,6 +1870,10 @@ msgstr ""
 msgid "跟随系统"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "转为任务"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "输入消息…"
 msgstr ""
@@ -1882,6 +1929,10 @@ msgstr ""
 
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
+msgstr ""
+
+#: src/app/Workbench.tsx
+msgid "这个任务的项目已移除或归档"
 msgstr ""
 
 #: src/app/Sidebar.tsx

@@ -1,0 +1,430 @@
+msgid ""
+msgstr ""
+"POT-Creation-Date: 2026-11-14 23:37+0800\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"X-Generator: @lingui/cli\n"
+"Language: pseudo\n"
+
+#. placeholder {0}: statusLabel(event.from)
+#. placeholder {1}: statusLabel(event.to)
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "{0} → {1}"
+msgstr ""
+
+#. placeholder {0}: counts[kind]
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{0} 个"
+msgstr ""
+
+#. placeholder {0}: sessions.length
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "{0} 个会话"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "交付"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "任务看板"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "任务详情"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "会话"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "会话会保留，只是不再属于它。删除后无法恢复。"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "保存"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "全部项目"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "关闭"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "再开一个会话"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "写下回答…"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "写评论…"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "列表"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "创建"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "创建任务"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "创建后开始"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "创建子任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "删除…"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "删除任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "删除这个任务？"
+msgstr ""
+
+#. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "加入会话「{0}」"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "发表评论"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "发送"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "发送回答"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+#: src/app/work-items/NewWorkItemDialog.tsx
+msgid "取消"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "取消任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "回答"
+msgstr ""
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "回答：{0}"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "在新会话页发出第一条消息时会建一个任务。"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "失败"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "子任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "完成"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "完成"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "已修改"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "已取消"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "已达成"
+msgstr ""
+
+#: src/app/work-items/PlanDock.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "开始"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "待办"
+msgstr ""
+
+#: src/app/work-items/PlanDock.tsx
+msgid "待开始的任务"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgctxt "workbench-session-pending"
+msgid "待确认"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "待验收"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "恢复默认"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "成功"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-assignee"
+msgid "我"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "或者写下回答…"
+msgstr ""
+
+#. placeholder {0}: item.number
+#: src/app/work-items/TaskMark.tsx
+msgid "打开任务 #{0}"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "执行者"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "描述"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgctxt "work-item-question"
+msgid "提问"
+msgstr ""
+
+#. placeholder {0}: event.question.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "提问：{0}"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "插件"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "收件箱"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "改动的文件"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "新对话生效"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "新建任务"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "新建子任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法保存"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无法发表评论"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无法发送回答"
+msgstr ""
+
+#: src/app/work-items/PlanDock.tsx
+msgid "无法开始这个任务"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无法返工"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "无项目"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "更多操作"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "有新结果"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "未达成"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "标签"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "标题"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "活动"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加描述…"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加标签"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "添加验收标准"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "状态"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "看板"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "视图"
+msgstr ""
+
+#. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "移出会话「{0}」"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "移除标签 {label}"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "筛选"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "结果未知"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "编辑描述"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "要改什么"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "评论"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgid "运行中"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "运行过的命令"
+msgstr ""
+
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "返工"
+msgstr ""
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "返工：{0}"
+msgstr ""
+
+#. placeholder {0}: files.length - SHOWN_FILES
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "还有 {0} 个"
+msgstr ""
+
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "还没有任务"
+msgstr ""
+
+#: src/app/work-items/parts.tsx
+msgctxt "work-item-status"
+msgid "进行中"
+msgstr ""
+
+#. placeholder {0}: command.exitCode
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "退出码 {0}"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+#: src/app/work-items/WorkItemsPage.tsx
+msgid "项目"
+msgstr ""
+
+#: src/app/work-items/NewWorkItemDialog.tsx
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "验收标准"
+msgstr ""
+
+#. placeholder {0}: index + 1
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "验收标准 {0}"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "默认"
+msgstr ""

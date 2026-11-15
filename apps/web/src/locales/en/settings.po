@@ -4661,6 +4661,10 @@ msgstr "New conversations start here."
 msgid "新会话的起始页，输入框居中"
 msgstr "Start page for a new conversation, composer centered"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "新会话自动建任务"
+msgstr "Create a task for each new conversation"
+
 #: src/app/design/mac/notes.ts
 msgid "新会话页"
 msgstr "New session page"

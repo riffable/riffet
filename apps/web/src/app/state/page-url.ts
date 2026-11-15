@@ -1,14 +1,14 @@
 import { readStatsSearch, writeStatsSearch, type StatsUiState } from '@/lib/stats-query';
 
-/** The design page's platforms: the shared system and the web's components, or how the Mac draws them. */
-export const DESIGN_PLATFORMS = ['web', 'macos'] as const;
+/** The design page's platforms: the shared system and the web's components, or how the Mac or Android draws them. */
+export const DESIGN_PLATFORMS = ['web', 'macos', 'android'] as const;
 export type DesignPlatform = (typeof DESIGN_PLATFORMS)[number];
 
 /**
  * The pages with an address of their own. A page covers the conversation, so its address does not
  * name one: a reload restores the conversation underneath from the stored selection.
  */
-const PAGES = ['tasks', 'marks', 'stats', 'extensions', 'plugins', 'design'] as const;
+const PAGES = ['tasks', 'automations', 'marks', 'stats', 'extensions', 'plugins', 'design'] as const;
 export type AddressPage = (typeof PAGES)[number];
 
 /**
@@ -16,7 +16,7 @@ export type AddressPage = (typeof PAGES)[number];
  *
  * - `/c/<sessionId>`: a conversation; its project comes with it. `?mark=<markId>` locates a 收藏.
  * - `/p/<projectId>`: a project's new-conversation page.
- * - `/tasks`, `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
+ * - `/tasks` (任务), `/automations` (定时任务), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
  * - `/design/<chapter>?platform=macos`: a chapter of the design system; no chapter is its overview.
  *
  * Plugin ids always contain a dot, and the server answers a path with an extension as a file, so

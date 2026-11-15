@@ -31,8 +31,11 @@ export interface Project {
    * second kind of path.
    */
   worktree?: { originProjectId: string; branch: string };
-  /** Internal directories stay out of the project picker. Each task workspace holds one independent task and its continuations. */
-  system?: 'quick-chat' | 'task-workspace';
+  /**
+   * Internal directories stay out of the project picker. Each task workspace holds one independent task and its continuations;
+   * `assistant` holds the 助理's conversations (docs/TASK-BOARD.md §5).
+   */
+  system?: 'quick-chat' | 'task-workspace' | 'assistant';
 }
 export interface TaskWorkspaceLocation {
   path: string;
@@ -132,6 +135,11 @@ export interface Session {
   terminalHold?: SessionTerminalHold;
   /** The conversation's current goal, kept by the server from whichever backend owns it; missing when there is none. */
   goal?: SessionGoal;
+  /**
+   * The 任务 this conversation works on (docs/TASK-BOARD.md §4). A fork or handoff takes its
+   * source's; quick chats never have one.
+   */
+  workItemId?: string;
   createdAt: string; updatedAt: string;
 }
 export type SessionGoalStatus = 'active' | 'paused' | 'blocked' | 'usage_limited' | 'budget_limited' | 'complete';

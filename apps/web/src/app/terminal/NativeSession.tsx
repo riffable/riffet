@@ -25,7 +25,8 @@ import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
 import { ComposerDock } from '../session/ComposerDock';
-import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../tasks/SendLater';
+import { PlanDock } from '../work-items/PlanDock';
+import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../automations/SendLater';
 import { pickerBlockReason } from '../session/pickers';
 import { useSessionTranscript } from '../session/useSessionTranscript';
 import { timelineItemTime, type Choice, type SlashCommand } from '../session/model';
@@ -811,6 +812,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   /** The queue card is on screen, closing included: the composer card keeps its seam until the card has gone. */
   const [queueShown, setQueueShown] = useState(false);
   const followUps = useSessionFollowUps(session.id);
+  const assistant = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'assistant');
   const followUpList = useMemo(() => followUps.items.length ? <FollowUpList items={followUps.items} onCancel={(id) => void followUps.cancel(id)} /> : undefined, [followUps.items, followUps.cancel]);
   const sendLater = useCallback(async (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => {
     const ok = await scheduleFollowUp(session.id, prompt, attachments, context, at);
@@ -834,8 +836,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       onRemoveQueued={removeQueued}
       onQueueShown={setQueueShown}
       followUps={followUpList}
+      plans={assistant ? <PlanDock /> : undefined}
     />
-  ), [followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
+  ), [assistant, followUpList, layout.plan, goal, todoEntries, queuedRuns, working, queueUnconfirmed, unconfirmedRunId, revealUnconfirmed, queuedPending, canSteerQueued, steerQueuedById, steerDisabled, sendQueuedNowById, editQueued, removeQueued]);
   // Without the backend's permissions there is no name to show, only an id.
   const approvalSummary = useMemo(() => (backendCapabilities?.permissions.length ? <ApprovalSummary mode={approval} options={backendCapabilities.permissions} /> : undefined), [approval, backendCapabilities]);
   const approvalPicker = useMemo(() => (backendCapabilities?.permissions.length ? (

@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, type NativeModelApiProtocol, type QuickChatSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -332,7 +332,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'cursorCli', 'taskWorkspaceRoot']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'workItemCards', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -388,6 +388,10 @@ export class SettingsService {
       if (typeof values.composerSendLater !== 'boolean') throw new AppError('INVALID_SETTINGS', 'composerSendLater must be a boolean');
       result.composerSendLater = values.composerSendLater;
     }
+    if (values.workItemCards !== undefined) {
+      if (typeof values.workItemCards !== 'boolean') throw new AppError('INVALID_SETTINGS', 'workItemCards must be a boolean');
+      result.workItemCards = values.workItemCards;
+    }
     for (const [key, max] of [['idleReclaimMinutes', 7 * 24 * 60], ['maxLiveAgents', 500]] as const) {
       const value = values[key];
       if (value === undefined) continue;
@@ -415,6 +419,10 @@ export class SettingsService {
       if (Object.keys(chosen).length) result.auxiliaryModels = chosen;
     }
     if (values.quickChat !== undefined) result.quickChat = validateQuickChat(values.quickChat);
+    if (values.assistant !== undefined) {
+      const assistant = validateAssistant(values.assistant);
+      if (Object.keys(assistant).length) result.assistant = assistant;
+    }
     if (values.cursorCli !== undefined) result.cursorCli = this.cursor.validate(values.cursorCli);
     return result;
   }
@@ -446,6 +454,11 @@ export class SettingsService {
       for(const key of Object.keys(merged))if(merged[key]===null)delete merged[key];
       input.quickChat=merged;
     }
+    if(input.assistant&&typeof input.assistant==='object'&&!Array.isArray(input.assistant)){
+      const merged:Record<string,unknown>={...generalCurrent.assistant,...input.assistant};
+      for(const key of Object.keys(merged))if(merged[key]===null)delete merged[key];
+      input.assistant=merged;
+    }
     const next=this.validateSettings({...generalCurrent,...input});
     this.cursor.mirrorDefaults(input,next);
     this.persistSettings(!nextStoredCli&&legacyCli?{...next,cursorCli:legacyCli}:next,nextStoredCli);
@@ -456,6 +469,24 @@ export class SettingsService {
 export type { AppSettings, CapabilityReport, CommandResult, ConfigFile } from '../../../../packages/contracts/src/index.js';
 
 const QUICK_CHAT_PRESET_ID=/^[a-z0-9-]{1,32}$/;
+
+function validateAssistant(raw: unknown): AssistantSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'assistant must be an object');
+  const values = raw as Record<string, unknown>;
+  if (Object.keys(values).some(key => !['backendId', 'profileId', 'model'].includes(key))) throw new AppError('INVALID_SETTINGS', 'assistant contains an unknown field');
+  const result: AssistantSettings = {};
+  if (values.backendId !== undefined) {
+    if (typeof values.backendId !== 'string' || !isNativeBackendId(values.backendId) || values.backendId === 'chat') throw new AppError('INVALID_SETTINGS', 'assistant.backendId is invalid');
+    result.backendId = values.backendId as NativeBackendId;
+  }
+  for (const key of ['profileId', 'model'] as const) {
+    const value = values[key];
+    if (value === undefined) continue;
+    if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `assistant.${key} is invalid`);
+    result[key] = value;
+  }
+  return result;
+}
 
 function validateQuickChat(raw: unknown): QuickChatSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'quickChat must be an object');

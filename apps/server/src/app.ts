@@ -27,7 +27,7 @@ import { ThemeService } from './themes/index.js';
 import { migratePluginStorage } from './compat.js';
 import { SessionLock } from './agent-host/session-lock.js';
 import { NativeDispatcher } from './native/dispatch.js';
-import { effectiveSettingsForClient, registerProjectVisibilityHook, registerSessionVisibilityHook } from './native/client-features.js';
+import { defaultBackendForClient, effectiveSettingsForClient, registerProjectVisibilityHook, registerSessionVisibilityHook } from './native/client-features.js';
 import { ClientLogs } from './clientLogs.js';
 import { ServiceMonitor } from './monitor.js';
 import { AgentReclaimer } from './native/reclaim.js';
@@ -58,6 +58,9 @@ import { registerProjectRoutes } from './routes/projects.js';
 import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
+import { registerWorkItemRoutes } from './routes/work-items.js';
+import { AssistantBoard, WorkItemService, assistantProject } from './work-items/index.js';
+import { savedDefaultBackendId } from './session-identity.js';
 import { registerShareRoutes } from './routes/shares.js';
 import { ShareService } from './shares/service.js';
 import { SessionDeletion } from './session-deletion.js';
@@ -170,7 +173,9 @@ export async function createApp(options: AppOptions = {}) {
   // Paired devices' calls and leases (docs/DEVICES.md §3); leases follow the scheduler's wake-ups.
   const devices=new DeviceChannel({store,auth,workspace,pendingWakeups:()=>orchestrationRef?.pendingWakeups()??[]});
   const adb=new DeviceAdb(options.adbRunner?{runner:options.adbRunner,locate:()=>'adb'}:{});
-  const riffetMcp=new RiffetMcpService({store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins});
+  let workItemsRef:WorkItemService|undefined;
+  let assistantRef:AssistantBoard|undefined;
+  const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins});
   const terminal:TerminalService=new TerminalService(store,{stateDir,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
@@ -311,7 +316,13 @@ export async function createApp(options: AppOptions = {}) {
   const externalSessions=new ExternalSessions({store,settings,nativeBackends,auth});
   const terminalHolds=new TerminalHolds({store,nativeBackends,runtime:sessionLock,log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
   terminalHolds.start();
-  const deps:RouteDeps={channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
+  const workItems=new WorkItemService(store,()=>({
+    send:(sessionId,text,commandId)=>{orchestration.message(sessionId,text,commandId);},
+    open:async(target,text,attach)=>(await orchestration.open(target,text,attach)).id,
+  }));
+  workItemsRef=workItems;
+  assistantRef=new AssistantBoard({store,workItems,defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds())});
+  const deps:RouteDeps={workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -324,6 +335,7 @@ export async function createApp(options: AppOptions = {}) {
   registerSessionRoutes(app,deps);
   registerExternalSessionRoutes(app,deps);
   registerMarkRoutes(app,deps);
+  registerWorkItemRoutes(app,deps);
   const shares=new ShareService(deps);
   registerShareRoutes(app,deps,shares);
   const deletion=new SessionDeletion({store,stateDir,sessionCommands,sessionLock,dispatch,nativeBackends,terminal,ingest,liveIndex,timeline,turnSummaries,shares,orchestration,notices,riffetMcp,planFiles,
@@ -383,6 +395,8 @@ export async function createApp(options: AppOptions = {}) {
   reclaimer.start();
   // Made before anyone can ask for it, so a phone opening the list sees it at once. A failure costs quick chat, not the server.
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
+  try{assistantProject(store,stateDir);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
+  workItems.retitleBriefConversations();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
     archive:sessionId=>patchSession(deps,sessionId,{archived:true}),
     log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
@@ -405,12 +419,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,workItems,assistant:assistantRef,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

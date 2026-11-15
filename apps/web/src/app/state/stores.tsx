@@ -9,6 +9,7 @@ import { replacePageUrl } from '@/lib/overlay-navigation';
 import { createCatalogStore, type CatalogState } from './catalogStore';
 import { createListsStore, type ListsState } from './listsStore';
 import { createMarksStore, type MarksState } from './marksStore';
+import { createWorkItemsStore, type WorkItemsState } from './workItemsStore';
 import { createNavStore, STORAGE_KEYS, type NavState } from './navStore';
 import { pageAddressUrl } from './page-url';
 import { createSettingsStore } from './settingsStore';
@@ -44,8 +45,9 @@ export function createWorkbenchStores() {
   const ui = createUiStore();
   const lists = createListsStore({ settings, selectedSessionId: () => nav.get().sessionId, handlers });
   const marks = createMarksStore(lists);
+  const workItems = createWorkItemsStore(lists);
   const tabs = createTabsStore({ lists, nav, ui, handlers });
-  return { handlers, catalog, settings, nav, ui, lists, marks, tabs };
+  return { handlers, catalog, settings, nav, ui, lists, marks, workItems, tabs };
 }
 
 export type WorkbenchStores = ReturnType<typeof createWorkbenchStores>;
@@ -66,6 +68,7 @@ export const useLists = <S,>(selector: (state: ListsState) => S, isEqual?: (a: S
 export const useNav = <S,>(selector: (state: NavState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().nav, selector, isEqual);
 export const useUi = <S,>(selector: (state: UiState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().ui, selector, isEqual);
 export const useMarks = <S,>(selector: (state: MarksState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().marks, selector, isEqual);
+export const useWorkItems = <S,>(selector: (state: WorkItemsState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().workItems, selector, isEqual);
 export const useCatalog = <S,>(selector: (state: CatalogState) => S, isEqual?: (a: S, b: S) => boolean): S => useStore(useStores().catalog, selector, isEqual);
 /** The server's settings; `{}` until they have loaded. */
 export const useSettings = <S,>(selector: (settings: AppSettings) => S): S => useStore(useStores().settings, (state) => selector(state.settings));
@@ -76,13 +79,15 @@ export const useSettings = <S,>(selector: (settings: AppSettings) => S): S => us
  * the workbench does not re-render for them.
  */
 export function WorkbenchEffects() {
-  const { lists, nav, ui, tabs } = useStores();
+  const { lists, nav, ui, tabs, workItems } = useStores();
   const loaded = useStore(lists, (state) => state.loaded);
+  // The sidebar counts the inbox, so the list is read once the workbench has loaded, not when the page opens.
+  useEffect(() => { if (loaded) workItems.start(); }, [loaded, workItems]);
   // A conversation the server deleted (here or on another device) leaves the tabs, the selection and the lists.
   useEffect(() => {
     return onSessionsDeleted((ids) => { tabs.retire(ids); lists.removeSessions(ids); });
   }, [tabs, lists]);
-  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, pluginsOpen, pluginId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId);
+  const { projectId, taskProjectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, pluginsOpen, pluginId, statsState } = useStore(nav, (state) => state, (a, b) => a.designOpen === b.designOpen && a.designPlatform === b.designPlatform && a.designChapter === b.designChapter && a.projectId === b.projectId && a.taskProjectId === b.taskProjectId && a.sessionId === b.sessionId && a.statsOpen === b.statsOpen && a.extensionsOpen === b.extensionsOpen && a.marksOpen === b.marksOpen && a.tasksOpen === b.tasksOpen && a.automationsOpen === b.automationsOpen && a.statsState === b.statsState && a.pluginsOpen === b.pluginsOpen && a.pluginId === b.pluginId);
   const sidebarCollapsed = useStore(ui, (state) => state.sidebarCollapsed);
   const dockHeight = useStore(ui, (state) => state.dockHeight);
   const sidebarWidth = useStore(ui, (state) => state.sidebarWidth);
@@ -95,7 +100,7 @@ export function WorkbenchEffects() {
     let timer: number | undefined;
     const unseenOnScreen = () => {
       const state = nav.get();
-      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.extensionsOpen || state.marksOpen || state.designOpen || state.attemptsGroupId) return undefined;
+      if (document.visibilityState !== 'visible' || !document.hasFocus() || !state.sessionId || state.pluginsOpen || state.statsOpen || state.tasksOpen || state.automationsOpen || state.extensionsOpen || state.marksOpen || state.designOpen || state.attemptsGroupId) return undefined;
       const session = lists.get().sessions.find((item) => item.id === state.sessionId);
       return session && isUnread(session) ? session : undefined;
     };
@@ -142,9 +147,9 @@ export function WorkbenchEffects() {
    */
   useEffect(() => {
     if (!loaded) return;
-    const page = pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : designOpen ? 'design' : tasksOpen ? 'tasks' : undefined;
+    const page = pluginsOpen ? 'plugins' : extensionsOpen ? 'extensions' : statsOpen ? 'stats' : marksOpen ? 'marks' : designOpen ? 'design' : tasksOpen ? 'tasks' : automationsOpen ? 'automations' : undefined;
     replacePageUrl(pageAddressUrl({ page, sessionId, projectId, pluginId, stats: statsState, designPlatform, designChapter }));
-  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, pluginsOpen, pluginId, statsState]);
+  }, [loaded, projectId, sessionId, statsOpen, extensionsOpen, marksOpen, designOpen, designPlatform, designChapter, tasksOpen, automationsOpen, pluginsOpen, pluginId, statsState]);
 
   return null;
 }

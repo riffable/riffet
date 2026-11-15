@@ -11,7 +11,7 @@ import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage, newId } from '@/lib/utils';
 import { useLists } from '../state/stores';
-import { AutomationEditor, type AutomationEditorState } from '../tasks/AutomationEditor';
+import { AutomationEditor, type AutomationEditorState } from '../automations/AutomationEditor';
 import { LaunchTargetBar, launchTargetOf, useBackendCatalogs, type LaunchTargetShape } from './LaunchTargetBar';
 
 /**

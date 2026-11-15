@@ -20,6 +20,7 @@ import { AppError } from '../errors.js';
 import { WorkspaceService } from '../workspace/index.js';
 import { SessionCommands } from '../orchestration/session-commands.js';
 import { SessionReferenceService } from '../context-references/service.js';
+import { WorkItemService } from '../work-items/index.js';
 
 const cleanups: Array<() => Promise<void> | void> = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
@@ -78,7 +79,7 @@ async function boot(savedSettings?: Record<string, unknown>) {
   };
   const effectiveSettings = (headers?: import('node:http').IncomingHttpHeaders) => ({ ...effectiveSettingsForClient(headers, settings.getSettings(), nativeBackends.offeredBackendIds()), allowOutsideRead: true });
   const deps = {
-    stateDir, store, settings, nativeBackends, orchestration, effectiveSettings,
+    stateDir, store, settings, nativeBackends, orchestration, effectiveSettings, workItems: new WorkItemService(store),
     titles: { backfill: async () => undefined },
     auth: { authenticate: () => ({ kind: 'device' }), csrf: () => '', onRevoke: () => () => undefined },
     terminal: { listSnapshot: () => [] },

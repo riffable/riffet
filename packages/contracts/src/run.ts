@@ -117,7 +117,7 @@ export interface OutputRate {
   /** Absent when the window has no token samples. */
   tokens?: MetricsTokenSource | 'mixed';
 }
-export type NativeSessionInput = Pick<Session, 'projectId'> & Partial<Pick<Session, 'title' | 'tags' | 'model' | 'mode' | 'approval' | 'backendId' | 'backendProfileId' | 'nativeSessionId' | 'cursorSessionId' | 'resumePicker' | 'origin' | 'terminalAppearance' | 'toolGroups' | 'extensionsOff'>>;
+export type NativeSessionInput = Pick<Session, 'projectId'> & Partial<Pick<Session, 'title' | 'tags' | 'model' | 'mode' | 'approval' | 'backendId' | 'backendProfileId' | 'nativeSessionId' | 'cursorSessionId' | 'resumePicker' | 'origin' | 'terminalAppearance' | 'toolGroups' | 'extensionsOff' | 'workItemId'>>;
 export interface Run {
   id: string; sessionId: string; commandId: string; prompt: string;
   state: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';

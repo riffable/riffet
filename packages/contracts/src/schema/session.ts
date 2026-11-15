@@ -102,6 +102,7 @@ export const SessionSchema = z.object({
   extensionsOff: z.array(z.string()).optional(),
   terminalHold: z.object({ since: z.string(), pid: z.number().int().optional() }).optional(),
   goal: SessionGoalSchema.optional(),
+  workItemId: z.string().optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

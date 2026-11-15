@@ -28,12 +28,29 @@ function creationRejection(error: unknown, store: RouteDeps['store'], clientSess
   return new AppError(error.code,error.message,error.statusCode,{...(error.details&&typeof error.details==='object'?error.details:{}),accepted:false},error.params);
 }
 
+function requestedWorkItemId(value: unknown): string|undefined {
+  if(value===undefined)return undefined;
+  if(typeof value!=='string'||!value||value.length>100)throw new AppError('INVALID_WORK_ITEM','workItemId must be a string of 1 to 100 characters');
+  return value;
+}
+
 export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): void {
   registerDiscussionRoutes(app, deps);
-  const {store,auth,settings,terminal,sessionLock,nativeBackends,dispatch,streams,sessionCommands,renameNative,readNativeInput,nativeRuns,contextReferences}=deps;
+  const {store,workItems,auth,settings,terminal,sessionLock,nativeBackends,dispatch,streams,sessionCommands,renameNative,readNativeInput,nativeRuns,contextReferences}=deps;
   const LIST_CHANGE_DEBOUNCE_MS=250;
+  /**
+   * The 任务 a conversation opened from a composer belongs to (docs/TASK-BOARD.md §4.3): the one the
+   * request names, or with `workItemCards` on a new one keyed by the conversation, so a retry finds it.
+   * Called inside the creation's transaction, so a refused creation leaves no task behind.
+   */
+  const composerWorkItem=(clientSessionId:string,requested:unknown,text:string,backendId:string|undefined,projectId:string|undefined)=>{
+    const named=requestedWorkItemId(requested);
+    if(named)return workItems.get(named).id;
+    if(settings.getSettings().workItemCards===false)return undefined;
+    return workItems.ensureForComposerSession(clientSessionId,{text,...(backendId?{backendId}:{}),...(projectId?{projectId}:{})}).id;
+  };
   app.get('/api/sessions',async(request,reply)=>revisionedList(request,reply,store.listRevision,()=>visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id))));
-  app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
+  app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;workItemId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
     const create=async()=>{
     const body=request.body;
     try {
@@ -56,7 +73,10 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         const capabilities=await nativeBackends.catalog.capabilitiesFor(backendId,profile.id);
         if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===sessionInput.mode):sessionInput.mode!=='agent')throw new AppError('INVALID_MODE','The saved task mode is no longer available');
         if(sessionInput.approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===sessionInput.approval)))throw new AppError('INVALID_APPROVAL_MODE','The saved task permission is no longer available');
-      },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);return store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);}));
+      },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
+        const workItemId=composerWorkItem(clientSessionId,body.workItemId,message.text,sessionInput.backendId,undefined);
+        const accepted=store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);
+        if(workItemId)workItems.attachSession(clientSessionId,workItemId);return accepted;}));
       requireSessionVisibleToClient(request.headers,result.session,id=>store.getProject(id));
       reply.code(202);dispatch.kick();return result;
     }
@@ -79,7 +99,12 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
       const input=await resolveNativeSessionInput(deps,body,request.headers);
       if(message.references?.length)await nativeBackends.assertSessionReferences(input);
       const prepared=await contextReferences.prepare(clientSessionId,message,request.headers);
-      const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));return accepted;});
+      const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
+        const project=store.getProject(input.projectId);
+        // Quick chats and the 助理's own conversations are not work on the board.
+        const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:composerWorkItem(clientSessionId,body.workItemId,message.text,input.backendId,project.system?undefined:project.id);
+        const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);
+        if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));return accepted;});
       reply.code(202);dispatch.kick();return result;
     }
     const input=await resolveNativeSessionInput(deps,body,request.headers);
@@ -148,7 +173,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
     let pending:NodeJS.Timeout|undefined;
     const unsubscribe=store.onListsChanged(()=>{
       if(pending)return;
-      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,projects:store.projectRevision,marks:store.marksRevision,favorites:store.favoritesRevision})}\n\n`);},LIST_CHANGE_DEBOUNCE_MS);
+      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,projects:store.projectRevision,marks:store.marksRevision,workItems:store.workItemsRevision,favorites:store.favoritesRevision})}\n\n`);},LIST_CHANGE_DEBOUNCE_MS);
     });
     // An agent's notice (docs/DEVICES.md §2). A client listening only for `changed` never sees it.
     const unsubscribeNotices=deps.notices.subscribe(notice=>{

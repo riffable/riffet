@@ -149,6 +149,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr "任务"
 
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "任务看板"
+msgstr "任务看板"
+
 #: src/app/CommandPalette.tsx
 #: src/app/Header.tsx
 #: src/app/Sidebar.tsx
@@ -232,6 +237,10 @@ msgstr "停止当前运行"
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
 msgstr "允许插件使用 Riffet 的文件、网络和进程权限"
+
+#: src/app/Workbench.tsx
+msgid "先为这个任务选一个项目"
+msgstr "先为这个任务选一个项目"
 
 #: src/app/ImportSessionDialog.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -399,6 +408,11 @@ msgstr "刷新"
 #: src/app/tabs/TabBar.tsx
 msgid "加入标签栏"
 msgstr "加入标签栏"
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "助理"
+msgstr "助理"
 
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "卸载"
@@ -722,6 +736,11 @@ msgstr "已更新，刷新后继续"
 msgid "已设置"
 msgstr "已设置"
 
+#. placeholder {0}: result.workItem.number
+#: src/app/use-session-actions.ts
+msgid "已转为任务 #{0}"
+msgstr "已转为任务 #{0}"
+
 #: src/app/plugins/PluginFlowDialog.tsx
 msgid "已过期"
 msgstr "已过期"
@@ -819,6 +838,10 @@ msgstr "所选后端不可用"
 #: src/app/Workbench.tsx
 msgid "打开 Agent 扩展"
 msgstr "打开 Agent 扩展"
+
+#: src/app/Workbench.tsx
+msgid "打开任务看板"
+msgstr "打开任务看板"
 
 #: src/app/Workbench.tsx
 msgid "打开侧栏"
@@ -1099,6 +1122,10 @@ msgstr "无法保存待发送消息，请检查浏览器存储空间"
 msgid "无法保存项目"
 msgstr "无法保存项目"
 
+#: src/app/state/workItemsStore.ts
+msgid "无法修改任务"
+msgstr "无法修改任务"
+
 #: src/app/state/marksStore.ts
 msgid "无法修改收藏"
 msgstr "无法修改收藏"
@@ -1121,9 +1148,17 @@ msgctxt "workbench-worktree-create-failed"
 msgid "无法创建 Worktree"
 msgstr "无法创建 Worktree"
 
+#: src/app/state/workItemsStore.ts
+msgid "无法创建任务"
+msgstr "无法创建任务"
+
 #: src/app/use-session-actions.ts
 msgid "无法创建会话"
 msgstr "无法创建会话"
+
+#: src/app/state/workItemsStore.ts
+msgid "无法删除任务"
+msgstr "无法删除任务"
 
 #: src/app/state/marksStore.ts
 msgid "无法删除收藏"
@@ -1178,6 +1213,10 @@ msgstr "无法定位这条收藏"
 #: src/app/ImportSessionDialog.tsx
 msgid "无法导入会话"
 msgstr "无法导入会话"
+
+#: src/app/Workbench.tsx
+msgid "无法开始这个任务"
+msgstr "无法开始这个任务"
 
 #: src/app/AddProjectDialog.tsx
 msgid "无法打开系统目录选择器"
@@ -1374,6 +1413,10 @@ msgstr "权限"
 #: src/app/plugins/PluginsPage.tsx
 msgid "来源"
 msgstr "来源"
+
+#: src/app/use-session-actions.ts
+msgid "查看"
+msgstr "查看"
 
 #: src/app/App.tsx
 msgid "查看访问令牌"
@@ -1827,6 +1870,10 @@ msgstr "警告"
 msgid "跟随系统"
 msgstr "跟随系统"
 
+#: src/app/Sidebar.tsx
+msgid "转为任务"
+msgstr "转为任务"
+
 #: src/app/ProjectHome.tsx
 msgid "输入消息…"
 msgstr "输入消息…"
@@ -1883,6 +1930,10 @@ msgstr "还没有会话"
 #: src/app/Sidebar.tsx
 msgid "还没有项目"
 msgstr "还没有项目"
+
+#: src/app/Workbench.tsx
+msgid "这个任务的项目已移除或归档"
+msgstr "这个任务的项目已移除或归档"
 
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-status-active"

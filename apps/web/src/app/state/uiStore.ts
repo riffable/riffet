@@ -1,4 +1,4 @@
-import type { Run } from '@contracts';
+import type { ExtensionKind, NativeBackendId, Run } from '@contracts';
 import { sameContextReference, type PromptContextReference } from '@/lib/api';
 import { MOBILE_LAYOUT_QUERY } from '@/lib/use-media-query';
 import { readStored, writeStored } from '@/lib/utils';
@@ -83,6 +83,8 @@ export interface UiState {
   /** The floating panel's frame; unset until it has been moved, then it opens attached top-right. */
   panelFrame?: PanelFrame;
   previewTarget?: PreviewTarget;
+  /** What the extensions page shows when it next opens from elsewhere, such as the 助理's home; `at` tells two requests apart. */
+  extensionsFocus?: { projectId: string; backendId: NativeBackendId; kind: ExtensionKind; at: number };
   /** The side panel's view, by id; one that is not offered for the project shows the first that is. */
   panelTab: string;
   dockOpen: boolean;

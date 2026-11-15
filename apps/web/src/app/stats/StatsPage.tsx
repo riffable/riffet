@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { StatsRunRow } from '@contracts';
 import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
@@ -8,7 +8,7 @@ import { FeedbackNotice } from '@/components/ui/feedback-notice';
 import { Skeleton } from '@/components/ui/skeleton';
 import { exportStats } from '@/lib/api';
 import { formatTimestamp } from '@/lib/stats-format';
-import { clientTimeZone, previousWindowLabel, statsFilterKey, statsFilterParams, windowLabel, type StatsUiState } from '@/lib/stats-query';
+import { clientTimeZone, previousWindowLabel, resolveWindow, statsFilterKey, statsFilterParams, windowLabel, type StatsUiState } from '@/lib/stats-query';
 import { toast } from '@/lib/toast';
 import { errorMessage } from '@/lib/utils';
 import { AreaChart } from './AreaChart';
@@ -18,6 +18,7 @@ import { FilterBar } from './FilterBar';
 import { CalendarHeatmap, WeekHeatmap } from './Heatmaps';
 import { KpiCards } from './KpiCards';
 import { LatencyChart } from './LatencyChart';
+import { NorthStar } from './NorthStar';
 import { RankChart } from './RankChart';
 import { RunsTable } from './RunsTable';
 import { ReliabilityChart, ToolChart } from './SplitBars';
@@ -64,6 +65,11 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
   };
   const empty = dashboard && dashboard.summary.current.runs === 0 && dashboard.summary.current.sessions === 0 && dashboard.series.points.length === 0;
   const period = windowLabel(state, new Date());
+  // Read again whenever the dashboard is: the same window, and fresh when it refreshes.
+  const filterKey = statsFilterKey(state);
+  const northWindow = useMemo(() => resolveWindow(state, new Date()),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filterKey, dashboard?.generatedAt]);
   const compare = previousWindowLabel(state, new Date());
 
   return (
@@ -96,6 +102,7 @@ export const StatsPage = memo(function StatsPage({ state, sidebarCollapsed, onSt
       {dashboard && series && (
         <HighlightProvider>
           {empty && <p className="rounded-xl border border-line bg-subtle px-4 py-3 text-sm text-fg-3"><Trans>还没有可统计的会话。缺失的指标显示为「—」，不是 0。</Trans></p>}
+          <NorthStar window={northWindow} timeZone={clientTimeZone()} />
           <KpiCards summary={dashboard.summary} series={series} compareLabel={compare} />
           <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,1.7fr)_minmax(260px,0.8fr)]">
             <AreaChart

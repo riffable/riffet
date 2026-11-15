@@ -29,8 +29,8 @@
 | 档 | 宽度 | 用于 |
 |---|---|---|
 | 阅读 | `--content-width`，默认 920，读者可拖到 640–1600 | 对话、终端、输入框 |
-| 文档 | 768（`max-w-3xl`） | 列表、表单、收藏、任务、插件 |
-| 看板 | 1200 | 统计这类并排放图的页面 |
+| 文档 | 768（`max-w-3xl`） | 列表、表单、收藏、定时任务、插件 |
+| 看板 | 1200 | 统计、任务看板这类并排放图或分列的页面 |
 
 - **内边距**：内容列左右 16（手机）/ 32（桌面）；顶部 24 / 40；底部 64，给最后一项留出滚动余量。文档、看板两档的宽度不含内边距；阅读档是例外，`--content-width` 含左右各 48 的内边距，文字宽是它减 96（[界面](surfaces.md) §1）。
 - 一个页面只有一个滚动容器。页头固定，滚动区占满剩余高度。
@@ -52,8 +52,8 @@
 | 类型 | 骨架 | 内容列 | 用于 |
 |---|---|---|---|
 | 会话页 | `Workbench` 的会话区 | 阅读 | 会话；页头是标签栏或标题行，底部是输入框 |
-| 文档页 | `PageScaffold column="document"` | 768 | 收藏、任务、插件 |
-| 看板页 | `PageScaffold column="board"` | 1200 | 统计 |
+| 文档页 | `PageScaffold column="document"` | 768 | 收藏、定时任务、插件 |
+| 看板页 | `PageScaffold column="board"` | 1200 | 统计、任务看板 |
 | 目录加正文 | `PageScaffold` 的 `aside` | 正文按文档或阅读列 | 设计规范；扩展管理（见现状） |
 | 项目主页 | 新会话页 | 输入框居中，宽度同阅读列 | 选定项目后的起始页 |
 
@@ -147,7 +147,7 @@
 |---|---|---|---|
 | 侧栏 | `Sidebar.tsx`：会话按项目或时间分组，项目可折叠 | 无 | ⌘B 收起；收起后悬停边缘浮出；手机上是抽屉 |
 | 会话标签页 | `tabs/TabBar.tsx`、`tabs/tabsStore.ts` | 当前会话的 `/c/<sessionId>` | ⌥W；点标签的关闭按钮 |
-| 页面 | `PageScaffold` | `/tasks`、`/marks`、`/stats`、`/extensions`、`/plugins?id=…`、`/design/<章节>` | Back、Escape |
+| 页面 | `PageScaffold` | `/tasks`（任务）、`/automations`（定时任务）、`/marks`、`/stats`、`/extensions`、`/plugins?id=…`、`/design/<章节>` | Back、Escape |
 | 浮层 | 搜索、命令面板与 §2 的各种浮层 | 无 | Escape、Back |
 
 ### 4.1 会话标签页
