@@ -75,7 +75,7 @@ private val IosPreset = ThemePreset(
             choices = ComponentBackend.SHARED, chips = ComponentBackend.SHARED,
             segments = SegmentPresentation.SLIDING, segmentShadow = true, inline = InlinePresentation.TRANSPARENT),
         inputs = InputRecipe(fields = ComponentBackend.SHARED, sliders = ComponentBackend.SHARED),
-        lists = ListRecipe(selectionFill = false, dividers = true, roundedSelection = false,
+        lists = ListRecipe(dividers = true, roundedSelection = false,
             trailingMenuIcons = true, outlinedMenu = true, grouped = true, accentSections = false,
             sectionBackground = true, focusBorder = true, compactChevron = true,
             valueBelowLabel = false, groupSeparatorLine = false, selectionAtEnd = true),

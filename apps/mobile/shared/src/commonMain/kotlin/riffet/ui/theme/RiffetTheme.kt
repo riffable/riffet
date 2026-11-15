@@ -107,7 +107,9 @@ data class RiffetTypography(
  * on a monitor at arm's length, this in the hand, and a 14sp body there read as cramped. Line
  * heights run a little above Material's because Chinese has no ascenders to open the lines up.
  */
-internal val RiffetDefaultTypography = RiffetTypography(
+// Lazy: the generated mono styles and the style presets read this while their own files initialise,
+// and an eager value here closed a static-init cycle that crashed the app at launch (a null typography).
+internal val RiffetDefaultTypography: RiffetTypography by lazy { RiffetTypography(
     title = TextStyle(fontSize = 18.sp, lineHeight = 26.sp, fontWeight = FontWeight.Medium),
     body = TextStyle(fontSize = 16.sp, lineHeight = 26.sp),
     bodySmall = TextStyle(fontSize = 14.sp, lineHeight = 21.sp),
@@ -121,7 +123,7 @@ internal val RiffetDefaultTypography = RiffetTypography(
     headline = TextStyle(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium),
     subhead = TextStyle(fontSize = 14.sp, lineHeight = 20.sp),
     footnote = TextStyle(fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold),
-)
+) }
 
 val LocalRiffetColors: ProvidableCompositionLocal<RiffetColors> =
     staticCompositionLocalOf { RiffetDefaultTheme.light }

@@ -81,36 +81,45 @@ internal fun TimelineDisclosure(
             }
             // Web gives the title up to 70% and lets the detail flex. A phone row is roughly a
             // quarter as wide, so the title is capped instead: same intent, bounded result.
-            Box(modifier = if (detail == null && inline == null) Modifier.weight(1f) else Modifier.widthIn(max = 200.dp)) {
-                title()
-            }
-            if (detail != null) {
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = pathText(detail, dir = colors.fg4, name = colors.fg3),
-                    style = TimelineTheme.type.codeSmall,
-                    color = colors.fg3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-            }
             // The chevron follows the content — title, detail, inline counts — as the Mac row's
             // hover chevron does; only the row's state keeps the right edge (the web's `ml-auto`).
-            if (inline != null) {
-                Spacer(Modifier.width(8.dp))
-                inline()
+            @Composable
+            fun trail() {
+                if (inline != null) {
+                    Spacer(Modifier.width(8.dp))
+                    inline()
+                }
+                if (expandable) {
+                    Spacer(Modifier.width(6.dp))
+                    Chevron(open)
+                }
             }
-            if (expandable) {
-                Spacer(Modifier.width(6.dp))
-                Chevron(open)
+            when {
+                detail != null -> {
+                    Box(Modifier.widthIn(max = 200.dp)) { title() }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = pathText(detail, dir = colors.fg4, name = colors.fg3),
+                        style = TimelineTheme.type.codeSmall,
+                        color = colors.fg3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    trail()
+                }
+                // Inline counts are measured first and never wrap (mobile.md §1.1): the title
+                // shrinks to its text and truncates instead, and the counts sit right after it.
+                inline != null -> Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.weight(1f, fill = false).widthIn(max = 200.dp)) { title() }
+                    trail()
+                }
+                else -> {
+                    Box(Modifier.weight(1f)) { title() }
+                    trail()
+                }
             }
             if (status != null) {
-                if (detail == null && inline == null) {
-                    // The title already took the flexible space above.
-                } else if (detail == null) {
-                    Spacer(Modifier.weight(1f))
-                }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

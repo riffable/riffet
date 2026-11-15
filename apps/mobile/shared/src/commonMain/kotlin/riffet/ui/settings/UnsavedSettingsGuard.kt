@@ -1,8 +1,5 @@
 package riffet.ui.settings
 
-import riffet.ui.design.AlertDialog
-import androidx.compose.material3.Text
-import riffet.ui.design.RiffetTextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -14,15 +11,14 @@ import riffet.ui.app.LocalPageActive
 import riffet.ui.app.LocalPageBack
 import riffet.ui.app.PageLeaveGuard
 import riffet.ui.app.PageBackHandler
+import riffet.ui.design.ConfirmDialog
 
-/** A single guard shared by title-bar, system and app-swipe back. Failed saves stay on the page. */
+/**
+ * A single guard shared by the bar's cancel or back, system back and the app's swipe: with unsaved
+ * changes it asks to discard them. Saving is the page's own button, so the question has one answer.
+ */
 @Composable
-internal fun UnsavedSettingsGuard(
-    dirty: Boolean,
-    busy: Boolean,
-    canSave: Boolean = true,
-    onSave: ((() -> Unit) -> Unit),
-) {
+internal fun UnsavedSettingsGuard(dirty: Boolean, busy: Boolean) {
     val back = LocalPageBack.current
     var asking by remember { mutableStateOf(false) }
     PageLeaveGuard {
@@ -34,19 +30,19 @@ internal fun UnsavedSettingsGuard(
     }
     if (asking && LocalPageActive.current) {
         PageBackHandler { asking = false }
-        AlertDialog(
-            onDismissRequest = { asking = false },
-            title = { Text(stringResource(Res.string.settings_unsaved_title)) },
-            confirmButton = {
-                RiffetTextButton(enabled = !busy && canSave, onClick = {
-                    asking = false
-                    onSave { back?.leaveConfirmed() }
-                }) { Text(stringResource(Res.string.settings_save_and_back)) }
-            },
-            dismissButton = {
-                RiffetTextButton(enabled = !busy, danger = true, onClick = { asking = false; back?.leaveConfirmed() }) { Text(stringResource(Res.string.settings_discard_changes)) }
-                RiffetTextButton(onClick = { asking = false }) { Text(stringResource(Res.string.settings_keep_editing)) }
-            },
-        )
+        DiscardChangesDialog(onDiscard = { asking = false; back?.leaveConfirmed() }, onDismiss = { asking = false })
     }
+}
+
+/** The one wording for leaving unsaved changes, used by the guard and by pages that swap content. */
+@Composable
+internal fun DiscardChangesDialog(onDiscard: () -> Unit, onDismiss: () -> Unit) {
+    ConfirmDialog(
+        title = stringResource(Res.string.settings_discard_unsaved_title),
+        confirmLabel = stringResource(Res.string.app_discard),
+        cancelLabel = stringResource(Res.string.settings_keep_editing),
+        danger = true,
+        onConfirm = onDiscard,
+        onDismiss = onDismiss,
+    )
 }

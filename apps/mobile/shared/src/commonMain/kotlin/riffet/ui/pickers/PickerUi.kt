@@ -10,11 +10,9 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import riffet.ui.focus.keyboardPadding
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animate
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
 import riffet.ui.design.floatingShadow
@@ -542,11 +540,13 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
     }
     Column(Modifier.fillMaxWidth().pickerRowDivider(0.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = metrics.controlHeight), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(metrics.controlHeight), contentAlignment = Alignment.Center) {
+            // A start-aligned title starts where the rows' text does, or after the back arrow; a
+            // centred one keeps the slot so it sits between two equal ends.
+            if (onBack != null || style.components.sheets.centeredTitle) Box(Modifier.size(metrics.controlHeight), contentAlignment = Alignment.Center) {
                 if (onBack != null) RiffetIconButton(onClick = onBack) {
                     Icon(RiffetIcons.ChevronLeft, stringResource(Res.string.pickers_back), Modifier.size(metrics.iconSize))
                 }
-            }
+            } else Spacer(Modifier.width(SheetInset))
             Text(title, style = if (style.components.sheets.prominentTitle) typography.title else typography.barTitle,
                 color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis,
                 textAlign = if (style.components.sheets.centeredTitle) TextAlign.Center else TextAlign.Start,
@@ -557,7 +557,7 @@ private fun SheetHeader(title: String, subtitle: String?, onDismiss: () -> Unit,
         }
         if (!subtitle.isNullOrBlank()) Text(subtitle, style = typography.bodySmall, color = colors.fg3,
             maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = if (style.components.sheets.centeredTitle) TextAlign.Center else TextAlign.Start,
-            modifier = Modifier.fillMaxWidth().padding(start = metrics.groupInset, end = metrics.groupInset, bottom = metrics.controlInset))
+            modifier = Modifier.fillMaxWidth().padding(start = if (onBack != null && !style.components.sheets.centeredTitle) metrics.controlHeight else SheetInset, end = metrics.groupInset, bottom = metrics.controlInset))
     }
 }
 
@@ -638,24 +638,17 @@ internal fun OptionRow(
     val source = remember { MutableInteractionSource() }
     val enabled = disabledReason == null
     val style = LocalInterfaceStyle.current
-    // Several rows can be on at once: a wall of tinted rows says less than their checks do.
-    val selectionFill = style.components.lists.selectionFill && !multiple
+    // The current value is marked by its check alone (mobile.md §1.1): a filled row reads as
+    // pressed, and fill plus check says the same thing twice. Grouped styles set rows on the card.
+    val grouped = style.components.lists.grouped
     val action = style.components.sheets.actionSheet && !LocalPickerNavigationPanel.current && description.isNullOrBlank() && icon == null && trailing == null
     val surfaces = LocalRiffetSurfaces.current
-    val selectedInk = if (selectionFill && selected) surfaces.selectedContent else null
     val labelColor = when {
         !enabled -> LocalRiffetSurfaces.current.disabledContent
-        selectedInk != null -> selectedInk
         tone != null -> tone
         else -> colors.fg
     }
-    // The tint is faded from its own transparent form: animating from `Color.Transparent` (black)
-    // would pass through a grey.
-    val rowTint by animateColorAsState(
-        targetValue = if (selectionFill && selected) surfaces.selected else if (selectionFill) surfaces.selected.copy(alpha = 0f) else materialContentBackground(surfaces.card),
-        animationSpec = motion.effects(),
-        label = "rowTint",
-    )
+    val rowTint = if (grouped) materialContentBackground(surfaces.card) else Color.Transparent
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -672,7 +665,7 @@ internal fun OptionRow(
                 interactionSource = source, indication = LocalIndication.current, onValueChange = { onClick() })
             else Modifier.selectable(selected = selected, enabled = enabled, role = Role.RadioButton,
                 interactionSource = source, indication = LocalIndication.current, onClick = onClick))
-            .heightIn(min = maxOf(metrics.controlHeight, if (selectionFill || action) metrics.rowHeight else metrics.controlHeight))
+            .heightIn(min = maxOf(metrics.controlHeight, if (!grouped || action) metrics.rowHeight else metrics.controlHeight))
             .pickerRowDivider(if (action) 0.dp else SheetInset)
             .padding(horizontal = (SheetInset - SheetGutter).coerceAtLeast(0.dp), vertical = metrics.rowPadding / 2),
         verticalAlignment = Alignment.CenterVertically,
@@ -680,7 +673,7 @@ internal fun OptionRow(
         if (action) Spacer(Modifier.width(metrics.iconSlot + metrics.controlInset / 2))
         if (icon != null) {
             Icon(icon, contentDescription = null,
-                tint = iconTint ?: if (!enabled) surfaces.disabledContent else selectedInk ?: tone ?: colors.fg2,
+                tint = iconTint ?: if (!enabled) surfaces.disabledContent else tone ?: colors.fg2,
                 modifier = Modifier.size(metrics.iconSize))
             Spacer(Modifier.width(metrics.rowPadding))
         }
@@ -694,7 +687,7 @@ internal fun OptionRow(
                 Text(
                     text = detail,
                     style = typography.bodySmall,
-                    color = if (!enabled) surfaces.disabledContent else selectedInk ?: colors.fg3,
+                    color = if (!enabled) surfaces.disabledContent else colors.fg3,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -702,7 +695,7 @@ internal fun OptionRow(
         }
         if (trailing != null) {
             Spacer(Modifier.width((metrics.controlInset / 2)))
-            CompositionLocalProvider(LocalContentColor provides (if (!enabled) surfaces.disabledContent else selectedInk ?: colors.fg3)) {
+            CompositionLocalProvider(LocalContentColor provides (if (!enabled) surfaces.disabledContent else colors.fg3)) {
                 trailing()
             }
         }
@@ -710,8 +703,9 @@ internal fun OptionRow(
         // A check on what is chosen and nothing on the rest, single or multiple: a column of empty
         // circles or boxes is noise. The empty slot keeps every row's trailing edge in line.
         Box(Modifier.size(metrics.iconSize), contentAlignment = Alignment.Center) {
-            if (selected) Icon(RiffetIcons.Check, contentDescription = null,
-                tint = if (enabled) selectedInk ?: colors.accent else surfaces.disabledContent, modifier = Modifier.size(metrics.iconSize))
+            // A style that marks the current row with a bar (Fluent) marks it with that alone.
+            if (selected && !style.components.lists.selectionMarker) Icon(RiffetIcons.Check, contentDescription = null,
+                tint = if (enabled) colors.accent else surfaces.disabledContent, modifier = Modifier.size(metrics.iconSize))
         }
     }
 }
@@ -842,34 +836,20 @@ internal fun PickerNavRow(
 @Composable
 internal fun SheetNotice(text: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) {
     val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    val (icon, tone) = when (kind) {
-        SettingsNoticeKind.INFO -> RiffetIcons.Info to colors.fg3
-        SettingsNoticeKind.SUCCESS -> RiffetIcons.Check to colors.accent
-        SettingsNoticeKind.WARNING -> RiffetIcons.Warning to colors.warning
-        SettingsNoticeKind.ERROR -> RiffetIcons.Error to colors.danger
+    val noticeKind = when (kind) {
+        SettingsNoticeKind.INFO -> riffet.ui.design.NoticeKind.INFO
+        SettingsNoticeKind.SUCCESS -> riffet.ui.design.NoticeKind.SUCCESS
+        SettingsNoticeKind.WARNING -> riffet.ui.design.NoticeKind.WARNING
+        SettingsNoticeKind.ERROR -> riffet.ui.design.NoticeKind.ERROR
     }
-    val actionable = action != null && onAction != null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = metrics.rowPadding, vertical = (metrics.controlInset / 2))
-            .clip(RoundedCornerShape(LocalInterfaceStyle.current.rowRadius))
-            .background(materialContentBackground(LocalRiffetSurfaces.current.groupedPage))
-            // The action's 48dp touch target sets the height, so the notice grows as little as possible.
-            .padding(start = metrics.controlInset, end = if (actionable) (metrics.controlInset / 4) else metrics.controlInset, top = if (actionable) 0.dp else (metrics.rowPadding / 2), bottom = if (actionable) 0.dp else (metrics.rowPadding / 2)),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = tone, modifier = Modifier.size(metrics.smallIconSize))
-        Spacer(Modifier.width((metrics.controlInset / 2)))
-        Text(text = text, style = typography.caption, color = colors.fg2, modifier = if (actionable) Modifier.weight(1f) else Modifier)
-        if (action != null && onAction != null) {
-            RiffetTextButton(onClick = onAction) {
-                Text(action, style = typography.buttonSmall)
-            }
-        }
-    }
+    riffet.ui.design.Notice(
+        message = text,
+        kind = noticeKind,
+        modifier = Modifier.padding(horizontal = metrics.rowPadding, vertical = metrics.controlInset / 2),
+        action = action,
+        onAction = onAction,
+        background = materialContentBackground(LocalRiffetSurfaces.current.groupedPage),
+    )
 }
 
 /**
@@ -890,28 +870,5 @@ internal fun AnimatedSheetNotice(text: String?, kind: SettingsNoticeKind) {
                 }
             }
         }
-    }
-}
-
-/** A compact tappable pill for the top bar, e.g. the current model. */
-@Composable
-internal fun PickerChip(
-    text: String,
-    onClick: (() -> Unit)?,
-    modifier: Modifier = Modifier,
-    icon: ImageVector? = null,
-    tone: Color? = null,
-    enabled: Boolean = true,
-) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    riffet.ui.design.RiffetInlineAction(onClick, modifier, enabled) {
-        if (icon != null) {
-            Icon(icon, null, tint = tone ?: colors.fg3, modifier = Modifier.size(metrics.smallIconSize))
-            Spacer(Modifier.width(metrics.controlInset / 2))
-        }
-        Text(text, style = typography.buttonSmall, color = if (!enabled) LocalRiffetSurfaces.current.disabledContent else tone ?: colors.fg2,
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

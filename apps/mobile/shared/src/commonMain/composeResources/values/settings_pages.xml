@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setp_available_models">可用模型</string>
+    <string name="setp_clear_logs_title">清空本机日志？</string>
+    <string name="setp_clear_logs_message">已上传到服务器的日志会保留。</string>
+    <string name="setp_notification_allow">允许系统通知</string>
+    <string name="setp_notification_blocked_desc">系统已关闭本 App 的通知，会话提醒无法送达。</string>
+    <string name="setp_keepalive_battery_allow">允许忽略电池优化</string>
+    <string name="setp_keepalive_autostart_allow">允许自启动</string>
+    <string name="setp_delete_preset_title">删除预设「%1$s」？</string>
+    <string name="setp_restore_presets_message">现有预设会被替换。</string>
+</resources>

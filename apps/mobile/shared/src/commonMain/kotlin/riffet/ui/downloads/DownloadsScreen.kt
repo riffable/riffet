@@ -39,7 +39,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import androidx.compose.material3.HorizontalDivider
 import riffet.ui.icons.Icon
 import riffet.ui.design.RiffetIconButton
@@ -107,6 +107,7 @@ fun DownloadsScreen(
     val typography = LocalRiffetTypography.current
     val items by center.items.collectAsState()
     var message by remember { mutableStateOf<String?>(null) }
+    var clearingHistory by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<DownloadItem?>(null) }
     val openFailedMessage = stringResource(Res.string.downloads_open_failed)
 
@@ -115,7 +116,7 @@ fun DownloadsScreen(
     riffet.ui.app.RiffetPageScaffold(modifier = modifier, topBar = {
         PageTopBar(title = stringResource(Res.string.downloads_title), onBack = onBack) {
             if (items.any { it.state != DownloadState.RUNNING }) {
-                RiffetTextButton(onClick = { center.clearFinished() }) {
+                RiffetTextButton(onClick = { clearingHistory = true }) {
                     Text(stringResource(Res.string.downloads_clear_history), style = typography.label, color = colors.accent)
                 }
             }
@@ -199,40 +200,33 @@ fun DownloadsScreen(
     }
 
     deleting?.takeIf { riffet.ui.app.LocalPageActive.current }?.let { item ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(stringResource(Res.string.downloads_delete_file)) },
-            text = { Text(stringResource(Res.string.downloads_delete_body, if (item.name.isBlank()) stringResource(Res.string.downloads_unnamed_file) else item.name)) },
-            confirmButton = {
-                RiffetTextButton(onClick = {
-                    center.deleteFile(item)
-                    deleting = null
-                }) { Text(stringResource(Res.string.downloads_delete), color = colors.danger) }
+        ConfirmDialog(
+            title = stringResource(Res.string.confirm_delete_file_title, if (item.name.isBlank()) stringResource(Res.string.downloads_unnamed_file) else item.name),
+            message = stringResource(Res.string.confirm_delete_file_message),
+            confirmLabel = stringResource(Res.string.downloads_delete),
+            danger = true,
+            onConfirm = {
+                center.deleteFile(item)
+                deleting = null
             },
-            dismissButton = { RiffetTextButton(onClick = { deleting = null }) { Text(stringResource(Res.string.downloads_cancel)) } },
+            onDismiss = { deleting = null },
+        )
+    }
+    if (clearingHistory) {
+        ConfirmDialog(
+            title = stringResource(Res.string.confirm_clear_history_title),
+            message = stringResource(Res.string.confirm_clear_history_message),
+            confirmLabel = stringResource(Res.string.downloads_clear_history),
+            danger = true,
+            onConfirm = { center.clearFinished(); clearingHistory = false },
+            onDismiss = { clearingHistory = false },
         )
     }
 }
 
 @Composable
 private fun EmptyDownloads(modifier: Modifier) {
-    val designMetrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Column(
-        modifier = modifier.fillMaxWidth().padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Box(
-            modifier = Modifier.size(56.dp).clip(CircleShape).background(colors.accentSoft),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(RiffetIcons.Download, contentDescription = null, tint = colors.accent, modifier = Modifier.size(designMetrics.iconSize))
-        }
-        Spacer(Modifier.height(14.dp))
-        Text(stringResource(Res.string.downloads_empty), style = typography.body, color = colors.fg)
-    }
+    riffet.ui.design.EmptyState(stringResource(Res.string.downloads_empty), modifier, icon = RiffetIcons.Download)
 }
 
 /**

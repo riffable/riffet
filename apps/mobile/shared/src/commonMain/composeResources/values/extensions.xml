@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ext_search_placeholder">搜索名称或类型</string>
+    <string name="ext_all">全部</string>
+    <string name="ext_show_all">全部 %1$d 个</string>
+    <string name="ext_empty">没有扩展</string>
+    <string name="ext_diagnostics">诊断</string>
+    <string name="ext_diagnostics_count">诊断 %1$d</string>
+    <string name="ext_reload_mcp">重载 MCP</string>
+    <string name="ext_reload_mcp_effect">已打开的会话可能需要重新加载。</string>
+    <string name="ext_enabled">启用</string>
+    <string name="ext_state">状态</string>
+    <string name="ext_config_files">配置文件</string>
+    <string name="ext_view_config">查看配置</string>
+    <string name="ext_confirm_title">%1$s「%2$s」？</string>
+    <string name="ext_open_auth">打开认证页面</string>
+    <string name="ext_auth_note">部分 CLI 的认证回调需要在运行 Riffet 的电脑上完成。</string>
+    <string name="ext_edit_title">编辑配置</string>
+    <string name="ext_view_title">查看配置</string>
+    <string name="ext_save_failed_hint">若文件已在服务器上更改，请重新打开后再保存。编辑内容会保留。</string>
+    <string name="ext_new_title">新建%1$s</string>
+    <string name="ext_create">创建</string>
+    <string name="ext_install">安装</string>
+    <string name="ext_path">文件路径</string>
+    <string name="ext_content">内容</string>
+    <string name="ext_install_title">安装插件</string>
+    <string name="ext_install_placeholder">插件 ID 或服务器支持的来源</string>
+    <string name="ext_install_scope">安装范围</string>
+    <string name="ext_auth_login">认证 %1$s</string>
+    <string name="ext_runtime_empty">暂无运行记录</string>
+</resources>

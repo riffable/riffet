@@ -58,14 +58,25 @@ internal fun DefaultApprovalRow(controller: SettingsController, backendId: Nativ
     val options = listOf(NativeBackendOption("", cliDefault, null)) + permissions
     val value = defaults?.approval.orEmpty()
     val label = optionLabelOf(options, value, stringResource(Res.string.pickers_approval_title))
-    SettingsRow(stringResource(Res.string.settings_approval_mode), error ?: modeDescription) {
-        when {
-            loading -> Spinner()
-            error != null -> SettingsButton(stringResource(Res.string.settings_retry), enabled = !state.saving, onClick = { retry++ })
-            permissions.isEmpty() -> SettingsStatusLine(stringResource(Res.string.settings_approval_unsupported), LocalRiffetColors.current.fg4)
-            else -> SettingsButton(label, enabled = !state.saving, onClick = { choosing = true })
-        }
-    }
+    // A choice row: the mode at the end opens the picker; a failed load retries from the same row.
+    val title = stringResource(Res.string.settings_approval_mode)
+    val retryLabel = stringResource(Res.string.settings_retry)
+    val unsupported = stringResource(Res.string.settings_approval_unsupported)
+    riffet.ui.design.GroupRow(
+        title = title,
+        subtitle = error ?: modeDescription,
+        subtitleLines = 3,
+        value = when {
+            loading -> null
+            error != null -> retryLabel
+            permissions.isEmpty() -> unsupported
+            else -> label
+        },
+        trailing = if (loading) ({ Spinner() }) else null,
+        enabled = !state.saving && !loading && (error != null || permissions.isNotEmpty()),
+        onClick = { if (error != null) retry++ else choosing = true },
+        modifier = androidx.compose.ui.Modifier.settingsSearchAnchor(title),
+    )
     if (choosing && LocalPageActive.current) ApprovalPickerSheet(
         options = options,
         value = value,

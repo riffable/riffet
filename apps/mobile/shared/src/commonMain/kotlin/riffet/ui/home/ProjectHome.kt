@@ -601,32 +601,18 @@ private fun ProjectContext(project: Project, onClick: () -> Unit) {
 /** No project yet: the way to the first one. */
 @Composable
 private fun HomeEmptyState(loaded: Boolean, error: String?, canAdd: Boolean, onAdd: () -> Unit, onRefresh: () -> Unit, contentPadding: PaddingValues = PaddingValues()) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Column(
-        modifier = Modifier.fillMaxSize().padding(contentPadding).padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Spacer(Modifier.height(64.dp))
-        Icon(RiffetIcons.Folder, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(28.dp))
-        Spacer(Modifier.height(14.dp))
-        Text(
-            text = if (loaded) stringResource(Res.string.session_no_directory) else stringResource(Res.string.session_loading_projects),
-            style = typography.title,
-            color = colors.fg,
-        )
-        if (loaded) {
-            error?.let { failure ->
-                Spacer(Modifier.height(8.dp))
-                Text(text = failure, style = typography.bodySmall, color = colors.fg3, textAlign = TextAlign.Center)
+    riffet.ui.design.EmptyState(
+        message = error.takeIf { loaded },
+        modifier = Modifier.padding(contentPadding),
+        icon = RiffetIcons.Folder,
+        title = if (loaded) stringResource(Res.string.session_no_directory) else stringResource(Res.string.session_loading_projects),
+        actions = if (loaded) {
+            {
+                riffet.ui.design.RiffetButton(stringResource(Res.string.session_add_directory), onAdd, enabled = canAdd, primary = true)
+                riffet.ui.design.RiffetButton(stringResource(Res.string.session_refresh), onRefresh)
             }
-            Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                HomeActionButton(label = stringResource(Res.string.session_add_directory), enabled = canAdd, primary = true, onClick = onAdd)
-                HomeActionButton(label = stringResource(Res.string.session_refresh), enabled = true, primary = false, onClick = onRefresh)
-            }
-        }
-    }
+        } else null,
+    )
 }
 
 /**
@@ -705,7 +691,7 @@ private fun HomeModeTabs(chat: Boolean, position: () -> Float, onSelect: (Boolea
                             role = Role.Tab, onClick = { onSelect(index == 1) }),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(label, style = labelStyle, color = if (selected) colors.accent else colors.fg2, maxLines = 1)
+                    Text(label, style = labelStyle, color = if (selected) colors.fg else colors.fg3, maxLines = 1)
                 }
             }
         }
@@ -721,6 +707,7 @@ private fun HomeModeTabs(chat: Boolean, position: () -> Float, onSelect: (Boolea
         indicator = {
             TabRowDefaults.PrimaryIndicator(
                 width = Dp.Unspecified,
+                color = colors.accent,
                 height = 2.dp,
                 modifier = Modifier.tabIndicatorLayout { measurable, constraints, tabs ->
                     if (tabs.size < 2) return@tabIndicatorLayout layout(0, 0) {}
@@ -739,8 +726,8 @@ private fun HomeModeTabs(chat: Boolean, position: () -> Float, onSelect: (Boolea
             )
         },
     ) {
-        val selected = MaterialTheme.colorScheme.primary
-        val unselected = MaterialTheme.colorScheme.onSurfaceVariant
+        val selected = colors.fg
+        val unselected = colors.fg3
         Tab(selected = !chat, onClick = { onSelect(false) }, selectedContentColor = selected, unselectedContentColor = unselected,
             text = { Text(taskLabel, style = labelStyle, maxLines = 1) })
         Tab(selected = chat, onClick = { onSelect(true) }, selectedContentColor = selected, unselectedContentColor = unselected,
@@ -752,30 +739,30 @@ private fun HomeModeTabs(chat: Boolean, position: () -> Float, onSelect: (Boolea
 private val HomeMarkSize = 104.dp
 private val HomeMarkMinRoom = 56.dp
 
-/** One of the terminal tools under the composer, as on web: an icon tile and a name. */
+/**
+ * One of the terminal tools under the composer: an icon and a name in an outline, no fill. The
+ * composer is the page's one filled card; the tools are secondary and read so (Material's filled
+ * versus outlined emphasis).
+ */
 @Composable
 private fun HomeToolCard(icon: ImageVector, title: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val style = LocalInterfaceStyle.current
+    val metrics = style.metrics
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    val shape = RoundedCornerShape(style.controlRadius)
+    val shape = RoundedCornerShape(metrics.controlRadius)
     Row(
         modifier = modifier
             .clip(shape)
-            .background(colors.bgElevated)
-            .border(style.metrics.hairlineWidth, colors.line, shape)
+            .border(metrics.hairlineWidth, colors.line, shape)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .heightIn(min = metrics.rowHeight)
+            .padding(horizontal = metrics.rowPadding),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        horizontalArrangement = Arrangement.spacedBy(metrics.controlInset),
     ) {
-        Box(
-            Modifier.size(24.dp).clip(RoundedCornerShape(style.metrics.iconTileRadius)).background(colors.bgMuted),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(icon, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(style.metrics.smallIconSize))
-        }
-        Text(title, style = typography.caption, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        Icon(icon, contentDescription = null, tint = colors.fg2, modifier = Modifier.size(metrics.smallIconSize))
+        Text(title, style = typography.bodySmall, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f))
     }
 }

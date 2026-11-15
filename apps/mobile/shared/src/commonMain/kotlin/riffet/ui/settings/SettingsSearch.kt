@@ -82,6 +82,10 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
               available: () -> Boolean = { true }) {
         add(SettingsSearchEntry(id, section, title, aliases(english, pinyin), SettingsSearchAnchor.GROUP, available))
     }
+    // Found on a page beneath the section's own: the result opens the section, which leads there.
+    fun beneath(id: String, section: SettingsSection, title: StringResource, english: String, pinyin: String) {
+        add(SettingsSearchEntry(id, section, title, aliases(english, pinyin), anchor = null))
+    }
     row("language.system", SettingsSection.LANGUAGE, Res.string.settings_language_system, "language locale follow system 语言 跟随系统", "yu yan gen sui xi tong")
     row("language.chinese", SettingsSection.LANGUAGE, Res.string.settings_language_chinese, "language locale simplified chinese 语言 简体中文 中文", "yu yan jian ti zhong wen")
     row("language.english", SettingsSection.LANGUAGE, Res.string.settings_language_english, "language locale english 语言 英文 英语", "yu yan ying wen ying yu")
@@ -93,12 +97,12 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     group("appearance.mode", SettingsSection.APPEARANCE, Res.string.settings_appearance, "light dark system mode", "ming an mo shi gen sui xi tong")
     row("appearance.amoled", SettingsSection.APPEARANCE, Res.string.settings_amoled, "amoled oled black", "chun hei hei se")
     group("appearance.material", SettingsSection.STYLE, Res.string.settings_surface_material, "surface material solid frosted blur glass liquid strength 纯色 磨砂 玻璃 液态 通透 强度", "biao mian cai zhi chun se mo sha bo li ye tai qiang du")
-    group("appearance.resources", SettingsSection.APPEARANCE, Res.string.settings_appearance_resources, "appearance resources plugins", "wai guan zi yuan cha jian")
-    row("appearance.preset", SettingsSection.APPEARANCE, Res.string.settings_appearance_preset, "preset appearance", "yu she")
-    row("appearance.palette", SettingsSection.APPEARANCE, Res.string.settings_appearance_palette, "palette color theme", "pei se zhu ti")
-    row("appearance.ui-font", SettingsSection.APPEARANCE, Res.string.settings_appearance_ui_font, "interface font typeface", "jie mian zi ti")
-    row("appearance.mono-font", SettingsSection.APPEARANCE, Res.string.settings_appearance_mono_font, "monospaced font code terminal", "deng kuan zi ti dai ma zhong duan")
-    row("appearance.background", SettingsSection.APPEARANCE, Res.string.settings_appearance_background, "background wallpaper texture", "bei jing bi zhi wen li")
+    row("appearance.resources", SettingsSection.APPEARANCE, Res.string.settings_appearance_resources, "appearance resources plugins", "wai guan zi yuan cha jian")
+    beneath("appearance.preset", SettingsSection.APPEARANCE, Res.string.settings_appearance_preset, "preset appearance", "yu she")
+    beneath("appearance.palette", SettingsSection.APPEARANCE, Res.string.settings_appearance_palette, "palette color theme", "pei se zhu ti")
+    beneath("appearance.ui-font", SettingsSection.APPEARANCE, Res.string.settings_appearance_ui_font, "interface font typeface", "jie mian zi ti")
+    beneath("appearance.mono-font", SettingsSection.APPEARANCE, Res.string.settings_appearance_mono_font, "monospaced font code terminal", "deng kuan zi ti dai ma zhong duan")
+    beneath("appearance.background", SettingsSection.APPEARANCE, Res.string.settings_appearance_background, "background wallpaper texture", "bei jing bi zhi wen li")
     group("typography.preview", SettingsSection.TYPOGRAPHY, Res.string.settings_preview, "preview font", "yu lan")
     row("typography.size", SettingsSection.TYPOGRAPHY, Res.string.settings_text_size, "font text size scale 字号 字体 缩放", "wen zi da xiao zi hao")
     row("typography.spacing", SettingsSection.TYPOGRAPHY, Res.string.settings_session_spacing, "spacing density compact relaxed", "hui hua jian ju mi du")
@@ -127,9 +131,9 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     group("service.memory", SettingsSection.SERVICE, Res.string.settings_service_cpu_memory_chart, "cpu memory performance", "chu li qi nei cun")
     group("diagnostics.logs", SettingsSection.DIAGNOSTICS, Res.string.settings_diagnostics_logs, "logs export upload", "ri zhi dao chu shang chuan")
     row("diagnostics.upload", SettingsSection.DIAGNOSTICS, Res.string.settings_upload_logs, "upload logs", "shang chuan ri zhi")
-    group("diagnostics.advanced", SettingsSection.DIAGNOSTICS, Res.string.settings_advanced_diagnostics, "advanced diagnostics terminal benchmark", "gao ji zhen duan zhong duan ji zhun")
-    group("extensions.discovered", SettingsSection.EXTENSIONS, Res.string.settings_discovered_extensions, "discovered extensions plugins skills mcp hooks rules 插件 技能 规则", "fa xian de kuo zhan cha jian ji neng gui ze")
-    group("extensions.manage", SettingsSection.EXTENSIONS, Res.string.settings_manage, "manage install plugins runtime check", "guan li an zhuang cha jian yun xing shi")
+    row("diagnostics.advanced", SettingsSection.DIAGNOSTICS, Res.string.settings_advanced_diagnostics, "advanced diagnostics terminal benchmark", "gao ji zhen duan zhong duan ji zhun")
+    beneath("extensions.discovered", SettingsSection.EXTENSIONS, Res.string.settings_discovered_extensions, "discovered extensions plugins skills mcp hooks rules 插件 技能 规则", "fa xian de kuo zhan cha jian ji neng gui ze")
+    beneath("extensions.manage", SettingsSection.EXTENSIONS, Res.string.settings_manage, "manage install plugins runtime check", "guan li an zhuang cha jian yun xing shi")
     group("devices.allow", SettingsSection.DEVICES, Res.string.settings_device_group, "allow device control", "she bei kong zhi")
 }
 

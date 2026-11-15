@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ext_search_placeholder">Search name or type</string>
+    <string name="ext_all">All</string>
+    <string name="ext_show_all">All %1$d</string>
+    <string name="ext_empty">No extensions</string>
+    <string name="ext_diagnostics">Diagnostics</string>
+    <string name="ext_diagnostics_count">Diagnostics %1$d</string>
+    <string name="ext_reload_mcp">Reload MCP</string>
+    <string name="ext_reload_mcp_effect">Open conversations may need to be reloaded.</string>
+    <string name="ext_enabled">Enabled</string>
+    <string name="ext_state">Status</string>
+    <string name="ext_config_files">Config files</string>
+    <string name="ext_view_config">View config</string>
+    <string name="ext_confirm_title">%1$s \"%2$s\"?</string>
+    <string name="ext_open_auth">Open authentication page</string>
+    <string name="ext_auth_note">Some CLIs complete the authentication callback on the computer running Riffet.</string>
+    <string name="ext_edit_title">Edit config</string>
+    <string name="ext_view_title">View config</string>
+    <string name="ext_save_failed_hint">If the file changed on the server, reopen it and save again. Your edits are kept.</string>
+    <string name="ext_new_title">New %1$s</string>
+    <string name="ext_create">Create</string>
+    <string name="ext_install">Install</string>
+    <string name="ext_path">File path</string>
+    <string name="ext_content">Content</string>
+    <string name="ext_install_title">Install plugin</string>
+    <string name="ext_install_placeholder">Plugin ID or a source the server supports</string>
+    <string name="ext_install_scope">Install scope</string>
+    <string name="ext_auth_login">Authenticate %1$s</string>
+    <string name="ext_runtime_empty">No runtime entries</string>
+</resources>

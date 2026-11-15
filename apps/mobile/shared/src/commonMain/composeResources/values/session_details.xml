@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="details_dismiss">关闭</string>
+    <string name="details_stop_title">停止「%1$s」？</string>
+    <string name="details_all">全部 %1$d 个</string>
+    <string name="details_subagents">子 Agent</string>
+    <string name="details_tasks">后台任务</string>
+    <string name="details_running_of">%1$d 个运行中 · 共 %2$d</string>
+    <string name="details_pin">置顶</string>
+    <string name="details_unpin">取消置顶</string>
+    <string name="details_archive">归档</string>
+    <string name="details_unarchive">恢复</string>
+    <string name="details_resume">终端恢复</string>
+</resources>

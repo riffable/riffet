@@ -448,8 +448,8 @@ internal fun HorizontalBars(
             }
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(row.label, style = typography.bodySmall, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(compactCount(row.value), style = typography.caption, color = colors.fg3)
+                    Text(row.label, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(compactCount(row.value), style = typography.body.copy(fontFeatureSettings = "tnum"), color = colors.fg, maxLines = 1, modifier = Modifier.padding(start = 12.dp))
                 }
                 Canvas(Modifier.fillMaxWidth().height(8.dp).padding(top = 2.dp)) {
                     drawRoundRect(colors.bgMuted, cornerRadius = CornerRadius(8f, 8f), size = Size(size.width, size.height))
@@ -478,54 +478,39 @@ internal fun WeekHourHeatmap(cells: List<List<Long>>, modifier: Modifier = Modif
         stringResource(Res.string.stats_weekday_sat),
         stringResource(Res.string.stats_weekday_sun),
     )
-    val hourLabels = listOf(
-        stringResource(Res.string.stats_hour_label, 0),
-        "6",
-        "12",
-        "18",
-        stringResource(Res.string.stats_hour_label, 24),
-    )
+    // Seven rows by six four-hour blocks: at 360dp a 24-column grid has 9dp cells, blocks have ~40dp ones.
+    val blocks = 6
+    val grid = List(7) { day -> List(blocks) { block -> (0 until 4).sumOf { cells.getOrNull(day)?.getOrNull(block * 4 + it) ?: 0L } } }
+    val blockMax = grid.maxOfOrNull { row -> row.maxOrNull() ?: 0L } ?: 0L
     Column(modifier) {
-        Row(Modifier.fillMaxWidth().height(148.dp)) {
-            Column(Modifier.width(18.dp).fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().height(196.dp)) {
+            Column(Modifier.width(24.dp).fillMaxSize()) {
                 weekdays.forEach { day ->
                     Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.CenterStart) {
-                        Text(day, style = typography.caption, color = colors.fg4, maxLines = 1)
+                        Text(day, style = typography.caption, color = colors.fg3, maxLines = 1)
                     }
                 }
             }
             Canvas(Modifier.weight(1f).fillMaxSize()) {
-                val rows = 7
-                val cols = 24
-                val gap = 2.dp.toPx()
-                val cellW = ((size.width - gap * (cols - 1)) / cols).coerceAtLeast(1f)
-                val rowPitch = size.height / rows
+                val gap = 3.dp.toPx()
+                val cellW = ((size.width - gap * (blocks - 1)) / blocks).coerceAtLeast(1f)
+                val rowPitch = size.height / 7
                 val cellH = (rowPitch - gap).coerceAtLeast(1f)
-                for (day in 0 until rows) {
-                    for (hour in 0 until cols) {
-                        val value = cells.getOrNull(day)?.getOrNull(hour) ?: 0L
-                        val level = heatmapLevel(value, max)
+                for (day in 0 until 7) {
+                    for (block in 0 until blocks) {
                         drawRoundRect(
-                            heatColor(colors, level),
-                            topLeft = Offset(hour * (cellW + gap), day * rowPitch),
+                            heatColor(colors, heatmapLevel(grid[day][block], blockMax)),
+                            topLeft = Offset(block * (cellW + gap), day * rowPitch),
                             size = Size(cellW, cellH),
-                            cornerRadius = CornerRadius(2.dp.toPx(), 2.dp.toPx()),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
                         )
                     }
                 }
             }
         }
-        Row(
-            Modifier.fillMaxWidth().padding(start = 18.dp, top = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            hourLabels.forEach { label ->
-                Text(
-                    label,
-                    style = typography.caption,
-                    color = colors.fg4,
-                    maxLines = 1,
-                )
+        Row(Modifier.fillMaxWidth().padding(start = 24.dp, top = 4.dp)) {
+            listOf("0", "4", "8", "12", "16", "20").forEach { label ->
+                Text(label, style = typography.caption.copy(fontFeatureSettings = "tnum"), color = colors.fg3, maxLines = 1, modifier = Modifier.weight(1f))
             }
         }
     }
@@ -535,63 +520,28 @@ internal fun WeekHourHeatmap(cells: List<List<Long>>, modifier: Modifier = Modif
 internal fun CalendarHeatmap(weeks: List<List<CalendarCell>>, modifier: Modifier = Modifier) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    val days = weeks.asSequence()
-        .flatten()
-        .mapNotNull { cell -> cell.date?.let { date -> date to cell } }
-        .sortedBy { it.first }
-        .distinctBy { it.first }
-        .map { it.second }
-        .toList()
+    // Seven rows by at most twelve weeks, so a cell is ~20dp at 360dp; a year-long range shows its latest quarter.
+    val shown = weeks.takeLast(12)
+    val days = shown.flatten().mapNotNull { it.date }
     if (days.isEmpty()) {
         EmptyChart(stringResource(Res.string.stats_empty_daily), modifier)
         return
     }
-    val firstDate = days.first().date.orEmpty()
-    val lastDate = days.last().date.orEmpty()
-    val firstParts = firstDate.split("-")
-    val lastParts = lastDate.split("-")
-    val dateRange = if (days.size == 1) firstDate else if (firstParts.size == 3 && lastParts.size == 3) {
-        val start = "${firstParts[1].toIntOrNull() ?: firstParts[1]}/${firstParts[2].toIntOrNull() ?: firstParts[2]}"
-        val end = "${lastParts[1].toIntOrNull() ?: lastParts[1]}/${lastParts[2].toIntOrNull() ?: lastParts[2]}"
-        if (firstParts[0] == lastParts[0]) "$start – $end" else "${firstParts[0]}/$start – ${lastParts[0]}/$end"
-    } else {
-        "$firstDate – $lastDate"
-    }
-    val cellHeight = 18.dp
-    val gap = 3.dp
+    fun short(date: String): String = date.split("-").let { p -> if (p.size == 3) "${p[1].toIntOrNull() ?: p[1]}/${p[2].toIntOrNull() ?: p[2]}" else date }
+    val dateRange = if (days.size == 1) short(days.first()) else "${short(days.first())} – ${short(days.last())}"
     Column(modifier) {
-        Text(
-            dateRange,
-            style = typography.caption,
-            color = colors.fg4,
-            maxLines = 1,
-            modifier = Modifier.padding(bottom = 6.dp),
-        )
+        Text(dateRange, style = typography.caption.copy(fontFeatureSettings = "tnum"), color = colors.fg3, maxLines = 1, modifier = Modifier.padding(bottom = 8.dp))
         BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val gapTotal = gap * (days.size - 1).toFloat()
-            val naturalCellWidth = 8.dp
-            val naturalWidth = naturalCellWidth * days.size.toFloat() + gapTotal
-            val cellWidth = if (naturalWidth <= maxWidth) {
-                ((maxWidth - gapTotal).coerceAtLeast(0.dp) / days.size.toFloat())
-            } else {
-                naturalCellWidth
-            }
-            val contentWidth = cellWidth * days.size.toFloat() + gapTotal
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .height(cellHeight)
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(gap),
-            ) {
-                Canvas(Modifier.width(contentWidth).height(cellHeight)) {
-                    val cellW = (size.width - gap.toPx() * (days.size - 1)) / days.size
-                    days.forEachIndexed { index, item ->
+            val gap = 3.dp
+            val cell = ((maxWidth - gap * (shown.size - 1).toFloat()) / shown.size.toFloat()).coerceAtMost(28.dp)
+            Canvas(Modifier.width(cell * shown.size.toFloat() + gap * (shown.size - 1).toFloat()).height(cell * 7f + gap * 6f)) {
+                shown.forEachIndexed { col, week ->
+                    week.forEachIndexed { row, item ->
                         drawRoundRect(
                             heatColor(colors, item.level),
-                            topLeft = Offset(index * (cellW + gap.toPx()), 0f),
-                            size = Size(cellW, size.height),
-                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx()),
+                            topLeft = Offset(col * (cell + gap).toPx(), row * (cell + gap).toPx()),
+                            size = Size(cell.toPx(), cell.toPx()),
+                            cornerRadius = CornerRadius(4.dp.toPx(), 4.dp.toPx()),
                         )
                     }
                 }
@@ -619,7 +569,14 @@ internal fun LatencyRangeChart(
             val high = mark.high
             val color = colors.accent
             Column {
-                Text(mark.label, style = typography.bodySmall, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(mark.label, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text(
+                        mark.mark?.let(format) ?: STATS_UNAVAILABLE,
+                        style = typography.body.copy(fontFeatureSettings = "tnum"), color = colors.fg, maxLines = 1,
+                        modifier = Modifier.padding(start = 12.dp),
+                    )
+                }
                 Canvas(Modifier.fillMaxWidth().height(16.dp)) {
                     val midY = size.height / 2f
                     drawLine(colors.line, Offset(0f, midY), Offset(size.width, midY), strokeWidth = 2f)
@@ -635,11 +592,12 @@ internal fun LatencyRangeChart(
                     }
                 }
                 rememberResourceEnvironment()
-                val caption = when {
-                    low == null && high == null && mark.mark == null -> STATS_UNAVAILABLE
-                    else -> "${low?.let(format) ?: STATS_UNAVAILABLE} – ${high?.let(format) ?: STATS_UNAVAILABLE} · p99 ${mark.mark?.let(format) ?: STATS_UNAVAILABLE}"
+                if (low != null || high != null) {
+                    Text(
+                        "${low?.let(format) ?: STATS_UNAVAILABLE} – ${high?.let(format) ?: STATS_UNAVAILABLE}",
+                        style = typography.caption.copy(fontFeatureSettings = "tnum"), color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
                 }
-                Text(caption, style = typography.caption, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -664,7 +622,7 @@ internal fun ReliabilityChart(rows: List<ReliabilityRow>, modifier: Modifier = M
             val values = listOf(row.completed, row.failed, row.cancelled, row.interrupted)
             val total = values.sum().coerceAtLeast(1L)
             Column {
-                Text(row.label, style = typography.bodySmall, color = colors.fg, maxLines = 1)
+                Text(row.label, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Canvas(Modifier.fillMaxWidth().height(12.dp)) {
                     var x = 0f
                     values.forEachIndexed { index, value ->
@@ -702,11 +660,7 @@ private fun Legend(items: List<Pair<String, Color>>) {
 
 @Composable
 private fun EmptyChart(text: String, modifier: Modifier = Modifier) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Box(modifier.fillMaxWidth().height(88.dp), contentAlignment = Alignment.Center) {
-        Text(text, style = typography.bodySmall, color = colors.fg3)
-    }
+    riffet.ui.design.EmptyState(text, modifier, fill = false)
 }
 
 /**

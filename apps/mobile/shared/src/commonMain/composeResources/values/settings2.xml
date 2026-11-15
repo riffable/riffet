@@ -35,18 +35,6 @@
     <string name="settings_app_icon_cyan">青色</string>
     <string name="settings_app_icon_graphite">石墨</string>
     <string name="settings_app_icon_white">白色</string>
-    <string name="settings_theme_summary_riffet">默认外观：冷中性灰阶配蓝色强调。</string>
-    <string name="settings_theme_summary_solarized">奶油纸底与墨绿黑，为长时间阅读设计。</string>
-    <string name="settings_theme_summary_catppuccin">柔和的低对比紫调，适合暗光环境。</string>
-    <string name="settings_theme_summary_rose_pine">暖紫玫瑰调，低饱和的纸感配色。</string>
-    <string name="settings_theme_summary_kiln">暖象牙底与黏土橙。</string>
-    <string name="settings_theme_summary_everforest">低饱和绿色系，暖而沉稳。</string>
-    <string name="settings_theme_summary_ink">中性纸底与墨水蓝。</string>
-    <string name="settings_theme_summary_sepia">旧书纸底与牛血红。</string>
-    <string name="settings_theme_summary_moss">微绿灰纸底与橄榄苔绿。</string>
-    <string name="settings_theme_summary_slate">微冷纸底与石板蓝。</string>
-    <string name="settings_theme_summary_pencil">纯中性灰阶，不用彩色强调。</string>
-    <string name="settings_theme_summary_celadon">青瓷纸底与深青。</string>
 
     <!-- Idle reclaim presets -->
     <string name="settings_extra_idle_off">关闭</string>
@@ -94,9 +82,7 @@
     <string name="settings_extra_ext_runtime_error">连接异常</string>
     <string name="settings_extra_ext_runtime_pending">等待加载</string>
     <string name="settings_extra_ext_runtime_unknown">未确认</string>
-    <string name="settings_extra_ext_confirm_title">%1$s %2$s？</string>
     <string name="settings_extra_ext_confirm_skill_note">此设置也会影响其他使用该技能的项目。</string>
-    <string name="settings_extra_ext_install_confirm">安装 %1$s（%2$s）？</string>
 
     <!-- Pairing errors -->
     <string name="settings_extra_pair_invalid_code_title">配对码不正确或已过期</string>
@@ -129,21 +115,18 @@
     <string name="settings_quick_chat_open_sheet">浮层</string>
     <string name="settings_quick_chat_open_page">完整页面</string>
     <string name="settings_quick_chat_presets">预设</string>
-    <string name="settings_quick_chat_edit">编辑</string>
     <string name="settings_quick_chat_add">添加</string>
     <string name="settings_quick_chat_new_preset">新建预设</string>
     <string name="settings_quick_chat_edit_preset">编辑预设</string>
     <string name="settings_quick_chat_preset_name">名称</string>
     <string name="settings_quick_chat_preset_prompt">提示词</string>
     <string name="settings_quick_chat_delete">删除</string>
-    <string name="settings_quick_chat_delete_title">删除预设？</string>
     <string name="settings_quick_chat_restore_defaults">恢复默认预设</string>
     <string name="settings_quick_chat_restore">恢复</string>
     <string name="settings_quick_chat_restore_title">恢复默认预设？</string>
     <string name="settings_quick_chat_presets_limit">最多 12 个预设，名称 20 字以内</string>
 
     <!-- Keep-alive (通知与后台) -->
-    <string name="settings_keepalive_battery">忽略电池优化</string>
     <string name="settings_keepalive_allow">允许</string>
     <string name="settings_keepalive_background">允许后台运行</string>
     <string name="settings_keepalive_hint_oppo">耗电管理 › 允许后台行为</string>

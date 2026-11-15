@@ -1,17 +1,14 @@
 package riffet.ui.home
 
-import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.settings.SettingsNoticeKind
 import androidx.compose.ui.semantics.Role
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,7 +40,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -304,26 +300,4 @@ private fun DirectoryChip(
     label: String,
     enabled: Boolean,
     onClick: () -> Unit,
-) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Row(
-        modifier = Modifier
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .clip(RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-            .background(if (enabled) LocalRiffetSurfaces.current.card else LocalRiffetSurfaces.current.press)
-            .clickable(role = Role.Button, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(icon, contentDescription = null, tint = if (enabled) colors.fg3 else LocalRiffetSurfaces.current.disabledContent, modifier = Modifier.size(14.dp))
-        Spacer(Modifier.width(6.dp))
-        Text(
-            text = label,
-            style = typography.label,
-            color = if (enabled) colors.fg else LocalRiffetSurfaces.current.disabledContent,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
-}
+) = riffet.ui.design.ChipButton(label, active = false, onClick = onClick, icon = icon, enabled = enabled, trailingIcon = null)

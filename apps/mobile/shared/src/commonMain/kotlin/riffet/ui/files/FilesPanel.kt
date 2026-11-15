@@ -6,12 +6,21 @@ import androidx.compose.foundation.layout.PaddingValues
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.surfaces
 import androidx.compose.ui.semantics.Role
-import androidx.compose.foundation.shape.CircleShape
 import riffet.ui.favorites.FolderFavoriteChips
 import riffet.ui.favorites.FolderFavoritesState
 import riffet.ui.favorites.rememberFolderFavorites
 import riffet.ui.app.PageBarAction
 import riffet.ui.app.PageTopBar
+import riffet.ui.app.PageMoreAction
+import riffet.ui.app.PageBackHandler
+import riffet.ui.design.StyleTopBar
+import riffet.ui.design.RiffetSearchField
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 import riffet.ui.pickers.RiffetDropdownMenu
 import riffet.ui.pickers.RiffetMenuItem
 import androidx.compose.foundation.background
@@ -64,9 +73,7 @@ import riffet.ui.focus.SelectableText
 import riffet.ui.focus.blurOnTap
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.settings.SettingsButton
-import riffet.ui.settings.SettingsField
 import riffet.ui.settings.SettingsNoticeKind
-import riffet.ui.settings.SettingsMessageBanner
 import riffet.ui.sessionlist.relativeTimeAgo
 import riffet.ui.settings.SettingsSegmented
 import riffet.ui.theme.LocalRiffetColors
@@ -125,7 +132,6 @@ private enum class SearchMode(val id: String) {
 
 private sealed interface FilesPage {
     data class Directory(val path: String) : FilesPage
-    data object Search : FilesPage
     data class Preview(val path: String, val line: Int?, val visualization: Boolean = false) : FilesPage
 }
 
@@ -161,11 +167,6 @@ fun FilesPanel(
                 onDirectory = { path ->
                     if (path != page.path && !pages.popTo { (it as? FilesPage.Directory)?.path == path }) pages.push(FilesPage.Directory(path))
                 },
-                onFile = { pages.push(FilesPage.Preview(it, null)) },
-                onSearch = { pages.push(FilesPage.Search) },
-            )
-            FilesPage.Search -> FileSearchPage(api, projectId, back, close,
-                onDirectory = { pages.push(FilesPage.Directory(it)) },
                 onFile = { path, line -> pages.push(FilesPage.Preview(path, line)) },
             )
             is FilesPage.Preview -> FilePreviewPage(api, projectId, page, back, close)
@@ -178,54 +179,49 @@ private fun FilePageChrome(
     title: String,
     onBack: () -> Unit,
     onClose: () -> Unit,
+    /** A file page's directory under its name (mobile.md §9.3). */
+    subtitle: String? = null,
     actions: @Composable () -> Unit = {},
     header: @Composable () -> Unit = {},
     bottomBar: (@Composable () -> Unit)? = null,
+    /** Replaces the title bar (the directory's search field); [onBack] is then the field's arrow. */
+    searchBar: (@Composable () -> Unit)? = null,
+    closeInBar: Boolean = true,
     content: @Composable (PaddingValues) -> Unit,
 ) {
     RiffetPageScaffold(topBar = {
-        PageTopBar(title = title, onBack = onBack) {
+        if (searchBar != null) searchBar()
+        else PageTopBar(title = title, onBack = onBack, subtitle = subtitle) {
             actions()
-            PageBarAction(icon = RiffetIcons.Close, description = stringResource(Res.string.files_close), onClick = onClose)
+            if (closeInBar) PageBarAction(icon = RiffetIcons.Close, description = stringResource(Res.string.files_close), onClick = onClose)
         }
         header()
     }, bottomBar = bottomBar, content = content)
 }
 
-/** The directory page's actions behind one overflow button, so the bar stays back/title/menu/close. */
+/** The bar while searching: the field fills it, the arrow closes the search. */
 @Composable
-private fun DirectoryActionsMenu(
-    canFavorite: Boolean,
-    starred: Boolean,
-    refreshing: Boolean,
-    onFavorite: () -> Unit,
-    onRefresh: () -> Unit,
-    onSearch: () -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        PageBarAction(icon = RiffetIcons.Ellipsis, description = stringResource(Res.string.files_more), onClick = { open = true })
-        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }, modifier = Modifier.width(200.dp)) {
-            if (canFavorite) {
-                RiffetMenuItem(
-                    if (starred) stringResource(Res.string.files_unfavorite) else stringResource(Res.string.files_favorite_folder),
-                    { open = false; onFavorite() },
-                    icon = if (starred) RiffetIcons.StarFilled else RiffetIcons.Star,
-                )
-            }
-            RiffetMenuItem(stringResource(Res.string.files_refresh), { open = false; onRefresh() }, icon = RiffetIcons.Refresh, enabled = !refreshing)
-            RiffetMenuItem(stringResource(Res.string.files_search), { open = false; onSearch() }, icon = RiffetIcons.Search)
-        }
-    }
+private fun FilesSearchBar(query: String, onQueryChange: (String) -> Unit, placeholder: String, onClose: () -> Unit) {
+    StyleTopBar(
+        title = {
+            RiffetSearchField(
+                query = query, onQueryChange = onQueryChange, placeholder = placeholder,
+                clearDescription = stringResource(Res.string.session_clear_search), requestFocus = true,
+                modifier = Modifier.padding(end = LocalInterfaceStyle.current.metrics.pageInset),
+            )
+        },
+        navigation = { PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_close_search), onClose) },
+    )
 }
 
 @Composable
 private fun DirectoryPage(
     api: RiffetApi, projectId: String, projectName: String, path: String, favorites: FolderFavoritesState,
     onBack: () -> Unit, onClose: () -> Unit,
-    onDirectory: (String) -> Unit, onFile: (String) -> Unit, onSearch: () -> Unit,
+    onDirectory: (String) -> Unit, onFile: (String, Int?) -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val metrics = LocalInterfaceStyle.current.metrics
     val addFavoriteFailed = stringResource(Res.string.favorites_error_add)
     val removeFavoriteFailed = stringResource(Res.string.favorites_error_remove)
     val cached = remember { FileCache.listing(projectId, path) }
@@ -233,12 +229,22 @@ private fun DirectoryPage(
     var hasMore by remember { mutableStateOf(cached?.hasMore ?: false) }
     var loading by remember { mutableStateOf(cached == null) }
     var loadingMore by remember { mutableStateOf(false) }
+    var loadMoreFailed by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var searching by rememberSaveable { mutableStateOf(false) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var mode by rememberSaveable { mutableStateOf(SearchMode.NAME.id) }
+    val searchMode = SearchMode.entries.first { it.id == mode }
+    var found by remember { mutableStateOf<List<FileEntry>?>(null) }
+    var hits by remember { mutableStateOf<List<SearchHit>?>(null) }
+    var searchBusy by remember { mutableStateOf(false) }
+    var searchError by remember { mutableStateOf<String?>(null) }
     val active = riffet.ui.app.LocalPageActive.current
     suspend fun load(force: Boolean = false) {
         if (force) loading = true
         error = null
+        loadMoreFailed = false
         try {
             val first = api.files(projectId, path, PAGE, 0)
             val known = first.map { it.path }.toSet()
@@ -257,23 +263,62 @@ private fun DirectoryPage(
             if (!loaded) load()
         }
     }
+    // Results follow the query: a pause in typing, then one request; a newer query cancels the older one.
+    LaunchedEffect(query, mode, searching) {
+        val value = query.trim()
+        if (!searching || value.isEmpty()) { found = null; hits = null; searchBusy = false; searchError = null; return@LaunchedEffect }
+        delay(300)
+        searchBusy = true
+        searchError = null
+        try {
+            if (searchMode == SearchMode.NAME) { found = api.find(projectId, value); hits = null }
+            else { hits = api.search(projectId, value); found = null }
+        } catch (cancellation: CancellationException) { throw cancellation }
+        catch (failure: Throwable) { searchError = panelError(failure, getString(Res.string.files_error_search)) }
+        finally { searchBusy = false }
+    }
+    val closeSearch: () -> Unit = { searching = false; query = "" }
+    PageBackHandler(enabled = searching) { closeSearch() }
+    val showResults = searching && query.isNotBlank()
+    val listState = rememberLazyListState()
     FilePageChrome(projectName, onBack, onClose, actions = {
-        DirectoryActionsMenu(
-            canFavorite = path.isNotEmpty(),
-            starred = path.isNotEmpty() && favorites.favoriteAt(path) != null,
-            refreshing = loading,
-            onFavorite = { favorites.toggle(path, addFavoriteFailed, removeFavoriteFailed) },
-            onRefresh = { scope.launch { load(true) } },
-            onSearch = onSearch,
-        )
-    }, header = {
-        error?.let { SettingsMessageBanner(it, SettingsNoticeKind.ERROR); SettingsButton(stringResource(Res.string.files_retry), onClick = { scope.launch { load(true) } }) }
-        favorites.error?.let { SettingsMessageBanner(it, SettingsNoticeKind.ERROR) }
-        DirectoryHeader(projectName, path, favorites, onDirectory)
+        PageBarAction(RiffetIcons.Search, stringResource(Res.string.files_search), { searching = true })
+        if (path.isNotEmpty()) {
+            val starred = favorites.favoriteAt(path) != null
+            PageBarAction(
+                icon = if (starred) RiffetIcons.StarFilled else RiffetIcons.Star,
+                description = stringResource(if (starred) Res.string.files_unfavorite else Res.string.files_favorite_folder),
+                onClick = { favorites.toggle(path, addFavoriteFailed, removeFavoriteFailed) },
+                tint = if (starred) LocalRiffetColors.current.warning else null,
+            )
+        }
+        PageMoreAction { close ->
+            RiffetMenuItem(stringResource(Res.string.files_refresh), { close(); scope.launch { load(true) } }, icon = RiffetIcons.Refresh, enabled = !loading)
+            RiffetMenuItem(stringResource(Res.string.files_close), { close(); onClose() }, icon = RiffetIcons.Close)
+        }
+    }, closeInBar = false, searchBar = if (searching) ({
+        FilesSearchBar(query, { query = it }, stringResource(if (searchMode == SearchMode.NAME) Res.string.files_search_name_placeholder else Res.string.files_search_content_placeholder), closeSearch)
+    }) else null, header = {
+        if (searching) {
+            Box(Modifier.fillMaxWidth().padding(horizontal = metrics.pageInset, vertical = 8.dp)) {
+                SettingsSegmented(
+                    options = SearchMode.entries.map { it.id to stringResource(if (it == SearchMode.NAME) Res.string.files_mode_name else Res.string.files_mode_content) },
+                    value = mode, onSelect = { mode = it; found = null; hits = null },
+                )
+            }
+            searchError?.let { BannerBox(it, SettingsNoticeKind.ERROR) }
+        } else {
+            error?.let { message -> BannerBox(message, SettingsNoticeKind.ERROR, stringResource(Res.string.files_retry)) { scope.launch { load(true) } } }
+            favorites.error?.let { BannerBox(it, SettingsNoticeKind.ERROR) }
+            DirectoryHeader(projectName, path, favorites, onDirectory)
+        }
     }) { insets ->
         Box(Modifier.fillMaxSize()) {
-            BrowseBody(entries, loading, loadingMore, hasMore, favorites, insets,
-                onOpenDirectory = onDirectory, onOpenFile = onFile,
+            if (showResults) SearchBody(searchMode, searchBusy, found, hits, insets,
+                onOpenEntry = { if (it.kind == FileEntryKind.DIRECTORY) onDirectory(it.path) else onFile(it.path, null) },
+                onOpenHit = { onFile(it.path, it.line.toInt()) },
+            ) else BrowseBody(entries, loading, hasMore && !loadMoreFailed, favorites, insets, listState,
+                onOpenDirectory = onDirectory, onOpenFile = { onFile(it, null) },
                 onLoadMore = {
                     if (!loadingMore) scope.launch {
                         loadingMore = true
@@ -284,7 +329,7 @@ private fun DirectoryPage(
                             hasMore = next.size == PAGE
                             FileCache.putListing(projectId, path, FileCache.Listing(entries, hasMore))
                         } catch (cancellation: CancellationException) { throw cancellation }
-                        catch (failure: Throwable) { error = panelError(failure, getString(Res.string.files_error_load_more)) }
+                        catch (failure: Throwable) { loadMoreFailed = true; error = panelError(failure, getString(Res.string.files_error_load_more)) }
                         finally { loadingMore = false }
                     }
                 },
@@ -294,43 +339,9 @@ private fun DirectoryPage(
 }
 
 @Composable
-private fun FileSearchPage(
-    api: RiffetApi, projectId: String, onBack: () -> Unit, onClose: () -> Unit,
-    onDirectory: (String) -> Unit, onFile: (String, Int?) -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    var mode by remember { mutableStateOf(SearchMode.NAME) }
-    var query by remember { mutableStateOf("") }
-    var found by remember { mutableStateOf<List<FileEntry>?>(null) }
-    var hits by remember { mutableStateOf<List<SearchHit>?>(null) }
-    var searching by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
-    val runSearch: () -> Unit = {
-        val value = query.trim()
-        if (value.isNotEmpty() && !searching) {
-            val requestedMode = mode
-            searching = true
-            scope.launch {
-                error = null
-                try {
-                    if (requestedMode == SearchMode.NAME) { found = api.find(projectId, value); hits = null }
-                    else { hits = api.search(projectId, value); found = null }
-                } catch (cancellation: CancellationException) { throw cancellation }
-                catch (failure: Throwable) { error = panelError(failure, getString(Res.string.files_error_search)) }
-                finally { searching = false }
-            }
-        }
-    }
-    FilePageChrome(stringResource(Res.string.files_search), onBack, onClose, header = {
-        error?.let { SettingsMessageBanner(it, SettingsNoticeKind.ERROR) }
-        SearchControls(mode, { mode = it; found = null; hits = null }, query, { query = it }, searching, runSearch)
-    }) { insets ->
-        Box(Modifier.fillMaxSize()) {
-            SearchBody(mode, searching, found, hits, insets,
-                onOpenEntry = { if (it.kind == FileEntryKind.DIRECTORY) onDirectory(it.path) else onFile(it.path, null) },
-                onOpenHit = { onFile(it.path, it.line.toInt()) },
-            )
-        }
+private fun BannerBox(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) {
+    Box(Modifier.fillMaxWidth().padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = 4.dp)) {
+        riffet.ui.design.Notice(message, kind, action = action, onAction = onAction)
     }
 }
 
@@ -362,23 +373,22 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
     var renderHtml by remember(path, page.line) { mutableStateOf(page.line == null) }
     val textPreview = value != null && !(html && renderHtml) && value.image == null && !value.binary
     val footer: (@Composable () -> Unit)? = if (value != null && textPreview) ({ TextPreviewFooter(value) }) else null
-    FilePageChrome(tildePath(path), onBack, onClose, actions = {
+    // The name is what the reader looks for; the directory is the line under it.
+    val shownPath = tildePath(path)
+    FilePageChrome(shownPath.substringAfterLast('/'), onBack, onClose,
+        subtitle = shownPath.substringBeforeLast('/', "").takeIf { it.isNotEmpty() }, actions = {
         if (download != null) PageBarAction(icon = RiffetIcons.Download, description = stringResource(Res.string.files_download_file), onClick = download)
     }, header = {
-        error?.let { SettingsMessageBanner(it, SettingsNoticeKind.ERROR); SettingsButton(stringResource(Res.string.files_retry), onClick = { refresh++ }) }
+        error?.let { message -> BannerBox(message, SettingsNoticeKind.ERROR, stringResource(Res.string.files_retry)) { refresh++ } }
         if (value != null) {
-            if (outside) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                SettingsMessageBanner(stringResource(Res.string.files_outside_banner), SettingsNoticeKind.INFO)
-            }
-            if (html) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+            if (outside) BannerBox(stringResource(Res.string.files_outside_banner), SettingsNoticeKind.INFO)
+            if (html) Box(Modifier.fillMaxWidth().padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = 8.dp)) {
                 SettingsSegmented(
                     options = listOf("preview" to stringResource(Res.string.files_preview), "source" to stringResource(Res.string.files_source)),
                     value = if (renderHtml) "preview" else "source", onSelect = { renderHtml = it == "preview" },
                 )
             }
-            if (textPreview && value.truncated) Box(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-                SettingsMessageBanner(stringResource(Res.string.files_truncated), SettingsNoticeKind.INFO)
-            }
+            if (textPreview && value.truncated) BannerBox(stringResource(Res.string.files_truncated), SettingsNoticeKind.INFO)
         }
     }, bottomBar = footer) { insets ->
         Box(Modifier.fillMaxSize().blurOnTap()) {
@@ -397,12 +407,13 @@ private fun FilePreviewPage(api: RiffetApi, projectId: String, page: FilesPage.P
 private fun DirectoryHeader(projectName: String, path: String, favorites: FolderFavoritesState, onNavigate: (String) -> Unit) {
     val colors = LocalRiffetColors.current
     val crumbs = remember(path) { path.split('/').filter { it.isNotEmpty() } }
-    Row(
+    // At the root the bar's title already names the folder; the path appears once there is one.
+    if (crumbs.isNotEmpty()) Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(40.dp)
             .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 14.dp),
+            .padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset - 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Crumb(text = projectName, current = crumbs.isEmpty(), onClick = { onNavigate("") })
@@ -416,7 +427,18 @@ private fun DirectoryHeader(projectName: String, path: String, favorites: Folder
         }
     }
     // The project's favorite folders: a tap goes there, a long press manages one.
-    FolderFavoriteChips(favorites, currentPath = path, onOpen = { onNavigate(it.path) }, modifier = Modifier.padding(horizontal = 14.dp, vertical = 4.dp))
+    FolderFavoriteChips(favorites, currentPath = path, onOpen = { onNavigate(it.path) }, modifier = Modifier.padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = 4.dp))
+}
+
+@Composable
+private fun FileTypeIcon(directory: Boolean) {
+    val colors = LocalRiffetColors.current
+    Icon(
+        if (directory) RiffetIcons.Folder else RiffetIcons.FileText,
+        contentDescription = null,
+        tint = if (directory) colors.accent else colors.fg3,
+        modifier = Modifier.size(22.dp),
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -424,10 +446,10 @@ private fun DirectoryHeader(projectName: String, path: String, favorites: Folder
 private fun BrowseBody(
     entries: List<FileEntry>,
     loading: Boolean,
-    loadingMore: Boolean,
     hasMore: Boolean,
     favorites: FolderFavoritesState,
     insets: PaddingValues,
+    listState: LazyListState,
     onOpenDirectory: (String) -> Unit,
     onOpenFile: (String) -> Unit,
     onLoadMore: () -> Unit,
@@ -440,8 +462,17 @@ private fun BrowseBody(
     val removeFavoriteFailed = stringResource(Res.string.favorites_error_remove)
     val sortedEntries = remember(entries) { entries.sortedBy { it.kind != FileEntryKind.DIRECTORY } }
 
+    // The next page loads when the end of the list comes into view.
+    val currentLoadMore by rememberUpdatedState(onLoadMore)
+    LaunchedEffect(listState, hasMore, entries.size) {
+        if (!hasMore) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.let { (it.visibleItemsInfo.lastOrNull()?.index ?: 0) >= it.totalItemsCount - 6 } }
+            .filter { it }
+            .collect { currentLoadMore() }
+    }
+
     val now = platformNowMillis()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = insets) {
+    LazyColumn(Modifier.fillMaxSize(), state = listState, contentPadding = insets) {
         if (loading) {
             item(key = "loading") {
                 Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
@@ -452,50 +483,43 @@ private fun BrowseBody(
                     val directory = entry.kind == FileEntryKind.DIRECTORY
                     val starred = directory && favorites.favoriteAt(entry.path) != null
                     var menu by remember { mutableStateOf(false) }
-                    Row(
-                        modifier = Modifier
-                            .animateItem(fadeInSpec = motion.effects(), placementSpec = motion.spatial(), fadeOutSpec = motion.effects())
-                            .fillMaxWidth()
-                            .height(56.dp)
-                            // A long press on a folder offers to star it.
-                            .combinedClickable(
-                                onClick = { if (directory) onOpenDirectory(entry.path) else onOpenFile(entry.path) },
-                                onLongClick = if (directory) ({ menu = true }) else null,
-                            )
-                            .padding(horizontal = designMetrics.pageInset),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Box(
-                            modifier = Modifier.size(36.dp).clip(CircleShape).background(if (directory) colors.accentSoft else colors.bgMuted),
-                            contentAlignment = Alignment.Center,
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .animateItem(fadeInSpec = motion.effects(), placementSpec = motion.spatial(), fadeOutSpec = motion.effects())
+                                .fillMaxWidth()
+                                .height(56.dp)
+                                // A long press on a folder opens its actions.
+                                .combinedClickable(
+                                    onClick = { if (directory) onOpenDirectory(entry.path) else onOpenFile(entry.path) },
+                                    onLongClick = if (directory) ({ menu = true }) else null,
+                                )
+                                .padding(horizontal = designMetrics.pageInset),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                if (directory) RiffetIcons.Folder else RiffetIcons.FileText,
-                                contentDescription = null,
-                                tint = if (directory) colors.accent else colors.fg2,
-                                modifier = Modifier.size(designMetrics.smallIconSize),
-                            )
-                        }
-                        Spacer(Modifier.width(14.dp))
-                        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-                            Text(entry.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            FileTypeIcon(directory)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(entry.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                // Re-derive the bucket from the timestamp instead of comparing the
+                                // client's source-locale label, so "just now" localizes too.
+                                val meta = listOfNotNull(
+                                    if (entry.kind == FileEntryKind.FILE) formatBytes(entry.size) else null,
+                                    relativeTimeAgo(entry.modifiedAt, now),
+                                ).joinToString(" · ")
+                                if (meta.isNotEmpty()) Text(meta, style = typography.bodySmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             if (starred) {
-                                Spacer(Modifier.width(6.dp))
-                                Icon(RiffetIcons.StarFilled, contentDescription = stringResource(Res.string.files_starred), tint = colors.warning, modifier = Modifier.size(12.dp))
-                            }
-                            RiffetDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                                RiffetMenuItem(if (starred) stringResource(Res.string.files_unfavorite) else stringResource(Res.string.files_favorite_folder), onClick = { menu = false; favorites.toggle(entry.path, addFavoriteFailed, removeFavoriteFailed) })
+                                Spacer(Modifier.width(12.dp))
+                                Icon(RiffetIcons.StarFilled, contentDescription = stringResource(Res.string.files_starred), tint = colors.warning, modifier = Modifier.size(16.dp))
                             }
                         }
-                        val meta = listOfNotNull(
-                            // Re-derive the bucket from the timestamp instead of comparing the
-                            // client's source-locale label, so "just now" localizes too.
-                            relativeTimeAgo(entry.modifiedAt, now),
-                            if (entry.kind == FileEntryKind.FILE) formatBytes(entry.size) else null,
-                        ).joinToString(" · ")
-                        if (meta.isNotEmpty()) {
-                            Spacer(Modifier.width(8.dp))
-                            Text(meta, style = typography.caption, color = colors.fg3, maxLines = 1)
+                        RiffetDropdownMenu(expanded = menu, onDismissRequest = { menu = false }, modifier = Modifier.align(Alignment.TopEnd)) {
+                            RiffetMenuItem(
+                                if (starred) stringResource(Res.string.files_unfavorite) else stringResource(Res.string.files_favorite_folder),
+                                onClick = { menu = false; favorites.toggle(entry.path, addFavoriteFailed, removeFavoriteFailed) },
+                                icon = if (starred) RiffetIcons.StarFilled else RiffetIcons.Star,
+                            )
                         }
                     }
                 }
@@ -509,13 +533,7 @@ private fun BrowseBody(
             }
             if (hasMore) {
                 item(key = "load-more") {
-                    Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                        SettingsButton(
-                            text = if (loadingMore) stringResource(Res.string.files_loading) else stringResource(Res.string.files_load_more),
-                            onClick = onLoadMore,
-                            enabled = !loadingMore,
-                        )
-                    }
+                    Box(Modifier.fillMaxWidth().height(56.dp), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
                 }
             }
         }
@@ -541,34 +559,6 @@ private fun Crumb(text: String, current: Boolean, onClick: () -> Unit) {
 /* --------------------------------------------------------------------------------------------- */
 /* Search                                                                                         */
 /* --------------------------------------------------------------------------------------------- */
-
-@Composable
-private fun SearchControls(
-    mode: SearchMode, onModeChange: (SearchMode) -> Unit, query: String,
-    onQueryChange: (String) -> Unit, searching: Boolean, onRun: () -> Unit,
-) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // The field owns the full width: closing the panel is the header's ✕, so there is no
-        // second ✕ here to be mistaken for "clear the query".
-        SettingsField(
-            value = query,
-            onValueChange = onQueryChange,
-            placeholder = if (mode == SearchMode.NAME) stringResource(Res.string.files_search_name_placeholder) else stringResource(Res.string.files_search_content_placeholder),
-            modifier = Modifier.fillMaxWidth(),
-        )
-        val modeLabels = mapOf(
-            SearchMode.NAME to stringResource(Res.string.files_mode_name),
-            SearchMode.CONTENT to stringResource(Res.string.files_mode_content),
-        )
-        SettingsSegmented(
-            options = SearchMode.entries.map { it.id to modeLabels.getValue(it) },
-            value = mode.id,
-            enabled = !searching,
-            onSelect = { id -> SearchMode.entries.firstOrNull { it.id == id }?.let(onModeChange) },
-        )
-        SettingsButton(text = if (searching) stringResource(Res.string.files_searching) else stringResource(Res.string.files_search_action), onClick = onRun, enabled = !searching, primary = true)
-    }
-}
 
 @Composable
 private fun SearchBody(
@@ -598,26 +588,16 @@ private fun SearchBody(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(60.dp)
+                                .height(56.dp)
                                 .clickable { onOpenEntry(entry) }
                                 .padding(horizontal = designMetrics.pageInset),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier.size(36.dp).clip(CircleShape).background(if (directory) colors.accentSoft else colors.bgMuted),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Icon(
-                                    if (directory) RiffetIcons.Folder else RiffetIcons.FileText,
-                                    contentDescription = null,
-                                    tint = if (directory) colors.accent else colors.fg2,
-                                    modifier = Modifier.size(designMetrics.smallIconSize),
-                                )
-                            }
-                            Spacer(Modifier.width(14.dp))
+                            FileTypeIcon(directory)
+                            Spacer(Modifier.width(16.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(entry.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(entry.path, style = typography.monoSmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(entry.path, style = typography.bodySmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.StartEllipsis)
                             }
                         }
                     }
@@ -629,9 +609,9 @@ private fun SearchBody(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable { onOpenHit(hit) }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
+                                .padding(horizontal = designMetrics.pageInset, vertical = 10.dp),
                         ) {
-                            Text("${hit.path}:${hit.line}", style = typography.monoSmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text("${hit.path}:${hit.line}", style = typography.bodySmall, color = colors.fg3, maxLines = 1, overflow = TextOverflow.StartEllipsis)
                             Spacer(Modifier.height(2.dp))
                             Text(hit.text.trim(), style = typography.monoSmall, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
@@ -708,7 +688,7 @@ private fun TextPreviewFooter(preview: FilePreview) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     val lineCount = remember(preview.content) { preview.content.count { it == '\n' } + 1 }
-    Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().height(28.dp).padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset), verticalAlignment = Alignment.CenterVertically) {
         Text(stringResource(Res.string.files_line_count, lineCount, formatBytes(preview.size)), style = typography.caption, color = colors.fg3)
     }
 }

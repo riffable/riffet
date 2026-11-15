@@ -61,9 +61,12 @@ internal fun AuxiliaryModelRow(
     } ?: offLabel
     val busy = state.saving
     var modelOpen by remember { mutableStateOf(false) }
-    SettingsRow(title, loadError) {
-        Box {
-            SettingsButton(currentLabel, enabled = !busy && options != null, onClick = { modelOpen = true })
+    // A choice row (mobile.md §2.4) with the menu anchored at its end.
+    Box {
+        // A model reads `<provider> · <model>`, too long for the row's end: it goes under the title.
+        riffet.ui.design.GroupRow(title = title, subtitle = loadError ?: currentLabel, subtitleLines = 2,
+            enabled = !busy && options != null, onClick = { modelOpen = true }, modifier = Modifier.settingsSearchAnchor(title))
+        Box(Modifier.align(androidx.compose.ui.Alignment.TopEnd)) {
             RiffetDropdownMenu(expanded = modelOpen, onDismissRequest = { modelOpen = false }, modifier = Modifier.widthIn(min = 200.dp)) {
                 RiffetMenuItem(
                     onClick = {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_close_search">Close search</string>
+    <string name="app_more">More</string>
+    <string name="app_discard">Discard</string>
+</resources>

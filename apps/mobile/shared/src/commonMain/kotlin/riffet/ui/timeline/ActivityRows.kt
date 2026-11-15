@@ -10,7 +10,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import androidx.compose.material3.Text
 import riffet.ui.design.RiffetTextButton as TextButton
 import androidx.compose.runtime.Composable
@@ -145,7 +145,7 @@ internal fun ActivityRow(item: TimelineItem.Activity) {
     ) {
         ActivityDetail(activity, view)
     }
-    if (confirming && actions != null) StopConfirmation(view.stopWarning, onConfirm = { confirming = false; actions.onStop(activity.id) }, onDismiss = { confirming = false })
+    if (confirming && actions != null) StopConfirmation(view.stopWarning, onConfirm = { confirming = false; actions.onStop(activity.id) }, onDismiss = { confirming = false }, name = if (background) view.subject ?: view.label else null)
 }
 
 /** The preview, then the full text on request: nothing is fetched until the reader asks. */
@@ -258,13 +258,14 @@ private fun ShellCommandRow(activity: NativeActivity, open: Boolean, onToggle: (
 }
 
 @Composable
-internal fun StopConfirmation(warning: String?, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(Res.string.timeline_stop_background_task_title)) },
-        text = { Text(warning ?: "") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(stringResource(Res.string.timeline_stop)) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.timeline_cancel)) } },
+internal fun StopConfirmation(warning: String?, onConfirm: () -> Unit, onDismiss: () -> Unit, name: String? = null) {
+    ConfirmDialog(
+        title = if (name.isNullOrBlank()) stringResource(Res.string.timeline_stop_background_task_title) else stringResource(Res.string.confirm_stop_named, name),
+        message = warning?.takeIf { it.isNotBlank() },
+        confirmLabel = stringResource(Res.string.timeline_stop),
+        danger = true,
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
     )
 }
 

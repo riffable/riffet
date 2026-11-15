@@ -114,18 +114,17 @@ private fun ThisDeviceGroup(platform: DevicePlatform, api: RiffetApi) {
         Res.string.settings_device_cap_alarm to capabilities[DeviceCapability.ALARM],
     ).mapNotNull { (label, capability) -> capability?.let { label to it } }
     SettingsGroup(stringResource(Res.string.settings_device_capabilities)) {
-        rows.forEach { (label, capability) ->
-            SettingsRow(stringResource(label)) { CapabilityControl(capability, platform) }
-        }
-        SettingsRow(
-            stringResource(Res.string.settings_device_exact_alarm),
-            if (state.exactAlarms) null else stringResource(Res.string.settings_device_exact_alarm_off),
-        ) {
-            if (state.exactAlarms) {
-                SettingsStatusLine(stringResource(Res.string.settings_allowed), LocalRiffetColors.current.success)
-            } else {
-                SettingsButton(stringResource(Res.string.settings_keepalive_allow), onClick = { platform.request(DevicePermission.EXACT_ALARM) })
-            }
+        rows.forEach { (label, capability) -> CapabilityRow(stringResource(label), capability, platform) }
+        if (state.exactAlarms) {
+            GroupRow(stringResource(Res.string.settings_device_exact_alarm), value = stringResource(Res.string.settings_allowed))
+        } else {
+            GroupRow(
+                stringResource(Res.string.settings_device_exact_alarm),
+                subtitle = stringResource(Res.string.settings_device_exact_alarm_off),
+                subtitleLines = 2,
+                value = stringResource(Res.string.setm_needs_permission), chevron = true,
+                onClick = { platform.request(DevicePermission.EXACT_ALARM) },
+            )
         }
     }
     SettingsFootnote(stringResource(Res.string.settings_device_background_note))
@@ -175,15 +174,13 @@ private fun AccessibilityGroup(accessibility: DeviceAccessibility, platform: Dev
 
     val stalled = accessibility.state == AccessibilityState.NOT_RUNNING
     SettingsGroup(stringResource(Res.string.settings_device_accessibility)) {
-        SettingsRow(
-            stringResource(Res.string.settings_device_accessibility),
-            if (stalled) stringResource(Res.string.settings_device_a11y_stalled) else null,
-        ) {
-            when {
-                running -> SettingsStatusLine(stringResource(Res.string.settings_device_a11y_running), LocalRiffetColors.current.success)
-                stalled -> SettingsButton(stringResource(Res.string.settings_device_a11y_restart), onClick = ::restart, enabled = !busy)
-                else -> SettingsButton(stringResource(Res.string.settings_device_a11y_enable), onClick = ::turnOn, enabled = !busy)
-            }
+        when {
+            running -> GroupRow(stringResource(Res.string.settings_device_accessibility), value = stringResource(Res.string.settings_device_a11y_running))
+            stalled -> SettingsActionRow(
+                stringResource(Res.string.settings_device_a11y_restart), onClick = ::restart,
+                subtitle = stringResource(Res.string.settings_device_a11y_stalled), enabled = !busy,
+            )
+            else -> SettingsActionRow(stringResource(Res.string.settings_device_a11y_enable), onClick = ::turnOn, enabled = !busy)
         }
     }
     if (sheet && pageActive) AccessibilitySheet(accessibility, platform, api) { sheet = false }
@@ -219,32 +216,30 @@ private fun AccessibilitySheet(accessibility: DeviceAccessibility, platform: Dev
             if (adb == DeviceAdbState.READY || adb == DeviceAdbState.UNAUTHORIZED) {
                 val ready = adb == DeviceAdbState.READY
                 Group {
-                    GroupRow(
+                    SettingsActionRow(
                         stringResource(Res.string.settings_device_a11y_computer),
                         subtitle = grantError ?: if (ready) null else stringResource(Res.string.settings_device_a11y_unauthorized),
-                        subtitleLines = 3,
-                        trailing = if (ready) ({
-                            SettingsButton(stringResource(Res.string.settings_device_a11y_enable), enabled = !granting, onClick = {
-                                if (packageName == null) return@SettingsButton
-                                scope.launch {
-                                    granting = true
-                                    grantError = null
-                                    try {
-                                        api.grantDeviceAdb(packageName)
-                                        platform.refresh()
-                                        platform.enableAccessibility()
-                                    } catch (cancellation: CancellationException) {
-                                        throw cancellation
-                                    } catch (failure: RiffetHttpException) {
-                                        grantError = grantFailure(failure, platform.maker)
-                                    } catch (failure: Throwable) {
-                                        grantError = failure.message
-                                    } finally {
-                                        granting = false
-                                    }
+                        enabled = ready, busy = granting,
+                        onClick = {
+                            if (packageName == null) return@SettingsActionRow
+                            scope.launch {
+                                granting = true
+                                grantError = null
+                                try {
+                                    api.grantDeviceAdb(packageName)
+                                    platform.refresh()
+                                    platform.enableAccessibility()
+                                } catch (cancellation: CancellationException) {
+                                    throw cancellation
+                                } catch (failure: RiffetHttpException) {
+                                    grantError = grantFailure(failure, platform.maker)
+                                } catch (failure: Throwable) {
+                                    grantError = failure.message
+                                } finally {
+                                    granting = false
                                 }
-                            })
-                        }) else null,
+                            }
+                        },
                     )
                 }
                 GroupSpacer()
@@ -256,13 +251,17 @@ private fun AccessibilitySheet(accessibility: DeviceAccessibility, platform: Dev
                         subtitle = if (platform.maker == DeviceMaker.OPPO) stringResource(Res.string.settings_device_a11y_reinstall) else null,
                         subtitleLines = 3,
                         leading = { StepNumber(1) },
-                        trailing = { StepAction(restrictedDone) { platform.request(DevicePermission.RESTRICTED_SETTINGS) } },
+                        trailing = if (restrictedDone) ({ StepDone() }) else null,
+                        chevron = !restrictedDone,
+                        onClick = if (restrictedDone) null else ({ platform.request(DevicePermission.RESTRICTED_SETTINGS) }),
                     )
                 }
                 GroupRow(
                     stringResource(Res.string.settings_device_a11y_open),
                     leading = { StepNumber(if (needsRestricted) 2 else 1) },
-                    trailing = { StepAction(listed) { platform.request(DevicePermission.ACCESSIBILITY) } },
+                    trailing = if (listed) ({ StepDone() }) else null,
+                    chevron = !listed,
+                    onClick = if (listed) null else ({ platform.request(DevicePermission.ACCESSIBILITY) }),
                 )
             }
         }
@@ -286,12 +285,8 @@ private fun StepNumber(number: Int) {
 }
 
 @Composable
-private fun StepAction(done: Boolean, onClick: () -> Unit) {
-    if (done) {
-        Icon(RiffetIcons.Check, contentDescription = null, tint = LocalRiffetColors.current.success, modifier = Modifier.size(LocalInterfaceStyle.current.metrics.iconSize))
-    } else {
-        SettingsButton(stringResource(Res.string.settings_device_a11y_go), onClick = onClick)
-    }
+private fun StepDone() {
+    Icon(RiffetIcons.Check, contentDescription = null, tint = LocalRiffetColors.current.success, modifier = Modifier.size(LocalInterfaceStyle.current.metrics.iconSize))
 }
 
 /** The apps screen control has touched, each with 允许 / 询问 / 禁止; stored on this device only. */
@@ -310,36 +305,21 @@ private fun AppPoliciesGroup() {
     SettingsGroup(stringResource(Res.string.settings_device_apps)) {
         touched.forEach { app ->
             val current = AppPolicy.of(policies[app.packageName]) ?: apps.policy(app.packageName)
-            SettingsRow(app.label) { PolicyMenu(labels, current) { apps.set(app.packageName, it) } }
+            SettingsChoiceRow(
+                app.label, labels.map { it.first.name to it.second }, current.name,
+                onSelect = { id -> labels.firstOrNull { it.first.name == id }?.let { apps.set(app.packageName, it.first) } },
+            )
         }
     }
     SettingsFootnote(stringResource(Res.string.settings_device_apps_note))
 }
 
 @Composable
-private fun PolicyMenu(labels: List<Pair<AppPolicy, String>>, current: AppPolicy, onSelect: (AppPolicy) -> Unit) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    var open by remember { mutableStateOf(false) }
-    Box {
-        SettingsButton(labels.first { it.first == current }.second, onClick = { open = true })
-        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            labels.forEach { (policy, label) ->
-                RiffetMenuItem(onClick = { open = false; onSelect(policy) }, selected = policy == current, showCheck = true) {
-                    Text(label, style = typography.body, color = colors.fg)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CapabilityControl(capability: DeviceCapabilityState, platform: DevicePlatform) {
-    val colors = LocalRiffetColors.current
+private fun CapabilityRow(label: String, capability: DeviceCapabilityState, platform: DevicePlatform) {
     val missing = capability.missing
     when {
-        missing != null -> SettingsButton(stringResource(Res.string.settings_keepalive_allow), onClick = { platform.request(missing) })
-        capability.usable -> SettingsStatusLine(stringResource(Res.string.settings_device_available), colors.success)
-        else -> SettingsStatusLine(stringResource(Res.string.settings_device_unavailable), colors.fg4)
+        missing != null -> GroupRow(label, value = stringResource(Res.string.setm_needs_permission), chevron = true, onClick = { platform.request(missing) })
+        capability.usable -> GroupRow(label, value = stringResource(Res.string.settings_device_available))
+        else -> GroupRow(label, value = stringResource(Res.string.settings_device_unavailable))
     }
 }

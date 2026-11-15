@@ -12,13 +12,11 @@
     <string name="settings_open">Open</string>
     <string name="settings_collapse">Collapse</string>
     <string name="settings_expand">Expand</string>
-    <string name="settings_enabled">Enabled</string>
     <string name="settings_disabled">Disabled</string>
 
     <!-- Settings home and sections -->
     <string name="settings_diagnostics_logs">Logs</string>
     <string name="settings_advanced_diagnostics">Advanced diagnostics</string>
-    <string name="settings_terminal_render_test">Terminal render test</string>
     <string name="settings_terminal_render_test_desc">The result is written to this device log.</string>
     <string name="settings_render_benchmark">Render benchmark</string>
     <string name="settings_provider">Provider</string>
@@ -58,18 +56,13 @@
     <!-- Logs -->
     <string name="settings_upload_logs">Upload logs to the server</string>
     <string name="settings_upload_logs_desc">Stored on the computer running Riffet.</string>
-    <string name="settings_uploading">Uploading…</string>
-    <string name="settings_upload">Upload</string>
     <string name="settings_upload_success">Uploaded: %1$s (%2$d KB)</string>
     <string name="settings_upload_failed">Upload failed: %1$s</string>
     <string name="settings_export_logs">Export logs</string>
     <string name="settings_clear_logs">Clear logs</string>
     <string name="settings_export_logs_desc">Saved to Downloads/Riffet and ready to share.</string>
-    <string name="settings_export_unavailable_desc">This device cannot save files. Use Upload logs to the server above instead.</string>
     <string name="settings_clear">Clear</string>
     <string name="settings_logs_cleared">Logs cleared</string>
-    <string name="settings_exporting">Exporting…</string>
-    <string name="settings_export">Export</string>
     <string name="settings_share_logs">Share logs</string>
     <string name="settings_export_success">Saved to %1$s (%2$d KB)</string>
     <string name="settings_export_failed">Export failed: %1$s</string>
@@ -80,8 +73,6 @@
     <string name="settings_session_alerts_desc">The session you are viewing does not alert.</string>
     <string name="settings_notification_permission">System notification permission</string>
     <string name="settings_allowed">Allowed</string>
-    <string name="settings_not_allowed">Not allowed</string>
-    <string name="settings_system_settings">System settings</string>
     <string name="settings_background">Background</string>
     <string name="settings_background_sessions">Follow running sessions in the background</string>
     <string name="settings_background_sessions_desc">Keeps the connection alive with an ongoing notification; when off, background alerts may be delayed or missing.</string>
@@ -128,7 +119,6 @@
     <string name="settings_build_number">Build number</string>
     <string name="settings_platform">Platform</string>
     <string name="settings_runtime_environment">Runtime environment</string>
-    <string name="settings_checking">Checking…</string>
     <string name="settings_recheck">Check again</string>
     <string name="settings_no_cli_capabilities">No CLI capabilities detected yet.</string>
     <string name="settings_version">Version</string>
@@ -144,7 +134,6 @@
     <string name="settings_persistence">Persistence</string>
     <string name="settings_not_detected">Not detected</string>
     <string name="settings_checked_at">Checked at</string>
-    <string name="settings_available_models">Available models · %1$d</string>
 
     <!-- Backends -->
     <string name="settings_backend_save_note">Saved on the server for new sessions; existing sessions keep their configuration.</string>
@@ -152,14 +141,12 @@
     <string name="settings_new_session_default">Default for new sessions</string>
     <string name="settings_new_session">New sessions</string>
     <string name="settings_cli_builtin_login">CLI login</string>
-    <string name="settings_profile_default_summary">Default for new sessions · %1$s</string>
     <string name="settings_no_providers">No providers yet.</string>
     <string name="settings_default_backend">Default backend</string>
     <string name="settings_current_backend">Currently using %1$s</string>
     <string name="settings_set_as_default">Set as default</string>
     <string name="settings_set_as_default_done">Set as the default for new sessions</string>
     <string name="settings_default">Default</string>
-    <string name="settings_backend_cli_builtin_login">%1$s CLI login</string>
     <string name="settings_name">Name</string>
     <string name="settings_service_address">Service address</string>
     <string name="settings_api_key_hint">Stored only on the server and never shown; leave blank to keep the current key.</string>
@@ -169,9 +156,7 @@
     <string name="settings_api_key_configured">Key configured</string>
     <string name="settings_api_key_missing">No key configured</string>
     <string name="settings_cancel_clear">Cancel clear</string>
-    <string name="settings_clear_key">Clear</string>
     <string name="settings_launch_settings">Launch settings</string>
-    <string name="settings_optional">Optional</string>
     <string name="settings_cli_entry">CLI entry</string>
     <string name="settings_config_dir">Config directory</string>
     <string name="settings_use_cli_default_dir">Use the CLI default directory</string>
@@ -189,10 +174,8 @@
     <string name="settings_model_catalog_failed">Could not read the model list</string>
     <string name="settings_models">Models</string>
     <string name="settings_all_models">Using all models, including ones added later.</string>
-    <string name="settings_models_selected">%1$d models selected.</string>
     <string name="settings_gateway_image_hint">For gateway models, select Image manually, or images become placeholders.</string>
     <string name="settings_gateway_context_hint">Set a length here when the gateway does not declare one; a declaration replaces the gateway value.</string>
-    <string name="settings_fetching">Fetching…</string>
     <string name="settings_fetch_models">Get model list</string>
     <string name="settings_no_models_returned">This address returned no models; you can enter model IDs manually.</string>
     <string name="settings_fetch_failed_manual">Read failed; you can enter model IDs manually.</string>
@@ -238,22 +221,15 @@
     <string name="settings_pair_device_copy">Copy pairing code</string>
     <string name="settings_pair_device_local_only">The server listens only on its own machine; other devices cannot connect.</string>
     <string name="settings_paired_local_only">Stored only on this device</string>
-    <string name="settings_forget_server_title">Forget server?</string>
     <string name="settings_forget_server_body">Only the pairing credential on this device is deleted; connecting again requires pairing.</string>
     <string name="settings_forget_failed">Could not forget the server</string>
     <string name="settings_forget">Forget</string>
 
     <!-- Unsaved changes -->
-    <string name="settings_unsaved_title">Unsaved changes</string>
-    <string name="settings_save_and_back">Save and go back</string>
-    <string name="settings_discard_changes">Discard changes</string>
     <string name="settings_keep_editing">Keep editing</string>
 
     <!-- Service status -->
     <string name="settings_service_read_failed">Could not read server status</string>
-    <string name="settings_service_live">Live · refreshes every 5 s · up %1$s</string>
-    <string name="settings_service_stale">Connection lost; showing the last data</string>
-    <string name="settings_service_refresh">Refresh</string>
     <string name="settings_service_process">Server process</string>
     <string name="settings_service_memory">Memory</string>
     <string name="settings_service_heap">Heap %1$s / %2$s</string>
@@ -286,69 +262,28 @@
     <string name="settings_service_sessions">Sessions</string>
     <string name="settings_service_session_detail">%1$d running · %2$d waiting · %3$d total</string>
     <string name="settings_service_processes">Processes · %1$d</string>
-    <string name="settings_service_end_process_title">End process %1$s?</string>
     <string name="settings_service_end_process_body">SIGTERM will be sent to PID %1$d.\n%2$s</string>
     <string name="settings_service_end_failed">Could not end the process</string>
     <string name="settings_service_end_process">End process</string>
-    <string name="settings_service_end">End</string>
     <string name="settings_service_server_process">Server</string>
     <string name="settings_service_child_process">Child process</string>
 
     <!-- Extensions -->
-    <string name="settings_extension_connection_changed">The connection changed; these edits still belong to %1$s.</string>
-    <string name="settings_extension_switch_connection">Switch to the current connection</string>
-    <string name="settings_config">Configuration</string>
     <string name="settings_select_config">Select configuration</string>
-    <string name="settings_search_extensions">Search extensions</string>
     <string name="settings_discovered_extensions">Discovered extensions</string>
     <string name="settings_new">New</string>
-    <string name="settings_type">Type</string>
-    <string name="settings_all_types">All types</string>
-    <string name="settings_reading_extensions">Reading extensions…</string>
     <string name="settings_no_matching_extensions">No matching extensions</string>
-    <string name="settings_no_extension_dir">No extension directory</string>
-    <string name="settings_extension_disabled_summary">%1$s · disabled</string>
-    <string name="settings_show_more">Show more · %1$d remaining</string>
-    <string name="settings_refresh_list">Refresh list</string>
-    <string name="settings_hide_load_notes">Hide load notes</string>
-    <string name="settings_load_notes">Load notes · %1$d</string>
-    <string name="settings_back_to_extensions">Back to extensions</string>
-    <string name="settings_extension_info">Extension info</string>
     <string name="settings_owner_plugin">Owner plugin</string>
-    <string name="settings_view_plugin">View plugin</string>
-    <string name="settings_extension_management">Extension management</string>
-    <string name="settings_new_extension">New extension</string>
-    <string name="settings_file_name">File name</string>
-    <string name="settings_save_preview">Save preview</string>
-    <string name="settings_file_content">File content</string>
-    <string name="settings_config_file">Configuration file</string>
-    <string name="settings_select_file">Select file</string>
-    <string name="settings_before_save">Before saving</string>
-    <string name="settings_after_save">After saving</string>
-    <string name="settings_reread">Read again</string>
-    <string name="settings_confirm_save">Confirm save</string>
-    <string name="settings_preview_save">Preview save</string>
     <string name="settings_manage">Manage</string>
     <string name="settings_install_plugin">Install plugin</string>
-    <string name="settings_install">Install…</string>
-    <string name="settings_user_scope">User scope</string>
-    <string name="settings_project_scope">Current project</string>
     <string name="settings_extension_runtime">Runtime status</string>
-    <string name="settings_check">Check</string>
-    <string name="settings_mcp_config">MCP configuration</string>
     <string name="settings_reload">Reload</string>
     <string name="settings_reload_mcp_confirm">Reload MCP configuration?</string>
-    <string name="settings_check_results">Check results</string>
-    <string name="settings_authenticate">Authenticate</string>
-    <string name="settings_start_mcp_auth_confirm">Start MCP authorization?</string>
     <string name="settings_discard_unsaved_title">Discard unsaved changes?</string>
-    <string name="settings_confirmation_note">Runs on the current server; existing sessions may need to reload.</string>
-    <string name="settings_execute">Run</string>
 
     <!-- Pairing -->
     <string name="pairing_title_new">Pair a server</string>
     <string name="pairing_title_repair">Pair again</string>
-    <string name="pairing_connect_title">Connect to a server</string>
     <string name="pairing_connect_hint">Run riffet pair on the server, or choose Pair a new device on a connected device to get a pairing code.</string>
     <string name="pairing_server_address">Server address</string>
     <string name="pairing_server_address_placeholder">192.168.1.10 or mac.local</string>
@@ -356,11 +291,9 @@
     <string name="pairing_code_placeholder">8-character code</string>
     <string name="pairing_paste">Paste</string>
     <string name="pairing_scan_start">Scan QR code</string>
-    <string name="pairing_pairing">Pairing…</string>
     <string name="pairing_pair">Pair</string>
     <string name="pairing_discovering">Looking for Riffet on your local network…</string>
     <string name="pairing_discovered_servers">Servers found</string>
-    <string name="pairing_use">Use</string>
     <string name="settings_icon_pack">Interface icons</string>
     <string name="settings_icon_pack_footnote">Applies throughout the interface and is saved on this device. Enabled icon extensions also appear here.</string>
     <string name="settings_icon_pack_loading">Loading icons…</string>
@@ -408,7 +341,6 @@
     <string name="settings_appearance_ui_font">Interface font</string>
     <string name="settings_appearance_mono_font">Monospaced font</string>
     <string name="settings_appearance_background">Background</string>
-    <string name="settings_appearance_refresh">Refresh</string>
     <string name="settings_appearance_resource_failed">Some appearance resources could not be loaded; defaults are used.</string>
     <string name="settings_appearance_catalog_failed">The appearance catalog is temporarily unavailable.</string>
 </resources>

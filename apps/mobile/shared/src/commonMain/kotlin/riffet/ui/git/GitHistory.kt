@@ -43,6 +43,9 @@ import riffet.contracts.GitRefLabel
 import riffet.contracts.GitStatus
 import riffet.ui.app.LocalPageActive
 import riffet.ui.design.AlertDialog
+import riffet.ui.design.ChipButton
+import riffet.ui.design.ChipItem
+import riffet.ui.design.ChipRow
 import riffet.ui.design.RiffetTextButton
 import riffet.ui.icons.Icon
 import riffet.ui.icons.RiffetIcons
@@ -61,77 +64,54 @@ import riffet_mobile.shared.generated.resources.*
 
 private val HistoryRowHeight = 52.dp
 
-private enum class GitPrompt { NEW_BRANCH, CHECK_OUT_REMOTE }
-
-/** The History tab: the branch menu, the Current / All switch, Fetch, and the commit list with its graph. */
+/** The History tab: the branch menu and the Current / All filter in one strip, then the commit list with its graph. */
 @Composable
-internal fun GitHistoryTab(state: GitHistoryState, history: GitHistoryController, status: GitStatus?) {
+internal fun GitHistoryTab(state: GitHistoryState, history: GitHistoryController, status: GitStatus?, onCheckOutRemote: () -> Unit) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    var prompt by remember { mutableStateOf<GitPrompt?>(null) }
     val busy = state.busy
     val refs = state.refs
+    var menu by remember { mutableStateOf(false) }
     // Not a repository: the Changes tab says so; there is no history to show.
     val lanes = remember(state.rows) { (state.rows.maxOfOrNull { it.width } ?: 1).coerceIn(1, GitMaxLanes) }
     val now = remember(state.commits) { platformNowMillis() }
 
     Column(Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            var menu by remember { mutableStateOf(false) }
-            Box(Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(enabled = !busy, role = Role.Button) { menu = true }
-                        .padding(horizontal = 4.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(RiffetIcons.Branch, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = refs?.head ?: status?.branch ?: stringResource(Res.string.git_head),
-                        style = typography.monoSmall,
-                        color = colors.fg,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
+        ChipRow(
+            items = listOf(ChipItem("current", stringResource(Res.string.git_history_current)), ChipItem("all", stringResource(Res.string.git_history_all))),
+            selected = if (state.all) "all" else "current",
+            onSelect = { history.setAll(it == "all") },
+            leading = {
+                Box {
+                    ChipButton(
+                        label = refs?.head ?: status?.branch ?: stringResource(Res.string.git_head),
+                        active = false,
+                        onClick = { if (!busy) menu = true },
+                        icon = RiffetIcons.Branch,
                     )
-                    Icon(RiffetIcons.ChevronDown, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(16.dp))
-                }
-                RiffetDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                    refs?.branches?.forEach { branch ->
-                        RiffetMenuItem(
-                            onClick = { menu = false; history.switchTo(branch.name) },
-                            selected = branch.current == true,
-                            showCheck = true,
-                            enabled = branch.elsewhere != true,
-                        ) { Text(branch.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    }
-                    if (refs != null && refs.remoteCount <= GIT_REMOTES_IN_MENU) {
-                        refs.remotes.take(GIT_REMOTES_IN_MENU).forEach { remote ->
-                            RiffetMenuItem(onClick = { menu = false; history.checkOutRemote(remote.name) }) {
-                                Text(remote.name, style = typography.body, color = colors.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    RiffetDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                        refs?.branches?.forEach { branch ->
+                            RiffetMenuItem(
+                                onClick = { menu = false; history.switchTo(branch.name) },
+                                selected = branch.current == true,
+                                showCheck = true,
+                                enabled = branch.elsewhere != true,
+                            ) { Text(branch.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                        if (refs != null && refs.remoteCount <= GIT_REMOTES_IN_MENU) {
+                            refs.remotes.take(GIT_REMOTES_IN_MENU).forEach { remote ->
+                                RiffetMenuItem(onClick = { menu = false; history.checkOutRemote(remote.name) }) {
+                                    Text(remote.name, style = typography.body, color = colors.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                }
                             }
                         }
+                        if (refs != null && refs.remoteCount > GIT_REMOTES_IN_MENU) {
+                            RiffetMenuItem(text = stringResource(Res.string.git_checkout_remote), onClick = { menu = false; onCheckOutRemote() })
+                        }
                     }
-                    if (refs != null && refs.remoteCount > GIT_REMOTES_IN_MENU) {
-                        RiffetMenuItem(text = stringResource(Res.string.git_checkout_remote), onClick = { menu = false; prompt = GitPrompt.CHECK_OUT_REMOTE })
-                    }
-                    RiffetMenuItem(text = stringResource(Res.string.git_new_branch_menu), onClick = { menu = false; prompt = GitPrompt.NEW_BRANCH })
                 }
-            }
-            SettingsButton(stringResource(Res.string.git_fetch), onClick = history::fetch, enabled = !busy)
-        }
-        Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp)) {
-            SettingsSegmented(
-                options = listOf("current" to stringResource(Res.string.git_history_current), "all" to stringResource(Res.string.git_history_all)),
-                value = if (state.all) "all" else "current",
-                onSelect = { history.setAll(it == "all") },
-            )
-        }
+            },
+        )
 
         when {
             !state.loaded -> Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
@@ -154,24 +134,6 @@ internal fun GitHistoryTab(state: GitHistoryState, history: GitHistoryController
                     }
                 }
             }
-        }
-    }
-
-    prompt?.let { kind ->
-        when (kind) {
-            GitPrompt.NEW_BRANCH -> GitTextPrompt(
-                placeholder = stringResource(Res.string.git_branch_name),
-                confirm = stringResource(Res.string.git_create_switch),
-                onConfirm = { prompt = null; history.createBranch(it) },
-                onDismiss = { prompt = null },
-            )
-
-            GitPrompt.CHECK_OUT_REMOTE -> GitTextPrompt(
-                placeholder = stringResource(Res.string.git_remote_branch),
-                confirm = stringResource(Res.string.git_check_out),
-                onConfirm = { prompt = null; history.checkOutRemote(it) },
-                onDismiss = { prompt = null },
-            )
         }
     }
 }
@@ -224,20 +186,16 @@ private fun GitRefChip(ref: GitRefLabel) {
     )
 }
 
-/** A commit as a page: its message, who and when, the hash with Copy Hash, New Branch from Here, and the files it changed. */
+/** A commit as a page: its message, who and when, the hash, and the files it changed (Copy Hash and New Branch from Here are in the bar). */
 @Composable
 internal fun GitCommitPage(
     hash: String,
     state: GitHistoryState,
-    busy: Boolean,
-    history: GitHistoryController,
     onOpenDiff: (String) -> Unit,
 ) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    val clipboard = LocalClipboardManager.current
     val detail = state.detail?.takeIf { it.hash == hash }
-    var prompt by remember { mutableStateOf(false) }
 
     if (detail == null) {
         Box(Modifier.fillMaxSize().padding(vertical = 40.dp), contentAlignment = Alignment.TopCenter) { Spinner(size = 20.dp) }
@@ -253,11 +211,7 @@ internal fun GitCommitPage(
                         style = typography.caption,
                         color = colors.fg3,
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(detail.hash.take(8), style = typography.monoSmall, color = colors.fg2, modifier = Modifier.weight(1f))
-                        SettingsButton(stringResource(Res.string.git_copy_hash), onClick = { clipboard.setText(AnnotatedString(detail.hash)) })
-                    }
-                    SettingsButton(stringResource(Res.string.git_new_branch_here), onClick = { prompt = true }, enabled = !busy)
+                    Text(detail.hash.take(8), style = typography.monoSmall, color = colors.fg2)
                     Spacer(Modifier.height(4.dp))
                 }
             }
@@ -287,25 +241,19 @@ internal fun GitCommitPage(
             }
         }
     }
-
-    if (prompt) GitTextPrompt(
-        placeholder = stringResource(Res.string.git_branch_name),
-        confirm = stringResource(Res.string.git_create_switch),
-        onConfirm = { prompt = false; history.createBranch(it, base = hash) },
-        onDismiss = { prompt = false },
-    )
 }
 
-/** A dialog asking for one line of text. */
+/** A dialog asking for one line of text; a blank answer is allowed only when [required] is false. */
 @Composable
-private fun GitTextPrompt(placeholder: String, confirm: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit) {
+internal fun GitTextPrompt(title: String, placeholder: String, confirm: String, onConfirm: (String) -> Unit, onDismiss: () -> Unit, required: Boolean = true) {
     var text by remember { mutableStateOf("") }
     val pageActive = LocalPageActive.current
     if (pageActive) riffet.ui.app.PageBackHandler { onDismiss() }
     AlertDialog(
         onDismissRequest = onDismiss,
+        title = { Text(title) },
         text = { SettingsField(value = text, onValueChange = { text = it }, placeholder = placeholder, mono = true) },
-        confirmButton = { RiffetTextButton(enabled = text.isNotBlank(), onClick = { onConfirm(text.trim()) }) { Text(confirm) } },
+        confirmButton = { RiffetTextButton(enabled = !required || text.isNotBlank(), onClick = { onConfirm(text.trim()) }) { Text(confirm) } },
         dismissButton = { RiffetTextButton(onClick = onDismiss) { Text(stringResource(Res.string.git_cancel)) } },
     )
 }

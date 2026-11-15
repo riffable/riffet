@@ -865,6 +865,8 @@ internal fun Workbench(
                     api = api,
                     owner = owner,
                     connection = connection,
+                    status = store.connection.collectAsState().value,
+                    onClose = { navigation.drawerOpen = false },
                     onPaired = onPaired,
                     onOwner = {
                         navigation.drawerOpen = false

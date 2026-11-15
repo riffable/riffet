@@ -179,18 +179,7 @@ internal fun SubagentScreen(
 /** Nothing to show yet: the child is connected, but has not said anything. */
 @Composable
 private fun EmptySubagent() {
-    val designMetrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            Icon(RiffetIcons.Bot, contentDescription = null, tint = colors.fg4, modifier = Modifier.size(designMetrics.iconSize))
-            Text(text = stringResource(Res.string.session_subagent_empty), style = typography.bodySmall, color = colors.fg3)
-        }
-    }
+    riffet.ui.design.EmptyState(stringResource(Res.string.session_subagent_empty), icon = RiffetIcons.Bot)
 }
 
 /** The subagent a page is open on: which call spawned it, and what to call it in the header. */

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="prov_models_enabled">%1$d enabled</string>
+    <string name="prov_models_all">All</string>
+    <string name="prov_add_model">Add model</string>
+    <string name="prov_search_models">Search models</string>
+    <string name="prov_clear_key">Clear API Key</string>
+</resources>

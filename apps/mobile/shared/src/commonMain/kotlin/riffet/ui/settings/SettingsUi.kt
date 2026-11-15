@@ -18,6 +18,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import riffet.ui.icons.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import riffet.ui.pickers.RiffetDropdownMenu
+import riffet.ui.pickers.RiffetMenuItem
+import riffet.ui.pickers.RiffetMenuText
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -130,9 +137,12 @@ internal fun SettingsRow(
     }
 }
 
-/** Longer explanations keep their full width, with actions on a separate line. */
+/**
+ * Longer explanations keep their full width, with buttons on a separate line. Being replaced: a row
+ * is a navigation, switch, choice or action row (mobile.md §2.4); do not add new uses.
+ */
 @Composable
-internal fun SettingsActionRow(title: String, description: String, actions: @Composable () -> Unit) {
+internal fun SettingsButtonsRow(title: String, description: String, actions: @Composable () -> Unit) {
     val metrics = LocalInterfaceStyle.current.metrics
     val typography = LocalRiffetTypography.current
     val colors = LocalRiffetColors.current
@@ -161,6 +171,72 @@ internal fun SettingsSwitchRow(
         enabled = enabled,
         modifier = Modifier.toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange),
     ) { SettingsSwitch(checked = checked, enabled = enabled, onCheckedChange = null) }
+}
+
+/**
+ * A row that is one value out of a few (mobile.md §2.4): the current value at the end, a tap opens
+ * a menu with the choices, the current one checked. [options] are (id, label) pairs.
+ */
+@Composable
+internal fun SettingsChoiceRow(
+    title: String,
+    options: List<Pair<String, String>>,
+    value: String,
+    subtitle: String? = null,
+    enabled: Boolean = true,
+    leading: (@Composable () -> Unit)? = null,
+    onSelect: (String) -> Unit,
+) {
+    var open by remember { mutableStateOf(false) }
+    val colors = LocalRiffetColors.current
+    Box {
+        // Where the current value goes follows the platform, as SettingsNavigationRow does: Android
+        // settings show it as the summary under the title, grouped (iOS-like) styles at the row's end.
+        val current = options.firstOrNull { it.first == value }?.second ?: value
+        val trailing = LocalInterfaceStyle.current.components.lists.grouped
+        GroupRow(
+            // A setting's description is read in full (mobile.md §1.1: setting labels may wrap).
+            title = title,
+            subtitle = if (trailing) subtitle else listOfNotNull(current, subtitle).joinToString("\n"),
+            subtitleLines = 4, leading = leading,
+            value = current.takeIf { trailing },
+            enabled = enabled, onClick = { open = true }, modifier = Modifier.settingsSearchAnchor(title),
+        )
+        // Anchored at the row's end, where the value is.
+        Box(Modifier.align(Alignment.TopEnd)) {
+            RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                options.forEach { (id, label) ->
+                    RiffetMenuItem(onClick = { open = false; if (id != value) onSelect(id) }, selected = id == value, showCheck = true) {
+                        Text(label, style = RiffetMenuText, color = colors.fg)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A row that does one thing (mobile.md §2.4): its title is the verb, in the accent colour, or the
+ * danger colour for a removal, which then belongs in its own group at the bottom of the page.
+ * [busy] shows a spinner in place of the trailing slot while the action runs.
+ */
+@Composable
+internal fun SettingsActionRow(
+    title: String,
+    onClick: () -> Unit,
+    subtitle: String? = null,
+    danger: Boolean = false,
+    enabled: Boolean = true,
+    busy: Boolean = false,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    val colors = LocalRiffetColors.current
+    GroupRow(
+        title = title, subtitle = subtitle, subtitleLines = 2, leading = leading,
+        titleColor = if (danger) colors.danger else colors.accent,
+        trailing = if (busy) ({ riffet.ui.timeline.Spinner(size = 16.dp) }) else null,
+        enabled = enabled && !busy, onClick = onClick, modifier = Modifier.settingsSearchAnchor(title),
+    )
 }
 
 /** A note under a group, aligned with its text inset. */
@@ -229,64 +305,29 @@ internal fun SettingsStatusLine(text: String, tone: Color) {
     }
 }
 
-internal enum class SettingsNoticeKind { INFO, SUCCESS, WARNING, ERROR }
+/** The settings name for [riffet.ui.design.NoticeKind]. */
+internal typealias SettingsNoticeKind = riffet.ui.design.NoticeKind
 
-/** [background] defaults to the card tone of a plain page; [PageBanner] is the one for a grouped page. */
+/** A [riffet.ui.design.Notice]; [background] defaults to the card tone. */
 @Composable
 internal fun SettingsMessageBanner(
     message: String,
     kind: SettingsNoticeKind,
     action: String? = null,
     onAction: (() -> Unit)? = null,
-    background: Color = cardColor(),
+    background: Color = LocalRiffetSurfaces.current.card,
     maxLines: Int = Int.MAX_VALUE,
     onOverflow: ((Boolean) -> Unit)? = null,
-) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    val (icon, tone) = when (kind) {
-        SettingsNoticeKind.INFO -> RiffetIcons.Info to colors.fg3
-        SettingsNoticeKind.SUCCESS -> RiffetIcons.Check to colors.accent
-        SettingsNoticeKind.WARNING -> RiffetIcons.Warning to colors.warning
-        SettingsNoticeKind.ERROR -> RiffetIcons.Error to colors.danger
-    }
-    val actionable = action != null && onAction != null
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(metrics.groupRadius))
-            .background(background)
-            // With an action, its 48dp touch target sets the height and the row centres on it.
-            .padding(start = metrics.pageInset, end = if (actionable) metrics.controlInset / 2 else metrics.pageInset, top = if (actionable) 0.dp else metrics.rowPadding, bottom = if (actionable) 0.dp else metrics.rowPadding),
-        verticalAlignment = if (actionable) Alignment.CenterVertically else Alignment.Top,
-    ) {
-        Icon(
-            icon,
-            contentDescription = null,
-            tint = tone,
-            modifier = Modifier.size(14.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(text = message, style = typography.caption, color = colors.fg2, modifier = Modifier.weight(1f),
-            maxLines = maxLines, overflow = TextOverflow.Ellipsis, onTextLayout = { onOverflow?.invoke(it.hasVisualOverflow) })
-        if (action != null && onAction != null) {
-            riffet.ui.design.RiffetTextButton(onClick = onAction, modifier = Modifier.padding(start = 8.dp)) {
-                Text(action)
-            }
-        }
-    }
-}
+) = riffet.ui.design.Notice(message, kind, action = action, onAction = onAction, background = background, maxLines = maxLines, onOverflow = onOverflow)
 
-/** A banner on a settings page, in the grouped cards' own tone so it reads against the grouped page. */
+/** A [riffet.ui.design.Notice] on a settings page. */
 @Composable
-internal fun PageBanner(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) {
-    SettingsMessageBanner(message, kind, action, onAction, background = LocalRiffetSurfaces.current.card)
-}
+internal fun PageBanner(message: String, kind: SettingsNoticeKind, action: String? = null, onAction: (() -> Unit)? = null) =
+    riffet.ui.design.Notice(message, kind, action = action, onAction = onAction)
 
-/** A label and its value in a group, the value in the monospace face and free to wrap, e.g. a path. */
+/** A label and its value in a group, free to wrap; [mono] for what is code (a path, a command, an id). */
 @Composable
-internal fun SettingsValueRow(label: String, value: String) {
+internal fun SettingsValueRow(label: String, value: String, mono: Boolean = true) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
@@ -299,7 +340,7 @@ internal fun SettingsValueRow(label: String, value: String) {
             modifier = if (!LocalInterfaceStyle.current.components.lists.grouped) Modifier.weight(1f) else Modifier)
         Text(
             text = value,
-            style = typography.monoSmall,
+            style = if (mono) typography.monoSmall else typography.bodySmall.copy(fontFeatureSettings = "tnum"),
             color = colors.fg3,
             textAlign = TextAlign.End,
             maxLines = 3,

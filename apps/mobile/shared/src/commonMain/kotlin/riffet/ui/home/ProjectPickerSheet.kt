@@ -1,6 +1,8 @@
 package riffet.ui.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -17,6 +19,7 @@ import riffet.contracts.Project
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.RiffetSearchField
 import riffet.ui.icons.RiffetIcons
+import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.pickers.LocalPickerHost
 import riffet.ui.pickers.OptionRow
 import riffet.ui.pickers.PickerPage
@@ -74,17 +77,12 @@ internal fun ProjectPickerSheet(
                 modifier = Modifier.padding(horizontal = SheetInset, vertical = metrics.controlInset / 2),
             )
             Column(Modifier.fillMaxWidth().weight(1f, fill = searchable).verticalScroll(rememberScrollState()).padding(bottom = metrics.controlInset)) {
-                if (onChooseDirectory != null && query.isBlank()) OptionRow(
-                    label = stringResource(Res.string.session_choose_other_directory),
-                    icon = RiffetIcons.FolderPlus,
-                    selected = false,
-                    onClick = { browse = true; host?.dismiss?.invoke() },
-                )
                 if (allLabel != null && query.isBlank()) OptionRow(
                     label = allLabel,
                     selected = selectedId == null,
                     onClick = { pick(null) },
                 )
+                if (allLabel != null && query.isBlank()) Separator()
                 shown.forEach { (project, nested) ->
                     Box(if (nested && query.isBlank()) Modifier.padding(start = metrics.rowPadding) else Modifier) {
                         OptionRow(
@@ -97,9 +95,26 @@ internal fun ProjectPickerSheet(
                         )
                     }
                 }
+                if (onChooseDirectory != null && query.isBlank()) {
+                    Separator()
+                    if (onChooseDirectory != null && query.isBlank()) OptionRow(
+                        label = stringResource(Res.string.session_choose_other_directory),
+                        icon = RiffetIcons.FolderPlus,
+                        selected = false,
+                        tone = LocalRiffetColors.current.accent,
+                        onClick = { browse = true; host?.dismiss?.invoke() },
+                    )
+                }
             }
         }
     }
+}
+
+/** Sets the scope row and the action row apart from the directory list. */
+@Composable
+private fun Separator() {
+    val metrics = LocalInterfaceStyle.current.metrics
+    Box(Modifier.fillMaxWidth().padding(vertical = metrics.controlInset / 2).height(metrics.hairlineWidth).background(LocalRiffetColors.current.line))
 }
 
 /** Origins in order, each followed by its worktrees; a worktree whose origin is gone lists on its own. */

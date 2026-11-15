@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Model picker sheet -->
+    <string name="pmodel_title">选择模型</string>
+    <string name="pmodel_loading">加载中…</string>
+    <string name="pmodel_switching">切换中…</string>
+    <string name="pmodel_retry">重试</string>
+    <string name="pmodel_none">没有可用的模型</string>
+    <string name="pmodel_unavailable">不可用</string>
+    <string name="pmodel_load_failed">无法加载模型：%1$s</string>
+    <string name="pmodel_limit_reached">已达用量上限</string>
+    <string name="pmodel_fast">Fast</string>
+    <string name="pmodel_max">MAX</string>
+    <string name="pmodel_context">上下文</string>
+    <string name="pmodel_param_chip">%1$s · %2$s</string>
+</resources>

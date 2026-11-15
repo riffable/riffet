@@ -94,9 +94,10 @@ internal fun DeviceConfirmSheet(request: ConfirmRequest, onAllow: () -> Unit, on
                     Text(stringResource(riffet.shared.R.string.host_device_grant_valid, it), style = typography.caption, color = colors.fg3)
                 }
                 Spacer(Modifier.height(20.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    RiffetButton(stringResource(riffet.shared.R.string.host_device_confirm_deny), primary = false, onClick = onDeny, modifier = Modifier.weight(1f))
-                    RiffetButton(stringResource(riffet.shared.R.string.host_device_confirm_allow), primary = true, onClick = onAllow, modifier = Modifier.weight(1f))
+                // Allow leads as the filled primary; deny is the secondary one below it.
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    RiffetButton(stringResource(riffet.shared.R.string.host_device_confirm_allow), primary = true, onClick = onAllow, modifier = Modifier.fillMaxWidth())
+                    RiffetButton(stringResource(riffet.shared.R.string.host_device_confirm_deny), primary = false, onClick = onDeny, modifier = Modifier.fillMaxWidth())
                 }
             }
         }

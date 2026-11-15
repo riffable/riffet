@@ -35,6 +35,7 @@ import riffet_mobile.shared.generated.resources.session_delete_body
 import riffet_mobile.shared.generated.resources.session_delete_confirm
 import riffet_mobile.shared.generated.resources.session_delete_discussions
 import riffet_mobile.shared.generated.resources.session_delete_schedules
+import riffet_mobile.shared.generated.resources.confirm_delete_session_title
 import riffet_mobile.shared.generated.resources.session_delete_title
 
 private const val SCOPE_CHANGED = "SESSION_DELETE_SCOPE_CHANGED"
@@ -152,7 +153,7 @@ internal fun SessionDeletionDialog(deletion: SessionDeletion) {
     val effects = target.preview.effects
     AlertDialog(
         onDismissRequest = deletion::dismiss,
-        title = { Text(stringResource(Res.string.session_delete_title)) },
+        title = { Text(stringResource(Res.string.confirm_delete_session_title, target.session.title)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(stringResource(Res.string.session_delete_body))

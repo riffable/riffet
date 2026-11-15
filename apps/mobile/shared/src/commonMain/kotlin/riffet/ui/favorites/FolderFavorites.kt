@@ -1,36 +1,17 @@
 package riffet.ui.favorites
 
-import riffet.ui.design.LocalRiffetSurfaces
-import riffet.ui.design.LocalInterfaceStyle
-import riffet.ui.design.surfaces
-import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.LocalIndication
-import androidx.compose.foundation.indication
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.ui.draw.drawBehind
 import riffet.ui.pickers.RiffetDropdownMenu
 import riffet.ui.pickers.RiffetMenuItem
 import riffet.ui.theme.LocalRiffetMotion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import riffet.ui.design.AlertDialog
 import riffet.ui.icons.Icon
 import androidx.compose.material3.Text
@@ -45,8 +26,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -151,7 +130,7 @@ private fun folderName(path: String): String = path.split('/').lastOrNull { it.i
 internal fun favoriteName(favorite: FolderFavorite): String = favorite.label?.takeIf { it.isNotBlank() } ?: folderName(favorite.path)
 
 /**
- * The favorites as a scrolling row of chips. A tap opens one; a long press offers 重命名, 上移,
+ * The favorites as a scrolling row of chips. A tap opens one; in edit mode (the pencil at the end) or on a long press a chip offers 重命名, 上移,
  * 下移 and 取消收藏. A folder that is gone is greyed with 不存在 and only offers removal.
  */
 @Composable
@@ -162,6 +141,8 @@ internal fun FolderFavoriteChips(state: FolderFavoritesState, currentPath: Strin
     if (state.favorites.isNotEmpty()) shown.value = state.favorites
     // Read here, in composition: the LazyRow content lambda is memoized on its captures and would not see a plain holder change.
     val rows = shown.value
+    var editing by remember { mutableStateOf(false) }
+    if (editing && state.favorites.isEmpty()) editing = false
     AnimatedVisibility(visible = state.favorites.isNotEmpty(), enter = motion.expandIn(), exit = motion.collapseOut()) {
         LazyRow(
             modifier = modifier.fillMaxWidth(),
@@ -172,9 +153,21 @@ internal fun FolderFavoriteChips(state: FolderFavoritesState, currentPath: Strin
                 FavoriteChip(
                     state, favorite,
                     current = favorite.path == currentPath,
+                    editing = editing,
                     onOpen = { onOpen(favorite) },
                     modifier = Modifier.animateItem(fadeInSpec = motion.effects(), placementSpec = motion.spatial(), fadeOutSpec = motion.effects()),
                 )
+            }
+            // Rename and reorder also have a visible way in; the long press stays as the shortcut.
+            item(key = "edit") {
+                riffet.ui.design.RiffetIconButton(onClick = { editing = !editing }, modifier = Modifier.animateItem()) {
+                    Icon(
+                        if (editing) RiffetIcons.Check else RiffetIcons.Pencil,
+                        contentDescription = stringResource(if (editing) Res.string.homem_favorites_done else Res.string.homem_favorites_edit),
+                        tint = if (editing) LocalRiffetColors.current.accent else LocalRiffetColors.current.fg3,
+                        modifier = Modifier.size(16.dp),
+                    )
+                }
             }
         }
     }
@@ -185,48 +178,22 @@ private class Held<T>(var value: T)
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FavoriteChip(state: FolderFavoritesState, favorite: FolderFavorite, current: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
-    val designMetrics = LocalInterfaceStyle.current.metrics
-    val motion = LocalRiffetMotion.current
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
+private fun FavoriteChip(state: FolderFavoritesState, favorite: FolderFavorite, current: Boolean, editing: Boolean, onOpen: () -> Unit, modifier: Modifier = Modifier) {
     var menu by remember { mutableStateOf(false) }
     var renaming by remember { mutableStateOf(false) }
     val removeFailed = stringResource(Res.string.favorites_error_remove)
     val reorderFailed = stringResource(Res.string.favorites_error_reorder)
     val renameFailed = stringResource(Res.string.favorites_error_rename)
-    val container by animateColorAsState(if (current) surfaces.selected else surfaces.card, motion.effects(), label = "favorite-chip-container")
-    val visualHeight = designMetrics.smallIconSize + designMetrics.controlInset
-    val source = remember { MutableInteractionSource() }
-    val indication = LocalIndication.current
+    val missing = stringResource(Res.string.favorites_missing)
     Box(modifier = modifier) {
-        Row(
-            modifier = Modifier
-                .heightIn(min = designMetrics.controlHeight)
-                .combinedClickable(interactionSource = source, indication = null, onClick = { if (favorite.exists) onOpen() else menu = true }, onLongClick = { menu = true })
-                .padding(vertical = ((designMetrics.controlHeight - visualHeight) / 2).coerceAtLeast(0.dp))
-                .clip(RoundedCornerShape(LocalInterfaceStyle.current.controlRadius))
-                .drawBehind { drawRect(container) }
-                .indication(source, indication)
-                .heightIn(min = visualHeight)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(RiffetIcons.StarFilled, contentDescription = null, tint = if (favorite.exists) colors.warning else colors.fg4, modifier = Modifier.size(12.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = favoriteName(favorite),
-                style = typography.label,
-                color = if (!favorite.exists) surfaces.disabledContent else if (current) surfaces.selectedContent else colors.fg,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 160.dp),
-            )
-            if (!favorite.exists) {
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(Res.string.favorites_missing), style = typography.caption, color = colors.fg4, maxLines = 1)
-            }
-        }
+        riffet.ui.design.ChipButton(
+            label = if (favorite.exists) favoriteName(favorite) else favoriteName(favorite) + " · " + missing,
+            active = current,
+            onClick = { if (favorite.exists && !editing) onOpen() else menu = true },
+            icon = if (favorite.exists) RiffetIcons.StarFilled else RiffetIcons.Star,
+            trailingIcon = if (editing) RiffetIcons.Ellipsis else null,
+            onLongClick = { menu = true },
+        )
         RiffetDropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             val index = state.favorites.indexOfFirst { it.id == favorite.id }
             if (favorite.exists) {

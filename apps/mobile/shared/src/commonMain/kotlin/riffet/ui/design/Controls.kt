@@ -12,6 +12,8 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -202,6 +204,10 @@ internal fun SegmentedControl(
                             else -> RoundedCornerShape(0.dp)
                         },
                         modifier = Modifier.heightIn(min = metrics.segmentedHeight),
+                        // The check takes a third of a segment; with three or more it truncates the labels,
+                        // and the filled segment already marks the choice.
+                        // The fill marks the chosen segment; a check on top would mark it twice (mobile.md §1.1).
+                        icon = {},
                     ) { Text(label, style = LocalRiffetTypography.current.segmented, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                 }
             }
@@ -339,25 +345,63 @@ internal fun ChipRow(
 
 /**
  * A chip that opens a picker rather than toggling: [label] with a trailing chevron, filled like a
- * selected chip while [active] (a scope is set). Sized and shaped like [ChipRow]'s chips.
+ * selected chip while [active] (a scope is set). Sized and shaped like [ChipRow]'s chips and
+ * [ToggleChip], so a row can mix the three.
  */
 @Composable
-internal fun ChipButton(label: String, active: Boolean, onClick: () -> Unit, icon: ImageVector? = null) {
+internal fun ChipButton(
+    label: String,
+    active: Boolean,
+    onClick: () -> Unit,
+    icon: ImageVector? = null,
+    enabled: Boolean = true,
+    /** Ahead of the chevron; null for a chip that acts rather than opens a menu (jump to a folder). */
+    trailingIcon: ImageVector? = RiffetIcons.ChevronDown,
+    /** A second gesture on the chip (the custom-drawn chip only). */
+    onLongClick: (() -> Unit)? = null,
+) = ChipFrame(label, selected = active, enabled = enabled, role = Role.Button, onClick = onClick,
+    leadingIcon = icon, trailingIcon = trailingIcon, onLongClick = onLongClick)
+
+/**
+ * An on/off option as a chip (Fast, Max): the selected fill while [selected], nothing else — one
+ * mark for one state (mobile.md §1.1). The same chip as [ChipButton], without the chevron.
+ */
+@Composable
+internal fun ToggleChip(label: String, selected: Boolean, onToggle: (Boolean) -> Unit, enabled: Boolean = true) =
+    ChipFrame(label, selected = selected, enabled = enabled, role = Role.Switch, onClick = { onToggle(!selected) },
+        leadingIcon = null, trailingIcon = null)
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ChipFrame(
+    label: String,
+    selected: Boolean,
+    enabled: Boolean,
+    role: Role,
+    onClick: () -> Unit,
+    leadingIcon: ImageVector?,
+    trailingIcon: ImageVector?,
+    onLongClick: (() -> Unit)? = null,
+) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
     val glyph = metrics.smallIconSize * 0.85f
     if (LocalInterfaceStyle.current.components.controls.chips == ComponentBackend.MATERIAL) {
-        FilterChip(selected = active, onClick = onClick,
+        FilterChip(selected = selected, onClick = onClick, enabled = enabled,
             label = { Text(label, style = LocalRiffetTypography.current.buttonSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp)) },
-            leadingIcon = icon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(glyph)) } },
-            trailingIcon = { Icon(RiffetIcons.ChevronDown, contentDescription = null, modifier = Modifier.size(glyph)) },
+            leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(glyph)) } },
+            trailingIcon = trailingIcon?.let { { Icon(it, contentDescription = null, modifier = Modifier.size(glyph)) } },
             shape = RoundedCornerShape(metrics.controlRadius))
         return
     }
     val colors = LocalRiffetColors.current
     val s = surfaces
-    val tint by animateColorAsState(if (active) s.selectedContent else colors.fg2, motion.effects(), label = "chipButton")
-    val fill by animateColorAsState(if (active) s.selected else s.press, motion.effects(), label = "chipButton-fill")
+    val tint by animateColorAsState(when {
+        !enabled -> s.disabledContent
+        selected -> s.selectedContent
+        else -> colors.fg2
+    }, motion.effects(), label = "chip")
+    val fill by animateColorAsState(if (selected) s.selected else s.press, motion.effects(), label = "chip-fill")
     Row(
         Modifier
             .height(metrics.controlHeight)
@@ -365,14 +409,14 @@ internal fun ChipButton(label: String, active: Boolean, onClick: () -> Unit, ico
             .drawBehind {
                 drawRoundRect(fill, topLeft = Offset(0f, ((metrics.controlHeight - metrics.segmentedHeight) / 2).coerceAtLeast(0.dp).toPx()), size = Size(size.width, metrics.segmentedHeight.toPx()), cornerRadius = CornerRadius(metrics.controlRadius.toPx()))
             }
-            .clickable(role = Role.Button, onClick = onClick)
+            .combinedClickable(enabled = enabled, role = role, onClick = onClick, onLongClick = onLongClick)
             .padding(horizontal = metrics.rowPadding * 3 / 4),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 3),
     ) {
-        icon?.let { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(glyph)) }
+        leadingIcon?.let { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(glyph)) }
         Text(label, color = tint, style = LocalRiffetTypography.current.buttonSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = 160.dp))
-        Icon(RiffetIcons.ChevronDown, contentDescription = null, tint = tint, modifier = Modifier.size(glyph))
+        trailingIcon?.let { Icon(it, contentDescription = null, tint = tint, modifier = Modifier.size(glyph)) }
     }
 }
 

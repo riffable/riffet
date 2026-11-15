@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gitp_new_checkpoint">New Checkpoint</string>
+    <string name="gitp_new_branch">New Branch</string>
+    <string name="gitp_new_worktree">New Worktree</string>
+    <string name="gitp_checkout_remote_title">Check Out Remote Branch</string>
+    <string name="gitp_push_to_remote">Push to %1$s</string>
+    <string name="gitp_no_files">No files</string>
+    <string name="gitp_created">Created</string>
+    <string name="gitp_files">Files</string>
+    <string name="gitp_excluded_label">Excluded</string>
+    <string name="gitp_changes_on_restore">Changes on Restore</string>
+    <string name="gitp_branch">Branch</string>
+    <string name="gitp_path">Path</string>
+    <string name="gitp_remove_worktree">Remove Worktree</string>
+    <string name="gitp_remove_worktree_title">Remove “%1$s”?</string>
+</resources>

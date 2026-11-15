@@ -253,6 +253,11 @@ fun InteractionCard(
         update { it.interactionChanged(interaction).selectOption(optionId) }
     }
 
+    // A single-choice question without free text is answered by the tap itself; multi-select and
+    // free text keep their submit button.
+    val answerAction = shown.actions.firstOrNull { carriesSelection(shown, it.id) }?.id
+    val tapAnswers = isQuestion && shown.multiple != true && shown.allowOther != true && shown.options.isNotEmpty() && answerAction != null
+
     fun changeOther(value: String) {
         update { it.interactionChanged(interaction).changeOtherText(value) }
     }
@@ -353,7 +358,10 @@ fun InteractionCard(
                                     indication = LocalIndication.current, enabled = interactive, role = Role.Checkbox) { changeOption(option.id) }
                             } else {
                                 Modifier.selectable(selected = checked, interactionSource = source,
-                                    indication = LocalIndication.current, enabled = interactive, role = Role.RadioButton) { changeOption(option.id) }
+                                    indication = LocalIndication.current, enabled = interactive, role = Role.RadioButton) {
+                                    changeOption(option.id)
+                                    if (tapAnswers) submit(answerAction!!)
+                                }
                             }
                             val mark: @Composable () -> Unit = {
                                 if (shown.multiple == true) Checkbox(checked, onCheckedChange = null, enabled = interactive)
@@ -365,7 +373,6 @@ fun InteractionCard(
                                 modifier = Modifier.fillMaxWidth().heightIn(min = designMetrics.controlHeight)
                                     .clip(shape)
                                     .then(if (recipe.focusBorder && focused) Modifier.border(designMetrics.focusWidth, LocalRiffetSurfaces.current.focus, shape) else Modifier)
-                                    .background(if (checked && recipe.selectionFill) LocalRiffetSurfaces.current.selected else androidx.compose.ui.graphics.Color.Transparent)
                                     .then(selection).padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -373,9 +380,8 @@ fun InteractionCard(
                                 Text(option.label, style = if (recipe.grouped) typography.body else typography.bodySmall,
                                     color = when {
                                         !interactive -> LocalRiffetSurfaces.current.disabledContent
-                                        checked && recipe.selectionFill -> LocalRiffetSurfaces.current.selectedContent
-                                        checked -> colors.accent
-                                        else -> colors.fg2
+                                        // The mark says which is chosen; the label stays ink.
+                                        else -> colors.fg
                                     }, modifier = Modifier.weight(1f))
                                 if (recipe.selectionAtEnd) {
                                     Spacer(Modifier.width(12.dp))
@@ -466,7 +472,10 @@ fun InteractionCard(
 
         // The pressed button carries the spinner; the caption is only for an action no button shows.
         val postingAction = submission?.takeIf { it.phase == SubmissionPhase.POSTING }?.request?.action
-        val buttonActions = shown.actions.map { it.id }.filter { it != "next" || (!isQuestion && !selectsOptions) }
+        // A tap-to-answer question hides its answer button, so posting that answer shows the caption.
+        val buttonActions = shown.actions.map { it.id }
+            .filter { it != "next" || (!isQuestion && !selectsOptions) }
+            .filter { !(tapAnswers && it == answerAction) }
 
         if (!isQuestion && !selectsOptions) {
             // The CLI's own choices, in its own order. The focused row leads; a clearly negative
@@ -484,7 +493,7 @@ fun InteractionCard(
             }
         } else {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                shown.actions.filter { it.id != "next" }.forEach { action ->
+                shown.actions.filter { it.id != "next" && !(tapAnswers && it.id == answerAction) }.forEach { action ->
                     // A submit carries the draft, an `answer` is a question's own submit: both are the
                     // primary action and both wait for a selection, whether the kind is question or plan.
                     val submitsSelection = carriesSelection(shown, action.id)
@@ -783,8 +792,9 @@ private fun ApprovalNotices(
         stringResource(if (it.kind == InteractionErrorKind.SUBMIT) Res.string.timeline_interaction_submit_failed else Res.string.timeline_interaction_sync_failed)
     }
     val text = error ?: verifyNotice ?: outcome ?: notice
-    if (text != null) Text(text, style = typography.caption, color = if (error != null) colors.danger else colors.warning,
-        maxLines = if (compact) 3 else Int.MAX_VALUE, overflow = TextOverflow.Ellipsis)
+    if (text != null) riffet.ui.design.Notice(text, if (error != null) riffet.ui.design.NoticeKind.ERROR else riffet.ui.design.NoticeKind.WARNING,
+        // Inside the card, a faint ink tint sets it apart; the selection tone would read as a chosen option.
+        background = LocalRiffetSurfaces.current.press, maxLines = if (compact) 3 else Int.MAX_VALUE)
     val reason = state.submission?.message?.takeIf { state.submission?.phase == SubmissionPhase.UNCERTAIN && it.isNotBlank() && it != text }
     if (!compact && reason != null) Text(reason, style = typography.caption, color = colors.fg3)
     if (state.canSync) {

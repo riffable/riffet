@@ -1,300 +1,297 @@
 package riffet.ui.settings
 
-import riffet.ui.design.LocalInterfaceStyle
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material3.*
-import riffet.ui.design.RiffetTextButton
-import riffet.ui.icons.Icon
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
-import riffet_mobile.shared.generated.resources.*
-import riffet.contracts.*
+import riffet.contracts.ExtensionContext
+import riffet.contracts.ExtensionInventory
+import riffet.contracts.ExtensionManagementCapabilities
+import riffet.contracts.ExtensionActionRequest
+import riffet.contracts.NativeBackendId
+import riffet.contracts.NativeBackendProfileSettings
 import riffet.shared.RiffetApi
-import riffet.ui.pickers.RiffetDropdownMenu
-import riffet.ui.pickers.RiffetMenuItem
-import riffet.ui.theme.LocalRiffetColors
-import riffet.ui.theme.LocalRiffetTypography
-import riffet.ui.theme.LocalRiffetMotion
 import riffet.shared.backendProfiles
-import riffet.shared.createExtensionDocument
-import riffet.shared.extension
 import riffet.shared.extensionAction
 import riffet.shared.extensionCapabilities
-import riffet.shared.extensionDocument
-import riffet.shared.extensionRuntime
 import riffet.shared.extensions
-import riffet.shared.saveExtensionDocument
+import riffet.ui.app.LocalRiffetSnackbar
+import riffet.ui.app.PageBarAction
+import riffet.ui.app.PageBarProgress
+import riffet.ui.app.PageHost
+import riffet.ui.app.PageMoreAction
+import riffet.ui.app.PageSearch
+import riffet.ui.app.PageStack
+import riffet.ui.design.ChipButton
+import riffet.ui.design.ChipItem
+import riffet.ui.design.ChipRow
+import riffet.ui.design.ConfirmDialog
+import riffet.ui.design.GroupRow
+import riffet.ui.design.LocalInterfaceStyle
+import riffet.ui.design.RiffetTextButton
+import riffet.ui.icons.RiffetIcons
+import riffet.ui.pickers.RiffetDropdownMenu
+import riffet.ui.pickers.RiffetMenuItem
+import riffet.ui.settings.extensions.CenteredSpinner
+import riffet.ui.settings.extensions.ExtRoute
+import riffet.ui.settings.extensions.ExtensionCreatePage
+import riffet.ui.settings.extensions.ExtensionDetailPage
+import riffet.ui.settings.extensions.ExtensionDiagnosticsPage
+import riffet.ui.settings.extensions.ExtensionEditorPage
+import riffet.ui.settings.extensions.ExtensionIcon
+import riffet.ui.settings.extensions.ExtensionInstallPage
+import riffet.ui.settings.extensions.ExtensionRuntimePage
+import riffet.ui.settings.extensions.extensionKind
+import riffet.ui.settings.extensions.extensionKindOrder
+import riffet.ui.settings.extensions.extensionScope
+import riffet.ui.theme.LocalRiffetColors
+import riffet.ui.theme.LocalRiffetTypography
+import riffet_mobile.shared.generated.resources.*
 
-/** One active operation at a time keeps an edit pinned to its original server/profile. */
-internal class ExtensionsController(private val api: RiffetApi, private val scope: CoroutineScope, private val projectId: String?) {
+/** What the pages of the extension directory share: the agent and config in scope, and what the server lists for them. */
+internal class ExtensionsController(val api: RiffetApi, private val scope: CoroutineScope, private val projectId: String?) {
     var backend by mutableStateOf(NativeBackendId.CURSOR)
     var profiles by mutableStateOf<List<NativeBackendProfileSettings>>(emptyList())
     var profileId by mutableStateOf("")
     var inventory by mutableStateOf<ExtensionInventory?>(null)
-    var detail by mutableStateOf<ExtensionDetail?>(null)
-    var document by mutableStateOf<ExtensionDocument?>(null)
-    var text by mutableStateOf("")
-    var creating by mutableStateOf<ExtensionCreateTarget?>(null)
-    var path by mutableStateOf("")
-    var busy by mutableStateOf(false)
-    var error by mutableStateOf<String?>(null)
-    var notice by mutableStateOf<String?>(null)
     var capabilities by mutableStateOf<ExtensionManagementCapabilities?>(null)
-    var runtime by mutableStateOf<ExtensionRuntimeReport?>(null)
-    val dirty get() = creating != null || (document != null && text != document!!.content)
+    /** True from the first frame, so the page opens on a spinner rather than an empty list. */
+    var loading by mutableStateOf(true)
+    var error by mutableStateOf<String?>(null)
     val context get() = ExtensionContext(backend, profileId, projectId)
-    val serverUrl get() = api.baseUrl
-    fun matches(api: RiffetApi, projectId: String?) = this.api === api && this.projectId == projectId
+    private var job: Job? = null
 
-    private fun perform(block: suspend () -> Unit) {
-        if (busy) return
-        busy = true; error = null
-        scope.launch {
+    private fun launch(block: suspend () -> Unit) {
+        job?.cancel()
+        loading = true; error = null
+        job = scope.launch {
             try { block() }
             catch (cancel: CancellationException) { throw cancel }
             catch (failure: Throwable) { error = failure.message ?: getString(Res.string.settings_extra_ext_action_failed) }
-            finally { busy = false }
+            finally { loading = false }
         }
     }
-    fun clear() { detail = null; document = null; text = ""; creating = null; path = "" }
-    fun chooseBackend(value: NativeBackendId) = perform {
-        clear(); backend = value; profiles = emptyList(); profileId = ""; inventory = null; capabilities = null; runtime = null
-        val response = api.backendProfiles(value)
-        profiles = response.profiles
-        profileId = response.defaultProfileId ?: profiles.firstOrNull { it.isDefault == true }?.id ?: profiles.firstOrNull()?.id.orEmpty()
-        if (profileId.isNotEmpty()) load()
-    }
+
     private suspend fun load() {
-        inventory = api.extensions(context)
-        capabilities = try { api.extensionCapabilities(context) } catch (cancel: CancellationException) { throw cancel } catch (_: Throwable) { null }
+        val scoped = context
+        val listed = api.extensions(scoped)
+        val allowed = try { api.extensionCapabilities(scoped) } catch (cancel: CancellationException) { throw cancel } catch (_: Throwable) { null }
+        inventory = listed; capabilities = allowed
     }
-    fun chooseProfile(id: String) = perform { clear(); profileId = id; inventory = null; capabilities = null; runtime = null; load() }
-    fun refresh() = perform { clear(); load() }
-    fun open(id: String) = perform {
-        clear(); detail = api.extension(context, id)
-        val file = detail?.files?.firstOrNull { it.id == detail?.item?.documentId } ?: detail?.files?.firstOrNull()
-        if (file != null) { document = api.extensionDocument(context, file.id); text = document!!.content }
-    }
-    fun openFile(id: String) = perform { document = api.extensionDocument(context, id); text = document!!.content; creating = null }
-    suspend fun create(target: ExtensionCreateTarget) {
-        clear(); creating = target
-        path = listOf(target.directory, if (target.kind == "skill") "my-skill/SKILL.md" else target.fileName ?: "my-extension.md").filter { it.isNotEmpty() }.joinToString("/")
-        text = target.template ?: when (target.kind) {
-            "skill" -> getString(Res.string.settings_extra_ext_template_skill)
-            "mcp" -> "{\n  \"mcpServers\": {}\n}\n"
-            "hook" -> "{}\n"
-            else -> getString(Res.string.settings_extra_ext_template_instructions)
+
+    fun chooseBackend(value: NativeBackendId) {
+        backend = value; profiles = emptyList(); profileId = ""; inventory = null; capabilities = null
+        launch {
+            val response = api.backendProfiles(value)
+            profiles = response.profiles
+            profileId = response.defaultProfileId ?: profiles.firstOrNull { it.isDefault == true }?.id ?: profiles.firstOrNull()?.id.orEmpty()
+            if (profileId.isNotEmpty()) load()
         }
     }
-    fun save(onSaved: () -> Unit = {}) = perform {
-        val target = creating
-        val previous = document
-        val saved = if (target != null) api.createExtensionDocument(context, target.id, path, text)
-            else if (previous?.editable == true) api.saveExtensionDocument(context, previous.id, text, previous.contentHash)
-            else return@perform
-        document = saved; text = saved.content; creating = null; notice = saved.applyEffect
-        try { inventory = api.extensions(context) } catch (cancel: CancellationException) { throw cancel } catch (_: Throwable) { notice = getString(Res.string.settings_extra_ext_saved_refresh_failed) }
-        onSaved()
+
+    fun chooseProfile(id: String) {
+        profileId = id; inventory = null; capabilities = null
+        launch { load() }
     }
-    fun action(action: String, target: String? = null, installScope: String = "user") = perform {
-        val response = api.extensionAction(context, ExtensionActionRequest(action, if (target == null && action != "reload") detail?.item?.id else null, target, if (target != null && action == "install") installScope else null))
-        notice = listOfNotNull(response.applyEffect, response.authorizationUrl, response.output, response.diagnostics?.joinToString("\n")).joinToString("\n")
-        if (response.success) { clear(); load() }
+
+    /** Pull to refresh, retry, and after a change: the list stays while it is read again. */
+    fun reload() {
+        if (profileId.isEmpty()) chooseBackend(backend) else launch { load() }
     }
-    fun readRuntime() = perform { runtime = api.extensionRuntime(context) }
+
+    /** After a file or install changed what the server lists: a failure here is not the change's failure. */
+    suspend fun refreshQuietly() {
+        try { inventory = api.extensions(context) } catch (cancel: CancellationException) { throw cancel } catch (_: Throwable) {}
+    }
+}
+
+private const val PREVIEW = 5
+
+/** The Agent extensions page and the pages above it, each its own page of a nested stack (mobile.md §2.1). */
+@Composable
+internal fun ExtensionsPage(api: RiffetApi, projectId: String?, title: String, onBack: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    key(api, projectId) {
+        val controller = remember { ExtensionsController(api, scope, projectId) }
+        val pages = remember { PageStack<ExtRoute>(ExtRoute.Directory) }
+        LaunchedEffect(controller) { controller.chooseBackend(controller.backend) }
+        PageHost(pages) { route, back ->
+            when (route) {
+                ExtRoute.Directory -> ExtensionDirectory(controller, title, onBack, pages::push)
+                is ExtRoute.Detail -> ExtensionDetailPage(controller, route.itemId, pages::push, back)
+                is ExtRoute.Editor -> ExtensionEditorPage(controller, route.documentId, back)
+                is ExtRoute.Create -> ExtensionCreatePage(controller, route.target, back)
+                ExtRoute.Install -> ExtensionInstallPage(controller, back)
+                ExtRoute.Runtime -> ExtensionRuntimePage(controller, back)
+                ExtRoute.Diagnostics -> ExtensionDiagnosticsPage(controller.inventory?.diagnostics.orEmpty(), back)
+            }
+        }
+    }
 }
 
 @Composable
-internal fun ExtensionsSection(api: RiffetApi, projectId: String?) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val motion = LocalRiffetMotion.current
-    val coroutineScope = rememberCoroutineScope()
-    var controller by remember { mutableStateOf(ExtensionsController(api, coroutineScope, projectId)) }
+private fun ExtensionDirectory(controller: ExtensionsController, title: String, onBack: () -> Unit, push: (ExtRoute) -> Unit) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    val reloadMcpConfirm = stringResource(Res.string.settings_reload_mcp_confirm)
-    val startMcpAuthConfirm = stringResource(Res.string.settings_start_mcp_auth_confirm)
-    var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var confirmation by remember { mutableStateOf<Pair<String, () -> Unit>?>(null) }
-    var preview by remember { mutableStateOf(false) }
-    var search by remember { mutableStateOf("") }
-    var installTarget by remember { mutableStateOf("") }
-    var installScope by remember { mutableStateOf("user") }
-    var kind by remember { mutableStateOf("") }
-    var showDiagnostics by remember { mutableStateOf(false) }
-    var showInstall by remember { mutableStateOf(false) }
-    var visibleCount by remember { mutableStateOf(40) }
-    LaunchedEffect(search, kind, controller.backend, controller.profileId) { visibleCount = 40 }
-    fun navigate(action: () -> Unit) { if (!controller.busy) { if (controller.dirty) pending = action else { preview = false; action() } } }
-    LaunchedEffect(controller) { controller.chooseBackend(controller.backend) }
-    LaunchedEffect(api, projectId, controller.busy, controller.dirty) {
-        if (!controller.matches(api, projectId) && !controller.busy && !controller.dirty) controller = ExtensionsController(api, coroutineScope, projectId)
+    val metrics = LocalInterfaceStyle.current.metrics
+    val scope = rememberCoroutineScope()
+    val snackbar = LocalRiffetSnackbar.current
+    var query by remember { mutableStateOf("") }
+    var kindFilter by remember { mutableStateOf("") }
+    var reloadConfirm by remember { mutableStateOf(false) }
+    var reloading by remember { mutableStateOf(false) }
+    val inventory = controller.inventory
+    val needle = query.trim()
+    val items = inventory?.items.orEmpty().filter {
+        needle.isEmpty() || it.name.contains(needle, true) || it.kind.contains(needle, true)
     }
-    UnsavedSettingsGuard(controller.dirty, controller.busy, onSave = controller::save)
-    val inDetail = controller.document != null || controller.creating != null || controller.detail != null
-    if (!controller.matches(api, projectId)) {
-        PageBanner(stringResource(Res.string.settings_extension_connection_changed, controller.serverUrl), SettingsNoticeKind.INFO)
-        SettingsButton(stringResource(Res.string.settings_extension_switch_connection), enabled = !controller.busy, onClick = { navigate { controller = ExtensionsController(api, coroutineScope, projectId) } })
-        Spacer(Modifier.height(16.dp))
-    }
-    controller.error?.let { PageBanner(it, SettingsNoticeKind.ERROR); Spacer(Modifier.height(12.dp)) }
-    controller.notice?.let { SelectionContainer { Text(it, style = typography.caption, color = colors.fg3) }; Spacer(Modifier.height(12.dp)) }
-    if (!inDetail) {
-        SettingsGroup(stringResource(Res.string.settings_agent_backends)) {
-            SettingsRow("CLI") { ExtensionMenu(backendLabel(controller.backend), NativeBackendId.entries.filter { it != NativeBackendId.CHAT }.map { it.name to backendLabel(it) }, !controller.busy) { id -> navigate { controller.chooseBackend(NativeBackendId.valueOf(id)) } } }
-            SettingsRow(stringResource(Res.string.settings_config)) { ExtensionMenu(controller.profiles.firstOrNull { it.id == controller.profileId }?.name ?: stringResource(Res.string.settings_select_config), controller.profiles.map { it.id to it.name }, !controller.busy) { id -> navigate { controller.chooseProfile(id) } } }
-        }
-        Spacer(Modifier.height(16.dp))
-        SettingsField(search, { search = it }, placeholder = stringResource(Res.string.settings_search_extensions))
-        Spacer(Modifier.height(12.dp))
-        val items = controller.inventory?.items.orEmpty().filter { (kind.isEmpty() || it.kind == kind) && "${it.name} ${it.sourcePath}".contains(search, true) }
-        SettingsGroup(stringResource(Res.string.settings_discovered_extensions), action = {
-            ExtensionMenu(stringResource(Res.string.settings_new), controller.inventory?.createTargets.orEmpty().map { it.id to "${extensionKind(it.kind)} · ${extensionScope(it.scope)}" }, !controller.busy) { id -> controller.inventory?.createTargets?.find { it.id == id }?.let { target -> coroutineScope.launch { controller.create(target) } } }
-        }) {
-            SettingsRow(stringResource(Res.string.settings_type)) { ExtensionMenu(if (kind.isEmpty()) stringResource(Res.string.settings_all_types) else extensionKind(kind), listOf("" to stringResource(Res.string.settings_all_types)) + listOf("skill", "mcp", "plugin", "hook", "rule", "command", "config").map { it to extensionKind(it) }, true) { kind = it } }
-            if (controller.busy && controller.inventory == null) Text(stringResource(Res.string.settings_reading_extensions), modifier = Modifier.padding(metrics.pageInset), style = typography.body, color = colors.fg3)
-            if (!controller.busy && items.isEmpty()) Text(if (controller.inventory != null) stringResource(Res.string.settings_no_matching_extensions) else stringResource(Res.string.settings_no_extension_dir), modifier = Modifier.padding(metrics.pageInset), style = typography.body, color = colors.fg3)
-            items.take(visibleCount).forEach { item ->
-                val baseSummary = "${extensionKind(item.kind)} · ${extensionScope(item.scope)}"
-                val summary = if (item.enabled == false) stringResource(Res.string.settings_extension_disabled_summary, baseSummary) else baseSummary
-                SettingsNavigationRow(item.name, summary) { navigate { controller.open(item.id) } }
+    val extraKinds = items.map { it.kind }.toSet() - extensionKindOrder.toSet()
+    val kinds = (extensionKindOrder + extraKinds.sorted()).filter { kind -> items.any { it.kind == kind } }
+    // A kind that left with a scope change falls back to every kind.
+    val kind = if (kindFilter in kinds) kindFilter else ""
+    val shownKinds = if (kind.isEmpty()) kinds else listOf(kind)
+    val capped = kind.isEmpty() && needle.isEmpty()
+    val targets = inventory?.createTargets.orEmpty()
+    val canInstall = controller.capabilities?.actions?.contains("install") == true
+    val canReload = controller.capabilities?.actions?.contains("reload") == true
+    val diagnostics = inventory?.diagnostics.orEmpty()
+    val unsupportedReason = controller.capabilities?.reason
+    val addEntries = targets.map { target -> (extensionKind(target.kind) + " · " + extensionScope(target.scope)) to ExtRoute.Create(target) } +
+        (if (canInstall) listOf(stringResource(Res.string.settings_install_plugin) to ExtRoute.Install) else emptyList())
+    val reloadTitle = stringResource(Res.string.settings_reload_mcp_confirm)
+
+    SettingsPage(
+        title, onBack,
+        search = PageSearch(query, { query = it }, stringResource(Res.string.ext_search_placeholder)),
+        refreshing = controller.loading && inventory != null,
+        onRefresh = controller::reload,
+        actions = {
+            if (controller.loading && inventory == null || reloading) PageBarProgress()
+            if (addEntries.isNotEmpty()) AddMenu(addEntries, push)
+            PageMoreAction { close ->
+                RiffetMenuItem(stringResource(Res.string.settings_extension_runtime), onClick = { close(); push(ExtRoute.Runtime) })
+                if (diagnostics.isNotEmpty()) RiffetMenuItem(stringResource(Res.string.ext_diagnostics_count, diagnostics.size), onClick = { close(); push(ExtRoute.Diagnostics) })
+                if (canReload) RiffetMenuItem(stringResource(Res.string.ext_reload_mcp), onClick = { close(); reloadConfirm = true })
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        if (items.size > visibleCount) SettingsButton(stringResource(Res.string.settings_show_more, items.size - visibleCount), onClick = { visibleCount += 40 })
-        SettingsButton(stringResource(Res.string.settings_refresh_list), enabled = !controller.busy && controller.profileId.isNotEmpty(), onClick = controller::refresh)
-        if (!controller.inventory?.diagnostics.isNullOrEmpty()) {
-            SettingsButton(if (showDiagnostics) stringResource(Res.string.settings_hide_load_notes) else stringResource(Res.string.settings_load_notes, controller.inventory!!.diagnostics.size), onClick = { showDiagnostics = !showDiagnostics })
-            if (showDiagnostics) controller.inventory?.diagnostics?.forEach { Text(it, style = typography.caption, color = colors.fg3, modifier = Modifier.padding(vertical = 4.dp)) }
-        }
-    } else {
-        SettingsButton(stringResource(Res.string.settings_back_to_extensions), enabled = !controller.busy, onClick = { navigate { controller.clear() } })
-        Text("${backendLabel(controller.backend)} · ${controller.profiles.firstOrNull { it.id == controller.profileId }?.name.orEmpty()}", style = typography.caption, color = colors.fg3, modifier = Modifier.padding(top = 8.dp))
-        controller.detail?.item?.let { item ->
-            SettingsGroup(stringResource(Res.string.settings_extension_info)) {
-                SettingsRow(item.name, "${extensionKind(item.kind)} · ${extensionScope(item.scope)}") { item.enabled?.let { Text(if (it) stringResource(Res.string.settings_enabled) else stringResource(Res.string.settings_disabled), style = typography.caption, color = colors.fg3) } }
-                item.readOnlyReason?.let { Text(it, style = typography.caption, color = colors.fg3, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                item.description?.let { Text(it, style = typography.body, color = colors.fg2, modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
-                item.sourcePath?.let { source -> Column(Modifier.padding(metrics.pageInset)) { Text(stringResource(Res.string.settings_source), style = typography.caption, color = colors.fg3); Spacer(Modifier.height(4.dp)); SelectionContainer { Text(source, style = typography.mono, color = colors.fg2) } } }
-                item.ownerPluginId?.let { owner -> SettingsNavigationRow(stringResource(Res.string.settings_owner_plugin), stringResource(Res.string.settings_view_plugin)) { navigate { controller.open(owner) } } }
-            }
-            val eligible = item.scope in listOf("user", "project") && item.ownerPluginId == null && (item.kind !in listOf("plugin", "mcp") || item.nativeId != null) && (item.kind != "skill" || item.readOnlyReason == null)
-            val actions = if (eligible) controller.capabilities?.kinds?.get(item.kind).orEmpty().filter { it != "install" && !(it == "enable" && item.enabled == true) && !(it == "disable" && item.enabled == false) } else emptyList()
-            if (actions.isNotEmpty()) {
-                SettingsGroup(stringResource(Res.string.settings_extension_management)) { actions.forEach { action ->
-                    val actionLabel = extensionAction(action)
-                    val confirmNote = if (item.kind == "skill") stringResource(Res.string.settings_extra_ext_confirm_skill_note) else ""
-                    val confirmTitle = stringResource(Res.string.settings_extra_ext_confirm_title, actionLabel, item.name) + confirmNote
-                    SettingsRow(actionLabel) { SettingsButton(actionLabel, enabled = !controller.busy && !controller.dirty, onClick = { confirmation = confirmTitle to { controller.action(action) } }) }
-                } }
-            }
-        }
-        controller.creating?.let { target -> SettingsGroup(stringResource(Res.string.settings_new_extension)) {
-            SettingsValueRow(stringResource(Res.string.settings_type), "${extensionKind(target.kind)} · ${extensionScope(target.scope)}")
-            Column(Modifier.padding(metrics.pageInset)) { Text(stringResource(Res.string.settings_file_name), style = typography.caption, color = colors.fg3); Spacer(Modifier.height(8.dp)); SettingsField(controller.path, { controller.path = it }, enabled = !controller.busy && target.fileName == null, mono = true) }
-        } }
-        if (controller.document != null || controller.creating != null) {
-            val editable = controller.creating != null || controller.document?.editable == true
-            SettingsGroup(if (preview) stringResource(Res.string.settings_save_preview) else stringResource(Res.string.settings_file_content)) {
-                if (controller.detail?.files.orEmpty().size > 1) SettingsRow(stringResource(Res.string.settings_config_file)) { ExtensionMenu(stringResource(Res.string.settings_select_file), controller.detail!!.files.map { it.id to it.path }, !controller.busy) { id -> navigate { controller.openFile(id) } } }
-                Column(Modifier.padding(metrics.pageInset), verticalArrangement = Arrangement.spacedBy(metrics.sectionGap / 2)) {
-                    if (preview && controller.document != null) {
-                        Text(stringResource(Res.string.settings_before_save), style = typography.caption, color = colors.fg3)
-                        SelectionContainer { Text(controller.document!!.content, style = typography.mono, color = colors.fg3) }
-                        Text(stringResource(Res.string.settings_after_save), style = typography.caption, color = colors.fg3)
-                    }
-                    riffet.ui.design.RiffetTextField(
-                        value = controller.text, onValueChange = { controller.text = it },
-                        readOnly = !editable || preview || controller.busy, mono = true, singleLine = false,
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp, max = 520.dp),
-                    )
-                    controller.document?.let { Text(it.reason ?: it.applyEffect, style = typography.caption, color = colors.fg3); it.validationNote?.let { note -> Text(note, style = typography.caption, color = colors.fg3) } }
-                    Row(horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
-                        if (preview) SettingsButton(stringResource(Res.string.settings_keep_editing), enabled = !controller.busy, onClick = { preview = false })
-                        else controller.document?.let { doc -> SettingsButton(stringResource(Res.string.settings_reread), enabled = !controller.busy, onClick = { navigate { controller.openFile(doc.id) } }) }
-                        Spacer(Modifier.weight(1f))
-                        if (editable) SettingsButton(if (preview) stringResource(Res.string.settings_confirm_save) else stringResource(Res.string.settings_preview_save), enabled = !controller.busy && controller.dirty, primary = true, onClick = { if (preview) controller.save { preview = false } else preview = true })
-                    }
+        },
+    ) {
+        ChipRow(
+            items = emptyList(), selected = "", onSelect = {}, modifier = Modifier.bleed(),
+            leading = {
+                ScopeChip(backendLabel(controller.backend), NativeBackendId.entries.filter { it != NativeBackendId.CHAT }.map { it.name to backendLabel(it) }) {
+                    controller.chooseBackend(NativeBackendId.valueOf(it))
                 }
+                ScopeChip(
+                    controller.profiles.firstOrNull { it.id == controller.profileId }?.name ?: stringResource(Res.string.settings_select_config),
+                    controller.profiles.map { it.id to it.name },
+                ) { controller.chooseProfile(it) }
+            },
+        )
+        if (kinds.size > 1) ChipRow(
+            items = listOf(ChipItem("", stringResource(Res.string.ext_all))) + kinds.map { ChipItem(it, extensionKind(it), items.count { item -> item.kind == it }) },
+            selected = kind, onSelect = { kindFilter = it }, modifier = Modifier.bleed(),
+        )
+        controller.error?.let { message ->
+            PageBanner(message, SettingsNoticeKind.ERROR, stringResource(Res.string.settings_retry), controller::reload)
+        }
+        shownKinds.forEach { group ->
+            val members = items.filter { it.kind == group }
+            val shown = if (capped) members.take(PREVIEW) else members
+            SettingsGroup(extensionKind(group)) {
+                shown.forEach { item ->
+                    GroupRow(
+                        title = item.name,
+                        subtitle = listOfNotNull(extensionScope(item.scope), item.description?.takeIf { it.isNotBlank() }).joinToString(" · "),
+                        leading = { ExtensionIcon(item.kind) },
+                        value = if (item.enabled == false) stringResource(Res.string.settings_disabled) else null,
+                        chevron = true,
+                        onClick = { push(ExtRoute.Detail(item.id)) },
+                    )
+                }
+                if (shown.size < members.size) SettingsActionRow(stringResource(Res.string.ext_show_all, members.size), onClick = { kindFilter = group })
             }
         }
-    }
-    if (controller.creating == null) SettingsGroup(stringResource(Res.string.settings_manage)) {
-        if (!inDetail && controller.capabilities?.actions?.contains("install") == true) {
-            SettingsRow(stringResource(Res.string.settings_install_plugin)) { SettingsButton(if (showInstall) stringResource(Res.string.settings_cancel) else stringResource(Res.string.settings_install), enabled = !controller.busy, onClick = { showInstall = !showInstall }) }
-            AnimatedVisibility(showInstall, enter = motion.expandIn(), exit = motion.collapseOut()) { Column(Modifier.padding(metrics.pageInset), verticalArrangement = Arrangement.spacedBy(metrics.sectionGap / 2)) {
-                SettingsField(installTarget, { installTarget = it }, placeholder = "name@marketplace", enabled = !controller.busy)
-                val projectInstall = controller.context.projectId != null && controller.capabilities?.installScopes?.contains("project") == true
-                val effectiveScope = if (projectInstall) installScope else "user"
-                if (projectInstall) ExtensionMenu(extensionScope(installScope), listOf("user" to stringResource(Res.string.settings_user_scope), "project" to stringResource(Res.string.settings_project_scope)), !controller.busy) { installScope = it }
-                val installConfirm = stringResource(Res.string.settings_extra_ext_install_confirm, installTarget, extensionScope(effectiveScope))
-                SettingsButton(stringResource(Res.string.settings_install_plugin), primary = true, enabled = !controller.busy && installTarget.isNotBlank(), onClick = { confirmation = installConfirm to { controller.action("install", installTarget, effectiveScope) } })
-            } }
+        if (controller.loading && inventory == null) CenteredSpinner()
+        else if (items.isEmpty() && controller.error == null) {
+            ExtensionsEmpty(searching = needle.isNotEmpty(), entries = if (needle.isEmpty()) addEntries else emptyList(), push = push)
         }
-        SettingsRow(stringResource(Res.string.settings_extension_runtime)) { SettingsButton(stringResource(Res.string.settings_check), enabled = !controller.busy && controller.profileId.isNotEmpty(), onClick = controller::readRuntime) }
-        if (controller.capabilities?.actions?.contains("reload") == true) { SettingsRow(stringResource(Res.string.settings_mcp_config)) { SettingsButton(stringResource(Res.string.settings_reload), enabled = !controller.busy && !controller.dirty, onClick = { confirmation = reloadMcpConfirm to { controller.action("reload") } }) } }
+        unsupportedReason?.let { SettingsFootnote(it) }
     }
-    controller.runtime?.let { report ->
-        SettingsGroup(stringResource(Res.string.settings_check_results)) {
-            report.entries.forEach { entry ->
-                SettingsRow(entry.name, extensionRuntimeState(entry.state)) { if (entry.kind == "mcp" && controller.capabilities?.kinds?.get("mcp")?.contains("login") == true) SettingsButton(stringResource(Res.string.settings_authenticate), enabled = !controller.busy && !controller.dirty, onClick = { confirmation = startMcpAuthConfirm to { controller.action("login", entry.name) } }) }
+
+    if (reloadConfirm) ConfirmDialog(
+        title = reloadTitle,
+        message = stringResource(Res.string.ext_reload_mcp_effect),
+        confirmLabel = stringResource(Res.string.settings_reload),
+        onConfirm = {
+            reloadConfirm = false
+            reloading = true
+            scope.launch {
+                try {
+                    val response = controller.api.extensionAction(controller.context, ExtensionActionRequest("reload"))
+                    val note = if (response.success) response.applyEffect else response.diagnostics?.joinToString("\n") ?: response.output
+                    if (!note.isNullOrBlank()) snackbar?.show(note)
+                } catch (cancel: CancellationException) { throw cancel }
+                catch (failure: Throwable) { snackbar?.show(failure.message ?: getString(Res.string.settings_extra_ext_action_failed)) }
+                finally { reloading = false }
             }
-            report.diagnostics.forEach { Text(it, style = typography.caption, color = colors.fg3, modifier = Modifier.padding(metrics.pageInset)) }
-        }
-    }
-    if (pending != null) AlertDialog(onDismissRequest = { pending = null }, title = { Text(stringResource(Res.string.settings_discard_unsaved_title)) }, confirmButton = { RiffetTextButton(onClick = { val next = pending; pending = null; preview = false; next?.invoke() }) { Text(stringResource(Res.string.settings_discard_changes)) } }, dismissButton = { RiffetTextButton(onClick = { pending = null }) { Text(stringResource(Res.string.settings_keep_editing)) } })
-    confirmation?.let { request -> AlertDialog(onDismissRequest = { confirmation = null }, title = { Text(request.first) }, text = { Text(stringResource(Res.string.settings_confirmation_note)) }, confirmButton = { RiffetTextButton(onClick = { confirmation = null; request.second() }) { Text(stringResource(Res.string.settings_execute)) } }, dismissButton = { RiffetTextButton(onClick = { confirmation = null }) { Text(stringResource(Res.string.settings_cancel)) } }) }
+        },
+        onDismiss = { reloadConfirm = false },
+    )
 }
 
+/** The `+` of the bar: one entry per kind of new file, and the plugin install. */
 @Composable
-private fun ExtensionMenu(label: String, choices: List<Pair<String, String>>, enabled: Boolean, onSelect: (String) -> Unit) {
+private fun AddMenu(entries: List<Pair<String, ExtRoute>>, push: (ExtRoute) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        SettingsButton(label, enabled = enabled && choices.isNotEmpty(), onClick = { open = true })
-        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) { choices.forEach { (id, title) -> RiffetMenuItem(title, onClick = { open = false; onSelect(id) }) } }
+        PageBarAction(RiffetIcons.Plus, stringResource(Res.string.settings_add), { open = true })
+        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            entries.forEach { (label, route) -> RiffetMenuItem(label, onClick = { open = false; push(route) }) }
+        }
     }
 }
 
+/** A scope of the list as a chip that shows the current value and opens a menu of the others. */
 @Composable
-private fun extensionKind(value: String): String = when (value) {
-    "skill" -> stringResource(Res.string.settings_extra_ext_kind_skill)
-    "mcp" -> "MCP"
-    "plugin" -> stringResource(Res.string.settings_extra_ext_kind_plugin)
-    "hook" -> "Hooks"
-    "rule" -> stringResource(Res.string.settings_extra_ext_kind_rule)
-    "command" -> stringResource(Res.string.settings_extra_ext_kind_command)
-    else -> stringResource(Res.string.settings_extra_ext_kind_config)
+private fun ScopeChip(label: String, choices: List<Pair<String, String>>, onSelect: (String) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        ChipButton(label, active = false, onClick = { if (choices.isNotEmpty()) open = true })
+        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            choices.forEach { (id, text) -> RiffetMenuItem(text, onClick = { open = false; onSelect(id) }) }
+        }
+    }
 }
+
+/** An empty list says so and offers the way to the first extension; a search with no match only says so. */
 @Composable
-private fun extensionScope(value: String): String = when (value) {
-    "user" -> stringResource(Res.string.settings_extra_ext_scope_user)
-    "project" -> stringResource(Res.string.settings_extra_ext_scope_project)
-    "managed" -> stringResource(Res.string.settings_extra_ext_scope_managed)
-    "builtin" -> stringResource(Res.string.settings_extra_ext_scope_builtin)
-    else -> value
-}
-@Composable
-private fun extensionAction(value: String): String = when (value) {
-    "enable" -> stringResource(Res.string.settings_extra_ext_action_enable)
-    "disable" -> stringResource(Res.string.settings_extra_ext_action_disable)
-    "uninstall" -> stringResource(Res.string.settings_extra_ext_action_uninstall)
-    "update" -> stringResource(Res.string.settings_extra_ext_action_update)
-    "login" -> stringResource(Res.string.settings_extra_ext_action_login)
-    else -> value
-}
-@Composable
-private fun extensionRuntimeState(value: String): String = when (value) {
-    "loaded" -> stringResource(Res.string.settings_extra_ext_runtime_loaded)
-    "error" -> stringResource(Res.string.settings_extra_ext_runtime_error)
-    "pending" -> stringResource(Res.string.settings_extra_ext_runtime_pending)
-    else -> stringResource(Res.string.settings_extra_ext_runtime_unknown)
+private fun ExtensionsEmpty(searching: Boolean, entries: List<Pair<String, ExtRoute>>, push: (ExtRoute) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    riffet.ui.design.EmptyState(
+        message = if (searching) stringResource(Res.string.settings_no_matching_extensions) else stringResource(Res.string.ext_empty),
+        icon = RiffetIcons.Puzzle,
+        fill = false,
+        actions = if (entries.isEmpty()) null else ({
+            Box {
+                RiffetTextButton(onClick = { open = true }) { Text(stringResource(Res.string.settings_new)) }
+                RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                    entries.forEach { (label, route) -> RiffetMenuItem(label, onClick = { open = false; push(route) }) }
+                }
+            }
+        }),
+    )
 }

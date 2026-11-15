@@ -6,7 +6,6 @@
     <string name="session_save">保存</string>
     <string name="session_stop">停止</string>
     <string name="session_expand">展开</string>
-    <string name="session_collapse">收起</string>
     <string name="session_open_sidebar">打开侧边栏</string>
     <string name="session_remove">移除</string>
     <string name="session_failed">失败</string>
@@ -61,11 +60,6 @@
     <string name="session_subagent_finished">已结束</string>
     <string name="session_subagent_pending">主会话有待处理的确认</string>
     <string name="session_subagent_empty">这个子 Agent 还没有输出</string>
-    <string name="session_subagents">子 Agent</string>
-    <string name="session_subagent_count">%1$d 个</string>
-    <string name="session_subagent_count_running">%1$d 个 · %2$d 个运行中</string>
-    <string name="session_background_tasks">后台任务</string>
-    <string name="session_background_running">%1$d 个运行中</string>
 
     <!-- Session details pane -->
     <string name="session_changes">变更</string>
@@ -81,13 +75,11 @@
     <string name="session_created">创建</string>
     <string name="session_recent_activity">最近活动</string>
     <string name="session_details">详情</string>
-    <string name="session_section">会话</string>
     <string name="session_rename">重命名</string>
     <string name="session_unpin">取消置顶</string>
     <string name="session_pin">置顶会话</string>
     <string name="session_restore">恢复会话</string>
     <string name="session_archive">归档会话</string>
-    <string name="session_close_details">关闭会话详情</string>
     <string name="session_write_no_api">暂时无法修改会话</string>
     <string name="session_write_archived">会话已归档，先恢复再修改</string>
     <string name="session_state_running">运行中</string>
@@ -150,7 +142,6 @@
     <string name="session_list_empty">没有会话</string>
     <string name="session_tab_new">新会话</string>
     <string name="session_tab_tasks">任务</string>
-    <string name="session_favorites">收藏</string>
     <string name="session_mode_task">新建任务</string>
     <string name="session_mode_chat">快速对话</string>
     <string name="session_quick_chat_plain">对话</string>
@@ -197,7 +188,6 @@
     <string name="session_reference_limit">最多引用 5 个会话</string>
     <string name="session_reference_partial">仅含部分历史</string>
     <string name="session_reference_original">查看引用时的记录</string>
-    <string name="session_reference_done">完成</string>
     <string name="session_reference_source">打开原会话</string>
     <string name="session_reference_retention">原文副本随本会话保存</string>
     <string name="session_reference_previous">上一页</string>

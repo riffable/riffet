@@ -4,7 +4,15 @@ import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.GroupRow
 import riffet.ui.design.Group
 import riffet.ui.design.GroupTitle
-import riffet.ui.design.GroupSpacer
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import riffet.ui.pickers.PickerOverlay
+import riffet.ui.state.RiffetConnectionState
+import riffet.ui.timeline.StatusDot
+import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.design.IconTile
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,7 +31,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
@@ -46,22 +53,23 @@ import riffet.ui.design.OwnerAvatar
 import riffet.ui.settings.OwnerController
 import riffet.ui.favorites.favoriteName
 import riffet.ui.favorites.rememberFolderFavorites
-import riffet.ui.icons.BrandMark
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.timeline.Spinner
 import riffet_mobile.shared.generated.resources.*
 
 /**
- * The navigation drawer's content: context and secondary destinations, not the session list or the
- * projects. The server (switch between paired ones), the host's folder favorites (each starts a
- * new session there), 下载 and 统计.
+ * The navigation drawer's content (mobile.md §2.7): the owner as the header, the server card (tap to
+ * switch among paired servers), the 下载 / 统计 tiles, then the host's folder favorites, each of
+ * which starts a new session there.
  */
 @Composable
 internal fun WorkbenchDrawer(
     api: RiffetApi?,
     owner: OwnerController?,
     connection: RiffetConnection,
+    status: RiffetConnectionState,
+    onClose: () -> Unit,
     onOwner: () -> Unit,
     /** A switched-to server, handed over like a fresh pairing. */
     onPaired: (RiffetApi) -> Unit,
@@ -74,56 +82,58 @@ internal fun WorkbenchDrawer(
     connectionOperation: MutableState<String?>,
 ) {
     val colors = LocalRiffetColors.current
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(top = 8.dp, bottom = 24.dp)) {
-        if (owner != null) {
-            Group { OwnerHeader(owner, onOwner) }
-            GroupSpacer()
-        }
-        GroupTitle(stringResource(Res.string.settings_paired_servers))
-        Group { ServerHeader(api, connection, onPaired, onRepair, operationScope, connectionOperation) }
-        if (api != null) {
-            val picks = rememberFolderFavorites(api).byRecentUse
-            if (picks.isNotEmpty()) {
-                GroupTitle(stringResource(Res.string.session_favorites))
-                Group {
+    val metrics = LocalInterfaceStyle.current.metrics
+    Column(Modifier.fillMaxSize()) {
+        DrawerHeader(owner, onOwner, onClose)
+        Column(Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState()).padding(bottom = metrics.sectionGap)) {
+            ServerCard(api, connection, status, onPaired, onRepair, operationScope, connectionOperation)
+            val downloading = if (downloadsSupported) DownloadCenter.shared.items.collectAsState().value.any { it.state == DownloadState.RUNNING } else false
+            val tools = buildList {
+                if (downloadsSupported) add(PaneAction(RiffetIcons.Download,
+                    if (downloading) stringResource(Res.string.session_downloading) else stringResource(Res.string.session_downloads), onClick = onDownloads))
+                if (api != null) add(PaneAction(RiffetIcons.Chart, stringResource(Res.string.session_stats), onClick = onStats))
+            }
+            if (tools.isNotEmpty()) {
+                PaneGap()
+                PaneActionBar(tools)
+            }
+            if (api != null) {
+                val picks = rememberFolderFavorites(api).byRecentUse
+                if (picks.isNotEmpty()) PaneSection(stringResource(Res.string.drawer_favorites)) {
                     picks.forEach { favorite ->
-                        GroupRow(title = favoriteName(favorite), leading = { EntryMark(RiffetIcons.Star, colors.warning) },
-                            chevron = true, onClick = { onFavorite(favorite) })
+                        PaneRow(title = favoriteName(favorite), leading = { PaneIcon(RiffetIcons.Star, colors.warning) }, onClick = { onFavorite(favorite) })
                     }
                 }
             }
-        }
-        GroupSpacer()
-        if (downloadsSupported || api != null) Group {
-            if (downloadsSupported) {
-                val downloading = DownloadCenter.shared.items.collectAsState().value.any { it.state == DownloadState.RUNNING }
-                DrawerItem(
-                    label = if (downloading) stringResource(Res.string.session_downloading) else stringResource(Res.string.session_downloads),
-                    icon = RiffetIcons.Download, onClick = onDownloads,
-                )
-            }
-            if (api != null) DrawerItem(stringResource(Res.string.session_stats), RiffetIcons.Chart, onClick = onStats)
+            PaneEnd()
         }
     }
 }
 
-/** The owner's avatar and name (or the page title while there is no name); opens the owner page in 设置. */
+/** The owner's avatar and name (the page title while there is no name); the title opens the owner page. */
 @Composable
-private fun OwnerHeader(controller: OwnerController, onClick: () -> Unit) {
+private fun DrawerHeader(controller: OwnerController?, onOwner: () -> Unit, onClose: () -> Unit) {
     rememberResourceEnvironment()
+    val metrics = LocalInterfaceStyle.current.metrics
+    if (controller == null) {
+        PaneHeader(title = "Riffet", onClose = onClose)
+        return
+    }
     val owner = controller.state.collectAsState().value.owner
-    GroupRow(
+    PaneHeader(
         title = owner?.name?.takeIf { it.isNotBlank() } ?: L10n.uiText("owner.title"),
-        leading = { OwnerAvatar(owner, controller.avatarUrl(owner), 40.dp) },
-        chevron = true, onClick = onClick,
+        onClose = onClose,
+        leading = { OwnerAvatar(owner, controller.avatarUrl(owner), metrics.iconSlot * 4 / 3) },
+        onTitleClick = onOwner,
     )
 }
 
-/** The connected server under the mark; with others paired, the row unfolds into a switch. */
+/** The connected server on one row: name, address, connection state; with others paired it opens the picker. */
 @Composable
-private fun ServerHeader(
+private fun ServerCard(
     api: RiffetApi?,
     connection: RiffetConnection,
+    status: RiffetConnectionState,
     onPaired: (RiffetApi) -> Unit,
     onRepair: (String) -> Unit,
     operationScope: CoroutineScope,
@@ -131,10 +141,11 @@ private fun ServerHeader(
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
+    val type = LocalRiffetTypography.current
     val snackbar = LocalRiffetSnackbar.current
     val current = api?.baseUrl
     var servers by remember(connection) { mutableStateOf<List<PairedServer>>(emptyList()) }
-    var open by rememberSaveable { mutableStateOf(false) }
+    var picking by rememberSaveable { mutableStateOf(false) }
     var busy by connectionOperation
     LaunchedEffect(connection, current) {
         servers = try {
@@ -148,45 +159,63 @@ private fun ServerHeader(
     val here = servers.firstOrNull { it.baseUrl == current }
     val others = servers.filter { it.baseUrl != current }.sortedByDescending { it.lastUsedAt }
 
-    val grouped = LocalInterfaceStyle.current.components.lists.grouped
-    GroupRow(
-        title = here?.displayName ?: "Riffet", subtitle = current,
-        leading = {
-            if (grouped) IconTile(RiffetIcons.Monitor, colors.accent)
-            else BrandMark(fg = colors.fg, accent = colors.accent, modifier = Modifier.size(metrics.iconSize))
-        },
-        trailing = if (others.isNotEmpty()) ({
-            Icon(RiffetIcons.ChevronDown, contentDescription = stringResource(Res.string.settings_paired_servers),
-                tint = colors.fg3, modifier = Modifier.size(metrics.smallIconSize).rotate(if (open) 180f else 0f))
-        }) else null,
-        onClick = if (others.isNotEmpty()) ({ open = !open }) else null,
-    )
-    if (open) {
-        others.forEach { server ->
-            val switch: () -> Unit = {
-                if (busy == null) {
-                    busy = server.origin
-                    operationScope.launch {
-                        try {
-                            onPaired(connection.switchServer(server.origin))
-                        } catch (cancellation: CancellationException) {
-                            throw cancellation
-                        } catch (_: RiffetUnauthenticatedException) {
-                            onRepair(server.baseUrl)
-                        } catch (_: Throwable) {
-                            snackbar?.show(getString(Res.string.settings_paired_connect_failed))
-                        } finally {
-                            busy = null
+    val (tint, label) = when (status) {
+        RiffetConnectionState.Idle -> null to null
+        // Connected is the normal state and says nothing (mobile.md §1); only the exceptions do.
+        RiffetConnectionState.Live -> null to null
+        RiffetConnectionState.Connecting -> colors.fg3 to stringResource(Res.string.session_connecting)
+        RiffetConnectionState.Reconnecting -> colors.warning to stringResource(Res.string.session_reconnecting)
+        is RiffetConnectionState.Failed -> colors.danger to stringResource(Res.string.session_disconnected)
+    }
+    PaneSection {
+        PaneRow(
+            // The address only under a name; a server known by its address does not repeat it.
+            title = here?.displayName ?: current?.substringAfter("://")?.trimEnd('/') ?: "Riffet",
+            subtitle = current?.takeIf { here?.displayName != null && here.displayName != it.substringAfter("://").trimEnd('/') },
+            leading = { if (tint != null) PaneDot(tint) else PaneIcon(RiffetIcons.Monitor) },
+            value = label,
+            chevron = others.isNotEmpty(),
+            onClick = if (others.isNotEmpty()) ({ picking = true }) else null,
+        )
+    }
+    if (picking && others.isNotEmpty()) {
+        PickerOverlay(title = stringResource(Res.string.settings_paired_servers), onDismiss = { picking = false }) {
+            Group {
+                (listOfNotNull(here) + others).forEach { server ->
+                    val isCurrent = server.baseUrl == current
+                    val switch: () -> Unit = {
+                        if (isCurrent) picking = false
+                        else if (busy == null) {
+                            busy = server.origin
+                            operationScope.launch {
+                                try {
+                                    onPaired(connection.switchServer(server.origin))
+                                    picking = false
+                                } catch (cancellation: CancellationException) {
+                                    throw cancellation
+                                } catch (_: RiffetUnauthenticatedException) {
+                                    picking = false
+                                    onRepair(server.baseUrl)
+                                } catch (_: Throwable) {
+                                    snackbar?.show(getString(Res.string.settings_paired_connect_failed))
+                                } finally {
+                                    busy = null
+                                }
+                            }
                         }
                     }
+                    GroupRow(
+                        title = server.displayName, subtitle = server.baseUrl,
+                        leading = { EntryMark(RiffetIcons.Monitor, colors.accent) },
+                        trailing = when {
+                            busy == server.origin -> ({ Spinner(size = metrics.smallIconSize) })
+                            isCurrent -> ({ Icon(RiffetIcons.Check, null, tint = colors.accent, modifier = Modifier.size(metrics.smallIconSize)) })
+                            else -> null
+                        },
+                        enabled = busy == null, onClick = switch,
+                    )
                 }
             }
-            GroupRow(
-                title = server.displayName, subtitle = server.baseUrl,
-                leading = { EntryMark(RiffetIcons.Monitor, colors.accent) },
-                trailing = if (busy == server.origin) ({ Spinner(size = 18.dp) }) else null,
-                enabled = busy == null, onClick = switch,
-            )
         }
     }
 }
@@ -197,9 +226,4 @@ private fun EntryMark(icon: ImageVector, tint: Color) {
     val style = LocalInterfaceStyle.current
     if (style.components.lists.grouped) IconTile(icon, tint)
     else Icon(icon, null, Modifier.size(style.metrics.iconSize), LocalRiffetColors.current.fg2)
-}
-
-@Composable
-private fun DrawerItem(label: String, icon: ImageVector, onClick: () -> Unit) {
-    GroupRow(title = label, leading = { EntryMark(icon, LocalRiffetColors.current.accent) }, chevron = true, onClick = onClick)
 }

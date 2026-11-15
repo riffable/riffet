@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="homem_favorites_edit">编辑收藏</string>
+    <string name="homem_favorites_done">完成</string>
+</resources>

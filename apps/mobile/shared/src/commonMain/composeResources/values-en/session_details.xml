@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="details_dismiss">Dismiss</string>
+    <string name="details_stop_title">Stop \"%1$s\"?</string>
+    <string name="details_all">All %1$d</string>
+    <string name="details_subagents">Subagents</string>
+    <string name="details_tasks">Background tasks</string>
+    <string name="details_running_of">%1$d running · %2$d total</string>
+    <string name="details_pin">Pin</string>
+    <string name="details_unpin">Unpin</string>
+    <string name="details_archive">Archive</string>
+    <string name="details_unarchive">Restore</string>
+    <string name="details_resume">Resume</string>
+</resources>

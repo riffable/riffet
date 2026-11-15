@@ -36,7 +36,6 @@ internal data class InputRecipe(
 
 @Immutable
 internal data class ListRecipe(
-    val selectionFill: Boolean = true,
     val dividers: Boolean = false,
     val roundedSelection: Boolean = true,
     val trailingMenuIcons: Boolean = false,

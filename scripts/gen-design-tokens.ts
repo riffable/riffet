@@ -86,10 +86,12 @@ const outputs: Record<string, (text: string, file: string) => string> = {
     ...kList('SharedMotionTokens', kmap(MOBILE_SHARED_MOTION), 'DefaultMotionTokens + '),
     ...kList('ExpressiveMotionTokens', kmap(MOBILE_EXPRESSIVE_MOTION), 'DefaultMotionTokens + '),
     ...Object.entries(MOBILE_EASING).map(([name, points]) => `internal val ${name[0]!.toUpperCase()}${name.slice(1)}MotionEasing = CubicBezierEasing(${points.map(kf).join(', ')})`),
+    // Before IosStyleTypography: reading MaterialStyleTypography starts ThemePresets.kt's initialiser,
+    // which reaches back for these through RiffetDefaultTypography.
+    ...Object.entries(MOBILE_CODE_TEXT).map(([name, style]) => `internal val Mobile${name[0]!.toUpperCase()}${name.slice(1)}Text = ${kText(style, ', fontFamily = FontFamily.Monospace')}`),
     'internal val IosStyleTypography = MaterialStyleTypography.copy(',
     ...Object.entries(MOBILE_IOS_TEXT).map(([slot, style]) => `    ${slot} = ${kText(style)},`),
     ')',
-    ...Object.entries(MOBILE_CODE_TEXT).map(([name, style]) => `internal val Mobile${name[0]!.toUpperCase()}${name.slice(1)}Text = ${kText(style, ', fontFamily = FontFamily.Monospace')}`),
     '',
   ].join('\n'),
   'apps/mobile/iosApp/Riffet/Design/RiffetDesign.swift': (text, file) => {

@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import riffet.ui.design.RiffetTextButton as TextButton
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
@@ -212,17 +212,16 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true) {
         }
         if (confirmContinue && checked != null && recoveryStore != null) {
             val result = checked!!
-            val title = if (result.queuedRunIds.isEmpty()) stringResource(Res.string.composer_continue) else stringResource(Res.string.composer_continue_queued, result.queuedRunIds.size)
-            AlertDialog(
-                onDismissRequest = { confirmContinue = false },
-                title = { Text(title) },
-                text = { Text(stringResource(Res.string.composer_continue_unknown)) },
-                confirmButton = { TextButton(onClick = {
+            ConfirmDialog(
+                title = if (result.queuedRunIds.isEmpty()) stringResource(Res.string.confirm_continue_title) else stringResource(Res.string.confirm_continue_queued_title, result.queuedRunIds.size),
+                message = stringResource(Res.string.composer_continue_unknown),
+                confirmLabel = stringResource(Res.string.composer_continue),
+                onConfirm = {
                     confirmContinue = false
                     checking = true
                     scope.launch { try { recoveryStore.continueRun(result.run, result.queuedRunIds); checked = null } finally { checking = false } }
-                }) { Text(title) } },
-                dismissButton = { TextButton(onClick = { confirmContinue = false }) { Text(stringResource(Res.string.timeline_cancel)) } },
+                },
+                onDismiss = { confirmContinue = false },
             )
         }
         AnimatedVisibility(visible = errorOpen && deliveryError != null, enter = motion.expandIn(), exit = motion.collapseOut()) {
@@ -406,43 +405,52 @@ private fun SessionReferenceChip(reference: riffet.contracts.CapturedSessionRefe
         Spacer(Modifier.width(4.dp))
         Text(reference.title, style = TimelineTheme.type.caption)
     }
-    if (opened) AlertDialog(
-        wideContent = true,
-        onDismissRequest = { opened = false },
-        title = { Text(reference.title) },
-        text = {
-            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
-                Text(stringResource(Res.string.session_reference_captured, formatDateTime(reference.capturedAt) ?: reference.capturedAt), style = TimelineTheme.type.caption)
-                if (reference.coverage.completeness == "partial") Text(stringResource(Res.string.session_reference_partial), style = TimelineTheme.type.caption)
-                if (reference.coverage.activeTurnIncomplete == true) Text(stringResource(Res.string.session_reference_unfinished), style = TimelineTheme.type.caption)
-                SelectableText {
-                    rememberResourceEnvironment()
-                    Text(original?.getOrNull(page) ?: riffet.shared.sessionReferenceExcerpt(reference.excerpt))
-                }
-                original?.takeIf { it.size > 1 }?.let { pages ->
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton(enabled = page > 0, onClick = { page-- }) { Text(stringResource(Res.string.session_reference_previous)) }
-                        Text("${page + 1} / ${pages.size}", style = TimelineTheme.type.caption)
-                        TextButton(enabled = page < pages.lastIndex, onClick = { page++ }) { Text(stringResource(Res.string.session_reference_next)) }
-                    }
-                }
-                Text(stringResource(Res.string.session_reference_retention), style = TimelineTheme.type.caption)
-                Text(stringResource(Res.string.session_reference_scope), style = TimelineTheme.type.caption)
-                if (openSource != null) TextButton(onClick = { opened = false; openSource(reference.sessionId) }) {
-                    Text(stringResource(Res.string.session_reference_source))
-                }
-                failure?.let { Text(it, color = TimelineTheme.colors.danger) }
+    if (opened) riffet.ui.pickers.PickerOverlay(title = reference.title, onDismiss = { opened = false }, fullHeight = true) {
+        val colors = riffet.ui.theme.LocalRiffetColors.current
+        val inset = riffet.ui.pickers.SheetInset
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = inset)) {
+            Text(stringResource(Res.string.session_reference_captured, formatDateTime(reference.capturedAt) ?: reference.capturedAt), style = TimelineTheme.type.caption)
+            if (reference.coverage.completeness == "partial") Text(stringResource(Res.string.session_reference_partial), style = TimelineTheme.type.caption)
+            if (reference.coverage.activeTurnIncomplete == true) Text(stringResource(Res.string.session_reference_unfinished), style = TimelineTheme.type.caption)
+            Spacer(Modifier.height(8.dp))
+            SelectableText {
+                rememberResourceEnvironment()
+                Text(original?.getOrNull(page) ?: riffet.shared.sessionReferenceExcerpt(reference.excerpt))
             }
-        },
-        confirmButton = { TextButton(onClick = { opened = false }) { Text(stringResource(Res.string.session_reference_done)) } },
-        dismissButton = { TextButton(enabled = store != null && !loading, onClick = {
-            scope.launch {
-                loading = true
-                try { original = store?.sessionReferencePages(recipientId, reference.snapshotRef); page = 0; failure = null }
-                catch (error: kotlinx.coroutines.CancellationException) { throw error }
-                catch (error: Throwable) { failure = error.message }
-                finally { loading = false }
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(Res.string.session_reference_retention), style = TimelineTheme.type.caption)
+            Text(stringResource(Res.string.session_reference_scope), style = TimelineTheme.type.caption)
+            failure?.let { Text(it, color = TimelineTheme.colors.danger) }
+        }
+        original?.takeIf { it.size > 1 }?.let { pages ->
+            Row(Modifier.fillMaxWidth().padding(horizontal = inset), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
+                riffet.ui.design.RiffetIconButton(onClick = { page-- }, enabled = page > 0) {
+                    Icon(RiffetIcons.ChevronLeft, stringResource(Res.string.session_reference_previous), Modifier.size(20.dp))
+                }
+                Text("${page + 1} / ${pages.size}", style = TimelineTheme.type.caption.copy(fontFeatureSettings = "tnum"))
+                riffet.ui.design.RiffetIconButton(onClick = { page++ }, enabled = page < pages.lastIndex) {
+                    Icon(RiffetIcons.ChevronRight, stringResource(Res.string.session_reference_next), Modifier.size(20.dp))
+                }
             }
-        }) { Text(stringResource(Res.string.session_reference_original)) } },
-    )
+        }
+        if (original == null) riffet.ui.design.GroupRow(
+            title = stringResource(Res.string.session_reference_original),
+            enabled = store != null && !loading,
+            titleColor = colors.accent,
+            onClick = {
+                scope.launch {
+                    loading = true
+                    try { original = store?.sessionReferencePages(recipientId, reference.snapshotRef); page = 0; failure = null }
+                    catch (error: kotlinx.coroutines.CancellationException) { throw error }
+                    catch (error: Throwable) { failure = error.message }
+                    finally { loading = false }
+                }
+            },
+        )
+        if (openSource != null) riffet.ui.design.GroupRow(
+            title = stringResource(Res.string.session_reference_source),
+            titleColor = colors.accent,
+            onClick = { opened = false; openSource(reference.sessionId) },
+        )
+    }
 }

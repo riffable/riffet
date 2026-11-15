@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Flags Compose patterns that made Android pages remount or recompose every frame. Each one cost a
-// real regression; see "Compose 约定" in AGENTS.md. Text rules, so a deliberate exception carries a
+// Flags Compose patterns that made Android pages remount or recompose every frame (each one cost a
+// real regression; see "Compose 约定" in apps/mobile/AGENTS.md), and page structure the mobile page
+// spec retired (docs/design/system/mobile.md §2.4). Text rules, so a deliberate exception carries a
 // `compose-pitfalls: allow` comment on the line (with the reason next to it).
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -47,6 +48,19 @@ const rules = [
     hint: 'derive it before the row composes (the presenter hook, see prepareTranscriptMarkdown) or reserve its final size',
   },
   {
+    // 「启用 [启用]」: a row's title next to a button repeating it or showing the current value. A
+    // settings row is a navigation, switch, choice or action row instead.
+    name: 'settings row holding a button',
+    test: (line, lines, index) => /\bSettingsButton\(/.test(line)
+      && lines.slice(Math.max(0, index - 3), index + 1).some(previous => /\bSettingsRow\(/.test(previous)),
+    hint: 'use SettingsActionRow, SettingsChoiceRow, SettingsNavigationRow or SettingsSwitchRow (mobile.md §2.4)',
+  },
+  {
+    name: 'SettingsButtonsRow',
+    test: line => /\bSettingsButtonsRow\(/.test(line) && !/fun\s+SettingsButtonsRow/.test(line),
+    hint: 'one action per row: SettingsActionRow, with any result in a Snackbar (mobile.md §2.4)',
+  },
+  {
     name: 'staticCompositionLocalOf outside the allowlist',
     test: line => {
       const match = line.match(/val\s+(\w+)\s*(?::[^=]+)?=\s*staticCompositionLocalOf/);
@@ -76,7 +90,7 @@ for (const source of sources) {
       const joined = /=\s*$/.test(code) ? code + (lines[index + 1] ?? '') : code;
       for (const rule of rules) {
         if (rule.files && !rule.files.test(file)) continue;
-        if (rule.test(joined)) problems.push(`${relative(root, file)}:${index + 1}: ${rule.name} — ${rule.hint}`);
+        if (rule.test(joined, lines, index)) problems.push(`${relative(root, file)}:${index + 1}: ${rule.name} — ${rule.hint}`);
       }
     });
   }

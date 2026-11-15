@@ -301,15 +301,15 @@ private fun RegularToolRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         if (stats.files > 1) {
-                            Text(stringResource(Res.string.timeline_file_count, stats.files), style = type.caption, color = colors.fg3)
+                            Text(stringResource(Res.string.timeline_file_count, stats.files), style = type.caption, color = colors.fg3, maxLines = 1, softWrap = false)
                         }
                         // Text, so the plain diff roles cannot be used here — they are translucent
                         // backgrounds and would be illegible as type.
                         if (stats.added > 0) {
-                            Text("+${stats.added}", style = type.codeSmall, color = colors.success)
+                            Text("+${stats.added}", style = type.codeSmall, color = colors.success, maxLines = 1, softWrap = false)
                         }
                         if (stats.removed > 0) {
-                            Text("−${stats.removed}", style = type.codeSmall, color = colors.danger)
+                            Text("−${stats.removed}", style = type.codeSmall, color = colors.danger, maxLines = 1, softWrap = false)
                         }
                     }
                 }

@@ -12,13 +12,11 @@
     <string name="settings_open">打开</string>
     <string name="settings_collapse">收起</string>
     <string name="settings_expand">展开</string>
-    <string name="settings_enabled">已启用</string>
     <string name="settings_disabled">已停用</string>
 
     <!-- Settings home and sections -->
     <string name="settings_diagnostics_logs">日志</string>
     <string name="settings_advanced_diagnostics">高级诊断</string>
-    <string name="settings_terminal_render_test">终端渲染测试</string>
     <string name="settings_terminal_render_test_desc">结果写入本机日志。</string>
     <string name="settings_render_benchmark">渲染基准</string>
     <string name="settings_provider">提供商</string>
@@ -58,18 +56,13 @@
     <!-- Logs -->
     <string name="settings_upload_logs">上传日志到服务器</string>
     <string name="settings_upload_logs_desc">保存到运行 Riffet 的电脑上。</string>
-    <string name="settings_uploading">上传中…</string>
-    <string name="settings_upload">上传</string>
     <string name="settings_upload_success">已上传：%1$s（%2$d KB）</string>
     <string name="settings_upload_failed">上传失败：%1$s</string>
     <string name="settings_export_logs">导出日志</string>
     <string name="settings_clear_logs">清空日志</string>
     <string name="settings_export_logs_desc">保存到 下载/Riffet，可直接分享。</string>
-    <string name="settings_export_unavailable_desc">这台设备不能保存文件，请改用上面的上传日志到服务器。</string>
     <string name="settings_clear">清空</string>
     <string name="settings_logs_cleared">日志已清空</string>
-    <string name="settings_exporting">导出中…</string>
-    <string name="settings_export">导出</string>
     <string name="settings_share_logs">分享日志</string>
     <string name="settings_export_success">已保存到 %1$s（%2$d KB）</string>
     <string name="settings_export_failed">导出失败：%1$s</string>
@@ -80,8 +73,6 @@
     <string name="settings_session_alerts_desc">正在看的会话不提醒。</string>
     <string name="settings_notification_permission">系统通知权限</string>
     <string name="settings_allowed">已允许</string>
-    <string name="settings_not_allowed">未允许</string>
-    <string name="settings_system_settings">系统设置</string>
     <string name="settings_background">后台运行</string>
     <string name="settings_background_sessions">后台跟进运行中的会话</string>
     <string name="settings_background_sessions_desc">通过常驻通知保持连接；关闭后后台提醒可能延迟或缺失。</string>
@@ -128,7 +119,6 @@
     <string name="settings_build_number">构建号</string>
     <string name="settings_platform">平台</string>
     <string name="settings_runtime_environment">运行环境</string>
-    <string name="settings_checking">检测中…</string>
     <string name="settings_recheck">重新检测</string>
     <string name="settings_no_cli_capabilities">尚未检测到 CLI 能力。</string>
     <string name="settings_version">版本</string>
@@ -144,7 +134,6 @@
     <string name="settings_persistence">持久化</string>
     <string name="settings_not_detected">未检测到</string>
     <string name="settings_checked_at">检测时间</string>
-    <string name="settings_available_models">可用模型 · %1$d</string>
 
     <!-- Backends -->
     <string name="settings_backend_save_note">保存在服务器，用于新会话；已有会话保持原配置。</string>
@@ -152,14 +141,12 @@
     <string name="settings_new_session_default">新会话默认</string>
     <string name="settings_new_session">新会话</string>
     <string name="settings_cli_builtin_login">CLI 自带登录</string>
-    <string name="settings_profile_default_summary">新会话默认 · %1$s</string>
     <string name="settings_no_providers">还没有提供商。</string>
     <string name="settings_default_backend">默认后端</string>
     <string name="settings_current_backend">当前使用 %1$s</string>
     <string name="settings_set_as_default">设为默认</string>
     <string name="settings_set_as_default_done">已设为新会话默认</string>
     <string name="settings_default">默认</string>
-    <string name="settings_backend_cli_builtin_login">%1$s CLI 自带登录</string>
     <string name="settings_name">名称</string>
     <string name="settings_service_address">服务地址</string>
     <string name="settings_api_key_hint">只保存到服务器，不会回显；留空保留现有 Key。</string>
@@ -169,9 +156,7 @@
     <string name="settings_api_key_configured">已配置 Key</string>
     <string name="settings_api_key_missing">未配置 Key</string>
     <string name="settings_cancel_clear">取消清除</string>
-    <string name="settings_clear_key">清除</string>
     <string name="settings_launch_settings">启动设置</string>
-    <string name="settings_optional">可选</string>
     <string name="settings_cli_entry">CLI 入口</string>
     <string name="settings_config_dir">配置目录</string>
     <string name="settings_use_cli_default_dir">使用 CLI 默认目录</string>
@@ -189,10 +174,8 @@
     <string name="settings_model_catalog_failed">读取模型列表失败</string>
     <string name="settings_models">模型</string>
     <string name="settings_all_models">正在使用全部模型，包括之后新增的。</string>
-    <string name="settings_models_selected">已选 %1$d 个模型。</string>
     <string name="settings_gateway_image_hint">网关模型需手动勾选「图片」，否则图片会变成占位符。</string>
     <string name="settings_gateway_context_hint">网关未声明长度时在这里设置；声明会替代网关值。</string>
-    <string name="settings_fetching">获取中…</string>
     <string name="settings_fetch_models">获取模型列表</string>
     <string name="settings_no_models_returned">这个地址没有返回任何模型，可以手动填写模型 ID。</string>
     <string name="settings_fetch_failed_manual">读取失败，可以手动填写模型 ID。</string>
@@ -238,22 +221,15 @@
     <string name="settings_pair_device_copy">复制配对码</string>
     <string name="settings_pair_device_local_only">服务器只监听本机，其他设备无法连接。</string>
     <string name="settings_paired_local_only">仅保存在这台设备</string>
-    <string name="settings_forget_server_title">忘记服务器？</string>
     <string name="settings_forget_server_body">仅删除本机配对凭据，再次连接需重新配对。</string>
     <string name="settings_forget_failed">无法忘记服务器</string>
     <string name="settings_forget">忘记</string>
 
     <!-- Unsaved changes -->
-    <string name="settings_unsaved_title">有尚未保存的修改</string>
-    <string name="settings_save_and_back">保存并返回</string>
-    <string name="settings_discard_changes">放弃修改</string>
     <string name="settings_keep_editing">继续编辑</string>
 
     <!-- Service status -->
     <string name="settings_service_read_failed">无法读取服务器状态</string>
-    <string name="settings_service_live">实时 · 每 5 秒刷新 · 已运行 %1$s</string>
-    <string name="settings_service_stale">连接中断，显示上次数据</string>
-    <string name="settings_service_refresh">刷新</string>
     <string name="settings_service_process">服务器进程</string>
     <string name="settings_service_memory">内存</string>
     <string name="settings_service_heap">堆 %1$s / %2$s</string>
@@ -286,69 +262,28 @@
     <string name="settings_service_sessions">会话</string>
     <string name="settings_service_session_detail">运行中 %1$d · 等待 %2$d · 共 %3$d</string>
     <string name="settings_service_processes">进程 · %1$d</string>
-    <string name="settings_service_end_process_title">结束进程 %1$s？</string>
     <string name="settings_service_end_process_body">将向 PID %1$d 发送 SIGTERM。\n%2$s</string>
     <string name="settings_service_end_failed">无法结束进程</string>
     <string name="settings_service_end_process">结束进程</string>
-    <string name="settings_service_end">结束</string>
     <string name="settings_service_server_process">服务器</string>
     <string name="settings_service_child_process">子进程</string>
 
     <!-- Extensions -->
-    <string name="settings_extension_connection_changed">连接已切换，当前修改仍属于 %1$s。</string>
-    <string name="settings_extension_switch_connection">切换到当前连接</string>
-    <string name="settings_config">配置</string>
     <string name="settings_select_config">选择配置</string>
-    <string name="settings_search_extensions">搜索扩展</string>
     <string name="settings_discovered_extensions">已发现的扩展</string>
     <string name="settings_new">新建</string>
-    <string name="settings_type">类型</string>
-    <string name="settings_all_types">全部类型</string>
-    <string name="settings_reading_extensions">正在读取扩展…</string>
     <string name="settings_no_matching_extensions">没有匹配的扩展</string>
-    <string name="settings_no_extension_dir">暂无扩展目录</string>
-    <string name="settings_extension_disabled_summary">%1$s · 已停用</string>
-    <string name="settings_show_more">显示更多 · 还有 %1$d 项</string>
-    <string name="settings_refresh_list">刷新列表</string>
-    <string name="settings_hide_load_notes">收起加载说明</string>
-    <string name="settings_load_notes">加载说明 · %1$d</string>
-    <string name="settings_back_to_extensions">返回扩展列表</string>
-    <string name="settings_extension_info">扩展信息</string>
     <string name="settings_owner_plugin">所属插件</string>
-    <string name="settings_view_plugin">查看插件信息</string>
-    <string name="settings_extension_management">扩展管理</string>
-    <string name="settings_new_extension">新建扩展</string>
-    <string name="settings_file_name">文件名</string>
-    <string name="settings_save_preview">保存预览</string>
-    <string name="settings_file_content">文件内容</string>
-    <string name="settings_config_file">配置文件</string>
-    <string name="settings_select_file">选择文件</string>
-    <string name="settings_before_save">保存前</string>
-    <string name="settings_after_save">保存后</string>
-    <string name="settings_reread">重新读取</string>
-    <string name="settings_confirm_save">确认保存</string>
-    <string name="settings_preview_save">预览保存</string>
     <string name="settings_manage">管理</string>
     <string name="settings_install_plugin">安装插件</string>
-    <string name="settings_install">安装…</string>
-    <string name="settings_user_scope">用户级</string>
-    <string name="settings_project_scope">当前项目</string>
     <string name="settings_extension_runtime">运行状态</string>
-    <string name="settings_check">检查</string>
-    <string name="settings_mcp_config">MCP 配置</string>
     <string name="settings_reload">重新加载</string>
     <string name="settings_reload_mcp_confirm">重新加载 MCP 配置？</string>
-    <string name="settings_check_results">检查结果</string>
-    <string name="settings_authenticate">认证</string>
-    <string name="settings_start_mcp_auth_confirm">开始 MCP 授权？</string>
     <string name="settings_discard_unsaved_title">放弃未保存的修改？</string>
-    <string name="settings_confirmation_note">操作在当前服务器执行，现有会话可能需要重新加载。</string>
-    <string name="settings_execute">执行</string>
 
     <!-- Pairing -->
     <string name="pairing_title_new">配对新服务器</string>
     <string name="pairing_title_repair">重新配对</string>
-    <string name="pairing_connect_title">连接服务器</string>
     <string name="pairing_connect_hint">在服务器上执行 riffet pair，或在已连接的设备上选择「配对新设备」获取配对码。</string>
     <string name="pairing_server_address">服务器地址</string>
     <string name="pairing_server_address_placeholder">192.168.1.10 或 mac.local</string>
@@ -356,11 +291,9 @@
     <string name="pairing_code_placeholder">8 位配对码</string>
     <string name="pairing_paste">粘贴</string>
     <string name="pairing_scan_start">扫描二维码</string>
-    <string name="pairing_pairing">正在配对…</string>
     <string name="pairing_pair">配对</string>
     <string name="pairing_discovering">正在查找局域网中的 Riffet…</string>
     <string name="pairing_discovered_servers">发现的服务器</string>
-    <string name="pairing_use">使用</string>
     <string name="settings_icon_pack">界面图标</string>
     <string name="settings_icon_pack_footnote">切换会应用到整个界面并在本机保存。启用的图标扩展也会显示在这里。</string>
     <string name="settings_icon_pack_loading">正在加载图标…</string>
@@ -408,7 +341,6 @@
     <string name="settings_appearance_ui_font">界面字体</string>
     <string name="settings_appearance_mono_font">等宽字体</string>
     <string name="settings_appearance_background">背景</string>
-    <string name="settings_appearance_refresh">刷新</string>
     <string name="settings_appearance_resource_failed">部分外观资源未能加载，暂用默认样式。</string>
     <string name="settings_appearance_catalog_failed">外观目录暂不可用。</string>
 </resources>

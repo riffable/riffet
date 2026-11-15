@@ -30,6 +30,14 @@ import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.LargeTitle
 import riffet.ui.design.rememberLargeTitleState
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -145,10 +153,50 @@ internal fun PageBarAction(
     }
 }
 
-/** Keeps the scroll/content subtree in place when the visual renderer changes. */
+/**
+ * A search the page offers from its top bar (mobile.md §4): an icon among the actions that turns the
+ * bar into a search field; back or the arrow closes it and clears the query.
+ */
+internal class PageSearch(val query: String, val onQueryChange: (String) -> Unit, val placeholder: String)
+
+/** What the leading icon of a pushed page does: go back, or (an edit page) cancel. */
+internal enum class PageNavigation { BACK, CLOSE }
+
+/** The bar of a page with a [PageSearch] open: the field fills the bar, the arrow closes it. */
+@Composable
+private fun SearchTopBar(search: PageSearch, onClose: () -> Unit) {
+    StyleTopBar(
+        title = {
+            riffet.ui.design.RiffetSearchField(
+                query = search.query, onQueryChange = search.onQueryChange, placeholder = search.placeholder,
+                clearDescription = stringResource(Res.string.session_clear_search), requestFocus = true,
+                modifier = Modifier.padding(end = LocalInterfaceStyle.current.metrics.pageInset),
+            )
+        },
+        navigation = { PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_close_search), onClose) },
+    )
+}
+
+/**
+ * The page every settings-like screen is built on: the top bar (back or cancel, title, then
+ * [actions] — at most two icons, more go into a ⋯ menu), one scroll of inset content, and
+ * optionally a [search] in the bar and pull-to-[onRefresh]. Keeps the scroll/content subtree in
+ * place when the visual renderer changes.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-internal fun ScrollablePage(title: String, onBack: () -> Unit, large: Boolean = false, compactTitle: Boolean = false, content: @Composable ColumnScope.() -> Unit) {
+internal fun ScrollablePage(
+    title: String,
+    onBack: () -> Unit,
+    large: Boolean = false,
+    compactTitle: Boolean = false,
+    navigation: PageNavigation = PageNavigation.BACK,
+    search: PageSearch? = null,
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    actions: @Composable RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val page = pageColor()
     val scroll = rememberScrollState()
     val menu = LocalTabMenu.current?.takeIf { large }
@@ -157,30 +205,44 @@ internal fun ScrollablePage(title: String, onBack: () -> Unit, large: Boolean = 
     val nativeLargeTitle = style.components.navigation.largeTitle == riffet.ui.design.ComponentBackend.MATERIAL
     val behavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val largeState = rememberLargeTitleState(scroll)
+    var searching by rememberSaveable { mutableStateOf(search?.query?.isNotEmpty() == true) }
+    val closeSearch: () -> Unit = { searching = false; search?.onQueryChange?.invoke("") }
+    PageBackHandler(enabled = searching && search != null) { closeSearch() }
+    val barActions: @Composable RowScope.() -> Unit = {
+        if (search != null) PageBarAction(RiffetIcons.Search, search.placeholder, { searching = true })
+        actions()
+    }
     RiffetPageScaffold(
         modifier = Modifier.fillMaxSize().pageBackground(page)
             .then(if (showLargeTitle && nativeLargeTitle) Modifier.nestedScroll(behavior.nestedScrollConnection) else Modifier),
         topBar = {
             val largeBarSurface = Modifier.riffetMaterial(MaterialRole.TOP_BAR, RectangleShape, page)
-            val navigation: @Composable () -> Unit = {
-                PageBarAction(
-                    if (menu != null) RiffetIcons.Menu else RiffetIcons.ArrowLeft,
-                    stringResource(if (menu != null) Res.string.session_open_sidebar else Res.string.app_back),
-                    menu ?: onBack,
-                )
+            val navigationIcon: @Composable () -> Unit = {
+                when {
+                    menu != null -> PageBarAction(RiffetIcons.Menu, stringResource(Res.string.session_open_sidebar), menu)
+                    navigation == PageNavigation.CLOSE -> PageBarAction(RiffetIcons.Close, stringResource(Res.string.settings_cancel), onBack)
+                    else -> PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_back), onBack)
+                }
             }
-            if (showLargeTitle && nativeLargeTitle) RiffetMaterialContent {
+            if (searching && search != null) SearchTopBar(search, closeSearch)
+            else if (showLargeTitle && nativeLargeTitle) RiffetMaterialContent {
                 LargeTopAppBar(
                     title = { Text(title, style = LocalRiffetTypography.current.largeTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-                    navigationIcon = navigation, modifier = largeBarSurface,
+                    navigationIcon = navigationIcon, actions = barActions, modifier = largeBarSurface,
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, scrolledContainerColor = Color.Transparent),
                     windowInsets = WindowInsets(0, 0, 0, 0), scrollBehavior = behavior,
                 )
-            } else if (showLargeTitle) LargeTitleBar(title, largeState, page, navigation = navigation)
-            else StyleTopBar(title = { Text(title, style = LocalRiffetTypography.current.barTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigation = navigation)
+            } else if (showLargeTitle) LargeTitleBar(title, largeState, page, navigation = navigationIcon, actions = barActions)
+            else StyleTopBar(title = { Text(title, style = LocalRiffetTypography.current.barTitle, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                navigation = navigationIcon, actions = barActions)
         },
     ) { contentInsets ->
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        // The refresh box stays in the tree with or without [onRefresh], so adding one never remounts the page.
+        val pull = rememberPullToRefreshState()
+        PullToRefreshBox(isRefreshing = refreshing, onRefresh = { onRefresh?.invoke() }, modifier = Modifier.fillMaxSize(),
+            state = pull, contentAlignment = Alignment.TopCenter,
+            indicator = { if (onRefresh != null) PullToRefreshDefaults.Indicator(state = pull, isRefreshing = refreshing,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = contentInsets.calculateTopPadding())) }) {
             Column(Modifier.widthIn(max = style.metrics.contentMaxWidth).fillMaxWidth().verticalScroll(scroll)
                 .padding(contentInsets)
                 .padding(start = style.metrics.pageInset, end = style.metrics.pageInset,
@@ -190,5 +252,23 @@ internal fun ScrollablePage(title: String, onBack: () -> Unit, large: Boolean = 
                 content()
             }
         }
+    }
+}
+
+/** The ⋯ at the end of a top bar, for the page's low-frequency tools (refresh, diagnostics, import). */
+@Composable
+internal fun PageMoreAction(items: @Composable ColumnScope.(close: () -> Unit) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    Box {
+        PageBarAction(RiffetIcons.Ellipsis, stringResource(Res.string.app_more), { open = true })
+        riffet.ui.pickers.RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) { items { open = false } }
+    }
+}
+
+/** The bar's place for "working on it": a spinner the size of an action, while the page is disabled. */
+@Composable
+internal fun PageBarProgress() {
+    Box(Modifier.size(LocalInterfaceStyle.current.metrics.controlHeight), contentAlignment = Alignment.Center) {
+        riffet.ui.timeline.Spinner(size = 18.dp)
     }
 }

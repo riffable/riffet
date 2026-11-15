@@ -2,6 +2,7 @@ package riffet.ui.composer
 
 import riffet.contracts.SessionGoal
 import riffet.ui.design.riffetMaterial
+import riffet.ui.design.materialContentBackground
 import riffet.ui.design.MaterialRole
 import riffet.ui.design.RiffetMaterialContent
 
@@ -536,10 +537,14 @@ internal fun ComposerCard(
         modifier = modifier
             .fillMaxWidth()
             .keepsFocusOnTap()
-            // The home's composer is the page itself, not a layer over it.
+            // The home's composer is the page itself, not a layer over it: nothing scrolls behind it
+            // to blur, so it is the page's solid card (the settings cards' fill), the strongest
+            // surface on the page, and the tools under it stay quieter. In a session it floats over
+            // the transcript as glass.
             .then(if (hero) Modifier else Modifier.floatingShadow(shape, lifted = focused))
             .clip(shape)
-            .riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating),
+            .then(if (hero) Modifier.background(materialContentBackground(LocalRiffetSurfaces.current.card), shape)
+                else Modifier.riffetMaterial(MaterialRole.COMPOSER, shape, LocalRiffetSurfaces.current.floating)),
     ) {
         RiffetMaterialContent {
         Column(if (hero) Modifier else Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
@@ -671,7 +676,7 @@ internal fun ComposerCard(
                         .padding(horizontal = metrics.inputInset, vertical = metrics.controlInset * 2 / 3),
                         contentAlignment = if (hero) Alignment.TopStart else Alignment.CenterStart) {
                         if (value.text.isEmpty()) {
-                            Text(text = placeholder, style = typography.input, color = colors.fg,
+                            Text(text = placeholder, style = typography.input, color = colors.fg3,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         inner()

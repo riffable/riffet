@@ -40,6 +40,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.semantics.semantics
@@ -101,31 +102,20 @@ internal fun OverviewPage(dashboard: StatsDashboard, modifier: Modifier = Modifi
             primary.footnote?.let {
                 Text(it, style = typography.caption, color = colors.fg3, modifier = Modifier.padding(top = 4.dp))
             }
-            Spacer(Modifier.height(20.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                kpis.subList(1, 4).forEach { spec ->
+        }
+        StatsCard(null, padded = false) {
+            kpis.drop(1).forEachIndexed { index, spec ->
+                if (index > 0) HorizontalDivider(color = colors.line, modifier = Modifier.padding(horizontal = designMetrics.pageInset))
+                Row(Modifier.fillMaxWidth().padding(horizontal = designMetrics.pageInset, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(spec.label, style = typography.caption, color = colors.fg3)
-                        Spacer(Modifier.height(4.dp))
-                        Text(spec.text, style = typography.title, color = colors.fg)
-                        Text(formatDelta(spec.delta), style = typography.caption, color = deltaPolarity(spec.delta, spec.lowerIsBetter).color(colors))
+                        Text(spec.label, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (spec.delta != null) Text(formatDelta(spec.delta), style = typography.caption, color = deltaPolarity(spec.delta, spec.lowerIsBetter).color(colors))
                     }
+                    Text(spec.text, style = typography.body.copy(fontFeatureSettings = "tnum"), color = colors.fg, maxLines = 1)
                 }
             }
         }
         StatsCard(stringResource(Res.string.stats_usage_trend)) { StackedAreaChart(tracks, labels) }
-        StatsCard(stringResource(Res.string.stats_efficiency_activity), padded = false) {
-            kpis.drop(4).forEachIndexed { index, spec ->
-                if (index > 0) HorizontalDivider(color = colors.line, modifier = Modifier.padding(horizontal = designMetrics.pageInset))
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(spec.label, style = typography.bodySmall, color = colors.fg2, modifier = Modifier.weight(1f))
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(spec.text, style = typography.label, color = colors.fg)
-                        if (spec.delta != null) Text(formatDelta(spec.delta), style = typography.caption, color = deltaPolarity(spec.delta, spec.lowerIsBetter).color(colors))
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -243,7 +233,7 @@ private val StatsCardShape: RoundedCornerShape
 /** One section of a stats page: a raised card on the page colour, titled, with an optional control. */
 @Composable
 private fun StatsCard(
-    title: String,
+    title: String?,
     padded: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
     content: @Composable () -> Unit,
@@ -252,7 +242,7 @@ private fun StatsCard(
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     Column(Modifier.fillMaxWidth().clip(StatsCardShape).background(cardColor()).padding(vertical = 16.dp)) {
-        Row(
+        if (title != null) Row(
             Modifier.fillMaxWidth().heightIn(min = 24.dp).padding(start = 16.dp, end = if (trailing != null) 8.dp else 16.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -278,20 +268,16 @@ private fun bucketLabel(iso: String, granularity: StatsGranularity): String {
 @Composable
 internal fun StatsSkeleton(modifier: Modifier = Modifier) {
     val designMetrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
     Column(modifier.fillMaxSize().padding(designMetrics.rowPadding), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(Modifier.fillMaxWidth().height(180.dp).clip(StatsCardShape).background(cardColor()))
-        Box(Modifier.fillMaxWidth().height(220.dp).clip(StatsCardShape).background(cardColor()))
+        riffet.ui.design.SkeletonBlock(Modifier.fillMaxWidth().height(180.dp), StatsCardShape)
+        riffet.ui.design.SkeletonBlock(Modifier.fillMaxWidth().height(220.dp), StatsCardShape)
     }
 }
 
+// The page's empty state (mobile.md section 2.1): centred; the range pill above says which period.
 @Composable
 internal fun StatsEmpty(modifier: Modifier = Modifier) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Column(modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        Text(stringResource(Res.string.stats_empty_title), style = typography.title, color = colors.fg)
-    }
+    riffet.ui.design.EmptyState(stringResource(Res.string.stats_empty_title), modifier)
 }
 
 /** Compact trigger shared by the date range and the trend's bucket size. */

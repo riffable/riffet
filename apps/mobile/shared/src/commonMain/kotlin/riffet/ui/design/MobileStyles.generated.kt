@@ -168,6 +168,8 @@ internal val ExpressiveMotionTokens = DefaultMotionTokens + mapOf(
 )
 internal val StandardMotionEasing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
 internal val SharedMotionEasing = CubicBezierEasing(0.25f, 0.1f, 0.25f, 1f)
+internal val MobileMonoText = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, fontFamily = FontFamily.Monospace)
+internal val MobileMonoSmallText = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, fontFamily = FontFamily.Monospace)
 internal val IosStyleTypography = MaterialStyleTypography.copy(
     headlineLarge = TextStyle(fontSize = 34.sp, lineHeight = 41.sp, fontWeight = FontWeight.Bold),
     titleLarge = TextStyle(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.Medium),
@@ -177,5 +179,3 @@ internal val IosStyleTypography = MaterialStyleTypography.copy(
     bodySmall = TextStyle(fontSize = 13.sp, lineHeight = 18.sp),
     labelLarge = TextStyle(fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
 )
-internal val MobileMonoText = TextStyle(fontSize = 14.sp, lineHeight = 22.sp, fontFamily = FontFamily.Monospace)
-internal val MobileMonoSmallText = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, fontFamily = FontFamily.Monospace)

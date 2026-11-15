@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setp_available_models">Available models</string>
+    <string name="setp_clear_logs_title">Clear local logs?</string>
+    <string name="setp_clear_logs_message">Logs already uploaded to the server are kept.</string>
+    <string name="setp_notification_allow">Allow system notifications</string>
+    <string name="setp_notification_blocked_desc">Notifications are off for this app, so session alerts will not arrive.</string>
+    <string name="setp_keepalive_battery_allow">Allow battery optimization exemption</string>
+    <string name="setp_keepalive_autostart_allow">Allow auto-start</string>
+    <string name="setp_delete_preset_title">Delete preset "%1$s"?</string>
+    <string name="setp_restore_presets_message">Your current presets will be replaced.</string>
+</resources>

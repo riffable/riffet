@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setm_needs_permission">需要授权</string>
+    <string name="setm_service_overview">概览</string>
+    <string name="setm_service_uptime">已运行</string>
+    <string name="setm_process_title">进程</string>
+    <string name="setm_process_kind">类型</string>
+    <string name="setm_process_parent">父进程</string>
+    <string name="setm_process_elapsed">运行时长</string>
+    <string name="setm_process_command">命令</string>
+</resources>

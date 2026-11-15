@@ -72,6 +72,9 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.LocalRiffetMotion
 import riffet.ui.timeline.Spinner
 import riffet.ui.terminal.TerminalBenchScreen
+import riffet.ui.settings.appearance.AppearancePage
+import riffet.ui.settings.diagnostics.DiagnosticsPage
+import riffet.ui.design.ConfirmDialog
 
 private sealed interface SettingsPageRoute {
     data object Home : SettingsPageRoute
@@ -112,7 +115,6 @@ internal fun SettingsScreen(
     onSettingsSaved: (riffet.contracts.AppSettings) -> Unit = {},
     onProfilesChanged: () -> Unit = {},
 ) {
-    val motion = LocalRiffetMotion.current
     val scope = rememberCoroutineScope()
     PageBackHandler(enabled = connectionOperation.value != null) { }
     PageLeaveGuard { connectionOperation.value == null }
@@ -143,7 +145,17 @@ internal fun SettingsScreen(
                 if (searchQuery.isBlank()) OwnerHeaderRow(owner) { pages.push(SettingsPageRoute.Owner) }
                 if (searchQuery.isBlank()) SectionList(themeMode, themes, themeId, api.baseUrl, iconPacks) { pages.push(SettingsPageRoute.Section(it)) }
             }
-            is SettingsPageRoute.Section -> {
+            // A section with pages of its own beneath it owns its whole page, top bar included.
+            is SettingsPageRoute.Section -> if (route.section == SettingsSection.EXTENSIONS) ExtensionsPage(api, projectId, route.section.label, back)
+            else if (route.section == SettingsSection.APPEARANCE) AppearancePage(
+                route.section.label, back, sectionSearchTarget(route.searchTargetId),
+                themeMode, onThemeModeChange, themes, themeId, onThemeIdChange,
+            ) else if (route.section == SettingsSection.DIAGNOSTICS) DiagnosticsPage(
+                api, controller, route.section.label, back, sectionSearchTarget(route.searchTargetId),
+                onOpenBenchmark = { pages.push(SettingsPageRoute.TerminalBench) },
+            ) else if (route.section == SettingsSection.SERVICE) ServiceStatusPage(
+                api, controller, route.section.label, back, sectionSearchTarget(route.searchTargetId),
+            ) else {
                 val section = route.section
                 val auxiliaryOptions = if (section == SettingsSection.AUXILIARY || section == SettingsSection.QUICK_CHAT) {
                     rememberAuxiliaryModelOptions(api)
@@ -151,13 +163,8 @@ internal fun SettingsScreen(
                 LaunchedEffect(controller, section) {
                     // The service page reads settings too, for its reclaim group, without gating on them.
                     if ((section.serverSettings || section == SettingsSection.SERVICE || section == SettingsSection.DEVICES) && controller.state.value.settings == null) controller.load()
-                    if (section == SettingsSection.DIAGNOSTICS && controller.state.value.capabilities == null) controller.loadDiagnostics()
                 }
-                val searchEntry = settingsSearchCatalogue.firstOrNull { it.id == route.searchTargetId }
-                val searchTarget = searchEntry?.anchor?.let { anchor ->
-                    SettingsSearchTarget(searchEntry.id, stringResource(searchEntry.title), anchor)
-                }
-                SettingsPage(section.label, back, searchTarget = searchTarget) {
+                SettingsPage(section.label, back, searchTarget = sectionSearchTarget(route.searchTargetId)) {
                     if (section.serverSettings) ControllerMessages(controller)
                     if (section.serverSettings && state.settings == null) {
                         ServerSettingsLoad(controller)
@@ -166,7 +173,7 @@ internal fun SettingsScreen(
                         SettingsSection.STYLE -> InterfaceStylePicker()
                         SettingsSection.MOTION -> MotionSection()
                         SettingsSection.GESTURES -> GesturesSection()
-                        SettingsSection.APPEARANCE -> ThemeSection(themeMode, onThemeModeChange, themes, themeId, onThemeIdChange)
+                        SettingsSection.APPEARANCE -> Unit
                         SettingsSection.TYPOGRAPHY -> TypographySection()
                         SettingsSection.ICONS -> {
                             if (appIconSupported) {
@@ -181,7 +188,7 @@ internal fun SettingsScreen(
                         SettingsSection.QUICK_CHAT -> QuickChatSection(controller, auxiliaryOptions.first, auxiliaryOptions.second) { pages.push(SettingsPageRoute.QuickChatPresets) }
                         SettingsSection.BACKENDS -> BackendsSection(controller) { pages.push(SettingsPageRoute.Backend(it)) }
                         SettingsSection.FILES -> FilesSettingsSection(controller)
-                        SettingsSection.EXTENSIONS -> ExtensionsSection(api, projectId)
+                        SettingsSection.EXTENSIONS -> Unit
                         SettingsSection.DEVICES -> DevicesSection(api)
                         SettingsSection.CONNECTION -> {
                             SettingsGroup("") {
@@ -189,68 +196,29 @@ internal fun SettingsScreen(
                             }
                             PairedServersSection(connection, onPaired, onRepair, onDisconnected, operationScope, connectionOperation)
                         }
-                        SettingsSection.SERVICE -> {
-                            ReclaimSection(controller)
-                            ServiceStatusSection(api)
-                        }
-                        SettingsSection.DIAGNOSTICS -> {
-                            SettingsGroup(stringResource(Res.string.settings_diagnostics_logs)) { LogUploadRow(api); LogExportRow() }
-                            state.diagnosticsError?.let { Spacer(Modifier.height(16.dp)); PageBanner(it, SettingsNoticeKind.ERROR) }
-                            EnvironmentSection(controller)
-                            var advanced by remember { mutableStateOf(false) }
-                            SettingsGroup(stringResource(Res.string.settings_advanced_diagnostics)) {
-                                SettingsRow(stringResource(Res.string.settings_terminal_render_test), stringResource(Res.string.settings_terminal_render_test_desc)) {
-                                    SettingsButton(if (advanced) stringResource(Res.string.settings_collapse) else stringResource(Res.string.settings_expand), onClick = { advanced = !advanced })
-                                }
-                                AnimatedVisibility(advanced, enter = motion.expandIn(), exit = motion.collapseOut()) {
-                                    SettingsRow(stringResource(Res.string.settings_render_benchmark)) {
-                                        SettingsButton(stringResource(Res.string.settings_open), onClick = { pages.push(SettingsPageRoute.TerminalBench) })
-                                    }
-                                }
-                            }
-                        }
+                        SettingsSection.SERVICE -> Unit
+                        SettingsSection.DIAGNOSTICS -> Unit
                         SettingsSection.ABOUT -> AppAboutSection()
                     }
                 }
             }
-            is SettingsPageRoute.Backend -> {
-                LaunchedEffect(controller, route.id) { controller.loadProfiles(route.id) }
-                SettingsPage(backendLabel(route.id), back) {
-                    ControllerMessages(controller)
-                    BackendProfilesSection(
-                        controller, route.id,
-                        onEdit = { pages.push(SettingsPageRoute.Profile(route.id, it)) },
-                        onAdd = { pages.push(SettingsPageRoute.Add(route.id)) },
-                    )
-                }
-            }
-            is SettingsPageRoute.Profile -> {
-                val profile = state.profileLists[route.backend]?.firstOrNull { it.id == route.id }
-                SettingsPage(profile?.name ?: stringResource(Res.string.settings_provider), back) {
-                    ControllerMessages(controller)
-                    if (profile != null) BackendProfileEditor(
-                        backendId = route.backend, profile = profile, controller = controller,
-                        isDefault = defaultProfileId(state, route.backend) == profile.id,
-                        onDeleted = { pages.pop() },
-                    ) else PageBanner(stringResource(Res.string.settings_provider_missing), SettingsNoticeKind.ERROR)
-                }
-            }
-            is SettingsPageRoute.Add -> SettingsPage(stringResource(Res.string.settings_add_provider_title, backendLabel(route.backend)), back) {
-                ControllerMessages(controller)
-                AddProfileForm(route.backend, controller, onCancel = back, onCreated = { pages.pop() })
-            }
-            SettingsPageRoute.Owner -> {
-                rememberResourceEnvironment()
-                SettingsPage(L10n.uiText("owner.title"), back) { OwnerProfilePage(owner) }
-            }
-            SettingsPageRoute.QuickChatPresets -> SettingsPage(stringResource(Res.string.settings_quick_chat_presets), back) {
-                ControllerMessages(controller)
-                QuickChatPresetsEditor(controller)
-            }
+            is SettingsPageRoute.Backend -> BackendProfilesPage(controller, route.id, back,
+                onEdit = { pages.push(SettingsPageRoute.Profile(route.id, it)) },
+                onAdd = { pages.push(SettingsPageRoute.Add(route.id)) })
+            is SettingsPageRoute.Profile -> BackendProfilePage(controller, route.backend, route.id, back, onDeleted = { pages.pop() })
+            is SettingsPageRoute.Add -> AddProfilePage(controller, route.backend, back, onCreated = { pages.pop() })
+            SettingsPageRoute.Owner -> OwnerProfilePages(owner, back)
+            SettingsPageRoute.QuickChatPresets -> QuickChatPresetsPage(controller, back)
             SettingsPageRoute.PairDevice -> SettingsPage(stringResource(Res.string.settings_pair_device), back) { PairDeviceSection(api) }
             SettingsPageRoute.TerminalBench -> TerminalBenchScreen(onBack = back)
         }
     }
+}
+
+@Composable
+private fun sectionSearchTarget(id: String?): SettingsSearchTarget? {
+    val entry = settingsSearchCatalogue.firstOrNull { it.id == id } ?: return null
+    return entry.anchor?.let { SettingsSearchTarget(entry.id, stringResource(entry.title), it) }
 }
 
 /** Material supporting labels or Cupertino trailing values, with the same destination. */
@@ -285,19 +253,55 @@ internal fun SettingsNavigationRow(title: String, summary: String, icon: ImageVe
     SettingsLinkRow(title = title, subtitle = summary.takeIf { it.isNotEmpty() }, leading = leading, onClick = onClick)
 }
 
-/** Settings share the same scrollable chrome and style scope as the rest of the app. */
+/**
+ * Settings share the same scrollable chrome and style scope as the rest of the app. Search, add and
+ * the page's tools go in the bar ([search], [actions]; see mobile.md §4), not above the content.
+ */
 @Composable
 internal fun SettingsPage(
     title: String, onBack: () -> Unit, large: Boolean = false,
-    searchTarget: SettingsSearchTarget? = null, content: @Composable ColumnScope.() -> Unit,
+    searchTarget: SettingsSearchTarget? = null,
+    navigation: riffet.ui.app.PageNavigation = riffet.ui.app.PageNavigation.BACK,
+    search: riffet.ui.app.PageSearch? = null,
+    refreshing: Boolean = false,
+    onRefresh: (() -> Unit)? = null,
+    actions: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {},
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     val typography = LocalRiffetTypography.current
     CompositionLocalProvider(
         LocalRiffetTypography provides typography.copy(subhead = typography.bodySmall, caption = typography.bodySmall),
         LocalSettingsSearchTarget provides searchTarget,
     ) {
-        riffet.ui.app.ScrollablePage(title, onBack, large, compactTitle = true, content = content)
+        riffet.ui.app.ScrollablePage(title, onBack, large, compactTitle = true, navigation = navigation, search = search,
+            refreshing = refreshing, onRefresh = onRefresh, actions = actions, content = content)
     }
+}
+
+/**
+ * An edit or new page (mobile.md §2.3): cancel at the start of the bar, [saveLabel] at the end,
+ * enabled only with a change that can be saved. Leaving with unsaved changes, by cancel or by
+ * either back, asks first. [onSave] is the caller's: it pops the page when the save succeeds and
+ * keeps the page (and shows why) when it fails.
+ */
+@Composable
+internal fun EditPage(
+    title: String,
+    onBack: () -> Unit,
+    dirty: Boolean,
+    busy: Boolean,
+    onSave: () -> Unit,
+    canSave: Boolean = dirty,
+    saveLabel: String = stringResource(Res.string.settings_save),
+    /** Off when the page sits at the root of a stack inside the page that owns the guard. */
+    guard: Boolean = true,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    if (guard) UnsavedSettingsGuard(dirty = dirty, busy = busy)
+    SettingsPage(title, onBack, navigation = riffet.ui.app.PageNavigation.CLOSE, actions = {
+        if (busy) riffet.ui.app.PageBarProgress()
+        else riffet.ui.design.RiffetTextButton(onClick = onSave, enabled = canSave) { Text(saveLabel) }
+    }, content = content)
 }
 
 @Composable
@@ -315,10 +319,12 @@ internal fun ServerSettingsLoad(controller: SettingsController) {
     val state by controller.state.collectAsState()
     if (state.loading) {
         Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
-    } else SettingsGroup(stringResource(Res.string.settings_server_settings)) {
-        SettingsRow(stringResource(Res.string.settings_load_failed_title), stringResource(Res.string.settings_load_failed_desc)) {
-            SettingsButton(stringResource(Res.string.settings_retry), onClick = controller::load)
+    } else {
+        PageBanner(stringResource(Res.string.settings_load_failed_title), SettingsNoticeKind.ERROR)
+        SettingsGroup(stringResource(Res.string.settings_server_settings)) {
+            SettingsActionRow(stringResource(Res.string.settings_retry), controller::load)
         }
+        SettingsFootnote(stringResource(Res.string.settings_load_failed_desc))
     }
 }
 
@@ -373,24 +379,6 @@ private fun appIconLabel(value: AppIcon): String = stringResource(
     },
 )
 
-/** A built-in palette's description comes from resources; a shared custom theme keeps the server's. */
-@Composable
-private fun themeSummary(entry: ThemeEntry): String = when (entry.id) {
-    ThemeId.RIFFET.id -> stringResource(Res.string.settings_theme_summary_riffet)
-    ThemeId.SOLARIZED.id -> stringResource(Res.string.settings_theme_summary_solarized)
-    ThemeId.CATPPUCCIN.id -> stringResource(Res.string.settings_theme_summary_catppuccin)
-    ThemeId.ROSE_PINE.id -> stringResource(Res.string.settings_theme_summary_rose_pine)
-    ThemeId.KILN.id -> stringResource(Res.string.settings_theme_summary_kiln)
-    ThemeId.EVERFOREST.id -> stringResource(Res.string.settings_theme_summary_everforest)
-    ThemeId.INK.id -> stringResource(Res.string.settings_theme_summary_ink)
-    ThemeId.SEPIA.id -> stringResource(Res.string.settings_theme_summary_sepia)
-    ThemeId.MOSS.id -> stringResource(Res.string.settings_theme_summary_moss)
-    ThemeId.SLATE.id -> stringResource(Res.string.settings_theme_summary_slate)
-    ThemeId.PENCIL.id -> stringResource(Res.string.settings_theme_summary_pencil)
-    ThemeId.CELADON.id -> stringResource(Res.string.settings_theme_summary_celadon)
-    else -> entry.summary
-}
-
 @Composable
 private fun LanguageSection() {
     val current = AppLanguages.current
@@ -409,27 +397,6 @@ private fun LanguageSection() {
         }
     }
     SettingsFootnote(stringResource(Res.string.settings_language_footnote))
-}
-
-@Composable
-private fun ThemeSection(
-    themeMode: ThemeMode,
-    onThemeModeChange: (ThemeMode) -> Unit,
-    themes: List<ThemeEntry>,
-    themeId: String,
-    onThemeIdChange: (String) -> Unit,
-) {
-    val display = DisplaySettings.shared
-    SettingsGroup(title = stringResource(Res.string.settings_appearance)) {
-        AppearanceRow(themeMode, onThemeModeChange)
-        SettingsSwitchRow(title = stringResource(Res.string.settings_amoled),
-            description = stringResource(Res.string.settings_amoled_desc),
-            checked = display.amoled, onCheckedChange = display::changeAmoled)
-    }
-    riffet.ui.theme.AppearanceResourcesPicker()
-    val activePaletteId = riffet.ui.theme.LocalAppearanceResources.current?.palette?.id ?: themeId
-    SettingsGroup(title = stringResource(Res.string.settings_theme)) { ThemeGallery(themes, activePaletteId, onThemeIdChange) }
-    SettingsFootnote(stringResource(Res.string.settings_theme_footnote))
 }
 
 @Composable
@@ -472,51 +439,6 @@ private fun TextSizeRow(value: TextSize, onChange: (TextSize) -> Unit) {
             valueRange = 0f..sizes.lastIndex.toFloat(),
             steps = sizes.size - 2,
         )
-    }
-}
-
-/**
- * The palette picker.
- *
- * A column rather than the segmented control the other rows use: the options have Latin names that
- * do not fit across a phone, and a swatch says more about a palette than a name does. It renders
- * whatever catalogue the caller holds — built-ins plus the themes shared through this server — so a
- * theme created on the web or the Mac appears here with nothing to restate.
- */
-@Composable
-private fun ThemeGallery(themes: List<ThemeEntry>, selected: String, onSelect: (String) -> Unit) {
-    themes.forEach { entry -> ThemeGalleryRow(entry, entry.id == selected, onSelect) }
-}
-
-@Composable
-private fun ThemeGalleryRow(entry: ThemeEntry, selected: Boolean, onSelect: (String) -> Unit) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, role = Role.RadioButton) { onSelect(entry.id) }
-            .padding(horizontal = metrics.pageInset, vertical = metrics.rowPadding),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(metrics.sectionGap / 2),
-    ) {
-        ThemeSwatch(entry)
-        Column(Modifier.weight(1f)) {
-            Text(entry.name, style = typography.body, color = colors.fg)
-            val summary = themeSummary(entry)
-            if (summary.isNotEmpty()) {
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    summary,
-                    style = typography.caption,
-                    color = colors.fg3,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        riffet.ui.design.SelectionMark(selected)
     }
 }
 
@@ -570,24 +492,6 @@ private fun AppIconPicker() {
 }
 
 @Composable
-private fun AppearanceRow(themeMode: ThemeMode, onThemeModeChange: (ThemeMode) -> Unit) {
-    val title = stringResource(Res.string.settings_color_mode)
-    Column(modifier = Modifier.fillMaxWidth().settingsSearchAnchor(title).padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Text(stringResource(Res.string.settings_color_mode), style = LocalRiffetTypography.current.body, color = LocalRiffetColors.current.fg)
-        Spacer(Modifier.height(10.dp))
-        SettingsSegmented(
-            options = listOf(
-                ThemeMode.SYSTEM.name to stringResource(Res.string.settings_theme_mode_system),
-                ThemeMode.LIGHT.name to stringResource(Res.string.settings_theme_mode_light),
-                ThemeMode.DARK.name to stringResource(Res.string.settings_theme_mode_dark),
-            ),
-            value = themeMode.name,
-            onSelect = { ThemeMode.entries.firstOrNull { mode -> mode.name == it }?.let(onThemeModeChange) },
-        )
-    }
-}
-
-@Composable
 private fun ChoiceRow(
     title: String,
     options: List<Pair<String, String>>,
@@ -595,93 +499,7 @@ private fun ChoiceRow(
     description: String? = null,
     enabled: Boolean = true,
     onSelect: (String) -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxWidth().settingsSearchAnchor(title).padding(horizontal = 16.dp, vertical = 14.dp)) {
-        Text(title, style = LocalRiffetTypography.current.body, color = LocalRiffetColors.current.fg)
-        if (description != null) {
-            Spacer(Modifier.height(2.dp))
-            Text(description, style = LocalRiffetTypography.current.caption, color = LocalRiffetColors.current.fg3)
-        }
-        Spacer(Modifier.height(10.dp))
-        SettingsSegmented(options = options, value = value, enabled = enabled, onSelect = onSelect)
-    }
-}
-
-/** Sends the log to the server, which keeps it on its own machine, so nobody has to forward a file. */
-@Composable
-private fun LogUploadRow(api: RiffetApi) {
-    val typography = LocalRiffetTypography.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<String?>(null) }
-    SettingsActionRow(
-        title = stringResource(Res.string.settings_upload_logs),
-        description = result ?: stringResource(Res.string.settings_upload_logs_desc),
-    ) {
-        RiffetTextButton(enabled = !busy, onClick = {
-            busy = true
-            scope.launch {
-                result = try {
-                    AppLog.log("app", "upload requested")
-                    val saved = api.uploadClientLog(AppLog.exportName(), redactLog(AppLog.export()))
-                    getString(Res.string.settings_upload_success, saved.path, saved.bytes / 1024)
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (error: Throwable) {
-                    getString(Res.string.settings_upload_failed, (error.message ?: error::class.simpleName).toString())
-                } finally {
-                    busy = false
-                }
-            }
-        }) { Text(if (busy) stringResource(Res.string.settings_uploading) else stringResource(Res.string.settings_upload), style = typography.button) }
-    }
-}
-
-/**
- * 导出日志: the device's [AppLog] saved into 下载/Riffet and handed to the share sheet, so it can be
- * sent straight to whoever is chasing a problem. Where nothing can be saved only 清空 is offered.
- */
-@Composable
-private fun LogExportRow() {
-    val typography = LocalRiffetTypography.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    var result by remember { mutableStateOf<String?>(null) }
-    SettingsActionRow(
-        title = if (downloadsSupported) stringResource(Res.string.settings_export_logs) else stringResource(Res.string.settings_clear_logs),
-        description = result ?: if (downloadsSupported) {
-            stringResource(Res.string.settings_export_logs_desc)
-        } else {
-            stringResource(Res.string.settings_export_unavailable_desc)
-        },
-    ) {
-        RiffetTextButton(enabled = !busy, onClick = {
-            scope.launch {
-                AppLog.clear()
-                result = getString(Res.string.settings_logs_cleared)
-            }
-        }) { Text(stringResource(Res.string.settings_clear), style = typography.button) }
-        if (downloadsSupported) RiffetTextButton(enabled = !busy, onClick = {
-            busy = true
-            scope.launch {
-                result = try {
-                    AppLog.log("app", "export requested")
-                    val bytes = redactLog(AppLog.export()).encodeToByteArray()
-                    val saved = saveDownload(AppLog.exportName(), "text/plain", bytes)
-                    shareSavedFile(saved, getString(Res.string.settings_share_logs))
-                    getString(Res.string.settings_export_success, saved.location, bytes.size / 1024)
-                } catch (cancellation: CancellationException) {
-                    throw cancellation
-                } catch (error: Throwable) {
-                    getString(Res.string.settings_export_failed, (error.message ?: error::class.simpleName).toString())
-                } finally {
-                    busy = false
-                }
-            }
-        }) { Text(if (busy) stringResource(Res.string.settings_exporting) else stringResource(Res.string.settings_export), style = typography.button) }
-    }
-}
-
+) = SettingsChoiceRow(title, options, value, subtitle = description, enabled = enabled, onSelect = onSelect)
 
 @Composable
 private fun FeatureSwitch(feature: NativeFeature, title: String, description: String? = null) {
@@ -695,9 +513,11 @@ private fun NotificationsSection() {
     val access = rememberNotificationAccess()
     SettingsGroup(stringResource(Res.string.settings_notifications)) {
         FeatureSwitch(NativeFeature.ALERTS, stringResource(Res.string.settings_session_alerts), stringResource(Res.string.settings_session_alerts_desc))
-        SettingsRow(stringResource(Res.string.settings_notification_permission), if (access == NotificationAccess.ALLOWED) stringResource(Res.string.settings_allowed) else stringResource(Res.string.settings_not_allowed)) {
-            SettingsButton(stringResource(Res.string.settings_system_settings), onClick = ::openNotificationSettings)
-        }
+        if (access != NotificationAccess.ALLOWED) SettingsActionRow(
+            stringResource(Res.string.setp_notification_allow),
+            onClick = ::openNotificationSettings,
+            subtitle = stringResource(Res.string.setp_notification_blocked_desc),
+        )
     }
     SettingsGroup(stringResource(Res.string.settings_background)) {
         FeatureSwitch(NativeFeature.BACKGROUND_WATCH, stringResource(Res.string.settings_background_sessions), stringResource(Res.string.settings_background_sessions_desc))
@@ -719,14 +539,10 @@ private fun KeepAliveRows() {
         KeepAliveNotice.dismiss()
         openKeepAlivePage(page)
     }
-    status.batteryExempt?.let { exempt ->
-        SettingsRow(
-            stringResource(Res.string.settings_keepalive_battery),
-            if (exempt) stringResource(Res.string.settings_allowed) else stringResource(Res.string.settings_not_allowed),
-        ) {
-            if (!exempt) SettingsButton(stringResource(Res.string.settings_keepalive_allow), primary = true, onClick = { open(KeepAlivePage.BATTERY) })
-        }
-    }
+    if (status.batteryExempt == false) SettingsActionRow(
+        stringResource(Res.string.setp_keepalive_battery_allow),
+        onClick = { open(KeepAlivePage.BATTERY) },
+    )
     val hint = when (status.vendor) {
         KeepAliveVendor.OPPO -> Res.string.settings_keepalive_hint_oppo
         KeepAliveVendor.XIAOMI -> Res.string.settings_keepalive_hint_xiaomi
@@ -734,14 +550,8 @@ private fun KeepAliveRows() {
         KeepAliveVendor.HUAWEI, KeepAliveVendor.HONOR -> Res.string.settings_keepalive_hint_huawei
         KeepAliveVendor.SAMSUNG, null -> Res.string.settings_keepalive_hint_default
     }
-    SettingsRow(stringResource(Res.string.settings_keepalive_background), stringResource(hint)) {
-        SettingsButton(stringResource(Res.string.settings_system_settings), onClick = { open(KeepAlivePage.BACKGROUND) })
-    }
-    if (status.autostart) {
-        SettingsRow(stringResource(Res.string.settings_keepalive_autostart)) {
-            SettingsButton(stringResource(Res.string.settings_system_settings), onClick = { open(KeepAlivePage.AUTOSTART) })
-        }
-    }
+    SettingsActionRow(stringResource(Res.string.settings_keepalive_background), onClick = { open(KeepAlivePage.BACKGROUND) }, subtitle = stringResource(hint))
+    if (status.autostart) SettingsActionRow(stringResource(Res.string.setp_keepalive_autostart_allow), onClick = { open(KeepAlivePage.AUTOSTART) })
 }
 
 /** 确认操作前验证本人, as on iPhone: turning it on needs one successful verification. */
@@ -846,7 +656,7 @@ private fun idleLabel(minutes: Int) = when {
 
 /** When the server stops the CLIs of conversations nobody uses; the next message resumes them. */
 @Composable
-private fun ReclaimSection(controller: SettingsController) {
+internal fun ReclaimSection(controller: SettingsController) {
     val state by controller.state.collectAsState()
     ControllerMessages(controller)
     val settings = state.settings ?: return
@@ -896,38 +706,20 @@ private fun QuickChatSection(controller: SettingsController, options: List<riffe
             enabled = !busy,
             onSelect = { mode -> controller.saveQuickChat(openMode = mode) },
         )
-        SettingsRow(stringResource(Res.string.settings_quick_chat_presets)) {
-            SettingsButton(stringResource(Res.string.settings_quick_chat_edit), enabled = !busy, onClick = onEditPresets)
-        }
+        SettingsNavigationRow(
+            stringResource(Res.string.settings_quick_chat_presets),
+            settings.quickChat?.presets?.size?.toString().orEmpty(),
+            onClick = onEditPresets,
+        )
         val days = settings.quickChat?.retentionDays ?: 7
-        var archiveOpen by remember { mutableStateOf(false) }
-        SettingsRow(stringResource(Res.string.settings_quick_chat_archive)) {
-            Box {
-                SettingsButton(
-                    if (days == 0) stringResource(Res.string.settings_quick_chat_never) else stringResource(Res.string.settings_quick_chat_days, days),
-                    enabled = !busy,
-                    onClick = { archiveOpen = true },
-                )
-                RiffetDropdownMenu(expanded = archiveOpen, onDismissRequest = { archiveOpen = false }, modifier = Modifier.widthIn(min = 160.dp)) {
-                    listOf(1, 3, 7, 14, 30, 0).forEach { choice ->
-                        RiffetMenuItem(
-                            onClick = {
-                                archiveOpen = false
-                                if (days != choice) controller.saveQuickChat(retentionDays = choice)
-                            },
-                            selected = days == choice,
-                            showCheck = true,
-                        ) {
-                            Text(
-                                if (choice == 0) stringResource(Res.string.settings_quick_chat_never) else stringResource(Res.string.settings_quick_chat_days, choice),
-                                style = RiffetMenuText,
-                                color = LocalRiffetColors.current.fg,
-                            )
-                        }
-                    }
-                }
-            }
-        }
+        val never = stringResource(Res.string.settings_quick_chat_never)
+        SettingsChoiceRow(
+            title = stringResource(Res.string.settings_quick_chat_archive),
+            options = listOf(1, 3, 7, 14, 30, 0).map { it.toString() to if (it == 0) never else stringResource(Res.string.settings_quick_chat_days, it) },
+            value = days.toString(),
+            enabled = !busy,
+            onSelect = { controller.saveQuickChat(retentionDays = it.toInt()) },
+        )
     }
     SettingsFootnote(stringResource(Res.string.settings_quick_chat_hint))
 }
@@ -944,160 +736,139 @@ private fun nextPresetId(existing: Collection<String>): String {
     return "custom-$index"
 }
 
+private sealed interface PresetRoute {
+    data object List : PresetRoute
+    data class Edit(val preset: QuickChatPreset) : PresetRoute
+}
+
 /**
- * The preset list editor: tap a row to change its name or prompt, add, delete, or restore the
- * server's defaults. Every action writes the whole list, which is what the PATCH route replaces.
+ * The preset directory, and beneath it one preset's edit page. Every write sends the whole list,
+ * which is what the PATCH route replaces.
  */
 @Composable
-private fun QuickChatPresetsEditor(controller: SettingsController) {
+private fun QuickChatPresetsPage(controller: SettingsController, onBack: () -> Unit) {
     val state by controller.state.collectAsState()
-    val settings = state.settings ?: return
-    val presets = settings.quickChat?.presets.orEmpty()
-    val busy = state.saving
-    var editing by remember { mutableStateOf<QuickChatPreset?>(null) }
-    var deleting by remember { mutableStateOf<QuickChatPreset?>(null) }
-    var confirmRestore by remember { mutableStateOf(false) }
+    val pages = remember { PageStack<PresetRoute>(PresetRoute.List) }
+    PageHost(pages) { route, back ->
+        when (route) {
+            PresetRoute.List -> {
+                val presets = state.settings?.quickChat?.presets.orEmpty()
+                QuickChatPresetList(controller, presets, state.saving, onBack, onOpen = { pages.push(PresetRoute.Edit(it)) })
+            }
+            is PresetRoute.Edit -> QuickChatPresetEditPage(controller, route.preset, state.settings?.quickChat?.presets.orEmpty(), state.saving, back)
+        }
+    }
+}
 
-    SettingsGroup(
-        title = "",
-        card = presets.isNotEmpty(),
-        action = {
-            SettingsButton(
-                text = stringResource(Res.string.settings_quick_chat_add),
+@Composable
+private fun QuickChatPresetList(
+    controller: SettingsController,
+    presets: List<QuickChatPreset>,
+    busy: Boolean,
+    onBack: () -> Unit,
+    onOpen: (QuickChatPreset) -> Unit,
+) {
+    var confirmRestore by remember { mutableStateOf(false) }
+    SettingsPage(
+        stringResource(Res.string.settings_quick_chat_presets),
+        onBack,
+        actions = {
+            riffet.ui.app.PageBarAction(
+                icon = RiffetIcons.Plus,
+                description = stringResource(Res.string.settings_quick_chat_add),
                 enabled = !busy && presets.size < MAX_QUICK_CHAT_PRESETS,
-                onClick = { editing = QuickChatPreset(id = "", name = "", prompt = "") },
+                onClick = { onOpen(QuickChatPreset(id = "", name = "", prompt = "")) },
             )
         },
     ) {
-        presets.forEach { preset ->
-            PresetRow(
-                preset = preset,
-                enabled = !busy,
-                onEdit = { editing = preset },
-                onDelete = { deleting = preset },
-            )
+        ControllerMessages(controller)
+        if (presets.isNotEmpty()) SettingsGroup(title = "") {
+            presets.forEach { preset ->
+                GroupRow(title = preset.name, subtitle = preset.prompt.replace('\n', ' '), chevron = true, enabled = !busy, onClick = { onOpen(preset) })
+            }
         }
-    }
-    SettingsFootnote(stringResource(Res.string.settings_quick_chat_presets_limit))
-    SettingsGroup(title = "") {
-        SettingsRow(stringResource(Res.string.settings_quick_chat_restore_defaults)) {
-            SettingsButton(stringResource(Res.string.settings_quick_chat_restore), enabled = !busy, onClick = { confirmRestore = true })
+        SettingsFootnote(stringResource(Res.string.settings_quick_chat_presets_limit))
+        SettingsGroup(title = "") {
+            SettingsActionRow(stringResource(Res.string.settings_quick_chat_restore_defaults), onClick = { confirmRestore = true }, enabled = !busy)
         }
-    }
-
-    editing?.let { preset ->
-        QuickChatPresetDialog(
-            initial = preset,
-            existingIds = presets.map { it.id },
-            onDismiss = { editing = null },
-            onSave = { saved ->
-                val next = if (preset.id.isEmpty()) presets + saved else presets.map { if (it.id == preset.id) saved else it }
-                editing = null
-                controller.saveQuickChat(presets = next)
-            },
-        )
-    }
-    deleting?.let { preset ->
-        AlertDialog(
-            onDismissRequest = { deleting = null },
-            title = { Text(stringResource(Res.string.settings_quick_chat_delete_title)) },
-            confirmButton = {
-                RiffetTextButton(danger = true, onClick = {
-                    deleting = null
-                    controller.saveQuickChat(presets = presets.filterNot { it.id == preset.id })
-                }) { Text(stringResource(Res.string.settings_quick_chat_delete)) }
-            },
-            dismissButton = {
-                RiffetTextButton(onClick = { deleting = null }) { Text(stringResource(Res.string.settings_cancel)) }
-            },
-        )
     }
     if (confirmRestore) {
-        AlertDialog(
-            onDismissRequest = { confirmRestore = false },
-            title = { Text(stringResource(Res.string.settings_quick_chat_restore_title)) },
-            confirmButton = {
-                RiffetTextButton(danger = true, onClick = {
-                    confirmRestore = false
-                    controller.saveQuickChat(resetPresets = true)
-                }) { Text(stringResource(Res.string.settings_quick_chat_restore)) }
-            },
-            dismissButton = {
-                RiffetTextButton(onClick = { confirmRestore = false }) { Text(stringResource(Res.string.settings_cancel)) }
+        ConfirmDialog(
+            title = stringResource(Res.string.settings_quick_chat_restore_title),
+            message = stringResource(Res.string.setp_restore_presets_message),
+            confirmLabel = stringResource(Res.string.settings_quick_chat_restore),
+            danger = true,
+            onDismiss = { confirmRestore = false },
+            onConfirm = {
+                confirmRestore = false
+                controller.saveQuickChat(resetPresets = true)
             },
         )
     }
 }
 
 @Composable
-private fun PresetRow(preset: QuickChatPreset, enabled: Boolean, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    Row(
-        modifier = Modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onEdit).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(preset.name, style = typography.body, color = colors.fg, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(Modifier.height(2.dp))
-            Text(preset.prompt, style = typography.caption, color = colors.fg3, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-        Spacer(Modifier.width(8.dp))
-        RiffetIconButton(onClick = onDelete, enabled = enabled) {
-            Icon(
-                RiffetIcons.Trash,
-                contentDescription = stringResource(Res.string.settings_quick_chat_delete),
-                tint = if (enabled) colors.fg3 else colors.fg4,
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun QuickChatPresetDialog(
+private fun QuickChatPresetEditPage(
+    controller: SettingsController,
     initial: QuickChatPreset,
-    existingIds: List<String>,
-    onDismiss: () -> Unit,
-    onSave: (QuickChatPreset) -> Unit,
+    presets: List<QuickChatPreset>,
+    busy: Boolean,
+    back: () -> Unit,
 ) {
-    val metrics = LocalInterfaceStyle.current.metrics
+    val isNew = initial.id.isEmpty()
     var name by remember(initial.id) { mutableStateOf(initial.name) }
     var prompt by remember(initial.id) { mutableStateOf(initial.prompt) }
-    val id = initial.id.ifEmpty { nextPresetId(existingIds) }
-    AlertDialog(
-        wideContent = true,
-        onDismissRequest = onDismiss,
-        title = {
-            Text(stringResource(if (initial.id.isEmpty()) Res.string.settings_quick_chat_new_preset else Res.string.settings_quick_chat_edit_preset))
+    var confirmDelete by remember { mutableStateOf(false) }
+    val pageBack = riffet.ui.app.LocalPageBack.current
+    // The saved list resets the draft; leaving here skips the guard that still sees the old one.
+    val leave: () -> Unit = { pageBack?.leaveConfirmed() ?: back() }
+    val id = initial.id.ifEmpty { nextPresetId(presets.map { it.id }) }
+    val dirty = name != initial.name || prompt != initial.prompt
+    LaunchedEffect(controller) { controller.clearMessages() }
+    EditPage(
+        title = stringResource(if (isNew) Res.string.settings_quick_chat_new_preset else Res.string.settings_quick_chat_edit_preset),
+        onBack = back,
+        dirty = dirty,
+        busy = busy,
+        canSave = dirty && name.isNotBlank() && prompt.isNotBlank(),
+        onSave = {
+            val saved = QuickChatPreset(id, name.trim(), prompt.trim())
+            val next = if (isNew) presets + saved else presets.map { if (it.id == initial.id) saved else it }
+            controller.saveQuickChat(presets = next, onSaved = leave)
         },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(metrics.sectionGap / 2)) {
-                SettingsField(
-                    value = name,
-                    onValueChange = { name = it.take(MAX_PRESET_NAME) },
-                    placeholder = stringResource(Res.string.settings_quick_chat_preset_name),
-                )
-                SettingsField(
-                    value = prompt,
-                    onValueChange = { prompt = it.take(MAX_PRESET_PROMPT) },
-                    placeholder = stringResource(Res.string.settings_quick_chat_preset_prompt),
-                    singleLine = false,
-                    minLines = 4,
-                    maxLines = 8,
-                )
-            }
-        },
-        confirmButton = {
-            RiffetTextButton(
-                onClick = { onSave(QuickChatPreset(id, name.trim(), prompt.trim())) },
-                enabled = name.isNotBlank() && prompt.isNotBlank(),
-            ) { Text(stringResource(Res.string.session_save)) }
-        },
-        dismissButton = {
-            RiffetTextButton(onClick = onDismiss) { Text(stringResource(Res.string.session_cancel)) }
-        },
-    )
+    ) {
+        ControllerMessages(controller)
+        SettingsGroup(title = "") {
+            riffet.ui.design.GroupField(
+                value = name,
+                onValueChange = { name = it.take(MAX_PRESET_NAME) },
+                placeholder = stringResource(Res.string.settings_quick_chat_preset_name),
+            )
+            riffet.ui.design.GroupField(
+                value = prompt,
+                onValueChange = { prompt = it.take(MAX_PRESET_PROMPT) },
+                placeholder = stringResource(Res.string.settings_quick_chat_preset_prompt),
+                singleLine = false,
+                minLines = 4,
+                maxLines = 8,
+            )
+        }
+        if (!isNew) SettingsGroup(title = "") {
+            SettingsActionRow(stringResource(Res.string.settings_quick_chat_delete), onClick = { confirmDelete = true }, danger = true, enabled = !busy)
+        }
+    }
+    if (confirmDelete) {
+        ConfirmDialog(
+            title = stringResource(Res.string.setp_delete_preset_title, initial.name),
+            confirmLabel = stringResource(Res.string.settings_quick_chat_delete),
+            danger = true,
+            onDismiss = { confirmDelete = false },
+            onConfirm = {
+                confirmDelete = false
+                controller.saveQuickChat(presets = presets.filterNot { it.id == initial.id }, onSaved = leave)
+            },
+        )
+    }
 }
 
 @Composable
@@ -1123,7 +894,7 @@ private fun FilesSettingsSection(controller: SettingsController) {
             after()
         }
     }
-    UnsavedSettingsGuard(dirty, busy, onSave = ::save)
+    UnsavedSettingsGuard(dirty, busy)
     SettingsGroup(stringResource(Res.string.settings_file_access)) {
         SettingsSwitchRow(
             stringResource(Res.string.settings_allow_outside_read),
@@ -1153,67 +924,5 @@ private fun AppAboutSection() {
         SettingsValueRow(stringResource(Res.string.settings_app_version), info.version)
         SettingsValueRow(stringResource(Res.string.settings_build_number), info.build)
         SettingsValueRow(stringResource(Res.string.settings_platform), info.platform)
-    }
-}
-
-@Composable
-private fun EnvironmentSection(controller: SettingsController) {
-    val metrics = LocalInterfaceStyle.current.metrics
-    val state by controller.state.collectAsState()
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    val capabilities = state.capabilities
-
-    SettingsGroup(
-        title = stringResource(Res.string.settings_runtime_environment),
-        action = {
-            SettingsButton(
-                text = if (state.diagnosticsLoading) stringResource(Res.string.settings_checking) else stringResource(Res.string.settings_recheck),
-                enabled = !state.diagnosticsLoading,
-                onClick = { controller.loadDiagnostics() },
-            )
-        },
-    ) {
-        if (capabilities == null) {
-            Text(
-                text = stringResource(Res.string.settings_no_cli_capabilities),
-                style = typography.caption,
-                color = colors.fg3,
-                modifier = Modifier.padding(horizontal = metrics.pageInset, vertical = metrics.rowPadding),
-            )
-        } else {
-            SettingsValueRow(stringResource(Res.string.settings_version), capabilities.cliVersion ?: stringResource(Res.string.settings_unknown))
-            SettingsValueRow(stringResource(Res.string.settings_path), capabilities.cliPath)
-            SettingsValueRow(
-                if (capabilities.authMessage?.startsWith("Custom Cursor provider") == true) stringResource(Res.string.settings_custom_service) else stringResource(Res.string.settings_account),
-                if (capabilities.authenticated) {
-                    if (capabilities.authMessage?.startsWith("Custom Cursor provider") == true) stringResource(Res.string.settings_connected) else stringResource(Res.string.settings_signed_in)
-                } else {
-                    stringResource(Res.string.settings_signed_out)
-                },
-            )
-            SettingsValueRow("tmux", if (capabilities.tmux) stringResource(Res.string.settings_available) else stringResource(Res.string.settings_not_installed))
-            SettingsValueRow(stringResource(Res.string.settings_persistence), capabilities.nativePersistence)
-            SettingsValueRow("Tailscale", if (capabilities.tailscale.present) capabilities.tailscale.message else stringResource(Res.string.settings_not_detected))
-            SettingsValueRow(stringResource(Res.string.settings_checked_at), capabilities.checkedAt)
-        }
-    }
-
-    if (capabilities != null && capabilities.warnings.isNotEmpty()) {
-        Spacer(Modifier.height(16.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(metrics.controlInset / 2)) {
-            capabilities.warnings.forEach { warning -> PageBanner(warning, SettingsNoticeKind.WARNING) }
-        }
-    }
-
-    if (capabilities != null && capabilities.models.isNotEmpty()) {
-        SettingsGroup(title = stringResource(Res.string.settings_available_models, capabilities.models.size)) {
-            Text(
-                text = capabilities.models.joinToString("  "),
-                style = typography.monoSmall,
-                color = colors.fg2,
-                modifier = Modifier.padding(horizontal = metrics.pageInset, vertical = metrics.rowPadding),
-            )
-        }
     }
 }

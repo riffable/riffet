@@ -249,7 +249,6 @@ internal fun SideDrawers(
                         DrawerSheet(
                             width = sheetWidth,
                             navigation = true,
-                            onClose = { latestStartChange(false) },
                             modifier = Modifier.offset { IntOffset(((start.value - 1f) * sheetPx).roundToInt(), 0) },
                             content = startDrawer,
                         )
@@ -313,7 +312,7 @@ private fun FollowFlag(progress: DrawerProgress, open: Boolean, motion: riffet.u
 }
 
 @Composable
-private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = false, onClose: (() -> Unit)? = null, content: @Composable () -> Unit) {
+private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = false, content: @Composable () -> Unit) {
     val colors = LocalRiffetColors.current
     val style = LocalInterfaceStyle.current
     val surface = LocalRiffetSurfaces.current
@@ -347,13 +346,6 @@ private fun DrawerSheet(width: Dp, modifier: Modifier, navigation: Boolean = fal
             Box(Modifier.matchParentSize().riffetMaterial(MaterialRole.SIDEBAR, shape, surface.groupedPage))
             Column(Modifier.fillMaxSize().padding(padding)) {
                 RiffetMaterialContent(baseBackground = surface.groupedPage) {
-                    if (navigation && onClose != null) {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(title, style = LocalRiffetTypography.current.title, color = colors.fg, maxLines = 1,
-                                overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            PageBarAction(RiffetIcons.Close, stringResource(Res.string.pickers_close), onClose)
-                        }
-                    }
                     Box(Modifier.fillMaxWidth().weight(1f)) { content() }
                 }
             }

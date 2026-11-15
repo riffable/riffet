@@ -29,8 +29,34 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.app.AdaptiveModalViewport
 import riffet.ui.app.LocalRiffetWindowInfo
 import riffet.ui.app.adaptiveDialogProperties
+import riffet_mobile.shared.generated.resources.*
 
 internal val LocalDialogAction = staticCompositionLocalOf { false }
+
+/**
+ * A confirmation (mobile.md §2.6): the [title] names the action and its object («卸载「x」？»),
+ * [message] only a consequence the reader cannot infer (cannot be undone, what else goes with it),
+ * and [confirmLabel] is that action's verb, in the danger colour when it destroys something.
+ */
+@Composable
+internal fun ConfirmDialog(
+    title: String,
+    confirmLabel: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    message: String? = null,
+    danger: Boolean = false,
+    enabled: Boolean = true,
+    cancelLabel: String = org.jetbrains.compose.resources.stringResource(Res.string.settings_cancel),
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = message?.let { { Text(it) } },
+        confirmButton = { RiffetTextButton(onClick = onConfirm, enabled = enabled, danger = danger) { Text(confirmLabel) } },
+        dismissButton = { RiffetTextButton(onClick = onDismiss) { Text(cancelLabel) } },
+    )
+}
 
 /** Callers own operation state. A form has navigation actions; a short alert has an action row. */
 @Composable

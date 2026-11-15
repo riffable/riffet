@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="confirm_stop_named">Stop “%1$s”?</string>
+    <string name="confirm_continue_title">Continue the conversation?</string>
+    <string name="confirm_continue_queued_title">Continue sending %1$d messages?</string>
+    <string name="confirm_restart_session_title">Restart “%1$s” and apply?</string>
+    <string name="confirm_delete_session_title">Delete session “%1$s”?</string>
+    <string name="confirm_delete_file_title">Delete file “%1$s”?</string>
+    <string name="confirm_delete_file_message">It is removed from this device and cannot be recovered.</string>
+    <string name="confirm_clear_history_title">Clear download history?</string>
+    <string name="confirm_clear_history_message">Finished files stay on this device.</string>
+    <string name="confirm_forget_server_title">Forget server “%1$s”?</string>
+    <string name="confirm_end_process_title">End process “%1$s”?</string>
+    <string name="confirm_release_terminal_title">Take the session back from the terminal?</string>
+    <string name="confirm_interrupt_title">Interrupt the process in “%1$s”?</string>
+</resources>

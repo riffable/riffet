@@ -254,6 +254,65 @@ internal fun RiffetTextField(
     }
 }
 
+/**
+ * A text field as one row of a [Group] (mobile.md §2.3): the card is its container, so it draws no
+ * outline and no fill of its own — an outlined field inside a card is two boxes, and the card's
+ * corner clips the outline. [label] above the text, in the third tone, when the group holds more
+ * than one field; a lone field says what it is with the page title or [placeholder]. The hairline
+ * between fields is the group's.
+ */
+@Composable
+internal fun GroupField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String? = null,
+    enabled: Boolean = true,
+    mono: Boolean = false,
+    password: Boolean = false,
+    singleLine: Boolean = true,
+    minLines: Int = 1,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    trailingIcon: (@Composable () -> Unit)? = null,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    keyboardActions: KeyboardActions = KeyboardActions.Default,
+) {
+    val metrics = LocalInterfaceStyle.current.metrics
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    val s = surfaces
+    val base = if (mono) typography.input.copy(fontFamily = typography.monoFamily) else typography.input
+    val textStyle = base.copy(color = if (enabled) colors.fg else s.disabledContent)
+    BasicTextField(
+        value = value, onValueChange = onValueChange, enabled = enabled, singleLine = singleLine,
+        minLines = minLines, maxLines = maxLines, keyboardOptions = keyboardOptions, keyboardActions = keyboardActions,
+        textStyle = textStyle, visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
+        cursorBrush = SolidColor(colors.accent),
+        modifier = modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Row(
+                Modifier.fillMaxWidth().heightIn(min = metrics.rowHeight)
+                    .padding(start = metrics.rowPadding, end = if (trailingIcon != null) metrics.controlInset / 3 else metrics.rowPadding),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f).padding(vertical = metrics.rowPadding / 2)) {
+                    if (label != null) Text(label, style = typography.bodySmall, color = if (enabled) colors.fg3 else s.disabledContent,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = metrics.hairlineWidth * 2))
+                    Box(contentAlignment = Alignment.CenterStart) {
+                        if (value.isEmpty() && placeholder != null) Text(placeholder, style = base.copy(color = if (enabled) colors.fg3 else s.disabledContent),
+                            maxLines = if (singleLine) 1 else maxLines, overflow = TextOverflow.Ellipsis)
+                        inner()
+                    }
+                }
+                if (trailingIcon != null) Box(Modifier.sizeIn(minWidth = metrics.controlHeight, minHeight = metrics.controlHeight), contentAlignment = Alignment.Center) {
+                    CompositionLocalProvider(LocalContentColor provides if (enabled) colors.fg3 else s.disabledContent) { trailingIcon() }
+                }
+            }
+        },
+    )
+}
+
 /** M3 owns dragging, stepping, keyboard adjustment and accessibility for both renderers. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

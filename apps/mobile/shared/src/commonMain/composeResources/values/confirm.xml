@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="confirm_stop_named">停止「%1$s」？</string>
+    <string name="confirm_continue_title">继续对话？</string>
+    <string name="confirm_continue_queued_title">继续发送 %1$d 条消息？</string>
+    <string name="confirm_restart_session_title">重启「%1$s」并应用？</string>
+    <string name="confirm_delete_session_title">删除会话「%1$s」？</string>
+    <string name="confirm_delete_file_title">删除文件「%1$s」？</string>
+    <string name="confirm_delete_file_message">将从设备上删除，无法恢复。</string>
+    <string name="confirm_clear_history_title">清除下载记录？</string>
+    <string name="confirm_clear_history_message">已完成的文件保留在设备上。</string>
+    <string name="confirm_forget_server_title">忘记服务器「%1$s」？</string>
+    <string name="confirm_end_process_title">结束进程「%1$s」？</string>
+    <string name="confirm_release_terminal_title">收回终端中的会话？</string>
+    <string name="confirm_interrupt_title">中断「%1$s」中的进程？</string>
+</resources>

@@ -172,6 +172,8 @@ internal fun GroupRow(
     subtitle: String? = null,
     /** A description or a result can run longer than a summary. */
     subtitleLines: Int = 1,
+    /** One for an object in a list (a session, a task): it truncates rather than wraps. */
+    titleLines: Int = 2,
     leading: (@Composable () -> Unit)? = null,
     value: String? = null,
     chevron: Boolean = false,
@@ -179,24 +181,30 @@ internal fun GroupRow(
     enabled: Boolean = true,
     onClickLabel: String? = null,
     role: Role? = null,
+    /** An action row's title is its verb, in the accent (or danger) colour. */
+    titleColor: Color? = null,
     onClick: (() -> Unit)? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     if (!LocalInterfaceStyle.current.components.lists.grouped) {
         ListItem(
-            headlineContent = { Text(title, style = LocalRiffetTypography.current.body, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-            supportingContent = subtitle?.let { { Text(it, style = LocalRiffetTypography.current.subhead, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis) } },
+            headlineContent = { Text(title, style = LocalRiffetTypography.current.body, maxLines = titleLines, overflow = TextOverflow.Ellipsis) },
+            supportingContent = subtitle?.let { { Text(it, style = LocalRiffetTypography.current.bodySmall, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis) } },
             leadingContent = leading,
             trailingContent = if (value != null || trailing != null || chevron) ({
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy((metrics.controlInset / 2))) {
-                    if (value != null) Text(value)
+                    // Capped like the grouped row's value: a long value ellipsizes rather than squeezing the title.
+                    // Material's trailing text is Label Small (11sp), too small beside a 16sp title for a
+                    // value people read (a mode, a figure); the secondary 14 keeps the row one scale.
+                    if (value != null) Text(value, style = LocalRiffetTypography.current.bodySmall, color = LocalRiffetColors.current.fg3,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = metrics.menuMaxWidth * 0.4f))
                     trailing?.invoke()
                     if (chevron) Icon(RiffetIcons.ChevronRight, null, Modifier.size(metrics.smallIconSize))
                 }
             }) else null,
             colors = ListItemDefaults.colors(
                 containerColor = Color.Transparent,
-                headlineColor = if (enabled) LocalRiffetColors.current.fg else surfaces.disabledContent,
+                headlineColor = if (enabled) titleColor ?: LocalRiffetColors.current.fg else surfaces.disabledContent,
             ),
             modifier = modifier.heightIn(min = maxOf(metrics.controlHeight, if (subtitle != null) metrics.rowSubtitleHeight else metrics.rowHeight)).then(if (onClick != null) Modifier.clickable(enabled = enabled, onClickLabel = onClickLabel, role = role ?: Role.Button, onClick = onClick) else Modifier),
         )
@@ -216,8 +224,8 @@ internal fun GroupRow(
     ) {
         if (leading != null) Box(Modifier.width(metrics.iconSlot), contentAlignment = Alignment.Center) { leading() }
         Column(Modifier.weight(1f).padding(vertical = (metrics.rowPadding / 2))) {
-            Text(title, style = type.body, color = if (enabled) colors.fg else surfaces.disabledContent, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            if (subtitle != null) Text(subtitle, style = type.subhead, color = colors.fg3, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = metrics.hairlineWidth * 2))
+            Text(title, style = type.body, color = if (enabled) titleColor ?: colors.fg else surfaces.disabledContent, maxLines = titleLines, overflow = TextOverflow.Ellipsis)
+            if (subtitle != null) Text(subtitle, style = type.bodySmall, color = colors.fg3, maxLines = subtitleLines, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = metrics.hairlineWidth * 2))
         }
         if (value != null) Text(value, style = type.body, color = colors.fg3, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.widthIn(max = metrics.menuMaxWidth * 0.4f))
         trailing?.invoke()

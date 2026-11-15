@@ -6,7 +6,6 @@
     <string name="session_save">Save</string>
     <string name="session_stop">Stop</string>
     <string name="session_expand">Expand</string>
-    <string name="session_collapse">Collapse</string>
     <string name="session_open_sidebar">Open sidebar</string>
     <string name="session_remove">Remove</string>
     <string name="session_failed">Failed</string>
@@ -61,11 +60,6 @@
     <string name="session_subagent_finished">Finished</string>
     <string name="session_subagent_pending">The main session has a pending confirmation</string>
     <string name="session_subagent_empty">This subagent has not produced any output yet</string>
-    <string name="session_subagents">Subagents</string>
-    <string name="session_subagent_count">%1$d</string>
-    <string name="session_subagent_count_running">%1$d · %2$d running</string>
-    <string name="session_background_tasks">Background tasks</string>
-    <string name="session_background_running">%1$d running</string>
 
     <!-- Session details pane -->
     <string name="session_changes">Changes</string>
@@ -81,13 +75,11 @@
     <string name="session_created">Created</string>
     <string name="session_recent_activity">Last activity</string>
     <string name="session_details">Details</string>
-    <string name="session_section">Session</string>
     <string name="session_rename">Rename</string>
     <string name="session_unpin">Unpin</string>
     <string name="session_pin">Pin session</string>
     <string name="session_restore">Restore session</string>
     <string name="session_archive">Archive session</string>
-    <string name="session_close_details">Close session details</string>
     <string name="session_write_no_api">Session changes are temporarily unavailable</string>
     <string name="session_write_archived">This session is archived; restore it before making changes</string>
     <string name="session_state_running">Running</string>
@@ -150,7 +142,6 @@
     <string name="session_list_empty">No sessions</string>
     <string name="session_tab_new">New</string>
     <string name="session_tab_tasks">Tasks</string>
-    <string name="session_favorites">Favorites</string>
     <string name="session_mode_task">New task</string>
     <string name="session_mode_chat">Quick chat</string>
     <string name="session_quick_chat_plain">Chat</string>
@@ -197,7 +188,6 @@
     <string name="session_reference_limit">Reference up to 5 sessions</string>
     <string name="session_reference_partial">Contains partial history</string>
     <string name="session_reference_original">View captured messages</string>
-    <string name="session_reference_done">Done</string>
     <string name="session_reference_source">Open source session</string>
     <string name="session_reference_retention">The original copy stays with this session</string>
     <string name="session_reference_previous">Previous</string>

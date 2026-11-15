@@ -22,7 +22,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import riffet.shared.RiffetHttpException
-import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.MaterialRole
@@ -36,6 +36,7 @@ import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet_mobile.shared.generated.resources.Res
 import riffet_mobile.shared.generated.resources.session_cancel
+import riffet_mobile.shared.generated.resources.confirm_release_terminal_title
 import riffet_mobile.shared.generated.resources.session_terminal_force_body
 import riffet_mobile.shared.generated.resources.session_terminal_hold
 import riffet_mobile.shared.generated.resources.session_terminal_release
@@ -103,17 +104,13 @@ internal fun TerminalHoldBar(store: SessionStore, sessionId: String, modifier: M
     }
 
     if (confirmForce) {
-        AlertDialog(
-            onDismissRequest = { confirmForce = false },
-            text = { Text(stringResource(Res.string.session_terminal_force_body)) },
-            confirmButton = {
-                RiffetTextButton(danger = true, onClick = { confirmForce = false; release(true) }) {
-                    Text(stringResource(Res.string.session_terminal_release), color = colors.danger)
-                }
-            },
-            dismissButton = {
-                RiffetTextButton(onClick = { confirmForce = false }) { Text(stringResource(Res.string.session_cancel)) }
-            },
+        ConfirmDialog(
+            title = stringResource(Res.string.confirm_release_terminal_title),
+            message = stringResource(Res.string.session_terminal_force_body),
+            confirmLabel = stringResource(Res.string.session_terminal_release),
+            danger = true,
+            onConfirm = { confirmForce = false; release(true) },
+            onDismiss = { confirmForce = false },
         )
     }
 }

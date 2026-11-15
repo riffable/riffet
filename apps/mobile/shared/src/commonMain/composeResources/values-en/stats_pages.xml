@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="statp_all_agents">All agents</string>
+    <string name="statp_agent_count">%1$d agents</string>
+</resources>

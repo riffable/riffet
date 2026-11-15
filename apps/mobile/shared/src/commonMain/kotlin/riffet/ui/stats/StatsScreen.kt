@@ -1,6 +1,14 @@
 package riffet.ui.stats
 
 import riffet.ui.design.LocalInterfaceStyle
+import riffet.ui.design.ViewTabs
+import riffet.ui.app.PageMoreAction
+import riffet.ui.pickers.RiffetMenuItem
+import riffet.ui.pickers.RiffetMenuText
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import riffet.ui.design.surfaces
 import riffet.ui.app.pageColor
 import riffet.ui.app.pageBackground
@@ -99,6 +107,7 @@ private val StatsTab.label: String
  * Full-screen stats. Opened from the sidebar as [riffet.ui.app.RiffetApp]'s `Overlay.Stats`.
  * The stream is collected only while this page is composed, which is what "visible" means here.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun StatsScreen(
     api: RiffetApi,
@@ -128,32 +137,17 @@ internal fun StatsScreen(
     var tab by remember { mutableStateOf(StatsTab.OVERVIEW) }
     val state by controller.state.collectAsState()
     val dashboard = state.dashboard
-    var filtersExpanded by rememberSaveable { mutableStateOf(false) }
     val pageStates = rememberSaveableStateHolder()
     val pagerState = rememberPagerState { StatsTab.entries.size }
 
     riffet.ui.app.RiffetPageScaffold(modifier = modifier, topBar = {
         PageTopBar(title = stringResource(Res.string.stats_title), onBack = onBack) {
-            StatsDropdown(
-                label = stringResource(Res.string.stats_time_range),
-                options = StatsRange.entries.map { it.id to it.label },
-                value = state.range.id,
-                onSelect = { id -> StatsRange.entries.firstOrNull { it.id == id }?.let(controller::chooseRange) },
-            )
-            RiffetIconButton(onClick = { filtersExpanded = !filtersExpanded }) {
-                Icon(
-                    RiffetIcons.Filter,
-                    contentDescription = if (filtersExpanded) stringResource(Res.string.stats_filter_collapse) else stringResource(Res.string.stats_filter_expand),
-                    tint = if (filtersExpanded || state.backends.isNotEmpty() || !state.includeEstimated) colors.accent else colors.fg3,
-                    modifier = Modifier.size(designMetrics.buttonIconSize),
-                )
-            }
-            RiffetIconButton(onClick = controller::refresh, enabled = !state.refreshing) {
-                if (state.refreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(designMetrics.smallIconSize), color = colors.accent, strokeWidth = 1.5.dp)
-                } else {
-                    Icon(RiffetIcons.Refresh, contentDescription = stringResource(Res.string.stats_refresh), tint = colors.fg2, modifier = Modifier.size(designMetrics.buttonIconSize))
+            PageMoreAction { close ->
+                RiffetMenuItem(selected = state.includeEstimated, showCheck = true, onClick = controller::toggleEstimated) {
+                    Text(stringResource(Res.string.stats_include_estimated), style = RiffetMenuText, color = colors.fg, modifier = Modifier.weight(1f))
                 }
+                HorizontalDivider(color = colors.line)
+                RiffetMenuItem(text = stringResource(Res.string.stats_refresh), onClick = { close(); controller.refresh() }, enabled = !state.refreshing)
             }
         }
         if (state.offline && dashboard != null) {
@@ -172,50 +166,53 @@ internal fun StatsScreen(
                 SettingsMessageBanner(state.error ?: stringResource(Res.string.stats_load_failed), SettingsNoticeKind.ERROR)
             }
         }
-        Column(Modifier.fillMaxWidth()) {
-            AnimatedVisibility(visible = filtersExpanded, enter = motion.expandIn(), exit = motion.collapseOut()) {
-                Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(stringResource(Res.string.stats_agent_hint), style = typography.caption, color = colors.fg3, modifier = Modifier.padding(start = 4.dp))
-                    FilterChips(
-                        agents = dashboard?.options?.backends?.takeIf { it.isNotEmpty() } ?: defaultAgentOptions(),
-                        selected = state.backends,
-                        includeEstimated = state.includeEstimated,
-                        onToggleAgent = controller::toggleBackend,
-                        onToggleEstimated = controller::toggleEstimated,
-                    )
+        ViewTabs(
+            labels = StatsTab.entries.map { it.label },
+            selected = tab.ordinal,
+            onSelect = { tab = StatsTab.entries[it] },
+        )
+        // The scope the figures cover (mobile.md §2.1 范围条): the period and the agents, each a pill
+        // showing its value, so an empty or surprising page says which slice it is.
+        val agentOptions = dashboard?.options?.backends?.takeIf { it.isNotEmpty() } ?: defaultAgentOptions()
+        val chosenAgents = agentOptions.filter { it.key in state.backends }
+        var rangeOpen by remember { mutableStateOf(false) }
+        var agentsOpen by remember { mutableStateOf(false) }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                .padding(horizontal = LocalInterfaceStyle.current.metrics.pageInset, vertical = LocalInterfaceStyle.current.metrics.controlInset / 2),
+            horizontalArrangement = Arrangement.spacedBy(LocalInterfaceStyle.current.metrics.controlInset / 2),
+        ) {
+            Box {
+                riffet.ui.design.ChipButton(state.range.label, active = false, onClick = { rangeOpen = true })
+                riffet.ui.pickers.RiffetDropdownMenu(expanded = rangeOpen, onDismissRequest = { rangeOpen = false }) {
+                    StatsRange.entries.forEach { range ->
+                        RiffetMenuItem(selected = range == state.range, showCheck = true, onClick = { rangeOpen = false; controller.chooseRange(range) }) {
+                            Text(range.label, style = RiffetMenuText, color = colors.fg, modifier = Modifier.weight(1f))
+                        }
+                    }
+                }
+            }
+            Box {
+                val agentsLabel = when (chosenAgents.size) {
+                    0 -> stringResource(Res.string.statp_all_agents)
+                    1 -> chosenAgents.first().label
+                    else -> stringResource(Res.string.statp_agent_count, chosenAgents.size)
+                }
+                riffet.ui.design.ChipButton(agentsLabel, active = chosenAgents.isNotEmpty(), onClick = { agentsOpen = true })
+                riffet.ui.pickers.RiffetDropdownMenu(expanded = agentsOpen, onDismissRequest = { agentsOpen = false }) {
+                    agentOptions.forEach { agent ->
+                        RiffetMenuItem(
+                            selected = agent.key in state.backends,
+                            showCheck = true,
+                            onClick = { controller.toggleBackend(agent.key) },
+                            leading = agent.backendId?.let { id -> { Box(Modifier.size(6.dp).clip(CircleShape).background(colors.agentColor(id))) } },
+                        ) {
+                            Text(agent.label, style = RiffetMenuText, color = colors.fg, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }
-        if (LocalInterfaceStyle.current.components.lists.grouped) {
-            riffet.ui.design.SegmentedControl(
-                options = StatsTab.entries.map { it.label },
-                selected = tab.ordinal,
-                onSelect = { tab = StatsTab.entries[it] },
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        } else Row(Modifier.fillMaxWidth().padding(horizontal = designMetrics.pageInset).drawBehind {
-            val cellWidth = size.width / StatsTab.entries.size
-            val indicatorWidth = 32.dp.toPx()
-            val position = pagerState.currentPage + pagerState.currentPageOffsetFraction
-            drawRoundRect(
-                colors.accent,
-                topLeft = Offset(cellWidth * (position + 0.5f) - indicatorWidth / 2f, size.height - 3.dp.toPx()),
-                size = Size(indicatorWidth, 3.dp.toPx()),
-                cornerRadius = CornerRadius(1.5.dp.toPx()),
-            )
-        }) {
-            StatsTab.entries.forEach { item ->
-                val selected = tab == item
-                Column(
-                    Modifier.weight(1f).selectable(selected, role = Role.Tab, onClick = { tab = item }),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Text(item.label, style = typography.label, color = if (selected) colors.accent else colors.fg2, modifier = Modifier.padding(vertical = 13.dp))
-                    Spacer(Modifier.height(2.dp))
-                }
-            }
-        }
-        if (!riffet.ui.design.materialBackdropEnabled) HorizontalDivider(color = colors.line)
     }) { chromeInsets ->
         // Loading, empty and loaded are different screens: they cross-fade, and refreshes within one
         // phase leave it alone. The pager's state is hoisted above, so it survives a phase change.
@@ -230,7 +227,22 @@ internal fun StatsScreen(
                 StatsPhase.LOADING -> androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(chromeInsets)) { StatsSkeleton() }
                 StatsPhase.BLANK -> Spacer(Modifier.fillMaxSize())
                 StatsPhase.EMPTY -> androidx.compose.foundation.layout.Box(Modifier.fillMaxSize().padding(chromeInsets)) { StatsEmpty() }
-                StatsPhase.CONTENT -> if (dashboard != null) RiffetTabPager(
+                StatsPhase.CONTENT -> if (dashboard != null) {
+                    val pull = rememberPullToRefreshState()
+                    PullToRefreshBox(
+                        isRefreshing = state.refreshing,
+                        onRefresh = controller::refresh,
+                        modifier = Modifier.fillMaxSize(),
+                        state = pull,
+                        contentAlignment = Alignment.TopCenter,
+                        indicator = {
+                            PullToRefreshDefaults.Indicator(
+                                state = pull,
+                                isRefreshing = state.refreshing,
+                                modifier = Modifier.align(Alignment.TopCenter).padding(top = chromeInsets.calculateTopPadding()),
+                            )
+                        },
+                    ) { RiffetTabPager(
                     selected = tab.ordinal,
                     onSelect = { page -> StatsTab.entries.getOrNull(page)?.let { tab = it } },
                     pageCount = StatsTab.entries.size,
@@ -245,6 +257,7 @@ internal fun StatsScreen(
                             StatsTab.PERFORMANCE -> PerformancePage(controller, dashboard)
                         }
                     }
+                } }
                 }
             }
         }
@@ -252,64 +265,6 @@ internal fun StatsScreen(
 }
 
 private enum class StatsPhase { LOADING, BLANK, EMPTY, CONTENT }
-
-@Composable
-private fun FilterChips(
-    agents: List<StatsKeyInfo>,
-    selected: Set<String>,
-    includeEstimated: Boolean,
-    onToggleAgent: (String) -> Unit,
-    onToggleEstimated: () -> Unit,
-) {
-    val colors = LocalRiffetColors.current
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        agents.forEach { agent ->
-            FilterChip(
-                label = agent.label,
-                selected = agent.key in selected,
-                dot = agent.backendId?.let { colors.agentColor(it) },
-                onClick = { onToggleAgent(agent.key) },
-            )
-        }
-        FilterChip(label = stringResource(Res.string.stats_include_estimated), selected = includeEstimated, dot = null, onClick = onToggleEstimated)
-    }
-}
-
-@Composable
-private fun FilterChip(label: String, selected: Boolean, dot: androidx.compose.ui.graphics.Color?, onClick: () -> Unit) {
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    if ((LocalInterfaceStyle.current.components.controls.chips == riffet.ui.design.ComponentBackend.MATERIAL)) {
-        androidx.compose.material3.FilterChip(
-            selected = selected,
-            onClick = onClick,
-            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
-            leadingIcon = dot?.let { tint -> { Box(Modifier.size(6.dp).clip(CircleShape).background(tint)) } },
-        )
-        return
-    }
-    val shape = RoundedCornerShape(LocalInterfaceStyle.current.selectionRadius)
-    Row(
-        modifier = Modifier
-            .clip(shape)
-            .background(if (selected) surfaces.selected else surfaces.card)
-            .border(LocalInterfaceStyle.current.metrics.hairlineWidth, if (selected) surfaces.selected else colors.lineStrong, shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (dot != null) {
-            Box(Modifier.size(6.dp).clip(CircleShape).background(dot))
-            Spacer(Modifier.width(6.dp))
-        }
-        Text(label, style = typography.label, color = if (selected) surfaces.selectedContent else colors.fg2, maxLines = 1, overflow = TextOverflow.Ellipsis)
-    }
-}
 
 private fun dataStamp(generatedAt: String): String {
     val epoch = parseIsoInstant(generatedAt) ?: return generatedAt

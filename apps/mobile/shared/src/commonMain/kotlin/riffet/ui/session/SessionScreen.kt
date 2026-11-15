@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import riffet.ui.design.RiffetProgressIndicator as CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import riffet.ui.icons.Icon
@@ -175,6 +176,7 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.LocalRiffetPageMotion
 import org.jetbrains.compose.resources.stringResource
 import org.jetbrains.compose.resources.rememberResourceEnvironment
+import riffet_mobile.shared.generated.resources.confirm_restart_session_title
 import riffet_mobile.shared.generated.resources.session_profile_restart_title
 import riffet_mobile.shared.generated.resources.session_profile_restart_effect
 import riffet_mobile.shared.generated.resources.session_profile_restart
@@ -495,13 +497,13 @@ fun SessionScreen(
     }
     val snackbar = LocalRiffetSnackbar.current
     if (profileRestartTarget != null) {
-        AlertDialog(
-            onDismissRequest = { profileRestartTarget = null },
-            title = { Text(stringResource(Res.string.session_profile_restart_title)) },
-            text = { Text(stringResource(Res.string.session_profile_restart_effect)) },
-            dismissButton = { TextButton(onClick = { profileRestartTarget = null }) { Text(stringResource(Res.string.session_cancel)) } },
-            confirmButton = {
-                TextButton(onClick = {
+        ConfirmDialog(
+            title = stringResource(Res.string.confirm_restart_session_title, current.title),
+            message = stringResource(Res.string.session_profile_restart_effect),
+            confirmLabel = stringResource(Res.string.session_profile_restart),
+            danger = true,
+            onDismiss = { profileRestartTarget = null },
+            onConfirm = {
                     val binding = profileRestartTarget
                     profileRestartTarget = null
                     if (api != null && binding != null && !restartingProfile && !resuming) {
@@ -513,7 +515,6 @@ fun SessionScreen(
                             finally { restartingProfile = false }
                         }
                     }
-                }) { Text(stringResource(Res.string.session_profile_restart)) }
             },
         )
     }
@@ -590,7 +591,13 @@ fun SessionScreen(
         nativeNotice?.let { FeedbackValue("notice:$it", SessionBanner("notice", it, if (status?.noticeLevel == "error") SettingsNoticeKind.ERROR else SettingsNoticeKind.WARNING)) },
     )
     val feedbackVisible = sheet == null && !contextOpen && profileRestartTarget == null && noticeDetail == null
+    // Every notice stays in the feedback source, so one that is only hidden is not read as resolved.
+    // One is drawn per page (mobile.md §5): a live one before a resolved one, an error before a
+    // warning; among equals the agent's connection first, since a failed history sync or a notice
+    // usually follows from it.
     val presentedBanners = rememberFeedback(store to current.id, bannerSource, visible = feedbackVisible)
+        .sortedWith(compareBy({ !it.current }, { if (it.value.tone == SettingsNoticeKind.ERROR) 0 else 1 }))
+        .take(1)
     var persistentEntered by remember(store, current.id) { mutableStateOf(false) }
     var floatingEntered by remember(store, current.id) { mutableStateOf(false) }
     val persistentBanners = presentedBanners.filter { it.value.kind != "notice" }
@@ -616,26 +623,21 @@ fun SessionScreen(
         )
     }
     noticeDetail?.let { (key, banner) ->
-        AlertDialog(
-            onDismissRequest = { noticeDetail = null },
-            title = { Text(stringResource(Res.string.session_details)) },
-            text = {
-                SelectionContainer {
-                    Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) { Text(banner.text) }
-                }
-            },
-            confirmButton = {
-                Row {
-                    if (banner.kind != "notice" && bannerSource.any { it.key == key }) {
-                        TextButton(onClick = {
-                            if (bannerSource.any { it.key == key }) store.retry()
-                            noticeDetail = null
-                        }) { Text(stringResource(Res.string.session_retry)) }
-                    }
-                    TextButton(onClick = { noticeDetail = null }) { Text(stringResource(Res.string.pickers_close)) }
-                }
-            },
-        )
+        riffet.ui.pickers.PickerOverlay(title = stringResource(Res.string.session_details), onDismiss = { noticeDetail = null }) {
+            SelectionContainer {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).padding(horizontal = riffet.ui.pickers.SheetInset)) { Text(banner.text) }
+            }
+            if (banner.kind != "notice" && bannerSource.any { it.key == key }) {
+                riffet.ui.design.GroupRow(
+                    title = stringResource(Res.string.session_retry),
+                    titleColor = LocalRiffetColors.current.accent,
+                    onClick = {
+                        if (bannerSource.any { it.key == key }) store.retry()
+                        noticeDetail = null
+                    },
+                )
+            }
+        }
     }
     CompositionLocalProvider(
         LocalFileAccess provides fileAccess,
@@ -683,7 +685,7 @@ fun SessionScreen(
                         )
                         if (!materialBackdropEnabled) HorizontalDivider(color = colors.line)
 
-                        WaitingStrip(session = current, status = status, scope = store to current.id, visible = feedbackVisible)
+                        WaitingStrip(session = current, status = status, scope = store to current.id, visible = feedbackVisible, cardShown = interaction != null)
 
                         androidx.compose.runtime.key(store, current.id) {
                             Reveal(persistentBanners.takeIf { it.isNotEmpty() }, onEnteredChanged = { persistentEntered = it }) { banners ->
@@ -1266,12 +1268,16 @@ private fun ConnectionPill(connection: RiffetConnectionState, cachedAt: Long?, o
  * The single most useful thing a phone can show: the agent has stopped and needs the human. A
  * waiting session state and an `attention` status are the two ways the server expresses that, and
  * an interaction carries the question that is actually being asked.
+ *
+ * One fact in one place (mobile.md §5): while the question is on its card above the composer
+ * ([cardShown]), the card is where it is read and answered, and this strip stays away. It shows
+ * only for a wait the app cannot answer, with the way to the terminal.
  */
 @Composable
-private fun WaitingStrip(session: Session, status: NativeStatus?, scope: Any, visible: Boolean) {
+private fun WaitingStrip(session: Session, status: NativeStatus?, scope: Any, visible: Boolean, cardShown: Boolean) {
     // Live status wins over the session snapshot, which can still say WAITING after an answer.
-    val waiting = status?.let { it.phase == NativeStatusPhase.ATTENTION }
-        ?: (session.state == SessionState.WAITING)
+    val waiting = !cardShown && (status?.let { it.phase == NativeStatusPhase.ATTENTION }
+        ?: (session.state == SessionState.WAITING))
     val interaction = status?.interaction
     // The heading already says the agent is waiting; the line under it only carries the question.
     val text = interaction?.message?.takeIf { it.isNotBlank() }

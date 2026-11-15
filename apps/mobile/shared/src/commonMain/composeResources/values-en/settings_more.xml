@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="setm_needs_permission">Needs permission</string>
+    <string name="setm_service_overview">Overview</string>
+    <string name="setm_service_uptime">Uptime</string>
+    <string name="setm_process_title">Processes</string>
+    <string name="setm_process_kind">Type</string>
+    <string name="setm_process_parent">Parent</string>
+    <string name="setm_process_elapsed">Running for</string>
+    <string name="setm_process_command">Command</string>
+</resources>

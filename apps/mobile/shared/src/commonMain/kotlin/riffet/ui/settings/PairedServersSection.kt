@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import riffet.ui.design.AlertDialog
+import riffet.ui.design.ConfirmDialog
 import riffet.ui.icons.Icon
 import riffet.ui.design.RiffetIconButton
 import androidx.compose.material3.minimumInteractiveComponentSize
@@ -219,12 +220,14 @@ internal fun PairedServersSection(
         )
     }
     forgetting?.let { server ->
-        AlertDialog(
-            onDismissRequest = { if (busy == null) forgetting = null },
-            title = { Text(stringResource(Res.string.settings_forget_server_title)) },
-            text = { Text(stringResource(Res.string.settings_forget_server_body)) },
-            confirmButton = {
-                RiffetTextButton(enabled = busy == null, danger = true, onClick = forget@ {
+        ConfirmDialog(
+            title = stringResource(Res.string.confirm_forget_server_title, server.displayName),
+            message = stringResource(Res.string.settings_forget_server_body),
+            confirmLabel = stringResource(Res.string.settings_forget),
+            danger = true,
+            enabled = busy == null,
+            onDismiss = { if (busy == null) forgetting = null },
+            onConfirm = forget@ {
                     if (connectionOperation.value != null) return@forget
                     busy = server.origin
                     scope.launch {
@@ -241,9 +244,7 @@ internal fun PairedServersSection(
                             busy = null
                         }
                     }
-                }) { Text(stringResource(Res.string.settings_forget), color = colors.danger) }
             },
-            dismissButton = { RiffetTextButton(enabled = busy == null, onClick = { forgetting = null }) { Text(stringResource(Res.string.settings_cancel)) } },
         )
     }
 }

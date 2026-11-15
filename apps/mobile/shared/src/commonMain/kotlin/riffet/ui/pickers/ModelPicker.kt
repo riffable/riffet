@@ -1,6 +1,19 @@
 package riffet.ui.pickers
 
 import riffet.ui.design.LocalInterfaceStyle
+import riffet.ui.design.LocalRiffetSurfaces
+import riffet.ui.design.ChipButton
+import riffet.ui.design.ToggleChip
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import org.jetbrains.compose.resources.stringResource
+import riffet_mobile.shared.generated.resources.*
 import riffet.ui.settings.SettingsNoticeKind
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.layout.Box
@@ -194,7 +207,7 @@ internal fun ModelPickerPages(
     val parsed = remember(catalog, selection) { resolveModelSelection(catalog, selection) }
     val params = remember(catalog, selection) { catalogParams(catalog, parsed.model, parsed.params) }
     val tags = selectionTags(params)
-    val selectModel = "Select model"
+    val selectModel = stringResource(Res.string.pmodel_title)
     val currentLabel = modelLabel(catalog, selection).ifEmpty { selection.ifEmpty { selectModel } }
     // Which parameter's options are open as their own list. Only an id, so the list re-reads the
     // live parameter (and its new value) rather than holding a stale copy.
@@ -206,8 +219,15 @@ internal fun ModelPickerPages(
     val grouped = groups.size > 1
     val providerName = if (grouped) groups.firstOrNull { it.profileId == activeProfileId }?.name?.takeIf { it.isNotBlank() } else null
 
-    val switchingText = "Switching…"
-    val catalogLoadingText = "Loading…"
+    val switchingText = stringResource(Res.string.pmodel_switching)
+    val catalogLoadingText = stringResource(Res.string.pmodel_loading)
+    val fastText = stringResource(Res.string.pmodel_fast)
+    val maxText = stringResource(Res.string.pmodel_max)
+    val limitText = stringResource(Res.string.pmodel_limit_reached)
+    val retryText = stringResource(Res.string.pmodel_retry)
+    val noModelsText = stringResource(Res.string.pmodel_none)
+    val unavailableText = stringResource(Res.string.pmodel_unavailable)
+    val catalogErrorText = catalogError?.let { stringResource(Res.string.pmodel_load_failed, it) }
     val subtitle = if (!showSubtitle) {
         ""
     } else {
@@ -215,14 +235,14 @@ internal fun ModelPickerPages(
             if (!providerName.isNullOrBlank()) append(providerName).append(" · ")
             append(currentLabel)
             tags.effort?.let { append(" · ").append(it) }
-            if (tags.fast) append(" · Fast")
-            if (tags.max) append(" · MAX")
+            if (tags.fast) append(" · ").append(fastText)
+            if (tags.max) append(" · ").append(maxText)
             tags.context?.let { append(" · ").append(it) }
             when {
                 switching -> append(" · ").append(switchingText)
                 catalogLoading -> append(" · ").append(catalogLoadingText)
             }
-        }
+        }.takeIf { it != currentLabel }.orEmpty() // the model alone is already the checked row
     }
 
     val host = LocalPickerHost.current
@@ -265,155 +285,130 @@ internal fun ModelPickerPages(
                 }
             }
         } else {
-            PickerPage(title = "Select model", subtitle = subtitle, fullHeight = true, onBack = onBack) {
+            PickerPage(title = selectModel, subtitle = subtitle, fullHeight = true, onBack = onBack) {
             usage?.account?.let { account ->
                 Text(
-                    text = (if (account.limitReached) "Usage limit reached" + " · " else "") + accountSummary(account),
+                    text = (if (account.limitReached) limitText + " · " else "") + accountSummary(account),
                     style = typography.caption,
                     color = if (account.limitReached) colors.danger else colors.fg3,
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 4)),
                 )
             }
             if (!disabledReason.isNullOrEmpty()) SheetNotice(disabledReason, SettingsNoticeKind.INFO)
-            if (catalogError != null) SheetNotice("Couldn't load models: $catalogError", SettingsNoticeKind.ERROR, "Retry", onRetryCatalog)
+            if (catalogErrorText != null) SheetNotice(catalogErrorText, SettingsNoticeKind.ERROR, retryText, onRetryCatalog)
             if (!grouped && !catalogLoading && catalogError == null && catalog.isEmpty()) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.rowPadding / 2)),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(text = "No models available", style = typography.bodySmall, color = colors.fg3, modifier = Modifier.weight(1f))
+                    Text(text = noModelsText, style = typography.bodySmall, color = colors.fg3, modifier = Modifier.weight(1f))
                     riffet.ui.design.RiffetTextButton(onClick = onRetryCatalog) {
-                        Text("Retry")
+                        Text(retryText)
                     }
                 }
             }
 
-            // Metadata above consumes its natural height. Split only the remaining viewport:
-            // parameters scroll within their cap and cannot displace the model list.
-            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val parameterHeight = minOf(
-                    maxHeight * LocalInterfaceStyle.current.components.sheets.parameterHeightFraction,
-                    metrics.rowSubtitleHeight * 3.5f + metrics.controlInset,
-                )
-                Column(Modifier.fillMaxSize()) {
-                    LazyColumn(state = modelListState, modifier = Modifier.weight(1f).fillMaxWidth().padding(top = (metrics.controlInset / 4))) {
-                        if (grouped) {
-                            groups.forEach { group ->
-                                val models = group.models
-                                item(key = "group:${group.profileId}") { SectionLabel(group.name) }
-                                when {
-                                    group.loading && models.isEmpty() -> item(key = "loading:${group.profileId}") {
+            Column(Modifier.weight(1f).fillMaxWidth()) {
+                LazyColumn(state = modelListState, modifier = Modifier.weight(1f).fillMaxWidth().padding(top = (metrics.controlInset / 4))) {
+                    if (grouped) {
+                        groups.forEach { group ->
+                            val models = group.models
+                            item(key = "group:${group.profileId}") { SectionLabel(group.name) }
+                            when {
+                                group.loading && models.isEmpty() -> item(key = "loading:${group.profileId}") {
+                                    Text(
+                                        text = catalogLoadingText,
+                                        style = typography.bodySmall,
+                                        color = colors.fg3,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
+                                    )
+                                }
+                                group.error != null -> item(key = "error:${group.profileId}") {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
                                         Text(
-                                            text = "Loading…",
+                                            text = stringResource(Res.string.pmodel_load_failed, group.error),
                                             style = typography.bodySmall,
-                                            color = colors.fg3,
-                                            modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
+                                            color = colors.danger,
+                                            modifier = Modifier.weight(1f),
                                         )
+                                        riffet.ui.design.RiffetTextButton(onClick = {
+                                            val retryGroup = onRetryGroup
+                                            if (retryGroup != null) retryGroup(group.profileId) else onRetryCatalog()
+                                        }) { Text(retryText) }
                                     }
-                                    group.error != null -> item(key = "error:${group.profileId}") {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                        ) {
+                                }
+                                !group.available && models.isEmpty() -> item(key = "unavailable:${group.profileId}") {
+                                    Text(
+                                        text = group.unavailableReason ?: unavailableText,
+                                        style = typography.bodySmall,
+                                        color = colors.fg3,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
+                                    )
+                                }
+                                models.isEmpty() -> item(key = "none:${group.profileId}") {
+                                    Text(
+                                        text = noModelsText,
+                                        style = typography.bodySmall,
+                                        color = colors.fg3,
+                                        modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
+                                    )
+                                }
+                                else -> {
+                                    val reason = group.unavailableReason
+                                    if (!group.available && !reason.isNullOrBlank()) {
+                                        item(key = "reason:${group.profileId}") {
                                             Text(
-                                                text = "Couldn't load models: ${group.error}",
+                                                text = reason,
                                                 style = typography.bodySmall,
-                                                color = colors.danger,
-                                                modifier = Modifier.weight(1f),
-                                            )
-                                            riffet.ui.design.RiffetTextButton(onClick = {
-                                                val retryGroup = onRetryGroup
-                                                if (retryGroup != null) retryGroup(group.profileId) else onRetryCatalog()
-                                            }) { Text("Retry") }
-                                        }
-                                    }
-                                    !group.available && models.isEmpty() -> item(key = "unavailable:${group.profileId}") {
-                                        Text(
-                                            text = group.unavailableReason ?: "Unavailable",
-                                            style = typography.bodySmall,
-                                            color = colors.fg3,
-                                            modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
-                                        )
-                                    }
-                                    models.isEmpty() -> item(key = "none:${group.profileId}") {
-                                        Text(
-                                            text = "No models available",
-                                            style = typography.bodySmall,
-                                            color = colors.fg3,
-                                            modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 2)),
-                                        )
-                                    }
-                                    else -> {
-                                        val reason = group.unavailableReason
-                                        if (!group.available && !reason.isNullOrBlank()) {
-                                            item(key = "reason:${group.profileId}") {
-                                                Text(
-                                                    text = reason,
-                                                    style = typography.bodySmall,
-                                                    color = colors.fg3,
-                                                    modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 4)),
-                                                )
-                                            }
-                                        }
-                                        items(models, key = { "${group.profileId}:${it.value}" }) { model ->
-                                            val blocked = disabledReason ?: if (!group.available) "" else null
-                                            OptionRow(
-                                                label = cleanLabel(model.name.ifEmpty { model.value }),
-                                                selected = group.profileId == activeProfileId && model.value == parsed.model,
-                                                onClick = {
-                                                    val next = selectionForModel(models, model.value)
-                                                    val choose = onSelectChoice
-                                                    if (choose != null) choose(group.profileId, next) else onSelect(next)
-                                                    dismiss()
-                                                },
-                                                disabledReason = blocked,
-                                                trailing = if (group.profileId == activeProfileId) {
-                                                    usage?.models?.get(model.value)?.let { status -> { ModelStatusTags(status) } }
-                                                } else {
-                                                    null
-                                                },
+                                                color = colors.fg3,
+                                                modifier = Modifier.fillMaxWidth().padding(horizontal = SheetInset, vertical = (metrics.controlInset / 4)),
                                             )
                                         }
+                                    }
+                                    items(models, key = { "${group.profileId}:${it.value}" }) { model ->
+                                        val blocked = disabledReason ?: if (!group.available) "" else null
+                                        OptionRow(
+                                            label = cleanLabel(model.name.ifEmpty { model.value }),
+                                            selected = group.profileId == activeProfileId && model.value == parsed.model,
+                                            onClick = {
+                                                val next = selectionForModel(models, model.value)
+                                                val choose = onSelectChoice
+                                                if (choose != null) choose(group.profileId, next) else onSelect(next)
+                                                dismiss()
+                                            },
+                                            disabledReason = blocked,
+                                            trailing = if (group.profileId == activeProfileId) {
+                                                usage?.models?.get(model.value)?.let { status -> { ModelStatusTags(status) } }
+                                            } else {
+                                                null
+                                            },
+                                        )
                                     }
                                 }
                             }
-                        } else {
-                            items(catalog, key = { it.value }) { model ->
-                                OptionRow(
-                                    label = cleanLabel(model.name.ifEmpty { model.value }),
-                                    selected = model.value == parsed.model,
-                                    onClick = {
-                                        onSelect(selectionForModel(catalog, model.value))
-                                        dismiss()
-                                    },
-                                    disabledReason = disabledReason,
-                                    trailing = usage?.models?.get(model.value)?.let { status -> { ModelStatusTags(status) } },
-                                )
-                            }
-                        }
-                    }
-
-                    if (params.isNotEmpty()) {
-                        HorizontalDivider(color = colors.line)
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(max = parameterHeight)
-                                .verticalScroll(rememberScrollState())
-                                .padding(bottom = (metrics.rowPadding / 2)),
-                        ) {
-                            params.forEach { param ->
-                                ParamControl(
-                                    param = param,
-                                    enabled = disabledReason == null,
-                                    onChange = { value -> applyParam(param.id, value) },
-                                    onOpenList = { listParamId = param.id },
-                                )
-                            }
                         }
                     } else {
-                        Spacer(Modifier.height(metrics.controlInset))
+                        items(catalog, key = { it.value }) { model ->
+                            OptionRow(
+                                label = cleanLabel(model.name.ifEmpty { model.value }),
+                                selected = model.value == parsed.model,
+                                onClick = {
+                                    onSelect(selectionForModel(catalog, model.value))
+                                    dismiss()
+                                },
+                                disabledReason = disabledReason,
+                                trailing = usage?.models?.get(model.value)?.let { status -> { ModelStatusTags(status) } },
+                            )
+                        }
                     }
+                }
+                if (params.isNotEmpty()) {
+                    ParamStrip(params = params, enabled = disabledReason == null, onChange = applyParam, onOpenList = { listParamId = it })
+                } else {
+                    Spacer(Modifier.height(metrics.controlInset))
                 }
             }
             }
@@ -424,82 +419,89 @@ internal fun ModelPickerPages(
 /** Which of the model sheet's two pages: the list ([paramId] null) or one parameter's own list. */
 private data class ModelPage(val paramId: String?)
 
+
 /**
- * One parameter, as the control its kind calls for.
+ * Every parameter of the selected model as one compact strip under the list.
  *
- *  - a long ladder (a thinking level with more than three steps) and any plain select that long is a
- *    [PickerNavRow] opening its own list, because a phone strip would ellipsise every label and hide
- *    the one fact the control exists to state;
- *  - Fast and Thinking are switches;
- *  - Max is the context window's own switch (Cursor's Max mode) with the remaining windows -
- *    300K / 1M - kept as a Context strip underneath, so turning Max off never strands the reader on
- *    a window they did not choose and no documented window becomes unreachable.
+ *  - a select or effort ladder is a menu chip showing `Effort · High`: a dropdown for four options or
+ *    fewer, the parameter's own list page above that (and the page is where its description and the
+ *    Default marker live);
+ *  - Fast with a Default choice is a menu chip too, so Default stays reachable without a marker here;
+ *  - Fast, Thinking and Max are toggle chips, selected = on. Max's remaining windows (300K / 1M)
+ *    stay a Context menu chip while Max is off, so no documented window becomes unreachable.
  */
 @Composable
-private fun ParamControl(
-    param: ModelParam,
+private fun ParamStrip(
+    params: List<ModelParam>,
     enabled: Boolean,
-    onChange: (String) -> Unit,
-    onOpenList: () -> Unit,
+    onChange: (id: String, value: String) -> Unit,
+    onOpenList: (id: String) -> Unit,
 ) {
-    when (paramKind(param)) {
-        ParamKind.EFFORT, ParamKind.SELECT ->
-            if (paramNeedsList(param)) {
-                PickerNavRow(
-                    label = paramTitle(param),
-                    value = optionLabel(param, param.value),
-                    enabled = enabled,
-                    hint = paramHint(param).takeIf { it.isNotEmpty() },
-                    onClick = onOpenList,
-                )
-            } else {
-                SegmentRow(
-                    label = paramTitle(param),
-                    options = listValues(param),
-                    value = param.value,
-                    display = { optionLabel(param, it) },
-                    onSelect = onChange,
-                    enabled = enabled,
-                    hint = paramHint(param).takeIf { it.isNotEmpty() },
-                )
-            }
+    val metrics = LocalInterfaceStyle.current.metrics
+    val colors = LocalRiffetColors.current
+    Column(Modifier.fillMaxWidth()) {
+        HorizontalDivider(color = colors.line)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = SheetInset, vertical = metrics.controlInset / 2),
+            horizontalArrangement = Arrangement.spacedBy(metrics.controlInset / 2),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            params.forEach { param ->
+                val title = paramTitle(param)
+                when (paramKind(param)) {
+                    ParamKind.EFFORT, ParamKind.SELECT -> ParamMenuChip(
+                        title, listValues(param), param, enabled, { onChange(param.id, it) }, { onOpenList(param.id) },
+                    )
 
-        ParamKind.MAX -> {
-            ToggleRow(
-                label = paramTitle(param),
-                on = isOn(param),
-                onToggle = { onChange(toggledValue(param, it)) },
-                hint = paramHint(param).takeIf { it.isNotEmpty() },
-                enabled = enabled,
-            )
-            // While Max is on the strip is not drawn: none of its windows is the current one, so it
-            // would show no selection while the switch above already names the window in force.
-            val windows = contextChoices(param)
-            if (windows.size >= 2 && !isOn(param)) {
-                SegmentRow(
-                    label = "Context",
-                    options = windows,
-                    value = param.value,
-                    display = { optionLabel(param, it) },
-                    onSelect = onChange,
-                    enabled = enabled,
-                )
-            }
-        }
+                    ParamKind.FAST, ParamKind.TOGGLE ->
+                        if (paramKind(param) == ParamKind.FAST && param.options.any { it.value == "default" }) {
+                            ParamMenuChip(title, listValues(param), param, enabled, { onChange(param.id, it) }, { onOpenList(param.id) })
+                        } else {
+                            ToggleChip(title, isOn(param), { onChange(param.id, toggledValue(param, it)) }, enabled)
+                        }
 
-        ParamKind.FAST, ParamKind.TOGGLE -> ToggleRow(
-            label = paramTitle(param),
-            on = isOn(param),
-            onToggle = { onChange(toggledValue(param, it)) },
-            hint = paramHint(param).takeIf { it.isNotEmpty() } ?: param.description,
-            enabled = enabled,
-            trailing = if (paramKind(param) == ParamKind.FAST && param.options.any { it.value == "default" }) {
-                {
-                    riffet.ui.design.RiffetTextButton(onClick = { onChange("default") }, enabled = enabled) {
-                        Text("Default", color = if (param.value == "default") LocalRiffetColors.current.accent else LocalRiffetColors.current.fg3)
+                    ParamKind.MAX -> {
+                        ToggleChip(title, isOn(param), { onChange(param.id, toggledValue(param, it)) }, enabled)
+                        val windows = contextChoices(param)
+                        if (windows.size >= 2 && !isOn(param)) {
+                            ParamMenuChip(
+                                stringResource(Res.string.pmodel_context), windows, param, enabled,
+                                { onChange(param.id, it) }, { onOpenList(param.id) },
+                            )
+                        }
                     }
                 }
-            } else null,
-        )
+            }
+        }
     }
 }
+
+@Composable
+private fun ParamMenuChip(
+    title: String,
+    options: List<ModelParamOption>,
+    param: ModelParam,
+    enabled: Boolean,
+    onSelect: (String) -> Unit,
+    onOpenList: () -> Unit,
+) {
+    val colors = LocalRiffetColors.current
+    var open by remember { mutableStateOf(false) }
+    val label = stringResource(Res.string.pmodel_param_chip, title, optionLabel(param, param.value))
+    Box {
+        ChipButton(label, active = false, enabled = enabled, onClick = {
+            if (options.size > 4) onOpenList() else open = true
+        })
+        RiffetDropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            options.forEach { option ->
+                RiffetMenuItem(onClick = { open = false; onSelect(option.value) }, selected = option.value == param.value, showCheck = true) {
+                    Text(optionLabel(param, option.value), style = RiffetMenuText, color = colors.fg)
+                }
+            }
+        }
+    }
+}
+

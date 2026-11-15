@@ -2,6 +2,7 @@ package riffet.ui.terminal
 
 import riffet.ui.theme.appearancePageBackground
 
+import riffet.ui.design.ConfirmDialog
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.app.PageBarAction
@@ -150,6 +151,7 @@ internal fun TerminalScreen(
     var keyboardOpen by remember { mutableStateOf(false) }
     var moreOpen by remember { mutableStateOf(false) }
     var actionsOpen by remember(terminalId) { mutableStateOf(false) }
+    var confirmInterrupt by remember(terminalId) { mutableStateOf(false) }
     var lineInput by remember { mutableStateOf(false) }
     @Suppress("DEPRECATION")
     val clipboard = LocalClipboardManager.current
@@ -268,10 +270,22 @@ internal fun TerminalScreen(
                                 danger = true,
                                 onClick = {
                                     actionsOpen = false
-                                    scope.launch { runCatching { api.interruptTerminal(terminalId) } }
+                                    confirmInterrupt = true
                                 },
                             )
                         }
+                    }
+                    if (confirmInterrupt) {
+                        ConfirmDialog(
+                            title = stringResource(Res.string.confirm_interrupt_title, title),
+                            confirmLabel = stringResource(Res.string.timeline_terminal_interrupt_process),
+                            danger = true,
+                            onConfirm = {
+                                confirmInterrupt = false
+                                scope.launch { runCatching { api.interruptTerminal(terminalId) } }
+                            },
+                            onDismiss = { confirmInterrupt = false },
+                        )
                     }
                 }
                 (attachmentError ?: notice)?.let { Text(it, style = typography.caption, color = colors.danger, modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) }

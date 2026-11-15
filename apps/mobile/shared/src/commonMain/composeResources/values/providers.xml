@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="prov_models_enabled">%1$d 个已启用</string>
+    <string name="prov_models_all">全部</string>
+    <string name="prov_add_model">添加模型</string>
+    <string name="prov_search_models">搜索模型</string>
+    <string name="prov_clear_key">清除 API Key</string>
+</resources>
