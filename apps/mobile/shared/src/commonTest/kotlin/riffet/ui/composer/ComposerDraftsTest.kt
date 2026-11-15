@@ -44,6 +44,19 @@ class ComposerDraftsTest {
     }
 
     @Test
+    fun blankDraftIsNeitherKeptNorRestored() {
+        val preferences = MemoryPreferences()
+        // A draft of only a newline, saved before blank drafts were dropped.
+        preferences.setString("server:http://a:4317:composer-draft:session", "{\"text\":\"\\n\"}")
+        val source = ComposerDrafts(preferences).forServer("http://a:4317")
+        val draft = source.draftFor("session")
+        assertEquals("", draft.text.value)
+        draft.text.value = " \n "
+        source.save("session", draft)
+        assertEquals(null, preferences.string("server:http://a:4317:composer-draft:session"))
+    }
+
+    @Test
     fun lateAcceptancePreservesNewEditsAndDoesNotTouchAnotherServer() = runTest {
         val preferences = MemoryPreferences()
         val host = ComposerDrafts(preferences)

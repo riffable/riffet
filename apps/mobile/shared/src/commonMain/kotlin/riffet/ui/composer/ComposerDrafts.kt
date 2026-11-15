@@ -33,7 +33,8 @@ internal class ComposerDraft {
     val references = mutableStateOf<List<PromptContextReference>>(emptyList())
 
     fun clearSubmitted(prompt: String, attachmentIds: Set<String>, context: List<PromptContextReference>, revision: Long = textRevision) {
-        if (textRevision == revision && text.value.trim() == prompt) text.value = ""
+        // A draft left with only blank lines (a return the keyboard committed around the send) is spent too.
+        if ((textRevision == revision && text.value.trim() == prompt) || text.value.isBlank()) text.value = ""
         attachments.value = attachments.value.filterNot { it.id in attachmentIds }
         references.value = references.value.filterNot { it in context }
     }
@@ -93,7 +94,8 @@ class ComposerDrafts private constructor(private val preferences: AppPreferences
         val restored = raw?.let { runCatching { RiffetJson.instance.decodeFromString<SavedComposerDraft>(it) }.getOrNull() }
         ComposerDraft().apply {
             if (restored != null) {
-                text.value = restored.text
+                // Blank lines alone are no draft: one saved earlier held the dock open on an empty prompt.
+                text.value = restored.text.takeIf { it.isNotBlank() }.orEmpty()
                 attachments.value = restored.attachments
                 references.value = restored.references
             }
@@ -102,7 +104,7 @@ class ComposerDrafts private constructor(private val preferences: AppPreferences
 
     internal fun save(sessionId: String, draft: ComposerDraft) {
         if (sessionId in forgotten) return
-        val value = SavedComposerDraft(draft.text.value, draft.attachments.value, draft.references.value)
+        val value = SavedComposerDraft(draft.text.value.takeIf { it.isNotBlank() }.orEmpty(), draft.attachments.value, draft.references.value)
         val encoded = if (value == SavedComposerDraft()) null else RiffetJson.instance.encodeToString(value)
         if (saved[sessionId] != encoded) {
             preferences.setString("${prefix}composer-draft:$sessionId", encoded)

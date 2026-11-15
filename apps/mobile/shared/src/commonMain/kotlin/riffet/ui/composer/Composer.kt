@@ -121,6 +121,12 @@ import riffet.ui.state.inQueue
 import riffet.ui.state.RiffetConnectionState
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
 
 /*
  * The message composer, ported from `apps/web/src/app/session/Composer.tsx` and `ComposerDock.tsx`.
@@ -529,6 +535,30 @@ internal fun ComposerCard(
 
     LaunchedEffect(text) {
         if (scrollState.maxValue > 0) scrollState.scrollTo(scrollState.maxValue)
+    }
+
+    // Android keeps focus in the field when the keyboard is put away (back, the keyboard's own hide
+    // key), so the dock stayed open around an empty draft. Putting the keyboard away is leaving the
+    // composer: focus goes, and so does a draft of nothing but blank lines (a return the keyboard
+    // commits around a send), so the dock folds back to its resting state. A hardware keyboard never
+    // shows the soft one and is left alone.
+    if (allowCompact) {
+        val ime = WindowInsets.ime
+        val density = LocalDensity.current
+        val focusManager = LocalFocusManager.current
+        val currentText by rememberUpdatedState(text)
+        val textChange by rememberUpdatedState(onTextChange)
+        val hasFocus by rememberUpdatedState(focused)
+        LaunchedEffect(ime, density) {
+            var shown = false
+            snapshotFlow { ime.getBottom(density) > 0 }.collect { open ->
+                if (shown && !open && hasFocus) {
+                    focusManager.clearFocus()
+                    if (currentText.isNotEmpty() && currentText.isBlank()) textChange("")
+                }
+                shown = open
+            }
+        }
     }
 
     // On the session page, the body yields space to the footer and scrolls when the keyboard shrinks
