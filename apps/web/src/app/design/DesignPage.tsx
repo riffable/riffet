@@ -9,7 +9,11 @@ import { PageScaffold } from '../PageScaffold';
 import type { DesignPlatform } from '../state/page-url';
 import { useNav, useStores } from '../state/stores';
 import { useDesignCatalog, type CatalogChapter, type CatalogGroup } from './catalog';
-import { MacCover } from './mac/MacCover';
+import { useAndroidStyleNote } from './android/notes';
+import { ANDROID_STYLES } from './android/values';
+import { useStyleNote } from './mac/notes';
+import { STYLES as MAC_STYLES } from './mac/values';
+import { PlatformCover } from './platform';
 import { Cover } from './overview/Opening';
 import { Contents } from './overview/Contents';
 import { ChapterPlaceContext, PaintRevision } from './specimen';
@@ -111,6 +115,16 @@ function Pager({ previous, next, onGo }: { previous?: CatalogChapter; next?: Cat
 }
 
 /** Memoised: the workbench re-renders with every session-list change, which says nothing new here. */
+/** A platform part's title page, with its styles' names. */
+function PlatformTitle({ platform }: { platform: Exclude<DesignPlatform, 'web'> }) {
+  const { t } = useLingui();
+  const mac = useStyleNote();
+  const android = useAndroidStyleNote();
+  return platform === 'macos'
+    ? <PlatformCover name="macOS" styles={MAC_STYLES.map((style) => mac(style).title)} lines={[t`共用的基础与模式在 Mac 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`风格各有一节，数值与配方读自同一份定义。`]} />
+    : <PlatformCover name="Android" styles={ANDROID_STYLES.map((style) => android(style).title)} lines={[t`共用的基础与模式在 Android 上的写法：用哪个组件、取什么值、哪里跟平台。`, t`风格各有一节，尺寸与动效读自同一份定义。`]} />;
+}
+
 export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, onOpenSidebar, onExpandSidebar }: {
   sidebarCollapsed: boolean;
   onClose: () => void;
@@ -124,7 +138,7 @@ export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, 
   const { nav } = useStores();
   const platform = useNav((state) => state.designPlatform);
   const chapterId = useNav((state) => state.designChapter);
-  const catalogs: Record<DesignPlatform, CatalogGroup[]> = { web: useDesignCatalog('web'), macos: useDesignCatalog('macos') };
+  const catalogs: Record<DesignPlatform, CatalogGroup[]> = { web: useDesignCatalog('web'), macos: useDesignCatalog('macos'), android: useDesignCatalog('android') };
   const groups = catalogs[platform];
   const chapters = groups.flatMap((group) => group.chapters);
   const index = chapters.findIndex((chapter) => chapter.id === chapterId);
@@ -180,7 +194,7 @@ export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, 
         title={<Trans>设计规范</Trans>}
         meta={(
           <>
-            <UnderlineTabs<DesignPlatform> className="ml-2 h-full max-md:ml-0" value={platform} onChange={switchPlatform} ariaLabel={t`平台`} options={[{ value: 'web', label: 'Web' }, { value: 'macos', label: 'macOS' }]} />
+            <UnderlineTabs<DesignPlatform> className="ml-2 h-full max-md:ml-0" value={platform} onChange={switchPlatform} ariaLabel={t`平台`} options={[{ value: 'web', label: 'Web' }, { value: 'macos', label: 'macOS' }, { value: 'android', label: 'Android' }]} />
             <ChapterMenu groups={groups} current={current} onGo={go} />
           </>
         )}
@@ -216,7 +230,7 @@ export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, 
           </div>
         ) : (
           <div key={platform}>
-            {platform === 'macos' ? <MacCover /> : <Cover onGo={go} />}
+            {platform === 'web' ? <Cover onGo={go} /> : <PlatformTitle platform={platform} />}
             <Contents groups={groups} onGo={go} />
           </div>
         )}

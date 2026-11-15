@@ -1,43 +1,38 @@
 import { Fragment, type ReactNode } from 'react';
-import { useLingui } from '@lingui/react/macro';
-import type { DesktopStyle } from '@contracts';
 import { cn } from '@/lib/utils';
-import { Token } from '../specimen';
-import { useStyleNote } from './notes';
+import { Token } from './specimen';
+
+/** A column of the table: one interface style; `tag` is said under its name (the main or default style). */
+export interface CompareColumn { id: string; title: string; tag?: string }
 
 export interface CompareRow {
   label: ReactNode;
   /** Under the label, in the secondary colour. */
   hint?: ReactNode;
-  /** One cell per style, in the styles' order. */
+  /** One cell per column, in the columns' order. */
   cells: ReactNode[];
   /** Compared by these keys: rows whose styles agree are set back, so the differences stand out. */
   keys?: Array<string | number>;
 }
 
 /** One column per style, rows grouped under small headings, ruled like a table in a book. */
-export function CompareTable({ styles, groups }: { styles: readonly DesktopStyle[]; groups: Array<{ title?: string; note?: ReactNode; rows: CompareRow[] }> }) {
-  const { t } = useLingui();
-  const note = useStyleNote();
+export function CompareTable({ columns, groups }: { columns: readonly CompareColumn[]; groups: Array<{ title?: string; note?: ReactNode; rows: CompareRow[] }> }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[600px] table-fixed border-collapse text-sm">
         <colgroup>
-          <col className="w-[34%]" />
-          {styles.map((style) => <col key={style.id} />)}
+          <col className={columns.length > 4 ? 'w-[24%]' : 'w-[34%]'} />
+          {columns.map((column) => <col key={column.id} />)}
         </colgroup>
         <thead>
           <tr>
             <th />
-            {styles.map((style) => {
-              const { title, primary } = note(style);
-              return (
-                <th key={style.id} className="pb-3 pr-4 text-left font-normal">
-                  <span className="flex items-baseline gap-2"><span className="font-medium text-fg">{title}</span><Token className="text-2xs text-fg-4">{style.id}</Token></span>
-                  {primary && <span className="text-2xs text-fg-3">{t`主风格`}</span>}
-                </th>
-              );
-            })}
+            {columns.map((column) => (
+              <th key={column.id} className="pb-3 pr-4 text-left font-normal">
+                <span className="flex flex-col"><span className="font-medium text-fg">{column.title}</span>{column.title !== column.id && <Token className="text-2xs text-fg-4">{column.id}</Token>}</span>
+                {column.tag && <span className="text-2xs text-fg-3">{column.tag}</span>}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
@@ -45,7 +40,7 @@ export function CompareTable({ styles, groups }: { styles: readonly DesktopStyle
             <Fragment key={groupIndex}>
               {group.title && (
                 <tr>
-                  <td colSpan={styles.length + 1} className={cn('pb-2 text-xs font-medium text-fg-3', groupIndex ? 'pt-8' : 'pt-2')}>
+                  <td colSpan={columns.length + 1} className={cn('pb-2 text-xs font-medium text-fg-3', groupIndex ? 'pt-8' : 'pt-2')}>
                     {group.title}{group.note && <span className="ml-3 font-normal text-fg-4">{group.note}</span>}
                   </td>
                 </tr>

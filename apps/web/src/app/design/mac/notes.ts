@@ -1,6 +1,7 @@
 import { useLingui } from '@lingui/react/macro';
 import type { DesktopStyle } from '@contracts';
-import type { Family } from './values';
+import type { CompareColumn } from '../compare';
+import { STYLES, type Family } from './values';
 
 /** The groups the recipe families are read in: the window's frame, the conversation, then surfaces and controls. */
 export type FamilyGroup = 'frame' | 'session' | 'surface';
@@ -101,4 +102,11 @@ export function useStyleNote(): (style: DesktopStyle) => StyleNote {
     },
   };
   return (style) => notes[style.id] ?? { title: style.id, lede: t`这种风格还没有说明，数值与配方取自 interface-styles.ts。`, rules: [] };
+}
+
+/** The desktop styles as comparison columns, in the contract's order. */
+export function useMacColumns(): CompareColumn[] {
+  const { t } = useLingui();
+  const note = useStyleNote();
+  return STYLES.map((style) => ({ id: style.id, title: note(style).title, tag: note(style).primary ? t`主风格` : undefined }));
 }

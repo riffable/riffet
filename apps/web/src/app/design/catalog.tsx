@@ -7,6 +7,12 @@ import { FeedbackChapter as FeedbackComponentsChapter } from './components/Feedb
 import { InputsChapter } from './components/InputsChapter';
 import { NavigationChapter as NavigationComponentsChapter } from './components/NavigationChapter';
 import { OverlaysChapter as OverlayComponentsChapter } from './components/OverlaysChapter';
+import { ComponentChapter as AndroidComponentChapter } from './android/ComponentChapter';
+import { OverlayChapter as AndroidOverlayChapter } from './android/OverlayChapter';
+import { PagesChapter as AndroidPagesChapter } from './android/PagesChapter';
+import { PlatformChapter as AndroidPlatformChapter } from './android/PlatformChapter';
+import { StylesChapter as AndroidStylesChapter } from './android/StylesChapter';
+import { TypeChapter as AndroidTypeChapter } from './android/TypeChapter';
 import { ArchitectureChapter } from './engineering/ArchitectureChapter';
 import { PluginsChapter } from './engineering/PluginsChapter';
 import { AccessibilityChapter } from './foundations/AccessibilityChapter';
@@ -143,7 +149,22 @@ export function useDesignCatalog(platform: DesignPlatform): CatalogGroup[] {
     surfaces: [],
     engineering: [],
   };
-  const entries = platform === 'macos' ? macos : web;
+  /** Android's own chapters, under the same slugs as the Mac's where they cover the same thing. */
+  const android: Record<DesignGroup, Entry[]> = {
+    overview: [
+      ['platform', t`平台分工`, t`跟平台与跟共用的规范`, AndroidPlatformChapter],
+      ['styles', t`风格`, t`五种风格的数值、配方与缩样`, AndroidStylesChapter],
+    ],
+    foundations: [['type', t`文字角色`, t`各风格的字阶映射`, AndroidTypeChapter]],
+    components: [['mapping', t`组件对照`, t`Web 与 Android 一一对应`, AndroidComponentChapter]],
+    patterns: [
+      ['pages', t`页面与导航`, t`底栏、页面栈、侧栏与返回`, AndroidPagesChapter],
+      ['overlays', t`浮层`, t`菜单、底部面板、确认框与 Snackbar`, AndroidOverlayChapter],
+    ],
+    surfaces: [],
+    engineering: [],
+  };
+  const entries = { web, macos, android }[platform];
   let count = 0;
   return DESIGN_GROUPS.filter((group) => entries[group].length > 0).map((group, index) => ({
     id: group,

@@ -1,12 +1,13 @@
 import { useLingui } from '@lingui/react/macro';
 import { Chapter, Frame, Plate, Token, Value } from '../specimen';
-import { CompareTable, type CompareRow } from './CompareTable';
-import { useFamilyNotes } from './notes';
+import { CompareTable, type CompareRow } from '../compare';
+import { useFamilyNotes, useMacColumns } from './notes';
 import { MAC, STYLES } from './values';
 
 function Workbench() {
   const { t } = useLingui();
   const familyNote = useFamilyNotes();
+  const columns = useMacColumns();
   const cell = (value: number | string, range?: string) => (
     <span className="flex flex-col"><span className="font-mono tabular-nums">{value}</span>{range && <Value className="text-fg-4">{range}</Value>}</span>
   );
@@ -19,7 +20,7 @@ function Workbench() {
     { label: t`终端`, keys: STYLES.map(() => MAC.terminal.default), cells: STYLES.map((style) => <span key={style.id}>{cell(MAC.terminal.default, t`${MAC.terminal.min} 起，最多详情高的 60%`)}</span>) },
     { label: t({ message: '阅读列', context: 'content-column' }), hint: t`读者拖动调整`, keys: STYLES.map(() => MAC.reading.default), cells: STYLES.map((style) => <span key={style.id}>{cell(MAC.reading.default, `${MAC.reading.min}–${MAC.reading.max}`)}</span>) },
   ];
-  return <CompareTable styles={STYLES} groups={[{ rows }]} />;
+  return <CompareTable columns={columns} groups={[{ rows }]} />;
 }
 
 /** A page drawn with its parts named: the header from `pageChrome`, the one scroller, the centred column. */

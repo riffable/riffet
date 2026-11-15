@@ -1,7 +1,8 @@
 import { useLingui } from '@lingui/react/macro';
 import type { DesktopStyle } from '@contracts';
 import { Chapter, Plate, Token, Value } from '../specimen';
-import { CompareTable, type CompareRow } from './CompareTable';
+import { CompareTable, type CompareRow } from '../compare';
+import { useMacColumns } from './notes';
 import { fontStack, points, STYLES } from './values';
 
 interface Role {
@@ -17,6 +18,7 @@ interface Role {
 
 export function TypeChapter() {
   const { t } = useLingui();
+  const columns = useMacColumns();
   const roles: Role[] = [
     { name: t`正文`, api: 'RiffetFont.body', sample: t`把超时统一成一个常量`, size: () => 14, line: (style) => style.tokens.text.readingLine },
     { name: t`界面`, api: 'RiffetFont.label', sample: t`整理超时常量`, size: (style) => points(style.tokens.text.body) },
@@ -49,7 +51,7 @@ export function TypeChapter() {
   return (
     <Chapter title={t`文字角色`} lede={t`调用处只写角色，不写字号。角色的取值随风格变：界面、次要、侧栏三档来自配方，正文、注脚、标题与代码各端相同。`} source="apps/macos/Riffet/Theme/Theme.swift">
       <Plate number={1} title={t`角色与取值`} note={t`每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。`}>
-        <CompareTable styles={STYLES} groups={[{ rows }]} />
+        <CompareTable columns={columns} groups={[{ rows }]} />
       </Plate>
       <Plate number={2} title={t`规则`}>
         <ul className="flex flex-col edge-b">

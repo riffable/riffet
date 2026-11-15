@@ -1,22 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
-import { cn } from '@/lib/utils';
-import { Chapter, Frame, Plate, Token } from '../specimen';
-
-function Column({ title, items }: { title: string; items: Array<[string, string]> }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <h4 className="text-sm font-medium text-fg">{title}</h4>
-      <ul className="flex flex-col edge-b">
-        {items.map(([rule, api]) => (
-          <li key={rule} className="flex items-baseline justify-between gap-4 py-2.5 edge-t">
-            <span className="text-sm text-fg-2">{rule}</span>
-            <Token className="shrink-0 text-fg-3">{api}</Token>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
+import { GeneratedList, SplitColumn } from '../platform';
+import { Chapter, Plate } from '../specimen';
 
 export function PlatformChapter() {
   const { t } = useLingui();
@@ -40,29 +24,21 @@ export function PlatformChapter() {
     [t`选择控件的选用规则`, 'patterns.md §3'],
   ];
   const generated: Array<[string, string, string]> = [
-    ['pnpm gen:theme', 'index.css', 'Theme/RiffetTheme.swift'],
-    ['pnpm gen:tokens', 'design-tokens.ts', 'Theme/Controls.swift'],
-    ['pnpm gen:styles', 'interface-styles.ts', 'Theme/InterfaceStyles.swift'],
-    ['pnpm gen:mac-icons', 'icon-map.json', 'Theme/IconSymbols.generated.swift'],
+    ['pnpm gen:theme', 'index.css', 'apps/macos/Riffet/Theme/RiffetTheme.swift'],
+    ['pnpm gen:tokens', 'design-tokens.ts', 'apps/macos/Riffet/Theme/Controls.swift'],
+    ['pnpm gen:styles', 'interface-styles.ts', 'apps/macos/Riffet/Theme/InterfaceStyles.swift'],
+    ['pnpm gen:mac-icons', 'icon-map.json', 'apps/macos/Riffet/Theme/IconSymbols.generated.swift'],
   ];
   return (
     <Chapter title={t`平台分工`} lede={t`行为跟 macOS 的人机界面指南，外观跟风格配方；桌面的数值 Mac 与 Web 相同，单位是 pt。`} source="docs/design/system/macos.md">
       <Plate number={1} title={t`跟平台，还是跟 Web`} note={t`用户在 Mac 上已有的预期：窗口、sheet、右键菜单和快捷键，照系统的做。其余取 Web 的同一组值。`}>
         <div className="grid gap-10 md:grid-cols-2">
-          <Column title={t`跟平台`} items={platform} />
-          <Column title={t`跟 Web`} items={shared} />
+          <SplitColumn title={t`跟平台`} items={platform} />
+          <SplitColumn title={t`跟 Web`} items={shared} />
         </div>
       </Plate>
       <Plate number={2} title={t`生成到 Mac`} note={t`Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。`}>
-        <Frame className="flex flex-col p-6 max-md:p-4">
-          {generated.map(([command, source, target], index) => (
-            <div key={command} className={cn('grid grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)_minmax(0,1.4fr)] items-baseline gap-4 py-3 max-md:grid-cols-1 max-md:gap-1', index > 0 && 'edge-t')}>
-              <Token>{command}</Token>
-              <Token className="text-fg-3">{source}</Token>
-              <Token className="text-fg-2">apps/macos/Riffet/{target}</Token>
-            </div>
-          ))}
-        </Frame>
+        <GeneratedList rows={generated} />
       </Plate>
     </Chapter>
   );

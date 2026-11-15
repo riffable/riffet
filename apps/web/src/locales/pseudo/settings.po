@@ -99,6 +99,11 @@ msgstr ""
 msgid "{0} 小时"
 msgstr ""
 
+#. placeholder {0}: ANDROID_STYLES.length
+#: src/app/design/android/StylesChapter.tsx
+msgid "{0} 种界面风格共用一套组件：数值决定尺寸与动效，配方决定每类组件画成哪种形态。颜色由主题决定，与风格无关。"
+msgstr ""
+
 #. placeholder {0}: STYLES.length
 #: src/app/design/mac/StylesChapter.tsx
 msgid "{0} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。"
@@ -107,6 +112,11 @@ msgstr ""
 #. placeholder {0}: MAC.terminal.min
 #: src/app/design/mac/WindowChapter.tsx
 msgid "{0} 起，最多详情高的 60%"
+msgstr ""
+
+#. placeholder {0}: style.id
+#: src/app/design/android/PhoneMiniature.tsx
+msgid "{0} 风格的手机缩样"
 msgstr ""
 
 #. placeholder {0}: style.id
@@ -210,6 +220,7 @@ msgstr ""
 msgid "3 个以上、需要读说明的单选；2 到 4 个短选项用 Segmented。"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/patterns/ListsChapter.tsx
 msgid "3 分钟前"
 msgstr ""
@@ -261,6 +272,10 @@ msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "AgentLogo 在内置 id 上等同 AgentMark，插件 Agent 画它声明的 SVG。"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "Android 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -343,6 +358,18 @@ msgstr ""
 msgid "Mac 的设置总是独立窗口，这一项只对 Web 生效。"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "Material 控件，更大的圆角与选中面，浮动底栏，空间动效用更有弹性的弹簧。"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "material3 与 expressive 用 Material 的弹窗；其余风格用共享实现，宽度和操作排列读配方。"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "material3 风格的取值；其他风格的导航栏与底栏高度见「风格」一章。"
+msgstr ""
+
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "min(1080, 100vw − 32) × min(820, 100dvh − 32)"
 msgstr ""
@@ -391,12 +418,20 @@ msgstr ""
 msgid "SheetScaffold 统一标题、正文、页脚和键盘操作，调用处只填内容和按钮。点 sheet 外部不关闭。"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+msgid "Snackbar 整个应用一个队列，不压在底栏上"
+msgstr ""
+
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "success：完成与新增；warning：等待处理；danger：出错与不可逆操作。状态色专用于状态。"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "Tab 顺序与视觉顺序一致；焦点环只在键盘操作时出现。"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "ui/design/Dialogs.kt，不是 Material 的同名组件"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -409,6 +444,14 @@ msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "Web"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "Web 与 Android"
+msgstr ""
+
+#: src/app/design/catalog.tsx
+msgid "Web 与 Android 一一对应"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
@@ -441,6 +484,10 @@ msgstr ""
 
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "一个持续存在的状态"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "一件事只在一处说"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -479,12 +526,20 @@ msgstr ""
 msgid "一级视图用下划线，子视图用分段控件，两层不用同一种。"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
+msgid "一组值用底部面板，就近的少量选项用菜单"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "一行一个动作；过程组在回合结束后折叠。"
 msgstr ""
 
 #: src/app/design/patterns/ListsChapter.tsx
 msgid "一行由图标、标题、元信息和尾部操作组成。操作在指针停留或键盘进入时出现，触屏上常驻。"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "一页一个滚动区"
 msgstr ""
 
 #: src/app/design/patterns/OverlayChapter.tsx
@@ -535,6 +590,10 @@ msgstr ""
 msgid "上层引用下层的名字，下层不知道上层。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "上方的线"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr ""
@@ -551,8 +610,24 @@ msgstr ""
 msgid "下划线"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "下划线输入框"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "下划线页签"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "下划线页签，放不下的进入末尾菜单，当前页签始终可见"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "下层页面的位移"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "下方的点"
 msgstr ""
 
 #: src/app/settings/ViewsSection.tsx
@@ -664,6 +739,14 @@ msgstr ""
 msgid "个人资料"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "中"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "中性浮层、小圆角、描边的次要按钮、细轨道开关和下划线输入框。"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "中文"
 msgstr ""
@@ -732,6 +815,10 @@ msgstr ""
 msgid "主导航入口"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+msgid "主操作写动作本身，危险操作用 danger 色"
+msgstr ""
+
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "主操作在最右；不可逆的确认里 Return 落在取消上"
 msgstr ""
@@ -752,6 +839,10 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "主题 id"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "主题可切换的外观变体"
 msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
@@ -782,7 +873,7 @@ msgstr ""
 msgid "主题颜色写入 Mac、Android、iOS 与 Web 的主题文件"
 msgstr ""
 
-#: src/app/design/mac/CompareTable.tsx
+#: src/app/design/mac/notes.ts
 #: src/app/design/mac/StylesChapter.tsx
 msgid "主风格"
 msgstr ""
@@ -805,6 +896,14 @@ msgstr ""
 
 #: src/app/settings/channels/AddBotDialog.tsx
 msgid "二维码"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "五种风格只在 themePreset() 里按名字分派一次；组件读 LocalInterfaceStyle 的字段。"
+msgstr ""
+
+#: src/app/design/catalog.tsx
+msgid "五种风格的数值、配方与缩样"
 msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
@@ -887,6 +986,7 @@ msgstr ""
 msgid "代理"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "代码"
@@ -912,6 +1012,12 @@ msgstr ""
 msgid "以本地版本覆盖"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+#: src/app/design/android/TypeChapter.tsx
+msgctxt "design-sample"
+msgid "任务"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "任务文件位置"
 msgstr ""
@@ -922,6 +1028,10 @@ msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "会变化的数字和表格列用等宽数字，位数对齐，数值变化时不抖动。"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "会变化的数字用 tnum"
 msgstr ""
 
 #: src/app/design/mac/TypeChapter.tsx
@@ -1141,6 +1251,8 @@ msgstr ""
 msgid "侧边面板"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/foundations/SpaceChapter.tsx
@@ -1380,7 +1492,15 @@ msgstr ""
 msgid "全部角色"
 msgstr ""
 
-#: src/app/design/mac/MacCover.tsx
+#: src/app/design/android/StylesChapter.tsx
+msgid "共享实现"
+msgstr ""
+
+#: src/app/design/DesignPage.tsx
+msgid "共用的基础与模式在 Android 上的写法：用哪个组件、取什么值、哪里跟平台。"
+msgstr ""
+
+#: src/app/design/DesignPage.tsx
 msgid "共用的基础与模式在 Mac 上的写法：用哪个组件、取什么值、哪里跟平台。"
 msgstr ""
 
@@ -1480,6 +1600,10 @@ msgstr ""
 msgid "内容块"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "内容画到系统栏下，按 inset 让位"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "内缩"
 msgstr ""
@@ -1553,6 +1677,11 @@ msgstr ""
 msgid "最近会话"
 msgstr ""
 
+#. placeholder {0}: Math.round(ANDROID.sheetHeight * 100)
+#: src/app/design/android/OverlayChapter.tsx
+msgid "最高 {0}%"
+msgstr ""
+
 #: src/app/design/mac/StylesChapter.tsx
 msgid "写成 Web 变量名的数值在生成时从样式表读出，所以 Riffet 风格跟着 Web 变。各风格取值相同的行颜色变淡。"
 msgstr ""
@@ -1618,6 +1747,22 @@ msgstr ""
 msgid "分层、生成与检查"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "分段控件"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "分段控件是一组独立的胶囊"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "分段控件是下划线页签"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "分段控件的滑块"
+msgstr ""
+
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "分段控件的选中项、开关滑块"
 msgstr ""
@@ -1633,9 +1778,34 @@ msgstr ""
 msgid "分类保持原有分组，新设置放进已有分类。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "分组、弹窗、面板"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "分组之间"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "分组卡片"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "分组卡片里的字段用 GroupField，卡片即容器"
+msgstr ""
+
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "分组标题"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+#: src/app/design/android/StylesChapter.tsx
+msgid "分组标题用强调色"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "切换一页里的视图"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
@@ -1680,12 +1850,25 @@ msgstr ""
 msgid "列表、表单、项目主页"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
+msgid "列表与展示"
+msgstr ""
+
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "列表或页面没有内容"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 msgid "列表行"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "列表行的选中面"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "列表行高 56，分组之间 24"
 msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
@@ -1704,6 +1887,7 @@ msgstr ""
 msgid "创建应用"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/overview/Opening.tsx
@@ -1726,6 +1910,10 @@ msgstr ""
 msgid "删除 {0}？"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
+msgid "删除？"
+msgstr ""
+
 #. placeholder {0}: provider.name
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "删除「{0}」？"
@@ -1745,6 +1933,7 @@ msgstr ""
 msgid "删除后无法恢复"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/patterns/ConfirmChapter.tsx
@@ -1787,6 +1976,7 @@ msgstr ""
 msgid "动作的步骤与安装授权由宿主的弹窗承载。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/design/overview/SystemChapter.tsx
@@ -1797,6 +1987,7 @@ msgstr ""
 msgid "动效、无障碍、文案在每一层都有，基础只给取值和通用规则。"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "动效档位"
 msgstr ""
@@ -1815,6 +2006,10 @@ msgstr ""
 
 #: src/app/design/foundations/IconChapter.tsx
 msgid "单一图形族 Lucide，单一线宽：描边 1.25px，经 non-scaling-stroke 在全部尺寸下恒定；颜色继承所在行的文字色。"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "单位 dp。读自 mobile-styles.ts，与生成到 Kotlin 的是同一份；各风格取值相同的行颜色变淡。主题可以在上下限内覆盖。"
 msgstr ""
 
 #. placeholder {0}: host.cpuCount
@@ -1881,6 +2076,10 @@ msgstr ""
 msgid "历史头像"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+msgid "压栈的页面"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "压缩上下文"
 msgstr ""
@@ -1914,6 +2113,10 @@ msgstr ""
 
 #: src/app/design/mac/WindowChapter.tsx
 msgid "原生风格是窗口工具栏，自绘风格是 CustomPageBar"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "去哪里，用什么搭"
 msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
@@ -1969,6 +2172,10 @@ msgstr ""
 msgid "发送失败，可恢复内容后重试"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "发送按钮"
+msgstr ""
+
 #: src/app/settings/SupportSections.tsx
 msgid "发送诊断"
 msgstr ""
@@ -1994,6 +2201,8 @@ msgstr ""
 msgid "取得一个值的控件。字段共用 fieldClass 的外观，聚焦时边框与光晕换成强调色。"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/foundations/ContentChapter.tsx
@@ -2008,6 +2217,10 @@ msgstr ""
 #: src/app/settings/ThemeEditor.tsx
 msgctxt "settings-cancel-action"
 msgid "取消"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "取消单独放在操作面板下方"
 msgstr ""
 
 #: src/app/design/patterns/OverlayChapter.tsx
@@ -2042,12 +2255,24 @@ msgstr ""
 msgid "只换等宽字体"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "只有主操作填充强调色，次要与危险操作是透明的着色文字"
+msgstr ""
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "只有取值"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "只有图标的按钮用 Tip 显示名称，同时写进 aria-label。"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "只有图标的按钮的名称"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "只有图标的按钮靠无障碍名称"
 msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
@@ -2060,6 +2285,10 @@ msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "只用 CLI 标题"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "只用于二到三个短选项"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -2086,6 +2315,10 @@ msgstr ""
 msgid "可恢复"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "可收起的大标题"
+msgstr ""
+
 #: src/app/settings/SupportSections.tsx
 msgid "可用"
 msgstr ""
@@ -2102,6 +2335,11 @@ msgstr ""
 msgid "可选源码 checkout"
 msgstr ""
 
+#. placeholder {0}: BASE.drawerWidth
+#: src/app/design/android/PagesChapter.tsx
+msgid "右侧栏：会话详情，宽 {0}"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/WindowChapter.tsx
 msgid "右侧面板"
@@ -2113,6 +2351,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "右对齐"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "右滑返回可以在设置里关掉，或只留屏幕边缘。"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -2146,6 +2388,10 @@ msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "各自在独立 Worktree"
+msgstr ""
+
+#: src/app/design/catalog.tsx
+msgid "各风格的字阶映射"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -2315,6 +2561,7 @@ msgstr ""
 msgid "图中宽度按 1440 窗口的主区 {MAIN} 折算"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/IconChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -2323,6 +2570,10 @@ msgstr ""
 
 #: src/app/design/patterns/ListsChapter.tsx
 msgid "图标 16 · fg-3"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "图标 24，点击区 48"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
@@ -2362,6 +2613,7 @@ msgstr ""
 msgid "圆点"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
@@ -2391,8 +2643,16 @@ msgstr ""
 msgid "在 foundations.md 写明用途"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
+msgid "在 timeline 目录，未进组件层"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "在「技能与工具」中开启"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "在一组值里选一个"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -2563,6 +2823,7 @@ msgstr ""
 msgid "复述界面"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "外观"
@@ -2574,6 +2835,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "大"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "大标题"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -2614,6 +2879,10 @@ msgstr ""
 msgid "字体与图标"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "字体倍率与动画时长缩放"
+msgstr ""
+
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -2638,6 +2907,10 @@ msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "字符与默认"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "字距一律为 0：Material 的拉丁字距会把中文标签撑开"
 msgstr ""
 
 #: src/app/design/foundations/TypeChapter.tsx
@@ -2724,6 +2997,15 @@ msgstr ""
 msgid "宽 {WIDTH_HANDLE_WIDTH}，距列 {WIDTH_HANDLE_GAP}，向外拖动一像素列宽增加两像素"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "宽屏换成侧边导航栏"
+msgstr ""
+
+#. placeholder {0}: BASE.contentMaxWidth
+#: src/app/design/android/PagesChapter.tsx
+msgid "宽屏的内容最宽 {0}"
+msgstr ""
+
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "宽度"
@@ -2756,6 +3038,10 @@ msgstr ""
 
 #: src/app/settings/PushKeySection.tsx
 msgid "密钥只保存在这台服务器上"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "对一项内容执行操作"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -2810,6 +3096,7 @@ msgstr ""
 msgid "导致重建或逐帧重组的 Compose 写法"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -2822,6 +3109,30 @@ msgstr ""
 
 #: src/app/settings/ViewsSection.tsx
 msgid "导航条样式"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "导航栏"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "导航栏标题"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "导航栏标题 24，大标题加粗"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "导航栏标题居中"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "导航栏标题居中，56 高"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "导航栏标题左对齐，底栏平铺并延伸到手势区"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
@@ -2866,6 +3177,10 @@ msgstr ""
 msgid "尺寸、描边与颜色"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "尺寸、间距、圆角"
+msgstr ""
+
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "尺寸与圆角写在 className；减少动态时静止。数据到达时页面不跳动。"
 msgstr ""
@@ -2893,6 +3208,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "居中加操作卡片"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "屏幕宽度 · 从左边缘向右"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
@@ -3011,6 +3330,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "左侧按钮"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "左侧栏：服务器、收藏、下载、统计"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
@@ -3192,6 +3515,7 @@ msgstr ""
 msgid "市场"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "布局"
@@ -3238,6 +3562,7 @@ msgstr ""
 msgid "平台与风格"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "平台分工"
@@ -3250,6 +3575,10 @@ msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "平均延迟"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "平铺"
 msgstr ""
 
 #: src/app/design/foundations/ElevationChapter.tsx
@@ -3276,6 +3605,35 @@ msgstr ""
 msgid "应用图标"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+#: src/app/design/android/StylesChapter.tsx
+msgid "底栏"
+msgstr ""
+
+#: src/app/design/catalog.tsx
+msgid "底栏、页面栈、侧栏与返回"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "底栏三个目的地，其余页面压栈打开；左右两个侧栏不是浮层，返回手势与系统一致。"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "底栏浮在内容上，选中项是胶囊"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "底栏的选中"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "底栏选中项上方一条线"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "底栏选中项下方一个圆点"
+msgstr ""
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "底色"
 msgstr ""
@@ -3296,6 +3654,7 @@ msgstr ""
 msgid "底部圆点"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
@@ -3314,6 +3673,7 @@ msgstr ""
 msgid "开与关"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/foundations/SpaceChapter.tsx
 msgid "开关"
@@ -3360,12 +3720,17 @@ msgstr ""
 msgid "弹窗是附着在窗口上的 sheet"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "弹窗标题"
 msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "弹窗的四档宽度与页脚"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "弹窗的实现"
 msgstr ""
 
 #: src/app/design/patterns/OverlayChapter.tsx
@@ -3391,6 +3756,10 @@ msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "当前值写在旁边的文字里。"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "当前值只打勾，不填充"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
@@ -3602,6 +3971,10 @@ msgstr ""
 msgid "手动添加模型 ID"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
+msgid "手势与触觉"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "手机"
@@ -3677,6 +4050,7 @@ msgstr ""
 msgid "折叠"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "报告一次操作的结果"
 msgstr ""
@@ -3687,6 +4061,10 @@ msgstr ""
 
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "抬起"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "抬起的表面"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
@@ -3730,8 +4108,21 @@ msgstr ""
 msgid "指针能做的，键盘都能做。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/StatesChapter.tsx
 msgid "按下"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "按下时的不透明度"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "按下是表面高亮，没有 ripple"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "按下降低不透明度，没有 ripple"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -3750,6 +4141,7 @@ msgstr ""
 msgid "按视图的 when 条件"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/mac/ComponentChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "按钮"
@@ -3757,6 +4149,14 @@ msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "按钮，打开搜索浮层"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "按钮、开关、复选、输入与滑块用官方 Miuix 组件；分组、导航与面板用共享组件。"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "按钮、搜索框"
 msgstr ""
 
 #: src/app/design/foundations/IconChapter.tsx
@@ -3781,6 +4181,10 @@ msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "按钮按下时缩到 0.97"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "按钮的实现"
 msgstr ""
 
 #: src/app/settings/AvatarStylePicker.tsx
@@ -3832,9 +4236,14 @@ msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "控件"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "控件圆角 4，分组 8"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -3851,6 +4260,10 @@ msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "措辞"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "描边"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -4102,6 +4515,7 @@ msgstr ""
 msgid "改源：index.css 或 packages/contracts"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "数值"
@@ -4121,6 +4535,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "数字键 1–9，卡片获得焦点时显示；Esc 拒绝"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "整个应用一个队列"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -4178,6 +4596,8 @@ msgstr ""
 msgid "文字缩放"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/PlatformChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -4229,6 +4649,10 @@ msgctxt "workbench-sidebar-new-action"
 msgid "新会话"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "新会话、任务、设置三个目的地，只有图标"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "新会话在这里启动。"
 msgstr ""
@@ -4245,6 +4669,7 @@ msgstr ""
 msgid "新会话默认"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "新增"
 msgstr ""
@@ -4535,6 +4960,10 @@ msgstr ""
 msgid "时长"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "时长与弹簧"
+msgstr ""
+
 #: src/app/design/overview/SystemChapter.tsx
 msgid "时长与曲线的档位"
 msgstr ""
@@ -4562,6 +4991,10 @@ msgstr ""
 #: src/app/design/patterns/ListsChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "昨天"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "是"
 msgstr ""
 
 #: src/app/design/components/OverlaysChapter.tsx
@@ -4601,6 +5034,7 @@ msgstr ""
 msgid "暮色"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "曲线"
 msgstr ""
@@ -4647,6 +5081,10 @@ msgstr ""
 
 #: src/app/design/overview/Opening.tsx
 msgid "替换了一处手写数值，其余调用点保持原样。"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "有提交和取消的任务"
 msgstr ""
 
 #. placeholder {0}: formatTime(code.expiresAt)
@@ -4776,6 +5214,10 @@ msgstr ""
 msgid "机器人"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "权限、文件选择与分享"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "来源"
@@ -4808,6 +5250,10 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "查看项目、会话和模型"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "标为新增的组件还没有 Android 实现，迁移时先建组件，再改调用点。"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
@@ -4885,6 +5331,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "标题与菜单"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "标题与说明是 GroupTitle、GroupFootnote"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -5011,6 +5461,7 @@ msgstr ""
 msgid "检测时间"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
@@ -5048,6 +5499,10 @@ msgctxt "design-system-layer"
 msgid "模式"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "横向滑动只留给侧栏和返回，列表行不做左滑操作"
+msgstr ""
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "横轴为时间，纵轴为进度。Mac 使用 snappy 与 smooth 弹簧，iOS 使用弹簧，感知时长与此一致。"
 msgstr ""
@@ -5056,10 +5511,23 @@ msgstr ""
 msgid "次/分"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "次要"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "次要按钮"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "次要按钮按外观变体画成浅底或着色文字"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "次要按钮是浅色填充，危险操作用 error 角色"
 msgstr ""
 
 #: src/app/design/overview/Opening.tsx
@@ -5082,6 +5550,8 @@ msgstr ""
 msgid "正在读取服务器状态"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -5090,6 +5560,10 @@ msgstr ""
 
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "正文、代码、错误原因"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "正文密度与 Material 3 相同"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -5132,16 +5606,36 @@ msgstr ""
 msgid "每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
+msgid "每格用该风格的字号排出；取值在各风格间相同的行颜色变淡。"
+msgstr ""
+
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "每种组件每端一个实现"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "每种组件每端只有一个实现。Android 的组件在 ui/design，业务代码只经它们画界面，不直接调用 Material 控件。"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "每种组件每端只有一个实现。Mac 的组件在 Theme 目录，业务代码只经它们画界面。"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
+msgid "每种风格从自己的字阶映射到同一组角色；主题可以按角色覆盖。单位 sp。"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "每类组件的形态"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "比例"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "毫秒；弹簧为阻尼比与刚度"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -5210,6 +5704,7 @@ msgstr ""
 msgid "浅底标签"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
 #: src/app/design/overview/Opening.tsx
@@ -5217,6 +5712,10 @@ msgstr ""
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "浅色"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "浅色填充"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -5244,10 +5743,16 @@ msgstr ""
 msgid "浏览组件"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "浮动"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "浮动底栏的侧边留白"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -5265,6 +5770,7 @@ msgstr ""
 msgid "浮层、页面"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "浮层与反馈"
 msgstr ""
@@ -5280,6 +5786,10 @@ msgstr ""
 #: src/app/design/catalog.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "浮层的选用"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "浮层表面"
 msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
@@ -5302,6 +5812,7 @@ msgstr ""
 msgid "消息之外新增的中文字面量"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
 #: src/app/design/overview/Opening.tsx
@@ -5309,6 +5820,10 @@ msgstr ""
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "深色"
+msgstr ""
+
+#: src/app/design/android/PhoneMiniature.tsx
+msgid "深色模式"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -5362,6 +5877,10 @@ msgstr ""
 msgid "源码已切到最新发布，当前 Server 尚未使用该提交；请完成构建并重启。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "滑块轨道"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 msgid "满铺单层"
 msgstr ""
@@ -5372,6 +5891,14 @@ msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "点击下方按钮选择要启用的技能与工具"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "点击区与控件高"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "点击区至少 48"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -5433,6 +5960,10 @@ msgstr ""
 msgid "状态码分布"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "独立的胶囊"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 msgid "独立窗口"
 msgstr ""
@@ -5458,6 +5989,10 @@ msgstr ""
 msgid "生成与检查"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "生成到 Android"
+msgstr ""
+
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "生成到 Mac"
 msgstr ""
@@ -5475,8 +6010,16 @@ msgstr ""
 msgid "用"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "用 Compose 画出的 iOS 外观；iPhone 原生端与它取同样的值。"
+msgstr ""
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "用户元信息"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "用户在 Android 上已有的预期：返回手势、长按、Snackbar 和系统界面，照系统的做。其余取共用的语义。"
 msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
@@ -5485,6 +6028,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "用户消息"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "用户的文字大小与系统字体倍率相乘，终端固定为 1"
 msgstr ""
 
 #: src/app/settings/channels/CardSettings.tsx
@@ -5511,6 +6058,7 @@ msgstr ""
 msgid "画布摘要"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/foundations/TypeChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
@@ -5606,6 +6154,10 @@ msgstr ""
 msgid "直接加入"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "相连的按钮"
+msgstr ""
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "省略"
 msgstr ""
@@ -5616,6 +6168,18 @@ msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "看板页"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "着色文字"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "短"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "短暂反馈"
 msgstr ""
 
 #: src/app/settings/ThemeCanvas.tsx
@@ -5641,6 +6205,11 @@ msgstr ""
 msgid "确认"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "确认、反馈与空状态"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "确认一次不可逆的操作"
 msgstr ""
@@ -5660,6 +6229,14 @@ msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "确认按钮写出结果"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "确认框"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "确认框宽"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -5698,6 +6275,10 @@ msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "离开时"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "离开页面"
 msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
@@ -5773,6 +6354,14 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "空闲后停止 CLI"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "空间弹簧 · 刚度"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "空间弹簧 · 阻尼"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
@@ -5873,12 +6462,24 @@ msgctxt "settings-model-filter"
 msgid "筛选"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
+msgid "筛选、菜单、开关三种，同一尺寸"
+msgstr ""
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "筛选模型"
 msgstr ""
 
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "筛选的选项固定且少，用分段控件；更多条件收进图标按钮的弹出层。"
+msgstr ""
+
+#: src/app/design/android/PhoneMiniature.tsx
+msgid "简体中文"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "简单的操作面板把取消单独放在下方"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -5922,6 +6523,10 @@ msgstr ""
 msgid "系统控件"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "系统界面"
+msgstr ""
+
 #: src/app/design/mac/notes.ts
 msgid "系统组件"
 msgstr ""
@@ -5936,6 +6541,14 @@ msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "系统负载"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "系统返回、预测式返回和右滑返回走同一个分发"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "系统返回与预测式返回"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
@@ -5998,6 +6611,7 @@ msgstr ""
 msgid "组件"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "组件对照"
@@ -6009,6 +6623,10 @@ msgstr ""
 
 #: src/app/design/mac/notes.ts
 msgid "组件来源"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "组件的种类与状态"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -6104,6 +6722,10 @@ msgstr ""
 msgid "统计"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "统计、下载、Git、文件、终端压栈打开，隐藏底栏"
+msgstr ""
+
 #: src/app/design/mac/WindowChapter.tsx
 msgid "统计、扩展概览、并行尝试"
 msgstr ""
@@ -6195,6 +6817,7 @@ msgstr ""
 msgid "背景"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/notes.ts
 msgid "胶囊"
@@ -6244,6 +6867,10 @@ msgstr ""
 msgid "自绘浮层"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "色块"
+msgstr ""
+
 #: src/app/settings/ThemeCanvas.tsx
 msgid "苔藓"
 msgstr ""
@@ -6260,6 +6887,8 @@ msgstr ""
 msgid "获得键盘焦点时同样显示"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/foundations/ElevationChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/notes.ts
@@ -6267,6 +6896,10 @@ msgstr ""
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "菜单"
+msgstr ""
+
+#: src/app/design/catalog.tsx
+msgid "菜单、底部面板、确认框与 Snackbar"
 msgstr ""
 
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -6287,6 +6920,10 @@ msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "菜单与弹出层"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "菜单与面板最高为屏高的 70%，超出时在外壳里滚动"
 msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
@@ -6312,6 +6949,18 @@ msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "行为跟 macOS 的人机界面指南，外观跟风格配方；桌面的数值 Mac 与 Web 相同，单位是 pt。"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "行为跟 Material 3 与 Android 系统，外观跟风格配方；数值以 material3 风格为准，其余风格只改配方里写到的字段。"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "行之间有分隔线"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "行之间的分隔线"
 msgstr ""
 
 #: src/app/design/foundations/IconChapter.tsx
@@ -6360,6 +7009,10 @@ msgstr ""
 msgid "表单是细线分隔的行，字段的描边画在纸上"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "表单有未保存的改动时，任何一种返回都先确认"
+msgstr ""
+
 #: src/app/design/components/FeedbackChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -6370,10 +7023,16 @@ msgstr ""
 msgid "表面与控件"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "表面高亮"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "见声明式页面"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "规则"
 msgstr ""
@@ -6394,6 +7053,7 @@ msgstr ""
 msgid "角色"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "角色与取值"
 msgstr ""
@@ -6408,6 +7068,14 @@ msgstr ""
 
 #: src/app/design/components/ActionsChapter.tsx
 msgid "触发一次动作的控件。名称由文字或 Tip 给出，状态通过同一组参数表达。"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "触摸屏上改用菜单或底部面板"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "触摸屏上没有悬停：名称交给无障碍，操作用长按菜单，选值用底部面板，确认用弹窗。"
 msgstr ""
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -6438,6 +7106,8 @@ msgstr ""
 msgid "设备管理"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/mac/notes.ts
@@ -6471,6 +7141,10 @@ msgstr ""
 msgid "设置是独立窗口，⌘, 打开"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
+msgid "设置用紧凑的导航栏标题，大标题只用于滚动时会收起的页面"
+msgstr ""
+
 #: src/app/design/mac/WindowChapter.tsx
 msgid "设置窗口"
 msgstr ""
@@ -6493,6 +7167,10 @@ msgstr ""
 
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "设置表单用系统控件"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "设置里整行可点"
 msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -6570,6 +7248,7 @@ msgstr ""
 msgid "语气与形状"
 msgstr ""
 
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/settings/PreferencesSections.tsx
 msgid "语言"
 msgstr ""
@@ -6652,6 +7331,10 @@ msgstr ""
 msgid "谁绘制"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
+msgid "调用处只写角色，不写 .sp"
+msgstr ""
+
 #: src/app/design/mac/TypeChapter.tsx
 msgid "调用处只写角色，不写字号。角色的取值随风格变：界面、次要、侧栏三档来自配方，正文、注脚、标题与代码各端相同。"
 msgstr ""
@@ -6676,6 +7359,14 @@ msgstr ""
 msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+msgid "超大字体时确认框的操作改为竖排"
+msgstr ""
+
+#: src/app/design/android/TypeChapter.tsx
+msgid "超时常量"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
@@ -6694,6 +7385,10 @@ msgstr ""
 msgid "超过 7 天未使用 · {0}"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "超过这里松手即返回"
+msgstr ""
+
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "距边缘 ≤"
 msgstr ""
@@ -6702,6 +7397,11 @@ msgstr ""
 msgid "跟 Web"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "跟共用的规范"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "跟平台"
 msgstr ""
@@ -6710,10 +7410,19 @@ msgstr ""
 msgid "跟平台，还是跟 Web"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "跟平台，还是跟共用的规范"
+msgstr ""
+
 #: src/app/design/catalog.tsx
 msgid "跟平台与跟 Web"
 msgstr ""
 
+#: src/app/design/catalog.tsx
+msgid "跟平台与跟共用的规范"
+msgstr ""
+
+#: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
 #: src/app/design/overview/Opening.tsx
@@ -6737,6 +7446,18 @@ msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "轨道、悬停、选中"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "轨道加滑块"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "转场结束后再组合正文并淡入"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "转录与附件一起删除，无法恢复。"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -6770,6 +7491,7 @@ msgstr ""
 msgid "输入一条会话消息"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "输入与选择"
 msgstr ""
@@ -6808,6 +7530,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "输入框列"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "输入框卡片"
 msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
@@ -6886,6 +7612,10 @@ msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "运行时长"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "返回"
 msgstr ""
 
 #. placeholder {0}: parent.label
@@ -6971,12 +7701,20 @@ msgstr ""
 msgid "这种风格还没有说明，数值与配方取自 interface-styles.ts。"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+msgid "这种风格还没有说明，数值读自 mobile-styles.ts。"
+msgstr ""
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "进入"
 msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "进入减速，退出加速，原位变化用标准曲线；退出时长约为进入的 70%。动画优先作用于 opacity 与 transform，由合成器执行。"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "进入页面"
 msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
@@ -7078,10 +7816,19 @@ msgstr ""
 msgid "选中块在选项之间滑动。"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "选中项在行尾打勾"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "选中项在行尾打勾，分组标题用次级墨色"
+msgstr ""
+
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "选什么"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "选哪一种"
@@ -7105,6 +7852,7 @@ msgstr ""
 msgid "选择控件的选用"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "选择控件的选用规则"
 msgstr ""
@@ -7121,6 +7869,10 @@ msgstr ""
 
 #: src/app/design/components/InputsChapter.tsx
 msgid "选项列表"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "选项多或要读说明时用；就在触发点旁的两三个选项用菜单。"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -7156,8 +7908,17 @@ msgstr ""
 msgid "速度"
 msgstr ""
 
+#. placeholder {0}: ANDROID.back.velocity
+#: src/app/design/android/PagesChapter.tsx
+msgid "速度超过 {0} dp/s 时返回"
+msgstr ""
+
 #: src/app/design/foundations/ElevationChapter.tsx
 msgid "遮罩"
+msgstr ""
+
+#: src/app/design/android/OverlayChapter.tsx
+msgid "遮罩挂在窗口层，盖住顶栏和底栏"
 msgstr ""
 
 #: src/app/design/patterns/parts.tsx
@@ -7178,8 +7939,13 @@ msgstr ""
 msgid "配对码"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "配方"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "配方写在 ThemePresets.kt，这张表按它誊写。组件只读这些字段，不判断风格名。"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -7207,6 +7973,7 @@ msgstr ""
 msgid "重启会话后生效"
 msgstr ""
 
+#: src/app/design/android/TypeChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/overview/Opening.tsx
@@ -7319,6 +8086,10 @@ msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "长内容"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "长按打开操作菜单"
 msgstr ""
 
 #: src/app/design/components/OverlaysChapter.tsx
@@ -7434,6 +8205,10 @@ msgstr ""
 msgid "需兼容 OpenAI Responses API，地址要带 /v1"
 msgstr ""
 
+#: src/app/design/android/OverlayChapter.tsx
+msgid "需要"
+msgstr ""
+
 #. placeholder {0}: cliVersion.minimum ?? ''
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "需要 {0} 或更高"
@@ -7517,6 +8292,7 @@ msgstr ""
 msgid "页脚"
 msgstr ""
 
+#: src/app/design/android/ComponentChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/engineering/ArchitectureChapter.tsx
 #: src/app/design/mac/ComponentChapter.tsx
@@ -7534,12 +8310,21 @@ msgstr ""
 msgid "页面与地址"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+#: src/app/design/catalog.tsx
+msgid "页面与导航"
+msgstr ""
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "页面与视图之间的转场"
 msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "页面与面板的一级视图"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "页面主体放进页面骨架"
 msgstr ""
 
 #: src/app/design/patterns/PagesChapter.tsx
@@ -7566,6 +8351,10 @@ msgstr ""
 msgid "页面的地址不含会话；刷新后，下层的会话由上次的选择恢复。Back 与 Escape 关闭页面。"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
+msgid "页面的结构"
+msgstr ""
+
 #: src/app/design/patterns/NavigationChapter.tsx
 msgid "页面盖在会话上，浮层盖在最上面；关闭上层即回到下层。"
 msgstr ""
@@ -7578,16 +8367,29 @@ msgstr ""
 msgid "页面级搜索用工具栏的 .searchable"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
+msgid "页面边距"
+msgstr ""
+
 #: src/app/design/components/InputsChapter.tsx
 msgid "页面顶部的主搜索用 36 像素高。"
 msgstr ""
 
+#: src/app/design/android/PagesChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
 msgid "页面骨架"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "页面骨架、设置行、弹窗结构、确认与通知"
+msgstr ""
+
+#: src/app/design/android/PagesChapter.tsx
+msgid "顶栏"
+msgstr ""
+
+#: src/app/design/android/ComponentChapter.tsx
+msgid "顶栏、单一滚动区、转场后淡入的正文"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
@@ -7625,6 +8427,11 @@ msgstr ""
 msgid "项目树"
 msgstr ""
 
+#. placeholder {0}: ANDROID.back.previewScale
+#: src/app/design/android/PagesChapter.tsx
+msgid "预测式返回时页面缩到 {0} 并带圆角"
+msgstr ""
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "预览"
 msgstr ""
@@ -7651,6 +8458,10 @@ msgstr ""
 msgid "颜色支持 #rrggbb 与 #rrggbbaa"
 msgstr ""
 
+#: src/app/design/android/PlatformChapter.tsx
+msgid "颜色角色"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "颜色角色、--riffet-* 与元素规则"
 msgstr ""
@@ -7659,14 +8470,23 @@ msgstr ""
 msgid "颜色角色与主题取值；间距、字号、圆角、动效；风格配方"
 msgstr ""
 
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/overview/SystemChapter.tsx
 msgid "风格"
 msgstr ""
 
-#: src/app/design/mac/MacCover.tsx
+#: src/app/design/DesignPage.tsx
+msgid "风格各有一节，尺寸与动效读自同一份定义。"
+msgstr ""
+
+#: src/app/design/DesignPage.tsx
 msgid "风格各有一节，数值与配方读自同一份定义。"
+msgstr ""
+
+#: src/app/design/android/PlatformChapter.tsx
+msgid "风格是配方"
 msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -7680,6 +8500,14 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "飞书里的应用不会被删除"
+msgstr ""
+
+#: src/app/design/android/StylesChapter.tsx
+msgid "首页的模式切换"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "首页的模式切换是下划线页签"
 msgstr ""
 
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -7719,6 +8547,8 @@ msgstr ""
 msgid "墨色实心，每个区域最多一个"
 msgstr ""
 
+#: src/app/design/android/notes.ts
+#: src/app/design/android/StylesChapter.tsx
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
@@ -7761,4 +8591,8 @@ msgstr ""
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "默认模型"
+msgstr ""
+
+#: src/app/design/android/notes.ts
+msgid "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
 msgstr ""

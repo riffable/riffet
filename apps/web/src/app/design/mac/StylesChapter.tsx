@@ -1,8 +1,8 @@
 import { useLingui } from '@lingui/react/macro';
 import type { DesktopStyle, DesktopStyleLength } from '@contracts';
 import { Chapter, Plate, Token } from '../specimen';
-import { CompareTable, type CompareRow } from './CompareTable';
-import { useFamilyNotes, useGroupLabels, useStyleNote, type FamilyGroup } from './notes';
+import { CompareTable, type CompareRow } from '../compare';
+import { useFamilyNotes, useGroupLabels, useMacColumns, useStyleNote, type FamilyGroup } from './notes';
 import { StyleMiniature } from './StyleMiniature';
 import { FAMILIES, points, STYLES } from './values';
 
@@ -125,13 +125,14 @@ export function StylesChapter() {
   const { t } = useLingui();
   const tokens = useTokenGroups();
   const recipes = useRecipeGroups();
+  const columns = useMacColumns();
   return (
     <Chapter title={t`风格`} lede={t`${STYLES.length} 种界面风格共用一套组件：配方决定每类组件取哪种形态，数值决定它的尺寸。颜色由主题决定，与风格无关。`} tone="canvas" source="packages/contracts/src/interface-styles.ts">
       <Plate number={1} title={t`数值`} note={t`写成 Web 变量名的数值在生成时从样式表读出，所以 Riffet 风格跟着 Web 变。各风格取值相同的行颜色变淡。`}>
-        <CompareTable styles={STYLES} groups={tokens} />
+        <CompareTable columns={columns} groups={tokens} />
       </Plate>
       <Plate number={2} title={t`配方`} note={t`每个形态在 Mac 上只有一份实现。新风格只是重新组合已有形态时，在 contracts 里加一条即可，不写界面代码。`}>
-        <CompareTable styles={STYLES} groups={recipes} />
+        <CompareTable columns={columns} groups={recipes} />
       </Plate>
       {STYLES.map((style, index) => <StylePlate key={style.id} style={style} number={index + 3} />)}
     </Chapter>
