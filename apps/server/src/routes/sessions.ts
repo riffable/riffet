@@ -39,16 +39,10 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
   const {store,workItems,auth,settings,terminal,sessionLock,nativeBackends,dispatch,streams,sessionCommands,renameNative,readNativeInput,nativeRuns,contextReferences}=deps;
   const LIST_CHANGE_DEBOUNCE_MS=250;
   /**
-   * The 任务 a conversation opened from a composer belongs to (docs/TASK-BOARD.md §4.3): the one the
-   * request names, or with `workItemCards` on a new one keyed by the conversation, so a retry finds it.
-   * Called inside the creation's transaction, so a refused creation leaves no task behind.
+   * The 任务 a new conversation starts (docs/TASK-BOARD.md §4.3): only one the request names. A conversation
+   * opened from a composer is not a task by itself. Called inside the creation's transaction.
    */
-  const composerWorkItem=(clientSessionId:string,requested:unknown,text:string,backendId:string|undefined,projectId:string|undefined)=>{
-    const named=requestedWorkItemId(requested);
-    if(named)return workItems.get(named).id;
-    if(settings.getSettings().workItemCards===false)return undefined;
-    return workItems.ensureForComposerSession(clientSessionId,{text,...(backendId?{backendId}:{}),...(projectId?{projectId}:{})}).id;
-  };
+  const startedWorkItem=(requested:unknown)=>{const named=requestedWorkItemId(requested);return named?workItems.get(named).id:undefined;};
   app.get('/api/sessions',async(request,reply)=>revisionedList(request,reply,store.listRevision,()=>visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id))));
   app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;workItemId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
     const create=async()=>{
@@ -74,7 +68,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         if(capabilities.supportsModeSelection?!capabilities.modes.some(item=>item.id===sessionInput.mode):sessionInput.mode!=='agent')throw new AppError('INVALID_MODE','The saved task mode is no longer available');
         if(sessionInput.approval!==undefined&&(!capabilities.supportsPermissionSelection||!capabilities.permissions.some(item=>item.id===sessionInput.approval)))throw new AppError('INVALID_APPROVAL_MODE','The saved task permission is no longer available');
       },(project,sessionInput,message)=>contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
-        const workItemId=composerWorkItem(clientSessionId,body.workItemId,message.text,sessionInput.backendId,undefined);
+        const workItemId=startedWorkItem(body.workItemId);
         const accepted=store.createTaskWorkspaceSubmission(project,clientSessionId,sessionInput,commandId,message,snapshots);
         if(workItemId)workItems.attachSession(clientSessionId,workItemId);return accepted;}));
       requireSessionVisibleToClient(request.headers,result.session,id=>store.getProject(id));
@@ -102,7 +96,7 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
       const result=contextReferences.commit(clientSessionId,prepared,snapshots=>{contextReferences.validateSources(clientSessionId,message,request.headers);
         const project=store.getProject(input.projectId);
         // Quick chats and the 助理's own conversations are not work on the board.
-        const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:composerWorkItem(clientSessionId,body.workItemId,message.text,input.backendId,project.system?undefined:project.id);
+        const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:startedWorkItem(body.workItemId);
         const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);
         if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));return accepted;});
       reply.code(202);dispatch.kick();return result;

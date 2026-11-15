@@ -259,7 +259,7 @@ export interface NativeSessionCreateInput {
   toolGroups?: ToolGroupId[];
   /** MCP servers and skills switched off for this conversation, `mcp:<name>` / `skill:<name>`; absent or empty means all on. */
   extensionsOff?: string[];
-  /** The 任务 this conversation starts; absent lets the server's `workItemCards` setting decide. */
+  /** The 任务 this conversation starts; absent, it belongs to none. */
   workItemId?: string;
   initialMessage: NativeMessageInput;
 }

@@ -39,7 +39,8 @@ export interface WorkItem {
    */
   titleSessionId?: string;
   /**
-   * How it came to be. `composer`: with the first message of a conversation (setting `workItemCards`);
+   * How it came to be. `composer`: with the first message of a conversation, before only the board,
+   * the 助理 and 转为任务 made tasks; no longer created, and those left without activity were removed;
    * `assistant`: planned by the 助理, waiting in its conversation for 开始 while still 待办.
    */
   source: 'board' | 'composer' | 'session' | 'assistant';

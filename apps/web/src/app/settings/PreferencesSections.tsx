@@ -304,7 +304,7 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
   const [busy, setBusy] = useState(false);
   const behavior = readEnterKeyBehavior(settings.composerEnterBehavior);
   const runningBehavior = readComposerRunningBehavior(settings.composerRunningBehavior);
-  const persist = async (patch: Pick<AppSettings, 'composerEnterBehavior' | 'composerRunningBehavior' | 'composerSendLater' | 'workItemCards'>) => {
+  const persist = async (patch: Pick<AppSettings, 'composerEnterBehavior' | 'composerRunningBehavior' | 'composerSendLater'>) => {
     if (busy) return;
     setBusy(true);
     try { onSaved(await api.updateSettings(patch), patch); }
@@ -324,10 +324,6 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
     </Row>
     <Row title={t`展示稍后发送按钮`}>
       <Switch aria-label={t`展示稍后发送按钮`} checked={settings.composerSendLater === true} disabled={busy} onCheckedChange={(value) => void persist({ composerSendLater: value })} />
-    </Row>
-    {/* docs/TASK-BOARD.md §4.3: the server creates the 任务, so the choice holds for every client. */}
-    <Row title={t`新会话自动建任务`} description={t`保存在服务器，所有设备生效。`}>
-      <Switch aria-label={t`新会话自动建任务`} checked={settings.workItemCards !== false} disabled={busy} onCheckedChange={(value) => void persist({ workItemCards: value })} />
     </Row>
   </Group>;
 }

@@ -420,20 +420,14 @@ export class WorkItemService {
   }
 
   /**
-   * The task opened with the first message of a composer conversation: the one already made for
-   * `sessionId` (a retried creation), or a new one in `doing`. The caller creates the conversation in
-   * the same transaction, so a failed creation leaves no item behind.
+   * Composer conversations no longer open a task by themselves (docs/TASK-BOARD.md §4.3). The ones they
+   * opened before go, unless the owner or the agent did something with them: a comment, a question, an
+   * answer, a submission, a rework, or a sub-task. Their conversations stay as they are, without a task.
    */
-  ensureForComposerSession(sessionId: string, input: { text: string; backendId?: string; projectId?: string }): WorkItem {
-    return this.write(() => {
-      const existing = this.items.byOrigin(sessionId);
-      if (existing) return existing;
-      const first = input.text.split('\n').map(line => line.trim()).find(Boolean) ?? '';
-      return this.create({
-        title: first.slice(0, 80).trim() || 'New task', status: 'doing',
-        ...(input.backendId ? { assignee: { kind: 'agent', backendId: input.backendId as NativeBackendId } } : {}),
-        ...(input.projectId ? { projectId: input.projectId } : {}),
-      }, { source: 'composer', titleSessionId: sessionId, originSessionId: sessionId });
-    });
+  dropComposerItems(): void {
+    const kept = new Set(['comment', 'question', 'answer', 'submit', 'rework']);
+    const stale = this.items.all().filter(item => item.source === 'composer'
+      && !this.items.hasChildren(item.id) && !this.items.events(item.id).some(event => kept.has(event.kind)));
+    for (const item of stale) this.delete(item.id);
   }
 }

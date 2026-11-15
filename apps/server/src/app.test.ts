@@ -1951,8 +1951,8 @@ describe('Riffet MCP tools', () => {
     expect(statSync(file).mode & 0o777).toBe(0o600);
     const token = await credentialOf(file);
     const rpc = (bearer: string, method: string, params?: unknown) => app.inject({ method: 'POST', url: '/api/riffet-mcp', headers: { host: '127.0.0.1:4317', authorization: `Bearer ${bearer}` }, payload: { method, params } });
-    // A conversation opened from the composer belongs to a task (setting `workItemCards`, on unless turned off), so it reports on it too.
-    expect(((await rpc(token, 'tools/list')).json() as { result: { tools: Array<{ name: string }> } }).result.tools.map(tool => tool.name)).toEqual(['read_context', 'schedule_wakeup', 'cancel_wakeup', 'list_wakeups', 'schedule_task', 'notify_user', 'list_devices', 'task_submit', 'task_ask']);
+    // A conversation opened from the composer belongs to no task, so it has no task tools.
+    expect(((await rpc(token, 'tools/list')).json() as { result: { tools: Array<{ name: string }> } }).result.tools.map(tool => tool.name)).toEqual(['read_context', 'schedule_wakeup', 'cancel_wakeup', 'list_wakeups', 'schedule_task', 'notify_user', 'list_devices']);
     // No device was given, so none is listed.
     expect(((await rpc(token, 'tools/call', { name: 'list_devices', arguments: {} })).json() as { result: { structuredContent: { devices: unknown[] } } }).result.structuredContent.devices).toEqual([]);
     // The credential is not a device token, and a forged one is refused.

@@ -30,33 +30,35 @@ async function boot() {
 }
 
 describe('work items', () => {
-  it('creates one task with a composer conversation, even when the request is retried', async () => {
-    const { store, call, create, items, settings, project } = await boot();
+  it('starts only the task a new conversation names; a composer conversation opens none', async () => {
+    const { store, call, create, items, workItems } = await boot();
     const first = await create('s1');
     expect(first.statusCode, first.body).toBe(202);
-    expect((await create('s1')).statusCode).toBe(202);
-    const { items: list } = await items();
-    expect(list).toHaveLength(1);
-    expect(list[0]).toMatchObject({ number: 1, title: 'Fix the login', status: 'doing', source: 'composer', titleSessionId: 's1', projectId: project.id, assignee: { kind: 'agent', backendId: 'cursor' } });
-    expect(store.getSession('s1').workItemId).toBe(list[0]!.id);
+    expect((await items()).items).toHaveLength(0);
+    expect(store.getSession('s1').workItemId).toBeUndefined();
 
-    settings.setSettings({ workItemCards: false });
-    expect((await create('s2')).statusCode).toBe(202);
-    expect((await items()).items).toHaveLength(1);
-    expect(store.getSession('s2').workItemId).toBeUndefined();
+    // Tasks composer conversations opened before go at startup, unless something happened on them.
+    const idle = workItems.create({ title: 'Idle', status: 'doing' }, { source: 'composer', originSessionId: 's1' });
+    workItems.attachSession('s1', idle.id);
+    const discussed = workItems.create({ title: 'Discussed', status: 'doing' }, { source: 'composer' });
+    workItems.addComment(discussed.id, 'keep this');
+    workItems.dropComposerItems();
+    expect((await items()).items.map(entry => entry.id)).toEqual([discussed.id]);
+    expect(store.getSession('s1').workItemId).toBeUndefined();
+    workItems.delete(discussed.id);
 
-    // 开始 on the board: a conversation named for an item joins it whatever the setting, and moves it to doing.
+    // 开始 on the board: a conversation named for an item joins it and moves it to doing.
     const todo = (await call('POST', '/api/work-items', { id: 'w-todo', title: 'Later', assignee: { kind: 'agent', backendId: 'cursor' } })).json() as WorkItem;
     expect((await create('s3', 'Later', 'c-s3', { workItemId: todo.id })).statusCode).toBe(202);
     expect(store.getSession('s3').workItemId).toBe(todo.id);
     expect((await items()).items.find(entry => entry.id === todo.id)?.status).toBe('doing');
-    expect((await items()).items).toHaveLength(2);
+    expect((await items()).items).toHaveLength(1);
 
     // A quick chat never belongs to a task.
     const chat = store.updateProject(store.createProject('/tmp/riffet-work-items-chat', 'Chat').id, { system: 'quick-chat' });
     const quick = store.createSession({ projectId: chat.id, kind: 'native', backendId: 'cursor', title: 'Chat' });
     expect((await call('POST', `/api/sessions/${quick.id}/work-item`, { workItemId: 'new' })).statusCode).toBe(409);
-    expect((await items()).items).toHaveLength(2);
+    expect((await items()).items).toHaveLength(1);
   });
 
   it('attaches a conversation, moving todo to doing with its events, and a fork inherits the task', async () => {
@@ -96,8 +98,8 @@ describe('work items', () => {
 
   it('takes a submission with evidence read from the conversation, and sends an answer once', async () => {
     const { store, call, create, projectDir, workItems, riffetMcp } = await boot();
-    expect((await create('s1', 'Fix the login')).statusCode).toBe(202);
-    const id = store.getSession('s1').workItemId!;
+    const id = ((await call('POST', '/api/work-items', { id: 'w-login', title: 'Fix the login', assignee: { kind: 'agent', backendId: 'cursor' } })).json() as WorkItem).id;
+    expect((await create('s1', 'Fix the login', 'c-s1', { workItemId: id })).statusCode).toBe(202);
     expect((await call('PATCH', `/api/work-items/${id}`, { criteria: ['Tests pass', '  Lint is clean '] })).json()).toMatchObject({ criteria: ['Tests pass', 'Lint is clean'] });
     expect(riffetMcp.tools(store.getSession('s1')).map(tool => tool.name)).toContain('task_submit');
 

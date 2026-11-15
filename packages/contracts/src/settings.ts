@@ -63,11 +63,6 @@ export interface AppSettings {
    */
   maxLiveAgents?: number;
   quickChat?: QuickChatSettings;
-  /**
-   * 新建任务时建卡片 (docs/TASK-BOARD.md §4.3): a conversation opened from a composer, on any client,
-   * also creates a work item it belongs to. Unset means on.
-   */
-  workItemCards?: boolean;
   assistant?: AssistantSettings;
 }
 /**

@@ -297,8 +297,8 @@ export class SettingsService {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('invalid settings');
       // Retired persisted keys must be removed before strict validation, including on startup.
       // `titleModel` became `auxiliaryModels.title`; the next save writes the new shape. `riffetTools` (per-client
-      // tool groups) gave way to the composer's per-conversation pick.
-      const {defaultBackend:_retiredBackend,riffetTools:_retiredTools,titleModel,...settings}=data as Record<string,unknown>;
+      // tool groups) gave way to the composer's per-conversation pick. `workItemCards`: a composer conversation no longer opens a task.
+      const {defaultBackend:_retiredBackend,riffetTools:_retiredTools,workItemCards:_retiredWorkItemCards,titleModel,...settings}=data as Record<string,unknown>;
       if(titleModel&&settings.auxiliaryModels===undefined)settings.auxiliaryModels={title:titleModel};
       return this.validateSettings(settings);
     } catch (error) {
@@ -332,7 +332,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'workItemCards', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -387,10 +387,6 @@ export class SettingsService {
     if (values.composerSendLater !== undefined) {
       if (typeof values.composerSendLater !== 'boolean') throw new AppError('INVALID_SETTINGS', 'composerSendLater must be a boolean');
       result.composerSendLater = values.composerSendLater;
-    }
-    if (values.workItemCards !== undefined) {
-      if (typeof values.workItemCards !== 'boolean') throw new AppError('INVALID_SETTINGS', 'workItemCards must be a boolean');
-      result.workItemCards = values.workItemCards;
     }
     for (const [key, max] of [['idleReclaimMinutes', 7 * 24 * 60], ['maxLiveAgents', 500]] as const) {
       const value = values[key];

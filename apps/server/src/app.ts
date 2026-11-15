@@ -397,6 +397,7 @@ export async function createApp(options: AppOptions = {}) {
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
   try{assistantProject(store,stateDir);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
   workItems.retitleBriefConversations();
+  workItems.dropComposerItems();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
     archive:sessionId=>patchSession(deps,sessionId,{archived:true}),
     log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
