@@ -264,7 +264,7 @@ riffet plugin install /tmp/mono-icons.tgz
 
 ## 8. 移动端界面风格
 
-以下为组件接入约定；具体默认值与主题覆盖规则见第 9 节。
+以下为组件接入约定；具体默认值与主题覆盖规则见第 9 节。Android 的页面结构、浮层、组件对照与无障碍以 [设计体系 · Android](design/system/android.md) 为准，本节与第 9 节保留各风格的画法、主题格式和验证记录。
 
 Android 的「设置 → 外观 → 界面风格」提供 material3（默认）、ios、expressive、miuix、fluent 五个内置风格。
 这里的 iOS 指 Compose 绘制的视觉风格，不是 Android 上运行 UIKit。各风格共用现有主题配色
@@ -567,7 +567,7 @@ Android 共享界面按可见组件的层级取圆角，并由界面风格约束
 
 普通列表、设置分组、抽屉边缘和阅读内容的分隔线使用 `hairline` 颜色及 `hairlineWidth`，默认 1dp；静态容器边框也使用此宽度，焦点状态使用 `focus` 颜色及 `focusWidth`，默认 2dp。按钮按压靠背景反馈，除焦点和明确的内容边界外不额外加框。图表数据线、进度和终端字形按数据可读性决定粗细，不套用容器分隔线宽度。
 
-三个根页面与下钻页面的标题栏共用 `barTitle`，默认 18sp、Medium；任务页标题不再额外加粗。会话标题使用 `headline`，正文与设置行使用 `body`，组名使用 `footnote` 和次级文字色，时间与辅助信息使用 `caption`。仅搜索命中、状态和选中项以颜色或局部字重强调，避免每一层标题都加重。
+三个根页面与下钻页面的标题栏共用 `barTitle`，取当前风格字阶的导航栏标题（material3 为 22sp、Medium，各风格见 [Android](design/system/android.md) §2.1）；任务页标题不再额外加粗。会话标题使用 `headline`，正文与设置行使用 `body`，组名使用 `footnote` 和次级文字色，时间与辅助信息使用 `caption`。仅搜索命中、状态和选中项以颜色或局部字重强调，避免每一层标题都加重。
 
 任务页的外侧留白跟随 `pageInset`，分组和行内留白跟随 `rowPadding`，小控件与相邻图标使用 `controlInset` 的派生值；不用独立的固定像素间距制造第二套节奏。主题可以覆盖这些角色，触控区域仍受 `controlHeight` 的最小值保护。
 

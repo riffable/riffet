@@ -11,7 +11,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 | 总览 | 原则、本节的分类 | 读者从这里进来 | 本文 |
 | 基础 | 颜色、文字、排版、间距与尺寸、圆角、层级、动效、图标、状态、无障碍、文案 | 只有取值和通用规则，没有部件 | [foundations.md](foundations.md)、[content.md](content.md) |
 | 组件 | 按用途分六组：操作、输入、导航、展示、反馈、浮层 | 一个可复用的部件，有变体、尺寸、状态 | [components/](components/) |
-| 模式 | 页面、导航、浮层的选用、选择、反馈与加载、确认与撤销、表单与设置、列表、搜索与筛选、键盘 | 几个组件怎么组合、怎么交互 | [patterns.md](patterns.md) |
+| 模式 | 页面、导航、浮层的选用、选择、反馈与加载、确认与撤销、表单与设置、列表、搜索与筛选、键盘 | 几个组件怎么组合、怎么交互 | [patterns.md](patterns.md)；手机上的页面类型见 [mobile.md](mobile.md) |
 | 界面 | 会话、新会话、侧边面板 | Riffet 自己的整页 | [surfaces.md](surfaces.md) |
 | 扩展与工程 | 插件界面、架构（生成与检查） | 给写插件、改体系的人 | [plugins.md](plugins.md)、[architecture.md](architecture.md) |
 
@@ -21,7 +21,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 
 另有两条轴，与分层正交：
 
-- **平台**：同一条规则在各端的写法。行为跟平台，数值跟同一份定义（§3）。设计规范页切到 macOS 时目录的分组不变，只换内容；各端的差异写在平台文档，现有 [macOS](macos.md)。
+- **平台**：同一条规则在各端的写法。行为跟平台，数值跟同一份定义（§3）。设计规范页切到 macOS 或 Android 时目录的分组不变，只换内容；各端的差异写在平台文档，现有 [macOS](macos.md) 和 [Android](android.md)。
 - **风格**：每个语义取什么值、组件画成什么形态。语义层不写数值，风格层不改交互。同一个组件在桌面 Riffet 风格下是 28pt 的透明图标按钮，在 iOS 上是系统按钮加 44pt 点击区，但两者的状态、键盘操作、无障碍名称和文案规则相同。
   - **桌面**（Mac、Web）：配方 `packages/contracts/src/interface-styles.ts`，`pnpm gen:styles` 生成 Mac 的 `StyleSpec`。Riffet 是主风格，规则见 [Riffet 风格](../riffet-style.md)；原生风格见 [macOS 原生](../macos-native.md)；线条风格见 `interface-styles/`。
   - **移动**（Android、iOS）：Android 有 material3、ios、expressive、miuix、fluent 五种风格，规则见 [主题契约](../../THEMES.md) §8–9。iOS 原生端用系统控件，结构与 Android 的 `IosPreset` 对齐，见 [iPhone 原生方案](../../IOS.md)。
@@ -72,7 +72,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 - 每端每种组件只有一个实现。业务代码不直接用系统或第三方控件画同一种东西；平台需要系统控件时，由组件内部去用。
 - 新组件先写规范，再三端（含 iOS）实现，最后迁移调用点。只建组件不迁移，新旧写法会长期并存。
 - 组件规范按 [模板](components/TEMPLATE.md) 的标题写，一组一个文件（`components/actions.md`、`inputs.md`、`navigation.md`、`display.md`、`feedback.md`、`overlays.md`），一个组件一节，与设计规范页的六章对应。
-- 每端有一页「设计规范」：原则、基础的取值和所有组件的所有状态，用真实组件画、读当前主题的计算值，换主题或深浅色时跟着变。它是独立页面，设置的「外观」组里只放入口。Web 在 `apps/web/src/app/design/`，目录按 §1 分组，一次显示一章，地址 `/design/<组>/<章>`；页头可切到 macOS 部分（`?platform=macos`），讲各风格与 Mac 的写法。章节登记在 `design/catalog.tsx`，代码目录与组同名。Mac 另有一个原生窗口，用来验收组件（[macOS](macos.md) §8）。新组件落地时在这一页加一节。
+- 每端有一页「设计规范」：原则、基础的取值和所有组件的所有状态，用真实组件画、读当前主题的计算值，换主题或深浅色时跟着变。它是独立页面，设置的「外观」组里只放入口。Web 在 `apps/web/src/app/design/`，目录按 §1 分组，一次显示一章，地址 `/design/<组>/<章>`；页头可切到 macOS 部分（`?platform=macos`）和 Android 部分（`?platform=android`），讲各风格与该端的写法。章节登记在 `design/catalog.tsx`，代码目录与组同名。Mac 另有一个原生窗口，用来验收组件（[macOS](macos.md) §8）。新组件落地时在这一页加一节。
 - 每章按印刷样张排：12 栏网格，图号与说明占前三栏；每条规则配一张图示（剖面、标注图、曲线、叠放），不逐条罗列。界面唯一的彩色是 agent 的颜色，只在封面套印。它用来对照规范和交付前自审，不是 UI 测试（仓库不加 UI 展示测试，见 [AGENTS.md](../../../AGENTS.md)）。
 - 页面只放名字和数值，规则的理由与交互细节留在本目录的文档里，两边不重复。
 
@@ -130,7 +130,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 | 0 | 本文、[组件模板](components/TEMPLATE.md) | 完成 |
 | 1 | [基础](foundations.md)：颜色、文字与排版、间距与尺寸、圆角、阴影、动效、图标、状态、无障碍；数值生成到四端 | 完成：规范已写，数值生成到四端，`check:design` 拦截手写值 |
 | 2 | [组件](components/)：六组组件的规范、四端实现、调用点迁移；各端的设计规范页 | Web：规范与设计规范页已写全，多选框、单选、滑块、骨架屏、搜索框、列表行、复制按钮已实现并迁移调用点；`Progress` 等出现第二处确定进度再抽，原生 `title=` 待换成 `Tip`，余下记在各组的「现状」。Mac、Android、iOS 待迁移 |
-| 3 | [模式](patterns.md)、[界面](surfaces.md)、[插件界面](plugins.md)、[架构](architecture.md) | Web 的规范已写全，页面骨架、弹窗四档宽度与页脚、手机上的菜单弹层、列表行与悬停操作、按钮的进行中状态、确认按钮的文案已迁移，其余按「现状」迁移。Mac 的映射与落地顺序在 [macOS](macos.md)，待迁移；移动端待对齐 |
+| 3 | [模式](patterns.md)、[界面](surfaces.md)、[插件界面](plugins.md)、[架构](architecture.md) | Web 的规范已写全，页面骨架、弹窗四档宽度与页脚、手机上的菜单弹层、列表行与悬停操作、按钮的进行中状态、确认按钮的文案已迁移，其余按「现状」迁移。Mac 的映射与落地顺序在 [macOS](macos.md)，Android 的在 [Android](android.md)，都待迁移；iOS 待对齐 |
 | 4 | [文案](content.md) | 规则与术语表已写；现有文案按「现状」修改 |
 
 [Riffet 风格](../riffet-style.md)、[macOS 原生](../macos-native.md)、[主题契约](../../THEMES.md) §8–9 里属于语义层的内容（原则、状态、组件交互），随阶段 1–2 移进本目录；原文件只留各自风格的取值。
