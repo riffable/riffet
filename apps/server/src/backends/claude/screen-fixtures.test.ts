@@ -63,6 +63,11 @@ const expectations: Record<string, (screen: string) => void> = {
     // The dialog the CLI draws beside a held hook; seen again after the hook answers, it is the CLI asking again.
     expect(parseDialog(screen, terminal)?.interaction).toMatchObject({ kind: 'permission', title: 'Do you want to proceed?' });
     expect(parseDialog(screen, terminal)?.rows.every(row => !/\n/.test(row.label))).toBe(true);
+    // Plain Yes and No are the quick answers; the rows that grant more are not. The dashed rules framing the command are not content.
+    const interaction = parseDialog(screen, terminal)!.interaction;
+    expect(interaction.actions.map(action => action.tone)).toEqual(['primary', undefined, undefined, 'danger']);
+    expect(interaction.message).not.toContain('╌');
+    expect(interaction.message).toContain('touch approved.txt');
   },
   question: screen => {
     expect(claudeComposerVisible(screen)).toBe(false);

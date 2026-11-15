@@ -265,3 +265,10 @@
 - **原因**：页头操作区放的是对当前会话的操作和提醒；任务是会话的归属，和目录、分支同类，属于会话信息。状态环在页头和侧栏重复出现，信息量没有增加。
 - **否决**：页头右侧常驻任务状态环和编号。
 - **规则**：`docs/TASK-BOARD.md` §9，代码 `apps/web/src/app/SessionInfo.tsx`。
+
+## 2026-11-15 · 审批摘要的选项不跟内容长度挂钩
+
+- **决定**：Mac 与手机的审批摘要始终给出「拒绝」和「允许」，标题和命令是否被行数上限截断不再影响；想看全文的打开详情。从终端读出的权限框（Claude Code 的 `Do you want to proceed?`）同样给出：服务端把单独的 `Yes` 标为 `primary`、`No` 标为 `danger`，客户端据此认出允许与拒绝。预览里框住命令的 `╌` 虚线不进正文。推翻 2026-11-13「审批摘要『看全』指没被截断」。
+- **原因**：内容多长是内容的事，能不能回答是选项的事。按截断决定按钮，长命令和带说明的请求只剩「查看详情」，终端读出的权限框更是一个按钮都没有，常见的审批都得多点一次。
+- **否决**：按正文是否截断决定是否给出允许；按终端选项的序号猜允许与拒绝。
+- **规则**：`docs/design/system/surfaces.md` 审批卡一节；代码 `apps/server/src/agent-host/interaction-choice.ts`、`apps/macos/Riffet/Features/Conversation/InteractionCard.swift`、手机两端的 `InteractionCard`。

@@ -591,19 +591,16 @@ private fun ApprovalCard(
             .background(surfaces.card, RoundedCornerShape(style.groupRadius)).padding(12.dp),
     ) {
         val width = with(density) { maxWidth.roundToPx() }.coerceAtLeast(1)
-        val titleFits = !measurer.measure(title, typography.label, maxLines = 2,
-            overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = width)).hasVisualOverflow
-        val messageWidth = (width - with(density) { 16.dp.roundToPx() }).coerceAtLeast(1)
-        val messageFits = shown.message.isNullOrBlank() || !measurer.measure(shown.message.orEmpty(), typography.monoSmall,
-            maxLines = 3, overflow = TextOverflow.Ellipsis, constraints = Constraints(maxWidth = messageWidth)).hasVisualOverflow
         fun labelFits(label: String) = !measurer.measure(label, typography.label, maxLines = 1,
             constraints = Constraints(maxWidth = (width / 2).coerceAtLeast(1))).hasVisualOverflow
-        // Only explicit one-off and refusal decisions can be offered from a complete preview.
-        // Unknown/long action labels and remembered rules retain their exact text in the reader.
-        val quick = shown.actions.filter { action -> action.detail.isNullOrBlank() && labelFits(action.shortLabel ?: action.label) && action.id in quickActionIds }
-        // A blank body or an undisclosed per-action rule is not a complete approval preview.
-        val quickAllowed = shown.kind == NativeInteractionKind.PERMISSION && !selectsOptions && titleFits && messageFits &&
-            !shown.message.isNullOrBlank() && shown.actions.all { it.detail.isNullOrBlank() }
+        // A protocol request names its one-off approval and refusal by id; a permission lifted from a terminal
+        // marks its plain Yes and No by tone. How long the request is does not decide which answers are offered.
+        // Unknown or long labels and remembered rules (`detail`) keep their exact text in the reader.
+        val permission = shown.kind == NativeInteractionKind.PERMISSION
+        fun refuses(action: NativeInteractionAction) = action.id in refusalActionIds || (permission && action.tone == "danger")
+        val quick = shown.actions.filter { action -> action.detail.isNullOrBlank() && labelFits(action.shortLabel ?: action.label) &&
+            (action.id in quickActionIds || (permission && action.tone in setOf("primary", "danger"))) }
+        val quickAllowed = permission && !selectsOptions
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, style = typography.label, color = colors.fg, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!shown.message.isNullOrBlank()) {
@@ -613,8 +610,8 @@ private fun ApprovalCard(
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 PlainAction(stringResource(Res.string.session_details), ActionTone.NORMAL, true, neutral = true, onClick = onOpen)
-                quick.filter { quickAllowed || it.id in refusalActionIds }.forEach { action ->
-                    PlainAction(action.shortLabel ?: action.label, if (action.id in refusalActionIds) ActionTone.NORMAL else ActionTone.PRIMARY, connected && !busy,
+                quick.filter { quickAllowed || refuses(it) }.sortedBy { !refuses(it) }.forEach { action ->
+                    PlainAction(action.shortLabel ?: action.label, if (refuses(action)) ActionTone.NORMAL else ActionTone.PRIMARY, connected && !busy,
                         posting = action.id == posting, neutral = true, onClick = { onSubmit(action.id) })
                 }
             }

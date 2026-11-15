@@ -261,7 +261,7 @@ struct InteractionCardView: View {
         }
     }
 
-    /// A clipped request is read in the sheet before it can be approved.
+    /// 详情, the refusal and the approval. How long the request is does not decide which answers are offered.
     private var summaryActions: some View {
         VStack(alignment: .leading, spacing: 8) {
             ViewThatFits(in: .horizontal) {
@@ -276,37 +276,31 @@ struct InteractionCardView: View {
         }
     }
 
-    /// Text that fits at its unwrapped width is completely visible in the summary above.
-    /// The layout probes have zero height and never write measurements into view state.
+    /// A protocol request names its one-off approval and its refusal by id; a permission lifted from a
+    /// terminal marks its plain Yes and No by tone. Options that remember a rule carry `detail` and stay in the sheet.
+    private func approves(_ action: NativeInteractionAction) -> Bool {
+        action.detail == nil && (["approve", "allow", "accept", "allow-once"].contains(action.id) || (shown.kind == .permission && action.tone == "primary"))
+    }
+    private func refuses(_ action: NativeInteractionAction) -> Bool {
+        action.detail == nil && (["cancel", "deny", "decline", "reject"].contains(action.id) || (shown.kind == .permission && action.tone == "danger"))
+    }
+
+    @ViewBuilder
     private var quickApproval: some View {
-        ViewThatFits(in: .horizontal) {
-            if !readOnly, shown.kind == .permission, !selectsOptions,
-               shown.message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false,
-               shown.actions.allSatisfy({ $0.detail?.isEmpty != false }),
-               title.components(separatedBy: .newlines).count <= 2,
-               (shown.message ?? "").components(separatedBy: .newlines).count <= 3,
-               let action = shown.actions.first(where: { ["approve", "allow", "accept", "allow-once"].contains($0.id) && $0.detail == nil }) {
-                VStack(spacing: 0) {
-                    Text(title).riffetFont(.headline).fixedSize().hidden().accessibilityHidden(true).frame(height: 0)
-                    if let message = shown.message, !message.isEmpty {
-                        Text(message).riffetFont(.monoSmall, weight: .regular).fixedSize().hidden().accessibilityHidden(true).frame(height: 0)
-                    }
-                    Button { submit(action.id) } label: {
-                        InteractionButtonLabel(text: action.shortLabel ?? action.label, running: inFlightAction == action.id)
-                    }
-                    .buttonStyle(.borderedProminent).tint(palette.accent).disabled(!connected || busy)
-                    .accessibilityIdentifier("interactionAction.\(action.id)")
-                }
-                .fixedSize(horizontal: true, vertical: false)
+        if !readOnly, shown.kind == .permission, !selectsOptions, let action = shown.actions.first(where: approves) {
+            Button { submit(action.id) } label: {
+                InteractionButtonLabel(text: action.shortLabel ?? action.label, running: inFlightAction == action.id)
             }
-            Color.clear.frame(width: 0, height: 0).accessibilityHidden(true)
+            .buttonStyle(.borderedProminent).tint(palette.accent).disabled(!connected || busy)
+            .accessibilityIdentifier("interactionAction.\(action.id)")
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
     @ViewBuilder
     private var summaryButtons: some View {
         Button("详情") { showingDetails = true }.buttonStyle(.borderless).frame(minHeight: 44)
-        if !readOnly, let action = shown.actions.first(where: { ["cancel", "deny", "decline", "reject"].contains($0.id) && $0.detail == nil }) {
+        if !readOnly, let action = shown.actions.first(where: refuses) {
             Button { submit(action.id) } label: { InteractionButtonLabel(text: action.id == "cancel" ? String(localized: "取消", bundle: .riffet) : String(localized: "拒绝", bundle: .riffet), running: inFlightAction == action.id) }
                 .buttonStyle(.bordered).disabled(!connected || busy)
                 .accessibilityIdentifier("interactionAction.\(action.id)")

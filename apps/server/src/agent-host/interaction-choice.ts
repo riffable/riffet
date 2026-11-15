@@ -176,6 +176,23 @@ function choiceRows(
   return { rows, end };
 }
 
+/**
+ * A permission surface's plain answers, by the words every CLI draws for them: `Yes` approves once,
+ * `No` (Claude Code adds `, and tell Claude what to do differently`) refuses. Clients offer these two
+ * as quick actions, as they do a protocol request's `allow` and `deny`; a row that grants more (`Yes,
+ * and always allow …`) or reads otherwise keeps no tone and is chosen in the full reader.
+ */
+function permissionTone(label: string): { tone: 'primary' | 'danger'; shortLabel?: string } | undefined {
+  const text = label.replace(/^\d+\.\s+/, '').trim();
+  if (/^yes$/i.test(text)) return { tone: 'primary' };
+  if (/^no$/i.test(text)) return { tone: 'danger' };
+  if (/^no,\s/i.test(text)) return { tone: 'danger', shortLabel: 'No' };
+  return undefined;
+}
+
+/** A preview's dashed rules (`╌╌╌` around a command) frame the terminal's width, not content. */
+const DASHED_RULE = /^[╌╍┄┅┈┉]{3,}$/;
+
 function finish(
   terminal: TerminalIdentity,
   screen: string,
@@ -202,7 +219,7 @@ function finish(
     title,
     ...(message ? { message } : {}),
     options,
-    actions: options.map(option => ({ id: `option:${option.id}`, label: option.label })),
+    actions: options.map(option => ({ id: `option:${option.id}`, label: option.label, ...(kind === 'permission' ? permissionTone(option.label) : {}) })),
   };
   return { interaction, focus, rows: options.map(option => ({ ...option, other: false })) };
 }
@@ -257,7 +274,7 @@ function parseDecisionSurface(screen: string, terminal: TerminalIdentity, lines:
 
   // Whatever precedes the question is the preview of the operation being approved. Binary writes
   // preview only a path, and the CLI puts that above the rule, so pick it up from there too.
-  const preview = [...lines.slice(boundary + 1, runStart).map(textLine).filter(Boolean), ...run.slice(0, titleIndex)];
+  const preview = [...lines.slice(boundary + 1, runStart).map(textLine).filter(Boolean), ...run.slice(0, titleIndex)].filter(line => !DASHED_RULE.test(line));
   const abovePreview = boundary > 0 && !horizontalRule(lines[boundary - 1]!) ? textLine(lines[boundary - 1]!) : '';
   if (abovePreview) preview.unshift(abovePreview);
   if (!preview.length) return;

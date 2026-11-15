@@ -58,9 +58,6 @@ struct InteractionCardView: View {
     @State private var extendError: String?
     /// The action selected in the reader; its exact scope stays in the scrollable body.
     @State private var pickedAllow: String?
-    /// Whether the summary's title or command is cut off by its line limit; until measured, it is.
-    @State private var titleClipped = true
-    @State private var messageClipped = true
     @FocusState private var cardFocused: Bool
     @AppStorage("riffet.touchid-approvals") private var requireTouchID = false
     private let drafts = InteractionDrafts.shared
@@ -155,8 +152,7 @@ struct InteractionCardView: View {
         if let onOpenDetails { onOpenDetails() } else { showingDetails = true }
     }
 
-    /// Quick actions are offered only when the request is completely visible: wrapping is fine, cutting
-    /// off at the line limit is not. A request that does not fit is decided in the full reader.
+    /// The summary clamps the title and the command; how long they are does not change which answers it offers.
     private var summaryBody: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             if let context = summaryContext {
@@ -174,11 +170,15 @@ struct InteractionCardView: View {
             if summaryContext?.title != title {
                 HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                     headerIcon
-                    ClampedText(text: title, font: .riffet(size: S(13), weight: .medium), color: palette.fg, lines: 2, clipped: $titleClipped)
+                    Text(title).font(.riffet(size: S(13), weight: .medium)).foregroundStyle(palette.fg)
+                        .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             if let message = shown.message, !message.isEmpty {
-                ClampedText(text: message, font: .riffet(size: S(12), design: .monospaced), color: palette.fg2, lines: 3, clipped: $messageClipped)
+                Text(message).font(.riffet(size: S(12), design: .monospaced)).foregroundStyle(palette.fg2)
+                    .lineLimit(3).fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     .textSelection(.enabled)
                     .padding(.horizontal, Space.sm).padding(.vertical, Space.xs)
                     .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(blockFill))
@@ -211,22 +211,23 @@ struct InteractionCardView: View {
         }
     }
 
-    /// Details, then the refusal, then the approval on the trailing edge. Options that remember a rule
-    /// show their scope only in the reader, so they are never quick actions.
+    /// Details, then the refusal, then the approval on the trailing edge. A protocol request names them by
+    /// id; a permission lifted from a terminal marks its plain Yes and No by tone. Options that remember a
+    /// rule show their scope only in the reader, so they are never quick actions.
     private var summaryActions: some View {
-        let visible = (summaryContext?.title == title || !titleClipped) && !messageClipped && shown.message?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-        let refusals = ["deny", "decline", "reject", "cancel"]
+        let permission = shown.kind == .permission
+        let refuses = { (action: NativeInteractionAction) in ["deny", "decline", "reject", "cancel"].contains(action.id) || (permission && action.tone == "danger") }
+        let approves = { (action: NativeInteractionAction) in ["approve", "allow", "allow-once", "accept"].contains(action.id) || (permission && action.tone == "primary") }
         let quick = shown.actions.filter {
-            $0.detail == nil && (visible ? ["approve", "allow", "allow-once", "accept"] + refusals : refusals).contains($0.id)
-                && ($0.shortLabel != nil || $0.label.count < 28)
-        }.sorted { refusals.contains($0.id) && !refusals.contains($1.id) }
+            $0.detail == nil && (approves($0) || refuses($0)) && ($0.shortLabel != nil || $0.label.count < 28)
+        }.sorted { refuses($0) && !refuses($1) }
         return HStack(spacing: Space.sm) {
             submissionActions
             Spacer(minLength: 0)
             Button("查看详情", action: openDetails).buttonStyle(ChipButtonStyle())
             if !busy, !selectsOptions, !isQuestion, isInteractionRenderable(interaction: shown) {
                 ForEach(quick, id: \.id) { action in
-                    actionButton(action.shortLabel ?? action.label, refusals.contains(action.id) ? .secondary : .primary) { submit(action.id) }
+                    actionButton(action.shortLabel ?? action.label, refuses(action) ? .secondary : .primary) { submit(action.id) }
                         .disabled(!connected || busy)
                 }
             }
@@ -790,30 +791,6 @@ struct InteractionCardView: View {
 }
 
 /// Text held to a line limit that reports whether the limit cut it off: its height against the same text unlimited.
-private struct ClampedText: View {
-    let text: String
-    let font: Font
-    let color: Color
-    let lines: Int
-    @Binding var clipped: Bool
-    @State private var shownHeight: CGFloat = 0
-    @State private var fullHeight: CGFloat = .greatestFiniteMagnitude
-
-    var body: some View {
-        Text(text).font(font).foregroundStyle(color)
-            .lineLimit(lines).fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { shownHeight = $0 }
-            .background(alignment: .topLeading) {
-                Text(text).font(font).fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .hidden()
-                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
-            }
-            .onChange(of: fullHeight > shownHeight + 0.5, initial: true) { _, cut in clipped = cut }
-    }
-}
-
 /// The backend's own deadline for this request (`ExpiryCountdown` in `NativeInteractionCard.tsx`).
 /// Its own view so the once-a-second tick redraws only the label.
 private struct ExpiryCountdown: View {
