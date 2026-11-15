@@ -376,12 +376,16 @@ internal fun CodeBlock(
  */
 @Composable
 internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: TextStyle) {
+    // Some agents cite code as ```218:228:path/to/file.ts — a line range and a file, not a language.
+    val cited = remember(language) { language?.let(::codeCitation) }
+    val label = cited?.let { "${it.path} · L${it.start}–${it.end}" } ?: (language?.takeIf { it.isNotBlank() } ?: "text").uppercase()
+    val codeLanguage = cited?.let { languageForPath(it.path) } ?: language
     val designMetrics = LocalInterfaceStyle.current.metrics
     val colors = TimelineTheme.colors
     val shape = RoundedCornerShape(LocalInterfaceStyle.current.controlRadius)
-    val diagram = language?.lowercase() in diagramLanguages
-    val renderable = htmlPreviewSupported && (diagram || language?.lowercase() in contentPreviewLanguages)
-    var preview by remember(language) { mutableStateOf(diagram && htmlPreviewSupported) }
+    val diagram = codeLanguage?.lowercase() in diagramLanguages
+    val renderable = htmlPreviewSupported && (diagram || codeLanguage?.lowercase() in contentPreviewLanguages)
+    var preview by remember(codeLanguage) { mutableStateOf(diagram && htmlPreviewSupported) }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -394,9 +398,12 @@ internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: T
             modifier = Modifier.fillMaxWidth().height(36.dp).background(LocalRiffetSurfaces.current.floating).padding(start = 12.dp, end = 2.dp),
         ) {
             Text(
-                text = (language?.takeIf { it.isNotBlank() } ?: "text").uppercase(),
-                style = TimelineTheme.type.caption.copy(fontFamily = TimelineTheme.type.monoFamily, letterSpacing = 0.5.sp),
+                text = label,
+                style = TimelineTheme.type.caption.copy(fontFamily = TimelineTheme.type.monoFamily, letterSpacing = if (cited != null) 0.sp else 0.5.sp),
                 color = colors.fg3,
+                maxLines = 1,
+                // A cited path keeps its file name and lines; a language name is short.
+                overflow = if (cited != null) TextOverflow.StartEllipsis else TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f),
             )
             if (renderable) {
@@ -409,10 +416,10 @@ internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: T
         }
         Box(Modifier.fillMaxWidth().height(designMetrics.hairlineWidth).background(colors.lineSoft))
         if (renderable && preview) {
-            ServerContentPreview(path = if (diagram) "/diagram" else "/content-preview", source = code, language = language?.lowercase(), modifier = Modifier.fillMaxWidth().height(320.dp))
+            ServerContentPreview(path = if (diagram) "/diagram" else "/content-preview", source = code, language = codeLanguage?.lowercase(), modifier = Modifier.fillMaxWidth().height(320.dp))
         } else CodeLines(
             code = code,
-            language = language,
+            language = codeLanguage,
             style = codeStyle.copy(lineHeight = 20.sp),
             color = colors.fg,
             modifier = Modifier
@@ -420,6 +427,16 @@ internal fun MarkdownCodeBlockView(code: String, language: String?, codeStyle: T
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
     }
+}
+
+internal class CodeCitation(val start: Int, val end: Int, val path: String)
+
+/** A fence's info string as `start:end:path` (the web's `citation`), or null for a language. */
+internal fun codeCitation(info: String): CodeCitation? {
+    val match = Regex("""^(\d+):(\d+):(.+)$""").find(info.trim()) ?: return null
+    val start = match.groupValues[1].toIntOrNull() ?: return null
+    val end = match.groupValues[2].toIntOrNull() ?: return null
+    return CodeCitation(start, end, match.groupValues[3])
 }
 
 /** Lines per separately laid-out piece of a code block; see [CodeLines]. */
