@@ -149,6 +149,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr "任务"
 
+#. placeholder {0}: item.number
+#: src/app/SessionInfo.tsx
+msgid "任务 #{0}"
+msgstr "任务 #{0}"
+
 #: src/app/Sidebar.tsx
 #: src/app/Workbench.tsx
 msgid "任务看板"

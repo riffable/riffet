@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
-import { IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconTerminal } from '@/components/icons';
+import { IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconSquareKanban, IconTerminal } from '@/components/icons';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
 import { ListRow, listRowClass, rowReveal } from '@/components/ui/list-row';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -17,6 +17,8 @@ import { cn, formatDateTime, relativeTime, tildePath, timeAgo } from '@/lib/util
 import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
 import type { ContextUsage } from './session/model';
+import { useStores, useWorkItems } from './state/stores';
+import { useStatusLabel } from './work-items/parts';
 
 export interface GitChanges { changes: number; added: number; removed: number }
 
@@ -63,6 +65,21 @@ function PlaceRow({ icon, label, hint, active, onClick }: { icon: ReactNode; lab
       {label}
     </ListRow>
   );
+}
+
+/**
+ * The 任务 this session belongs to, first among the places: its number and status, opening it on the
+ * board. Nothing shows until the item list has it.
+ */
+function TaskPlaceRow({ workItemId, onNavigate }: { workItemId: string; onNavigate: () => void }) {
+  const { t } = useLingui();
+  const { workItems, nav } = useStores();
+  const statusLabel = useStatusLabel();
+  const item = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId));
+  if (!item) return null;
+  // Through `navigate`, as the sidebar's entry goes: a draft's discard guard still asks first.
+  const open = () => { onNavigate(); void nav.navigate(() => { workItems.reveal(item.id); nav.openPage('tasks'); }); };
+  return <PlaceRow icon={<IconSquareKanban />} label={t`任务 #${item.number}`} hint={statusLabel(item.status)} onClick={open} />;
 }
 
 /** A value that copies itself: a path or a branch. The icon only shows once it has something to say. */
@@ -194,11 +211,14 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
           </Fragment>
         ))}
       </dl>
-      {project && (
+      {(project || session.workItemId) && (
         <section className="edge-t p-1.5">
-          {changesVisible && <PlaceRow icon={<IconGitCompare />} label={t`变更`} hint={compactChanges(changes)} active={panelTab === 'changes'} onClick={go(() => onTogglePanel('changes'))} />}
-          <PlaceRow icon={<IconFolder />} label={t({ message: '文件', context: 'workbench-files-panel' })} active={panelTab === 'files'} onClick={go(() => onTogglePanel('files'))} />
-          <PlaceRow icon={<IconTerminal />} label={t`终端`} hint={mobile ? undefined : '⌃`'} active={terminalOpen} onClick={go(onToggleTerminal)} />
+          {session.workItemId && <TaskPlaceRow workItemId={session.workItemId} onNavigate={onNavigate} />}
+          {project && changesVisible && <PlaceRow icon={<IconGitCompare />} label={t`变更`} hint={compactChanges(changes)} active={panelTab === 'changes'} onClick={go(() => onTogglePanel('changes'))} />}
+          {project && <>
+            <PlaceRow icon={<IconFolder />} label={t({ message: '文件', context: 'workbench-files-panel' })} active={panelTab === 'files'} onClick={go(() => onTogglePanel('files'))} />
+            <PlaceRow icon={<IconTerminal />} label={t`终端`} hint={mobile ? undefined : '⌃`'} active={terminalOpen} onClick={go(onToggleTerminal)} />
+          </>}
         </section>
       )}
       {children}

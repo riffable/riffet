@@ -34,7 +34,7 @@ import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
 import { useLists, useStores } from './state/stores';
 import { useTabs } from './tabs/useTabs';
-import { TaskSessionTitle } from './work-items/TaskMark';
+import { TaskSessionTitle } from './work-items/TaskSessionTitle';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
 export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';

@@ -13,7 +13,6 @@ import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, Dia
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import type { ProjectRecord } from '@/lib/api';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
-import { TaskMark } from './work-items/TaskMark';
 import { parseSelection } from '@/lib/models';
 import { cleanLabel, closesOverlay, cn, tildePath } from '@/lib/utils';
 import { useGitStatus, watchGitStatus } from './state/gitStatusStore';
@@ -180,8 +179,6 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   // Right end of the row, or of the tab bar when tabs are on: alerts, 会话信息, side panel, ⋯.
   const actions = !mobile && (
     <div className="flex shrink-0 items-center justify-self-end gap-0.5">
-      {/* The task it belongs to leads the row: with tabs on, the title row is gone and this row stays. */}
-      {session?.workItemId && <TaskMark workItemId={session.workItemId} className="mr-1" />}
       {/* Alerts arrive with the session's data; each fades in where it lands instead of popping into the row. */}
       {views && <>{views}<span aria-hidden className="mx-1.5 h-4 w-px shrink-0 bg-line-strong" /></>}
       {alerts && <div className="contents [&>*]:animate-in [&>*]:fade-in-0 [&>*]:duration-[var(--duration-base)]">{alerts}</div>}
@@ -293,7 +290,6 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
             <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {state && <Badge tone={state.tone === 'idle' ? 'neutral' : state.tone}><StatusDot tone={state.tone} pulse={state.pulse} />{state.label}</Badge>}
               {!quickChat && <span>{session ? label(sessionBackend(session)) : 'Agent'}</span>}
-              {session?.workItemId && <TaskMark workItemId={session.workItemId} />}
             </DialogDescription>
           </DialogHeader>
           <DialogBody className="space-y-4 pb-6">

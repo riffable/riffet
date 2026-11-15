@@ -213,11 +213,6 @@ msgstr "我"
 msgid "或者写下回答…"
 msgstr "或者写下回答…"
 
-#. placeholder {0}: item.number
-#: src/app/work-items/TaskMark.tsx
-msgid "打开任务 #{0}"
-msgstr "打开任务 #{0}"
-
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
