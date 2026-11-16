@@ -221,7 +221,14 @@ export class CursorSteerBridge {
       const terminal = await this.port.terminals.get(current.terminalId);
       if (signal.aborted || terminal.state === 'exited' || this.port.getSession(session.id).terminalId !== terminal.id) return {};
       if (event === 'preToolUse') {
-        if (entry.active && !sameTarget(entry.active, target)) this.reject(session.id, 'Cursor started another generation');
+        if (entry.active && !sameTarget(entry.active, target)) {
+          // A chat runs one turn at a time, so another generation id is a new turn only once the store shows this one
+          // over. Until then the hook names no turn this chat is running: it must neither end the turn nor take its inputs.
+          const previous = this.native.turnState(session.id, entry.active);
+          if (previous === 'open') return {};
+          if (previous === 'answered') this.end(entry, session.id, entry.active, 'run_completed');
+          else this.reject(session.id, 'Cursor started another generation');
+        }
         entry.active = { ...target, terminalId: terminal.id, epoch: terminal.epoch };
         this.native.notifyTurnChanged(session.id);
         return {};

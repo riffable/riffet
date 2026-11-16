@@ -1,6 +1,6 @@
 import { readdir, realpath, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeWorkbenchEvent, Session } from '@contracts';
+import type { ApprovalMode, NativeInteractionResponse, NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Session } from '@contracts';
 import { AppError, KeyedTurnTrackers, firstMessageTitlePatch, nativeTitlePatch, type StatsSink } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentSessionView, type AgentTerminalControl } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter, cursorComposerHoldsPrompt } from '../cli-adapter.js';
@@ -151,6 +151,12 @@ export class NativeService {
 
   sessionForChat(chatId: string): AgentSessionView | undefined {
     return this.port.listSessions().find(session => session.nativeSessionId === chatId);
+  }
+
+  /** Where the chat store being followed for this conversation leaves a turn (`Transcript.turnState`); `undefined` while no store of that chat is read. */
+  turnState(sessionId: string, target: NativeTurnTarget): 'open' | 'answered' | 'superseded' | undefined {
+    const chat = this.watches.get(sessionId)?.chat;
+    return chat && chat.chatId === target.nativeSessionId && chat.status === 'ok' ? chat.turnState(target.turnId) : undefined;
   }
 
   /** Hook lifecycle changes must reach clients even while the tool writes no transcript. */

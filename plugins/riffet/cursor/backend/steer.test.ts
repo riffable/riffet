@@ -34,7 +34,7 @@ async function fixture() {
   };
   const session = () => host.sessions.get('s')!;
   const port = cursorPort(host);
-  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
+  const native = { useTurnObserver: vi.fn(), notifyTurnChanged: vi.fn(), turnState: vi.fn(() => undefined), sessionForChat: (id: string) => id === 'chat' ? session() : undefined } as unknown as NativeService;
   const bridge = new CursorSteerBridge(host, port, native, stateDir, {} as never);
   cleanup.push(() => bridge.close());
   bridge.bind('s');
@@ -151,6 +151,30 @@ describe('Cursor strict tool-boundary steering', () => {
     expect(await f.hook('postToolUse')).toEqual({});
     expect(f.fenced('run-old')).toBe(0);
     expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'new-generation' });
+  });
+
+  it('moves to another generation only once the store shows the tracked turn over', async () => {
+    const f = await fixture();
+    const turnState = vi.mocked(f.native.turnState);
+    await f.hook('preToolUse');
+    const request = f.request('kept');
+    await f.bridge.enqueue(request, request.input.text);
+    // A hook outside the turn's request, while the store still has the turn waiting on a tool.
+    turnState.mockReturnValue('open');
+    expect(await f.hook('preToolUse', { generation_id: 'stray' })).toEqual({});
+    expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'generation' });
+    expect(f.events().find(event => event.type === 'native_input_rejected')).toBeUndefined();
+    expect((await f.hook('postToolUse')).additional_context).toBeTruthy();
+    // The store ends the turn on its answer and the CLI goes straight on with the next one.
+    turnState.mockReturnValue('answered');
+    await f.hook('preToolUse', { generation_id: 'next' });
+    expect(f.events().filter(event => event.type === 'run_completed')).toEqual([expect.objectContaining({ runId: 'owner', nativeTurnId: 'generation' })]);
+    expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'next' });
+    // Without a readable store, another generation still replaces the tracked one, leaving its outcome to the core.
+    turnState.mockReturnValue(undefined);
+    await f.hook('preToolUse', { generation_id: 'after-next' });
+    expect(f.bridge.activeTurn(f.session())).toMatchObject({ turnId: 'after-next' });
+    expect(f.events().filter(event => event.type === 'run_completed')).toHaveLength(1);
   });
 
   it('rejects and retires an interrupted tool instead of injecting into its failed result', async () => {

@@ -424,6 +424,17 @@ export class Transcript {
     return this.mapper.turnId;
   }
 
+  /**
+   * Where the committed store leaves the turn with this request id: still `open`, `answered` (it is the last
+   * turn and ends on an answer), or `superseded` (a later prompt follows it, however it ended). A turn the
+   * store has not recorded yet, or a store that does not decode, is `open`: nothing shows it over.
+   */
+  turnState(turnId: string): 'open' | 'answered' | 'superseded' {
+    if (this.status !== 'ok') return 'open';
+    if (this.mapper.turnId === turnId) return this.pendingIds.length || this.mapper.awaitingReply ? 'open' : 'answered';
+    return this.events.some(event => event.type === 'user_message_chunk' && event.nativeTurnId === turnId) ? 'superseded' : 'open';
+  }
+
   /** Release SQLite and decoded blobs while retaining the bounded events and generation. */
   releaseReader(): void {
     this.reader.close();
