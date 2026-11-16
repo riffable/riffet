@@ -25,6 +25,8 @@ kotlin {
             export(project(":contracts"))
             export(project(":core"))
             binaryOption("bundleId", "io.github.riffable.client")
+            // Background: GC only under memory pressure, not on a timer (performance.md §3.9).
+            binaryOption("appStateTracking", "enabled")
         }
     }
     iosSimulatorArm64 {
@@ -34,6 +36,8 @@ kotlin {
             export(project(":contracts"))
             export(project(":core"))
             binaryOption("bundleId", "io.github.riffable.client")
+            // Background: GC only under memory pressure, not on a timer (performance.md §3.9).
+            binaryOption("appStateTracking", "enabled")
         }
     }
     macosArm64 {

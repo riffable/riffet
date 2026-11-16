@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.produceIn
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
@@ -86,7 +87,10 @@ class SyncStream(
     /** What the next dial resumes from; null asks for a snapshot. */
     val cursor: SyncCursor? get() = gate.cursor
 
-    fun flow(): Flow<SyncFrame> = flow {
+    fun flow(): Flow<SyncFrame> = sized().map { it.frame }
+
+    /** [flow] with each frame's share of the event text it came in, for a queue bounded in bytes. */
+    fun sized(): Flow<SizedFrame> = flow {
         var attempt = 0
         while (true) {
             _connection.value = if (attempt == 0) StreamConnection.Connecting else StreamConnection.Reconnecting(attempt)
@@ -125,7 +129,8 @@ class SyncStream(
                             val verdict = gate.accept(frame)
                             if (verdict.live) _connection.value = StreamConnection.Live
                             if (verdict.progressed) progressed = true
-                            verdict.frames.forEach { emit(it) }
+                            val bytes = event.data?.length ?: 0
+                            verdict.frames.forEachIndexed { index, frame -> emit(SizedFrame(frame, if (index == 0) bytes else 0)) }
                             verdict.redial?.let { reason ->
                                 AppLog.log(TAG, "$reason, redialling from ${gate.cursor}")
                                 break
@@ -323,3 +328,6 @@ fun decodeSyncFrame(event: ServerSentEvent, pluginAgents: Boolean = false): Sync
         SyncFrame.Unknown(type ?: event.event, element)
     }
 }
+
+/** A frame and the characters of event text it was decoded from. */
+class SizedFrame(val frame: SyncFrame, val bytes: Int)

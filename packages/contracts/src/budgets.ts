@@ -41,6 +41,8 @@ export const TERMINAL_KEPT_ROWS = { mac: 10_000, web: 10_000, phone: 3_000 } as 
  * the queue and resumes from its last applied seq, which costs one delta or snapshot instead of memory.
  */
 export const STREAM_QUEUE_FRAMES = 256;
+/** The same queue's ceiling in bytes of frame text: a frame may carry up to 256 KB, so the count alone allows 64 MB. */
+export const STREAM_QUEUE_BYTES = 8 * MIB;
 
 /** Session-list polling, milliseconds: while the lists stream is live, while it is down, and in the background. */
 export const LIST_POLL_MS = { pushed: 30_000, fallback: 5_000, background: 30_000 } as const;

@@ -20,6 +20,7 @@ import riffet.cache.ListCache
 import riffet.cache.createLocalFiles
 import riffet.cache.createTranscriptIndex
 import riffet.contracts.AgentIds
+import riffet.contracts.LIST_POLL_MS_BACKGROUND
 import riffet.shared.AppLog
 import riffet.shared.DeviceTokenStore
 import riffet.shared.IssuedDevice
@@ -345,6 +346,6 @@ class MacHost(private val secrets: SecretStore) {
 
     private companion object {
         const val ACTIVE_POLL_MILLIS = 10_000L
-        const val QUIET_POLL_MILLIS = 30_000L
+        const val QUIET_POLL_MILLIS = LIST_POLL_MS_BACKGROUND.toLong()
     }
 }

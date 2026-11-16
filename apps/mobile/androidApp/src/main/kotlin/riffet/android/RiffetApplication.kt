@@ -1,6 +1,7 @@
 package riffet.android
 
 import android.app.Application
+import android.content.ComponentCallbacks2
 import android.content.res.Configuration
 import android.os.Build
 import kotlinx.coroutines.runBlocking
@@ -13,6 +14,7 @@ import riffet.cache.createLogFiles
 import riffet.shared.AppLog
 import riffet.shared.AppLanguages
 import riffet.shared.RiffetAndroid
+import riffet.ui.platform.CacheRegistry
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -40,6 +42,17 @@ class RiffetApplication : Application() {
                 DeviceNotices.refreshLanguage(this@RiffetApplication)
             }
         }
+    }
+
+    /** Caches are rebuilt on demand; empty them once the UI is hidden or the system runs low (performance.md §3.1). */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW || level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL) CacheRegistry.clear()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        CacheRegistry.clear()
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {

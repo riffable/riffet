@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Resource rules that can be read off the source text (docs/guide/performance.md §3):
 //
-//   nscacheLimit       a Swift file that creates an NSCache sets countLimit or totalCostLimit (§3.1). Hard rule.
+//   nscacheLimit       a Swift file that constructs an NSCache sets countLimit or totalCostLimit (§3.1). Hard rule.
 //   ratchets           per file, these counts may not grow past scripts/perf-rules-baseline.json (a file new to it
 //                      starts at 0):
 //     unboundedChannel   Kotlin Channel.UNLIMITED: queue at most STREAM_QUEUE_FRAMES and resync on overflow (§3.2)
@@ -82,8 +82,9 @@ const problems = [];
 for (const path of [...new Set(SOURCES.flatMap((dir) => [...walk(join(root, dir))]))].sort()) {
   const text = readFileSync(join(root, path), 'utf8');
   const lines = text.split('\n');
-  if (path.endsWith('.swift') && /\bNSCache\s*</.test(text) && !/\b(countLimit|totalCostLimit)\b/.test(text)) {
-    const at = lines.findIndex((line) => /\bNSCache\s*</.test(line));
+  // Only a file that constructs one: a cache made by a helper (`CacheRegistry.cache`) has its limits set there.
+  if (path.endsWith('.swift') && /\bNSCache\s*<[^>]*>\s*\(\s*\)/.test(text) && !/\b(countLimit|totalCostLimit)\b/.test(text)) {
+    const at = lines.findIndex((line) => /\bNSCache\s*<[^>]*>\s*\(\s*\)/.test(line));
     if (!allowed(lines, at)) problems.push(`${path}:${at + 1}: NSCache without countLimit or totalCostLimit (performance.md §3.1)`);
   }
   for (const [kind, rule] of Object.entries(RATCHETS)) {

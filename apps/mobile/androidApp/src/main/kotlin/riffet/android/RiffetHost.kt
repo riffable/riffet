@@ -34,6 +34,7 @@ import riffet.cache.ListCache
 import riffet.cache.TimelineCache
 import riffet.cache.createLocalFiles
 import riffet.cache.createTranscriptIndex
+import riffet.contracts.LIST_POLL_MS_BACKGROUND
 import riffet.contracts.Project
 import riffet.contracts.Session
 import riffet.contracts.SessionState
@@ -535,7 +536,7 @@ object RiffetHost {
     private const val ACTIVE_POLL_MILLIS = 10_000L
 
     /** In the background with only an idle stream open: it still notices a turn started elsewhere. */
-    private const val QUIET_POLL_MILLIS = 30_000L
+    private const val QUIET_POLL_MILLIS = LIST_POLL_MS_BACKGROUND.toLong()
 }
 
 /**

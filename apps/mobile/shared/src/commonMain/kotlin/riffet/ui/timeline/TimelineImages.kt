@@ -57,6 +57,7 @@ import androidx.compose.ui.window.Dialog
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.annotation.ExperimentalCoilApi
+import coil3.memory.MemoryCache
 import coil3.compose.AsyncImagePainter
 import coil3.compose.LocalPlatformContext
 import coil3.compose.rememberAsyncImagePainter
@@ -77,6 +78,10 @@ import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import kotlinx.serialization.decodeFromString
 import riffet.contracts.Attachment
+import riffet.contracts.IMAGE_CACHE_PHONE_DECODED_BYTES
+import riffet.contracts.IMAGE_DISPLAY_EDGE_PX_PHONE
+import riffet.ui.platform.CacheRegistry
+import riffet.ui.platform.RegisteredCache
 import riffet.contracts.RiffetJson
 import riffet.shared.createDeviceTokenStore
 import riffet.shared.activeServerBaseUrl
@@ -268,10 +273,19 @@ internal fun rememberRiffetImageLoader(): ImageLoader {
             // The eager `HttpClient` overload: the no-arg and lambda overloads are ambiguous with
             // each other because the factory's defaults make both applicable to a bare lambda.
             .components { add(KtorNetworkFetcherFactory(imageHttpClient)) }
+            // Decoded bitmaps, capped at the phone budget instead of Coil's share of the heap.
+            .memoryCache { MemoryCache.Builder().maxSizeBytes(IMAGE_CACHE_PHONE_DECODED_BYTES).build() }
             .build()
+            .also { loader ->
+                val cache = loader.memoryCache ?: return@also
+                CacheRegistry.register(RegisteredCache("images", IMAGE_CACHE_PHONE_DECODED_BYTES, { cache.size }, { cache.clear() }))
+            }
     }
     return SingletonImageLoader.get(LocalPlatformContext.current)
 }
+
+private val MARKDOWN_IMAGE_WIDTH = 240.dp
+private val MARKDOWN_IMAGE_HEIGHT = 180.dp
 
 /** The renderer already supports paragraph images; reuse the existing Coil/auth transport. */
 internal class TranscriptImageTransformer : com.mikepenz.markdown.model.ImageTransformer {
@@ -288,13 +302,17 @@ internal class TranscriptImageTransformer : com.mikepenz.markdown.model.ImageTra
         }
         val url = (rememberImageUrl(source) as? ResolvedUrl.Ready)?.url
         val context = LocalPlatformContext.current
-        val request = remember(url, context) {
-            url?.let { ImageRequest.Builder(context).data(it).size(1_024, 1_024).scale(Scale.FIT).build() }
+        // Decoded at the box it is drawn in, never past the phone display edge.
+        val density = LocalDensity.current
+        val widthPx = with(density) { MARKDOWN_IMAGE_WIDTH.roundToPx() }.coerceIn(1, IMAGE_DISPLAY_EDGE_PX_PHONE)
+        val heightPx = with(density) { MARKDOWN_IMAGE_HEIGHT.roundToPx() }.coerceIn(1, IMAGE_DISPLAY_EDGE_PX_PHONE)
+        val request = remember(url, context, widthPx, heightPx) {
+            url?.let { ImageRequest.Builder(context).data(it).size(widthPx, heightPx).scale(Scale.FIT).build() }
         }
         val painter = rememberAsyncImagePainter(model = request, imageLoader = rememberRiffetImageLoader())
         return com.mikepenz.markdown.model.ImageData(
             painter,
-            modifier = Modifier.size(width = 240.dp, height = 180.dp),
+            modifier = Modifier.size(width = MARKDOWN_IMAGE_WIDTH, height = MARKDOWN_IMAGE_HEIGHT),
             contentDescription = link,
             contentScale = ContentScale.Fit,
         )

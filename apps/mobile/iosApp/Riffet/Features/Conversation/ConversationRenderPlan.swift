@@ -43,9 +43,7 @@ private enum ConversationToolRunState {
         let incomplete: Bool
         init(item: TimelineItemTool, active: Bool, incomplete: Bool) { self.item = item; self.active = active; self.incomplete = incomplete }
     }
-    private static let cache: NSCache<NSString, Entry> = {
-        let value = NSCache<NSString, Entry>(); value.countLimit = 512; return value
-    }()
+    private static let cache: NSCache<NSString, Entry> = CacheRegistry.cache("conversation.toolRunState", count: 512)
     static func state(_ item: TimelineItemTool, stale: Bool) -> (active: Bool, incomplete: Bool) {
         let key = "\(ObjectIdentifier(item))|\(stale)" as NSString
         if let hit = cache.object(forKey: key) { return (hit.active, hit.incomplete) }

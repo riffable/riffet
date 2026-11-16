@@ -1,7 +1,9 @@
 package riffet.ui.state
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -10,16 +12,22 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlin.concurrent.atomics.AtomicLong
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 import riffet.cache.MAIN_LANE
 import riffet.cache.SyncWindow
 import riffet.cache.TimelineCache
@@ -32,6 +40,8 @@ import riffet.contracts.NativeHistoryState
 import riffet.contracts.Run
 import riffet.contracts.RunMetrics
 import riffet.contracts.RunState
+import riffet.contracts.STREAM_QUEUE_BYTES
+import riffet.contracts.STREAM_QUEUE_FRAMES
 import riffet.contracts.Session
 import riffet.contracts.SyncFrame
 import riffet.contracts.SyncLane
@@ -298,24 +308,37 @@ internal class SessionSync(
         }
         if (_serverTooOld.value) return tooOld(token)
         checkHealth()
-        val cursor = lock.withLock { lane.rows.applied }
-        val stream = api.syncStream(lane.sessionId, MAIN_LANE, window, cursor)
-        connectionJob = scope.launch {
-            stream.connection.collect { state ->
-                core.reduceDial(token) { current ->
-                    val next = current.copy(
-                        connection = when (state) {
-                            is StreamConnection.Connecting -> RiffetConnectionState.Connecting
-                            is StreamConnection.Live -> RiffetConnectionState.Live
-                            is StreamConnection.Reconnecting -> RiffetConnectionState.Reconnecting
-                        },
-                    )
-                    if (state !is StreamConnection.Live) next.withoutOutputRate() else next
-                }
-            }
-        }
         try {
-            stream.flow().flowOn(background).buffer(Channel.UNLIMITED).collect { frame -> handle(token, lane, frame) }
+            // A consumer that falls [STREAM_QUEUE_FRAMES] behind drops what is queued and dials again
+            // from the lane seq it has applied (docs/guide/performance.md §3.2); the server answers with
+            // a delta or a snapshot, as after any reconnect.
+            var overflowed = false
+            val pacing = OverflowPacing()
+            do {
+                if (overflowed) pacing.after()
+                val cursor = lock.withLock { lane.rows.applied }
+                if (overflowed) log("sync overflow ${lane.sessionId} resuming from $cursor")
+                val redial = overflowed
+                val stream = api.syncStream(lane.sessionId, MAIN_LANE, window, cursor)
+                connectionJob?.cancel()
+                connectionJob = scope.launch {
+                    // A redial after an overflow is not a lost connection: the lane stays as it was until the new one is live.
+                    val states = if (redial) stream.connection.dropWhile { it is StreamConnection.Connecting } else stream.connection
+                    states.collect { state ->
+                        core.reduceDial(token) { current ->
+                            val next = current.copy(
+                                connection = when (state) {
+                                    is StreamConnection.Connecting -> RiffetConnectionState.Connecting
+                                    is StreamConnection.Live -> RiffetConnectionState.Live
+                                    is StreamConnection.Reconnecting -> RiffetConnectionState.Reconnecting
+                                },
+                            )
+                            if (state !is StreamConnection.Live) next.withoutOutputRate() else next
+                        }
+                    }
+                }
+                overflowed = stream.sized().collectBounded(STREAM_QUEUE_FRAMES, STREAM_QUEUE_BYTES, background, { it.bytes }) { handle(token, lane, it.frame) }
+            } while (overflowed)
         } catch (cancellation: CancellationException) {
             throw cancellation
         } catch (error: Throwable) {
@@ -778,20 +801,27 @@ internal class SessionSync(
         fun start() {
             job = scope.launch {
                 try {
-                    api.syncStream(sessionId, lane, window, null).flow().flowOn(background).buffer(Channel.UNLIMITED).collect { frame ->
-                        val changed = lock.withLock {
-                            withContext(background) {
-                                when (frame) {
-                                    is SyncFrame.Hello -> rows.hello(frame).let { false }
-                                    is SyncFrame.Snapshot -> rows.snapshot(frame)
-                                    is SyncFrame.Rows -> rows.rows(frame)
-                                    is SyncFrame.Reset -> rows.reset().let { false }
-                                    else -> false
+                    var overflowed = false
+                    val pacing = OverflowPacing()
+                    do {
+                        if (overflowed) pacing.after()
+                        val cursor = lock.withLock { rows.applied }
+                        overflowed = api.syncStream(sessionId, lane, window, cursor).sized().collectBounded(STREAM_QUEUE_FRAMES, STREAM_QUEUE_BYTES, background, { it.bytes }) { sized ->
+                            val frame = sized.frame
+                            val changed = lock.withLock {
+                                withContext(background) {
+                                    when (frame) {
+                                        is SyncFrame.Hello -> rows.hello(frame).let { false }
+                                        is SyncFrame.Snapshot -> rows.snapshot(frame)
+                                        is SyncFrame.Rows -> rows.rows(frame)
+                                        is SyncFrame.Reset -> rows.reset().let { false }
+                                        else -> false
+                                    }
                                 }
                             }
+                            if (changed) publish()
                         }
-                        if (changed) publish()
-                    }
+                    } while (overflowed)
                 } catch (cancellation: CancellationException) {
                     throw cancellation
                 } catch (error: Throwable) {
@@ -977,6 +1007,8 @@ internal class LaneRows(cap: SyncWindow) {
             head = null
             return false
         }
+        // A snapshot cut short by a redial is not resumed by a delta.
+        parts = null
         head = frame.headSeq
         caughtUp = (applied?.seq ?: -1) >= frame.headSeq
         return caughtUp
@@ -1271,3 +1303,70 @@ internal fun syncFailureText(error: Throwable): String = when (error) {
     is SyncRejectedException -> L10n.serverError(error.code, emptyMap(), error.message.orEmpty())
     else -> L10n.uiText("sync.serverUnreachable")
 }.ifBlank { L10n.uiText("sync.connectionFailed") }
+
+/** Raised inside [collectBounded]'s producer when its queue is full; never leaves it. */
+private class QueueFull : CancellationException("stream queue full")
+
+/**
+ * Collects with at most [capacity] items, or [maxBytes] of their [weigh]t, queued behind [action];
+ * the upstream runs in [producer]. When the queue is full it is dropped, the flow is cancelled and
+ * the result is true: the caller resumes from what it applied rather than from what the flow had
+ * passed on. False when the flow ended; its error is thrown after the items before it.
+ */
+@OptIn(ExperimentalAtomicApi::class)
+internal suspend fun <T> Flow<T>.collectBounded(
+    capacity: Int,
+    maxBytes: Long = Long.MAX_VALUE,
+    producer: CoroutineContext = EmptyCoroutineContext,
+    weigh: (T) -> Int = { 0 },
+    action: suspend (T) -> Unit,
+): Boolean = coroutineScope {
+    val queue = Channel<T>(capacity)
+    val queued = AtomicLong(0)
+    val overflow = CompletableDeferred<Unit>()
+    val upstream = this@collectBounded
+    launch(producer) {
+        try {
+            upstream.collect { item ->
+                if (queued.addAndFetch(weigh(item).toLong()) > maxBytes || queue.trySend(item).isFailure) {
+                    overflow.complete(Unit)
+                    throw QueueFull()
+                }
+            }
+            queue.close()
+        } catch (_: QueueFull) {
+            queue.close()
+        } catch (cancellation: CancellationException) {
+            queue.close()
+            throw cancellation
+        } catch (error: Throwable) {
+            queue.close(error)
+        }
+    }
+    while (true) {
+        val result = queue.receiveCatching()
+        if (overflow.isCompleted) break
+        result.exceptionOrNull()?.let { throw it }
+        if (result.isClosed) break
+        val item = result.getOrThrow()
+        queued.addAndFetch(-weigh(item).toLong())
+        action(item)
+    }
+    overflow.isCompleted
+}
+
+/**
+ * Consecutive overflows of one lane's queue: a consumer that keeps falling behind waits a little
+ * before each redial instead of reconnecting every [STREAM_QUEUE_FRAMES] frames.
+ */
+private class OverflowPacing {
+    private var count = 0
+    private var last: TimeMark? = null
+
+    suspend fun after() {
+        val since = last?.elapsedNow()
+        count = if (since != null && since < 30.seconds) count + 1 else 1
+        last = TimeSource.Monotonic.markNow()
+        if (count >= 2) delay((500L * (count - 1)).coerceAtMost(5_000L).milliseconds)
+    }
+}

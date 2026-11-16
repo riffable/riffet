@@ -22,7 +22,7 @@
 | `IMAGE_DISPLAY_EDGE_PX` | 行内图片解码的长边像素；查看器另行解码原图 |
 | `TEXT_CACHE_BYTES` | markdown、代码高亮、行排版等文本缓存的总和 |
 | `TERMINAL_KEPT_ROWS` | 客户端终端保留的回滚行数；服务端种子仍带 `TERMINAL_SCROLLBACK_ROWS` |
-| `STREAM_QUEUE_FRAMES` | 流与应用代码之间的帧队列上限 |
+| `STREAM_QUEUE_FRAMES`、`STREAM_QUEUE_BYTES` | 流与应用代码之间的帧队列上限，按帧数和字节数 |
 | `LIST_POLL_MS` | 会话列表轮询间隔：推送在线、推送断开、后台 |
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
 | `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、事件循环阻塞阈值 |
@@ -45,7 +45,7 @@
 
 ### 3.2 流与缓冲有界
 
-- 流到应用之间的队列不超过 `STREAM_QUEUE_FRAMES`。超出时丢掉队列，从最后应用的 seq 重新请求增量或快照。不用 `Channel.UNLIMITED`、不设上限的数组队列。
+- 流到应用之间的队列不超过 `STREAM_QUEUE_FRAMES` 帧、`STREAM_QUEUE_BYTES` 字节。超出时丢掉队列，从最后应用的 seq 重新请求增量或快照。不用 `Channel.UNLIMITED`、不设上限的数组队列。
 - 服务端给慢客户端的积压已有上限（`sync/connection.ts` 的 `slowBacklog` / `maxBacklog`），新的推送通道照此处理。
 - 检查：`check:perf` 拦截 `Channel.UNLIMITED`。
 

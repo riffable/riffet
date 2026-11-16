@@ -325,9 +325,7 @@ final class ConversationInlineMathRenderer: NSObject, WKNavigationDelegate {
         let descent: CGFloat
     }
     private final class Box { let rendered: Rendered; init(_ rendered: Rendered) { self.rendered = rendered } }
-    private let cache: NSCache<NSString, Box> = {
-        let cache = NSCache<NSString, Box>(); cache.totalCostLimit = 8 * 1024 * 1024; return cache
-    }()
+    private let cache: NSCache<NSString, Box> = CacheRegistry.cache("conversation.math", bytes: CacheRegistry.Budget.math)
     private var waiting: [ConversationInlineMathRequest: [CheckedContinuation<Rendered?, Never>]] = [:]
     private var queue: [ConversationInlineMathRequest] = []
     private var current: ConversationInlineMathRequest?

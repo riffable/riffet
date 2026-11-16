@@ -184,9 +184,7 @@ actor ConversationSyntax {
             return output
         }
     }
-    private let cache: NSCache<NSString, Result> = {
-        let cache = NSCache<NSString, Result>(); cache.totalCostLimit = 8 * 1024 * 1024; return cache
-    }()
+    private let cache: NSCache<NSString, Result> = CacheRegistry.cache("conversation.highlights", bytes: CacheRegistry.Budget.highlights)
     private var function: JSValue?
     private var loaded = false
 

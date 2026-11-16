@@ -13,7 +13,7 @@ import riffet.ui.design.materialContentBackground
 import riffet.ui.app.snackbarBottomBar
 import androidx.compose.ui.semantics.Role
 import androidx.compose.foundation.background
-import riffet.contracts.TERMINAL_SCROLLBACK_ROWS
+import riffet.contracts.TERMINAL_KEPT_ROWS_PHONE
 import riffet.contracts.TerminalState
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -125,7 +125,7 @@ internal fun TerminalScreen(
     val workerScope = remember(scope, worker) { CoroutineScope(scope.coroutineContext + worker) }
     val clientId = remember(terminalId) { "app-${newClientId()}" }
     val replies = remember(terminalId) { ReplyOutput() }
-    val surface = remember(terminalId) { TerminalSurfaceState(TerminalEmulator(replies, 100, 40, 10, 20, TERMINAL_SCROLLBACK_ROWS, null), workerScope) }
+    val surface = remember(terminalId) { TerminalSurfaceState(TerminalEmulator(replies, 100, 40, 10, 20, TERMINAL_KEPT_ROWS_PHONE, null), workerScope) }
     val scroll = remember(terminalId) { TerminalScrollState { surface.screen } }
     val connection = remember(terminalId) {
         TerminalConnection(api, terminalId, clientId, workerScope, onOutput = { data, fresh ->

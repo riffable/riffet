@@ -27,9 +27,7 @@ final class ConversationLayoutMemo {
     private let savedAspects: [String: Double]
     private var learnedAspects: [String: Double]
     private var saveScheduled = false
-    private let images: NSCache<NSString, UIImage> = {
-        let cache = NSCache<NSString, UIImage>(); cache.totalCostLimit = 48 * 1024 * 1024; return cache
-    }()
+    private let images: NSCache<NSString, UIImage> = CacheRegistry.cache("conversation.images", bytes: CacheRegistry.Budget.images)
 
     private init() {
         let stored = UserDefaults.standard.dictionary(forKey: Self.aspectsKey) as? [String: Double] ?? [:]

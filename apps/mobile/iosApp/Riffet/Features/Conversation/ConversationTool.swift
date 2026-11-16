@@ -121,9 +121,7 @@ private enum ConversationToolPresentations {
         let value: ToolPresentation
         init(item: TimelineItemTool, value: ToolPresentation) { self.item = item; self.value = value }
     }
-    private static let cache: NSCache<NSString, Entry> = {
-        let value = NSCache<NSString, Entry>(); value.countLimit = 96; value.totalCostLimit = 8 * 1024 * 1024; return value
-    }()
+    private static let cache: NSCache<NSString, Entry> = CacheRegistry.cache("conversation.toolPresentations", bytes: CacheRegistry.Budget.toolPresentations, count: 96)
     static func value(item: TimelineItemTool, root: String?, stale: Bool) -> ToolPresentation {
         // The shared layer words titles in the app language, so a switch needs fresh entries.
         let key = "\(ObjectIdentifier(item))|\(root ?? "")|\(stale)|\(AppLocalization.shared.language)" as NSString

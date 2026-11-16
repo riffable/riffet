@@ -1,5 +1,8 @@
 package riffet.ui.state
 
+import riffet.contracts.LIST_POLL_MS_FALLBACK
+import riffet.contracts.LIST_POLL_MS_PUSHED
+
 /**
  * How often a host in front re-reads the session list; the same rule for Android and iPhone.
  *
@@ -12,8 +15,8 @@ package riffet.ui.state
  * at once.
  */
 object ListPolling {
-    const val FOREGROUND_MILLIS = 5_000L
-    const val STREAM_COVERED_MILLIS = 30_000L
+    const val FOREGROUND_MILLIS = LIST_POLL_MS_FALLBACK.toLong()
+    const val STREAM_COVERED_MILLIS = LIST_POLL_MS_PUSHED.toLong()
     const val MAX_BACKOFF_MILLIS = 60_000L
 
     /** The wait before the next foreground read, after [failures] consecutive failed reads. */
