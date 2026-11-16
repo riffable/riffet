@@ -64,7 +64,22 @@ export interface AppSettings {
   maxLiveAgents?: number;
   quickChat?: QuickChatSettings;
   assistant?: AssistantSettings;
+  /**
+   * The destinations the sidebar shows as rows, in order, on every device; the rest sit under its
+   * 更多 menu. Unset means `DEFAULT_SIDEBAR_PINNED`. Ids a client does not offer are kept and skipped.
+   */
+  sidebarPinned?: string[];
 }
+/**
+ * Pages the sidebar reaches, as `AppSettings.sidebarPinned` names them. 新会话 and 搜索内容 are
+ * actions and always rows; 个人资料, 主题 and 设置 stay in the account menu. A client offers the ones
+ * it has (`activity` is the Mac's).
+ */
+export const SIDEBAR_DESTINATIONS = ['assistant', 'tasks', 'automations', 'marks', 'plugins', 'extensions', 'stats', 'activity'] as const;
+export type SidebarDestination = typeof SIDEBAR_DESTINATIONS[number];
+export const DEFAULT_SIDEBAR_PINNED: readonly SidebarDestination[] = ['assistant', 'tasks', 'automations'];
+/** The most ids `sidebarPinned` holds; past it the server refuses the list. */
+export const SIDEBAR_PINNED_MAX = 32;
 /**
  * The agent and model a client's 助理 composer starts with (docs/ASSISTANT.md §2), on every device.
  * Unset, it follows the composer's own choice. The 助理's instructions are the `AGENTS.md` of its

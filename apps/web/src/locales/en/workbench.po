@@ -107,7 +107,7 @@ msgstr "Missing"
 
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/use-session-actions.ts
 #: src/app/Workbench.tsx
 msgid "个人助理"
@@ -162,7 +162,7 @@ msgstr "Tasks"
 msgid "任务 #{0}"
 msgstr "Task #{0}"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "任务看板"
 msgstr "Task board"
@@ -887,7 +887,7 @@ msgstr "Open Automations"
 msgid "打开设置"
 msgstr "Open settings"
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "扩展管理"
 msgstr "Extensions"
@@ -937,8 +937,7 @@ msgid "提供模型源"
 msgstr "Provide model sources"
 
 #: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "插件"
 msgstr "Plugins"
@@ -1036,7 +1035,7 @@ msgstr "Favorite"
 msgid "收藏 {0}"
 msgstr "Add {0} to favorites"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "收藏夹"
 msgstr "Favorites"
@@ -1073,7 +1072,7 @@ msgstr "Close changes panel"
 msgid "收起文件面板"
 msgstr "Close files panel"
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 msgid "数据统计"
 msgstr "Stats"
 
@@ -1381,6 +1380,11 @@ msgid "暂时无法确认是否已发送，请先检查状态"
 msgstr "Can't confirm whether it was sent yet. Check the status first."
 
 #: src/plugins/TasksView.tsx
+msgid "更多"
+msgstr "More"
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr "More"
 
@@ -1787,7 +1791,7 @@ msgstr "Abilities"
 msgid "自动"
 msgstr "Auto"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "自动化"
 msgstr "Automations"
@@ -1799,6 +1803,10 @@ msgstr "Automatic compaction threshold"
 #: src/plugins/TasksView.tsx
 msgid "自动换行"
 msgstr "Word wrap"
+
+#: src/app/Sidebar.tsx
+msgid "自定义侧栏"
+msgstr "Customize sidebar"
 
 #: src/app/use-session-actions.ts
 msgid "草稿无法保存到浏览器，刷新后会丢失"

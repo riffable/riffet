@@ -7,6 +7,13 @@ msgstr ""
 "X-Generator: @lingui/cli\n"
 "Language: zh-Hans\n"
 
+#. placeholder {0}: label(moved)
+#. placeholder {1}: next.indexOf(moved) + 1
+#. placeholder {2}: next.length
+#: src/components/ui/sortable-list.tsx
+msgid "{0}：第 {1} 项，共 {2} 项"
+msgstr "{0}：第 {1} 项，共 {2} 项"
+
 #: src/lib/i18n/index.ts
 msgid "{count, plural, other {# 个月}}"
 msgstr "{count, plural, other {# 个月}}"

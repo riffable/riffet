@@ -3,7 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeBackendCatalogEntry, OwnerInfo } from '@contracts';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
 import { ThemeSwatch } from '@/components/theme-swatch';
-import { IconChartColumn, IconChevronRight, IconCopy, IconLaptop, IconMonitor, IconMoon, IconPuzzle, IconServer, IconSettings, IconSun } from '@/components/icons';
+import { IconChevronRight, IconCopy, IconLaptop, IconMonitor, IconMoon, IconServer, IconSettings, IconSun } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { StatusDot } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
@@ -23,19 +23,13 @@ interface Props {
   mobile?: boolean;
   onOpenProfile: () => void;
   onOpenSettings: () => void;
-  onOpenExtensions: () => void;
-  onOpenStats: () => void;
-  onOpenPlugins?: () => void;
-  extensionsActive?: boolean;
-  statsActive?: boolean;
-  pluginsActive?: boolean;
 }
 
 /** Prefetch only; opening the menu does not mount the settings workspace. */
 const preloadSettings = () => void import('./settings/SettingsDialog');
 
-/** The sidebar's only footer trigger; all destinations keep their existing navigation callbacks. */
-export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings, onOpenExtensions, onOpenStats, onOpenPlugins, extensionsActive, statsActive, pluginsActive }: Props) {
+/** The sidebar's only footer trigger: the account and the app; pages are reached from the navigation above. */
+export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, onOpenSettings }: Props) {
   const { t } = useLingui();
   const { local, address } = hostInfo();
   const offline = stale?.mode === 'offline';
@@ -64,10 +58,6 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
           </span>
           <IconChevronRight className="size-3.5 text-fg-4" />
         </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem aria-current={extensionsActive ? 'page' : undefined} onSelect={onOpenExtensions}><IconPuzzle /><Trans>扩展管理</Trans></DropdownMenuItem>
-        {mobile && onOpenPlugins && <DropdownMenuItem aria-current={pluginsActive ? 'page' : undefined} onSelect={onOpenPlugins}><IconPuzzle /><Trans>插件</Trans></DropdownMenuItem>}
-        <DropdownMenuItem aria-current={statsActive ? 'page' : undefined} onSelect={onOpenStats}><IconChartColumn /><Trans>数据统计</Trans></DropdownMenuItem>
         <DropdownMenuSeparator />
         <ThemeMenu />
         <DropdownMenuItem onSelect={onOpenSettings} textValue={t`设置`} aria-label={backendNotice ? [t`设置`, backendNotice, backend?.reason].filter(Boolean).join(' · ') : undefined}>

@@ -107,7 +107,7 @@ msgstr "不存在"
 
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/use-session-actions.ts
 #: src/app/Workbench.tsx
 msgid "个人助理"
@@ -162,7 +162,7 @@ msgstr "任务"
 msgid "任务 #{0}"
 msgstr "任务 #{0}"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "任务看板"
 msgstr "任务看板"
@@ -887,7 +887,7 @@ msgstr "打开自动化"
 msgid "打开设置"
 msgstr "打开设置"
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "扩展管理"
 msgstr "扩展管理"
@@ -937,8 +937,7 @@ msgid "提供模型源"
 msgstr "提供模型源"
 
 #: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "插件"
 msgstr "插件"
@@ -1036,7 +1035,7 @@ msgstr "收藏"
 msgid "收藏 {0}"
 msgstr "收藏 {0}"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "收藏夹"
 msgstr "收藏夹"
@@ -1073,7 +1072,7 @@ msgstr "收起变更面板"
 msgid "收起文件面板"
 msgstr "收起文件面板"
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 msgid "数据统计"
 msgstr "数据统计"
 
@@ -1381,6 +1380,11 @@ msgid "暂时无法确认是否已发送，请先检查状态"
 msgstr "暂时无法确认是否已发送，请先检查状态"
 
 #: src/plugins/TasksView.tsx
+msgid "更多"
+msgstr "更多"
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr "更多"
 
@@ -1787,7 +1791,7 @@ msgstr "能力"
 msgid "自动"
 msgstr "自动"
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "自动化"
 msgstr "自动化"
@@ -1799,6 +1803,10 @@ msgstr "自动压缩阈值"
 #: src/plugins/TasksView.tsx
 msgid "自动换行"
 msgstr "自动换行"
+
+#: src/app/Sidebar.tsx
+msgid "自定义侧栏"
+msgstr "自定义侧栏"
 
 #: src/app/use-session-actions.ts
 msgid "草稿无法保存到浏览器，刷新后会丢失"

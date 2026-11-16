@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { UnderlineTabs } from '@/components/ui/controls';
 import { ListRow, RowActions } from '@/components/ui/list-row';
 import { menuItem } from '@/components/ui/dropdown-menu';
+import { SortableList, SortHandle } from '@/components/ui/sortable-list';
 import { SettingsLinkRow } from '@/app/settings/SettingsLayout';
 import { Disclosure } from '@/app/session/Timeline';
 import { cn } from '@/lib/utils';
@@ -59,6 +60,19 @@ function Rows() {
   );
 }
 
+function SortableDemo() {
+  const { t } = useLingui();
+  const names: Record<string, string> = { changes: t`改动`, files: t`文件`, terminal: t`终端`, browser: t`浏览器` };
+  const [order, setOrder] = useState(['changes', 'files', 'terminal', 'browser']);
+  return (
+    <div className="flex w-72 flex-col rounded-xl border border-line bg-elevated px-4 [&>*+*]:edge-t">
+      <SortableList ids={order} onReorder={setOrder} label={(id) => names[id]!}>
+        {(id) => <div className="-ml-1.5 flex h-11 items-center gap-1 text-sm"><SortHandle label={t`调整${names[id]!}的顺序`} />{names[id]}</div>}
+      </SortableList>
+    </div>
+  );
+}
+
 export function NavigationChapter() {
   const { t } = useLingui();
   const [tab, setTab] = useState('changes');
@@ -101,6 +115,11 @@ export function NavigationChapter() {
             {/* The same row as hover draws it, so the hidden actions can be seen. */}
             <ListRow className="bg-hover text-fg" leading={<IconFileText />} actions={<RowActions className="pointer-events-auto opacity-100"><Button size="icon-sm" variant="quiet" aria-label={t`更多操作`}><IconEllipsis /></Button></RowActions>}>{t`文件`}</ListRow>
           </div>
+        </Specimen>
+      </Family>
+      <Family title="SortableList">
+        <Specimen name={t`默认`} prop="ids · onReorder · SortHandle" note={t`拖把手排序，或聚焦把手后按 ↑ ↓；拖动中 Esc 取消。`}>
+          <SortableDemo />
         </Specimen>
       </Family>
       <Plate number={1} title={t`行`} note={t`SessionRow、会话信息的各行和设置分区导航已换用 ListRow；menuItem 属于浮层，SettingsLinkRow 是卡片内的整宽分隔行，Disclosure 是转录折叠行，三者保持独立。`}>

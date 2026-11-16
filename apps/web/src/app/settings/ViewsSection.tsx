@@ -1,8 +1,6 @@
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowDown, IconArrowUp } from '@/components/icons';
-import { Button } from '@/components/ui/button';
 import { Segmented, Switch } from '@/components/ui/controls';
-import { Tip } from '@/components/ui/tooltip';
+import { SortableList, SortHandle } from '@/components/ui/sortable-list';
 import { cn } from '@/lib/utils';
 import type { ViewEntry } from '@/plugins/catalog';
 import { setChapterNavigation, setRailMark, setSessionSide, setViewOrder, setViewPlacement, setViewVisible, useSessionViews, useSidebarOrder, useViewPrefs, type RailMark, type SessionSide, type ViewList, type ViewSwitchPlacement } from '../session/viewPrefs';
@@ -51,24 +49,17 @@ function Thumb({ side, mark, selected }: { side: SessionSide; mark: RailMark; se
 /** The views of one list with their order and visibility controls; 对话 cannot be turned off. */
 function ViewRows({ list, views, hidden }: { list: ViewList; views: readonly ViewEntry[]; hidden: readonly string[] }) {
   const { t } = useLingui();
-  const move = (index: number, delta: -1 | 1) => {
-    const next = views.map((view) => view.id);
-    [next[index], next[index + delta]] = [next[index + delta]!, next[index]!];
-    setViewOrder(next, list);
-  };
-  return views.map(({ id: view, title: name }, index) => {
-    const up = t`上移${name}`;
-    const down = t`下移${name}`;
-    return (
-      <Row key={view} title={name}>
-        <div className="flex items-center gap-1">
-          <Tip label={up}><Button size="icon-xs" variant="quiet" aria-label={up} disabled={index === 0} onClick={() => move(index, -1)}><IconArrowUp /></Button></Tip>
-          <Tip label={down}><Button size="icon-xs" variant="quiet" aria-label={down} disabled={index === views.length - 1} onClick={() => move(index, 1)}><IconArrowDown /></Button></Tip>
-          <Switch className="ml-2" aria-label={name} checked={!hidden.includes(view)} disabled={list === 'session' && view === 'chat'} onCheckedChange={(visible) => setViewVisible(view, visible, list)} />
-        </div>
-      </Row>
-    );
-  });
+  const titles = new Map(views.map((view) => [view.id, view.title]));
+  const name = (id: string) => titles.get(id) ?? id;
+  return (
+    <SortableList ids={views.map((view) => view.id)} onReorder={(ids) => setViewOrder(ids, list)} label={name}>
+      {(view) => (
+        <Row title={<span className="-ml-1.5 flex items-center gap-1"><SortHandle label={t`调整${name(view)}的顺序`} />{name(view)}</span>}>
+          <Switch aria-label={name(view)} checked={!hidden.includes(view)} disabled={list === 'session' && view === 'chat'} onCheckedChange={(visible) => setViewVisible(view, visible, list)} />
+        </Row>
+      )}
+    </SortableList>
+  );
 }
 
 /** 视图: what a wide session shows on its right, how its rail marks prompts, and the switch between the views the catalog offers (对话, 终端, 画布...). */

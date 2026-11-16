@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBot, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconPuzzle, IconSearch, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -25,7 +25,8 @@ import { shortcutLabel } from '@/lib/platform';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
-import { useLists, useStores } from './state/stores';
+import { useLists, useSettings, useStores } from './state/stores';
+import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
 import { useTabs } from './tabs/useTabs';
 import { SidebarUserMenu } from './SidebarUserMenu';
 import { TaskSessionTitle } from './work-items/TaskSessionTitle';
@@ -48,6 +49,8 @@ interface Props {
   onProjectAction: (project: ProjectRecord, action: EntityAction) => void;
   onSessionAction: (session: Session, action: SessionAction) => void;
   onOpenSettings: () => void;
+  /** Opens the settings page that picks which destinations are rows and which sit under 更多. */
+  onCustomizeSidebar: () => void;
   /** Opens settings on the personal info page. */
   onOpenProfile: () => void;
   onOpenStats: () => void;
@@ -330,6 +333,25 @@ export function Sidebar(props: Props) {
   );
 
   const owner = useLists((state) => state.owner);
+  const sidebarPinned = useSettings((settings) => settings.sidebarPinned);
+  const destinations: Partial<Record<WebSidebarDestination, { open: () => void; active?: boolean | undefined; trailing?: ReactNode }>> = {
+    ...(props.onOpenAssistant ? { assistant: {
+      open: props.onOpenAssistant, active: props.assistantActive,
+      trailing: props.assistantSession && <span className="ml-auto inline-flex"><SessionIndicator session={props.assistantSession} mobile={mobile} selected={Boolean(props.assistantActive)} /></span>,
+    } } : {}),
+    ...(props.onOpenTasks ? { tasks: {
+      open: props.onOpenTasks, active: props.tasksActive,
+      trailing: props.tasksCount ? <span className="ml-auto text-2xs tabular-nums text-fg-4">{props.tasksCount}</span> : null,
+    } } : {}),
+    automations: { open: props.onOpenAutomations, active: props.automationsActive },
+    marks: { open: props.onOpenMarks, active: props.marksActive },
+    plugins: { open: props.onOpenPlugins, active: props.pluginsActive },
+    extensions: { open: props.onOpenExtensions, active: props.extensionsActive },
+    stats: { open: props.onOpenStats, active: props.statsActive },
+  };
+  const { pinned, more } = splitSidebarDestinations(sidebarPinned, WEB_SIDEBAR_DESTINATIONS.filter((id) => destinations[id]));
+  // The page open behind the menu marks the row that reaches it.
+  const moreActive = more.some((id) => destinations[id]!.active);
 
   const offlineBanner = props.stale?.mode === 'offline' && (
     <Notice tone="warning" className="mx-2 mb-1 items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs">{offlineLabel(props.stale.savedAt)}</Notice>
@@ -362,64 +384,43 @@ export function Sidebar(props: Props) {
             <IconSquarePen className="size-[15px] shrink-0" /><Trans context="workbench-sidebar-new-action">新会话</Trans>
           </button>
         )}
-        {props.onOpenAssistant && (
-          <button
-            type="button"
-            aria-current={props.assistantActive ? 'page' : undefined}
-            onClick={props.onOpenAssistant}
-            className={mobile
-              ? cn(mobileNavRow, props.assistantActive && 'bg-active')
-              : cn(navRow, props.assistantActive && 'bg-active text-fg')}
-          >
-            <IconBot className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>个人助理</Trans>
-            {props.assistantSession && <span className="ml-auto inline-flex"><SessionIndicator session={props.assistantSession} mobile={mobile} selected={Boolean(props.assistantActive)} /></span>}
-          </button>
-        )}
         <button type="button" data-touch-row onClick={props.onOpenSearch} className={mobile ? mobileNavRow : navRow}>
           <IconSearch className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />
           <span><Trans>搜索内容</Trans></span>
           <span aria-hidden="true" className="ml-auto hidden text-2xs text-fg-4 md:block">{shortcutLabel('K')}</span>
         </button>
-        {props.onOpenTasks && (
-          <button
-            type="button"
-            aria-current={props.tasksActive ? 'page' : undefined}
-            onClick={props.onOpenTasks}
-            className={mobile
-              ? cn(mobileNavRow, props.tasksActive && 'bg-active')
-              : cn(navRow, props.tasksActive && 'bg-active text-fg')}
-          >
-            <IconSquareKanban className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>任务看板</Trans>
-            {props.tasksCount ? <span className="ml-auto text-2xs tabular-nums text-fg-4">{props.tasksCount}</span> : null}
-          </button>
-        )}
-        {/* A destination like a conversation, not a tool like the footer's stats: templates and
-            schedules are where work starts, so the row sits with 新会话 and search. */}
-        <button
-          type="button"
-          aria-current={props.automationsActive ? 'page' : undefined}
-          onClick={props.onOpenAutomations}
-          className={mobile
-            ? cn(mobileNavRow, props.automationsActive && 'bg-active')
-            : cn(navRow, props.automationsActive && 'bg-active text-fg')}
-        >
-          <IconCalendarClock className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>自动化</Trans>
-        </button>
-        <button
-          type="button"
-          aria-current={props.marksActive ? 'page' : undefined}
-          onClick={props.onOpenMarks}
-          className={mobile
-            ? cn(mobileNavRow, props.marksActive && 'bg-active')
-            : cn(navRow, props.marksActive && 'bg-active text-fg')}
-        >
-          <IconBookmark className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>收藏夹</Trans>
-        </button>
-        {!mobile && (
-          <button type="button" aria-current={props.pluginsActive ? 'page' : undefined} onClick={props.onOpenPlugins} className={cn(navRow, props.pluginsActive && 'bg-active text-fg')}>
-            <IconPuzzle className="size-[15px] shrink-0" /><Trans>插件</Trans>
-          </button>
-        )}
+        {pinned.map((id) => {
+          const { icon: Icon, label } = SIDEBAR_DESTINATION_META[id];
+          const entry = destinations[id]!;
+          return (
+            <button
+              key={id}
+              type="button"
+              aria-current={entry.active ? 'page' : undefined}
+              onClick={entry.open}
+              className={mobile ? cn(mobileNavRow, entry.active && 'bg-active') : cn(navRow, entry.active && 'bg-active text-fg')}
+            >
+              <Icon className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />{t(label)}
+              {entry.trailing}
+            </button>
+          );
+        })}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={mobile ? cn(mobileNavRow, moreActive && 'bg-active') : cn(navRow, moreActive && 'bg-active text-fg')}>
+              <IconEllipsis className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans context="workbench-sidebar-more">更多</Trans>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="right" align="start" className="w-56">
+            {more.map((id) => {
+              const { icon: Icon, label } = SIDEBAR_DESTINATION_META[id];
+              const entry = destinations[id]!;
+              return <DropdownMenuItem key={id} aria-current={entry.active ? 'page' : undefined} onSelect={entry.open}><Icon />{t(label)}{entry.trailing}</DropdownMenuItem>;
+            })}
+            {more.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={props.onCustomizeSidebar}><IconSettings2 /><Trans>自定义侧栏</Trans></DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <Collapse open={Boolean(offlineBanner)}>{heldOfflineBanner}</Collapse>
@@ -568,12 +569,6 @@ export function Sidebar(props: Props) {
           mobile={mobile}
           onOpenProfile={props.onOpenProfile}
           onOpenSettings={props.onOpenSettings}
-          onOpenExtensions={props.onOpenExtensions}
-          onOpenStats={props.onOpenStats}
-          onOpenPlugins={props.onOpenPlugins}
-          extensionsActive={props.extensionsActive}
-          statsActive={props.statsActive}
-          pluginsActive={props.pluginsActive}
         />
       </div>
     </nav>

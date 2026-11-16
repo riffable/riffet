@@ -107,7 +107,7 @@ msgstr ""
 
 #: src/app/Header.tsx
 #: src/app/SessionInfo.tsx
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/use-session-actions.ts
 #: src/app/Workbench.tsx
 msgid "个人助理"
@@ -162,7 +162,7 @@ msgstr ""
 msgid "任务 #{0}"
 msgstr ""
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "任务看板"
 msgstr ""
@@ -887,7 +887,7 @@ msgstr ""
 msgid "打开设置"
 msgstr ""
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "扩展管理"
 msgstr ""
@@ -937,8 +937,7 @@ msgid "提供模型源"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
-#: src/app/Sidebar.tsx
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "插件"
 msgstr ""
@@ -1036,7 +1035,7 @@ msgstr ""
 msgid "收藏 {0}"
 msgstr ""
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "收藏夹"
 msgstr ""
@@ -1073,7 +1072,7 @@ msgstr ""
 msgid "收起文件面板"
 msgstr ""
 
-#: src/app/SidebarUserMenu.tsx
+#: src/app/sidebarDestinations.ts
 msgid "数据统计"
 msgstr ""
 
@@ -1381,6 +1380,11 @@ msgid "暂时无法确认是否已发送，请先检查状态"
 msgstr ""
 
 #: src/plugins/TasksView.tsx
+msgid "更多"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr ""
 
@@ -1787,7 +1791,7 @@ msgstr ""
 msgid "自动"
 msgstr ""
 
-#: src/app/Sidebar.tsx
+#: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
 msgid "自动化"
 msgstr ""
@@ -1798,6 +1802,10 @@ msgstr ""
 
 #: src/plugins/TasksView.tsx
 msgid "自动换行"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+msgid "自定义侧栏"
 msgstr ""
 
 #: src/app/use-session-actions.ts

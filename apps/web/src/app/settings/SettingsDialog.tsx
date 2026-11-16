@@ -22,6 +22,7 @@ import { ChannelsSection } from './ChannelsSection';
 import { DevicesSection } from './DevicesSection';
 import { TabsSection } from './TabsSection';
 import { ViewsSection } from './ViewsSection';
+import { SidebarSection } from './SidebarSection';
 import { SETTINGS_DIALOG_CLASS, settingsGroupTitle, settingsNavigationSections, settingsSections, type SettingsSection, type SettingsSectionGroup } from './settingsSections';
 export type { SettingsSection } from './settingsSections';
 type Section = SettingsSection;
@@ -213,6 +214,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'general' && <GeneralSection />}
             {section === 'appearance' && <ThemeSection />}
             {section === 'typography' && <TypographySection />}
+            {section === 'sidebar' && <SidebarSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
             {section === 'tabs' && <TabsSection />}
             {section === 'views' && <ViewsSection />}
             {section === 'terminal' && <TerminalSettingsSection />}

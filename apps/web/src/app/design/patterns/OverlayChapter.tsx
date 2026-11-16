@@ -135,10 +135,10 @@ export function OverlayChapter() {
       </Family>
       <Family title={t`个人资料与更多`}>
         <Specimen name={t`个人资料`}>
-          <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenExtensions={() => {}} onOpenStats={() => {}} />
+          <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} />
         </Specimen>
         <Specimen name={t`无法连接服务器`}>
-          <SidebarUserMenu stale={{ mode: 'offline' }} onOpenProfile={() => {}} onOpenSettings={() => {}} onOpenExtensions={() => {}} onOpenStats={() => {}} />
+          <SidebarUserMenu stale={{ mode: 'offline' }} onOpenProfile={() => {}} onOpenSettings={() => {}} />
         </Specimen>
       </Family>
       <Plate number={2} title={t`弹窗结构`} note={t`标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。`}>

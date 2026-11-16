@@ -3,7 +3,7 @@ import {
   Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
-  GitMerge, GitPullRequest, Globe, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
+  GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   KeyRound, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
   MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
@@ -51,6 +51,8 @@ export const IconDownload = icon(Download);
 export const IconHistory = icon(History);
 export const IconListFilter = icon(ListFilter);
 export const IconEllipsis = icon(Ellipsis);
+/** The handle a row is dragged by to reorder its list (`SortableList`). */
+export const IconGripVertical = icon(GripVertical);
 export const IconExternalLink = icon(ExternalLink);
 export const IconEye = icon(Eye);
 export const IconFile = icon(File);
@@ -102,6 +104,8 @@ export const IconPaperclip = icon(Paperclip);
 export const IconPictureInPicture = icon(PictureInPicture2);
 export const IconPencilLine = icon(PencilLine);
 export const IconPin = icon(Pin);
+/** Pinned: the on state of `IconPin`, as a sidebar destination fixed to its own row. */
+export const IconPinFilled = filled(Pin);
 export const IconPinOff = icon(PinOff);
 export const IconPause = filled(Pause);
 export const IconPlay = filled(Play);
