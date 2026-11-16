@@ -16,6 +16,7 @@ import riffet.shared.supported
 import riffet.ui.icons.IconPackState
 import riffet.ui.icons.RiffetIcons
 import riffet.shared.ThemeMode
+import riffet.ui.app.title
 import riffet.ui.theme.ThemeEntry
 import riffet_mobile.shared.generated.resources.*
 
@@ -27,6 +28,8 @@ internal enum class SettingsSection(
     val serverSettings: Boolean = false,
 ) {
     LANGUAGE(Res.string.settings_language, Res.string.settings_general, RiffetIcons.Globe),
+    ASSISTANT(Res.string.assistant_title, Res.string.settings_general, RiffetIcons.Bot, true),
+    LAUNCH_TAB(Res.string.settings_launch_tab, Res.string.settings_general, RiffetIcons.ListTodo),
     EXTENSIONS(Res.string.settings_extra_section_extensions, Res.string.settings_general, RiffetIcons.Puzzle),
     DEVICES(Res.string.settings_extra_section_devices, Res.string.settings_general, RiffetIcons.Shield),
     STYLE(Res.string.settings_interface_style, Res.string.settings_appearance, RiffetIcons.Layers),
@@ -90,6 +93,7 @@ internal fun SectionList(
                     SettingsSection.ICONS -> iconPacks.choices.firstOrNull { it.id == iconPacks.selected }?.title
                         ?.let { riffet.ui.theme.localizedAppearanceTitle(it) }.orEmpty()
                     SettingsSection.MOTION -> pageAnimationLabel(display.pageAnimation)
+                    SettingsSection.LAUNCH_TAB -> riffet.ui.app.HomeTab.entries.firstOrNull { it.key == riffet.ui.app.homeTabKey(display.launchTab) }?.let { stringResource(it.title()) }.orEmpty()
                     SettingsSection.CONNECTION -> server
                     SettingsSection.DEVICES -> if (DeviceControl.platform != null && deviceAllowed) stringResource(Res.string.settings_allowed) else ""
                     else -> ""

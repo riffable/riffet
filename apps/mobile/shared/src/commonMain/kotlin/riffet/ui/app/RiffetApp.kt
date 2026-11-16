@@ -62,6 +62,17 @@ import riffet.contracts.Project
 import riffet.contracts.Session
 import riffet.shared.AppPreferences
 import riffet.shared.DisplaySettings
+import riffet.shared.rememberAssistant
+import riffet.shared.reportAssistantTimeZone
+import riffet.ui.assistant.AssistantEntries
+import riffet.ui.assistant.AssistantSetup
+import riffet.ui.assistant.AssistantSheet
+import riffet.ui.assistant.AssistantSheets
+import riffet.shared.assistantMain
+import riffet.shared.assistantProject
+import riffet.ui.home.AssistantHome
+import riffet.ui.settings.ExtensionsPage
+import riffet_mobile.shared.generated.resources.assistant_abilities
 import riffet.shared.LocalNativeFeatures
 import riffet.shared.NativeFeatures
 import riffet.shared.PreferenceKeys
@@ -71,6 +82,7 @@ import riffet.shared.ThemeMode
 import riffet.shared.RiffetApi
 import riffet.shared.RiffetConnection
 import riffet.shared.createAppPreferences
+import riffet.shared.isAssistant
 import riffet.shared.isQuickChat
 import riffet.ui.downloads.DownloadFeedback
 import riffet.ui.downloads.DownloadsScreen
@@ -156,6 +168,10 @@ class RiffetNavigation {
     var downloadsOpen: Boolean
         get() = pages.contains { it == RiffetPage.Downloads }
         internal set(value) = setPage(RiffetPage.Downloads, value)
+    /** The assistant's 能力: the extensions page scoped to it. */
+    var abilitiesOpen: Boolean
+        get() = pages.contains { it == RiffetPage.Abilities }
+        internal set(value) = setPage(RiffetPage.Abilities, value)
     var pairingRequested: Boolean
         get() = pages.contains { it == RiffetPage.Pairing }
         internal set(value) = setPage(RiffetPage.Pairing, value)
@@ -483,7 +499,7 @@ fun RiffetApp(
                                                 owner = owner,
                                                 ownerRequested = navigation.ownerPageRequested,
                                                 onOwnerRequestHandled = { navigation.ownerPageRequested = false },
-                                                projectId = navigation.projectId ?: store.list.value.projects.firstOrNull { !it.isQuickChat }?.id,
+                                                projectId = navigation.projectId ?: store.list.value.projects.firstOrNull { !it.isQuickChat && !it.isAssistant }?.id,
                                                 themeMode = themeMode,
                                                 onThemeModeChange = onThemeMode,
                                                 iconPacks = iconPacks,
@@ -515,6 +531,13 @@ fun RiffetApp(
                                         connectionOperation = navigation.connectionOperation,
                                     )
                                     RiffetPage.Stats -> if (api != null) StatsScreen(api = api, onBack = back)
+                                    RiffetPage.Abilities -> if (api != null) ExtensionsPage(
+                                        api = api,
+                                        projectId = assistantProject(store.list.collectAsState().value.projects)?.id,
+                                        title = stringResource(Res.string.assistant_abilities),
+                                        onBack = back,
+                                        backend = NativeBackendId.CLAUDE,
+                                    )
                                     RiffetPage.Downloads -> DownloadsScreen(
                                         api = api,
                                         projectName = { id -> store.list.value.projects.firstOrNull { it.id == id }?.name },
@@ -623,12 +646,11 @@ internal fun Workbench(
     val snackbar = LocalRiffetSnackbar.current
     val quickChatUnavailable = stringResource(Res.string.session_quick_chat_unavailable)
 
-    // The last tab is a device preference; a first launch opens 任务.
+    // A launch opens the tab chosen in 设置 (助理 until then); the tab picked since stays for the run.
     if (!navigation.tabRestored) {
         navigation.tabRestored = true
-        navigation.tab = homeTab(preferences.string(HOME_TAB_KEY))
+        navigation.tab = homeTab(DisplaySettings.shared.launchTab)
     }
-    LaunchedEffect(navigation.tab) { preferences.setString(HOME_TAB_KEY, navigation.tab.name) }
 
     LaunchedEffect(store) { store.refresh() }
 
@@ -637,6 +659,8 @@ internal fun Workbench(
         if (!list.loaded || navigation.restored) return@LaunchedEffect
         navigation.restored = true
         if (navigation.session != null) return@LaunchedEffect
+        // The last conversation belongs to 任务; a launch on another tab stays there.
+        if (navigation.tab != HomeTab.TASKS) return@LaunchedEffect
         val last = preferences.string(PreferenceKeys.SESSION)?.let { id -> list.sessions.firstOrNull { it.id == id } }
         if (last != null) {
             store.select(last)
@@ -645,6 +669,29 @@ internal fun Workbench(
     }
     LaunchedEffect(session?.id) {
         if (navigation.restored) preferences.setString(PreferenceKeys.SESSION, session?.id)
+    }
+
+    // The assistant's one long conversation, shown by its tab once it exists (docs/ASSISTANT.md §3).
+    val assistantSetup = remember(api, scope) { AssistantSetup(api, scope) }
+    val assistantProject = remember(list.projects) { assistantProject(list.projects) }
+    var assistantStarted by remember { mutableStateOf<Session?>(null) }
+    val assistantMain = remember(assistantProject, list.sessions, assistantStarted) {
+        // A conversation just made shows before the project's own `mainSessionId` arrives.
+        assistantMain(assistantProject, list.sessions)
+            ?: assistantStarted?.let { made -> list.sessions.firstOrNull { it.id == made.id } ?: made }
+                ?.takeIf { assistantProject != null && it.projectId == assistantProject.id && it.archivedAt == null }
+    }
+    val onAssistantPage = navigation.tab == HomeTab.ASSISTANT && session == null
+    // What the session info and the composer's pickers act on: the visit, or the assistant's page.
+    val active = session ?: assistantMain.takeIf { onAssistantPage }
+    var assistantSheet by remember { mutableStateOf<AssistantSheet?>(null) }
+    // Packs are added in 设置: read again each time the assistant's page comes back.
+    LaunchedEffect(onAssistantPage) { if (onAssistantPage) assistantSetup.loadPacks() }
+    val assistantEntries = remember(assistantSetup) {
+        AssistantEntries(assistantSetup, onSheet = { assistantSheet = it }, onAbilities = {
+            navigation.detailsOpen = false
+            navigation.abilitiesOpen = true
+        })
     }
 
     val openSession: (Session) -> Unit = { target ->
@@ -663,6 +710,17 @@ internal fun Workbench(
         val request = requested ?: return@LaunchedEffect
         val target = list.sessions.firstOrNull { it.id == request.sessionId } ?: return@LaunchedEffect
         navigation.requested = null
+        // The assistant's conversation is its tab, not a page over the others.
+        if (target.id == assistantMain?.id) {
+            navigation.restored = true
+            navigation.statsOpen = false
+            navigation.downloadsOpen = false
+            navigation.pairingRequested = false
+            navigation.close()
+            navigation.tab = HomeTab.ASSISTANT
+            navigation.focus = request.sequence?.let { TimelineFocus(target.id, it, platformNowMillis()) }
+            return@LaunchedEffect
+        }
         // An explicit request wins over reopening the last session; back from it lands on 任务.
         navigation.restored = true
         navigation.statsOpen = false
@@ -719,13 +777,13 @@ internal fun Workbench(
     // details pane on the right shows the same 模型 / 权限 and issues the same writes, and one
     // controller is what keeps the two from fetching two catalogs and from disagreeing about
     // whether a write is in flight.
-    val controller = remember(api, session?.id) {
-        val open = session
+    val controller = remember(api, active?.id) {
+        val open = active
         if (api == null || open == null) null
         else SessionDetailController(api = api, scope = scope, sessionId = open.id, onSession = store::applySession)
     }
-    LaunchedEffect(controller, session?.backendId, session?.backendProfileId, session?.projectId) {
-        val open = session ?: return@LaunchedEffect
+    LaunchedEffect(controller, active?.backendId, active?.backendProfileId, active?.projectId) {
+        val open = active ?: return@LaunchedEffect
         controller?.load(open.backendId ?: NativeBackendId.CURSOR, open.backendProfileId, open.projectId)
     }
     // One delete confirmation for the list's menu and the details drawer. A conversation removed here
@@ -841,6 +899,20 @@ internal fun Workbench(
     }
     val cannotUseDirectory = stringResource(Res.string.session_cannot_use_directory)
 
+    // The page is the conversation the store holds: select it when the tab is on it, and keep the
+    // owner's time zone current for the model (docs/ASSISTANT.md §5.1).
+    LaunchedEffect(onAssistantPage, assistantMain?.id) {
+        val main = assistantMain ?: return@LaunchedEffect
+        if (!onAssistantPage) return@LaunchedEffect
+        androidx.compose.runtime.withFrameNanos { }
+        if (store.selected.value?.id != main.id) store.select(main)
+    }
+    val zone = riffet.ui.timeline.platformTimeZoneId()
+    LaunchedEffect(onAssistantPage, assistantMain?.id, list.settings?.assistant?.timeZone, zone) {
+        if (!onAssistantPage || assistantMain == null || api == null || list.settings?.assistant?.timeZone == zone) return@LaunchedEffect
+        runCatching { api.reportAssistantTimeZone(zone) }.getOrNull()?.let(store::applySavedSettings)
+    }
+
     AdaptiveWorkbench(tasks = navigation.tab == HomeTab.TASKS) { layout ->
         val rail = layout.rail
         val paned = layout.twoPane
@@ -859,7 +931,7 @@ internal fun Workbench(
                 if (open) navigation.drawerOpen = false
                 navigation.detailsOpen = open
             },
-            endEnabled = session != null,
+            endEnabled = active != null,
             startEnabled = !covering,
             backSwipe = { navigation.backSwipeFor(drawerBackTarget) },
             startDrawer = {
@@ -909,7 +981,7 @@ internal fun Workbench(
                 )
             },
             endDrawer = {
-                val open = session
+                val open = active
                 if (open != null) {
                     SessionDetailsPane(
                         store = store,
@@ -934,6 +1006,7 @@ internal fun Workbench(
                         onOpenSubagent = { entry ->
                             navigation.subagent = SubagentTarget(toolCallId = entry.toolCallId, name = entry.name)
                         },
+                        assistant = assistantEntries.takeIf { open.id == assistantMain?.id },
                     )
                 }
             },
@@ -985,6 +1058,55 @@ internal fun Workbench(
                                                     onOpenTerminal = { id, title -> navigation.terminal = TerminalTarget(id, title) },
                                                     initialMode = navigation.quickChatMode,
                                                 )
+                                                HomeTab.ASSISTANT -> when {
+                                                    // A conversation opened over the tabs owns the transcript, so this page waits behind it.
+                                                    assistantMain != null -> if (session == null) key(assistantMain.id) {
+                                                        SessionScreen(
+                                                            store = store,
+                                                            session = assistantMain,
+                                                            writeScope = scope,
+                                                            onBack = openMenu,
+                                                            onOpenMenu = openMenu,
+                                                            assistantPacks = assistantSetup.packs.orEmpty(),
+                                                            project = assistantProject,
+                                                            api = api,
+                                                            controller = controller,
+                                                            context = store.context.collectAsState().value,
+                                                            onOpenDetails = { navigation.detailsOpen = true },
+                                                            onOpenSession = openSession,
+                                                            onOpenSubagent = { target -> navigation.subagent = target },
+                                                            onOpenTerminal = { id -> navigation.terminal = TerminalTarget(id, assistantMain.title) },
+                                                            focus = navigation.focus
+                                                                ?.takeIf { it.sessionId == assistantMain.id }
+                                                                ?.let { TimelineFocusTarget(it.sequence, it.token) },
+                                                            presenter = presenter,
+                                                            marks = marks,
+                                                        )
+                                                    }
+                                                    assistantProject != null -> AssistantHome(
+                                                        store = store,
+                                                        api = api,
+                                                        project = assistantProject,
+                                                        configs = homeConfigs,
+                                                        entries = assistantEntries,
+                                                        onOpenMenu = openMenu,
+                                                        onOpenSession = { made ->
+                                                            assistantStarted = made
+                                                            store.refresh()
+                                                            navigationScope.launch {
+                                                                androidx.compose.runtime.withFrameNanos { }
+                                                                if (navigation.session == null) store.select(made)
+                                                            }
+                                                        },
+                                                        onStarted = { backend, profile, model ->
+                                                            scope.launch {
+                                                                val saved = runCatching { api?.rememberAssistant(backend, profile, model) }.getOrNull()
+                                                                if (saved != null) store.applySavedSettings(saved)
+                                                            }
+                                                        },
+                                                    )
+                                                    else -> EmptyPane()
+                                                }
                                                 HomeTab.TASKS -> if (paned) {
                                                     AdaptiveSessionPanes(
                                                         list = { sessionList(true) },
@@ -1018,6 +1140,7 @@ internal fun Workbench(
         )
     }
     SessionDeletionDialog(deletion)
+    AssistantSheets(assistantSetup, assistantSheet, onDismiss = { assistantSheet = null })
     importScope?.let { target ->
         if (api != null) ExternalSessionPickerSheet(
             api = api,
@@ -1035,9 +1158,6 @@ internal fun Workbench(
 
 private class ImportScope(val projectId: String?)
 
-/** The device's last tab, outside the per-server navigation keys. */
-private const val HOME_TAB_KEY = "home-tab"
-
 /**
  * 新建任务's project: the one asked for, else the last used, else the busiest. Quick chat is the
  * other launch target on the same page, never this project, so it is never saved as the last one.
@@ -1046,7 +1166,7 @@ private const val HOME_TAB_KEY = "home-tab"
 private fun rememberHomeProject(store: SessionStore, navigation: RiffetNavigation, preferences: AppPreferences): Project? {
     val list by store.list.collectAsState()
     val project: Project? = remember(list.projects, list.sessions, navigation.projectId) {
-        val live = list.projects.filter { it.archivedAt == null && it.system != "task-workspace" }
+        val live = list.projects.filter { it.archivedAt == null && !it.isAssistant && it.system != "task-workspace" }
         live.firstOrNull { it.id == navigation.projectId && !it.isQuickChat }
             ?: live.firstOrNull { it.id == preferences.string(PreferenceKeys.PROJECT) && !it.isQuickChat }
             ?: visibleGroups(live, list.sessions, "", false).firstOrNull()?.project
@@ -1079,6 +1199,7 @@ internal sealed interface RiffetPage {
     data object Pairing : RiffetPage
     data object Stats : RiffetPage
     data object Downloads : RiffetPage
+    data object Abilities : RiffetPage
     data class Panel(val panel: ProjectPanel, val file: FileTarget? = null) : RiffetPage
     data class Subagent(val target: SubagentTarget) : RiffetPage
     data class Terminal(val target: TerminalTarget) : RiffetPage

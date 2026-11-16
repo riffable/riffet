@@ -63,8 +63,11 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet_mobile.shared.generated.resources.*
 
 /** What the pages of the extension directory share: the agent and config in scope, and what the server lists for them. */
-internal class ExtensionsController(val api: RiffetApi, private val scope: CoroutineScope, private val projectId: String?) {
-    var backend by mutableStateOf(NativeBackendId.CURSOR)
+internal class ExtensionsController(
+    val api: RiffetApi, private val scope: CoroutineScope, private val projectId: String?,
+    initialBackend: NativeBackendId = NativeBackendId.CURSOR,
+) {
+    var backend by mutableStateOf(initialBackend)
     var profiles by mutableStateOf<List<NativeBackendProfileSettings>>(emptyList())
     var profileId by mutableStateOf("")
     var inventory by mutableStateOf<ExtensionInventory?>(null)
@@ -123,10 +126,14 @@ private const val PREVIEW = 5
 
 /** The extensions page and the pages above it, each its own page of a nested stack (mobile.md §2.1). */
 @Composable
-internal fun ExtensionsPage(api: RiffetApi, projectId: String?, title: String, onBack: () -> Unit) {
+internal fun ExtensionsPage(
+    api: RiffetApi, projectId: String?, title: String, onBack: () -> Unit,
+    /** The agent the page opens on; the assistant's is Claude Code. */
+    backend: NativeBackendId = NativeBackendId.CURSOR,
+) {
     val scope = rememberCoroutineScope()
     key(api, projectId) {
-        val controller = remember { ExtensionsController(api, scope, projectId) }
+        val controller = remember { ExtensionsController(api, scope, projectId, backend) }
         val pages = remember { PageStack<ExtRoute>(ExtRoute.Directory) }
         LaunchedEffect(controller) { controller.chooseBackend(controller.backend) }
         PageHost(pages) { route, back ->

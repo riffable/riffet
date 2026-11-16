@@ -34,6 +34,13 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.lerp
 import riffet.contracts.NativeBackendOption
 import riffet.ui.app.TabTopBar
+import riffet.ui.assistant.AssistantEntries
+import riffet.ui.assistant.AssistantSheet
+import riffet.shared.assistantSettings
+import riffet_mobile.shared.generated.resources.assistant_title
+import riffet_mobile.shared.generated.resources.assistant_memory
+import riffet_mobile.shared.generated.resources.assistant_rules
+import riffet_mobile.shared.generated.resources.assistant_abilities
 import riffet.ui.app.RiffetPageScaffold
 import riffet.ui.design.materialBackdropEnabled
 import riffet_mobile.shared.generated.resources.session_quick_chat_plain
@@ -130,6 +137,7 @@ import riffet.contracts.ModelInfo
 import riffet.contracts.NativeBackendCapabilities
 import riffet.contracts.NativeBackendCatalogEntry
 import riffet.contracts.NativeBackendId
+import androidx.compose.foundation.layout.RowScope
 import riffet.contracts.NativeBackendProfile
 import riffet.contracts.NativeSlashCatalog
 import riffet.contracts.Project
@@ -184,6 +192,7 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.shared.backendCatalog
 import riffet.shared.backendUsage
 import riffet.shared.backends
+import riffet.shared.isAssistant
 import riffet.shared.isQuickChat
 import riffet.shared.slashCatalog
 import org.jetbrains.compose.resources.getString
@@ -237,6 +246,9 @@ import riffet.ui.design.agentMarkTint
 /** The page's one draft, shared by both launch targets (the web's `new:home`). */
 internal const val HOME_DRAFT_ID = "home"
 
+/** The assistant page's own draft: what is typed there is not 新会话's. */
+private const val ASSISTANT_DRAFT_ID = "assistant"
+
 
 /** A fling faster than this settles the mode the way it was flung. */
 private val ModeSettleVelocity = 400.dp
@@ -247,7 +259,7 @@ private val ModeSettleVelocity = 400.dp
  * change (`backendRevision`), the saved defaults change, or the reader retries.
  */
 @Stable
-class HomeConfigs internal constructor(internal val task: HomeConfig, internal val chat: HomeConfig)
+class HomeConfigs internal constructor(internal val task: HomeConfig, internal val chat: HomeConfig, internal val assistant: HomeConfig)
 
 @Composable
 fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): HomeConfigs {
@@ -258,6 +270,7 @@ fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): H
         HomeConfigs(
             task = HomeConfig(api, scope, catalogReadFailed, providerNotRead, preferences = preferences),
             chat = HomeConfig(api, scope, catalogReadFailed, providerNotRead, quickChat = true),
+            assistant = HomeConfig(api, scope, catalogReadFailed, providerNotRead),
         )
     }
 }
@@ -500,7 +513,7 @@ fun ProjectHome(
 
         if (projectSheet && project != null) {
             ProjectPickerSheet(
-                projects = list.projects.filter { it.archivedAt == null && !it.isQuickChat && it.system != "task-workspace" },
+                projects = list.projects.filter { it.archivedAt == null && !it.isQuickChat && !it.isAssistant && it.system != "task-workspace" },
                 selectedId = project.id,
                 onSelect = { picked -> if (picked != null && picked.id != project.id) onSelectProject(picked) },
                 onDismiss = { projectSheet = false },
@@ -825,6 +838,8 @@ private fun HomeContent(
     /** Shows a terminal by id and title. */
     onOpenTerminal: (String, String) -> Unit,
     contentPadding: PaddingValues = PaddingValues(),
+    /** The assistant's page: its own draft, no terminal tools, the setup cards in their place. */
+    assistant: AssistantHomeParts? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val motion = LocalRiffetMotion.current
@@ -834,15 +849,17 @@ private fun HomeContent(
     val scope = rememberCoroutineScope()
     val pageActive = LocalPageActive.current
 
+    val draftId = if (assistant != null) ASSISTANT_DRAFT_ID else HOME_DRAFT_ID
     val drafts = LocalComposerDrafts.current
-    val draft = remember(drafts) { drafts?.draftFor(HOME_DRAFT_ID) ?: ComposerDraft() }
+    val draft = remember(drafts) { drafts?.draftFor(draftId) ?: ComposerDraft() }
     var text by draft.text
     var attachments by draft.attachments
     var references by draft.references
-    SideEffect { drafts?.save(HOME_DRAFT_ID, draft) }
+    SideEffect { drafts?.save(draftId, draft) }
     DisposableEffect(drafts) {
-        onDispose { drafts?.save(HOME_DRAFT_ID, draft) }
+        onDispose { drafts?.save(draftId, draft) }
     }
+    val composerFocus = remember { androidx.compose.ui.focus.FocusRequester() }
     var thumbnails by remember { mutableStateOf<Map<String, ImageBitmap>>(emptyMap()) }
     var uploading by remember { mutableStateOf(false) }
     var creating by remember { mutableStateOf(false) }
@@ -910,7 +927,7 @@ private fun HomeContent(
             } catch (failure: Throwable) {
                 error = failure.message ?: getString(Res.string.session_attachment_upload_failed)
             } finally {
-                drafts?.save(HOME_DRAFT_ID, draft)
+                drafts?.save(draftId, draft)
                 uploading = false
             }
         }
@@ -919,7 +936,7 @@ private fun HomeContent(
     // While the page shows an Agent that keeps a warm CLI (only Cursor does), one is held for its choice;
     // leaving the page or choosing otherwise releases it, and a send hands it to the new conversation.
     val prewarm = remember { PrewarmLease() }
-    val prewarmBody = if (pageActive && !chat && config.capabilities?.supportsPrewarm == true) PrewarmBody(
+    val prewarmBody = if (pageActive && !chat && assistant == null && config.capabilities?.supportsPrewarm == true) PrewarmBody(
         projectId = target.id, backendId = config.backendId, backendProfileId = config.profileId,
         model = config.model.takeIf { it.isNotBlank() }, mode = config.mode, approval = config.approval,
     ) else null
@@ -952,7 +969,8 @@ private fun HomeContent(
                 attachments = emptyList()
                 references = emptyList()
                 thumbnails = emptyMap()
-                drafts?.save(HOME_DRAFT_ID, draft)
+                drafts?.save(draftId, draft)
+                assistant?.onStarted?.invoke(config.backendId, config.profileId, config.model)
                 onOpenSession(session)
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -1032,7 +1050,9 @@ private fun HomeContent(
                             Spacer(Modifier.height(8.dp))
                         }
                     }
-                    if (!chat && onImport != null) {
+                    if (assistant != null) {
+                        Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) { assistant.cards(this) }
+                    } else if (!chat && onImport != null) {
                         Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             HomeToolCard(RiffetIcons.Terminal, stringResource(Res.string.session_terminal), ::openShell, Modifier.weight(1f))
                             HomeToolCard(RiffetIcons.Clock, stringResource(Res.string.external_import_action), onImport, Modifier.weight(1f))
@@ -1044,10 +1064,18 @@ private fun HomeContent(
                 Column {
                     slot()
                     Spacer(Modifier.height(metrics.controlInset / 2))
+                    if (assistant != null) {
+                        riffet.ui.assistant.AssistantPackEntries(assistant.packs) { entry ->
+                            text = riffet.ui.assistant.draftWithEntry(entry, text)
+                            drafts?.save(draftId, draft)
+                            composerFocus.requestFocus()
+                        }
+                        Spacer(Modifier.height(metrics.controlInset / 3))
+                    }
                     ComposerCard(
                         text = text,
                         onTextChange = { text = it },
-                        placeholder = if (chat) stringResource(Res.string.composer_placeholder_online) else stringResource(Res.string.session_task_placeholder),
+                        placeholder = if (chat || assistant != null) stringResource(Res.string.composer_placeholder_online) else stringResource(Res.string.session_task_placeholder),
                         attachments = attachments,
                         thumbnails = thumbnails,
                         uploading = uploading,
@@ -1080,10 +1108,11 @@ private fun HomeContent(
                             else if (references.none { it.sessionId == selected.id }) references = references + sessionReference(selected)
                         }) else null,
                         onOpenSessionReference = { reference ->
-                            drafts?.save(HOME_DRAFT_ID, draft)
+                            drafts?.save(draftId, draft)
                             list.sessions.firstOrNull { it.id == reference.sessionId }?.let(onOpenSession)
                         },
                         onRemoveSessionReference = { reference -> references = references - reference },
+                        focusRequester = composerFocus,
                     )
                 }
             },
@@ -1182,6 +1211,56 @@ private enum class HomeSheet { Settings, Agent, Model, Mode, Approval, Tools }
 /** Where the page-to-page glide is headed, so a tab change does not restart one a swipe already started. */
 private class PositionGlide(var target: Float) {
     var job: Job? = null
+}
+
+/** What the assistant's page adds to the home composer: the setup cards under it, and what to do once the first message is sent. */
+internal class AssistantHomeParts(
+    val cards: @Composable RowScope.() -> Unit,
+    val onStarted: ((NativeBackendId, String?, String) -> Unit)?,
+    val packs: List<riffet.contracts.AssistantPack> = emptyList(),
+)
+
+/**
+ * The assistant before it has a conversation (`apps/web/src/app/ProjectHome.tsx`): the home composer
+ * in the assistant's project with 记忆 / 规则 / 能力 under it. The agent and model start from the
+ * assistant's own choice; the first message makes the conversation, which the workbench then shows.
+ */
+@Composable
+internal fun AssistantHome(
+    store: SessionStore,
+    api: RiffetApi?,
+    project: Project,
+    configs: HomeConfigs,
+    entries: AssistantEntries,
+    onOpenMenu: () -> Unit,
+    onOpenSession: (Session) -> Unit,
+    onStarted: (NativeBackendId, String?, String) -> Unit,
+) {
+    val list by store.list.collectAsState()
+    val config = configs.assistant
+    val settings = remember(list.settings, config.backends) { assistantSettings(list.settings, config.backends) }
+    LaunchedEffect(configs, project.id, settings, list.backendRevision) { config.sync(project.id, settings, list.backendRevision) }
+    Box(Modifier.fillMaxSize().appearancePageBackground(LocalRiffetSurfaces.current.page).blurOnTap()) {
+        RiffetPageScaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = { TabTopBar(title = stringResource(Res.string.assistant_title), onOpenMenu = onOpenMenu) },
+        ) { contentInsets ->
+            HomeContent(
+                store = store, api = api, target = project, chat = false, config = config, slot = {},
+                onOpenSession = onOpenSession, onImport = null, onOpenTerminal = { _, _ -> },
+                contentPadding = contentInsets,
+                assistant = AssistantHomeParts(
+                    cards = {
+                        HomeToolCard(RiffetIcons.Brain, stringResource(Res.string.assistant_memory), { entries.onSheet(AssistantSheet.MEMORY) }, Modifier.weight(1f))
+                        HomeToolCard(RiffetIcons.FileText, stringResource(Res.string.assistant_rules), { entries.onSheet(AssistantSheet.RULES) }, Modifier.weight(1f))
+                        HomeToolCard(RiffetIcons.Puzzle, stringResource(Res.string.assistant_abilities), entries.onAbilities, Modifier.weight(1f))
+                    },
+                    onStarted = onStarted,
+                    packs = entries.setup.packs.orEmpty(),
+                ),
+            )
+        }
+    }
 }
 
 /** The web's `tildePath`, also covering Linux homes (`/home/x`, `/<mount>/home/x`, `/root`). */

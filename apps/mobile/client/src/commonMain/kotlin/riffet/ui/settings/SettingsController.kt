@@ -345,6 +345,24 @@ class SettingsController(
         }
     }
 
+    /** Writes one of the 助理's background-run settings (`RiffetApiAssistant.kt`'s setters); [onSaved] runs once it is stored. */
+    fun saveAssistant(write: suspend (RiffetApi) -> AppSettings, onSaved: () -> Unit = {}) {
+        if (!beginWrite()) return
+        scope.launch {
+            _state.update { it.copy(error = null, notice = null) }
+            try {
+                publish(write(api))
+                onSaved()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = failure.settingsMessage(L10n.uiText("settings.saveFailed"))) }
+            } finally {
+                _state.update { it.copy(saving = false) }
+            }
+        }
+    }
+
     /** Sets one auxiliary purpose (`title`, `handoff`, `chat`) or clears it; other purposes stay as they are. */
     fun saveAuxiliaryModel(purpose: String, ref: AuxiliaryModelRef?, onSaved: () -> Unit = {}) {
         if (!beginWrite()) return

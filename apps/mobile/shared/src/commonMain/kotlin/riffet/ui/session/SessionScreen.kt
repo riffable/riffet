@@ -205,6 +205,8 @@ import riffet_mobile.shared.generated.resources.session_not_set
 import riffet_mobile.shared.generated.resources.session_offline_age
 import riffet_mobile.shared.generated.resources.session_offline_synced_now
 import riffet_mobile.shared.generated.resources.app_back
+import riffet_mobile.shared.generated.resources.assistant_title
+import riffet_mobile.shared.generated.resources.session_open_sidebar
 import riffet_mobile.shared.generated.resources.session_permission
 import riffet_mobile.shared.generated.resources.session_reconnecting
 import riffet_mobile.shared.generated.resources.session_rename_session
@@ -270,6 +272,13 @@ fun SessionScreen(
     writeScope: CoroutineScope? = null,
     /** Saved replies (收藏); null on a host that has none. */
     marks: SessionMarks? = null,
+    /**
+     * The assistant tab's conversation (docs/ASSISTANT.md §3.1): the title is fixed, and the bar leads
+     * with the menu (the page is a tab, not a visit) instead of a way back.
+     */
+    onOpenMenu: (() -> Unit)? = null,
+    /** The assistant's capability packs, as chips above its composer. */
+    assistantPacks: List<riffet.contracts.AssistantPack> = emptyList(),
 ) {
     val designMetrics = LocalInterfaceStyle.current.metrics
     val pageMotion = LocalRiffetPageMotion.current
@@ -678,6 +687,7 @@ fun SessionScreen(
                             connection = connection,
                             cachedAt = cachedAt,
                             onBack = onBack,
+                            onOpenMenu = onOpenMenu,
                             onOpenDetails = onOpenDetails,
                             onRetry = { store.retry() },
                             onResume = resume,
@@ -699,7 +709,9 @@ fun SessionScreen(
                 },
                 bottomBar = {
                     // A wide single pane (Pad, an unfolded phone) keeps the transcript's reading column.
-                    Column(Modifier.fillMaxWidth().wrapContentWidth().widthIn(max = designMetrics.contentMaxWidth).snackbarBottomBar()) {
+                    Column(Modifier.fillMaxWidth().wrapContentWidth().widthIn(max = designMetrics.contentMaxWidth).snackbarBottomBar()
+                        // Inside a tab the bar sits under the composer.
+                        .padding(bottom = riffet.ui.app.LocalTabContentBottomPadding.current)) {
                         Reveal(Unit.takeIf { status?.profilePending == true && current.archivedAt == null }) {
                             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Text(stringResource(Res.string.session_profile_pending), color = colors.fg3, modifier = Modifier.weight(1f))
@@ -755,6 +767,7 @@ fun SessionScreen(
                             store = store,
                             session = current,
                             writeScope = writeScope,
+                            packs = assistantPacks,
                             supportsSteer = detail?.capabilities?.supportsSteer == true,
                             supportsSessionReferences = detail?.capabilities?.supportsSessionReferences == true,
                             supportsTargetedStop = detail?.capabilities?.supportsTargetedStop == true,
@@ -1133,6 +1146,7 @@ private fun SessionTopBar(
     connection: RiffetConnectionState,
     cachedAt: Long?,
     onBack: () -> Unit,
+    onOpenMenu: (() -> Unit)?,
     onOpenDetails: () -> Unit,
     onRetry: () -> Unit,
     /** Present while the CLI is not running and can be reopened (or is being reopened). */
@@ -1145,7 +1159,8 @@ private fun SessionTopBar(
         modifier = Modifier.fillMaxWidth().height(64.dp).padding(start = 4.dp, end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        PageBarAction(icon = RiffetIcons.ArrowLeft, description = stringResource(Res.string.app_back), onClick = onBack, tint = colors.fg)
+        if (onOpenMenu != null) PageBarAction(icon = RiffetIcons.Menu, description = stringResource(Res.string.session_open_sidebar), onClick = onOpenMenu, tint = colors.fg)
+        else PageBarAction(icon = RiffetIcons.ArrowLeft, description = stringResource(Res.string.app_back), onClick = onBack, tint = colors.fg)
         Box(
             modifier = Modifier
                 .weight(1f)
@@ -1156,7 +1171,7 @@ private fun SessionTopBar(
             contentAlignment = Alignment.CenterStart,
         ) {
             Text(
-                text = session.title,
+                text = if (onOpenMenu != null) stringResource(Res.string.assistant_title) else session.title,
                 // A title someone else wrote, often long: a row title's size, not a page heading's.
                 style = LocalRiffetTypography.current.headline,
                 color = colors.fg,

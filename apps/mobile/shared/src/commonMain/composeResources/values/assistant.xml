@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assistant_tab">助理</string>
+    <string name="assistant_title">个人助理</string>
+    <string name="assistant_memory">记忆</string>
+    <string name="assistant_rules">规则</string>
+    <string name="assistant_abilities">能力</string>
+    <string name="assistant_delegations">委托</string>
+    <string name="assistant_memory_profile">关于你</string>
+    <string name="assistant_memory_notes">记下的事</string>
+    <string name="assistant_memory_failed">无法读取记忆</string>
+    <string name="assistant_rules_default">默认</string>
+    <string name="assistant_rules_modified">已修改</string>
+    <string name="assistant_rules_restore">恢复默认</string>
+    <string name="assistant_rules_effect">下次启动时生效</string>
+    <string name="assistant_delegation_end">结束</string>
+    <string name="settings_launch_tab">启动时打开</string>
+    <string name="assistant_memory_empty">还没有记忆</string>
+    <string name="assistant_delegations_empty">还没有委托</string>
+    <string name="assistant_delegation_ended">已结束</string>
+    <string name="assistant_trigger_schedule">定时 %1$s</string>
+    <string name="assistant_trigger_release">%1$s 发版</string>
+    <string name="assistant_trigger_page">%1$s 有变化</string>
+    <string name="assistant_background">后台运行</string>
+    <string name="assistant_background_note">用个人助理的模型，按用量计费</string>
+    <string name="assistant_supervision">跟进任务</string>
+    <string name="assistant_supervision_idle">任务的会话停下、你不在时，核对交付或推动它</string>
+    <string name="assistant_consolidation">记忆整理</string>
+    <string name="assistant_consolidation_idle">每晚，以及主对话压缩前</string>
+    <string name="assistant_delegations_active">%1$d 项进行中</string>
+    <string name="assistant_model">模型</string>
+    <string name="assistant_daily_runs">24 小时内最多</string>
+    <string name="assistant_daily_runs_count">%1$d 次</string>
+    <string name="assistant_daily_started">已开始 %1$d 次</string>
+    <string name="assistant_daily_started_waiting">已开始 %1$d 次，%2$d 次在等</string>
+    <string name="assistant_dispatch">开始任务前</string>
+    <string name="assistant_dispatch_edits">改代码的先问我</string>
+    <string name="assistant_dispatch_all">都先问我</string>
+    <string name="assistant_usage">近 %1$d 天 %2$d 次 · %3$s tokens</string>
+    <string name="assistant_packs">能力包</string>
+    <string name="assistant_packs_note">个人助理空闲时生效；去掉后记忆保留</string>
+    <string name="assistant_pack_remove_title">去掉「%1$s」？</string>
+    <string name="assistant_pack_remove_message">它的文件夹会删除，可以从个人助理目录的提交历史找回</string>
+    <string name="assistant_pack_remove">去掉</string>
+</resources>

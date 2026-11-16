@@ -46,6 +46,7 @@ import riffet.contracts.QuickChatPreset
 import riffet.i18n.L10n
 import riffet.shared.*
 import riffet.ui.app.PageLeaveGuard
+import riffet.ui.app.title
 import riffet.ui.app.PageBackHandler
 import riffet.ui.app.PageHost
 import riffet.ui.app.PageStack
@@ -173,6 +174,7 @@ internal fun SettingsScreen(
                         ServerSettingsLoad(controller)
                     } else when (section) {
                         SettingsSection.LANGUAGE -> LanguageSection()
+                        SettingsSection.LAUNCH_TAB -> LaunchTabSection()
                         SettingsSection.STYLE -> InterfaceStylePicker()
                         SettingsSection.MOTION -> MotionSection()
                         SettingsSection.GESTURES -> GesturesSection()
@@ -189,6 +191,7 @@ internal fun SettingsScreen(
                         SettingsSection.NOTIFICATIONS -> NotificationsSection()
                         SettingsSection.INTERACTION -> InteractionSection(controller)
                         SettingsSection.QUICK_CHAT -> QuickChatSection(controller, auxiliaryOptions.first, auxiliaryOptions.second) { pages.push(SettingsPageRoute.QuickChatPresets) }
+                        SettingsSection.ASSISTANT -> AssistantSettingsSection(api, controller)
                         SettingsSection.BACKENDS -> Unit
                         SettingsSection.PROVIDERS -> Unit
                         SettingsSection.FILES -> FilesSettingsSection(controller)
@@ -607,6 +610,26 @@ private fun InteractionSection(controller: SettingsController) {
         )
     }
     ApprovalVerificationGroup()
+}
+
+/** Which tab a launch opens; this device's choice, like the rest of what is stored locally. */
+@Composable
+private fun LaunchTabSection() {
+    val display = DisplaySettings.shared
+    val title = stringResource(Res.string.settings_launch_tab)
+    SettingsGroup("") {
+        Column(Modifier.fillMaxWidth().selectableGroup().settingsSearchAnchor(title)) {
+            riffet.ui.app.HomeTab.entries.forEach { tab ->
+                val selected = tab.key == riffet.ui.app.homeTabKey(display.launchTab)
+                GroupRow(
+                    title = stringResource(tab.title()),
+                    trailing = { SelectionMark(selected) },
+                    modifier = Modifier.selectable(selected, role = Role.RadioButton) { display.changeLaunchTab(tab.key) },
+                )
+            }
+        }
+    }
+    LocalPreferenceNote()
 }
 
 @Composable

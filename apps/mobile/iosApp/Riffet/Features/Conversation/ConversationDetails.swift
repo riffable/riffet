@@ -9,6 +9,8 @@ struct ConversationDetails: View {
     let catalog: NativeBackendCatalogEntry?
     let connectionStatus: ConversationStatus?
     let supportsTerminal: Bool
+    /// Set for the assistant's main conversation: its setup rows, a fixed title, no code or list actions.
+    var assistant: AssistantSetup? = nil
     let find: () -> Void
     let openTerminal: () -> Void
     let rename: () -> Void
@@ -36,6 +38,8 @@ struct ConversationDetails: View {
 
     private var current: Session { workbench.selected?.id == session.id ? workbench.selected ?? session : session }
     private var project: Project? { workbench.project(current.projectId) }
+    /// Anything in the assistant's directory is not code work.
+    private var inAssistant: Bool { assistant != nil || project?.isAssistant == true }
     private var items: [Item] {
         let subagents = workbench.subagentEntries
         let owned = Set(subagents.map(\.toolCallId))
@@ -65,6 +69,7 @@ struct ConversationDetails: View {
         NavigationStack {
             RiffetList {
                 Section { RiffetPaneActionBar(actions: destinations) }
+                if let assistant { Section { AssistantSetupRows(workbench: workbench, setup: assistant) } }
                 // The one fact about this conversation a reader cannot see elsewhere: a profile change
                 // waiting for the agent to restart, else the server's informational notice.
                 if workbench.status?.profilePending?.boolValue == true {
@@ -88,7 +93,7 @@ struct ConversationDetails: View {
             .accessibilityIdentifier("conversationInformationList")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) { RiffetBarTitle(title: current.title, status: stateLine) }
+                ToolbarItem(placement: .principal) { RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : current.title, status: stateLine) }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { dismiss() } label: { Image(systemName: "xmark") }.accessibilityLabel(String(localized: "关闭", bundle: .riffet))
                 }
@@ -113,26 +118,28 @@ struct ConversationDetails: View {
 
     private var destinations: [RiffetPaneAction] {
         var result: [RiffetPaneAction] = []
-        if current.backendId != .chat, project != nil {
+        if current.backendId != .chat, project != nil, !inAssistant {
             result.append(.init(symbol: "point.3.connected.trianglepath.dotted", title: String(localized: "变更", bundle: .riffet)) { destination = .changes })
             result.append(.init(symbol: "folder", title: String(localized: "文件", bundle: .riffet)) { destination = .files })
         }
-        if supportsTerminal { result.append(.init(symbol: "terminal", title: String(localized: "终端", bundle: .riffet)) { close(openTerminal) }) }
+        if supportsTerminal, !inAssistant { result.append(.init(symbol: "terminal", title: String(localized: "终端", bundle: .riffet)) { close(openTerminal) }) }
         result.append(.init(symbol: "magnifyingglass", title: String(localized: "查找", bundle: .riffet)) { close(find) })
         return result
     }
 
     private func smallActions(_ current: Session) -> [RiffetPaneAction] {
         let pinned = current.pinnedAt != nil, archived = current.archivedAt != nil
-        return [
-            .init(symbol: pinned ? "pin.slash" : "pin", title: pinned ? String(localized: "取消置顶", bundle: .riffet) : String(localized: "置顶", bundle: .riffet)) {
+        var actions: [RiffetPaneAction] = []
+        if !inAssistant {
+            actions.append(.init(symbol: pinned ? "pin.slash" : "pin", title: pinned ? String(localized: "取消置顶", bundle: .riffet) : String(localized: "置顶", bundle: .riffet)) {
                 Task { await workbench.update(current, pinned: !pinned) }
-            },
-            .init(symbol: "pencil", title: String(localized: "重命名", bundle: .riffet)) { close(rename) },
-            .init(symbol: archived ? "arrow.uturn.backward" : "archivebox", title: archived ? String(localized: "恢复", bundle: .riffet) : String(localized: "归档", bundle: .riffet)) {
-                Task { await workbench.update(current, archived: !archived) }
-            },
-        ]
+            })
+            actions.append(.init(symbol: "pencil", title: String(localized: "重命名", bundle: .riffet)) { close(rename) })
+        }
+        actions.append(.init(symbol: archived ? "arrow.uturn.backward" : "archivebox", title: archived ? String(localized: "恢复", bundle: .riffet) : String(localized: "归档", bundle: .riffet)) {
+            Task { await workbench.update(current, archived: !archived) }
+        })
+        return actions
     }
 
     /// Closes the panel, then runs what the conversation's menu would run, once the sheet is gone: an alert
@@ -205,12 +212,12 @@ struct ConversationDetails: View {
         if let approval = NativeConfigurationSummary.approval(status: workbench.status, backend: backend, sessionApproval: current.approval) {
             RiffetValueRow(label: String(localized: "操作确认", bundle: .riffet), value: catalog?.capabilities.permissions.first { $0.id == approval }?.label ?? approval)
         }
-        if let project {
+        if let project, !inAssistant {
             RiffetValueRow(label: String(localized: "项目", bundle: .riffet), value: project.name)
             RiffetValueRow(label: String(localized: "目录", bundle: .riffet), value: project.cwd, mono: true).accessibilityIdentifier("sessionInformationDirectory")
             if let branch = project.worktree?.branch { RiffetValueRow(label: String(localized: "分支", bundle: .riffet), value: branch, mono: true) }
         }
-        if !current.tags.isEmpty { RiffetValueRow(label: String(localized: "标签", bundle: .riffet), value: current.tags.map { "#" + $0 }.joined(separator: " ")) }
+        if !current.tags.isEmpty, !inAssistant { RiffetValueRow(label: String(localized: "标签", bundle: .riffet), value: current.tags.map { "#" + $0 }.joined(separator: " ")) }
         RiffetValueRow(label: String(localized: "创建时间", bundle: .riffet), value: date(current.createdAt))
         RiffetValueRow(label: String(localized: "最近活动", bundle: .riffet), value: date(current.lastActivityAt ?? current.updatedAt))
         RiffetValueRow(label: String(localized: "会话 ID", bundle: .riffet), value: current.id, mono: true)

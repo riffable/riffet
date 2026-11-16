@@ -158,3 +158,162 @@ private struct AuxiliaryModelChoice: View {
         }
     }
 }
+
+/// 个人助理 (docs/ASSISTANT.md §7.6): its model, what it does in the background, which spends the owner's tokens while
+/// they are away, and how it starts tasks. Saved at once, on the server, for every device.
+struct AssistantSettingsView: View {
+    let workbench: Workbench
+    @State private var setup = AssistantSetup()
+    @State private var usage: AssistantRunUsage?
+    @State private var saving = false
+    @State private var error: String?
+    @State private var removing: AssistantPack?
+    @Environment(\.palette) private var palette
+
+    private static let dailyRuns: [Int32] = [10, 30, 100]
+
+    var body: some View {
+        let assistant = workbench.settings?.assistant
+        // The assistant's own agent; its model comes from every provider of that agent, as the composer lists them.
+        let choice = AssistantKt.assistantChoice(saved: assistant, backends: workbench.backends)
+        let backend = workbench.backends.first { $0.backendId == choice?.backendId }
+        let projectID = workbench.assistantProject?.id
+        let daily = assistant?.dailyRuns?.int32Value ?? Int32(BudgetsKt.ASSISTANT_BUDGET_DAILY_RUNS)
+        let dailyChoices = (Self.dailyRuns.contains(daily) ? Self.dailyRuns : (Self.dailyRuns + [daily]).sorted())
+        let active = setup.delegations?.filter { $0.state == "active" }.count
+        RiffetForm {
+            Section {
+                if let choice, let backend, let projectID {
+                    NavigationLink {
+                        NewTaskModelPicker(workbench: workbench, backend: choice.backendId, projectID: projectID, profiles: backend.profiles,
+                                           selectedProfileID: choice.profileId, selection: choice.model) { _, profileID, model in
+                            save { try await $0.rememberAssistant(backendId: choice.backendId, profileId: profileID, model: model) }
+                        }
+                    } label: {
+                        HStack(spacing: 12) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(String(localized: "模型", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg)
+                                Text(backend.label).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            }
+                            Spacer(minLength: 8)
+                            if let model = choice.model, !model.isEmpty { Text(model).riffetFont(.body).foregroundStyle(palette.fg3).lineLimit(1) }
+                        }
+                    }
+                    .disabled(saving)
+                } else {
+                    SettingsRowLabel(title: String(localized: "模型", bundle: .riffet))
+                }
+            }
+            if !setup.packs.isEmpty {
+                Section {
+                    ForEach(setup.packs, id: \.id) { pack in
+                        Toggle(isOn: Binding(get: { pack.installed }, set: { on in
+                            if !on && !pack.builtIn { removing = pack } else { setPack(pack, on: on) }
+                        })) {
+                            describedLabel(pack.title, pack.description)
+                        }
+                        .tint(palette.accent).disabled(saving)
+                    }
+                } header: {
+                    RiffetSectionTitle(String(localized: "能力包", bundle: .riffet))
+                } footer: {
+                    Text(String(localized: "个人助理空闲时生效；去掉后记忆保留", bundle: .riffet))
+                }
+            }
+            Section {
+                Toggle(isOn: Binding(get: { assistant?.supervision?.boolValue == true }, set: { on in save { try await $0.setAssistantSupervision(on: on) } })) {
+                    describedLabel(String(localized: "跟进任务", bundle: .riffet), spent("supervise") ?? String(localized: "任务的会话停下、你不在时，核对交付或推动它", bundle: .riffet))
+                }
+                .tint(palette.accent).disabled(saving)
+                Toggle(isOn: Binding(get: { assistant?.consolidation?.boolValue != false }, set: { on in save { try await $0.setAssistantConsolidation(on: on) } })) {
+                    describedLabel(String(localized: "记忆整理", bundle: .riffet), spent("consolidate") ?? String(localized: "每晚，以及主对话压缩前", bundle: .riffet))
+                }
+                .tint(palette.accent).disabled(saving)
+                NavigationLink { AssistantDelegationsView(workbench: workbench, setup: setup) } label: {
+                    SettingsRowLabel(title: String(localized: "委托", bundle: .riffet), value: spent("delegation") ?? active.map { String(localized: "\($0) 项进行中", bundle: .riffet) })
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    RiffetPickerRow(title: String(localized: "24 小时内最多", bundle: .riffet), options: dailyChoices.map {
+                        .init(id: $0, title: String(localized: "\(Int($0)) 次运行", bundle: .riffet))
+                    }, selection: Binding(get: { daily }, set: { value in save { try await $0.setAssistantDailyRuns(count: value) } }))
+                    .disabled(saving)
+                    if let usage {
+                        Text(usage.waiting > 0
+                             ? String(localized: "已开始 \(Int(usage.started)) 次，\(Int(usage.waiting)) 次在等", bundle: .riffet)
+                             : String(localized: "已开始 \(Int(usage.started)) 次", bundle: .riffet))
+                            .riffetFont(.caption).foregroundStyle(palette.fg3)
+                    }
+                }
+            } header: {
+                RiffetSectionTitle(String(localized: "后台运行", bundle: .riffet))
+            } footer: {
+                Text(String(localized: "用个人助理的模型，按用量计费", bundle: .riffet))
+            }
+            Section {
+                Picker(String(localized: "开始任务前", bundle: .riffet), selection: Binding(
+                    get: { assistant?.dispatch == "all" ? "all" : "edits" },
+                    set: { value in save { try await $0.setAssistantDispatch(value: value) } }
+                )) {
+                    Text(String(localized: "改代码的先问我", bundle: .riffet)).tag("edits")
+                    Text(String(localized: "都先问我", bundle: .riffet)).tag("all")
+                }
+                .pickerStyle(.menu).tint(palette.fg3).disabled(saving)
+            } header: {
+                RiffetSectionTitle(String(localized: "任务", bundle: .riffet))
+            }
+            RiffetNotice.section(.error, error)
+        }
+        .confirmationDialog(removing.map { String(localized: "去掉「\($0.title)」？", bundle: .riffet) } ?? "",
+                            isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } }), titleVisibility: .visible) {
+            Button(String(localized: "去掉", bundle: .riffet), role: .destructive) {
+                if let pack = removing { setPack(pack, on: false) }
+                removing = nil
+            }
+        } message: { Text(String(localized: "它的文件夹会删除，可以从个人助理目录的提交历史找回", bundle: .riffet)) }
+        .navigationTitle(String(localized: "个人助理", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .task { await setup.refresh(workbench.api) }
+        .task { await loadUsage() }
+    }
+
+    private func describedLabel(_ title: String, _ detail: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).riffetFont(.body).foregroundStyle(palette.fg)
+            if let detail, !detail.isEmpty { Text(detail).riffetFont(.caption).foregroundStyle(palette.fg3) }
+        }
+    }
+
+    /// `近 7 天 12 次 · 1.2M tokens`, once the job has had runs.
+    private func spent(_ job: String) -> String? {
+        guard let usage, let row = usage.jobs.first(where: { $0.job == job }), row.runs > 0 else { return nil }
+        let tokens = StatsMathKt.compactCount(value: Double(row.tokens))
+        return String(localized: "近 \(Int(usage.days)) 天 \(Int(row.runs)) 次 · \(tokens) tokens", bundle: .riffet)
+    }
+
+    private func setPack(_ pack: AssistantPack, on: Bool) {
+        guard !saving, let api = workbench.api else { return }
+        saving = true
+        Task {
+            defer { saving = false }
+            do { try await setup.setPack(api, id: pack.id, on: on); error = nil }
+            catch is CancellationError {} catch { self.error = error.riffetMessage; await setup.refresh(api) }
+        }
+    }
+
+    private func loadUsage() async {
+        guard let api = workbench.api else { return }
+        if let value = try? await api.assistantRunUsage() { usage = value }
+    }
+
+    private func save(_ write: @escaping (RiffetApi) async throws -> AppSettings) {
+        guard !saving, let api = workbench.api else { return }
+        saving = true
+        Task {
+            defer { saving = false }
+            do {
+                workbench.store.applySavedSettings(settings: try await write(api))
+                error = nil
+                await loadUsage()
+            } catch is CancellationError {} catch { self.error = error.riffetMessage }
+        }
+    }
+}

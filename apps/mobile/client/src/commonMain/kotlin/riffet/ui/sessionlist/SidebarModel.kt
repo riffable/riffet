@@ -4,6 +4,7 @@ import riffet.contracts.Project
 import riffet.contracts.Session
 import riffet.contracts.SessionState
 import riffet.i18n.L10n
+import riffet.shared.isAssistant
 import riffet.shared.isQuickChat
 import riffet.ui.timeline.instantMillis
 
@@ -281,8 +282,8 @@ private fun sidebarProjectMap(projects: List<Project>, showArchived: Boolean): M
     )
     return buildMap {
         for (project in projects) {
-            // The quick chat project has its own section above the projects.
-            if (project.isQuickChat) continue
+            // The quick chat project has its own section above the projects; the assistant is not a project.
+            if (project.isQuickChat || project.isAssistant) continue
             var current = project
             val visited = mutableSetOf<String>()
             var hidden = false

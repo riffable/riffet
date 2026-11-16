@@ -215,6 +215,8 @@ data class AppSettings(
     val agentDefaults: Map<String, NativeBackendDefaults>? = null,
     /** Ordered ids of the pages the sidebar pins; null is the default set. Account-wide. */
     val sidebarPinned: List<String>? = null,
+    /** The agent and model the 助理 starts with, on every device. */
+    val assistant: AssistantSettings? = null,
 ) {
     /** The Agent new sessions start on, built-in or a plugin's; null when none was chosen. */
     val defaultAgent: String? get() = defaultAgentId ?: defaultBackendId?.let(AgentIds::wire)

@@ -92,10 +92,14 @@ struct NativeExtensionsView: View {
     /// The kind chip: empty shows every kind, each cut to its first few.
     @State private var kindFilter = ""
     private static let preview = 5
-    init(workbench: Workbench) {
+    /// Set for the 助理's 能力: the agent and project stay at the assistant's own, so the page lists what its launch loads.
+    private let assistantProjectID: String?
+    init(workbench: Workbench, assistantProjectID: String? = nil) {
         self.workbench = workbench
+        self.assistantProjectID = assistantProjectID
         let preferred = workbench.settings?.defaultBackendId
-        _backend = State(initialValue: preferred.flatMap { managementBackends.contains($0) ? $0 : nil } ?? .cursor)
+        _backend = State(initialValue: assistantProjectID != nil ? .claude : preferred.flatMap { managementBackends.contains($0) ? $0 : nil } ?? .cursor)
+        _projectID = State(initialValue: assistantProjectID ?? "")
     }
     private var context: ExtensionContext { ExtensionContext(backendId: backend, profileId: profileID, projectId: projectID.isEmpty ? nil : projectID) }
     private var contextKey: String { "\(backend.name)|\(profileID)|\(projectID)" }
@@ -125,7 +129,7 @@ struct NativeExtensionsView: View {
         let capped = kind.isEmpty && needle.isEmpty
         let diagnostics = (inventory?.diagnostics ?? []) + (runtime?.diagnostics ?? [])
         RiffetList {
-            SettingsChipRow { chips }
+            if assistantProjectID == nil { SettingsChipRow { chips } }
             if all.count > 1 {
                 RiffetChipBar(items: [.init(value: "", title: String(localized: "全部", bundle: .riffet))]
                                 + all.map { .init(value: $0.kind, title: "\(ExtText.kind($0.kind)) \($0.items.count)") },
@@ -175,7 +179,7 @@ struct NativeExtensionsView: View {
                 else if grouped.isEmpty && !needle.isEmpty { ContentUnavailableView.search(text: needle) }
             }
         }
-        .navigationTitle(String(localized: "扩展管理", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(assistantProjectID != nil ? String(localized: "能力", bundle: .riffet) : String(localized: "扩展管理", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .riffetSearchable(text: $filter, prompt: String(localized: "搜索名称或类型", bundle: .riffet))
         .toolbar {
             if canCreate || canInstall {

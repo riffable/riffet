@@ -357,6 +357,6 @@ final class SessionDeletion: Identifiable {
 }
 
 extension Project {
-    /// A directory a task can run in: not the server's quick-chat home nor a task's private workspace.
-    var isTaskTarget: Bool { !isQuickChat && system != "task-workspace" }
+    /// A directory a task can run in: not the server's quick-chat home, a task's private workspace or the assistant's directory.
+    var isTaskTarget: Bool { !isQuickChat && system != "task-workspace" && system != "assistant" }
 }

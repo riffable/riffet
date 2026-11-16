@@ -44,6 +44,7 @@ internal data class SettingsSearchTarget(val id: String, val title: String, val 
 internal val LocalSettingsSearchTarget = staticCompositionLocalOf<SettingsSearchTarget?> { null }
 
 private val sectionAliases = mapOf(
+    SettingsSection.LAUNCH_TAB to "launch start tab assistant default open 启动 默认 打开 助理 标签 qidong moren dakai zhuli biaoqian",
     SettingsSection.LANGUAGE to "language locale follow system simplified chinese english 语言 跟随系统 简体中文 中文 英文 英语 yuyan gen sui xi tong jian ti zhong wen ying wen ying yu yy",
     SettingsSection.MOTION to "motion animation transition 动效 动画 dongxiao donghua",
     SettingsSection.GESTURES to "gestures swipe back haptics vibration interaction 手势 返回 触觉 振动 shoushi fanhui chujue jiaohu",
@@ -57,6 +58,7 @@ private val sectionAliases = mapOf(
     SettingsSection.BACKENDS to "models provider backend cursor claude codex gemini openai ollama moxing tigongshang",
     SettingsSection.AUXILIARY to "auxiliary models title summary fuzhu moxing biaoti zhaiyao",
     SettingsSection.QUICK_CHAT to "quick chat prompts retention kuaisu liaotian duihua",
+    SettingsSection.ASSISTANT to "personal assistant background runs follow up memory delegations 个人助理 助理 后台运行 委托 gerenzhuli zhuli houtai yunxing weituo",
     SettingsSection.CONNECTION to "connection server pairing lianjie fuwuqi peidui",
     SettingsSection.SERVICE to "service status reclaim cpu memory fuwu zhuangtai huishou neicun",
     SettingsSection.DIAGNOSTICS to "diagnostics logs environment benchmark zhenduan rizhi huanjing",
@@ -108,6 +110,7 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     row("typography.spacing", SettingsSection.TYPOGRAPHY, Res.string.settings_session_spacing, "spacing density compact relaxed", "hui hua jian ju mi du")
     group("icons.app", SettingsSection.ICONS, Res.string.settings_app_icon, "launcher app icon", "ying yong tu biao")
     group("icons.pack", SettingsSection.ICONS, Res.string.settings_icon_pack, "icon pack lucide fluent mdi remix octicons", "jie mian tu biao tu biao bao")
+    row("launch-tab.tab", SettingsSection.LAUNCH_TAB, Res.string.settings_launch_tab, "launch start tab assistant default open 启动 默认 打开 助理 标签", "qi dong mo ren da kai zhu li")
     row("input.running-message", SettingsSection.INTERACTION, Res.string.settings_task_output_to, "queue steer running message", "yun xing zhong fa song de xiao xi")
     group("input.verification", SettingsSection.INTERACTION, Res.string.settings_verify_group, "approval verification biometric fingerprint face security 指纹 人脸 生物识别", "shen pi yan zheng zhi wen ren lian an quan") { approvalVerificationAvailability() != VerificationAvailability.UNSUPPORTED }
     row("notifications.alerts", SettingsSection.NOTIFICATIONS, Res.string.settings_session_alerts, "session alerts notifications", "hui hua ti xing tong zhi") { NativeFeature.ALERTS.supported }
@@ -120,6 +123,11 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     row("backends.approval", SettingsSection.BACKENDS, Res.string.settings_approval_mode, "default approval permission sandbox", "mo ren shen pi mo shi")
     row("auxiliary.title", SettingsSection.AUXILIARY, Res.string.settings_auxiliary_title, "session title model", "hui hua biao ti")
     row("auxiliary.handoff", SettingsSection.AUXILIARY, Res.string.settings_auxiliary_handoff, "handoff summary model", "jiao jie zhai yao")
+    row("assistant.supervision", SettingsSection.ASSISTANT, Res.string.assistant_supervision, "follow up tasks supervise background", "gen jin ren wu")
+    row("assistant.consolidation", SettingsSection.ASSISTANT, Res.string.assistant_consolidation, "memory consolidation nightly", "ji yi zheng li")
+    row("assistant.model", SettingsSection.ASSISTANT, Res.string.assistant_model, "assistant model agent provider", "zhu li mo xing")
+    row("assistant.daily-runs", SettingsSection.ASSISTANT, Res.string.assistant_daily_runs, "daily runs limit budget per 24 hours", "24 xiao shi nei zui duo ci shu")
+    row("assistant.dispatch", SettingsSection.ASSISTANT, Res.string.assistant_dispatch, "ask before starting a task approval", "kai shi ren wu qian xun wen")
     row("quick-chat.model", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_default_model, "quick chat default model", "kuai su dui hua mo ren mo xing")
     row("quick-chat.open-mode", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_open_mode, "open mode sheet page", "da kai mo shi mian ban ye mian")
     row("quick-chat.presets", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_presets, "quick chat presets prompts", "kuai su dui hua yu she ti shi ci")

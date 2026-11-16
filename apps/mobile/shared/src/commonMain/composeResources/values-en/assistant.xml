@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="assistant_tab">Assistant</string>
+    <string name="assistant_title">Personal assistant</string>
+    <string name="assistant_memory">Memory</string>
+    <string name="assistant_rules">Rules</string>
+    <string name="assistant_abilities">Abilities</string>
+    <string name="assistant_delegations">Delegations</string>
+    <string name="assistant_memory_profile">About you</string>
+    <string name="assistant_memory_notes">Notes</string>
+    <string name="assistant_memory_failed">Can\'t read memory</string>
+    <string name="assistant_rules_default">Default</string>
+    <string name="assistant_rules_modified">Modified</string>
+    <string name="assistant_rules_restore">Restore default</string>
+    <string name="assistant_rules_effect">Takes effect on the next start</string>
+    <string name="assistant_delegation_end">End</string>
+    <string name="settings_launch_tab">Open on launch</string>
+    <string name="assistant_memory_empty">Nothing remembered yet</string>
+    <string name="assistant_delegations_empty">No delegations</string>
+    <string name="assistant_delegation_ended">Ended</string>
+    <string name="assistant_trigger_schedule">Schedule %1$s</string>
+    <string name="assistant_trigger_release">%1$s releases</string>
+    <string name="assistant_trigger_page">%1$s changes</string>
+    <string name="assistant_background">Background runs</string>
+    <string name="assistant_background_note">Uses the assistant\'s model, billed by usage</string>
+    <string name="assistant_supervision">Follow up on tasks</string>
+    <string name="assistant_supervision_idle">When a task\'s conversation stops while you\'re away, checks the delivery or moves it on</string>
+    <string name="assistant_consolidation">Memory consolidation</string>
+    <string name="assistant_consolidation_idle">Nightly, and before the main conversation is compacted</string>
+    <string name="assistant_delegations_active">%1$d active</string>
+    <string name="assistant_model">Model</string>
+    <string name="assistant_daily_runs">Per 24 hours, at most</string>
+    <string name="assistant_daily_runs_count">%1$d runs</string>
+    <string name="assistant_daily_started">%1$d started</string>
+    <string name="assistant_daily_started_waiting">%1$d started, %2$d waiting</string>
+    <string name="assistant_dispatch">Before starting a task</string>
+    <string name="assistant_dispatch_edits">Ask before code changes</string>
+    <string name="assistant_dispatch_all">Always ask</string>
+    <string name="assistant_usage">%2$d runs in %1$d days · %3$s tokens</string>
+    <string name="assistant_packs">Capability packs</string>
+    <string name="assistant_packs_note">Takes effect when the assistant is idle; its memory stays after removal</string>
+    <string name="assistant_pack_remove_title">Remove “%1$s”?</string>
+    <string name="assistant_pack_remove_message">Its folder is deleted; the assistant directory\'s commit history keeps it</string>
+    <string name="assistant_pack_remove">Remove</string>
+</resources>

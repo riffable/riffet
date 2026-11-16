@@ -164,7 +164,7 @@ struct NewTaskOptions: View {
 }
 
 /// Model rows carry their provider identity, so equal model IDs from different providers do not collide.
-private struct NewTaskModelPicker: View {
+struct NewTaskModelPicker: View {
     let workbench: Workbench
     let backend: NativeBackendId
     let projectID: String

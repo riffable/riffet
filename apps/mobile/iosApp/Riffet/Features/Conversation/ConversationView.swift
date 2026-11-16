@@ -6,6 +6,8 @@ struct ConversationView: View {
     let sessionID: String
     var focusApproval = false
     var focusSequence: Int64? = nil
+    /// Set for the assistant's main conversation (docs/ASSISTANT.md §3.1): a fixed title, and its setup in the session info.
+    var assistant: AssistantSetup? = nil
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
@@ -371,7 +373,7 @@ struct ConversationView: View {
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $terminal) { TerminalPage(workbench: workbench, projectID: session.projectId, terminalID: session.terminalId) }
         .sheet(isPresented: $information, onDismiss: { afterDetails?(); afterDetails = nil }) {
-            ConversationDetails(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus, supportsTerminal: supportsTerminal,
+            ConversationDetails(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus, supportsTerminal: supportsTerminal, assistant: assistant,
                                 find: { workbench.store.find.open(readingPos: nil) }, openTerminal: { terminal = true }, rename: { renameTitle = session.title; renaming = true },
                                 afterClose: { afterDetails = $0 })
         }
@@ -595,6 +597,12 @@ struct ConversationView: View {
                              supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true,
                              supportsSessionReferences: catalog?.capabilities.supportsSessionReferences == true,
                              menu: $menu, onMenuPicked: { composerFocus += 1 })
+            if let assistant {
+                AssistantPackEntries(packs: assistant.packs) { entry in
+                    draft.text = AssistantPackEntries.draft(entry, typed: draft.text)
+                    composerFocus += 1
+                }
+            }
             ConversationComposer(workbench: workbench, session: session, draft: draft, supportsInterrupt: catalog?.capabilities.supportsInterrupt == true && catalog?.capabilities.supportsTargetedStop?.boolValue == true, catalog: catalog,
                                  catalogLoading: catalogLoading, catalogError: catalogError,
                                  onOptionsClosed: { if catalogError != nil, !catalogLoading { Task { await loadCatalog(session) } } },
@@ -629,6 +637,8 @@ struct ConversationView: View {
         followsTail = true; unread = false
         scrollRequest = .init(target: nil, anchor: .bottom)
     }
+    /// The conversation lives in the assistant's directory: the main one, or an older one opened from search.
+    private func inAssistant(_ session: Session) -> Bool { assistant != nil || workbench.project(session.projectId)?.isAssistant == true }
     @ToolbarContentBuilder private func conversationToolbar(_ session: Session) -> some ToolbarContent {
         // A remedy is the bar's own glass button; a connection that is fine shows nothing.
         // A resume reads as "starting" at once, which ends needsResume; the button stays and spins
@@ -642,10 +652,10 @@ struct ConversationView: View {
                 // A generated sentence, not a page name: list-title size, so it reads as content and truncates later.
                 // The line under it is the phone's connection to the server; a healthy one says nothing.
                 TimelineView(.periodic(from: .now, by: 30)) { context in
-                    RiffetBarTitle(title: session.title, status: resumingHere ? nil : connectionCaption(at: context.date))
+                    RiffetBarTitle(title: assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.title, status: resumingHere ? nil : connectionCaption(at: context.date))
                         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
                 }
-            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(session.title)", bundle: .riffet))
+            }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(assistant != nil ? String(localized: "个人助理", bundle: .riffet) : session.title)", bundle: .riffet))
                 .accessibilityValue(connectionStatus?.badge?.text ?? (needsResume ? String(localized: "此会话当前未运行", bundle: .riffet) : ""))
                 .accessibilityIdentifier("conversationInformation")
         }
@@ -689,17 +699,21 @@ struct ConversationView: View {
                         }.disabled(action.disabled?.boolValue == true || workbench.runtimeActionPending)
                     }
                 }
+                // The assistant's directory is not code: no files, changes, rename or pin. Its agent's terminal stays.
+                let codeless = inAssistant(session)
                 if supportsTerminal { Button("终端", systemImage: "terminal") { terminal = true } }
-                if session.backendId != .chat, session.archivedAt == nil, session.nativeSessionId != nil, session.terminalHold == nil {
+                if session.backendId != .chat, !codeless, session.archivedAt == nil, session.nativeSessionId != nil, session.terminalHold == nil {
                     Button("在终端恢复…", systemImage: "apple.terminal") { terminalResume = true }
                 }
                 // A quick chat's project is the server's own empty directory, not something to browse.
-                if session.backendId != .chat, let project = workbench.project(session.projectId) {
+                if session.backendId != .chat, !codeless, let project = workbench.project(session.projectId) {
                     NavigationLink { ProjectFilesView(workbench: workbench, project: project) } label: { Label("项目文件", systemImage: "folder") }
                     NavigationLink { ProjectChangesView(workbench: workbench, project: project) } label: { Label("项目变更", systemImage: "point.3.connected.trianglepath.dotted") }
                 }
-                Button("重命名", systemImage: "pencil") { renameTitle = session.title; renaming = true }
-                Button(session.pinnedAt != nil ? "取消置顶" : "置顶会话", systemImage: session.pinnedAt != nil ? "pin.slash" : "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }
+                if !codeless {
+                    Button("重命名", systemImage: "pencil") { renameTitle = session.title; renaming = true }
+                    Button(session.pinnedAt != nil ? "取消置顶" : "置顶会话", systemImage: session.pinnedAt != nil ? "pin.slash" : "pin") { Task { await workbench.update(session, pinned: session.pinnedAt == nil) } }
+                }
                 Button(session.archivedAt == nil ? "归档会话" : "恢复会话", systemImage: session.archivedAt == nil ? "archivebox" : "arrow.uturn.backward") { Task { await workbench.update(session, archived: session.archivedAt == nil) } }
                 if workbench.list.canDeleteSessions {
                     Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)

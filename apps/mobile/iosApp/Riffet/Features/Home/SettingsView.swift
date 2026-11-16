@@ -38,6 +38,8 @@ struct SettingsView: View {
     @Environment(\.horizontalSizeClass) private var widthClass
     @Environment(\.verticalSizeClass) private var heightClass
     @State private var query = ""
+    /// Read here so the row shows the tab just chosen on its page.
+    @AppStorage(RootTab.launchKey) private var launchRaw = RootTab.assistant.rawValue
     @State private var deviceCount: Int?
     @State private var exporting = false
     @State private var exportError: String?
@@ -142,6 +144,8 @@ struct SettingsView: View {
         return [
             SettingsGroup(title: String(localized: "通用", bundle: .riffet), entries: [
                 SettingsEntry(title: String(localized: "语言", bundle: .riffet), icon: "globe", value: AppLanguage.current.name, kind: .link { AnyView(LanguageSettingsView()) }),
+                SettingsEntry(title: String(localized: "个人助理", bundle: .riffet), icon: "sparkles", kind: .link { AnyView(AssistantSettingsView(workbench: workbench)) }),
+                SettingsEntry(title: String(localized: "启动时打开", bundle: .riffet), icon: "rectangle.on.rectangle", value: (RootTab(rawValue: launchRaw) ?? .assistant).title, kind: .link { AnyView(LaunchTabSettingsView()) }),
                 SettingsEntry(title: String(localized: "扩展管理", bundle: .riffet), icon: "puzzlepiece.extension", kind: .link { AnyView(NativeExtensionsView(workbench: workbench)) }),
             ]),
             SettingsGroup(title: String(localized: "外观", bundle: .riffet), entries: appearance),
@@ -522,6 +526,20 @@ private struct FilesSettingsView: View {
             workbench.store.applySavedSettings(settings: saved)
             return nil
         } catch { return error.riffetMessage }
+    }
+}
+
+private struct LaunchTabSettingsView: View {
+    @AppStorage(RootTab.launchKey) private var launchRaw = RootTab.assistant.rawValue
+    var body: some View {
+        RiffetForm {
+            Section {
+                ForEach(RootTab.allCases, id: \.rawValue) { tab in
+                    SettingsCheckRow(title: tab.title, selected: launchRaw == tab.rawValue) { launchRaw = tab.rawValue }
+                }
+            } footer: { Text("仅保存在这台设备") }
+        }
+        .navigationTitle(String(localized: "启动时打开", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
 }
 

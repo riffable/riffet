@@ -79,20 +79,27 @@ import riffet.ui.design.RiffetTabBar
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 import riffet.ui.icons.LiveBrandMark
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
 import riffet_mobile.shared.generated.resources.Res
+import riffet_mobile.shared.generated.resources.assistant_tab
 import riffet_mobile.shared.generated.resources.session_settings
 import riffet_mobile.shared.generated.resources.session_tab_new
 import riffet_mobile.shared.generated.resources.session_tab_tasks
 
-/** The workbench's destinations, in the bar's order. */
-enum class HomeTab { NEW_SESSION, TASKS, SETTINGS }
+/** The workbench's destinations, in the bar's order. [key] is the form the launch preference stores. */
+enum class HomeTab(val key: String) {
+    NEW_SESSION("new"), ASSISTANT("assistant"), TASKS("tasks"), SETTINGS("settings")
+}
 
-/** The stored form of [HomeTab]; anything unrecognized (and a first launch) is 任务. */
-internal fun homeTab(raw: String?): HomeTab = HomeTab.entries.firstOrNull { it.name == raw } ?: HomeTab.TASKS
+/** The tab a launch opens: the stored [HomeTab.key]; anything unrecognized (and a first launch) is 助理. */
+internal fun homeTab(raw: String?): HomeTab = HomeTab.entries.firstOrNull { it.key == raw } ?: HomeTab.ASSISTANT
+
+/** The key a stored launch choice stands for: an unrecognized one is the default, 助理. */
+internal fun homeTabKey(raw: String?): String = homeTab(raw).key
 
 /** From this width the bottom bar becomes a rail at the start edge. */
 internal val RailMinWidth = 600.dp
@@ -272,9 +279,18 @@ private fun Modifier.leaving(): Modifier = clearAndSetSemantics { }.pointerInput
 /** A destination's outline glyph, its filled form while selected (Material's bar convention), and its label. */
 private class TabFace(val icon: ImageVector, val selected: ImageVector, val label: String)
 
+/** A tab's name, for the bar and for the launch choice in 设置. */
+internal fun HomeTab.title(): StringResource = when (this) {
+    HomeTab.NEW_SESSION -> Res.string.session_tab_new
+    HomeTab.ASSISTANT -> Res.string.assistant_tab
+    HomeTab.TASKS -> Res.string.session_tab_tasks
+    HomeTab.SETTINGS -> Res.string.session_settings
+}
+
 @Composable
 private fun tabFace(tab: HomeTab): TabFace = when (tab) {
     HomeTab.NEW_SESSION -> TabFace(RiffetIcons.MessageSquarePlus, RiffetIcons.MessageSquarePlusFilled, stringResource(Res.string.session_tab_new))
+    HomeTab.ASSISTANT -> TabFace(RiffetIcons.Bot, RiffetIcons.Bot, stringResource(Res.string.assistant_tab))
     // A checklist has no filled form; the indicator pill carries the selection.
     HomeTab.TASKS -> TabFace(RiffetIcons.ListTodo, RiffetIcons.ListTodo, stringResource(Res.string.session_tab_tasks))
     HomeTab.SETTINGS -> TabFace(RiffetIcons.Settings, RiffetIcons.SettingsFilled, stringResource(Res.string.session_settings))

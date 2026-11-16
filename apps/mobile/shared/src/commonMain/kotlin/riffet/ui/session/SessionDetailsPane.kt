@@ -34,6 +34,7 @@ import riffet.contracts.SessionState
 import riffet.core.SubagentEntry
 import riffet.core.SubagentState
 import riffet.core.subagentEntries
+import riffet.shared.isAssistant
 import riffet.shared.RiffetApi
 import riffet.shared.SessionUpdate
 import riffet.ui.app.PageBackHandler
@@ -113,6 +114,8 @@ internal fun SessionDetailsPane(
     /** The delete preview is loading. */
     deleteBusy: Boolean = false,
     modifier: Modifier = Modifier,
+    /** The assistant's main conversation (docs/ASSISTANT.md §3.1): no code, directory or list actions; its setup rows instead. */
+    assistant: riffet.ui.assistant.AssistantEntries? = null,
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     // A live `session` frame updates the session in place; fall back to the host's copy until then.
@@ -137,7 +140,9 @@ internal fun SessionDetailsPane(
     // Nothing left to list: fall back to the first level.
     val shownAll = showAll?.takeIf { (it == WorkKind.SUBAGENTS && subTasks.subagents.isNotEmpty()) || (it == WorkKind.TASKS && subTasks.tasks.isNotEmpty()) }
     PageBackHandler(enabled = shownAll != null) { showAll = null }
-    val subtitle = listOfNotNull(state.first, backendName(current.backendId)).joinToString(" · ")
+    // Anything in the assistant's directory is not code work: no changes, files or listing actions.
+    val inAssistant = assistant != null || project?.isAssistant == true
+    val subtitle = listOfNotNull(state.first, backendName(current.backendId).takeIf { assistant == null }).joinToString(" · ")
 
     Column(modifier = modifier.fillMaxHeight().background(
         materialContentBackground(LocalRiffetSurfaces.current.groupedPage),
@@ -146,7 +151,7 @@ internal fun SessionDetailsPane(
             title = when (shownAll) {
                 WorkKind.SUBAGENTS -> stringResource(Res.string.details_subagents)
                 WorkKind.TASKS -> stringResource(Res.string.details_tasks)
-                null -> current.title
+                null -> if (assistant != null) stringResource(Res.string.assistant_title) else current.title
             },
             subtitle = if (shownAll != null) current.title else subtitle,
             onClose = onClose,
@@ -181,17 +186,22 @@ internal fun SessionDetailsPane(
 
                     val terminalId = current.terminalId
                     PaneActionBar(buildList {
-                        if (!quickChat) {
+                        if (!quickChat && !inAssistant) {
                             onOpenGit?.let { add(PaneAction(RiffetIcons.Branch, stringResource(Res.string.session_changes), onClick = it)) }
                             onOpenFiles?.let { add(PaneAction(RiffetIcons.Folder, stringResource(Res.string.session_files), onClick = it)) }
-                            if (onOpenTerminal != null && terminalId != null) {
-                                add(PaneAction(RiffetIcons.SquareTerminal, stringResource(Res.string.session_terminal)) { onOpenTerminal(terminalId) })
-                            }
+                        }
+                        // The agent's own terminal is the assistant's too: it is how a prompt that needs keys is answered.
+                        if (!quickChat && onOpenTerminal != null && terminalId != null) {
+                            add(PaneAction(RiffetIcons.SquareTerminal, stringResource(Res.string.session_terminal)) { onOpenTerminal(terminalId) })
                         }
                         // Find reads the conversation itself, so it is here for a quick chat too, and open while archived.
                         onFind?.let { add(PaneAction(RiffetIcons.Search, stringResource(Res.string.session_find), onClick = it)) }
                     })
 
+                    if (assistant != null) {
+                        PaneGap()
+                        riffet.ui.assistant.AssistantPaneRows(assistant)
+                    }
                     if (subTasks.subagents.isNotEmpty()) SubagentSection(subTasks, store, onOpenSubagent, limit = InlineWork) { showAll = WorkKind.SUBAGENTS }
                     if (subTasks.tasks.isNotEmpty()) TaskSection(subTasks.tasks, store, limit = InlineWork) { showAll = WorkKind.TASKS }
 
@@ -215,7 +225,7 @@ internal fun SessionDetailsPane(
                     val branch = project?.worktree?.branch?.removePrefix("refs/heads/")?.takeIf { it.isNotBlank() }
                     // Monospace only for what is code: the path and the branch.
                     val facts = buildList<Triple<String, String, Boolean>> {
-                        if (!quickChat) {
+                        if (!quickChat && !inAssistant) {
                             project?.let { add(Triple(stringResource(Res.string.session_project), if (it.worktree != null) stringResource(Res.string.session_project_with_worktree, it.name) else it.name, false)) }
                             project?.let { add(Triple(stringResource(Res.string.session_directory), tildePath(it.cwd), true)) }
                             branch?.let { add(Triple(stringResource(Res.string.session_branch), it, true)) }
@@ -224,7 +234,7 @@ internal fun SessionDetailsPane(
                         if (!quickChat) {
                             detailApprovalLabel(detail, detail?.intended(current) ?: current, stringResource(Res.string.pickers_approval_title))?.takeIf { it.isNotBlank() }?.let { add(Triple(stringResource(Res.string.session_permission), it, false)) }
                         }
-                        if (current.tags.isNotEmpty()) add(Triple(stringResource(Res.string.session_tags), current.tags.joinToString(stringResource(Res.string.session_tag_separator)), false))
+                        if (current.tags.isNotEmpty() && !inAssistant) add(Triple(stringResource(Res.string.session_tags), current.tags.joinToString(stringResource(Res.string.session_tag_separator)), false))
                         relativeTimeAgo(current.createdAt, now)?.let { add(Triple(stringResource(Res.string.session_created), it, false)) }
                         relativeTimeAgo(activityAt(current), now)?.let { add(Triple(stringResource(Res.string.session_recent_activity), it, false)) }
                     }
@@ -232,16 +242,16 @@ internal fun SessionDetailsPane(
                         facts.forEach { (label, value, mono) -> PaneValueRow(label, value, mono) }
                     }
 
-                    val canResume = api != null && current.nativeSessionId != null && current.terminalHold == null && current.archivedAt == null && !quickChat
+                    val canResume = api != null && current.nativeSessionId != null && current.terminalHold == null && current.archivedAt == null && !quickChat && !inAssistant
                     val editable = writeBlocked == null && !writeBusy
                     PaneGap()
                     PaneActionBar(buildList {
-                        add(PaneAction(
+                        if (!inAssistant) add(PaneAction(
                             if (current.pinnedAt != null) RiffetIcons.PinOff else RiffetIcons.Pin,
                             if (current.pinnedAt != null) stringResource(Res.string.details_unpin) else stringResource(Res.string.details_pin),
                             enabled = editable,
                         ) { controller?.update(SessionUpdate(pinned = current.pinnedAt == null)) })
-                        add(PaneAction(RiffetIcons.Pencil, stringResource(Res.string.session_rename), enabled = editable, onClick = onRename))
+                        if (!inAssistant) add(PaneAction(RiffetIcons.Pencil, stringResource(Res.string.session_rename), enabled = editable, onClick = onRename))
                         add(PaneAction(
                             if (current.archivedAt != null) RiffetIcons.ArchiveRestore else RiffetIcons.Archive,
                             if (current.archivedAt != null) stringResource(Res.string.details_unarchive) else stringResource(Res.string.details_archive),

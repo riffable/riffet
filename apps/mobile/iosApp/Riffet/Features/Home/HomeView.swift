@@ -3,7 +3,20 @@ import RiffetKit
 
 enum MobileRoute: Hashable { case session(String, Bool) }
 
-private enum RootTab: String { case newTask, tasks, settings }
+/// The tabs, in the bar's order. A launch opens the one chosen in 设置 → 交互与输入; 助理 until then.
+enum RootTab: String, CaseIterable {
+    case newTask, assistant, tasks, settings
+    static let launchKey = "riffet.ios.launch-tab"
+    static var launch: RootTab { RootTab(rawValue: UserDefaults.standard.string(forKey: launchKey) ?? "") ?? .assistant }
+    var title: String {
+        switch self {
+        case .newTask: String(localized: "新会话", bundle: .riffet)
+        case .assistant: String(localized: "助理", bundle: .riffet)
+        case .tasks: String(localized: "任务", bundle: .riffet)
+        case .settings: String(localized: "设置", bundle: .riffet)
+        }
+    }
+}
 
 struct RiffetRootView: View {
     let workbench: Workbench
@@ -14,14 +27,15 @@ struct RiffetRootView: View {
     // being rebuilt (new workbench, scene restoration). The `.tag` on each tab
     // below is load-bearing, not decoration: without tags TabView loses the
     // selection on any redraw driven by a global observable change.
-    @SceneStorage("riffet.root-tab") private var tabRaw = RootTab.tasks.rawValue
+    @SceneStorage("riffet.root-tab") private var tabRaw = RootTab.launch.rawValue
     @State private var newPath: [MobileRoute] = []
+    @State private var assistantPath: [MobileRoute] = []
     @State private var taskPath: [MobileRoute] = []
     /// Bumped when the current Tasks tab is tapped again; the list scrolls to its top.
     @State private var tasksScrollTop = 0
     @State private var deletionShown = false
     @State private var deletionConfirmed = false
-    private var currentTab: RootTab { RootTab(rawValue: tabRaw) ?? .tasks }
+    private var currentTab: RootTab { RootTab(rawValue: tabRaw) ?? .assistant }
     private var tabSelection: Binding<RootTab> {
         Binding(get: { currentTab }, set: { value in
             if value == currentTab, value == .tasks { tasksScrollTop += 1 }
@@ -50,6 +64,13 @@ struct RiffetRootView: View {
             .riffetToastHost()
             .tabItem { Image(systemName: "plus.bubble").environment(\.symbolVariants, .none).accessibilityLabel("新会话") }
             .tag(RootTab.newTask)
+            NavigationStack(path: $assistantPath) {
+                AssistantRootView(workbench: workbench, onOpenSession: { assistantPath.append(.session($0, false)) })
+                    .navigationDestination(for: MobileRoute.self) { destination($0) }
+            }
+            .riffetToastHost()
+            .tabItem { Image(systemName: "sparkles").environment(\.symbolVariants, .none).accessibilityLabel("助理") }
+            .tag(RootTab.assistant)
             // One stack in both widths: on a wide window the list moves out beside it and the stack's
             // root becomes the empty detail, while its path, and the conversation on it, stay mounted
             // through a fold, an unfold or a resize.
@@ -95,6 +116,7 @@ struct RiffetRootView: View {
             guard let ids = removal?.ids else { return }
             let gone: (MobileRoute) -> Bool = { if case let .session(id, _) = $0 { ids.contains(id) } else { false } }
             newPath.removeAll(where: gone)
+            assistantPath.removeAll(where: gone)
             taskPath.removeAll(where: gone)
         }
         .onChange(of: model.pendingSessionID) { _, _ in consumeNavigation() }
@@ -145,6 +167,7 @@ struct RiffetRootView: View {
     private var stackTop: MobileRoute? {
         switch currentTab {
         case .newTask: newPath.last
+        case .assistant: assistantPath.last
         case .tasks: taskPath.last
         case .settings: nil
         }
@@ -161,7 +184,12 @@ struct RiffetRootView: View {
     }
     private func consumeNavigation() {
         if model.pendingHome { tabRaw = RootTab.tasks.rawValue; taskPath = []; model.pendingHome = false }
-        if let id = model.pendingSessionID { tabRaw = RootTab.tasks.rawValue; taskPath = [.session(id, true)]; model.pendingSessionID = nil }
+        if let id = model.pendingSessionID {
+            // The assistant's conversation is its tab, not a page of 任务.
+            if id == workbench.assistantMain?.id { tabRaw = RootTab.assistant.rawValue; assistantPath = [] }
+            else { tabRaw = RootTab.tasks.rawValue; taskPath = [.session(id, true)] }
+            model.pendingSessionID = nil
+        }
         if let prompt = model.pendingPrompt {
             let draft = workbench.drafts.draft("new")
             // An empty prompt (⌘N, riffet://new) only opens the page; it leaves the draft as it was.

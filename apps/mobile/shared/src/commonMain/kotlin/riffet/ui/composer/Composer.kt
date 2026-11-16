@@ -210,6 +210,8 @@ fun Composer(
     /** A message is on its way: the transcript resumes following its tail. */
     onSubmit: () -> Unit = {},
     writeScope: CoroutineScope? = null,
+    /** The assistant's capability packs; an installed one with an entry shows as a chip above the card. */
+    packs: List<riffet.contracts.AssistantPack> = emptyList(),
 ) {
     val metrics = LocalInterfaceStyle.current.metrics
     val colors = LocalRiffetColors.current
@@ -376,6 +378,12 @@ fun Composer(
                 },
                 onCancel = { run -> scope.launch { store.cancelRun(run) } },
             )
+        }
+
+        riffet.ui.assistant.AssistantPackEntries(packs) { entry ->
+            text = riffet.ui.assistant.draftWithEntry(entry, text)
+            drafts?.save(session.id, draft)
+            inputFocus.requestFocus()
         }
 
         // A terminal holding the conversation is its only writer: the bar takes the card's place.

@@ -135,7 +135,17 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         preferences?.setString(SPACING_KEY, value.key)
     }
 
+    /** The tab a launch opens (`HomeTab.key`); 助理 until chosen. */
+    var launchTab: String by mutableStateOf(preferences?.string(LAUNCH_TAB_KEY) ?: "assistant")
+        private set
+
+    fun changeLaunchTab(key: String) {
+        preferences?.setString(LAUNCH_TAB_KEY, key)
+        launchTab = key
+    }
+
     companion object {
+        internal const val LAUNCH_TAB_KEY = "display.launch-tab"
         internal const val PAGE_ANIMATION_KEY = "display.page-animation"
         internal const val INTERFACE_STYLE_KEY = "display.interface-style"
         internal const val SURFACE_MATERIAL_KEY = "display.surface-material"
