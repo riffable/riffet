@@ -39,6 +39,7 @@ import kotlinx.coroutines.runBlocking
 import riffet.ui.composer.createIosOutboxStore
 import riffet.ui.state.SessionStore
 import riffet.ui.state.ListPolling
+import riffet.ui.state.ListsFeed
 import riffet.ui.state.SessionListState
 import riffet.ui.timeline.TimelinePresenter
 
@@ -60,6 +61,7 @@ class IOSHost {
     private var timelines: TimelineCache? = null
     private var cacheFinalizer: Job? = null
     private var poll: Job? = null
+    private var feed: ListsFeed? = null
     private val pokes = Channel<Unit>(Channel.CONFLATED)
 
     var connection: RiffetConnection? = null
@@ -267,7 +269,19 @@ class IOSHost {
 
     private fun startPoll(store: SessionStore, deferFirstRead: Boolean = false) {
         poll?.cancel()
-        poll = scope.launch { pollLoop(store, deferFirstRead) }
+        val api = api ?: return
+        // The lists stream lives exactly as long as the poll: in front only, and then the poll is the fallback.
+        poll = scope.launch {
+            val listsFeed = ListsFeed(api, store, this)
+            feed = listsFeed
+            val stream = launch { listsFeed.run() }
+            try {
+                pollLoop(store, deferFirstRead)
+            } finally {
+                stream.cancel()
+                if (feed === listsFeed) feed = null
+            }
+        }
     }
 
     private suspend fun pollLoop(store: SessionStore, deferFirstRead: Boolean) {
@@ -306,6 +320,7 @@ class IOSHost {
         if (!foreground) return
         AppLog.log("app", "network restored")
         _store.value?.wake()
+        feed?.kick()
         poke()
     }
 }

@@ -246,6 +246,15 @@ class SessionStore(
     )
     val sendState: StateFlow<ComposerSendState> = Projection(core.state) { it.send }
 
+    private val _listsPushed = MutableStateFlow(false)
+
+    /** The lists stream is live ([ListsFeed]): the server pushes list changes, so polling only backs it up. */
+    val listsPushed: StateFlow<Boolean> = _listsPushed.asStateFlow()
+
+    internal fun setListsPushed(live: Boolean) {
+        _listsPushed.value = live
+    }
+
     val connection: StateFlow<RiffetConnectionState> = Projection(core.state) { it.connection }
 
     /**

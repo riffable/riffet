@@ -140,4 +140,59 @@ class SessionStoreSettingsTest {
         assertEquals(1L, store.list.value.backendRevision)
         client.close()
     }
+
+    @Test
+    fun bootstrapRevisionsStartSessionDeltasThatMergeInServerOrder() = runTest {
+        fun session(id: String, activity: String, updatedAt: String = activity, title: String = id) =
+            """{"id":"$id","projectId":"p1","kind":"native","title":"$title","tags":[],"state":"idle","mode":"default","lastActivityAt":"$activity","createdAt":"2026-10-21T00:00:00.000Z","updatedAt":"$updatedAt"}"""
+        val json = headersOf(HttpHeaders.ContentType, "application/json")
+        val since = mutableListOf<String?>()
+        var delta = ""
+        val client = HttpClient(MockEngine(MockEngineConfig().apply {
+            dispatcher = UnconfinedTestDispatcher(testScheduler)
+            addHandler { request ->
+                when (request.url.encodedPath) {
+                    "/api/bootstrap" -> respond(
+                        """{"projects":[],"sessions":[${session("a", "2026-10-21T00:03:00.000Z")},${session("b", "2026-10-21T00:02:00.000Z")},${session("c", "2026-10-21T00:01:00.000Z")}],""" +
+                            """"terminals":[],"settings":{},"protocol":{"version":1,"features":["list-delta"]},"revisions":{"sessions":10,"terminals":3,"projects":7}}""",
+                        headers = json,
+                    )
+                    "/api/sessions" -> {
+                        since += request.url.parameters["since"]
+                        if (delta.isEmpty()) respond("", HttpStatusCode.NotModified)
+                        else respond(delta, headers = headersOf(HttpHeaders.ContentType to listOf("application/json"), HttpHeaders.ETag to listOf("W/\"11\"")))
+                    }
+                    else -> error("Unexpected request: ${request.url.encodedPath}")
+                }
+            }
+        }))
+        val store = SessionStore(
+            RiffetApi(client, "http://127.0.0.1:9"),
+            CoroutineScope(UnconfinedTestDispatcher(testScheduler)),
+            background = EmptyCoroutineContext,
+        )
+        store.refresh()
+        settle()
+        assertEquals(null, store.list.value.error)
+        assertEquals(listOf("a", "b", "c"), store.list.value.sessions.map { it.id })
+
+        // The bootstrap's revisions are held already: a push naming them reads nothing.
+        store.listsChanged("""{"revision":10,"projects":7}""")
+        settle()
+        assertEquals(emptyList(), since)
+
+        delta = """{"revision":11,"sessions":[${session("c", "2026-10-21T00:05:00.000Z", title = "c2")},${session("d", "2026-10-21T00:04:00.000Z")}],"removed":["b"]}"""
+        store.pollSessions()
+        assertEquals(listOf("c", "d", "a"), store.list.value.sessions.map { it.id })
+        assertEquals("c2", store.list.value.sessions.first().title)
+        assertEquals(listOf<String?>("10"), since)
+
+        // The same revision again: the server answers 304 and the list is not rewritten.
+        val held = store.list.value
+        delta = ""
+        store.pollSessions()
+        assertEquals(held, store.list.value)
+        assertEquals(listOf<String?>("10", "11"), since)
+        client.close()
+    }
 }

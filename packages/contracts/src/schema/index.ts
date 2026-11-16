@@ -47,6 +47,7 @@ export const CONTRACTS = {
   ShareDraftEvent: response(share.ShareDraftEventSchema),
 
   Session: frame(session.SessionSchema),
+  SessionListDelta: frame(session.SessionListDeltaSchema),
   SessionState: frame(session.SessionStateSchema),
   Run: frame(run.RunSchema),
   RunState: frame(run.RunStateSchema),

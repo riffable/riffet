@@ -224,7 +224,7 @@ object RiffetHost {
     private suspend fun watch(store: SessionStore) = coroutineScope {
         val origin = currentOrigin ?: return@coroutineScope
         connection.apiOrNull()?.takeIf { serverOrigin(it.baseUrl) == origin }?.let { api ->
-            launch { RiffetDevice.watch(store, api, origin) { id -> foreground && navigation.session?.id == id } }
+            launch { RiffetDevice.watch(store, api, origin, marks, { foreground || keepAlive }) { id -> foreground && navigation.session?.id == id } }
         }
         launch {
             store.activity.collect { activity ->

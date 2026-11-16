@@ -901,7 +901,7 @@ describe('app route surface after ACP removal', () => {
     expect(Array.isArray((await call('GET', '/api/integrations')).json().integrations)).toBe(true);
     const projectId = ((await call('POST', '/api/projects', { cwd: projectDir, name: 'etag' })).json() as { id: string }).id;
     await call('POST', '/api/sessions', { projectId, kind: 'native', title: 'First' });
-    for (const url of ['/api/sessions', '/api/terminals']) {
+    for (const url of ['/api/sessions', '/api/terminals', '/api/projects']) {
       const first = await call('GET', url);
       const etag = String(first.headers.etag);
       expect(etag).toMatch(/^W\/"\d+"$/);
@@ -919,6 +919,31 @@ describe('app route surface after ACP removal', () => {
     const compressed = await app.inject({ method: 'GET', url: '/api/sessions', headers: { host: '127.0.0.1:4317', cookie, 'accept-encoding': 'gzip' } });
     expect(compressed.headers['content-encoding']).toBe('gzip');
     expect(String(compressed.headers.vary).toLowerCase().split(',').map(value=>value.trim())).toEqual(expect.arrayContaining(['x-riffet-features','accept-encoding']));
+  });
+
+  it('answers a session list read since a revision with only what changed after it', async () => {
+    const { projectDir, call, store } = await boot();
+    const projectId = ((await call('POST', '/api/projects', { cwd: projectDir, name: 'delta' })).json() as { id: string }).id;
+    const kept = store.createSession({ projectId, kind: 'native', title: 'Kept' });
+    const renamed = store.createSession({ projectId, kind: 'native', title: 'Before' });
+    const deleted = store.createSession({ projectId, kind: 'native', title: 'Deleted' });
+    const { revisions } = (await call('GET', '/api/bootstrap')).json() as { revisions: { sessions: number; terminals: number; projects: number } };
+    expect(revisions).toEqual({ sessions: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision });
+    expect((await call('GET', `/api/sessions?since=${revisions.sessions}`)).json()).toEqual({ revision: revisions.sessions, sessions: [] });
+    // A terminal or project change moves only its own list.
+    store.saveTerminal({ id: 't-delta', projectId, state: 'exited', epoch: 0, createdAt: new Date().toISOString() } as never);
+    await call('PATCH', `/api/projects/${projectId}`, { name: 'Renamed project' });
+    expect(store.listRevision).toBe(revisions.sessions);
+    expect(store.terminalsRevision).toBeGreaterThan(revisions.terminals);
+    store.updateSession(renamed.id, { title: 'After' });
+    store.deleteSessions(deleted.id, [deleted.id]);
+    const delta = await call('GET', `/api/sessions?since=${revisions.sessions}`);
+    expect(delta.headers.etag).toBe(`W/"${store.listRevision}"`);
+    expect(delta.json()).toEqual({ revision: store.listRevision, sessions: [expect.objectContaining({ id: renamed.id, title: 'After' })], removed: [deleted.id] });
+    // A revision from before this process (a restart may have lost changes) gets the whole list.
+    const full = (await call('GET', `/api/sessions?since=${revisions.sessions - 1_000_000}`)).json() as { full?: boolean; sessions: Array<{ id: string }> };
+    expect(full.full).toBe(true);
+    expect(full.sessions.map(item => item.id).sort()).toEqual([kept.id, renamed.id].sort());
   });
 
   it('no longer serves the sync v2 transcript routes', async () => {
@@ -2217,16 +2242,23 @@ describe('session list push', () => {
     expect(response.headers['content-type']).toBe('text/event-stream');
     response.setEncoding('utf8');
     response.on('data', (chunk: string) => { body += chunk; });
+    const frames = () => [...body.matchAll(/event: changed\ndata: (.*)\n/g)].map(match => JSON.parse(match[1]!) as Record<string, number>);
+    const current = () => ({ revision: store.listRevision, terminals: store.terminalsRevision, projects: store.projectRevision, marks: store.marksRevision, workItems: store.workItemsRevision, favorites: store.favoritesRevision });
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(body).toContain(': connected');
+    // Where every list stands on connect, so a reconnect reads only what moved meanwhile.
+    expect(frames()).toEqual([current()]);
+    const sessions = store.listRevision;
     const created = await call('POST', '/api/projects', { cwd: projectDir });
     expect(created.statusCode).toBe(200);
     await call('PATCH', `/api/projects/${created.json().id}`, { name: 'Renamed' });
     const deadline = Date.now() + 2_000;
-    while (!body.includes('event: changed') && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
+    while (frames().length < 2 && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 25));
     await new Promise(resolve => setTimeout(resolve, 400));
-    expect(body.match(/event: changed/g)).toHaveLength(1);
-    expect(JSON.parse(/event: changed\ndata: (.*)\n/.exec(body)![1]!)).toEqual({ revision: store.listRevision, projects: store.projectRevision, marks: store.marksRevision, workItems: store.workItemsRevision, favorites: store.favoritesRevision });
+    expect(frames()).toHaveLength(2);
+    expect(frames()[1]).toEqual(current());
+    // Projects move on their own: the session list is not read again for them.
+    expect(store.listRevision).toBe(sessions);
   });
 });
 

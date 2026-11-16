@@ -142,6 +142,14 @@ export interface Session {
   workItemId?: string;
   createdAt: string; updatedAt: string;
 }
+/**
+ * `GET /api/sessions?since=<revision>` (docs/LIST-SYNC.md): the sessions changed after `since`. `full`
+ * when the server could not tell what changed; then `sessions` is the whole list. `removed` names the
+ * ids that left this client's list: deleted, or no longer shown to it.
+ */
+export interface SessionListDelta { revision: number; full?: true; sessions: Session[]; removed?: string[] }
+/** Each list's revision when `GET /api/bootstrap` read it; the starting point for the reads that follow. */
+export interface ListRevisions { sessions: number; terminals: number; projects: number }
 export type SessionGoalStatus = 'active' | 'paused' | 'blocked' | 'usage_limited' | 'budget_limited' | 'complete';
 /** A completion condition the agent keeps working toward (Claude Code `/goal`, Codex thread goals, DSH goals). */
 export interface SessionGoal {

@@ -1,10 +1,10 @@
 import { submissionFingerprint } from '../orchestration/session-commands.js';
 import type { FastifyInstance } from 'fastify';
 import { AppError, requireString } from '../errors.js';
-import type { SessionKind, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import type { SessionKind, SessionListDelta, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { recordTerminalAppearance } from '../terminal/appearance.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
-import { requestedNativeSessionId, startsWithBareTerminal, type RequestedNativeSession } from '../session-identity.js';
+import { requestedNativeSessionId, startsWithBareTerminal, type IdentifiedSession, type RequestedNativeSession } from '../session-identity.js';
 import { revisionedList, sequence, tags } from './params.js';
 import type { RouteDeps, NativeMessageBody } from './deps.js';
 import { withoutQuickChats } from '../chat/quick-chat.js';
@@ -43,7 +43,19 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
    * opened from a composer is not a task by itself. Called inside the creation's transaction.
    */
   const startedWorkItem=(requested:unknown)=>{const named=requestedWorkItemId(requested);return named?workItems.get(named).id:undefined;};
-  app.get('/api/sessions',async(request,reply)=>revisionedList(request,reply,store.listRevision,()=>visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id))));
+  /** With `since`, only what changed after that revision (docs/LIST-SYNC.md). */
+  app.get<{Querystring:{since?:string}}>('/api/sessions',async(request,reply)=>{
+    const listed=(items:readonly IdentifiedSession[])=>visibleSessionsForClient(request.headers,withoutQuickChats(items,request),id=>store.getProject(id));
+    if(request.query.since===undefined)return revisionedList(request,reply,store.listRevision,()=>listed(store.listSessions()));
+    return revisionedList(request,reply,store.listRevision,():SessionListDelta=>{
+      const changed=store.sessionsChangedSince(Number(request.query.since));
+      if(!changed)return {revision:store.listRevision,full:true,sessions:listed(store.listSessions())};
+      const found=changed.flatMap(id=>{const session=store.findSession(id);return session?[session]:[];});
+      const sessions=listed(found),shown=new Set(sessions.map(session=>session.id));
+      const removed=changed.filter(id=>!shown.has(id));
+      return {revision:store.listRevision,sessions,...(removed.length?{removed}:{})};
+    });
+  });
   app.post<{Body:{projectId?:string;projectless?:boolean;kind:SessionKind;title?:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;resumePicker?:boolean;clientSessionId?:string;workItemId?:string;initialMessage?:NativeMessageBody}&RequestedNativeSession}>('/api/sessions',async(request,reply)=>{
     const create=async()=>{
     const body=request.body;
@@ -164,10 +176,13 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
     reply.hijack(); streams.add(reply.raw);
     reply.raw.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
     reply.raw.write(': connected\n\n');
+    const changed=()=>`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision,marks:store.marksRevision,workItems:store.workItemsRevision,favorites:store.favoritesRevision})}\n\n`;
+    // Where every list stands now: a client compares it with what it holds and reads only what moved while it was away.
+    reply.raw.write(changed());
     let pending:NodeJS.Timeout|undefined;
     const unsubscribe=store.onListsChanged(()=>{
       if(pending)return;
-      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(`event: changed\ndata: ${JSON.stringify({revision:store.listRevision,projects:store.projectRevision,marks:store.marksRevision,workItems:store.workItemsRevision,favorites:store.favoritesRevision})}\n\n`);},LIST_CHANGE_DEBOUNCE_MS);
+      pending=setTimeout(()=>{pending=undefined;if(!reply.raw.destroyed&&!reply.raw.writableEnded)reply.raw.write(changed());},LIST_CHANGE_DEBOUNCE_MS);
     });
     // An agent's notice (docs/DEVICES.md §2). A client listening only for `changed` never sees it.
     const unsubscribeNotices=deps.notices.subscribe(notice=>{

@@ -18,10 +18,13 @@
  * - `session-references-v1`: messages can reference immutable snapshots of other sessions.
  * - `session-delete-v1`: `GET /api/sessions/:id/deletion` and `DELETE /api/sessions/:id` remove an idle
  *   conversation with its side chats (docs/design/session-deletion.md); a deleted id answers `410 SESSION_DELETED`.
+ * - `list-delta`: `GET /api/sessions?since=<revision>` answers with the sessions changed since (`SessionListDelta`),
+ *   `GET /api/bootstrap` carries `revisions`, and the lists stream sends `changed` on connect and carries
+ *   `terminals` (docs/LIST-SYNC.md).
  */
-export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1';
+export type ProtocolFeature = 'list-etag' | 'sync-v3' | 'integrations-v1' | 'quick-chat' | 'pi-agent' | 'antigravity-agent' | 'projectless-tasks' | 'plugin-agents' | 'session-references-v1' | 'session-delete-v1' | 'list-delta';
 export interface ProtocolInfo { version: number; features: ProtocolFeature[]; }
-export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1'] };
+export const PROTOCOL_INFO: ProtocolInfo = { version: 3, features: ['list-etag', 'sync-v3', 'integrations-v1', 'quick-chat', 'pi-agent', 'antigravity-agent', 'projectless-tasks', 'plugin-agents', 'session-references-v1', 'session-delete-v1', 'list-delta'] };
 /** Request header naming the features a client understands, comma-separated. */
 export const CLIENT_FEATURES_HEADER = 'x-riffet-features';
 // Shared HTTP contract. JSON request/response fields are kept stable across workers.

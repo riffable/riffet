@@ -29,6 +29,8 @@ import riffet.shared.RiffetApi
 import riffet.shared.RiffetClientConfig
 import riffet.shared.RiffetConnection
 import riffet.shared.serverOrigin
+import riffet.ui.state.ListPolling
+import riffet.ui.state.ListsFeed
 import riffet.ui.state.SessionMarks
 import riffet.ui.state.SessionStore
 import riffet.ui.state.RiffetConnectionState
@@ -135,6 +137,8 @@ class MacHost(private val secrets: SecretStore) {
     private var timelines: TimelineCache? = null
     private val windows = mutableListOf<WindowSession>()
     private var poll: Job? = null
+    private var feed: Job? = null
+    private var listsFeed: ListsFeed? = null
     private val pokes = Channel<Unit>(Channel.CONFLATED)
 
     var connection: RiffetConnection? = null
@@ -217,6 +221,10 @@ class MacHost(private val secrets: SecretStore) {
         _store.value = created
         AppLog.log("app", "store installed for $url")
         created.refresh()
+        // Always connected: the server pushes list changes and the poll below is the fallback.
+        val pushed = ListsFeed(api, created, child, onMarks = { savedMarks.poll() })
+        listsFeed = pushed
+        feed = child.launch { pushed.run() }
         poll = scope.launch { pollLoop(created, savedMarks) }
         return created
     }
@@ -244,6 +252,9 @@ class MacHost(private val secrets: SecretStore) {
     fun uninstall() {
         poll?.cancel()
         poll = null
+        feed?.cancel()
+        feed = null
+        listsFeed = null
         val finalWrites = windows.toList().map { it.shutdown() } + listOfNotNull(_store.value?.captureFinalFlush())
         windows.clear()
         _store.value?.clear()
@@ -277,6 +288,7 @@ class MacHost(private val secrets: SecretStore) {
 
     /** Asks the poll loop for a read now instead of at the end of its interval. */
     fun poke() {
+        listsFeed?.kick()
         pokes.trySend(Unit)
     }
 
@@ -303,13 +315,16 @@ class MacHost(private val secrets: SecretStore) {
     }
 
     private suspend fun pollLoop(store: SessionStore, marks: SessionMarks) {
+        var failures = 0
         while (true) {
-            try {
+            failures = try {
                 store.pollSessions()
+                0
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Throwable) {
                 AppLog.log("app", "poll failed ${error::class.simpleName}: ${error.message}")
+                failures + 1
             }
             try {
                 marks.poll()
@@ -320,16 +335,15 @@ class MacHost(private val secrets: SecretStore) {
             }
             val busy = store.list.value.sessions.any { it.archivedAt == null && it.state.active }
             val interval = when {
-                foreground -> FOREGROUND_POLL_MILLIS
-                busy -> ACTIVE_POLL_MILLIS
-                else -> QUIET_POLL_MILLIS
+                foreground -> ListPolling.foregroundDelay(store, failures)
+                busy -> ListPolling.backgroundDelay(store, ACTIVE_POLL_MILLIS)
+                else -> ListPolling.backgroundDelay(store, QUIET_POLL_MILLIS)
             }
             withTimeoutOrNull(interval) { pokes.receive() }
         }
     }
 
     private companion object {
-        const val FOREGROUND_POLL_MILLIS = 5_000L
         const val ACTIVE_POLL_MILLIS = 10_000L
         const val QUIET_POLL_MILLIS = 30_000L
     }

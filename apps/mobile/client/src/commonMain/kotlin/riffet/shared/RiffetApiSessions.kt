@@ -2,6 +2,9 @@ package riffet.shared
 
 import io.ktor.client.request.url
 import io.ktor.client.statement.bodyAsText
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.encodeURLParameter
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonObject
@@ -18,6 +21,7 @@ import riffet.contracts.NativeModelOption
 import riffet.contracts.RiffetJson
 import riffet.contracts.Run
 import riffet.contracts.Session
+import riffet.contracts.SessionListDelta
 import riffet.contracts.TerminalInfo
 
 // RiffetApi endpoints — sessions: the list, the native conversation stream and transcript, runs, interactions and per-session config. Transport and auth rules: see RiffetApi.kt.
@@ -36,6 +40,21 @@ suspend fun RiffetApi.sessions(): List<Session> = get("/api/sessions").decode()
  */
 @Throws(Exception::class)
 suspend fun RiffetApi.sessionsIfChanged(etag: String?): ConditionalList<Session> = conditionalList("/api/sessions", etag)
+
+/**
+ * `list-delta`: `GET /api/sessions?since=<revision>`. Null when the server answered 304 (the list is
+ * still at [etag]); otherwise the delta and the validator that names its revision.
+ */
+@Throws(Exception::class)
+suspend fun RiffetApi.sessionsSince(revision: Long, etag: String?): SessionDeltaAnswer? {
+    val response = request(HttpMethod.Get, "/api/sessions", listOf("since" to revision.toString()), ifNoneMatch = etag)
+    if (response.status == HttpStatusCode.NotModified) return null
+    val delta = response.decode<SessionListDelta>()
+    return SessionDeltaAnswer(delta, response.headers[HttpHeaders.ETag] ?: "W/\"${delta.revision}\"")
+}
+
+/** A `?since=` answer and the ETag to send next. */
+class SessionDeltaAnswer(val delta: SessionListDelta, val etag: String)
 
 @Throws(Exception::class)
 suspend fun RiffetApi.createSession(body: NativeSessionCreateInput): NativeSessionCreateResult {

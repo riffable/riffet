@@ -165,6 +165,21 @@ data class Bootstrap(
     val owner: OwnerInfo? = null,
     /** The server's protocol features; absent from one that predates them. */
     val protocol: BootstrapProtocol? = null,
+    /** The list revisions this snapshot was read at (`list-delta`); absent from an older server. */
+    val revisions: ListRevisions? = null,
+)
+
+@Serializable
+data class ListRevisions(val sessions: Long, val terminals: Long, val projects: Long)
+
+/** `GET /api/sessions?since=`: the sessions changed after that revision, or the whole list when [full]. */
+@Serializable
+data class SessionListDelta(
+    val revision: Long,
+    val full: Boolean? = null,
+    val sessions: List<Session>,
+    /** No longer in this client's list; whether they are deleted is the 410 `SESSION_DELETED` answer. */
+    val removed: List<String>? = null,
 )
 
 @Serializable

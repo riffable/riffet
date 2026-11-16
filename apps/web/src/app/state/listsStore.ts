@@ -1,7 +1,7 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import type { OwnerInfo, Session, TaskEvent, TerminalInfo } from '@contracts';
-import { api, etagRevision, listsStreamUrl, type Bootstrap, type ProjectRecord } from '@/lib/api';
+import type { OwnerInfo, Session, SessionListDelta, TaskEvent, TerminalInfo } from '@contracts';
+import { api, etagRevision, listsStreamUrl, type Bootstrap, type ConditionalList, type ProjectRecord } from '@/lib/api';
 import { loadCachedLists, refreshCachedLists, saveCachedLists } from '@/lib/list-cache';
 import { reconcileById, sameRecord } from '@/lib/reconcile';
 import { confirmSessionGone, isSessionDeleted } from '@/lib/session-deletion';
@@ -77,6 +77,10 @@ export function createListsStore(deps: ListsDeps) {
   let negotiatedProtocol = cached?.bootstrap.protocol;
   /** Projects have their own write generation: session updates must not invalidate their reads. */
   let projectsGeneration = 0;
+  /** Terminals' own write generation: a terminal read is stale only across a terminal write, not any write. */
+  let terminalsGeneration = 0;
+  /** The project revision the held projects were read at, when known. */
+  let projectsVersion: number | undefined;
   let pendingBootstrap: Promise<Bootstrap> | undefined;
   /** The `ETag` each list was last applied with. Absent means the server sent none, so every poll reads in full. */
   const etags: { sessions?: string; terminals?: string } = {};
@@ -107,12 +111,6 @@ export function createListsStore(deps: ListsDeps) {
     store.set((current) => current.loaded ? update(current) : current);
   };
 
-  /** The revision both lists were last read at, when they agree. */
-  const knownRevision = () => {
-    const sessions = etagRevision(etags.sessions);
-    return sessions !== undefined && sessions === etagRevision(etags.terminals) ? sessions : undefined;
-  };
-
   /**
    * A fresh full list that lacks a conversation the previous one held is evidence it was deleted
    * elsewhere, but only the server's `410 SESSION_DELETED` settles it; a cached list or a failed read never reaches here.
@@ -122,6 +120,13 @@ export function createListsStore(deps: ListsDeps) {
     const present = new Set(incoming.map((item) => item.id));
     for (const item of previous) if (!present.has(item.id) && !isSessionDeleted(item.id)) unconfirmed.set(item.id, true);
     for (const id of [...unconfirmed.keys()]) if (present.has(id)) unconfirmed.delete(id);
+    drainUnconfirmed();
+  };
+  /** The ids a delta took out of the list: deleted, or no longer shown here; only a 410 says which. */
+  const confirmGone = (removed: readonly string[], present: readonly Session[]) => {
+    if (!store.get().sessionDelete) return;
+    for (const item of present) unconfirmed.delete(item.id);
+    for (const id of removed) if (!isSessionDeleted(id)) unconfirmed.set(id, true);
     drainUnconfirmed();
   };
   /** Missing ids still to be asked about; a few per round so a large removal does not flood the server. */
@@ -159,15 +164,18 @@ export function createListsStore(deps: ListsDeps) {
         const data = await pending;
         negotiatedProtocol = data.protocol;
         revision += 1;
+        terminalsGeneration += 1;
         const next = { ...data, settings: deps.settings.absorb(data.settings, requestedRevision) };
         saveCachedLists(next);
-        // The lists just read may be newer than the ETags held; start the conditional reads over.
-        etags.sessions = undefined;
-        etags.terminals = undefined;
+        // The reads that follow start where these lists stand; an older server names no revisions, so they start over.
+        etags.sessions = data.revisions ? `W/"${data.revisions.sessions}"` : undefined;
+        etags.terminals = data.revisions ? `W/"${data.revisions.terminals}"` : undefined;
         const current = store.get();
         const applyProjects = requestedProjectsGeneration === projectsGeneration;
         const previousSessions = current.sessions;
-        if (applyProjects) projectsGeneration += 1;
+        if (applyProjects) { projectsGeneration += 1; projectsVersion = data.revisions?.projects; }
+        // The baseline a later delta's state changes are told against.
+        sessionStates = new Map(data.sessions.map((item) => [item.id, item.state]));
         store.set({
           loaded: true,
           projectlessTasks: data.protocol?.features.includes('projectless-tasks') ?? false,
@@ -240,6 +248,7 @@ export function createListsStore(deps: ListsDeps) {
       });
     },
     upsertTerminal(updated: TerminalInfo) {
+      terminalsGeneration += 1;
       mutate((current) => {
         const previous = current.terminals.find((item) => item.id === updated.id);
         if (previous && sameRecord(previous, updated)) return current;
@@ -247,6 +256,7 @@ export function createListsStore(deps: ListsDeps) {
       });
     },
     removeTerminal(id: string) {
+      terminalsGeneration += 1;
       mutate((current) => ({ terminals: current.terminals.filter((item) => item.id !== id), sessions: current.sessions.map((item) => item.terminalId === id ? { ...item, terminalId: undefined } : item) }));
     },
     replaceProject(updated: ProjectRecord) {
@@ -258,6 +268,7 @@ export function createListsStore(deps: ListsDeps) {
     },
     /** A native session's terminal, once the session reports it, unless the lists already hold it or a newer one. */
     adoptTerminal(found: TerminalInfo, sessionId: string) {
+      terminalsGeneration += 1;
       mutate((current) => {
         if (current.sessions.find((item) => item.id === sessionId)?.terminalId !== found.id) return current;
         const existing = current.terminals.find((item) => item.id === found.id);
@@ -271,7 +282,8 @@ export function createListsStore(deps: ListsDeps) {
      * the gaps, and both read conditionally so an unchanged list costs a 304. Returns the teardown.
      */
     connect(): () => void {
-      let active = true, inFlight = false, again = false, lastHiddenPoll = 0, lastPoll = 0, pushed = false, opened = false, missed = false;
+      // The bootstrap just read the lists; the safety-net poll counts from now.
+      let active = true, lastHiddenPoll = 0, lastPoll = Date.now(), pushed = false, opened = false, missed = false;
       let saveTimer: number | undefined;
       /** Lists read after the bootstrap update the local copy too, so the next visit paints them. */
       const saveSoon = () => {
@@ -281,7 +293,7 @@ export function createListsStore(deps: ListsDeps) {
           refreshCachedLists({ projects, sessions, terminals, ...(owner ? { owner } : {}), settings: deps.settings.current(), csrfToken: '', protocol: negotiatedProtocol });
         }, SAVE_DEBOUNCE_MS);
       };
-      let projectsVersion: number | undefined, wantedProjectsVersion: number | undefined, requestedProjectsVersion: number | undefined;
+      let wantedProjectsVersion: number | undefined, requestedProjectsVersion: number | undefined;
       let projectsInFlight = false, projectsAgain = false;
       const refreshProjects = (force = false) => {
         if (!active) return;
@@ -299,6 +311,8 @@ export function createListsStore(deps: ListsDeps) {
             try { await pendingBootstrap; } catch { /* The project read can still recover independently. */ }
             if (!active) return;
           }
+          // The bootstrap may have read this very revision.
+          if (!force && version !== undefined && version === projectsVersion) return;
           const startedAt = projectsGeneration;
           const incoming = await api.projects();
           if (!active) return;
@@ -322,9 +336,10 @@ export function createListsStore(deps: ListsDeps) {
        * state moves, which is also why the poll keeps running while the tab is hidden — just far
        * less often, since nothing is being painted.
        */
-      const noticeBackground = (incoming: Session[]) => {
+      const noticeBackground = (incoming: Session[], complete: boolean, removed: readonly string[] = []) => {
         const previous = sessionStates;
-        const next = new Map<string, Session['state']>();
+        const next = complete ? new Map<string, Session['state']>() : new Map(previous);
+        for (const id of removed) next.delete(id);
         for (const item of incoming) {
           next.set(item.id, item.state);
           const before = previous.get(item.id);
@@ -345,34 +360,74 @@ export function createListsStore(deps: ListsDeps) {
         }
         sessionStates = next;
       };
-      const poll = () => {
-        if (!active || inFlight) return;
+      const hasDelta = () => negotiatedProtocol?.features.includes('list-delta') === true;
+      let sessionsInFlight = false, sessionsAgain = false, terminalsInFlight = false, terminalsAgain = false;
+      /** A whole list dropped for a local write is read once more at once; a stream writing on every frame must not keep it reading. */
+      let fullRetried = false;
+      const readSessions = () => {
+        if (sessionsInFlight) { sessionsAgain = true; return; }
+        sessionsInFlight = true;
+        const startedAt = revision;
+        const since = hasDelta() ? etagRevision(etags.sessions) : undefined;
+        const read: Promise<ConditionalList<Pick<SessionListDelta, 'full' | 'sessions' | 'removed'>>> = since === undefined
+          ? api.sessionsIfChanged(etags.sessions).then((answer) => answer.unchanged ? answer : { ...answer, data: { full: true, sessions: answer.data } })
+          : api.sessionsSince(since, etags.sessions);
+        void read
+          .then((answer) => {
+            if (!active) return;
+            if (store.get().status === 'offline') deps.handlers.reload();
+            else store.set({ status: 'fresh' });
+            if (answer.unchanged) return;
+            const current = store.get();
+            const { full, sessions: incoming, removed = [] } = answer.data;
+            if (full) {
+              // A whole list read across a local write may hold an older copy of what it changed.
+              if (startedAt !== revision) { if (!fullRetried) { fullRetried = true; sessionsAgain = true; } return; }
+              fullRetried = false;
+              etags.sessions = answer.etag;
+              const sessions = reconcileById(current.sessions, incoming.filter((item) => !isSessionDeleted(item.id)));
+              noticeBackground(incoming, true);
+              confirmMissing(current.sessions, incoming);
+              if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
+              return;
+            }
+            etags.sessions = answer.etag;
+            noticeBackground(incoming, false, removed);
+            confirmGone(removed, incoming);
+            const sessions = mergeDelta(current.sessions, incoming, removed);
+            if (sessions !== current.sessions) { store.set({ sessions }); saveSoon(); }
+          })
+          .catch(() => store.set({ status: 'offline' }))
+          .finally(() => { sessionsInFlight = false; if (sessionsAgain) { sessionsAgain = false; readSessions(); } });
+      };
+      const readTerminals = () => {
+        if (terminalsInFlight) { terminalsAgain = true; return; }
+        terminalsInFlight = true;
+        const startedAt = terminalsGeneration;
+        void api.terminalsIfChanged(etags.terminals)
+          .then((answer) => {
+            if (!active || answer.unchanged) return;
+            if (startedAt !== terminalsGeneration) { terminalsAgain = true; return; }
+            etags.terminals = answer.etag;
+            const current = store.get();
+            const terminals = reconcileById(current.terminals, answer.data);
+            if (terminals !== current.terminals) { store.set({ terminals }); saveSoon(); }
+          })
+          .catch(() => store.set({ status: 'offline' }))
+          .finally(() => { terminalsInFlight = false; if (terminalsAgain) { terminalsAgain = false; readTerminals(); } });
+      };
+      const poll = (lists: { sessions: boolean; terminals: boolean } = { sessions: true, terminals: true }) => {
+        if (!active) return;
         if (document.visibilityState !== 'visible') {
           const now = Date.now();
           // A change pushed while throttled is remembered, so the interval fetches it once allowed.
           if (now - lastHiddenPoll < HIDDEN_POLL_MS) { missed = true; return; }
           lastHiddenPoll = now;
         }
-        inFlight = true;
         missed = false;
         lastPoll = Date.now();
-        const startedAt = revision;
-        void Promise.all([api.sessionsIfChanged(etags.sessions), api.terminalsIfChanged(etags.terminals)])
-          .then(([incomingSessions, incomingTerminals]) => {
-            if (!active || startedAt !== revision) return;
-            // Only now that the answer is being applied is its ETag worth remembering.
-            if (!incomingSessions.unchanged) etags.sessions = incomingSessions.etag;
-            if (!incomingTerminals.unchanged) etags.terminals = incomingTerminals.etag;
-            if (store.get().status === 'offline') deps.handlers.reload();
-            else store.set({ status: 'fresh' });
-            const current = store.get();
-            const sessions = incomingSessions.unchanged ? current.sessions : reconcileById(current.sessions, incomingSessions.data.filter((item) => !isSessionDeleted(item.id)));
-            const terminals = incomingTerminals.unchanged ? current.terminals : reconcileById(current.terminals, incomingTerminals.data);
-            if (!incomingSessions.unchanged) { noticeBackground(incomingSessions.data); confirmMissing(current.sessions, incomingSessions.data); }
-            if (sessions !== current.sessions || terminals !== current.terminals) { store.set({ sessions, terminals }); saveSoon(); }
-          })
-          .catch(() => store.set({ status: 'offline' }))
-          .finally(() => { inFlight = false; if (again) { again = false; poll(); } });
+        if (lists.sessions) readSessions();
+        if (lists.terminals) readTerminals();
       };
       /** Each domain advances separately; legacy servers may omit some or all revisions. */
       const changed = (event: Event) => {
@@ -382,6 +437,7 @@ export function createListsStore(deps: ListsDeps) {
         let favoritesRevision: number | undefined;
         let workItemsRevision: number | undefined;
         let projectsRevision: number | undefined;
+        let terminalsRevision: number | undefined;
         try {
           const parsed: unknown = data ? JSON.parse(data) : undefined;
           if (parsed && typeof (parsed as { revision?: unknown }).revision === 'number') pushedRevision = (parsed as { revision: number }).revision;
@@ -389,12 +445,20 @@ export function createListsStore(deps: ListsDeps) {
           if (parsed && typeof (parsed as { favorites?: unknown }).favorites === 'number') favoritesRevision = (parsed as { favorites: number }).favorites;
           if (parsed && typeof (parsed as { workItems?: unknown }).workItems === 'number') workItemsRevision = (parsed as { workItems: number }).workItems;
           if (parsed && typeof (parsed as { projects?: unknown }).projects === 'number') projectsRevision = (parsed as { projects: number }).projects;
+          if (parsed && typeof (parsed as { terminals?: unknown }).terminals === 'number') terminalsRevision = (parsed as { terminals: number }).terminals;
         } catch { /* legacy payload */ }
         // Before the list check: a mark change pushes without moving the lists' revision.
         announce({ ...(marksRevision === undefined ? {} : { marks: marksRevision }), ...(favoritesRevision === undefined ? {} : { favorites: favoritesRevision }), ...(workItemsRevision === undefined ? {} : { workItems: workItemsRevision }) });
         if (projectsRevision !== undefined) { wantedProjectsVersion = projectsRevision; refreshProjects(); }
-        if (pushedRevision !== undefined && pushedRevision === knownRevision()) return;
-        if (inFlight) again = true; else poll();
+        const readMoved = () => {
+          const sessions = pushedRevision === undefined || pushedRevision !== etagRevision(etags.sessions);
+          // An older server moves terminals with the session revision.
+          const terminalsPushed = terminalsRevision ?? pushedRevision;
+          const terminals = terminalsPushed === undefined || terminalsPushed !== etagRevision(etags.terminals);
+          if (sessions || terminals) poll({ sessions, terminals });
+        };
+        // Compared with what the bootstrap in flight is about to hold, not with the cached copy on screen.
+        if (pendingBootstrap) void pendingBootstrap.then(readMoved, readMoved); else readMoved();
       };
       const task = (event: Event) => {
         try { const parsed = JSON.parse((event as MessageEvent<string>).data) as Partial<TaskEvent>; if (typeof parsed.id === 'string' && typeof parsed.projectId === 'string') announceTask(parsed as TaskEvent); } catch { /* not a task event */ }
@@ -412,7 +476,12 @@ export function createListsStore(deps: ListsDeps) {
           if (active && store.get().loaded && incoming.revision !== store.get().owner?.revision) { store.set({ owner: incoming }); saveSoon(); }
         }).catch(() => {});
       };
-      const reconnected = () => { announce({}); refreshOwner(); announceTask(undefined); announcePlugins(); announceDevices(); announceChannels(); refreshProjects(true); if (inFlight) again = true; else poll(); };
+      const reconnected = () => {
+        refreshOwner(); announceTask(undefined); announcePlugins(); announceDevices(); announceChannels();
+        // A `list-delta` server opens the stream with a `changed` naming every list's revision; an older one is read again.
+        if (hasDelta()) return;
+        announce({}); refreshProjects(true); poll();
+      };
       let source: EventSource | undefined;
       let retryTimer: number | undefined;
       let retries = 0;
@@ -422,7 +491,7 @@ export function createListsStore(deps: ListsDeps) {
         const current = new EventSource(listsStreamUrl());
         source = current;
         // A reconnect may have missed changes made while the stream was down.
-        current.onopen = () => { retries = 0; pushed = true; if (opened) reconnected(); else refreshProjects(true); opened = true; };
+        current.onopen = () => { retries = 0; pushed = true; if (opened) reconnected(); else if (!hasDelta()) refreshProjects(true); opened = true; };
         current.onerror = () => {
           pushed = false;
           // The browser retries a dropped stream by itself, but gives up for good on an HTTP error,
@@ -441,8 +510,9 @@ export function createListsStore(deps: ListsDeps) {
       };
       connect();
       const timer = window.setInterval(() => { if (missed || !pushed || Date.now() - lastPoll >= PUSHED_POLL_MS) poll(); }, 5000);
-      const onFocus = () => { poll(); refreshProjects(true); };
-      const onVisibility = () => { poll(); if (document.visibilityState === 'visible') refreshProjects(true); };
+      // While the stream is up it has told every project change; without it the projects are read again.
+      const onFocus = () => { poll(); if (!pushed) refreshProjects(true); };
+      const onVisibility = () => { poll(); if (document.visibilityState === 'visible' && !pushed) refreshProjects(true); };
       window.addEventListener('focus', onFocus);
       document.addEventListener('visibilitychange', onVisibility);
       return () => {
@@ -455,3 +525,23 @@ export function createListsStore(deps: ListsDeps) {
 }
 
 export type ListsStore = ReturnType<typeof createListsStore>;
+
+/**
+ * [held] with a delta applied (docs/LIST-SYNC.md): a changed session replaces its copy unless the copy
+ * is newer (a stream frame landed meanwhile), removed ones go, and the order is the server's.
+ */
+function mergeDelta(held: Session[], changed: readonly Session[], removed: readonly string[]): Session[] {
+  if (!changed.length && !removed.length) return held;
+  const gone = new Set(removed);
+  const incoming = new Map(changed.filter((item) => !isSessionDeleted(item.id)).map((item) => [item.id, item]));
+  const next = held.flatMap((item) => {
+    if (gone.has(item.id)) return [];
+    const update = incoming.get(item.id);
+    if (!update) return [item];
+    incoming.delete(item.id);
+    return [update.updatedAt < item.updatedAt ? item : update];
+  });
+  next.push(...incoming.values());
+  next.sort((a, b) => (b.lastActivityAt ?? b.createdAt).localeCompare(a.lastActivityAt ?? a.createdAt));
+  return reconcileById(held, next);
+}

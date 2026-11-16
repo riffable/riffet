@@ -106,3 +106,10 @@ export const SessionSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
+
+export const SessionListDeltaSchema = z.object({
+  revision: z.number().int(),
+  full: z.literal(true).optional(),
+  sessions: z.array(SessionSchema),
+  removed: z.array(z.string()).optional(),
+});

@@ -76,7 +76,7 @@ Markdown 源；服务端比较两者的"骨架"：去掉列表序号、链接地
 | GET | `/api/marks/:id/prompt` | 整条回复对应的提问 `{ text? }`，供导出图片使用 |
 | GET | `/api/marks/:id/asset` | 图片副本（`<数据目录>/marks/<id>`，删除收藏时一并删除；创建时 base64 内联，≤ 10 MiB） |
 
-收藏变化沿用列表的变化通知：web 订阅 `/api/lists/stream` 的 `changed`，带 ETag 重新拉取；Mac App 由 KMP 的 `SessionMarks` 随会话列表同一轮询，以 `limit=1` 的 ETag 条件读判断修订是否变化。删除会话时其收藏转为失联。
+收藏变化沿用列表的变化通知：web 订阅 `/api/lists/stream` 的 `changed`，带 ETag 重新拉取；Mac 与 Android 由 KMP 的 `ListsFeed` 在 `changed` 的 `marks` 修订变化时读取，会话列表的兜底轮询里也以 `limit=1` 的 ETag 条件读判断修订是否变化（[LIST-SYNC.md](LIST-SYNC.md)）。删除会话时其收藏转为失联。
 
 ## 6. 呈现
 
@@ -84,7 +84,7 @@ Markdown 源；服务端比较两者的"骨架"：去掉列表序号、链接地
   Mac App 在消息右键菜单「收藏回复」「高亮所选文字」，图片与文件工具调用的右键菜单「收藏图片 / 收藏文件」。
 - **会话内**：被收藏的回复显示书签标识；高亮用不改 DOM / 不改存储文本的方式绘制（web 用 CSS Custom Highlight
   API，Mac App 用 temporary attributes）；点击或右键高亮可改颜色、写备注、删除。
-- **收藏夹页**：侧边栏顶部与定时任务、扩展管理并列。搜索、按项目 / 类型 / 失联筛选、编辑备注、批量删除；点击跳回原会话。web 地址为 `/c/<sessionId>?mark=<markId>`。
+- **收藏夹页**：侧边栏顶部与自动化、扩展管理并列。搜索、按项目 / 类型 / 失联筛选、编辑备注、批量删除；点击跳回原会话。web 地址为 `/c/<sessionId>?mark=<markId>`。
 
 ### 6.1 导出图片
 

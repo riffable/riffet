@@ -32,12 +32,12 @@ import riffet.shared.DeviceGate
 import riffet.shared.DevicePermission
 import riffet.shared.DevicePlatform
 import riffet.shared.DevicePlatformState
-import riffet.shared.NoticeStreamSession
 import riffet.shared.RiffetAndroid
 import riffet.shared.RiffetApi
 import riffet.shared.createAppPreferences
-import riffet.shared.noticeStream
 import riffet.shared.reportDevice
+import riffet.ui.state.ListsFeed
+import riffet.ui.state.SessionMarks
 import riffet.ui.state.SessionStore
 import java.io.File
 
@@ -57,7 +57,7 @@ internal object RiffetDevice {
     val platform by lazy { AndroidDevicePlatform(context) }
 
     private var channel: DeviceChannel? = null
-    private var notices: NoticeStreamSession? = null
+    private var feed: ListsFeed? = null
 
     fun initialize(context: Context) {
         this.context = context.applicationContext
@@ -65,11 +65,19 @@ internal object RiffetDevice {
     }
 
     /**
-     * For one installed store, until it is replaced: the notice stream always, the device stream
-     * while the switch is on. [viewing] tells whether the reader is looking at that conversation.
+     * For one installed store, until it is replaced: the lists stream always, the device stream
+     * while the switch is on. [viewing] tells whether the reader is looking at that conversation;
+     * [reading] whether list changes may be read now (the app is in front or kept alive).
      */
-    suspend fun watch(store: SessionStore, api: RiffetApi, origin: String, viewing: (String) -> Boolean): Unit = coroutineScope {
-        launch { showNotices(store, api, origin, viewing) }
+    suspend fun watch(
+        store: SessionStore,
+        api: RiffetApi,
+        origin: String,
+        marks: SessionMarks?,
+        reading: () -> Boolean,
+        viewing: (String) -> Boolean,
+    ): Unit = coroutineScope {
+        launch { showNotices(store, api, origin, marks, reading, viewing) }
         var wasOn = false
         DeviceControl.allowed.collectLatest { on ->
             if (on) {
@@ -124,28 +132,38 @@ internal object RiffetDevice {
         }
     }
 
-    private suspend fun showNotices(store: SessionStore, api: RiffetApi, origin: String, viewing: (String) -> Boolean) {
-        val session = api.noticeStream()
-        notices = session
+    /** One lists stream carries both: list changes go to the store, `notice` events become notifications. */
+    private suspend fun showNotices(
+        store: SessionStore,
+        api: RiffetApi,
+        origin: String,
+        marks: SessionMarks?,
+        reading: () -> Boolean,
+        viewing: (String) -> Boolean,
+    ) = coroutineScope {
         val shown = ArrayDeque<String>()
-        try {
-            session.notices.collect { notice ->
-                if (notice.id in shown) return@collect
+        val lists = ListsFeed(api, store, this, active = reading, onMarks = { marks?.poll() }, onNotice = { notice ->
+            if (notice.id !in shown) {
                 shown.addLast(notice.id)
                 if (shown.size > 50) shown.removeFirst()
-                if (viewing(notice.sessionId)) return@collect
-                val title = store.list.value.sessions.firstOrNull { it.id == notice.sessionId }?.title
-                RiffetHost.notifier.agentMessage("notice-${notice.id}", notice.sessionId, notice.title, notice.body, title, origin)
+                if (!viewing(notice.sessionId)) {
+                    val title = store.list.value.sessions.firstOrNull { it.id == notice.sessionId }?.title
+                    RiffetHost.notifier.agentMessage("notice-${notice.id}", notice.sessionId, notice.title, notice.body, title, origin)
+                }
             }
+        })
+        feed = lists
+        try {
+            lists.run()
         } finally {
-            if (notices === session) notices = null
+            if (feed === lists) feed = null
         }
     }
 
     /** The network came back or the app came to the front: redial now. */
     fun kick() {
         channel?.kick()
-        notices?.kick()
+        feed?.kick()
     }
 
     /** A permission or the switch changed: the server's copy of the capabilities follows. */

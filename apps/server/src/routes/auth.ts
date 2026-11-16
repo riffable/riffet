@@ -103,7 +103,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
   });
   app.get('/api/bootstrap',async(request)=>{
     const context=auth.authenticate(request);
-    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(store.listProjects(),request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),settings:effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
+    return {projects:visibleProjectsForClient(request.headers,withoutQuickChats(store.listProjects(),request)),sessions:visibleSessionsForClient(request.headers,withoutQuickChats(store.listSessions(),request),id=>store.getProject(id)),terminals:visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id)),revisions:{sessions:store.listRevision,terminals:store.terminalsRevision,projects:store.projectRevision},settings:effectiveSettings(request.headers),owner:deps.owner.get(),protocol:PROTOCOL_INFO,csrfToken:context.kind==='cookie'&&context.cookie?auth.csrf(context.cookie):''};
   });
 }
 /**

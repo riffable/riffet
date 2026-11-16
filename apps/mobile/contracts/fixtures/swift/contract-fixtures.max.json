@@ -3637,6 +3637,122 @@
     "createdAt": "text",
     "updatedAt": "text"
   },
+  "SessionListDelta": {
+    "revision": 1,
+    "full": true,
+    "sessions": [
+      {
+        "id": "text",
+        "projectId": "text",
+        "kind": "native",
+        "title": "text",
+        "tags": [
+          "text"
+        ],
+        "state": "idle",
+        "titleSource": "prompt",
+        "backendId": "cursor",
+        "backendProfileId": "text",
+        "nativeSessionId": "text",
+        "previousNativeSessionIds": [
+          "text"
+        ],
+        "quickExitCount": 1,
+        "nativeRuntime": {
+          "address": "text",
+          "fingerprint": "text",
+          "scopeFingerprint": "text",
+          "profileId": "text",
+          "attachment": {
+            "hook": "text",
+            "id": "text"
+          }
+        },
+        "cursorSessionId": "text",
+        "terminalId": "text",
+        "terminalAppearance": {
+          "foreground": "text",
+          "background": "text"
+        },
+        "resumePicker": true,
+        "model": "text",
+        "mode": "text",
+        "approval": "text",
+        "archivedAt": "text",
+        "error": "text",
+        "configRevision": 1,
+        "configPending": true,
+        "creationFingerprint": "text",
+        "lastActivityAt": "text",
+        "seenActivityAt": "text",
+        "activeSince": "text",
+        "pinnedAt": "text",
+        "pinRank": 1,
+        "origin": {
+          "kind": "fork",
+          "sessionId": "text",
+          "runId": "text",
+          "groupId": "text",
+          "automationId": "text",
+          "templateId": "text",
+          "scheduleId": "text",
+          "channel": {
+            "kind": "text",
+            "account": "text",
+            "chatId": "text"
+          },
+          "discussion": {
+            "anchor": {
+              "messageId": "text",
+              "aliases": [
+                "text"
+              ],
+              "runId": "text",
+              "nativeTurnId": "text",
+              "sequence": 1,
+              "generation": "text"
+            },
+            "quote": {
+              "exact": "text",
+              "prefix": "text",
+              "suffix": "text",
+              "start": 1,
+              "end": 1
+            },
+            "capturedAt": "text",
+            "contextRef": "text",
+            "requestFingerprint": "text"
+          }
+        },
+        "handedOffTo": "text",
+        "toolGroups": [
+          "text"
+        ],
+        "extensionsOff": [
+          "text"
+        ],
+        "terminalHold": {
+          "since": "text",
+          "pid": 1
+        },
+        "goal": {
+          "objective": "text",
+          "status": "active",
+          "reason": "text",
+          "tokensUsed": 1,
+          "tokenBudget": 1,
+          "seconds": 1,
+          "updatedAt": "text"
+        },
+        "workItemId": "text",
+        "createdAt": "text",
+        "updatedAt": "text"
+      }
+    ],
+    "removed": [
+      "text"
+    ]
+  },
   "SessionState": "idle",
   "SessionState#$=starting": "starting",
   "SessionState#$=running": "running",

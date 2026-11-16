@@ -1447,6 +1447,467 @@
         ]
       }
     },
+    "SessionListDelta": {
+      "direction": "response",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "full": {
+            "type": "boolean",
+            "const": true
+          },
+          "sessions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "projectId": {
+                  "type": "string"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "native"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "tags": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "state": {
+                  "type": "string",
+                  "enum": [
+                    "idle",
+                    "starting",
+                    "running",
+                    "waiting",
+                    "cancelling",
+                    "interrupted",
+                    "failed",
+                    "archived"
+                  ]
+                },
+                "titleSource": {
+                  "open": true,
+                  "type": "string",
+                  "enum": [
+                    "prompt",
+                    "provider",
+                    "generated",
+                    "user"
+                  ]
+                },
+                "backendId": {
+                  "negotiated": [
+                    "chat",
+                    "pi",
+                    "antigravity"
+                  ],
+                  "negotiatedPattern": {
+                    "feature": "plugin-agents",
+                    "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                    "maxLength": 64
+                  },
+                  "type": "string",
+                  "enum": [
+                    "cursor",
+                    "codex",
+                    "claude",
+                    "dsh",
+                    "droid",
+                    "traex",
+                    "pi",
+                    "antigravity",
+                    "chat"
+                  ]
+                },
+                "backendProfileId": {
+                  "type": "string"
+                },
+                "nativeSessionId": {
+                  "type": "string"
+                },
+                "previousNativeSessionIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "quickExitCount": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "nativeRuntime": {
+                  "type": "object",
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "scopeFingerprint": {
+                      "type": "string"
+                    },
+                    "profileId": {
+                      "type": "string"
+                    },
+                    "attachment": {
+                      "type": "object",
+                      "properties": {
+                        "hook": {
+                          "type": "string"
+                        },
+                        "id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "hook",
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "address",
+                    "fingerprint"
+                  ]
+                },
+                "cursorSessionId": {
+                  "type": "string"
+                },
+                "terminalId": {
+                  "type": "string"
+                },
+                "terminalAppearance": {
+                  "type": "object",
+                  "properties": {
+                    "foreground": {
+                      "type": "string"
+                    },
+                    "background": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "foreground",
+                    "background"
+                  ]
+                },
+                "resumePicker": {
+                  "type": "boolean"
+                },
+                "model": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "approval": {
+                  "type": "string"
+                },
+                "archivedAt": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "configRevision": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "configPending": {
+                  "type": "boolean"
+                },
+                "creationFingerprint": {
+                  "type": "string"
+                },
+                "lastActivityAt": {
+                  "type": "string"
+                },
+                "seenActivityAt": {
+                  "type": "string"
+                },
+                "activeSince": {
+                  "type": "string"
+                },
+                "pinnedAt": {
+                  "type": "string"
+                },
+                "pinRank": {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "origin": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "open": true,
+                      "type": "string",
+                      "enum": [
+                        "fork",
+                        "handoff",
+                        "attempt",
+                        "automation",
+                        "template",
+                        "schedule",
+                        "discussion",
+                        "channel"
+                      ]
+                    },
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "runId": {
+                      "type": "string"
+                    },
+                    "groupId": {
+                      "type": "string"
+                    },
+                    "automationId": {
+                      "type": "string"
+                    },
+                    "templateId": {
+                      "type": "string"
+                    },
+                    "scheduleId": {
+                      "type": "string"
+                    },
+                    "channel": {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string"
+                        },
+                        "account": {
+                          "type": "string"
+                        },
+                        "chatId": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "account",
+                        "chatId"
+                      ]
+                    },
+                    "discussion": {
+                      "type": "object",
+                      "properties": {
+                        "anchor": {
+                          "type": "object",
+                          "properties": {
+                            "messageId": {
+                              "type": "string"
+                            },
+                            "aliases": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "runId": {
+                              "type": "string"
+                            },
+                            "nativeTurnId": {
+                              "type": "string"
+                            },
+                            "sequence": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "generation": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "messageId"
+                          ]
+                        },
+                        "quote": {
+                          "type": "object",
+                          "properties": {
+                            "exact": {
+                              "type": "string"
+                            },
+                            "prefix": {
+                              "type": "string"
+                            },
+                            "suffix": {
+                              "type": "string"
+                            },
+                            "start": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            },
+                            "end": {
+                              "type": "integer",
+                              "minimum": -9007199254740991,
+                              "maximum": 9007199254740991
+                            }
+                          },
+                          "required": [
+                            "exact",
+                            "prefix",
+                            "suffix"
+                          ]
+                        },
+                        "capturedAt": {
+                          "type": "string"
+                        },
+                        "contextRef": {
+                          "type": "string"
+                        },
+                        "requestFingerprint": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "anchor",
+                        "quote",
+                        "capturedAt",
+                        "contextRef",
+                        "requestFingerprint"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "handedOffTo": {
+                  "type": "string"
+                },
+                "toolGroups": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "extensionsOff": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "terminalHold": {
+                  "type": "object",
+                  "properties": {
+                    "since": {
+                      "type": "string"
+                    },
+                    "pid": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    }
+                  },
+                  "required": [
+                    "since"
+                  ]
+                },
+                "goal": {
+                  "type": "object",
+                  "properties": {
+                    "objective": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "open": true,
+                      "type": "string",
+                      "enum": [
+                        "active",
+                        "paused",
+                        "blocked",
+                        "usage_limited",
+                        "budget_limited",
+                        "complete"
+                      ]
+                    },
+                    "reason": {
+                      "type": "string"
+                    },
+                    "tokensUsed": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "tokenBudget": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "seconds": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "objective",
+                    "status",
+                    "updatedAt"
+                  ]
+                },
+                "workItemId": {
+                  "type": "string"
+                },
+                "createdAt": {
+                  "type": "string"
+                },
+                "updatedAt": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "projectId",
+                "kind",
+                "title",
+                "tags",
+                "state",
+                "mode",
+                "createdAt",
+                "updatedAt"
+              ]
+            }
+          },
+          "removed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "revision",
+          "sessions"
+        ]
+      }
+    },
     "SessionState": {
       "direction": "response",
       "schema": {

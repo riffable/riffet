@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import type { FolderFavorite } from '../../../../packages/contracts/src/index.js';
 import { AppError, requireString } from '../errors.js';
 import type { StoredFolderFavorite } from '../store.js';
-import { tags } from './params.js';
+import { revisionedList, tags } from './params.js';
 import type { RouteDeps } from './deps.js';
 import { withoutQuickChats } from '../chat/quick-chat.js';
 import { clientSupportsFeature, requireProjectVisibleToClient, visibleProjectItemsForClient, visibleProjectsForClient } from '../native/client-features.js';
@@ -43,7 +43,7 @@ export function registerProjectRoutes(app: FastifyInstance, deps: RouteDeps): vo
     const root=projectId?store.getProject(projectId).cwd:undefined;
     return Promise.all(items.map(async item=>({...item,exists:await stat(root?join(root,item.path):item.path).then(info=>info.isDirectory(),()=>false)})));
   };
-  app.get('/api/projects',async(request)=>visibleProjectsForClient(request.headers,withoutQuickChats(store.listProjects(),request)));
+  app.get('/api/projects',async(request,reply)=>revisionedList(request,reply,store.projectRevision,()=>visibleProjectsForClient(request.headers,withoutQuickChats(store.listProjects(),request))));
   app.post<{Params:{id:string};Body:{name?:string}}>('/api/projects/:id/promote',async(request)=>{
     const name=requireString(request.body?.name,'name',200).trim();
     await assertTaskWorkspaceAvailable(store.getProject(request.params.id));

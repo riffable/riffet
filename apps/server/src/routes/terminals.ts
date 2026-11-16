@@ -15,7 +15,7 @@ const TERMINAL_SOCKET_BUFFER_LIMIT=32*1024*1024;
 export function registerTerminalRoutes(app: FastifyInstance, deps: RouteDeps): void {
   registerTerminalAttachmentRoutes(app, deps);
   const {store,auth,terminal,nativeBackends,dispatch}=deps;
-  app.get('/api/terminals',async(request,reply)=>revisionedList(request,reply,store.listRevision,()=>visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id))));
+  app.get('/api/terminals',async(request,reply)=>revisionedList(request,reply,store.terminalsRevision,()=>visibleProjectItemsForClient(request.headers,terminal.listSnapshot(),id=>store.getProject(id))));
   app.get<{Params:{id:string}}>('/api/terminals/:id',async(request)=>{
     const info=await terminal.get(request.params.id);
     if('warmup' in info)throw new AppError('TERMINAL_NOT_FOUND','Terminal not found',404);

@@ -48,6 +48,7 @@ import riffet.shared.releaseTerminalHold
 import riffet.shared.promoteProject
 import riffet.shared.projects
 import riffet.shared.sessionsIfChanged
+import riffet.shared.sessionsSince
 import riffet.shared.updateProject
 import riffet.shared.updateSession
 import riffet.shared.markAllSessionsSeen
@@ -113,6 +114,9 @@ internal class SessionLists(
     /** The validator of the last session list read, sent as `If-None-Match` by the next one. */
     private var sessionsEtag: String? = null
 
+    /** The server answers `GET /api/sessions?since=` (protocol feature `list-delta`), from the last bootstrap. */
+    private var listDelta = false
+
     /**
      * Whether a lists `changed` push naming [revision] (null from an older server) is news: false
      * when the list held already is that revision, so no read is needed.
@@ -129,6 +133,8 @@ internal class SessionLists(
             // A bootstrap owns the initial project snapshot; do not race it with another read.
             refreshJob?.takeIf { it.isActive }?.join()
             if (unauthenticated.value) return@launch
+            // The bootstrap may have read this very revision.
+            if (revision != null && projectsRevisionLoaded && revision == projectsRevision) return@launch
             val read = ++projectReads
             val writesAtStart = projectWrites
             try {
@@ -184,6 +190,14 @@ internal class SessionLists(
                 if (fresh) listApplied = read
                 val freshProjects = projectRead == projectReads && projectRead > projectApplied && projectWritesAtStart == projectWrites
                 if (freshProjects) projectApplied = projectRead
+                listDelta = bootstrap.protocol?.features?.contains(LIST_DELTA_FEATURE) == true
+                bootstrap.revisions?.let { revisions ->
+                    if (fresh) sessionsEtag = "W/\"${revisions.sessions}\""
+                    if (freshProjects) {
+                        projectsRevision = revisions.projects
+                        projectsRevisionLoaded = true
+                    }
+                }
                 lateinit var sessions: List<Session>
                 lateinit var held: List<Session>
                 _list.update { state ->
@@ -230,6 +244,14 @@ internal class SessionLists(
             startRefresh().join()
             return
         }
+        // A read dropped because a local write overtook it is repeated at once, not at the next push.
+        repeat(2) { if (readSessions()) return }
+    }
+
+    /** One session list read; false when its answer was dropped for being overtaken. */
+    private suspend fun readSessions(): Boolean {
+        val since = if (listDelta) sessionsEtag?.let(::etagRevision) else null
+        if (since != null) return readSessionDelta(since)
         val read = ++listReads
         val answer = try {
             withContext(background) { api.sessionsIfChanged(sessionsEtag) }
@@ -238,8 +260,8 @@ internal class SessionLists(
             throw unauthenticated
         }
         // 304: the server's list still is the revision this one was read at; nothing to fold in.
-        val polled = answer.items ?: return
-        if (read < listApplied) return
+        val polled = answer.items ?: return true
+        if (read < listApplied) return false
         sessionsEtag = answer.etag
         listApplied = read
         lateinit var sessions: List<Session>
@@ -250,6 +272,53 @@ internal class SessionLists(
             state.copy(sessions = sessions, loaded = true)
         }
         confirmRemoved(held, sessions)
+        applyPolled(sessions)
+        return true
+    }
+
+    /**
+     * `?since=<revision>`: only the sessions that changed. A `full` answer is the whole list, merged
+     * as a plain read is; otherwise they replace their older copies, `removed` ids are dropped (after
+     * the server confirms they are deleted) and the list is put back in the server's order.
+     */
+    private suspend fun readSessionDelta(since: Long): Boolean {
+        val read = ++listReads
+        val answer = try {
+            withContext(background) { api.sessionsSince(since, sessionsEtag) }
+        } catch (unauthenticated: RiffetUnauthenticatedException) {
+            signedOut()
+            throw unauthenticated
+        } ?: return true
+        val delta = answer.delta
+        // An answer older than the list held (one that crossed a newer read or a bootstrap) would move the list back.
+        val heldRevision = sessionsEtag?.let(::etagRevision)
+        if (read < listApplied || delta.full != true && heldRevision != null && delta.revision < heldRevision) return false
+        sessionsEtag = answer.etag
+        listApplied = read
+        val removed = delta.removed.orEmpty()
+        if (delta.full != true && delta.sessions.isEmpty() && removed.isEmpty()) return true
+        lateinit var sessions: List<Session>
+        lateinit var held: List<Session>
+        _list.update { state ->
+            held = state.sessions
+            sessions = if (delta.full == true) reconcileSessions(state.sessions, delta.sessions) else mergeDelta(state.sessions, delta.sessions, removed)
+            state.copy(sessions = sessions, loaded = true)
+        }
+        if (delta.full == true) confirmRemoved(held, sessions) else confirmGone(removed.filter { id -> held.any { it.id == id } })
+        applyPolled(sessions)
+        return true
+    }
+
+    private fun mergeDelta(held: List<Session>, changed: List<Session>, removed: List<String>): List<Session> {
+        val byId = held.associateBy { it.id }
+        val gone = removed.toHashSet()
+        val replaced = changed.filter { it.id !in gone }.map { session -> byId[session.id]?.takeIf { it.updatedAt > session.updatedAt } ?: session }
+        val replacedIds = replaced.mapTo(HashSet()) { it.id }
+        return (held.filter { it.id !in gone && it.id !in replacedIds } + replaced).sortedByDescending { it.lastActivityAt ?: it.createdAt }
+    }
+
+    /** What follows a list read that changed the list: the open session, the device copy and alerts. */
+    private fun applyPolled(sessions: List<Session>) {
         // The open session's stream sends its own `session` frames; a list read only wins when it
         // is newer, or it would put back a state the stream has already moved past.
         core.value.selected?.let { open ->
@@ -259,11 +328,11 @@ internal class SessionLists(
             }
         }
         scheduleListSave()
-        // Only the conversations that just moved are fetched (a notification opens on them); the
-        // rest wait for the next full refresh, as before polling. Fetching every running one on
-        // every read kept the device copy busy enough to hold up opening a session.
         val moved = observeSessions(sessions)
         log("poll n=${sessions.size} active=${sessions.count { it.state.active }} moved=${moved.joinToString(",") { "${shortId(it.session.id)}:${it.session.state}" }}")
+        // Only the conversations that just moved are fetched (a notification opens on them); the
+        // rest wait for the next full refresh. Fetching every running one on every read kept the
+        // device copy busy enough to hold up opening a session.
         moved.takeIf { it.isNotEmpty() }?.let { prefetch(it.map { alert -> alert.session }) }
     }
 
@@ -414,10 +483,12 @@ internal class SessionLists(
      * the server, a list this client is not shown): only the server's 410 lets the device copy go.
      */
     private fun confirmRemoved(held: List<Session>, fresh: List<Session>) {
-        if (!list.value.canDeleteSessions) return
         val present = fresh.mapTo(HashSet()) { it.id }
-        val missing = held.map { it.id }.filterNot { it in present }
-        if (missing.isEmpty()) return
+        confirmGone(held.map { it.id }.filterNot { it in present })
+    }
+
+    private fun confirmGone(missing: List<String>) {
+        if (missing.isEmpty() || !list.value.canDeleteSessions) return
         scope.launch {
             val deleted = missing.filter { id ->
                 try {
@@ -614,6 +685,10 @@ internal class SessionLists(
 }
 
 private const val DELETE_FEATURE = "session-delete-v1"
+private const val LIST_DELTA_FEATURE = "list-delta"
+
+/** The revision an ETag `W/"<revision>"` names; null for any other validator. */
+private fun etagRevision(etag: String): Long? = etag.removePrefix("W/").trim('"').toLongOrNull()
 private const val SESSION_DELETED = "SESSION_DELETED"
 
 /** How many of the most recently active conversations a refresh brings up to date. */

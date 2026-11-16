@@ -174,11 +174,17 @@ export class Store {
   /** Told how the open transaction ended; see {@link afterTransaction}. */
   private settleHooks: Array<(committed: boolean) => void> = [];
   /**
-   * Bumped by every change to projects, sessions or terminals; it is the validator behind the list
-   * ETags and the `changed` event. Seeded from the clock so a restart never reissues a revision a
-   * client may still hold.
+   * Bumped by every change to a session (docs/LIST-SYNC.md); it is the validator behind the session
+   * list ETag and the `changed` event's `revision`. Seeded from the clock so a restart never reissues
+   * a revision a client may still hold.
    */
   private listRevisionValue = Date.now();
+  /** The session revision this process started at: a `since` older than it may have missed changes. */
+  private readonly listRevisionFloor = this.listRevisionValue;
+  /** The session revision of each session's last change in this process, deleted ones included. */
+  private readonly sessionRevisions = new Map<string, number>();
+  /** Terminals move on their own, so a session change never re-reads them. */
+  private terminalsRevisionValue = Date.now();
   /** Projects move independently of conversation activity, so clients can refresh workspaces without polling on every session event. */
   private projectRevisionValue = Date.now();
   /** The same for saved replies, behind the marks ETag; it moves without the list revision, so a mark never refetches the sidebar. */
@@ -483,15 +489,41 @@ export class Store {
     this.listListeners.add(listener);
     return () => { this.listListeners.delete(listener); };
   }
+  /** The session list's revision; the name predates the per-list revisions. */
   get listRevision(): number { return this.listRevisionValue; }
+  get terminalsRevision(): number { return this.terminalsRevisionValue; }
   get projectRevision(): number { return this.projectRevisionValue; }
   get marksRevision(): number { return this.marksRevisionValue; }
   get workItemsRevision(): number { return this.workItemsRevisionValue; }
   get favoritesRevision(): number { return this.favoritesRevisionValue; }
-  private listsChanged(projects = false) {
+  /**
+   * The sessions changed after [since], or undefined when this process cannot tell: [since] is from
+   * before it started (a restart may have lost changes) or ahead of it (a restored backup). A
+   * listed id may since have been deleted; a rolled-back write lists an unchanged one.
+   */
+  sessionsChangedSince(since: number): string[] | undefined {
+    if (!Number.isSafeInteger(since) || since < this.listRevisionFloor || since > this.listRevisionValue) return undefined;
+    return [...this.sessionRevisions].flatMap(([id, revision]) => revision > since ? [id] : []);
+  }
+  findSession(id: string): IdentifiedSession | undefined {
+    const item = this.get<Session>('sessions', id);
+    return item && normalizeSessionIdentity(item);
+  }
+  private sessionsChanged(ids: readonly string[]) {
     this.listRevisionValue += 1;
-    if (projects) this.projectRevisionValue += 1;
+    for (const id of ids) this.sessionRevisions.set(id, this.listRevisionValue);
     this.notifyLists();
+  }
+  private terminalsChanged() {
+    this.terminalsRevisionValue += 1;
+    this.notifyLists();
+  }
+  /** A project's classification decides who sees its sessions and terminals, so those move with it. */
+  private projectsChanged(classified?: string) {
+    this.projectRevisionValue += 1;
+    if (classified === undefined) { this.notifyLists(); return; }
+    this.sessionsChanged((this.sql('SELECT id FROM sessions WHERE project_id=?').all(classified) as Array<{ id: string }>).map(row => row.id));
+    this.terminalsChanged();
   }
   /** Called by every committed mark write, and when a conversation holding marks is renamed (marks show its current title). */
   marksChanged() {
@@ -525,7 +557,7 @@ export class Store {
       return this.updateProject(existing.id, {worktree});
     }
     const project: Project = {id: randomUUID(), cwd, name, ...(worktree?{worktree}:{}), createdAt: now(), updatedAt: now()};
-    this.sql('INSERT INTO projects(id,json) VALUES(?,?)').run(project.id, JSON.stringify(project)); this.listsChanged(true); return project;
+    this.sql('INSERT INTO projects(id,json) VALUES(?,?)').run(project.id, JSON.stringify(project)); this.projectsChanged(); return project;
   }
   getProject(id: string): Project { const item = this.get<Project>('projects', id); if (!item) throw new AppError('PROJECT_NOT_FOUND', 'Project does not exist', 404); return item; }
   /** The reserved identity must be inserted with its first session and run, never exposed alone. */
@@ -537,7 +569,7 @@ export class Store {
       if (!existing) {
         if (this.listProjects().some(item => item.cwd === project.cwd)) throw new AppError('TASK_WORKSPACE_CONFLICT', 'The reserved directory already belongs to another project', 409);
         this.sql('INSERT INTO projects(id,json) VALUES(?,?)').run(project.id, JSON.stringify(project));
-        this.listsChanged(true);
+        this.projectsChanged();
       }
       const result = this.createNativeSubmission(clientSessionId, sessionInput, commandId, input, contextSnapshots);
       return { project: this.getProject(project.id), ...result };
@@ -562,7 +594,7 @@ export class Store {
     });
   }
   listProjects(): Project[] { return this.all<Project>('projects'); }
-  updateProject(id: string, patch: Partial<Project>): Project { const item = {...this.getProject(id), ...patch, id, updatedAt: now()}; this.replace('projects', id, item); this.listsChanged(true); return item; }
+  updateProject(id: string, patch: Partial<Project>): Project { const current = this.getProject(id), item = {...current, ...patch, id, updatedAt: now()}; this.replace('projects', id, item); this.projectsChanged(current.system === item.system ? undefined : id); return item; }
   /** The project's worktree origins, nearest first. Throws on a missing origin or a loop. */
   originChain(projectId: string): string[] {
     const chain: string[] = [];
@@ -584,7 +616,7 @@ export class Store {
     if (this.listSessions().some(s => s.projectId === id)) throw new AppError('PROJECT_HAS_SESSIONS', 'This project has conversations. Archive the project to retain its history.', 409);
     // A worktree resolves its merge target through this project.
     if (this.listProjects().some(project => project.worktree?.originProjectId === id)) throw new AppError('PROJECT_HAS_WORKTREES', 'Other projects are worktrees of this one. Archive the project to retain them.', 409);
-    this.transaction(() => { this.sql('DELETE FROM folder_favorites WHERE project_id=?').run(id); this.sql('DELETE FROM projects WHERE id=?').run(id); this.listsChanged(true); this.favoritesChanged(); }); }
+    this.transaction(() => { this.sql('DELETE FROM folder_favorites WHERE project_id=?').run(id); this.sql('DELETE FROM projects WHERE id=?').run(id); this.projectsChanged(); this.favoritesChanged(); }); }
   /** One scope's favorites (host-level without `projectId`) in display order; `exists` is the caller's to fill in. */
   listFolderFavorites(projectId?: string): StoredFolderFavorite[] {
     return (this.sql(`SELECT json FROM folder_favorites WHERE project_id=? ORDER BY json_extract(json,'$.sort'), json_extract(json,'$.createdAt')`).all(projectId ?? '') as {json: string}[]).map(row => JSON.parse(row.json) as StoredFolderFavorite);
@@ -621,7 +653,7 @@ export class Store {
       const stamp = now();
       const item = normalizeSessionIdentity({...input, id: randomUUID(), title: input.title || 'New conversation', ...clientTitleSource(input.title), tags: input.tags ?? [], state: 'idle', mode: input.mode ?? 'agent', lastActivityAt: input.lastActivityAt ?? stamp, seenActivityAt: input.lastActivityAt ?? stamp, createdAt: stamp, updatedAt: stamp});
       this.assertNativeIdentityAvailable(item);
-      this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(item.id, item.projectId, JSON.stringify(item)); this.listsChanged();
+      this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(item.id, item.projectId, JSON.stringify(item)); this.sessionsChanged([item.id]);
       return item;
     });
   }
@@ -661,7 +693,7 @@ export class Store {
         this.sessionSnapshotAppends.delete(id);
         this.setSetting(`${DELETED_PREFIX}${id}`, { rootId, deletedAt, cleanupPending: true, ...(id === rootId ? { sessionIds: [...ids] } : {}) } satisfies DeletedSession);
       }
-      this.listsChanged();
+      this.sessionsChanged(ids);
       this.afterTransaction(committed => {
         if (!committed) return;
         this.noteMessageIndexShape();
@@ -713,7 +745,7 @@ export class Store {
         this.assertNativeIdentityAvailable(item, id, id);
       }
       this.replace('sessions', id, item);
-      this.listsChanged();
+      this.sessionsChanged([id]);
       if (item.state !== current.state) for (const listener of this.stateListeners) { try { listener(item, current.state); } catch { /* derived records must not fail the write */ } }
       if (item.title !== current.title && this.sql('SELECT 1 AS found FROM marks WHERE session_id=? LIMIT 1').get(id)) this.marksChanged();
       return item;
@@ -908,7 +940,7 @@ export class Store {
         };
         this.assertNativeIdentityAvailable(session);
         this.sql('INSERT INTO sessions(id,project_id,json) VALUES(?,?,?)').run(session.id, session.projectId, JSON.stringify(session));
-        this.listsChanged();
+        this.sessionsChanged([session.id]);
       }
       // Derive the first Run's config from the immutable request, never the live Session model,
       // which may have been changed by the time an HTTP retry arrives.
@@ -1171,7 +1203,7 @@ export class Store {
         this.sql("DELETE FROM settings WHERE key LIKE ?").run(`terminal-paste:${row.id}:%`);
       }
     });
-    if (removed) this.listsChanged();
+    if (removed) this.terminalsChanged();
     return removed;
   }
 
@@ -1180,7 +1212,7 @@ export class Store {
     return () => { group!.delete(listener); if (!group!.size) this.listeners.delete(sessionId); };
   }
   private broadcast(event: WorkbenchEvent) { for (const listener of this.listeners.get(event.sessionId) ?? []) { try { listener(event); } catch { /* A disconnected subscriber must not fail a committed event. */ } } }
-  saveTerminal(item: TerminalInfo): TerminalInfo { this.sql('INSERT INTO terminals(id,json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(item.id,JSON.stringify(item)); this.listsChanged(); return item; }
+  saveTerminal(item: TerminalInfo): TerminalInfo { this.sql('INSERT INTO terminals(id,json) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(item.id,JSON.stringify(item)); this.terminalsChanged(); return item; }
   getTerminal(id: string): TerminalInfo { const item=this.get<TerminalInfo>('terminals',id); if (!item) throw new AppError('TERMINAL_NOT_FOUND','Terminal does not exist',404); return item; }
   findTerminal(id: string): TerminalInfo | undefined { return this.get<TerminalInfo>('terminals',id); }
   listTerminals(): TerminalInfo[] { return this.all<TerminalInfo>('terminals'); }
@@ -1197,7 +1229,7 @@ export class Store {
     this.transaction(() => {
       this.sql('DELETE FROM terminals WHERE id=?').run(id);
       this.sql("DELETE FROM settings WHERE key LIKE ?").run(`terminal-paste:${id}:%`);
-      this.listsChanged();
+      this.terminalsChanged();
     });
   }
   updateTerminal(id: string, patch: Partial<TerminalInfo>): TerminalInfo { return this.saveTerminal({...this.getTerminal(id),...patch,id}); }

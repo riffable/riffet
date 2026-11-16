@@ -67,8 +67,8 @@ fun RiffetApi.deviceStream(beforeDial: suspend () -> Unit): DeviceStreamSession 
     beforeDial = beforeDial,
 ).open()
 
-/** The `notice` events of `/api/lists/stream`; its `changed` hints are ignored here. */
-fun RiffetApi.noticeStream(): NoticeStreamSession = NoticeStreamSource(
+/** `/api/lists/stream`: `changed` revisions and `notice` events, redialled with the shared backoff. */
+fun RiffetApi.listsStream(): ListsStreamSession = ListsStreamSource(
     http = http,
     url = "$baseUrl/api/lists/stream",
     tokenProvider = tokenProvider,

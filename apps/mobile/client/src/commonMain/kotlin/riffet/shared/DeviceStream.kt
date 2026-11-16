@@ -77,26 +77,36 @@ class DeviceStreamSource(
     }
 }
 
-/** The lists stream's `notice` events; its `changed` frames and heartbeats only keep the watchdog quiet. */
-class NoticeStreamSession(val notices: Flow<RiffetNotice>, val connection: StateFlow<StreamConnection>, private val kicks: Channel<Unit>) {
+/** What `/api/lists/stream` sends: [Changed] carries the frame's raw JSON (revisions per list), never list data. */
+sealed interface ListsStreamEvent {
+    data class Changed(val data: String) : ListsStreamEvent
+    data class Notice(val notice: RiffetNotice) : ListsStreamEvent
+}
+
+/** The lists stream plus its connection. Collecting [events] dials; [kick] cuts a backoff short. */
+class ListsStreamSession(val events: Flow<ListsStreamEvent>, val connection: StateFlow<StreamConnection>, private val kicks: Channel<Unit>) {
     fun kick() {
         kicks.trySend(Unit)
     }
 }
 
-class NoticeStreamSource(
+class ListsStreamSource(
     private val http: HttpClient,
     private val url: String,
     private val tokenProvider: suspend () -> String?,
     private val config: RiffetClientConfig,
 ) {
-    fun open(): NoticeStreamSession {
+    fun open(): ListsStreamSession {
         val connection = MutableStateFlow<StreamConnection>(StreamConnection.Connecting)
         val kicks = Channel<Unit>(Channel.CONFLATED)
-        val notices = redialling<RiffetNotice>("notices", http, url, tokenProvider, config, connection, kicks, DEVICE_SILENCE, beforeDial = {}, connected = null) { event, _ ->
-            if (event.event == "notice") decode(RiffetNotice.serializer(), event.data) else null
+        val events = redialling<ListsStreamEvent>("lists", http, url, tokenProvider, config, connection, kicks, DEVICE_SILENCE, beforeDial = {}, connected = null) { event, _ ->
+            when (event.event) {
+                "notice" -> decode(RiffetNotice.serializer(), event.data)?.let(ListsStreamEvent::Notice)
+                "changed" -> ListsStreamEvent.Changed(event.data.orEmpty())
+                else -> null
+            }
         }
-        return NoticeStreamSession(notices, connection.asStateFlow(), kicks)
+        return ListsStreamSession(events, connection.asStateFlow(), kicks)
     }
 }
 

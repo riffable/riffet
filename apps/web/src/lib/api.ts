@@ -1,6 +1,7 @@
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
+  ListRevisions, SessionListDelta,
   AssistantInstructions, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
@@ -147,6 +148,8 @@ export interface Bootstrap {
   projects: ProjectRecord[];
   sessions: Session[];
   terminals: TerminalInfo[];
+  /** Where each list stood when read (`list-delta`); absent from an older server. */
+  revisions?: ListRevisions;
   settings: AppSettings;
   /** Absent from a server that predates personal info. */
   owner?: OwnerInfo;
@@ -578,6 +581,8 @@ export const api = {
   releaseTerminalHold: async (sessionId: string, force = false) => (await request<{ session: Session }>(`/api/sessions/${encodeURIComponent(sessionId)}/terminal-hold${force ? '?force=1' : ''}`, json('DELETE'))).session,
   sessions: () => request<Session[]>('/api/sessions'),
   sessionsIfChanged: (etag?: string) => requestList<Session[]>('/api/sessions', etag, timeout()),
+  /** Only the sessions changed after [since] (docs/LIST-SYNC.md); [etag] still turns an unchanged list into a 304. */
+  sessionsSince: (since: number, etag?: string) => requestList<SessionListDelta>(`/api/sessions?since=${since}`, etag, timeout()),
   startSession: <T = unknown>(id: string) => request<T>(`/api/sessions/${encodeURIComponent(id)}/start`, json('POST')),
   restartSession: <T = unknown>(id: string, restartFingerprint: string, restartAddress: string) => request<T>(`/api/sessions/${encodeURIComponent(id)}/start`, json('POST', { restartFingerprint, restartAddress })),
   steerQueuedNativeRun: (id: string, sourceRunId: string, body: { commandId: string; target: NativeTurnTarget }) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(sourceRunId)}/steer`, json('POST', body)),

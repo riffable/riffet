@@ -51,7 +51,7 @@
 - 写路径：`POST /api/sessions/:id/native/send` 以 `commandId` 去重并写入 `runs`，`NativeDispatcher` 经 `admission()` 放行，提交栅栏后调用驱动。
 - 读路径：驱动的 `TranscriptSource` 由 `TranscriptIngest` 拉取并追加到 `Journal`，`TimelineService` 折叠成行，`SyncConnection` 以 SSE 推送。
 - `JournalFeed` 把 journal 的增量分发给 `DispatchFeed`（回执与回合结束）、用量统计和搜索索引。
-- 投递状态与不变量见 [DELIVERY.md](../DELIVERY.md)，journal 见 [SESSION-JOURNAL.md](../SESSION-JOURNAL.md)，同步协议见 [SYNC-V3.md](../SYNC-V3.md)。
+- 投递状态与不变量见 [DELIVERY.md](../DELIVERY.md)，journal 见 [SESSION-JOURNAL.md](../SESSION-JOURNAL.md)，同步协议见 [SYNC-V3.md](../SYNC-V3.md)，侧栏列表的同步见 [LIST-SYNC.md](../LIST-SYNC.md)。
 
 ### 3. Agent integration
 

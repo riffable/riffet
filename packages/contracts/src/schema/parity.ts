@@ -58,6 +58,7 @@ interface Checked {
   ShareTurnCatalog: Drift<'ShareTurnCatalog', contracts.ShareTurnCatalog, typeof share.ShareTurnCatalogSchema>;
   ShareDraftEvent: Drift<'ShareDraftEvent', contracts.ShareDraftEvent, typeof share.ShareDraftEventSchema>;
   Session: Drift<'Session', contracts.Session, typeof session.SessionSchema>;
+  SessionListDelta: Drift<'SessionListDelta', contracts.SessionListDelta, typeof session.SessionListDeltaSchema>;
   SessionState: Drift<'SessionState', contracts.SessionState, typeof session.SessionStateSchema>;
   Run: Drift<'Run', contracts.Run, typeof run.RunSchema>;
   RunState: Drift<'RunState', contracts.Run['state'], typeof run.RunStateSchema>;
