@@ -27,7 +27,7 @@ final class TerminalDock {
     /// Shared by the conversation menu, home page, command palette and keyboard shortcut.
     /// Fetching the list also excludes shells that have exited since this window last saw them.
     func openShell(projectId: String? = nil, createNew: Bool = false) async {
-        guard let workbench, !openingShell, !workbench.quickChatContext, workbench.page == nil,
+        guard let workbench, !openingShell, !workbench.quickChatContext, !workbench.assistantContext, workbench.page == nil,
               let projectId = projectId ?? workbench.currentProjectId, projectId == workbench.currentProjectId else { return }
         let request = RequestContext { self.navigationContext }
         openingShell = true
@@ -95,7 +95,7 @@ final class TerminalDock {
     }
 
     func toggle() {
-        guard workbench?.quickChatContext != true else { return }
+        guard workbench?.quickChatContext != true, workbench?.assistantContext != true else { return }
         if shown && workbench?.showsTerminalPage == false {
             hide()
             NotificationCenter.default.post(name: .riffetFocusComposer, object: workbench)

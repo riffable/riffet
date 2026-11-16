@@ -45,7 +45,7 @@ enum PreferenceKey {
 /// pane's case stays so stored selections and links open the pane that took it over (`pane`).
 /// `appearance` is the theme pane: the appearance pane it named was split into its group's pages.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case profile, general, appearance, window, sidebar, tabs, typography, terminal, appIcon
+    case profile, general, assistant, appearance, window, sidebar, tabs, typography, terminal, appIcon
     case input, shortcuts, notifications, files
     case agents, modelProviders, auxiliaryModels, quickChat
     case connection, shares, channels, server, storage, backup
@@ -81,6 +81,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelProviders: String(localized: "模型提供商")
         case .auxiliaryModels: String(localized: "辅助模型")
         case .quickChat: String(localized: "快速对话")
+        case .assistant: String(localized: "个人助理")
         case .connection: String(localized: "连接与设备")
         case .shares: String(localized: "会话分享")
         case .channels: String(localized: "机器人")
@@ -111,6 +112,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelProviders: "network"
         case .auxiliaryModels: "wand.and.stars"
         case .quickChat: "bubble.left.and.bubble.right"
+        case .assistant: "person.crop.square"
         case .connection: "laptopcomputer.and.iphone"
         case .shares: "square.and.arrow.up"
         case .channels: "paperplane"
@@ -153,6 +155,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelProviders: String(localized: "连接、模型与额度")
         case .auxiliaryModels: String(localized: "会话标题与交接摘要")
         case .quickChat: String(localized: "默认模型与归档")
+        case .assistant: String(localized: "后台运行与任务")
         case .connection: String(localized: "服务器与已配对设备")
         case .shares: String(localized: "已发布的分享链接")
         case .channels: String(localized: "飞书机器人与可用账号")
@@ -184,6 +187,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modelProviders: String(localized: "模型 提供商 网关 API Key 额度 provider gateway quota", comment: "Search terms, space-separated")
         case .auxiliaryModels: String(localized: "标题 交接 摘要 模型 title handoff summary model", comment: "Search terms, space-separated")
         case .quickChat: String(localized: "快速会话 归档 chat quick archive retention", comment: "Search terms, space-separated")
+        case .assistant: String(localized: "助理 后台 跟进 记忆 委托 模型 任务 assistant background delegation", comment: "Search terms, space-separated")
         case .connection: String(localized: "服务器 设备 配对 配对码 二维码 地址 remote", comment: "Search terms, space-separated")
         case .shares: String(localized: "分享 链接 发布 取消分享 share publish link", comment: "Search terms, space-separated")
         case .channels: String(localized: "机器人 飞书 lark 卡片 绑定 群聊 话题 bot feishu channel", comment: "Search terms, space-separated")
@@ -202,7 +206,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var scope: SettingsScope? {
         switch pane {
         case .general, .appearance, .window, .tabs, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
-        case .sidebar, .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .shares, .channels: .server
+        case .sidebar, .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .assistant, .shares, .channels: .server
         default: nil
         }
     }
@@ -214,7 +218,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     }
 
     private static let all: [SettingsSection] = [
-        .profile, .general,
+        .profile, .general, .assistant,
         .appearance, .window, .sidebar, .tabs, .typography, .terminal, .appIcon,
         .input, .shortcuts, .notifications, .files,
         .agents, .modelProviders, .auxiliaryModels, .quickChat,

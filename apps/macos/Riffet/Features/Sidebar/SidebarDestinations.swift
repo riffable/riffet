@@ -6,7 +6,7 @@ import RiffetKit
 /// `packages/contracts/src/settings.ts`). Ids this Mac does not offer keep their places and are skipped.
 extension WorkbenchPage {
     /// The pages this Mac offers, in the catalog's order.
-    static let destinations: [WorkbenchPage] = [.tasks, .marks, .plugins, .extensions, .stats, .activity]
+    static let destinations: [WorkbenchPage] = [.assistant, .tasks, .marks, .plugins, .extensions, .stats, .activity]
 
     private static let defaultPinned = ["assistant", "tasks", "automations"]
 
@@ -35,6 +35,9 @@ extension WorkbenchPage {
 }
 
 extension Workbench {
+    /// [page]'s sidebar row is the open one: for the assistant, its conversation counts as the page.
+    func shows(_ page: WorkbenchPage) -> Bool { page == .assistant ? onAssistantPage : self.page == page }
+
     var sidebarDestinations: (pinned: [WorkbenchPage], more: [WorkbenchPage]) {
         WorkbenchPage.split(saved: settings?.sidebarPinned)
     }
@@ -45,8 +48,8 @@ extension Workbench {
         menu.autoenablesItems = false
         var chosen: (() -> Void)?
         for page in sidebarDestinations.more {
-            let item = MenuAction.item(page.title, symbol: page.symbol) { chosen = { self.page = page } }
-            item.state = self.page == page ? .on : .off
+            let item = MenuAction.item(page.title, symbol: page.symbol) { chosen = { self.show(page) } }
+            item.state = self.shows(page) ? .on : .off
             menu.addItem(item)
         }
         if menu.numberOfItems > 0 { menu.addItem(.separator()) }

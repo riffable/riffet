@@ -55,7 +55,8 @@ struct TranscriptView: View {
             },
             stopActivity: { [workbench] id in await workbench.stop(activity: id) },
             activityText: { [workbench] ref in await workbench.text(of: ref) },
-            turn: { [workbench, orchestrator, session] action, runId in
+            // Forking would open a second conversation in the assistant's directory; rewinding is about project code.
+            turn: workbench.isAssistantSession(session) ? nil : { [workbench, orchestrator, session] action, runId in
                 orchestrator.perform(action, runId: runId, session: session, workbench: workbench)
             },
             mark: { [workbench, session] command in

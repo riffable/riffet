@@ -260,6 +260,9 @@ struct ConversationView: View {
                             TerminalHoldBar(workbench: workbench, session: session)
                                 .onAppear { fullscreen = false }
                         } else {
+                            if !fullscreen, workbench.isAssistantMain(session) {
+                                AssistantEntries(workbench: workbench, composer: composer)
+                            }
                             composerView(state, fullscreen: $fullscreen)
                                 .frame(maxHeight: fullscreen ? .infinity : nil)
                         }
@@ -331,7 +334,7 @@ struct ConversationView: View {
                 }
             },
             unknownCommandHint: String(localized: "发送给 \(state.label)"),
-            searchFiles: quickChat ? nil : { query in (try? await workbench.host.api?.find(projectId: session.projectId, query: query)) ?? [] },
+            searchFiles: quickChat || workbench.isAssistantSession(session) ? nil : { query in (try? await workbench.host.api?.find(projectId: session.projectId, query: query)) ?? [] },
             references: quickChat ? [] : workbench.references(for: session.projectId),
             addReference: quickChat ? nil : { workbench.addReference(path: $0) },
             removeReference: quickChat ? nil : { workbench.removeReference($0) },

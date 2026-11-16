@@ -72,6 +72,7 @@ struct SidebarView: View {
                 SidebarFixedRow(selected: shows(page), action: { selection.wrappedValue = Self.pageTag(page) }) {
                     navigationLabel(page.title, symbol: page.symbol, selected: shows(page))
                     Spacer(minLength: 0)
+                    if page == .assistant { AssistantStatusMark(workbench: workbench) }
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
             }
@@ -227,7 +228,7 @@ struct SidebarView: View {
 
     /// [page]'s row is drawn selected: the page is open, or a click picked it and it opens next frame.
     private func shows(_ page: WorkbenchPage) -> Bool {
-        workbench.sidebar.picked.map { $0 == Self.pageTag(page) } ?? (workbench.page == page)
+        workbench.sidebar.picked.map { $0 == Self.pageTag(page) } ?? workbench.shows(page)
     }
 
     /// The icon sits in the session rows' 12pt mark column, so titles line up with theirs.
@@ -245,6 +246,8 @@ struct SidebarView: View {
             get: {
                 if let picked = workbench.sidebar.picked { return picked }
                 if let page = workbench.page { return Self.pageTag(page) }
+                // The assistant's conversation is not a list row: the destination row shows it.
+                if workbench.onAssistantPage { return Self.pageTag(.assistant) }
                 return workbench.showingHome ? nil : workbench.selected?.id
             },
             set: { id in

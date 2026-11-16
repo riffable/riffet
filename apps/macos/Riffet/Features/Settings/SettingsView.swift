@@ -134,6 +134,7 @@ struct SettingsView: View {
         case .modelProviders: AgentSettings(providersOnly: true)
         case .auxiliaryModels: AuxiliaryModelSettings()
         case .quickChat: QuickChatSettingsView()
+        case .assistant: AssistantSettingsView()
         case .connection: ConnectionSettings()
         case .shares: SharesSettings()
         case .channels: ChannelsSettings()

@@ -148,7 +148,7 @@ final class WorkbenchSidebar {
 
     private func rebuild() {
         guard let list else { return }
-        let projects = list.projects.filter { !$0.isBuiltInQuickChat }
+        let projects = list.projects.filter { !$0.isBuiltInQuickChat && !$0.isAssistant }
         // Quick chats have their own page and are in no sidebar list.
         let open = workbench?.selected?.id
         let sessions = list.sessions.filter {
@@ -184,7 +184,7 @@ final class WorkbenchSidebar {
             guard let self, let workbench = self.workbench, self.picked == id else { return }
             self.picked = nil
             if id.hasPrefix("page:") {
-                workbench.page = WorkbenchPage(rawValue: String(id.dropFirst(5)))
+                if let page = WorkbenchPage(rawValue: String(id.dropFirst(5))) { workbench.show(page) } else { workbench.page = nil }
                 return
             }
             workbench.open(sessionId: id)
@@ -293,7 +293,7 @@ final class WorkbenchSidebar {
     /// The project with the most recent activity: the first group of the sidebar's own ordering.
     var recentProjectId: String? {
         guard let list else { return nil }
-        let projects = list.projects.filter { !$0.isBuiltInQuickChat }
+        let projects = list.projects.filter { !$0.isBuiltInQuickChat && !$0.isAssistant }
         return (layout == "TIME"
             ? visibleGroups(projects: projects, sessions: list.sessions, query: "", showArchived: false)
             : groups).first?.project.id ?? workbench?.projects.first?.id

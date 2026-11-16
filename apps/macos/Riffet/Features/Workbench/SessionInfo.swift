@@ -10,6 +10,8 @@ struct SessionInfoButton: View {
     let session: Session
     var size: CGFloat = 28
     @State private var open = false
+    /// The assistant's 记忆 and 规则 sheets outlive the popover that opens them.
+    @State private var assistantSetup = AssistantSetup()
 
     var body: some View {
         Button { open.toggle() } label: {
@@ -22,8 +24,9 @@ struct SessionInfoButton: View {
         .help("会话信息")
         .accessibilityLabel("会话信息")
         .stylePopover(isPresented: $open, arrowEdge: .bottom) {
-            SessionInfoView(workbench: workbench, session: workbench.selected ?? session) { open = false }
+            SessionInfoView(workbench: workbench, session: workbench.selected ?? session, setup: assistantSetup) { open = false }
         }
+        .assistantSetupSheets(assistantSetup, workbench: workbench)
         .onChange(of: session.id) { open = false }
         .onChange(of: workbench.sessionInfoRequests) { open = true }
     }
@@ -46,20 +49,27 @@ private struct RunningDot: View {
 private struct SessionInfoView: View {
     let workbench: Workbench
     let session: Session
+    let setup: AssistantSetup
     let close: () -> Void
     @Environment(\.palette) private var palette
     @Environment(\.popupAvailableSize) private var available
+    @Environment(\.openSettings) private var openSettings
 
     private var quickChat: Bool { session.agentID == AgentDirectory.quickChat }
     private var project: Project? { quickChat ? nil : workbench.project(session.projectId) }
+    private var assistant: Bool { workbench.isAssistantSession(session) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 facts
-                if let project, !workbench.quickChatContext {
+                if let project, !workbench.quickChatContext, !assistant {
                     Divider()
                     places(project)
+                }
+                if workbench.isAssistantMain(session) {
+                    Divider()
+                    assistantRows
                 }
                 SessionMarksSection(workbench: workbench, session: session, close: close)
                 SessionWorkActions(workbench: workbench, inline: true, onOpen: close)
@@ -68,12 +78,32 @@ private struct SessionInfoView: View {
         .frame(width: 320)
         .frame(maxHeight: min(560, max(200, available.height)))
         .fixedSize(horizontal: false, vertical: true)
+        .task(id: session.id) { if workbench.isAssistantMain(session) { await setup.load(workbench) } }
+    }
+
+    /// What the assistant is made of, in place of a project's panel views and terminal.
+    private var assistantRows: some View {
+        VStack(spacing: 0) {
+            PlaceRow(symbol: "brain", title: String(localized: "记忆"), active: false) {
+                Text(setup.memoryNote).font(RiffetFont.text(RiffetTextSize.x2xs)).foregroundStyle(palette.fg3)
+            } action: { close(); setup.showsMemory = true }
+            PlaceRow(symbol: "checkmark.shield", title: String(localized: "规则"), active: false) {
+                Text(setup.instructionsNote).font(RiffetFont.text(RiffetTextSize.x2xs)).foregroundStyle(palette.fg3)
+            } action: { close(); Task { await setup.openRules(workbench) } }
+            PlaceRow(symbol: "sparkles", title: String(localized: "能力"), active: false) {
+                EmptyView()
+            } action: { close(); setup.openAbilities(workbench) }
+            PlaceRow(symbol: "gearshape", title: String(localized: "设置"), active: false) {
+                EmptyView()
+            } action: { close(); SidebarFooterSupport.openSettings(openSettings, on: .assistant) }
+        }
+        .padding(Space.xs)
     }
 
     // MARK: Facts
 
     private var facts: some View {
-        let branch = project.flatMap { GitStatusModel.model(for: $0.id).status?.branch }.flatMap { $0.isEmpty ? nil : $0 }
+        let branch = project.flatMap { assistant ? nil : GitStatusModel.model(for: $0.id).status?.branch }.flatMap { $0.isEmpty ? nil : $0 }
         let catalog = workbench.catalogs.cached(for: session)
         let model = (session.model ?? "").isEmpty ? nil : modelSelectionSummary(catalog: catalog?.models ?? [], selection: session.model)
         let approval = quickChat ? nil : (workbench.status?.approval ?? session.approval).flatMap { $0.isEmpty ? nil : $0 }

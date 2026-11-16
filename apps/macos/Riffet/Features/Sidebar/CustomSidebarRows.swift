@@ -22,6 +22,8 @@ struct CustomNavRow: View {
     var trailing: String?
     var selected = false
     var anchor: MenuAnchor?
+    /// A status at the end of the row, such as the assistant's conversation running.
+    var mark: AnyView?
     let style: StyleSpec
     let action: () -> Void
     @Environment(\.palette) private var palette
@@ -43,6 +45,7 @@ struct CustomNavRow: View {
                 if let trailing {
                     Text(trailing).font(.riffet(size: S(style.text.label))).foregroundStyle(palette.fg4)
                 }
+                if let mark { mark }
             }
             .padding(.horizontal, rowInset)
             .frame(maxWidth: .infinity, minHeight: navRow, maxHeight: navRow, alignment: .leading)

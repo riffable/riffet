@@ -102,7 +102,7 @@ struct CustomSidebar: View {
 
     /// [page]'s row is drawn selected: the page is open, or a click picked it and it opens next frame.
     private func shows(_ page: WorkbenchPage) -> Bool {
-        workbench.sidebar.picked.map { $0 == "page:" + page.rawValue } ?? (workbench.page == page)
+        workbench.sidebar.picked.map { $0 == "page:" + page.rawValue } ?? workbench.shows(page)
     }
 
     private func treeActions(_ style: StyleSpec) -> some View {
@@ -114,7 +114,7 @@ struct CustomSidebar: View {
             }
             .help("搜索内容 (⌘K)")
             ForEach(destinations.pinned, id: \.self) { page in
-                CustomNavRow(symbol: page.symbol, title: page.title, selected: shows(page), style: style) {
+                CustomNavRow(symbol: page.symbol, title: page.title, selected: shows(page), mark: page == .assistant ? AnyView(AssistantStatusMark(workbench: workbench)) : nil, style: style) {
                     workbench.sidebar.pick("page:" + page.rawValue, clicked: true)
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
@@ -141,7 +141,7 @@ struct CustomSidebar: View {
                 showPages([.plugins, .extensions], at: customAnchor)
             }
             CustomNavRow(symbol: "ellipsis", title: String(localized: "更多"), anchor: moreAnchor, style: style) {
-                showPages([.tasks, .marks, .stats, .activity], at: moreAnchor)
+                showPages([.assistant, .tasks, .marks, .stats, .activity], at: moreAnchor)
             }
         }
         .padding(.horizontal, Space.sm)
@@ -165,7 +165,7 @@ struct CustomSidebar: View {
         menu.autoenablesItems = false
         var chosen: (() -> Void)?
         for page in pages {
-            menu.addItem(MenuAction.item(page.title, symbol: page.symbol) { chosen = { workbench.page = page } })
+            menu.addItem(MenuAction.item(page.title, symbol: page.symbol) { chosen = { workbench.show(page) } })
         }
         _ = anchor.popUp(menu)
         chosen?()

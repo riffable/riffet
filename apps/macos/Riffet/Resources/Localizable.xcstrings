@@ -1,6 +1,237 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "%@ 有变化": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ changes"
+          }
+        }
+      }
+    },
+    "%@ 发版": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ releases"
+          }
+        }
+      }
+    },
+    "它的文件夹会删除，可以从个人助理目录的提交历史找回": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Its folder is deleted; the assistant directory's commit history keeps it."
+          }
+        }
+      }
+    },
+    "去掉「%@」？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove “%@”?"
+          }
+        }
+      }
+    },
+    "去掉": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove"
+          }
+        }
+      }
+    },
+    "个人助理空闲时生效；去掉后记忆保留": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Takes effect when the assistant is idle; its memory stays after removal"
+          }
+        }
+      }
+    },
+    "定时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schedule %@"
+          }
+        }
+      }
+    },
+    "到 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Until %@"
+          }
+        }
+      }
+    },
+    "用个人助理的模型，按用量计费": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uses the assistant's model, billed by usage"
+          }
+        }
+      }
+    },
+    "结束这项委托？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End this delegation?"
+          }
+        }
+      }
+    },
+    "助理 后台 跟进 记忆 委托 模型 任务 assistant background delegation": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "assistant background delegation memory follow-up model task"
+          }
+        }
+      }
+    },
+    "后台运行与任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background runs and tasks"
+          }
+        }
+      }
+    },
+    "改代码的先问我": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask before code changes"
+          }
+        }
+      }
+    },
+    "开始任务前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Before starting a task"
+          }
+        }
+      }
+    },
+    "%lld 项进行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld active"
+          }
+        }
+      }
+    },
+    "已开始 %lld 次，%lld 次在等": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld started, %2$lld waiting"
+          }
+        }
+      }
+    },
+    "已开始 %lld 次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld started"
+          }
+        }
+      }
+    },
+    "%lld 次": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld runs"
+          }
+        }
+      }
+    },
+    "24 小时内最多": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Per 24 hours, at most"
+          }
+        }
+      }
+    },
+    "委托": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delegations"
+          }
+        }
+      }
+    },
+    "每晚，以及主对话压缩前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nightly, and before the main conversation is compacted"
+          }
+        }
+      }
+    },
+    "任务的会话停下、你不在时，核对交付或推动它": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When a task's conversation stops while you're away, checks the delivery or moves it on"
+          }
+        }
+      }
+    },
+    "后台运行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Background runs"
+          }
+        }
+      }
+    },
     "统计未完成：%@": {
       "localizations": {
         "en": {
@@ -27,6 +258,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pinned pages and their order"
+          }
+        }
+      }
+    },
+    "能力包": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capability packs"
           }
         }
       }
@@ -67,6 +308,16 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pinned"
+          }
+        }
+      }
+    },
+    "记忆整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory consolidation"
           }
         }
       }
@@ -167,6 +418,46 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reclaimable"
+          }
+        }
+      }
+    },
+    "还没有委托": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No delegations yet"
+          }
+        }
+      }
+    },
+    "都先问我": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always ask"
+          }
+        }
+      }
+    },
+    "近 %lld 天 %lld 次 · %@ tokens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%2$lld runs in %1$lld days · %3$@ tokens"
+          }
+        }
+      }
+    },
+    "跟进任务": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow up on tasks"
           }
         }
       }
@@ -11348,6 +11639,96 @@
           "stringUnit": {
             "state": "translated",
             "value": "Restore here"
+          }
+        }
+      }
+    },
+    "个人助理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Personal Assistant"
+          }
+        }
+      }
+    },
+    "记忆": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        }
+      }
+    },
+    "能力": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abilities"
+          }
+        }
+      }
+    },
+    "AGENTS.md": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AGENTS.md"
+          }
+        }
+      }
+    },
+    "关于你": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About You"
+          }
+        }
+      }
+    },
+    "记下的事": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Noted"
+          }
+        }
+      }
+    },
+    "还没有记忆": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing remembered yet"
+          }
+        }
+      }
+    },
+    "无法读取记忆": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't read memory"
+          }
+        }
+      }
+    },
+    "已修改": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modified"
           }
         }
       }

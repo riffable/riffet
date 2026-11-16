@@ -42,7 +42,7 @@ struct SearchDialog: View {
             return PaletteCommand.all(workbench: workbench, openSettings: openSettings).filter { $0.matches(rest) }.map(Result.init)
         }
         let sessions = workbench.list.sessions
-        let groups = visibleGroups(projects: workbench.projectList.filter { !$0.isBuiltInQuickChat }, sessions: sessions, query: "", showArchived: true)
+        let groups = visibleGroups(projects: workbench.projectList.filter { !$0.isBuiltInQuickChat && !$0.isAssistant }, sessions: sessions, query: "", showArchived: true)
         let names = Dictionary(groups.flatMap { group in group.sessions.map { ($0.id, group.project.name) } }, uniquingKeysWith: { first, _ in first })
         if workbench.sidebar.searchMode == .content && needle.isEmpty { return [] }
         if workbench.sidebar.searchingContent {

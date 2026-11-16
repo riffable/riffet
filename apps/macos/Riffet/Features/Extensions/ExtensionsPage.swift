@@ -33,7 +33,7 @@ struct ExtensionsPage: View {
     init(workbench: Workbench) {
         self.workbench = workbench
         store = workbench.pageModels.extensions
-        _projectId = State(initialValue: "")
+        _projectId = State(initialValue: workbench.assistant.focusesExtensions ? workbench.assistantProject?.id ?? "" : "")
     }
 
     /// The catalog is read again when the Agent profiles, the project or the server change.
@@ -60,8 +60,13 @@ struct ExtensionsPage: View {
                 api: workbench.host.api,
                 backends: workbench.backends,
                 projectId: projectId.isEmpty ? nil : projectId,
-                projectName: workbench.projects.first { $0.id == projectId }?.name
+                projectName: scopeProjects.first { $0.id == projectId }?.name
             )
+            // From the assistant's 能力 the page opens on the assistant's own agent; the next visit starts as usual.
+            if workbench.assistant.focusesExtensions {
+                workbench.assistant.focusesExtensions = false
+                store.browse(kind: "skill", backend: .claude)
+            }
             await store.loadAll(force: false)
         }
         .task(id: store.neededCapabilityKeys.joined(separator: "\n")) {
@@ -100,11 +105,16 @@ struct ExtensionsPage: View {
             .disabled(store.busy)
     }
 
-    private var projectTitle: String { workbench.projects.first { $0.id == projectId }?.name ?? String(localized: "用户配置") }
+    /// The projects a scope can be picked from: the assistant's directory is one, under its own name.
+    private var scopeProjects: [(id: String, name: String)] {
+        workbench.projects.map { ($0.id, $0.name) } + (workbench.assistantProject.map { [($0.id, String(localized: "个人助理"))] } ?? [])
+    }
+
+    private var projectTitle: String { scopeProjects.first { $0.id == projectId }?.name ?? String(localized: "用户配置") }
 
     private var projectOptions: [ChoiceOption] {
         [ChoiceOption(title: String(localized: "用户配置"), selected: projectId.isEmpty) { select(project: "") }]
-            + workbench.projects.map { project in
+            + scopeProjects.map { project in
                 ChoiceOption(title: project.name, selected: project.id == projectId) { select(project: project.id) }
             }
     }

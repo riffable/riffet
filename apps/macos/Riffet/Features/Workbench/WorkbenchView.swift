@@ -63,7 +63,7 @@ struct WorkbenchView: View {
     private var inspectorShown: Bool { Self.panelShown(in: workbench) }
 
     private static func panelShown(in workbench: Workbench) -> Bool {
-        workbench.page == nil && workbench.attemptGroupSelection == nil && workbench.inspector.open && !workbench.quickChatContext
+        workbench.page == nil && workbench.attemptGroupSelection == nil && workbench.inspector.open && !workbench.inspectorUnavailable
     }
 
     /// Whether the panel shows, with what besides its own toggle decides it.
@@ -518,6 +518,7 @@ struct WorkbenchView: View {
     private var cover: some View {
         if let page = workbench.page {
             switch page {
+            case .assistant: AssistantPage(workbench: workbench)
             case .stats: StatsView(workbench: workbench)
             case .tasks: TasksPage(workbench: workbench)
             case .extensions: ExtensionsPage(workbench: workbench)
@@ -609,7 +610,7 @@ struct WorkbenchView: View {
             if let conversation {
                 SessionInfoButton(workbench: workbench, session: conversation)
             }
-            if !workbench.quickChatContext {
+            if !workbench.inspectorUnavailable {
                 Button { workbench.toggleInspector() } label: {
                     Image(icon: "sidebar.right").font(.riffet(size: S(13)))
                 }
@@ -831,8 +832,10 @@ struct SessionTitleView: View {
     @State private var draft = ""
     @State private var showingNotice = false
 
+    private var standing: Bool { workbench.isAssistantMain(session) }
+
     private var projectTitle: String? {
-        guard session.agentID != AgentDirectory.quickChat, let project = workbench.project(session.projectId) else { return nil }
+        guard session.agentID != AgentDirectory.quickChat, let project = workbench.project(session.projectId), !project.isAssistant else { return nil }
         if project.isTaskWorkspace { return String(localized: "未关联项目") }
         guard let tree = project.worktree, var origin = workbench.project(tree.originProjectId) else { return project.name }
         var visited: Set<String> = [project.id, origin.id]
@@ -860,17 +863,26 @@ struct SessionTitleView: View {
     var body: some View {
         VStack(spacing: 1) {
             TitleWithStatusLayout(spacing: 6) {
-                Button { draft = session.title; renaming = true } label: {
-                    Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
-                        .font(.riffet(size: S(13), weight: .medium))
+                if standing {
+                    // The assistant's one conversation has a fixed title and no rename.
+                    Text("个人助理")
+                        .font(RiffetFont.text(RiffetTextSize.sm, weight: .medium))
                         .foregroundStyle(palette.fg)
                         .lineLimit(1)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .contentShape(Rectangle())
+                        .padding(.horizontal, Space.xs + Space.xxs)
+                } else {
+                    Button { draft = session.title; renaming = true } label: {
+                        Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
+                            .font(.riffet(size: S(13), weight: .medium))
+                            .foregroundStyle(palette.fg)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(HoverRowStyle())
+                    .help("重命名会话")
                 }
-                .buttonStyle(HoverRowStyle())
-                .help("重命名会话")
                 HStack(spacing: 6) {
                     status
                         .font(.riffet(size: S(11)))
@@ -891,7 +903,7 @@ struct SessionTitleView: View {
                 if let projectTitle {
                     Text(projectTitle)
                 }
-                if let backend = session.agent {
+                if let backend = session.agent, !standing {
                     Text("·")
                     Label { Text(backendLabel(backend)) } icon: {
                         AgentIcon(id: backend, size: 13, color: agentMarkColor(backend, palette))
@@ -1362,7 +1374,7 @@ struct SessionMenu: View {
         menuButton
             // The side panel's status for the project, read once for both when they ask together.
             .task(id: "\(session.projectId)|\(session.state)|\(inspectorOpen)") {
-                guard session.agentID != AgentDirectory.quickChat else { return }
+                guard session.agentID != AgentDirectory.quickChat, !workbench.isAssistantSession(session) else { return }
                 await GitStatusModel.model(for: session.projectId).load(workbench.host.api)
             }
             .sessionOrchestration(orchestrator, workbench: workbench, session: session)
@@ -1428,7 +1440,9 @@ struct SessionMenu: View {
         menu.autoenablesItems = false
         let session = workbench.selected ?? session
         let quickChat = session.agentID == AgentDirectory.quickChat
-        let git = quickChat ? nil : GitStatusModel.model(for: session.projectId).status
+        // The assistant's directory is not project code: no branch, handoff or list actions. Its views (terminal, canvas) stay.
+        let assistant = workbench.isAssistantSession(session)
+        let git = quickChat || assistant ? nil : GitStatusModel.model(for: session.projectId).status
         let state = ConversationState(workbench: workbench, session: session, catalog: workbench.catalogs.cached(for: session))
         func add(_ title: String, _ symbol: String, _ action: @escaping () -> Void) -> NSMenuItem {
             let item = MenuAction.item(title, action)
@@ -1489,21 +1503,23 @@ struct SessionMenu: View {
                 let item = add(view.title, view.symbol) { inspectorTab = view.tab; inspectorOpen = true }
                 if view.tab == .changes, let changeSummary { item.subtitle = changeSummary }
             }
-            let terminal = add(workbench.terminalDock.openingShell ? String(localized: "正在打开终端…") : String(localized: "打开终端"), "terminal") {
-                Task { await workbench.terminalDock.openShell(projectId: session.projectId) }
+            if !assistant {
+                let terminal = add(workbench.terminalDock.openingShell ? String(localized: "正在打开终端…") : String(localized: "打开终端"), "terminal") {
+                    Task { await workbench.terminalDock.openShell(projectId: session.projectId) }
+                }
+                terminal.isEnabled = !workbench.terminalDock.openingShell
             }
-            terminal.isEnabled = !workbench.terminalDock.openingShell
         }
         if workbench.role == .main {
             let window = add(String(localized: "在新窗口中打开"), "macwindow.badge.plus") { WindowRouter.shared.openConversation(session.id) }
             window.keyEquivalent = "o"
             window.keyEquivalentModifierMask = [.command, .option]
         }
-        if session.archivedAt == nil, !quickChat, session.terminalHold == nil, session.nativeSessionId != nil {
+        if session.archivedAt == nil, !quickChat, !assistant, session.terminalHold == nil, session.nativeSessionId != nil {
             _ = add(String(localized: "在终端恢复…"), "terminal") { resuming = true }
         }
         menu.addItem(.separator())
-        if session.archivedAt == nil, !quickChat {
+        if session.archivedAt == nil, !quickChat, !assistant {
             if session.handedOffTo == nil {
                 _ = add(String(localized: "交接会话…"), "arrow.left.arrow.right") { orchestrator.handoff() }
             }
@@ -1513,11 +1529,13 @@ struct SessionMenu: View {
         _ = add(String(localized: "导出为 PDF…"), "doc.richtext") { sharePurpose = .pdf }
         _ = add(String(localized: "导出会话…"), "square.and.arrow.up") { orchestrator.export(session: session, workbench: workbench) }
         menu.addItem(.separator())
-        _ = add(String(localized: "重命名"), "pencil") { draft = session.title; renaming = true }
-        _ = add(String(localized: "编辑标签"), "tag") { editingTags = true }
-        let pinned = session.pinnedAt != nil
-        _ = add(pinned ? String(localized: "取消置顶") : String(localized: "置顶会话"), pinned ? "pin.slash" : "pin") { Task { await workbench.update(session, pinned: !pinned) } }
-        menu.addItem(.separator())
+        if !assistant {
+            _ = add(String(localized: "重命名"), "pencil") { draft = session.title; renaming = true }
+            _ = add(String(localized: "编辑标签"), "tag") { editingTags = true }
+            let pinned = session.pinnedAt != nil
+            _ = add(pinned ? String(localized: "取消置顶") : String(localized: "置顶会话"), pinned ? "pin.slash" : "pin") { Task { await workbench.update(session, pinned: !pinned) } }
+            menu.addItem(.separator())
+        }
         let archived = session.archivedAt != nil
         _ = add(archived ? String(localized: "取消归档") : String(localized: "归档会话"), archived ? "tray.and.arrow.up" : "archivebox") { Task { await workbench.update(session, archived: !archived) } }
         if workbench.list.canDeleteSessions {

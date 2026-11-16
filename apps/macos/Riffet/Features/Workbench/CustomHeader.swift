@@ -96,10 +96,10 @@ struct CustomHeader<Status: View>: View {
 
     private func titleLabel(_ session: Session, style: StyleSpec) -> some View {
         HStack(spacing: 6) {
-            if let agent = session.agent {
+            if let agent = session.agent, !workbench.isAssistantMain(session) {
                 AgentIcon(id: agent, size: S(style.text.body), color: agentMarkColor(agent, palette) ?? palette.fg3)
             }
-            Text(session.title.isEmpty ? String(localized: "新会话") : session.title)
+            Text(workbench.isAssistantMain(session) ? String(localized: "个人助理") : session.title.isEmpty ? String(localized: "新会话") : session.title)
                 .font(.riffet(size: S(style.text.body), weight: .medium))
                 .foregroundStyle(palette.fg)
                 .lineLimit(1)
@@ -130,7 +130,7 @@ struct CustomHeader<Status: View>: View {
                     SessionWorkActions(workbench: workbench, more: moreItems(conversation: conversation), size: CustomChrome.control(style))
                 case .sessionTabs, .toolbar:
                     if let conversation { SessionInfoButton(workbench: workbench, session: conversation, size: CustomChrome.control(style)) }
-                    inspectorButton(style)
+                    if !workbench.inspectorUnavailable { inspectorButton(style) }
                 }
             } else if workbench.page == nil, home, style.header != .titleMenu {
                 // The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tabs.
@@ -167,7 +167,7 @@ struct CustomHeader<Status: View>: View {
         let state = workbench.inspector
         let size = CustomChrome.control(style)
         let shown = shownPanel(workbench.inspectorViews)
-        if workbench.currentProject != nil {
+        if workbench.currentProject != nil, !workbench.assistantContext {
             Button { workbench.terminalDock.toggle() } label: { Image(icon: "terminal") }
                 .buttonStyle(IconButtonStyle(size: size, active: workbench.terminalDock.shown))
                 .help("显示/隐藏终端")
@@ -194,7 +194,7 @@ struct CustomHeader<Status: View>: View {
         var items = workbench.inspectorViews.filter { !builtIn.contains($0.tab) && $0.tab != .changes }.map { view in
             HeaderMoreItem(title: view.title, symbol: panelSymbol(view), on: state.open && view.tab == shown) { togglePanel(view.tab) }
         }
-        if conversation != nil {
+        if conversation != nil, !workbench.inspectorUnavailable {
             items.append(HeaderMoreItem(title: String(localized: "面板"), symbol: "sidebar.right", on: state.open, shortcut: ("i", [.option, .command])) {
                 workbench.toggleInspector()
             })

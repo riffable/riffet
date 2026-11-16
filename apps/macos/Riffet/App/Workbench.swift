@@ -5,10 +5,11 @@ import RiffetKit
 
 /// The one-level pages that replace the home page or a conversation in the detail column.
 enum WorkbenchPage: String, Equatable {
-    case stats, tasks, extensions, plugins, marks, activity
+    case assistant, stats, tasks, extensions, plugins, marks, activity
 
     var title: String {
         switch self {
+        case .assistant: String(localized: "个人助理")
         case .tasks: String(localized: "自动化")
         case .plugins: String(localized: "插件")
         case .extensions: String(localized: "扩展管理")
@@ -20,6 +21,7 @@ enum WorkbenchPage: String, Equatable {
 
     var symbol: String {
         switch self {
+        case .assistant: "person.crop.square"
         case .tasks: "clock"
         case .plugins: "puzzlepiece.extension"
         case .extensions: "wrench.and.screwdriver"
@@ -36,7 +38,7 @@ enum WorkbenchPage: String, Equatable {
         case .extensions: "⇧⌘E"
         case .marks: "⇧⌘L"
         case .stats: "⇧⌘U"
-        case .activity, .plugins: nil
+        case .assistant, .activity, .plugins: nil
         }
     }
 }
@@ -173,6 +175,8 @@ final class Workbench {
     let catalogs: CatalogCache
     /// The pages' models, kept across visits.
     @ObservationIgnored private(set) lazy var pageModels = PageModels(workbench: self)
+    /// The 个人助理's server-side state: its main conversation and saved choice.
+    let assistant = AssistantModel()
     /// One clock for every relative time on screen, instead of a timer per row.
     private(set) var minute = Date()
     private var clock: Timer?
@@ -523,7 +527,7 @@ final class Workbench {
 
     /// The server-owned project that holds quick chats; it is never listed as an ordinary project.
     var quickChatProject: Project? { projectList.first { $0.isBuiltInQuickChat } }
-    /// Every project a reader may pick, archived included, without the quick-chat project.
+    /// Every project a reader may pick, archived included, without the server's own projects.
     var listingProjects: [Project] { projectList.filter { !$0.isSystemProject } }
 
     var projects: [Project] { listingProjects.filter { $0.archivedAt == nil } }
@@ -576,14 +580,14 @@ final class Workbench {
     }
 
     func setInspectorOpen(_ open: Bool) {
-        guard !quickChatContext else { return }
+        guard !inspectorUnavailable else { return }
         if open { page = nil }
         setInspector { $0.open = open }
     }
 
     /// From a page the shortcut brings the panel back instead of toggling one that is not on screen.
     func toggleInspector() {
-        guard !quickChatContext else { return }
+        guard !inspectorUnavailable else { return }
         setInspectorOpen(page != nil || !inspector.open)
     }
 
@@ -603,7 +607,9 @@ final class Workbench {
     /// The side panel's views on offer now, in the reader's order and without the ones they turned off.
     var inspectorViews: [InspectorViewEntry] {
         let offered = InspectorViewRegistry.available(plugins, facts: inspectorFacts)
-        return sidebarViewPrefs.ordered(offered, id: \.id).filter { !sidebarViewPrefs.isHidden($0.id) }
+        // The assistant's directory is out of the workspace file routes' reach: only plugin views show there.
+        let assistant = assistantContext
+        return sidebarViewPrefs.ordered(offered, id: \.id).filter { !sidebarViewPrefs.isHidden($0.id) && !(assistant && ($0.tab == .changes || $0.tab == .files)) }
     }
 
     /// Every view this Mac can draw whatever the project, in the reader's order and hidden ones included:
@@ -652,7 +658,7 @@ final class Workbench {
     }
 
     func showInspector(_ tab: InspectorTab) {
-        guard !quickChatContext else { return }
+        guard !inspectorUnavailable else { return }
         page = nil
         setInspector { $0.open = true; $0.tab = tab }
     }
@@ -660,7 +666,7 @@ final class Workbench {
     /// Maximizing takes the area back from the terminal; leaving the conversation, closing the panel,
     /// or opening a page or terminal leaves it again, as on the web.
     func toggleInspectorMaximized() {
-        guard page == nil, !quickChatContext else { return }
+        guard page == nil, !inspectorUnavailable else { return }
         let floating = UserDefaults.standard.bool(forKey: InspectorFloat.floatingKey)
         if inspectorMaximized && !floating {
             exitInspectorMaximized()
@@ -817,6 +823,11 @@ final class Workbench {
     func showHome(projectId: String? = nil) {
         if role == .window {
             showInMain { $0.showHome(projectId: projectId) }
+            return
+        }
+        // Nothing lands on the assistant's project without a conversation: it is the standing one, or the page without one.
+        if let projectId, project(projectId)?.isAssistant == true {
+            openAssistant(excluding: selected?.projectId == projectId ? selected?.id : nil)
             return
         }
         navigationIntent += 1
@@ -1632,7 +1643,9 @@ extension Project {
     /// The server-owned quick-chat project, marked by the contract's `system` field.
     var isBuiltInQuickChat: Bool { system == "quick-chat" }
     var isTaskWorkspace: Bool { system == "task-workspace" }
-    var isSystemProject: Bool { isBuiltInQuickChat || isTaskWorkspace }
+    /// The personal assistant's project: its one conversation is not a project's session.
+    var isAssistant: Bool { system == "assistant" }
+    var isSystemProject: Bool { isBuiltInQuickChat || isTaskWorkspace || isAssistant }
 }
 
 /// What an async request was started for. Its result is dropped once the task is cancelled or
