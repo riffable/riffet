@@ -26,6 +26,7 @@ export * from './devices.js';
 export type * from './session.js';
 export type * from './run.js';
 export * from './terminal.js';
+export * from './budgets.js';
 export type * from './native.js';
 export type * from './workspace.js';
 export type * from './git.js';

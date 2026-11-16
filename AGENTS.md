@@ -44,6 +44,7 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 | 移动端文案、Compose | `pnpm check:mobile-strings`、`pnpm check:compose` |
 | 插件边界、插件 API | `pnpm check:plugins`、`pnpm gen:plugin-api:check` |
 | 文档里的路径 | `pnpm check:docs` |
+| 缓存、流、轮询、长列表、持久化数据 | `pnpm check:perf`；改了预算跑 `pnpm gen:budgets` |
 | 生成物的源头（设计取值、契约、图标……） | 对应的 `pnpm gen:<名字>`，再跑它的 `:check` |
 
 ## 改界面
@@ -70,6 +71,11 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 - 打开设计规范页的对应章节，和自己的改动对照一遍：间距、字号、状态（悬停、按下、焦点、禁用、加载、空、错误）、深浅色、窄屏。
 - 列出新增的用户可见文字，逐条问：删掉它，用户会做错什么？答不上来就删。
 - 新组件或新模式落地时，规范文档和设计规范页在同一次改动里更新。
+
+## 性能
+
+- 缓存、流缓冲、轮询、长列表、持久化数据按 [性能与资源规范](docs/guide/performance.md) 做：上限取自 `packages/contracts/src/budgets.ts`，不在业务代码里另写数字；每份常驻数据要有释放时机。
+- 规范 §6「现状」列着不符合规则的现有代码。迁移了哪条就删哪条；新留下的不一致也记进去。
 
 ## 服务端
 

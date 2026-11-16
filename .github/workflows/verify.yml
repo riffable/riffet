@@ -52,6 +52,8 @@ jobs:
         run: pnpm gen:timeline-fixtures:check
       - name: Contract schemas and fixtures are current
         run: pnpm gen:contracts:check
+      - name: Resource budgets are current
+        run: pnpm gen:budgets:check
       - name: Plugin SDK has a released baseline for its version
         run: pnpm gen:plugin-api:check
       - name: Model prompts are current
@@ -82,6 +84,8 @@ jobs:
         run: pnpm check:motion
       - name: Loops, web literals, Mac spacing and motion follow the design rules
         run: pnpm check:design
+      - name: Resource rules
+        run: pnpm check:perf
       - name: Tests
         run: pnpm test
       - name: Production build
