@@ -25,7 +25,7 @@ enum SettingsPatch {
         composerRunningBehavior: String? = nil,
         composerSendLater: Bool? = nil,
         idleReclaimMinutes: Int? = nil,
-        maxLiveAgents: Int? = nil,
+        maxAgentMemoryMb: Int? = nil,
         quickChat: QuickChatSettings? = nil,
         sidebarPinned: [String]? = nil
     ) -> AppSettingsUpdate {
@@ -43,7 +43,7 @@ enum SettingsPatch {
             composerRunningBehavior: composerRunningBehavior,
             composerSendLater: composerSendLater.map { KotlinBoolean(bool: $0) },
             idleReclaimMinutes: idleReclaimMinutes.map { KotlinInt(int: Int32($0)) },
-            maxLiveAgents: maxLiveAgents.map { KotlinInt(int: Int32($0)) },
+            maxAgentMemoryMb: maxAgentMemoryMb.map { KotlinInt(int: Int32($0)) },
             quickChat: quickChat,
             defaultAgentId: defaultAgentId,
             agentDefaults: agentDefaults,

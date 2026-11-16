@@ -504,6 +504,30 @@ data class ServiceMonitorSnapshot(
     val processes: List<ServiceProcess> = emptyList(),
     /** Clients that reported in the last six hours, most recent first. */
     val clients: List<ClientMetrics> = emptyList(),
+    /** Absent on servers that predate the memory-based reclaimer. */
+    val agentProcesses: AgentProcessReport? = null,
+)
+
+/** What the conversation-CLI reclaimer saw on its last pass. `pressure` is `normal`, `warning` or `critical`; 0 for a limit means none. */
+@Serializable
+data class AgentProcessReport(
+    val checkedAt: String,
+    val idleMinutes: Int = 0,
+    val memoryLimitBytes: Long = 0,
+    val memoryBytes: Long = 0,
+    val pressure: String = "normal",
+    val agents: List<AgentProcessUsage> = emptyList(),
+)
+
+/** One conversation's CLI. `retainedBy` names why it is kept (`turn`, `interaction`, `background`, `subscribed`, `terminal-held`, `launching`, `unobserved`, `not-resumable`); `reclaimAt` is when it stops if nothing changes. */
+@Serializable
+data class AgentProcessUsage(
+    val sessionId: String,
+    val terminalId: String? = null,
+    val rssBytes: Long = 0,
+    val lastUsedAt: String,
+    val retainedBy: List<String> = emptyList(),
+    val reclaimAt: String? = null,
 )
 
 /*
@@ -554,7 +578,7 @@ data class AppSettingsUpdate(
     val composerRunningBehavior: String? = null,
     val composerSendLater: Boolean? = null,
     val idleReclaimMinutes: Int? = null,
-    val maxLiveAgents: Int? = null,
+    val maxAgentMemoryMb: Int? = null,
     val quickChat: QuickChatSettings? = null,
     /** Carry a plugin Agent where [defaultBackendId] and [nativeBackendDefaults] cannot; the client folds them into those keys. */
     val defaultAgentId: String? = null,

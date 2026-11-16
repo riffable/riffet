@@ -6,11 +6,11 @@ let managementBackends: [NativeBackendId] = [.cursor, .codex, .claude, .dsh, .dr
 func managementSettingsPatch(defaultBackend: NativeBackendId? = nil, defaults: [NativeBackendId: NativeBackendDefaults]? = nil,
                              cursor: CursorCliSettingsUpdate? = nil, defaultModel: String? = nil,
                              composerRunningBehavior: String? = nil, idleReclaimMinutes: Int32? = nil,
-                             maxLiveAgents: Int32? = nil, editorCommand: String? = nil, allowOutsideRead: Bool? = nil) -> AppSettingsUpdate {
+                             maxAgentMemoryMb: Int32? = nil, editorCommand: String? = nil, allowOutsideRead: Bool? = nil) -> AppSettingsUpdate {
     AppSettingsUpdate(taskWorkspaceRoot: nil, editorCommand: editorCommand, defaultModel: defaultModel, defaultMode: nil, notifications: nil,
                       allowOutsideRead: allowOutsideRead.map { KotlinBoolean(bool: $0) }, defaultBackendId: defaultBackend, nativeBackendDefaults: defaults,
                       cursorCli: cursor, composerEnterBehavior: nil, composerRunningBehavior: composerRunningBehavior, composerSendLater: nil,
-                      idleReclaimMinutes: idleReclaimMinutes.map { KotlinInt(int: $0) }, maxLiveAgents: maxLiveAgents.map { KotlinInt(int: $0) },
+                      idleReclaimMinutes: idleReclaimMinutes.map { KotlinInt(int: $0) }, maxAgentMemoryMb: maxAgentMemoryMb.map { KotlinInt(int: $0) },
                       quickChat: nil, defaultAgentId: nil, agentDefaults: nil, sidebarPinned: nil)
 }
 

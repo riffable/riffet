@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 import riffet_mobile.shared.generated.resources.*
 import riffet.contracts.ServiceMonitorSample
+import riffet.contracts.AgentProcessUsage
 import riffet.contracts.ServiceMonitorSnapshot
 import riffet.contracts.ServiceProcess
 import riffet.shared.RiffetApi
@@ -51,10 +52,12 @@ import riffet.ui.design.ConfirmDialog
 import riffet.ui.design.GroupRow
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.pickers.RiffetDropdownMenu
+import riffet.ui.pickers.parseIsoMillis
 import riffet.ui.pickers.RiffetMenuItem
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.timeline.Spinner
+import riffet.ui.timeline.platformNowMillis
 import kotlin.math.round
 import riffet.shared.serviceMonitor
 import riffet.shared.terminateServiceProcess
@@ -131,7 +134,7 @@ internal fun ServiceStatusPage(
             ServiceRoute.Processes -> SettingsPage(stringResource(Res.string.setm_process_title), back) {
                 val list = snapshot?.processes.orEmpty()
                 SettingsGroup(stringResource(Res.string.settings_service_processes, list.size)) {
-                    list.forEach { ProcessRow(it, onOpen = { pages.push(ServiceRoute.Process(it.pid)) }, onEnd = { confirming = it }) }
+                    list.forEach { ProcessRow(it, snapshot?.agentUsage(it), onOpen = { pages.push(ServiceRoute.Process(it.pid)) }, onEnd = { confirming = it }) }
                 }
             }
             is ServiceRoute.Process -> SettingsPage(snapshot?.processes?.firstOrNull { it.pid == route.pid }?.name.orEmpty(), back) {
@@ -233,7 +236,7 @@ private fun ColumnScope.ServiceOverview(
 
     if (data.processes.isNotEmpty()) {
         SettingsGroup(stringResource(Res.string.settings_service_processes, data.processes.size)) {
-            data.processes.take(INLINE_PROCESSES).forEach { ProcessRow(it, onOpen = { onProcess(it) }, onEnd = onEnd) }
+            data.processes.take(INLINE_PROCESSES).forEach { ProcessRow(it, data.agentUsage(it), onOpen = { onProcess(it) }, onEnd = onEnd) }
             if (data.processes.size > INLINE_PROCESSES) {
                 GroupRow(stringResource(Res.string.ext_show_all, data.processes.size), chevron = true, onClick = onAllProcesses)
             }
@@ -256,17 +259,42 @@ private fun processKind(process: ServiceProcess): String =
         else -> stringResource(Res.string.settings_service_child_process)
     }
 
+/** The reclaimer's entry for an agent's conversation, if it reported one. */
+private fun ServiceMonitorSnapshot.agentUsage(process: ServiceProcess): AgentProcessUsage? =
+    if (process.kind != "agent") null else process.sessionId?.let { id -> agentProcesses?.agents?.firstOrNull { it.sessionId == id } }
+
+/** Why the CLI is kept, else when it stops; an unknown reason says nothing. */
+@Composable
+private fun agentStatus(usage: AgentProcessUsage): String? {
+    val reason = when (usage.retainedBy.firstOrNull()) {
+        "turn" -> stringResource(Res.string.setm_agent_turn)
+        "interaction" -> stringResource(Res.string.setm_agent_interaction)
+        "background" -> stringResource(Res.string.setm_agent_background)
+        "subscribed" -> stringResource(Res.string.setm_agent_subscribed)
+        "terminal-held" -> stringResource(Res.string.setm_agent_terminal)
+        "launching" -> stringResource(Res.string.setm_agent_launching)
+        "unobserved" -> stringResource(Res.string.setm_agent_unobserved)
+        "not-resumable" -> stringResource(Res.string.setm_agent_not_resumable)
+        else -> null
+    }
+    if (reason != null) return reason
+    val left = usage.reclaimAt?.let(::parseIsoMillis)?.minus(platformNowMillis()) ?: return null
+    return if (left <= 60_000) stringResource(Res.string.setm_agent_stopping_soon)
+    else stringResource(Res.string.setm_agent_stops_in, duration(left / 1000.0))
+}
+
 /** A process: its name over what it costs, the PID at the end. A press opens it, a long press offers to end it. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ProcessRow(process: ServiceProcess, onOpen: () -> Unit, onEnd: (ServiceProcess) -> Unit) {
+private fun ProcessRow(process: ServiceProcess, usage: AgentProcessUsage?, onOpen: () -> Unit, onEnd: (ServiceProcess) -> Unit) {
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
     var menu by remember { mutableStateOf(false) }
+    val status = usage?.let { agentStatus(it) }
     Box {
         GroupRow(
             process.name,
-            subtitle = "CPU ${percent(process.cpuPercent)} · ${bytes(process.rssBytes)} · ${duration(process.elapsedSec)}",
+            subtitle = listOfNotNull("CPU ${percent(process.cpuPercent)} · ${bytes(process.rssBytes)} · ${duration(process.elapsedSec)}", status).joinToString(" · "),
             leading = { Box(Modifier.size(8.dp).clip(CircleShape).background(processTint(process))) },
             trailing = { Text(process.pid.toString(), style = typography.caption.copy(fontFeatureSettings = "tnum"), color = colors.fg4) },
             modifier = Modifier.combinedClickable(onLongClick = { if (process.canTerminate) menu = true }, onClick = onOpen),

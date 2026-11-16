@@ -40,6 +40,8 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import riffet.contracts.AGENT_PROCESS_BUDGET_IDLE_MINUTES
+import riffet.contracts.AGENT_PROCESS_BUDGET_MEMORY_BYTES
 import riffet.contracts.AppSettingsUpdate
 import riffet.contracts.NativeBackendId
 import riffet.contracts.QuickChatPreset
@@ -666,7 +668,7 @@ private fun GesturesSection() {
 }
 
 private val IDLE_RECLAIM_PRESETS = listOf(0, 60, 360, 1440)
-private val MAX_LIVE_PRESETS = listOf(0, 12, 24, 48)
+private val MEMORY_LIMIT_PRESETS_MB = listOf(0, 2048, 4096, 8192, 16384)
 
 /** The presets, plus a value set elsewhere (another client, the API) so the control still shows it. */
 private fun withCurrent(presets: List<Int>, current: Int) = if (current in presets) presets else (presets + current).sorted()
@@ -678,14 +680,21 @@ private fun idleLabel(minutes: Int) = when {
     else -> stringResource(Res.string.settings_extra_idle_minutes, minutes)
 }
 
+@Composable
+private fun memoryLabel(mb: Int) = when {
+    mb == 0 -> stringResource(Res.string.settings_reclaim_unlimited)
+    mb % 1024 == 0 -> stringResource(Res.string.settings_reclaim_limit_gb, mb / 1024)
+    else -> "$mb MB"
+}
+
 /** When the server stops the CLIs of conversations nobody uses; the next message resumes them. */
 @Composable
 internal fun ReclaimSection(controller: SettingsController) {
     val state by controller.state.collectAsState()
     ControllerMessages(controller)
     val settings = state.settings ?: return
-    val idle = settings.idleReclaimMinutes ?: 360
-    val maxLive = settings.maxLiveAgents ?: 24
+    val idle = settings.idleReclaimMinutes ?: AGENT_PROCESS_BUDGET_IDLE_MINUTES
+    val memoryMb = settings.maxAgentMemoryMb ?: (AGENT_PROCESS_BUDGET_MEMORY_BYTES / (1024 * 1024)).toInt()
     val reclaimSaveFailed = stringResource(Res.string.settings_reclaim_save_failed)
     fun save(patch: AppSettingsUpdate) = controller.saveSettings(patch, failureMessage = reclaimSaveFailed)
     SettingsGroup(stringResource(Res.string.settings_reclaim)) {
@@ -698,12 +707,11 @@ internal fun ReclaimSection(controller: SettingsController) {
             onSelect = { if (it.toInt() != idle) save(AppSettingsUpdate(idleReclaimMinutes = it.toInt())) },
         )
         ChoiceRow(
-            title = stringResource(Res.string.settings_reclaim_max_live),
-            description = stringResource(Res.string.settings_reclaim_max_live_desc),
-            options = withCurrent(MAX_LIVE_PRESETS, maxLive).map { it.toString() to if (it == 0) stringResource(Res.string.settings_reclaim_unlimited) else stringResource(Res.string.settings_reclaim_limit_count, it) },
-            value = maxLive.toString(),
+            title = stringResource(Res.string.settings_reclaim_memory),
+            options = withCurrent(MEMORY_LIMIT_PRESETS_MB, memoryMb).map { it.toString() to memoryLabel(it) },
+            value = memoryMb.toString(),
             enabled = !state.saving,
-            onSelect = { if (it.toInt() != maxLive) save(AppSettingsUpdate(maxLiveAgents = it.toInt())) },
+            onSelect = { if (it.toInt() != memoryMb) save(AppSettingsUpdate(maxAgentMemoryMb = it.toInt())) },
         )
     }
 }

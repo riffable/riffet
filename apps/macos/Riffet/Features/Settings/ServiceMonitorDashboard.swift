@@ -95,8 +95,8 @@ struct ServiceMonitorDashboard: View {
                     MonitorRoutes(routes: snapshot.requests.topRoutes).equatable()
                 }
             }
-            SettingsBlock("进程") {
-                processes(snapshot.processes)
+            SettingsBlock(String(localized: "进程"), detail: agentMemoryDetail(snapshot.agentProcesses)) {
+                processes(snapshot.processes, snapshot.agentProcesses)
             }
             SettingsBlock("服务器信息") {
                 info(snapshot)
@@ -219,7 +219,7 @@ struct ServiceMonitorDashboard: View {
     }
 
     @ViewBuilder
-    private func processes(_ list: [ServiceProcess]) -> some View {
+    private func processes(_ list: [ServiceProcess], _ agents: AgentProcessReport?) -> some View {
         if list.isEmpty {
             Text("没有读到进程信息。")
                 .font(.riffet(size: S(12)))
@@ -236,7 +236,8 @@ struct ServiceMonitorDashboard: View {
             .foregroundStyle(palette.fg4)
             // A row redraws only when what it shows changes, not on every poll.
             ForEach(processRows(list)) { row in
-                MonitorProcessRow(process: row.process, depth: row.depth, stopping: stopping) { pendingStop = $0 }
+                let usage = row.process.kind == "agent" ? row.process.sessionId.flatMap { id in agents?.agents.first { $0.sessionId == id } } : nil
+                MonitorProcessRow(process: row.process, depth: row.depth, stopping: stopping, status: usage.flatMap(agentStatus)) { pendingStop = $0 }
                     .equatable()
             }
         }
@@ -322,16 +323,16 @@ struct ServiceReclaimSection: View {
     @State private var error: String?
 
     var body: some View {
-        let idle = workbench.settings?.idleReclaimMinutes?.intValue ?? defaultIdleReclaimMinutes
-        let maxLive = workbench.settings?.maxLiveAgents?.intValue ?? defaultMaxLiveAgents
+        let idle = workbench.settings?.idleReclaimMinutes?.intValue ?? Int(BudgetsKt.AGENT_PROCESS_BUDGET_IDLE_MINUTES)
+        let memoryMb = workbench.settings?.maxAgentMemoryMb?.intValue ?? Int(BudgetsKt.AGENT_PROCESS_BUDGET_MEMORY_BYTES / (1024 * 1024))
         SettingsBlock("资源回收", scope: .server, detail: "停止后发消息即可恢复；CLI 后台任务会结束。") {
             Picker("空闲后停止 CLI", selection: binding(current: idle) { SettingsPatch.make(idleReclaimMinutes: $0) }) {
                 ForEach(presetsWithCurrent(idleReclaimPresets, idle), id: \.self) { Text(idleReclaimLabel($0)).tag($0) }
             }
             .formPicker()
             .disabled(busy)
-            Picker("最多同时运行", selection: binding(current: maxLive) { SettingsPatch.make(maxLiveAgents: $0) }) {
-                ForEach(presetsWithCurrent(maxLiveAgentsPresets, maxLive), id: \.self) { Text($0 == 0 ? "不限" : "\($0) 个").tag($0) }
+            Picker("CLI 内存上限", selection: binding(current: memoryMb) { SettingsPatch.make(maxAgentMemoryMb: $0) }) {
+                ForEach(presetsWithCurrent(agentMemoryPresets, memoryMb), id: \.self) { Text(agentMemoryLabel($0)).tag($0) }
             }
             .formPicker()
             .disabled(busy)
@@ -385,16 +386,18 @@ private struct MonitorProcessRow: View, Equatable {
     let process: ServiceProcess
     let depth: Int
     let stopping: Int32?
+    let status: String?
     let onStop: (ServiceProcess) -> Void
     private let cpu: String
     private let memory: String
     private let uptime: String
     @Environment(\.palette) private var palette
 
-    init(process: ServiceProcess, depth: Int, stopping: Int32?, onStop: @escaping (ServiceProcess) -> Void) {
+    init(process: ServiceProcess, depth: Int, stopping: Int32?, status: String?, onStop: @escaping (ServiceProcess) -> Void) {
         self.process = process
         self.depth = depth
         self.stopping = stopping
+        self.status = status
         self.onStop = onStop
         cpu = monitorPercent(process.cpuPercent)
         memory = monitorBytes(process.rssBytes)
@@ -402,7 +405,7 @@ private struct MonitorProcessRow: View, Equatable {
     }
 
     static func == (a: Self, b: Self) -> Bool {
-        a.depth == b.depth && a.stopping == b.stopping && a.cpu == b.cpu && a.memory == b.memory && a.uptime == b.uptime
+        a.depth == b.depth && a.stopping == b.stopping && a.status == b.status && a.cpu == b.cpu && a.memory == b.memory && a.uptime == b.uptime
             && (a.process.cpuPercent >= 80) == (b.process.cpuPercent >= 80)
             && a.process.pid == b.process.pid && a.process.name == b.process.name && a.process.kind == b.process.kind
             && a.process.backendId == b.process.backendId && a.process.sessionTitle == b.process.sessionTitle
@@ -439,11 +442,19 @@ private struct MonitorProcessRow: View, Equatable {
                             .font(.riffet(size: S(11), design: .monospaced))
                             .foregroundStyle(palette.fg4)
                     }
-                    Text(process.sessionTitle ?? process.command)
-                        .font(.riffet(size: S(11), design: process.sessionTitle == nil ? .monospaced : .default))
-                        .foregroundStyle(palette.fg3)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    HStack(spacing: Space.sm) {
+                        Text(process.sessionTitle ?? process.command)
+                            .monospaced(process.sessionTitle == nil)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let status {
+                            Text(status)
+                                .lineLimit(1)
+                                .fixedSize()
+                        }
+                    }
+                    .font(.riffet(size: S(11)))
+                    .foregroundStyle(palette.fg3)
                 }
             }
             .padding(.leading, CGFloat(depth) * 16)
@@ -850,11 +861,37 @@ private struct MonitorRoutes: View, Equatable {
 
 // MARK: - Formatting
 
-/// The server's defaults when a setting is unset (`DEFAULT_IDLE_RECLAIM_MINUTES`, `DEFAULT_MAX_LIVE_AGENTS`).
-private let defaultIdleReclaimMinutes = 360
-private let defaultMaxLiveAgents = 24
 private let idleReclaimPresets = [0, 60, 360, 1440]
-private let maxLiveAgentsPresets = [0, 12, 24, 48]
+private let agentMemoryPresets = [0, 2048, 4096, 8192, 16384]
+
+private func agentMemoryLabel(_ mb: Int) -> String {
+    mb == 0 ? String(localized: "不限") : mb % 1024 == 0 ? "\(mb / 1024) GB" : "\(mb) MB"
+}
+
+/// The conversation CLIs' memory against its budget, and whether the system is short of memory.
+private func agentMemoryDetail(_ report: AgentProcessReport?) -> String? {
+    guard let report else { return nil }
+    let memory = report.memoryLimitBytes > 0 ? "\(monitorBytes(report.memoryBytes)) / \(monitorBytes(report.memoryLimitBytes))" : monitorBytes(report.memoryBytes)
+    return report.pressure == "normal" ? memory : "\(memory) · \(String(localized: "内存紧张"))"
+}
+
+/// Why the CLI is kept, else when it stops; an unknown reason says nothing.
+private func agentStatus(_ usage: AgentProcessUsage) -> String? {
+    switch usage.retainedBy.first {
+    case "turn": return String(localized: "回合进行中")
+    case "interaction": return String(localized: "等待回复")
+    case "background": return String(localized: "后台任务")
+    case "subscribed": return String(localized: "已打开")
+    case "terminal-held": return String(localized: "终端接管")
+    case "launching": return String(localized: "刚启动")
+    case "unobserved": return String(localized: "观察中")
+    case "not-resumable": return String(localized: "不可恢复")
+    default: break
+    }
+    guard let at = usage.reclaimAt, let date = ServerTime.date(at) else { return nil }
+    let left = date.timeIntervalSinceNow
+    return left <= 60 ? String(localized: "即将停止") : String(localized: "\(monitorUptime(left)) 后停止")
+}
 
 /// The presets, plus a value set elsewhere (another client, the API) so the control still shows it.
 private func presetsWithCurrent(_ presets: [Int], _ current: Int) -> [Int] {

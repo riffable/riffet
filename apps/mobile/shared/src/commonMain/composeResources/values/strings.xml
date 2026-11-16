@@ -99,10 +99,9 @@
     <string name="settings_reclaim">资源回收</string>
     <string name="settings_reclaim_idle">空闲后停止 CLI</string>
     <string name="settings_reclaim_idle_desc">无任务、无请求且无人查看时开始计时；发消息会恢复，CLI 后台任务会结束。</string>
-    <string name="settings_reclaim_max_live">最多同时运行</string>
-    <string name="settings_reclaim_max_live_desc">优先停止最久未用的空闲会话；30 分钟内用过的保留。</string>
+    <string name="settings_reclaim_memory">CLI 内存上限</string>
     <string name="settings_reclaim_unlimited">不限</string>
-    <string name="settings_reclaim_limit_count">%1$d 个</string>
+    <string name="settings_reclaim_limit_gb">%1$d GB</string>
     <string name="settings_local_effect_note">立即生效，仅保存在这台设备。</string>
     <string name="settings_server_effect_note">保存在服务器，所有设备生效。</string>
 
@@ -267,6 +266,16 @@
     <string name="settings_service_end_process">结束进程</string>
     <string name="settings_service_server_process">服务器</string>
     <string name="settings_service_child_process">子进程</string>
+    <string name="setm_agent_turn">回合进行中</string>
+    <string name="setm_agent_interaction">等待回复</string>
+    <string name="setm_agent_background">后台任务</string>
+    <string name="setm_agent_subscribed">已打开</string>
+    <string name="setm_agent_terminal">终端接管</string>
+    <string name="setm_agent_launching">刚启动</string>
+    <string name="setm_agent_unobserved">观察中</string>
+    <string name="setm_agent_not_resumable">不可恢复</string>
+    <string name="setm_agent_stops_in">%1$s 后停止</string>
+    <string name="setm_agent_stopping_soon">即将停止</string>
 
     <!-- Extensions -->
     <string name="settings_select_config">选择配置</string>

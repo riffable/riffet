@@ -14549,16 +14549,6 @@
         }
       }
     },
-    "最多同时运行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Maximum concurrent runs"
-          }
-        }
-      }
-    },
     "最常访问的接口": {
       "localizations": {
         "en": {
@@ -17271,6 +17261,116 @@
           "stringUnit": {
             "state": "translated",
             "value": "Session %lld"
+          }
+        }
+      }
+    },
+    "CLI 内存上限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CLI memory limit"
+          }
+        }
+      }
+    },
+    "回合进行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn running"
+          }
+        }
+      }
+    },
+    "等待回复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting reply"
+          }
+        }
+      }
+    },
+    "已打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open"
+          }
+        }
+      }
+    },
+    "终端接管": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In terminal"
+          }
+        }
+      }
+    },
+    "刚启动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Just started"
+          }
+        }
+      }
+    },
+    "观察中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observing"
+          }
+        }
+      }
+    },
+    "不可恢复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't resume"
+          }
+        }
+      }
+    },
+    "即将停止": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopping soon"
+          }
+        }
+      }
+    },
+    "内存紧张": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure"
+          }
+        }
+      }
+    },
+    "%@ 后停止": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stops in %@"
           }
         }
       }

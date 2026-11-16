@@ -206,8 +206,8 @@ data class AppSettings(
     val auxiliaryModels: AuxiliaryModels? = null,
     /** Minutes an unused conversation CLI may sit idle before the server stops it; null is 360, 0 never. */
     val idleReclaimMinutes: Int? = null,
-    /** Most conversation CLIs kept running; past it the least recently used idle ones stop. null is 24, 0 no limit. */
-    val maxLiveAgents: Int? = null,
+    /** MiB the conversation CLIs may hold together; past it the least recently used idle ones stop. null is 4096, 0 no limit. */
+    val maxAgentMemoryMb: Int? = null,
     /** Quick chat retention, open mode and presets; null means the server's defaults. */
     val quickChat: QuickChatSettings? = null,
     /** [defaultBackendId] and the plugin entries of [nativeBackendDefaults], for ids the enum cannot hold; see [AgentIds]. */

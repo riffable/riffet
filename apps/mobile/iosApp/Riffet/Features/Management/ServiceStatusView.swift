@@ -41,15 +41,14 @@ struct ServiceStatusView: View {
     /// 资源回收: when the server stops the CLIs of conversations nobody uses; the next message resumes them.
     @ViewBuilder
     private func reclaim(_ settings: AppSettings) -> some View {
-        let idle = settings.idleReclaimMinutes?.int32Value ?? 360
-        let maxLive = settings.maxLiveAgents?.int32Value ?? 24
+        let idle = settings.idleReclaimMinutes?.int32Value ?? Int32(BudgetsKt.AGENT_PROCESS_BUDGET_IDLE_MINUTES)
+        let memoryMb = settings.maxAgentMemoryMb?.int32Value ?? Int32(BudgetsKt.AGENT_PROCESS_BUDGET_MEMORY_BYTES / (1024 * 1024))
         Section {
             reclaimPicker(String(localized: "空闲后停止 CLI", bundle: .riffet), values: withCurrent([0, 60, 360, 1440], idle), current: idle, label: idleLabel) { next in
                 Task { await saveReclaim(managementSettingsPatch(idleReclaimMinutes: next)) }
             }
-            reclaimPicker(String(localized: "最多同时运行", bundle: .riffet), values: withCurrent([0, 12, 24, 48], maxLive), current: maxLive,
-                          label: { $0 == 0 ? String(localized: "不限", bundle: .riffet) : String(localized: "\($0) 个", bundle: .riffet) }) { next in
-                Task { await saveReclaim(managementSettingsPatch(maxLiveAgents: next)) }
+            reclaimPicker(String(localized: "CLI 内存上限", bundle: .riffet), values: withCurrent([0, 2048, 4096, 8192, 16384], memoryMb), current: memoryMb, label: memoryLabel) { next in
+                Task { await saveReclaim(managementSettingsPatch(maxAgentMemoryMb: next)) }
             }
         } header: {
             RiffetSectionTitle(String(localized: "资源回收", bundle: .riffet))
@@ -231,12 +230,16 @@ private struct ServiceProcessRow: View {
     let end: (ServiceProcess) -> Void
     let refresh: () async -> Void
     @Environment(\.palette) private var palette
+    private var agentUsage: AgentProcessUsage? {
+        guard process.kind == "agent", let id = process.sessionId else { return nil }
+        return snapshot?.agentProcesses?.agents.first { $0.sessionId == id }
+    }
 
     var body: some View {
         NavigationLink { ServiceProcessDetail(workbench: workbench, pid: process.pid, snapshot: $snapshot, refresh: refresh) } label: {
             VStack(alignment: .leading, spacing: 2) {
                 Text(process.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                Text("\(process.pid) · \(bytes(process.rssBytes))").riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).monospacedDigit()
+                Text(([ "\(process.pid) · \(bytes(process.rssBytes))" ] + [agentUsage.flatMap(agentStatus)].compactMap { $0 }).joined(separator: " · ")).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).monospacedDigit()
             }
         }
         .swipeActions {
@@ -309,6 +312,34 @@ private func withCurrent(_ presets: [Int32], _ current: Int32) -> [Int32] {
 
 private func idleLabel(_ minutes: Int32) -> String {
     minutes == 0 ? String(localized: "关闭", bundle: .riffet) : minutes % 60 == 0 ? String(localized: "\(minutes / 60) 小时", bundle: .riffet) : String(localized: "\(minutes) 分钟", bundle: .riffet)
+}
+
+private func memoryLabel(_ mb: Int32) -> String {
+    mb == 0 ? String(localized: "不限", bundle: .riffet) : mb % 1024 == 0 ? "\(mb / 1024) GB" : "\(mb) MB"
+}
+
+private let agentTimestamp: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter
+}()
+
+/// Why the CLI is kept, else when it stops; an unknown reason says nothing.
+private func agentStatus(_ usage: AgentProcessUsage) -> String? {
+    switch usage.retainedBy.first {
+    case "turn": return String(localized: "回合进行中", bundle: .riffet)
+    case "interaction": return String(localized: "等待回复", bundle: .riffet)
+    case "background": return String(localized: "后台任务", bundle: .riffet)
+    case "subscribed": return String(localized: "已打开", bundle: .riffet)
+    case "terminal-held": return String(localized: "终端接管", bundle: .riffet)
+    case "launching": return String(localized: "刚启动", bundle: .riffet)
+    case "unobserved": return String(localized: "观察中", bundle: .riffet)
+    case "not-resumable": return String(localized: "不可恢复", bundle: .riffet)
+    default: break
+    }
+    guard let at = usage.reclaimAt, let date = agentTimestamp.date(from: at) ?? ISO8601DateFormatter().date(from: at) else { return nil }
+    let left = date.timeIntervalSinceNow
+    return left <= 60 ? String(localized: "即将停止", bundle: .riffet) : String(localized: "\(duration(left)) 后停止", bundle: .riffet)
 }
 
 private func fixed(_ value: Double) -> String {

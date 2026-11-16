@@ -134,7 +134,7 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     row("quick-chat.archive", SettingsSection.QUICK_CHAT, Res.string.settings_quick_chat_archive, "archive retention days 保留 天数", "gui dang bao liu tian shu")
     group("connection.servers", SettingsSection.CONNECTION, Res.string.settings_paired_servers, "paired servers connection switch", "yi pei dui fu wu qi lian jie")
     row("service.idle", SettingsSection.SERVICE, Res.string.settings_reclaim_idle, "idle reclaim stop cli", "kong xian hou ting zhi cli")
-    row("service.limit", SettingsSection.SERVICE, Res.string.settings_reclaim_max_live, "maximum live agents simultaneous limit", "zui duo tong shi yun xing")
+    row("service.limit", SettingsSection.SERVICE, Res.string.settings_reclaim_memory, "cli memory limit", "cli nei cun shang xian")
     group("service.latency", SettingsSection.SERVICE, Res.string.settings_service_requests_latency_chart, "request latency performance", "qing qiu yan chi")
     group("service.memory", SettingsSection.SERVICE, Res.string.settings_service_cpu_memory_chart, "cpu memory performance", "chu li qi nei cun")
     group("diagnostics.logs", SettingsSection.DIAGNOSTICS, Res.string.settings_diagnostics_logs, "logs export upload", "ri zhi dao chu shang chuan")

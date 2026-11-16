@@ -99,10 +99,9 @@
     <string name="settings_reclaim">Resource reclaim</string>
     <string name="settings_reclaim_idle">Stop CLIs when idle</string>
     <string name="settings_reclaim_idle_desc">The timer starts when there is no task, request or viewer; sending a message resumes it, and background CLI tasks end.</string>
-    <string name="settings_reclaim_max_live">Maximum running at once</string>
-    <string name="settings_reclaim_max_live_desc">Idle sessions unused the longest stop first; sessions used within 30 minutes stay.</string>
+    <string name="settings_reclaim_memory">CLI memory limit</string>
     <string name="settings_reclaim_unlimited">Unlimited</string>
-    <string name="settings_reclaim_limit_count">%1$d</string>
+    <string name="settings_reclaim_limit_gb">%1$d GB</string>
     <string name="settings_local_effect_note">Takes effect immediately; stored only on this device.</string>
     <string name="settings_server_effect_note">Stored on the server and applied to all devices.</string>
 
@@ -267,6 +266,16 @@
     <string name="settings_service_end_process">End process</string>
     <string name="settings_service_server_process">Server</string>
     <string name="settings_service_child_process">Child process</string>
+    <string name="setm_agent_turn">Turn running</string>
+    <string name="setm_agent_interaction">Awaiting reply</string>
+    <string name="setm_agent_background">Background work</string>
+    <string name="setm_agent_subscribed">Open</string>
+    <string name="setm_agent_terminal">In terminal</string>
+    <string name="setm_agent_launching">Just started</string>
+    <string name="setm_agent_unobserved">Observing</string>
+    <string name="setm_agent_not_resumable">Can\'t resume</string>
+    <string name="setm_agent_stops_in">Stops in %1$s</string>
+    <string name="setm_agent_stopping_soon">Stopping soon</string>
 
     <!-- Extensions -->
     <string name="settings_select_config">Select configuration</string>
