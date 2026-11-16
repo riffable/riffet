@@ -1,7 +1,9 @@
 import { readContextFile } from '../../context-references/read-file.js';
 import { projectShareRollout } from './share-read.js';
 import { queryDirectory } from '../shared/query-directory.js';
-import { readFile, stat } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { createInterface } from 'node:readline';
 import { readCodexShare } from './share-read.js';
 import { homedir } from 'node:os';
 import { basename, resolve as resolvePath } from 'node:path';
@@ -17,7 +19,7 @@ import { asArray, asRecord, str } from './util.js';
 import { CodexAppServer as CodexAppServerProcess } from '../shared/codex-app-server.js';
 import { codexFlavor, usesOwnProvider, type CodexFlavor } from './flavors.js';
 import { fetchGatewayModels } from '../shared/gateway-models.js';
-import { findCodexRollout, parseRolloutUsage } from './rollout-usage.js';
+import { findCodexRollout, RolloutUsageReader } from './rollout-usage.js';
 import type { UsageTranscript } from '../../stats/types.js';
 import { codexTrustArgs } from '../shared/cli-trust.js';
 import { describeSearch, resolveCliExecutable } from '../shared/cli-resolve.js';
@@ -31,7 +33,7 @@ import type {
 } from '../types.js';
 import type { CliVersionRange } from '../shared/cli-version.js';
 import {
-  MAX_ROLLOUT_BYTES, normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, matchesRuntimeFingerprint, assertSupportedProfile, providerEnv,
+  normalizePermission, configuredCommand, executableOf, runtimeFingerprintFor, matchesRuntimeFingerprint, assertSupportedProfile, providerEnv,
   collaborationModeOf, probeAppServer, STEER_MIN_VERSIONS, supportsSteerVersion,
 } from './config.js';
 import { listModels, readUsage } from './catalog.js';
@@ -942,11 +944,14 @@ export class CodexBackendAdapter implements NativeBackendDriver {
     const file = threadId ? await findCodexRollout(this.flavor.stateHome(profile.config), threadId) : undefined;
     if (!threadId || !file) return known === 'none' ? undefined : { generation: 'none', entries: [] };
     const info = await stat(file);
-    if (info.size > MAX_ROLLOUT_BYTES) throw new Error(`${this.label} rollout exceeds the read limit`);
     const quiet = Date.now() - info.mtimeMs >= ROLLOUT_QUIET_MS;
     const generation = `${info.size}:${Math.round(info.mtimeMs)}:${quiet ? 'quiet' : 'busy'}`;
     if (generation === known) return undefined;
-    const entries = parseRolloutUsage(await readFile(file, 'utf8'), threadId, quiet).map(usage => ({ usage }));
+    // Streamed: a rollout runs to tens of megabytes, and only its usage rows are parsed (docs/guide/performance.md §3.8).
+    const reader = new RolloutUsageReader(threadId);
+    const lines = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+    for await (const line of lines) reader.line(line);
+    const entries = reader.records(quiet).map(usage => ({ usage }));
     return { generation, entries };
   }
 
