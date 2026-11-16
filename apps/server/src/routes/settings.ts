@@ -128,6 +128,13 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
       return rest;
     })};
   });
+  // Numbers and cache names only (docs/guide/performance.md §4); a client posts one sample every few minutes.
+  app.post<{Body:unknown}>('/api/system/client-metrics',{bodyLimit:16*1024},async(request,reply)=>{
+    const context=deps.auth.authenticate(request,true);
+    const device=context.deviceId?deps.auth.device(context.deviceId):undefined;
+    monitor.clients.record(context.deviceId?`device:${context.deviceId}`:'cookie',request.body,device?.name);
+    return reply.code(204).send();
+  });
   // tmux and Tailscale are the machine's, not an Agent's: this answers while any Agent plugin is off.
   app.get('/api/system/machine',async()=>machineReport());
   app.post<{Params:{pid:string}}>('/api/system/processes/:pid/terminate',async(request)=>{await monitor.terminate(request.params.pid);return {ok:true};});

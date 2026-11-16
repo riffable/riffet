@@ -9,6 +9,7 @@ import { App } from './app/App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { installFocusRingPolicy } from './lib/focus-ring';
 import { startMainThreadMonitor } from './lib/main-thread-monitor';
+import { startClientMetrics } from './lib/client-metrics';
 import { toast } from './lib/toast';
 import './lib/theme';
 import './lib/display-settings';
@@ -20,6 +21,7 @@ import './styles/index.css';
 
 installFocusRingPolicy();
 startMainThreadMonitor();
+startClientMetrics();
 
 // Development only: every layout shift no transition accounts for, and every spinner or disabled
 // state that came and went too fast to mean anything, is reported in the console (docs/WEB.md,

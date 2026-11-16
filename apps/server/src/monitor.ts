@@ -11,7 +11,7 @@ import { loopHealth } from './loop-health.js';
 import { SERVER_VERSION } from './version.js';
 import type { Store } from './store.js';
 import type { TerminalService } from './terminal/index.js';
-import type { ServiceMonitorSample, ServiceMonitorSnapshot, ServiceProcess, ServiceRouteStat } from '../../../packages/contracts/src/index.js';
+import type { ClientCacheSample, ClientMetrics, ClientMetricsPlatform, ClientMetricsSample, ServiceMonitorSample, ServiceMonitorSnapshot, ServiceProcess, ServiceRouteStat } from '../../../packages/contracts/src/index.js';
 
 const SAMPLE_MS = 10_000;
 /** 30 minutes of samples. */
@@ -60,6 +60,8 @@ export class ServiceMonitor {
   private cpuAt = performance.now();
   private cpu = process.cpuUsage();
   private timer: NodeJS.Timeout | undefined;
+  /** What clients report about themselves (`POST /api/system/client-metrics`). */
+  readonly clients = new ClientMetricsStore();
 
   constructor(private readonly deps: ServiceMonitorDeps) {}
 
@@ -139,6 +141,7 @@ export class ServiceMonitor {
       sessions: { total: Object.values(counts.sessions).reduce((sum, n) => sum + n, 0), running: sessions('starting', 'running', 'cancelling'), waiting: sessions('waiting') },
       series: [...this.series],
       processes: (await this.processes()).slice(0, PROCESSES_SHOWN),
+      clients: this.clients.list(now),
     };
   }
 
@@ -264,3 +267,75 @@ function maskCommand(command: string): string {
 }
 
 const round = (value: number) => Math.round(value * 10) / 10;
+
+/** Six hours at the clients' five-minute cadence (docs/guide/performance.md §4). */
+const CLIENT_KEPT_MS = 6 * 60 * 60_000;
+const CLIENT_SERIES_LENGTH = 80;
+const MAX_CLIENTS = 32;
+const MAX_CACHES = 32;
+/** A client may not report more often than this; a faster one is answered and dropped. */
+const MIN_INTERVAL_MS = 30_000;
+const PLATFORMS: readonly ClientMetricsPlatform[] = ['mac', 'web', 'ios', 'android'];
+
+interface Entry extends Omit<ClientMetrics, 'series'> { series: Omit<ClientMetricsSample, 'caches'>[]; seenAt: number }
+
+const bytes = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.round(Math.min(value, 2 ** 50)) : undefined;
+const text = (value: unknown, max: number) => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+const defined = <T extends object>(value: T) => Object.fromEntries(Object.entries(value).filter(([, field]) => field !== undefined)) as T;
+
+function cache(value: unknown): ClientCacheSample | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const item = value as Record<string, unknown>, name = text(item.name, 64);
+  return name ? defined({ name, bytes: bytes(item.bytes), limitBytes: bytes(item.limitBytes), count: bytes(item.count) }) : undefined;
+}
+
+/**
+ * The figures clients report about themselves, held in memory only: a client's newest sample and a
+ * bounded series, dropped six hours after it last reported. Numbers and cache names only.
+ */
+export class ClientMetricsStore {
+  private readonly entries = new Map<string, Entry>();
+
+  /** `credential` is the paired device id, or `cookie` for a browser signed in with the access token. */
+  record(credential: string, body: unknown, name?: string, now = Date.now()): void {
+    if (!body || typeof body !== 'object') throw new AppError('INVALID_METRICS', 'Metrics must be an object', 400);
+    const report = body as Record<string, unknown>;
+    const clientId = text(report.clientId, 64), platform = report.platform as ClientMetricsPlatform;
+    if (!clientId || !PLATFORMS.includes(platform)) throw new AppError('INVALID_METRICS', 'Metrics need a clientId and a platform', 400);
+    const raw = report.sample && typeof report.sample === 'object' ? report.sample as Record<string, unknown> : {};
+    const caches = Array.isArray(raw.caches) ? raw.caches.slice(0, MAX_CACHES).map(cache).filter((item) => item !== undefined) : undefined;
+    const sample: ClientMetricsSample = defined({
+      at: now, footprintBytes: bytes(raw.footprintBytes), managedHeapBytes: bytes(raw.managedHeapBytes),
+      streams: bytes(raw.streams), hitches: bytes(raw.hitches), caches,
+    });
+    const key = `${credential}:${clientId}`;
+    const entry = this.entries.get(key);
+    if (entry && now - entry.latest.at < MIN_INTERVAL_MS) return;
+    const { caches: _caches, ...point } = sample;
+    const next: Entry = entry ?? { key, platform, latest: sample, series: [], seenAt: now };
+    next.platform = platform;
+    next.latest = sample;
+    next.seenAt = now;
+    const version = text(report.appVersion, 40);
+    if (version) next.appVersion = version;
+    if (name) next.name = name.slice(0, 80);
+    if (sample.footprintBytes !== undefined) next.peakFootprintBytes = Math.max(next.peakFootprintBytes ?? 0, sample.footprintBytes);
+    next.series.push(point);
+    while (next.series.length > CLIENT_SERIES_LENGTH || (next.series[0] && now - next.series[0].at > CLIENT_KEPT_MS)) next.series.shift();
+    this.entries.delete(key);
+    this.entries.set(key, next);
+    this.prune(now);
+  }
+
+  /** Most recent first. */
+  list(now = Date.now()): ClientMetrics[] {
+    this.prune(now);
+    return [...this.entries.values()].reverse().map(({ seenAt: _seen, ...entry }) => ({ ...entry, series: [...entry.series] }));
+  }
+
+  private prune(now: number): void {
+    for (const [key, entry] of this.entries) if (now - entry.seenAt > CLIENT_KEPT_MS) this.entries.delete(key);
+    // Insertion order is report order: the first entries are the longest silent.
+    while (this.entries.size > MAX_CLIENTS) this.entries.delete(this.entries.keys().next().value!);
+  }
+}

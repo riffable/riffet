@@ -29,6 +29,28 @@ export interface ServiceMonitorSample {
   loopLagMs: number; load1: number;
 }
 export interface ServiceRouteStat { method: string; route: string; count: number; errors: number; avgMs: number; p95Ms: number; }
+/** Where a client's figures come from (docs/guide/performance.md §4). */
+export type ClientMetricsPlatform = 'mac' | 'web' | 'ios' | 'android';
+/** One registered cache: its name in the client's cache registry, what it holds now, and its ceiling. */
+export interface ClientCacheSample { name: string; bytes?: number; limitBytes?: number; count?: number }
+/** A client's own figures at one moment. `footprintBytes` is the platform's footprint (§2); `hitches` counts main-thread stalls over 100 ms since the previous sample. */
+export interface ClientMetricsSample {
+  at: number;
+  footprintBytes?: number; managedHeapBytes?: number; streams?: number; hitches?: number;
+  caches?: ClientCacheSample[];
+}
+/** `POST /api/system/client-metrics`: one sample. `clientId` tells apart the tabs or apps signed in with one credential. */
+export interface ClientMetricsReport {
+  clientId: string; platform: ClientMetricsPlatform; appVersion?: string;
+  sample: Omit<ClientMetricsSample, 'at'>;
+}
+/** A client as the monitor shows it: the newest sample with its caches, and the last six hours of the rest. */
+export interface ClientMetrics {
+  key: string; platform: ClientMetricsPlatform; name?: string; appVersion?: string;
+  latest: ClientMetricsSample; peakFootprintBytes?: number;
+  /** Oldest first, without `caches`. */
+  series: Omit<ClientMetricsSample, 'caches'>[];
+}
 /** `GET /api/system/monitor`: the running service at a glance, for the settings page. */
 export interface ServiceMonitorSnapshot {
   generatedAt: string;
@@ -51,4 +73,6 @@ export interface ServiceMonitorSnapshot {
   /** Oldest first, at most the last 30 minutes. */
   series: ServiceMonitorSample[];
   processes: ServiceProcess[];
+  /** Clients that reported in the last six hours (§4), most recent first. */
+  clients?: ClientMetrics[];
 }
