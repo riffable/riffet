@@ -60,7 +60,6 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'views', label: msg`视图`, group: 'appearance', icon: IconPanelRight },
   { id: 'terminal', label: msg`终端`, group: 'appearance', icon: IconTerminal },
   { id: 'appicon', label: msg`应用图标`, group: 'appearance', icon: IconImage },
-  { id: 'design', label: msg`设计规范`, group: 'appearance', icon: IconSwatchBook },
   { id: 'interaction', label: msg`输入`, group: 'behavior', icon: IconCornerDownLeft },
   { id: 'notifications', label: msg`通知`, group: 'behavior', icon: IconActivity },
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog },
@@ -76,6 +75,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'storage', label: msg`存储空间`, group: 'connection', icon: IconDatabase },
   { id: 'backup', label: msg`备份与恢复`, group: 'connection', icon: IconHardDriveDownload },
   { id: 'diagnostics', label: msg`诊断`, group: 'support', icon: IconGauge },
+  { id: 'design', label: msg`设计规范`, group: 'support', icon: IconSwatchBook },
   { id: 'about', label: msg`关于 Riffet`, group: 'support', icon: IconInfo },
 ];
 
