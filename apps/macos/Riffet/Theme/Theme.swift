@@ -115,7 +115,6 @@ final class ThemeStore {
         }
         return RiffetCodeThemeCatalog.resolve(selection: "auto", uiThemeId: entry.id)
     }
-    var revision: String { entry.revision }
 
     @ObservationIgnored private var generation = 0
     /// True while the store itself corrects [themeId], which is not the reader picking a theme.

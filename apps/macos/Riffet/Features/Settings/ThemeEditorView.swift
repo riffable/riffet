@@ -301,9 +301,9 @@ struct ThemeEditorView: View {
 
     @ViewBuilder
     private func syntaxPreview(half: CachedThemeSyntaxHalf) -> some View {
-        let fg = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["fg"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg : RiffetThemeCatalog.all[0].dark.fg)
-        let fg3 = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["fg-3"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg3 : RiffetThemeCatalog.all[0].dark.fg3)
-        let bgSubtle = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["bg-subtle"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.bgSubtle : RiffetThemeCatalog.all[0].dark.bgSubtle)
+        let fg = previewValues?.fg ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg : RiffetThemeCatalog.all[0].dark.fg)
+        let fg3 = previewValues?.fg3 ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg3 : RiffetThemeCatalog.all[0].dark.fg3)
+        let bgSubtle = previewValues?.bgSubtle ?? (mode == .light ? RiffetThemeCatalog.all[0].light.bgSubtle : RiffetThemeCatalog.all[0].dark.bgSubtle)
         let displayed: AttributedString = {
             guard let runs = syntaxPreviewRuns else {
                 var plain = AttributedString(Self.syntaxPreviewSnippet)
