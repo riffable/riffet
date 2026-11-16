@@ -8,32 +8,40 @@ import { errorMessage } from '@/lib/utils';
 import { ApprovalPicker } from '../session/ApprovalPicker';
 import { SettingsRow } from './SettingsLayout';
 
-export function DefaultApprovalSetting({ backendId, profileId, value, disabled, onChange }: {
+export function DefaultApprovalSetting({ backendId, capabilities: offeredCapabilities, value, disabled, onChange }: {
   backendId: NativeBackendId;
   profileId?: string;
+  /** Already read by the containing Agent page; the fallback also works outside StoresContext. */
+  capabilities?: NativeBackendCapabilities;
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
 }) {
   const { t } = useLingui();
-  const [capabilities, setCapabilities] = useState<NativeBackendCapabilities>();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const supplied = offeredCapabilities?.backendId === backendId ? offeredCapabilities : undefined;
+  const [read, setRead] = useState<{ backendId: NativeBackendId; capabilities?: NativeBackendCapabilities; loading: boolean; error: string }>();
   const [retry, setRetry] = useState(0);
+  const current = read?.backendId === backendId ? read : undefined;
+  const capabilities = supplied ?? current?.capabilities;
+  const loading = !capabilities && (!current || current.loading);
+  const error = capabilities ? '' : current?.error ?? '';
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError('');
-    setCapabilities(undefined);
+    if (supplied) {
+      setRead({ backendId, capabilities: supplied, loading: false, error: '' });
+      return () => { active = false; };
+    }
+    setRead((previous) => ({ backendId, capabilities: previous?.backendId === backendId ? previous.capabilities : undefined, loading: true, error: '' }));
     void api.backends().then((entries) => {
       if (!active) return;
       const entry = entries.find((item) => item.backendId === backendId);
       if (!entry) throw new Error(t`该 Agent 尚未配置提供商`);
-      setCapabilities(entry.capabilities);
-    }).catch((failure) => { if (active) setError(errorMessage(failure, t`无法加载审批模式，请重试`)); })
-      .finally(() => { if (active) setLoading(false); });
+      setRead({ backendId, capabilities: entry.capabilities, loading: false, error: '' });
+    }).catch((failure) => {
+      if (active) setRead((previous) => ({ backendId, capabilities: previous?.backendId === backendId ? previous.capabilities : undefined, loading: false, error: errorMessage(failure, t`无法加载审批模式，请重试`) }));
+    });
     return () => { active = false; };
-  }, [backendId, profileId, retry]);
+  }, [backendId, supplied, retry]);
   const permissions = capabilities?.supportsPermissionSelection ? capabilities.permissions : [];
   const options: NativeBackendOption[] = [{ id: '', label: t`沿用 CLI 默认` }, ...permissions];
   return <SettingsRow title={t`默认审批模式`} description={error || t`已有会话保持原配置。`}>

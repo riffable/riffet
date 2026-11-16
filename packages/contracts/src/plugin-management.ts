@@ -41,6 +41,10 @@ export interface PluginAction { id: string; label: string; kind: 'run' | 'device
 export type GatewayProtocol = 'anthropic-messages' | 'openai-responses' | 'openai-chat' | (string & {});
 
 export interface ModelSourceDescriptor {
+  /** Omitted by older plugins: source supplies a connection, adapter uses the profile's own connection. */
+  role?: 'source' | 'adapter';
+  /** Whether this contribution can read quota for the selected connection. */
+  usage?: boolean;
   id: string;
   label: string;
   /** The compat form of `protocols` for clients that match by backend: `anthropic-messages` is `claude`, `openai-responses` is `codex`. */

@@ -80,13 +80,14 @@ export type ModelInputModalities = Record<string, ModelInputModality[]>;
 /** Context window in tokens, by model id. */
 export type ModelContextWindows = Record<string, number>;
 /**
- * A named model source a profile can be pointed at, provided by an integration.
+ * A named connection source or gateway adapter a profile can use, provided by a plugin.
  *
- * Each one has a canonical endpoint and a credential the user cannot reasonably type: an SSO token
+ * Connection sources may supply a canonical endpoint and a credential the user cannot reasonably type: an SSO token
  * in another tool's cache, a JWT minted per request by a CLI, a key that lives in the environment.
  * Naming the source is what lets the server resolve it, and what tells the driver which injection
  * path to take. Sources come from plugins, so the set is open: a name nothing provides on this
- * server is kept as saved and resolves to nothing.
+ * server is kept as saved and resolves to nothing. Gateway adapters instead interpret the profile's
+ * existing address and key, adding catalog and optional quota support without replacing the connection.
  */
 export type NativeModelSource = string;
 /** Wire API used by a custom model provider. Omitted keeps the backend's existing default. */
@@ -123,9 +124,9 @@ export interface NativeBackendProfileSettings extends NativeBackendProfile {
    */
   modelContextWindows?: ModelContextWindows;
   /**
-   * Where this profile's models and credentials come from. Absent means what the profile has always
+   * The plugin connection source or gateway adapter used by this profile. Absent means what the profile has always
    * meant: the CLI's own login, or the `apiEndpoint` + `apiKey` the user typed. A source supplies
-   * both the catalog and the credential, so `apiEndpoint` is only an override of its default
+   * both the catalog and the credential; adapters use the profile's own connection. For sources, `apiEndpoint` overrides the default
    * address, and `apiKey` only an override of its key.
    */
   modelSource?: NativeModelSource;

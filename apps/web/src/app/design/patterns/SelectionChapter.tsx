@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { AgentMark } from '@/components/agent-marks';
-import { Segmented, Select } from '@/components/ui/controls';
+import { Segmented, Select, UnderlineTabs } from '@/components/ui/controls';
 import { Chapter, Frame, Plate, Reveal } from '../specimen';
 import { Pair } from './parts';
 
@@ -19,6 +19,7 @@ function Choices() {
     { what: t`视图`, options: t`页面的一级视图，2–5 个`, use: 'UnderlineTabs' },
     { what: t`视图`, options: t`一级视图内部的子视图，2–4 个`, use: 'Segmented' },
     { what: t`所属对象`, options: t`切换下方内容配置的对象`, use: 'Select appearance="heading"' },
+    { what: t`Agent 配置对象`, options: t`Agent 与模型提供商`, use: 'UnderlineTabs scrollable' },
     { what: t`所属对象`, options: t`需要并排比较各对象的状态`, use: t`对象列表，每行进入二级页` },
   ];
   const grid = 'grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.6fr)_minmax(0,1.4fr)] gap-x-6';
@@ -42,18 +43,30 @@ const options = (size: number) => AGENTS.map((value) => ({ value, label: NAMES[v
 
 function HeadingSelect() {
   const { t } = useLingui();
-  const [scope, setScope] = useState('claude');
+  const [scope, setScope] = useState('project-a');
   return (
     <Frame className="flex justify-center p-8 max-md:p-4">
       <div className="flex w-full max-w-md flex-col gap-3">
-        <Select appearance="heading" label={t`配置的 Agent`} value={scope} onChange={setScope} options={options(16)} />
+        <Select appearance="heading" label={t`项目`} value={scope} onChange={setScope} options={[{ value: 'project-a', label: 'Project A' }, { value: 'project-b', label: 'Project B' }]} />
         <div className="flex flex-col rounded-xl border border-line bg-elevated px-4 text-sm text-fg [&>*+*]:edge-t">
-          <span className="flex h-11 items-center justify-between">{t`默认审批模式`}<span className="text-fg-3">Auto mode</span></span>
-          <span className="flex h-11 items-center justify-between">{t`模型提供商`}<span className="text-fg-3">2</span></span>
+          <span className="flex h-11 items-center justify-between">{t`工作目录`}<span className="font-mono text-xs text-fg-3">~/workspace/{scope}</span></span>
+          <span className="flex h-11 items-center justify-between">{t`会话`}<span className="text-fg-3">2</span></span>
         </div>
       </div>
     </Frame>
   );
+}
+
+function AgentDirectory() {
+  const { t } = useLingui();
+  const [scope, setScope] = useState('codex');
+  const panelId = useId();
+  return <Frame className="p-8 max-md:p-4">
+    <div className="mx-auto flex w-full min-w-0 max-w-md flex-col gap-4">
+      <UnderlineTabs scrollable className="h-11" ariaLabel={t`配置的 Agent`} value={scope} onChange={setScope} options={options(16).map((option) => ({ ...option, panelId }))} />
+      <div id={panelId} role="tabpanel" aria-label={NAMES[scope]} className="rounded-xl border border-line p-4 text-sm">{NAMES[scope]}</div>
+    </div>
+  </Frame>;
 }
 
 function ManyOptions() {
@@ -61,9 +74,9 @@ function ManyOptions() {
   const [scope, setScope] = useState('claude');
   return (
     <Pair
-      good={<Select label="Agent" value={scope} onChange={setScope} options={options(14)} className="w-56" />}
+      good={<Select label={t`默认 Agent`} value={scope} onChange={setScope} options={options(14)} className="w-56" />}
       goodNote={t`总宽超过所在行的一半，就换成 Select。`}
-      bad={<div className="w-full overflow-hidden"><Segmented size="xs" value={scope} onChange={setScope} ariaLabel="Agent" options={AGENTS.slice(0, 6).map((value) => ({ value, label: NAMES[value] ?? value }))} /></div>}
+      bad={<div className="w-full overflow-hidden"><Segmented size="xs" value={scope} onChange={setScope} ariaLabel={t`默认 Agent`} options={AGENTS.slice(0, 6).map((value) => ({ value, label: NAMES[value] ?? value }))} /></div>}
       badNote={t`撑满设置行，再加一项就放不下。`}
     />
   );
@@ -79,7 +92,10 @@ export function SelectionChapter() {
       <Plate number={2} title={t`标题式选择`} note={t`对象名作为下方各组的标题，点开切换；对象再多也放得下。`}>
         <HeadingSelect />
       </Plate>
-      <Plate number={3} title={t`选项超过四个`} note={t`2026-11-14 决定：选项多或切换所属对象时改用 Select。`}>
+      <Plate number={3} title={t`Agent 配置对象`}>
+        <AgentDirectory />
+      </Plate>
+      <Plate number={4} title={t`选项超过四个`}>
         <ManyOptions />
       </Plate>
     </Chapter>

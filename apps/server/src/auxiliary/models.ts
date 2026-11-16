@@ -14,7 +14,9 @@ export type GatewayProfiles = (backendId: NativeBackendId) => NativeBackendProfi
 
 /** Same profile and model source as the parent agent; refresh command credentials for every request. */
 export async function profileModelEndpoint(ref: AuxiliaryModelRef, profile: NativeBackendProfileConfig, signal?: AbortSignal): Promise<GatewayEndpoint> {
+  signal?.throwIfAborted();
   await prepareSource(profile.config);
+  signal?.throwIfAborted();
   const protocol = gatewayProtocol(ref.backendId);
   const { resolved, credential } = launchSource(profile.config);
   const source = modelSourceOf(profile.config);
@@ -75,15 +77,22 @@ export async function listAuxiliaryModels(gatewayProfiles: GatewayProfiles, opti
     try { profiles = gatewayProfiles(backendId); } catch { return []; }
     return profiles.map(async (profile): Promise<AuxiliaryModelOption[]> => {
       const enabled = Array.isArray(profile.config.enabledModels) ? profile.config.enabledModels.filter((id): id is string => typeof id === 'string') : undefined;
-      const ids = enabled ?? (await listModels({
-        baseUrl: String(profile.config.apiEndpoint),
-        ...(typeof profile.config.apiKey === 'string' ? { apiKey: profile.config.apiKey } : {}),
-        timeoutMs: 5_000,
-        ...(options.signal ? { signal: options.signal } : {}),
-      }).catch(error => {
-        if (options.signal?.aborted) throw error;
-        return [];
-      })).map(model => model.value);
+      let ids = enabled;
+      if (!ids) {
+        try {
+          const endpoint = await profileModelEndpoint({ backendId, profileId: profile.id, model: '' }, profile, options.signal);
+          ids = (await listModels({
+            baseUrl: endpoint.baseUrl,
+            ...(endpoint.apiKey ? { apiKey: endpoint.apiKey } : {}),
+            ...(endpoint.headers ? { headers: endpoint.headers } : {}),
+            timeoutMs: 5_000,
+            ...(options.signal ? { signal: options.signal } : {}),
+          })).map(model => model.value);
+        } catch (error) {
+          if (options.signal?.aborted) throw error;
+          ids = [];
+        }
+      }
       return [...new Set(ids.map(id => gatewayModelId(backendId, id)))]
         .map(model => ({ backendId, profileId: profile.id, profileName: profile.name, model }));
     });
@@ -92,15 +101,10 @@ export async function listAuxiliaryModels(gatewayProfiles: GatewayProfiles, opti
 }
 
 /** Where `ref` is served, with the name of the profile it is listed under; throws when that profile is gone. */
-export function auxiliaryEndpoint(ref: AuxiliaryModelRef, gatewayProfiles: GatewayProfiles): GatewayEndpoint & { profileName: string } {
-  const protocol = gatewayProtocol(ref.backendId);
+export async function auxiliaryEndpoint(ref: AuxiliaryModelRef, gatewayProfiles: GatewayProfiles, signal?: AbortSignal): Promise<GatewayEndpoint & { profileName: string }> {
   const profile = gatewayProfiles(ref.backendId).find(item => item.id === ref.profileId);
-  if (!protocol || !profile) throw new Error('model profile is not configured');
-  return {
-    protocol,
-    baseUrl: String(profile.config.apiEndpoint),
-    ...(typeof profile.config.apiKey === 'string' ? { apiKey: profile.config.apiKey } : {}),
-    model: gatewayModelId(ref.backendId, ref.model),
-    profileName: profile.name,
-  };
+  if (!profile) throw new Error('model profile is not configured');
+  const endpoint = await profileModelEndpoint(ref, profile, signal);
+  signal?.throwIfAborted();
+  return { ...endpoint, profileName: profile.name };
 }

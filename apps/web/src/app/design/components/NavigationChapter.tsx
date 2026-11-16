@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import { IconEllipsis, IconFileText, IconFolder, IconGitBranch, IconMessageSquareText, IconTerminal } from '@/components/icons';
+import { AgentMark } from '@/components/agent-marks';
 import { Button } from '@/components/ui/button';
 import { UnderlineTabs } from '@/components/ui/controls';
 import { ListRow, RowActions } from '@/components/ui/list-row';
@@ -61,6 +62,7 @@ function Rows() {
 export function NavigationChapter() {
   const { t } = useLingui();
   const [tab, setTab] = useState('changes');
+  const [agent, setAgent] = useState('codex');
   return (
     <Chapter title={t`导航`} lede={t`在视图和条目之间移动。页签切换一级视图，行进入一个条目。`} source="apps/web/src/components/ui/controls.tsx">
       <Family title="UnderlineTabs">
@@ -72,6 +74,12 @@ export function NavigationChapter() {
         </Specimen>
         <Specimen name={t`单项禁用`} prop="option.disabled">
           <div className="h-9"><UnderlineTabs value={tab} onChange={setTab} ariaLabel={t`页签`} options={[{ value: 'changes', label: t`改动` }, { value: 'files', label: t`文件` }, { value: 'terminal', label: t`终端`, disabled: true }]} /></div>
+        </Specimen>
+        <Specimen name={t`横向滚动`} prop="scrollable">
+          <div className="w-full min-w-0 max-w-xs">
+            <UnderlineTabs scrollable className="h-11" value={agent} onChange={setAgent} ariaLabel={t`配置的 Agent`}
+              options={['codex', 'claude', 'cursor', 'dsh', 'pi', 'droid'].map((id) => ({ value: id, label: id === 'dsh' ? 'DeepSeek' : id === 'pi' ? 'pi' : id[0]!.toUpperCase() + id.slice(1), icon: <AgentMark backend={id} size={16} />, disabled: id === 'droid' }))} />
+          </div>
         </Specimen>
       </Family>
       <Family title="ListRow">

@@ -1,9 +1,10 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ModelInfo, NativeInteraction, NativeRunConfig, Run, Session } from '../../../../packages/contracts/src/index.js';
 import type { Store } from '../store.js';
 import type { NativeBackendDriver, NativeBackendProfileConfig as ProfileConfig } from './types.js';
 import { BackendCatalog } from './catalog.js';
 import { NativeBackendService } from './service.js';
+import { auxiliaryEndpoint, listAuxiliaryModels } from '../auxiliary/models.js';
 import { provideModelSources } from './shared/model-source.js';
 
 afterEach(() => provideModelSources(() => []));
@@ -502,4 +503,87 @@ it('reads current quota settings for a session bound to an older launch snapshot
   savedProfiles = savedProfiles.filter(profile => profile.id !== 'bound');
   await expect(catalog.usage('dsh', undefined, 'bound', current)).rejects.toMatchObject({ code: 'NATIVE_PROFILE_NOT_FOUND', statusCode: 404 });
   expect(calls).toHaveLength(1);
+});
+
+
+it('reuses a saved API key only for an adapter on the same connection while probing an unsaved type change', async () => {
+  const { service, driver } = harness();
+  Object.defineProperty(driver, 'traits', { value: { consumesProtocols: ['openai-responses'] } });
+  const endpoint = 'https://gateway.example/v1';
+  const storedConfig: Record<string, unknown> = { apiEndpoint: endpoint, apiKey: 'saved-key' };
+  const observed: unknown[] = [];
+  provideModelSources(() => [
+    { id: 'adapter', role: 'adapter', label: 'Adapter', protocols: ['openai-responses'], resolve: () => ({}), catalog: async (_backend, overrides) => { observed.push(overrides); return []; } },
+    { id: 'source', label: 'Source', protocols: ['openai-responses'], resolve: () => ({}), catalog: async (_backend, overrides) => { observed.push(overrides); return []; } },
+  ]);
+  const catalog = new BackendCatalog({ require: () => driver } as never, service.host, {
+    profiles: { get: () => undefined, getConfig: () => storedConfig } as never,
+  }, () => driver.profiles(service.host)[0]!);
+  await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'adapter' });
+  await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: 'https://other.example/v1', modelSource: 'adapter' });
+  await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'source' });
+  await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'adapter', apiKey: '' });
+  storedConfig.modelSource = 'source';
+  await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'adapter' });
+  expect(observed).toEqual([
+    { apiEndpoint: endpoint, apiKey: 'saved-key' },
+    { apiEndpoint: 'https://other.example/v1' },
+    { apiEndpoint: endpoint },
+    { apiEndpoint: endpoint },
+    { apiEndpoint: endpoint },
+  ]);
+});
+
+
+it('reuses a disabled adapter key only for its unchanged API connection without activating the adapter', async () => {
+  const { service, driver } = harness();
+  const endpoint = 'https://gateway.example/v1';
+  const storedConfig: Record<string, unknown> = { modelSource: 'disabled-adapter', apiEndpoint: endpoint, apiKey: 'saved-key' };
+  const activate = vi.fn(async () => { throw new Error('A disabled adapter must not activate'); });
+  provideModelSources(() => [], activate, id => id === 'disabled-adapter' ? 'adapter' : undefined);
+  const catalog = new BackendCatalog({ require: () => driver } as never, service.host, {
+    profiles: { get: () => undefined, getConfig: () => storedConfig } as never,
+  }, () => driver.profiles(service.host)[0]!);
+  const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ data: [{ id: 'm1' }] }));
+  try {
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint });
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: 'https://other.example/v1' });
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, apiKey: '' });
+    storedConfig.modelSource = 'unrecognized-source';
+    await catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint });
+    expect(fetch.mock.calls.map(([, init]) => (init?.headers as Record<string, string>).authorization)).toEqual([
+      'Bearer saved-key', undefined, undefined, undefined,
+    ]);
+    await expect(catalog.probeModels('dsh', { profileId: 'local', apiEndpoint: endpoint, modelSource: 'disabled-adapter' }))
+      .rejects.toMatchObject({ code: 'INVALID_BACKEND_PROFILE' });
+    expect(activate).not.toHaveBeenCalled();
+  } finally { fetch.mockRestore(); }
+});
+
+it('keeps auxiliary bindings to the same explicit API profile after adding a gateway adapter and resolves every request', async () => {
+  const { service, driver } = harness();
+  const config: Record<string, unknown> = { apiEndpoint: 'https://gateway.example/input', apiKey: 'profile-key' };
+  const profile: ProfileConfig = { id: 'bound', backendId: 'dsh', name: 'Bound', config };
+  driver.profiles = () => [profile];
+  const ref = { backendId: 'dsh' as const, profileId: profile.id, model: 'm1' };
+  const profiles = (backendId: Parameters<typeof service.catalog.gatewayProfiles>[0]) => backendId === 'dsh' ? service.catalog.gatewayProfiles(backendId) : [];
+  expect(await auxiliaryEndpoint(ref, profiles)).toMatchObject({ baseUrl: config.apiEndpoint, apiKey: 'profile-key', profileName: 'Bound' });
+  const prepare = vi.fn(async () => undefined);
+  const resolve = vi.fn((overrides: { apiEndpoint?: string; apiKey?: string }) => ({
+    endpoints: { 'openai-chat': { baseUrl: 'https://gateway.example/resolved/v1', headers: { 'X-Adapter': 'resolved' } } },
+    credential: { kind: 'static' as const, key: overrides.apiKey! },
+  }));
+  provideModelSources(() => [{ id: 'gateway-adapter', role: 'adapter', label: 'Adapter', protocols: ['openai-chat'], prepare, resolve, catalog: async () => [] }], undefined, () => 'adapter');
+  config.modelSource = 'gateway-adapter';
+  expect(profiles('dsh').map(item => item.id)).toEqual([ref.profileId]);
+  const endpoint = await auxiliaryEndpoint(ref, profiles);
+  expect(endpoint).toEqual({ protocol: 'chat', baseUrl: 'https://gateway.example/resolved/v1', apiKey: 'profile-key', headers: { 'X-Adapter': 'resolved' }, model: 'm1', profileName: 'Bound' });
+  const listModels = vi.fn(async () => [{ value: 'm1', name: 'M1', configOptions: [] }]);
+  expect(await listAuxiliaryModels(profiles, { listModels })).toEqual([{ ...ref, profileName: 'Bound' }]);
+  expect(listModels).toHaveBeenCalledExactlyOnceWith({ baseUrl: endpoint.baseUrl, apiKey: 'profile-key', headers: endpoint.headers, timeoutMs: 5_000 });
+  expect(prepare).toHaveBeenCalledTimes(2);
+  expect(resolve).toHaveBeenCalledWith({ apiEndpoint: config.apiEndpoint, apiKey: 'profile-key' });
+  provideModelSources(() => [], undefined, () => 'adapter');
+  expect(profiles('dsh').map(item => item.id)).toEqual([ref.profileId]);
+  await expect(auxiliaryEndpoint(ref, profiles)).rejects.toThrow('unavailable');
 });

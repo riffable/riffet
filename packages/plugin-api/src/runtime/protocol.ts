@@ -31,7 +31,7 @@ export type ChildToHost = {
 };
 
 export interface ChildContributions {
-  modelSources: Array<{ id: string; label: string; /** The protocols it serves, or the older `backends` they stand for: at least one of the two. */ protocols?: GatewayProtocol[]; backends?: ModelSourceBackend[]; defaultEndpoint?: string; overridable?: Array<keyof SourceOverrides>; loginAction?: string; hint?: { text: string; command?: string }; usage?: boolean }>;
+  modelSources: Array<{ id: string; role?: 'source' | 'adapter'; label: string; /** The protocols it serves, or the older `backends` they stand for: at least one of the two. */ protocols?: GatewayProtocol[]; backends?: ModelSourceBackend[]; defaultEndpoint?: string; overridable?: Array<keyof SourceOverrides>; loginAction?: string; hint?: { text: string; command?: string }; usage?: boolean }>;
   taskProviders: Array<{ id: string; diagnostics: boolean }>;
   actions: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   /** The ids of the commands it handles (`Contributions.commands`); the server checks each against the manifest. */

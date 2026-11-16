@@ -5,4 +5,17 @@
     <string name="prov_add_model">添加模型</string>
     <string name="prov_search_models">搜索模型</string>
     <string name="prov_clear_key">清除 API Key</string>
+    <string name="settings_agent_settings">Agent</string>
+    <string name="settings_model_providers">模型提供商</string>
+    <string name="prov_connection_method">接入方式</string>
+    <string name="prov_gateway_type">网关类型</string>
+    <string name="prov_generic_gateway">通用</string>
+    <string name="prov_quota">额度</string>
+    <string name="prov_quota_failed">额度读取失败</string>
+    <string name="prov_unavailable">不可用</string>
+    <string name="settings_default_agent">默认 Agent</string>
+    <string name="prov_refresh_quota">刷新额度</string>
+    <string name="settings_advanced_launch_settings">高级启动配置</string>
+    <string name="settings_clear_default_model">清除默认模型</string>
+    <string name="settings_model_automatic">自动</string>
 </resources>

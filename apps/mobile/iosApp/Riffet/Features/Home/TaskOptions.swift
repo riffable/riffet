@@ -724,9 +724,10 @@ private struct ProviderModelRows: View {
     }
 }
 
-private struct ModelParameterSection: View {
+struct ModelParameterSection: View {
     let catalog: [ModelInfo]
     let selection: String?
+    var settingsControls = false
     let choose: (String) -> Void
     @State private var contextFallback: [String: String] = [:]
     @Environment(\.palette) private var palette
@@ -749,8 +750,14 @@ private struct ModelParameterSection: View {
                     }
                     .accessibilityIdentifier("modelParameter.\(param.id)")
                     if kind == .max && !isOn(param: param) && contextChoices(param: param).count > 1 {
+                        if settingsControls {
+                            settingsChoice(param, title: "Context", choices: contextChoices(param: param).map { .init(id: $0.value, title: $0.label) })
+                        } else {
                         Picker("Context" as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) { ForEach(contextChoices(param: param), id: \.value) { option in Text(verbatim: option.label).tag(option.value) } }.pickerStyle(.navigationLink)
+                        }
                     }
+                } else if settingsControls {
+                    settingsChoice(param, title: parameterTitle(param), choices: listValues(param: param).map { .init(id: $0.value, title: optionLabel(param: param, value: $0.value)) })
                 } else {
                     Picker(parameterTitle(param) as String, selection: Binding(get: { param.value }, set: { apply(param, $0) })) {
                         ForEach(listValues(param: param), id: \.value) { option in Text(verbatim: optionLabel(param: param, value: option.value)).tag(option.value) }
@@ -758,6 +765,17 @@ private struct ModelParameterSection: View {
                 }
             }
         } }
+    }
+    @ViewBuilder private func settingsChoice(_ param: ModelParam_, title: String, choices: [RiffetPickerOption<String>]) -> some View {
+        let binding = Binding(get: { param.value }, set: { apply(param, $0) })
+        if (2...3).contains(choices.count) && choices.allSatisfy({ $0.title.count <= 8 && !$0.title.contains(" ") }) {
+            LabeledContent {
+                Picker(title, selection: binding) { ForEach(choices) { option in Text(verbatim: option.title).tag(option.id) } }.pickerStyle(.segmented).labelsHidden()
+            } label: { Text(verbatim: title).riffetFont(.body).foregroundStyle(palette.fg) }
+            .accessibilityIdentifier("modelParameter.\(param.id)")
+        } else {
+            RiffetPickerRow(title: title, options: choices, selection: binding).accessibilityIdentifier("modelParameter.\(param.id)")
+        }
     }
     private func apply(_ param: ModelParam_, _ value: String) { choose(selectionWithParam(catalog: catalog, currentSelection: selection ?? resolved.model, paramId: param.id, value: value)) }
     private func parameterTitle(_ param: ModelParam_) -> String {

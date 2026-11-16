@@ -27,7 +27,11 @@ internal fun AddProviderPage(controller: SettingsController, backendId: NativeBa
     val state by controller.state.collectAsState()
     val pageBack = LocalPageBack.current
     var name by remember { mutableStateOf("") }
-    var custom by remember { mutableStateOf(false) }
+    var connection by remember { mutableStateOf(BackendProfileDraft()) }
+    val (sources, availableSources, sourcesLoaded) = rememberProviderSources(controller, backendId)
+    val choice = connectionChoice(connection, sources)
+    val custom = choice == "api"
+    val entry = sources.firstOrNull { it.id == connection.modelSource }
     var apiEndpoint by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var apiProtocol by remember { mutableStateOf(DEFAULT_API_PROTOCOL) }
@@ -40,8 +44,9 @@ internal fun AddProviderPage(controller: SettingsController, backendId: NativeBa
         if (!valid || busy) return
         val body = NativeBackendProfileSettingsUpdate(
             name = name.trim(),
-            apiEndpoint = apiEndpoint.trim().takeIf { custom && it.isNotEmpty() },
-            apiKey = apiKey.takeIf { custom && it.isNotEmpty() }?.let { PatchValue.key(it) },
+            apiEndpoint = apiEndpoint.trim().takeIf { choice != "login" && it.isNotEmpty() },
+            apiKey = apiKey.takeIf { choice != "login" && it.isNotEmpty() }?.let { PatchValue.key(it) },
+            modelSource = connection.modelSource?.let { PatchValue.key(it) },
             apiProtocol = if (backendId == NativeBackendId.ANTIGRAVITY && custom) PatchValue.key("google-generative-ai") else if (backendId == NativeBackendId.PI && custom) PatchValue.key(apiProtocol) else null,
         )
         // Leaving here skips the unsaved-changes guard, which still sees the typed values.
@@ -50,28 +55,24 @@ internal fun AddProviderPage(controller: SettingsController, backendId: NativeBa
 
     EditPage(
         stringResource(Res.string.settings_add_provider_title, backendLabel(backendId)), onBack,
-        dirty = name.isNotEmpty() || apiEndpoint.isNotEmpty() || apiKey.isNotEmpty() || custom,
+        dirty = name.isNotEmpty() || apiEndpoint.isNotEmpty() || apiKey.isNotEmpty() || choice != "login",
         busy = busy, onSave = ::save, canSave = valid,
         saveLabel = stringResource(Res.string.settings_add),
     ) {
         ControllerMessages(controller)
         SettingsGroup("") {
-            SettingsRow(stringResource(Res.string.settings_source)) {
-                SettingsSegmented(
-                    options = listOf("login" to stringResource(Res.string.settings_cli_builtin_login), "custom" to stringResource(Res.string.settings_custom_api)),
-                    value = if (custom) "custom" else "login",
-                    enabled = !busy,
-                    onSelect = { custom = it == "custom" },
-                )
+            ProviderConnectionChoices(connection, sources, !busy && sourcesLoaded, availableSources) { next ->
+                if (connectionChoice(next, sources) != choice) { apiEndpoint = ""; apiKey = "" }
+                connection = next
             }
             GroupField(value = name, onValueChange = { name = it }, label = stringResource(Res.string.settings_name), placeholder = backendLabel(backendId), enabled = !busy)
-            if (custom) {
+            if (choice != "login" && (entry == null || "apiEndpoint" in entry.overridable)) {
                 GroupField(value = apiEndpoint, onValueChange = { apiEndpoint = it }, label = stringResource(Res.string.settings_service_address), placeholder = endpointPlaceholder(backendId), enabled = !busy, mono = true)
             }
             if (custom && backendId == NativeBackendId.PI) {
                 SettingsChoiceRow("API", apiProtocols, apiProtocol, enabled = !busy) { apiProtocol = it }
             }
-            if (custom) {
+            if (choice != "login" && (entry == null || "apiKey" in entry.overridable)) {
                 GroupField(value = apiKey, onValueChange = { apiKey = it }, label = "API Key", placeholder = stringResource(Res.string.settings_api_key_placeholder), enabled = !busy, mono = true, password = true)
             }
         }

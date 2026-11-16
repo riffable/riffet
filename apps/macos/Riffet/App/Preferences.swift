@@ -47,14 +47,14 @@ enum PreferenceKey {
 enum SettingsSection: String, CaseIterable, Identifiable {
     case profile, general, appearance, window, tabs, typography, terminal, appIcon
     case input, shortcuts, notifications, files
-    case agents, auxiliaryModels, quickChat
+    case agents, modelProviders, auxiliaryModels, quickChat
     case connection, shares, channels, server, backup
     case diagnostics, about
     case cli, service, projectConfigs
 
     var id: String { rawValue }
 
-    /// The pane that shows this section. Project configuration opens as a sheet over 模型设置.
+    /// The pane that shows this section. Project configuration opens as a sheet over Agent.
     var pane: SettingsSection {
         switch self {
         case .cli, .projectConfigs: .agents
@@ -76,7 +76,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shortcuts: String(localized: "快捷键")
         case .notifications: String(localized: "通知")
         case .files: String(localized: "文件与编辑器")
-        case .agents: String(localized: "模型设置")
+        case .agents: String(localized: "Agent")
+        case .modelProviders: String(localized: "模型提供商")
         case .auxiliaryModels: String(localized: "辅助模型")
         case .quickChat: String(localized: "快速对话")
         case .connection: String(localized: "连接与设备")
@@ -104,6 +105,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .notifications: "bell"
         case .files: "folder"
         case .agents: "sparkles"
+        case .modelProviders: "network"
         case .auxiliaryModels: "wand.and.stars"
         case .quickChat: "bubble.left.and.bubble.right"
         case .connection: "laptopcomputer.and.iphone"
@@ -121,7 +123,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         switch pane {
         case .appearance, .window, .tabs, .typography, .terminal, .appIcon: .appearance
         case .input, .shortcuts, .notifications, .files: .behavior
-        case .agents, .auxiliaryModels, .quickChat: .models
+        case .agents, .modelProviders, .auxiliaryModels, .quickChat: .models
         case .connection, .shares, .channels, .server, .backup: .connection
         case .diagnostics, .about: .support
         default: .general
@@ -142,7 +144,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shortcuts: String(localized: "全局快捷键与应用内快捷键")
         case .notifications: String(localized: "系统通知与网页端提醒")
         case .files: String(localized: "编辑器、任务文件与文件访问")
-        case .agents: String(localized: "Agent、提供商与新会话默认")
+        case .agents: String(localized: "默认 Agent、审批与启动设置")
+        case .modelProviders: String(localized: "连接、模型与额度")
         case .auxiliaryModels: String(localized: "会话标题与交接摘要")
         case .quickChat: String(localized: "默认模型与归档")
         case .connection: String(localized: "服务器与已配对设备")
@@ -170,7 +173,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shortcuts: String(localized: "快捷 热键 快捷键 键盘 hotkey shortcut command", comment: "Search terms, space-separated")
         case .notifications: String(localized: "通知 提醒 权限 notification", comment: "Search terms, space-separated")
         case .files: String(localized: "编辑器 文件 路径 editor 读取", comment: "Search terms, space-separated")
-        case .agents: String(localized: "模型 提供商 网关 api key 审批 provider backend agent cursor cli 项目配置 rules skills commands", comment: "Search terms, space-separated")
+        case .agents: String(localized: "Agent 审批 启动 CLI 项目配置 rules skills commands", comment: "Search terms, space-separated")
+        case .modelProviders: String(localized: "模型 提供商 网关 API Key 额度 provider gateway quota", comment: "Search terms, space-separated")
         case .auxiliaryModels: String(localized: "标题 交接 摘要 模型 title handoff summary model", comment: "Search terms, space-separated")
         case .quickChat: String(localized: "快速会话 归档 chat quick archive retention", comment: "Search terms, space-separated")
         case .connection: String(localized: "服务器 设备 配对 配对码 二维码 地址 remote", comment: "Search terms, space-separated")
@@ -190,7 +194,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var scope: SettingsScope? {
         switch pane {
         case .general, .appearance, .window, .tabs, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
-        case .input, .files, .agents, .auxiliaryModels, .quickChat, .shares, .channels: .server
+        case .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .shares, .channels: .server
         default: nil
         }
     }
@@ -205,7 +209,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         .profile, .general,
         .appearance, .window, .tabs, .typography, .terminal, .appIcon,
         .input, .shortcuts, .notifications, .files,
-        .agents, .auxiliaryModels, .quickChat,
+        .agents, .modelProviders, .auxiliaryModels, .quickChat,
         .connection, .shares, .channels, .server, .backup,
         .diagnostics, .about,
     ]

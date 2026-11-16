@@ -361,6 +361,8 @@ export interface ResolvedSource {
 }
 
 export interface ModelSourceProvider {
+  /** A source supplies a connection; an adapter adds gateway behavior to a profile's existing API connection. Omitted means source. */
+  role?: 'source' | 'adapter';
   /** Stored in a profile's `modelSource`: `/^[a-z0-9][a-z0-9.-]{0,63}$/`, unique across integrations. */
   id: string;
   label: string;

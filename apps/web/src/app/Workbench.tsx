@@ -428,7 +428,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
 
   let content: ReactNode;
   if (pluginsOpen) {
-    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews].map(view => view.id)} onOpenModels={() => openSettingsAt('backends')} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
+    content = <PluginsPage availableViewIds={[...sidebarViews, ...sessionViews].map(view => view.id)} onOpenModels={() => openSettingsAt('providers')} commandActions={pluginCommands.actions()} rejectedKeybindings={pluginCommands.rejectedKeybindings} onOpenAppearance={() => openSettingsAt('appearance')} selectedId={pluginId} selectedViewId={pluginViewId} initialTab={pluginDetailTab} openRevision={pluginOpenRevision} projectId={project?.id} sessionId={session?.id}
       onSelect={(id, tab = 'overview') => nav.set({ pluginId: id, pluginViewId: '', pluginDetailTab: tab })}
       onClose={() => { void nav.navigate(() => nav.set({ pluginsOpen: false })); }}
       onBeforeLeaveChange={nav.registerPluginBeforeLeave}

@@ -8,7 +8,7 @@ import type { TerminalLaunchEnv } from '../terminal/service.js';
 import { validateNativeModelApiProtocol, validateNativeModelSource, validateNativeProfileEndpoint } from '../settings/index.js';
 import { piProviderModels } from './pi/provider.js';
 import { fetchGatewayModels } from './shared/gateway-models.js';
-import { modelSourceOf, modelSourceProvider, prepareSource, sourceCatalog, sourceUsage } from './shared/model-source.js';
+import { modelSourceOf, modelSourceProvider, modelSourceRole, prepareSource, sourceCatalog, sourceUsage } from './shared/model-source.js';
 import { modelFamily, parseNativeModelSelection } from './shared/model-selection.js';
 import { NativeBackendRegistry, isNativeBackendId } from './registry.js';
 import { FreshCache } from './shared/fresh-cache.js';
@@ -299,12 +299,16 @@ export class BackendCatalog {
   /**
    * Profiles that point at a gateway of their own, credentials included. Server-side only.
    *
-   * The title service consumes explicit HTTP gateways; CLI-managed model sources use their own
-   * catalog and authentication protocols and are selected by the agent model picker instead.
+   * Explicit API connections remain eligible when a gateway adapter interprets their address.
+   * Sources that supply another connection or credential remain confined to the agent picker.
    */
   gatewayProfiles(backendId: NativeBackendId): NativeBackendProfileConfig[] {
     return this.profiles(this.registry.require(backendId))
-      .filter(profile => Boolean(str(profile.config.apiEndpoint)) && !modelSourceOf(profile.config));
+      .filter(profile => {
+        if (!str(profile.config.apiEndpoint)) return false;
+        const source = modelSourceOf(profile.config);
+        return !source || modelSourceRole(source) === 'adapter' && Boolean(str(profile.config.apiKey));
+      });
   }
 
   profileSettings(backendId: NativeBackendId): NativeBackendProfilesResponse {
@@ -562,7 +566,15 @@ export class BackendCatalog {
     const normalize = profile ? modelNormalizer(driver, profile) : (id: string) => id;
     // A blank key means "reuse what is already saved" so re-fetching does not force a retype.
     const storedConfig = input.profileId ? this.options.profiles?.getConfig(backendId, input.profileId) : undefined;
-    const stored = input.apiKey === undefined && input.modelSource === modelSourceOf(storedConfig ?? {})
+    const storedSource = modelSourceOf(storedConfig ?? {});
+    const storedApiConnection = !storedSource || modelSourceRole(storedSource) === 'adapter';
+    const targetApiConnection = !input.modelSource || Boolean(modelSourceProvider(input.modelSource)) && modelSourceRole(input.modelSource) === 'adapter';
+    // Changing a gateway adapter keeps the same connection. A type change must not forward its key
+    // to a different address or to a source that supplies its own connection/credentials.
+    const sameConnection = Boolean(input.apiEndpoint?.trim())
+      && input.apiEndpoint!.trim() === str(storedConfig?.apiEndpoint)?.trim()
+      && storedApiConnection && targetApiConnection;
+    const stored = input.apiKey === undefined && (input.modelSource === storedSource || sameConnection)
       ? str(storedConfig?.apiKey)
       : undefined;
     const apiKey = input.apiKey?.trim() || stored;

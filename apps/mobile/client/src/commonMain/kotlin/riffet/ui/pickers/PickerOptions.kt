@@ -489,3 +489,11 @@ fun selectionWithParam(
 
 /** Switching models keeps nothing from the previous model: its options may not even exist. */
 fun selectionForModel(catalog: List<ModelInfo>, model: String): String = catalogSelection(catalog, model)
+
+/** Fixing the inherited model as a default keeps its parameters; another model starts with its own. */
+fun selectionForDefaultModel(catalog: List<ModelInfo>, currentSelection: String?, model: String): String? {
+    if (model.isEmpty()) return null
+    val inherited = currentSelection.orEmpty()
+    return if (inherited.isNotBlank() && resolveModelSelection(catalog, inherited).model == model) inherited
+    else selectionForModel(catalog, model)
+}

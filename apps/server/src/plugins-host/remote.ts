@@ -130,6 +130,7 @@ function describedByChild(raw: unknown): ChildContributions {
     if (!isRecord(item) || !text(item.id, 64) || !text(item.label, 200) || (item.protocols === undefined && item.backends === undefined)
       || !optional(item.protocols, value => Array.isArray(value) && value.length <= 8 && value.every(protocol => typeof protocol === 'string' && PROTOCOL.test(protocol)))
       || !optional(item.backends, value => Array.isArray(value) && value.every(backend => backend === 'claude' || backend === 'codex'))
+      || !optional(item.role, value => value === 'source' || value === 'adapter')
       || !optional(item.defaultEndpoint, httpUrl) || !optional(item.overridable, value => Array.isArray(value) && value.every(key => key === 'apiEndpoint' || key === 'apiKey'))
       || !optional(item.loginAction, value => text(value, 64)) || !optional(item.hint, hint)
       || !optional(item.usage, value => typeof value === 'boolean')) throw malformed('a model source');
@@ -258,6 +259,7 @@ function commandResultFromChild(raw: unknown): PluginCommandResult {
 }
 
 class RemoteModelSource implements ModelSourceProvider {
+  readonly role?: 'source' | 'adapter';
   readonly id: string;
   readonly label: string;
   readonly protocols?: readonly GatewayProtocol[];
@@ -272,6 +274,7 @@ class RemoteModelSource implements ModelSourceProvider {
 
   constructor(description: ChildContributions['modelSources'][number], private readonly call: Call, private readonly addresses: SourceAddresses, private readonly service: HostService) {
     this.id = description.id; this.label = description.label;
+    if (description.role) this.role = description.role;
     if (description.defaultEndpoint && !addresses.allows(description.id, description.defaultEndpoint, {})) throw new Error(`model source ${description.id}: its default endpoint is not among the hosts it declares`);
     if (description.protocols) this.protocols = description.protocols;
     if (description.backends) this.backends = description.backends;

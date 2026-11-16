@@ -1,6 +1,76 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "清除默认模型" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear default model" } }
+      }
+    },
+    "跟随提供商" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Follow provider" } }
+      }
+    },
+    "高级启动配置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Advanced launch configuration" } }
+      }
+    },
+    "更换配置目录会切换账号与原生历史范围" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changing the configuration directory changes the account and native history scope" } }
+      }
+    },
+    "模型提供商" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Model providers" } }
+      }
+    },
+    "默认审批模式" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Default approval mode" } }
+      }
+    },
+    "CLI 默认" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "CLI default" } }
+      }
+    },
+    "已有会话保持原配置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Existing sessions keep their settings" } }
+      }
+    },
+    "启动设置" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Launch settings" } }
+      }
+    },
+    "接入方式" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connection" } }
+      }
+    },
+    "网关类型" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Gateway type" } }
+      }
+    },
+    "额度" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quota" } }
+      }
+    },
+    "刷新额度" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Refresh quota" } }
+      }
+    },
+    "额度读取失败" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not read quota" } }
+      }
+    },
     "代码高亮" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Code highlighting" } }

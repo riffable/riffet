@@ -33,23 +33,30 @@ const byId = async (registry: PluginRegistry, id: string) => (await registry.des
 describe('on-demand plugin execution', () => {
   it('discovers sources without probing and coalesces first use while respecting off', async () => {
     const detect = vi.fn(async () => true);
-    const activate = vi.fn(async () => ({ modelSources: [source('lazy-source')] }));
-    const value = custom('acme.lazy', activate, { activation: ['model-source'], defaultEnabled: 'auto', contributes: { modelSources: [{ id: 'lazy-source', title: { en: 'Lazy source' }, backends: ['codex'] }] } });
+    const activate = vi.fn(async () => ({ modelSources: [{ ...source('lazy-source'), role: 'adapter' as const, usage: async () => ({ models: {}, fetchedAt: 'now' }) }] }));
+    const value = custom('acme.lazy', activate, { activation: ['model-source'], defaultEnabled: 'auto', contributes: { modelSources: [{ id: 'lazy-source', role: 'adapter', usage: true, title: { en: 'Lazy source' }, backends: ['codex'] }] } });
     value.detect = detect;
     const fail = vi.fn(async () => { throw new Error('initialization failed'); });
     const failing = custom('acme.lazy-failure', fail, { activation: ['model-source'], contributes: { modelSources: [{ id: 'failure-source', title: { en: 'Failure source' }, protocols: ['openai-responses'] }] } });
     const registry = new PluginRegistry({ stateDir: await stateDir(), plugins: [value, failing], developmentPackages: [] });
     try {
       await registry.refresh();
-      expect(await byId(registry, 'acme.lazy')).toMatchObject({ enabled: true, active: false, activation: { state: 'idle' }, contributes: { modelSources: [{ id: 'lazy-source', protocols: ['openai-responses'] }] } });
+      expect(await byId(registry, 'acme.lazy')).toMatchObject({ enabled: true, active: false, activation: { state: 'idle' }, contributes: { modelSources: [{ id: 'lazy-source', role: 'adapter', usage: true, protocols: ['openai-responses'] }] } });
+      expect(registry.modelSourceRole('lazy-source')).toBe('adapter');
+      expect(registry.modelSourceRole('failure-source')).toBe('source');
+      expect(registry.modelSourceRole('unknown-source')).toBeUndefined();
       expect(detect).not.toHaveBeenCalled(); expect(activate).not.toHaveBeenCalled();
       await Promise.all([1, 2, 3].map(() => registry.ensureContribution('model-source', 'lazy-source')));
       expect(detect).toHaveBeenCalledTimes(1); expect(activate).toHaveBeenCalledTimes(1);
+      expect((await byId(registry, 'acme.lazy')).contributes.modelSources?.[0]).toMatchObject({ role: 'adapter', usage: true });
       const rejected = await Promise.allSettled([1, 2, 3].map(() => registry.ensureContribution('model-source', 'failure-source')));
       expect(rejected.every(result => result.status === 'rejected')).toBe(true); expect(fail).toHaveBeenCalledTimes(1);
       await expect(registry.ensureContribution('model-source', 'failure-source')).rejects.toMatchObject({ code: 'PLUGIN_ACTIVATION_FAILED' });
       expect(fail).toHaveBeenCalledTimes(2);
       await registry.update('acme.lazy', { enablement: 'off' });
+      expect(await byId(registry, 'acme.lazy')).toMatchObject({ enabled: false, contributes: { modelSources: [{ id: 'lazy-source', role: 'adapter', usage: true }] } });
+      expect(registry.modelSources().some(source => source.id === 'lazy-source')).toBe(false);
+      expect(registry.modelSourceRole('lazy-source')).toBe('adapter');
       await expect(registry.ensureContribution('model-source', 'lazy-source')).rejects.toMatchObject({ code: 'INTEGRATION_DISABLED' });
     } finally { await registry.close(); }
   });
@@ -853,16 +860,17 @@ describe('plugin manifests', () => {
     const bad: Array<[string, unknown]> = [
       ['acme.b1', { views: [view('other.plugin/x')] }],
       ['acme.b4', { views: [view('acme.b4/x'), view('acme.b4/x')] }],
+      ['acme.b5', { views: [view('acme.b5/x', { settingsCategory: 'unknown' })] }],
     ];
     const registry = new PluginRegistry({ stateDir: await stateDir(), plugins: [
-      custom('acme.good', () => ({}), { defaultEnabled: false, version: '1.2.3', title: { 'zh-Hans': '画布', en: 'Canvas' }, contributes: { views: [view('acme.good/flow', { locations: ['session-view'], defaultLocation: 'session-view' }) as never] } }),
+      custom('acme.good', () => ({}), { defaultEnabled: false, version: '1.2.3', title: { 'zh-Hans': '画布', en: 'Canvas' }, contributes: { views: [view('acme.good/flow', { locations: ['session-view', 'settings'], defaultLocation: 'session-view', settingsCategory: 'providers' }) as never] } }),
       ...bad.map(([id, contributes]) => custom(id as PluginManifest['id'], () => ({}), { contributes: contributes as never })),
     ] });
     await registry.refresh();
-    expect(await byId(registry, 'acme.good')).toMatchObject({ enabled: false, source: 'builtin', version: '1.2.3', title: { en: 'Canvas' }, declared: { views: [{ id: 'acme.good/flow' }] } });
+    expect(await byId(registry, 'acme.good')).toMatchObject({ enabled: false, source: 'builtin', version: '1.2.3', title: { en: 'Canvas' }, declared: { views: [{ id: 'acme.good/flow', settingsCategory: 'providers' }] } });
     expect(registry.modelSources()).toEqual([]);
     const reasons = (await registry.descriptors()).filter(item => item.id !== 'acme.good').map(item => item.status?.message ?? '');
-    expect(reasons).toEqual([expect.stringContaining('acme.b1/<name>'), expect.stringContaining('declared twice')]);
+    expect(reasons).toEqual([expect.stringContaining('acme.b1/<name>'), expect.stringContaining('declared twice'), expect.stringContaining('settingsCategory must be agent or providers')]);
   });
 
   it('loads a trusted development package without letting it take a built-in id, and serves only its allowed files from inside it', async () => {

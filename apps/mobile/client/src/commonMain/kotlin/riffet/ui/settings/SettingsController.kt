@@ -27,6 +27,8 @@ import riffet.shared.RiffetUnauthenticatedException
 import riffet.shared.backendCatalog
 import riffet.shared.backendProfiles
 import riffet.shared.backends
+import riffet.shared.plugins
+import riffet.shared.backendUsage
 import riffet.shared.capabilities
 import riffet.shared.createBackendProfile
 import riffet.i18n.L10n
@@ -60,6 +62,9 @@ data class BackendProfileDraft(
     val modelContextWindows: Map<String, Long> = emptyMap(),
     /** Wire API a custom pi provider speaks; absent keeps the backend's own default. */
     val apiProtocol: String? = null,
+    val modelSource: String? = null,
+    /** Editor-only selection, including an API whose address has not been typed yet. */
+    val connectionMethod: String? = null,
     val apiKeyDraft: String = "",
     val clearApiKey: Boolean = false,
 )
@@ -77,6 +82,7 @@ fun editableDraft(profile: NativeBackendProfileSettings): BackendProfileDraft = 
     modelInputModalities = profile.modelInputModalities.orEmpty(),
     modelContextWindows = profile.modelContextWindows.orEmpty(),
     apiProtocol = profile.apiProtocol,
+    modelSource = profile.modelSource,
 )
 
 /** `null` and `[]` are different selections: one is the whole catalog, the other is nothing. */
@@ -139,11 +145,12 @@ fun backendProfilePatch(
             PatchValue.contextWindows(draft.modelContextWindows.ifEmpty { null })
         },
         apiProtocol = if (draft.apiProtocol != baseline.apiProtocol) PatchValue.key(draft.apiProtocol) else null,
+        modelSource = if (draft.modelSource != baseline.modelSource) PatchValue.key(draft.modelSource) else null,
     ).also {
         changed = changed ||
             it.name != null || it.executable != null || it.configDir != null || it.sourceDir != null ||
             it.apiEndpoint != null || it.agentEndpoint != null || it.defaultModel != null ||
-            it.disableAutoUpdate != null || it.apiProtocol != null
+            it.disableAutoUpdate != null || it.apiProtocol != null || it.modelSource != null
     }
     if (draft.apiKeyDraft.isNotEmpty() || draft.clearApiKey) changed = true
     if (!changed) return null
@@ -157,6 +164,10 @@ fun backendProfilePatch(
         },
     )
 }
+
+/** Provider-specific model parameters never move to another provider or survive its removal. */
+fun selectDefaultProfile(current: NativeBackendDefaults?, profileId: String?): NativeBackendDefaults =
+    (current ?: NativeBackendDefaults()).copy(profileId = profileId, model = current?.model?.takeIf { profileId != null && current.profileId == profileId })
 
 /** Everything the settings surface reads from the server, as one snapshot. */
 data class SettingsState(
@@ -475,6 +486,19 @@ class SettingsController(
         api.backendCatalog(backendId, profileId = profileId, projectId = projectId, allModels = true)
     }
 
+    /** Launch defaults use the selected provider's enabled catalog without requiring a project. */
+    suspend fun launchCatalog(backendId: NativeBackendId, profileId: String): Result<NativeBackendCatalogEntry> = settingsResult {
+        api.backendCatalog(backendId, profileId = profileId, allModels = false, global = true)
+    }
+
+    suspend fun providerPlugins(): Result<List<riffet.shared.PluginDescriptor>> = settingsResult {
+        api.plugins()
+    }
+
+    suspend fun usage(backendId: NativeBackendId, profileId: String): Result<riffet.contracts.NativeBackendUsage> = settingsResult {
+        api.backendUsage(backendId, profileId = profileId, global = true)
+    }
+
     /** The default provider's options do not require a project or a model catalog. */
     suspend fun backendCapabilities(backendId: NativeBackendId): Result<NativeBackendCapabilities> = settingsResult {
         api.backends().firstOrNull { it.backendId == backendId }?.capabilities
@@ -489,6 +513,7 @@ class SettingsController(
         profileId: String?,
         apiProtocol: String? = null,
         clearApiKey: Boolean = false,
+        modelSource: String? = null,
     ): Result<List<ModelInfo>> = settingsResult {
         api.probeBackendModels(
             backendId,
@@ -497,6 +522,7 @@ class SettingsController(
                 apiKey = if (clearApiKey) "" else apiKey.takeIf { it.isNotEmpty() },
                 profileId = profileId,
                 apiProtocol = apiProtocol,
+                modelSource = modelSource,
             ),
         )
     }

@@ -360,11 +360,11 @@ describe('running an installed package', () => {
 
   it('takes the protocols a source serves in place of backends, and lets through only the endpoints that pass the same checks as the older fields', async () => {
     const { registry: reg } = await registry();
-    const served = entry('', "host.id + '.gw'").replace("backends: ['codex']", "protocols: ['openai-responses', 'x-custom']")
+    const served = entry('', "host.id + '.gw'").replace("backends: ['codex']", "role: 'adapter', protocols: ['openai-responses', 'x-custom']")
       .replace(/resolve: overrides => .*?, catalog:/s, "resolve: () => ({ endpoints: { 'openai-responses': { baseUrl: 'https://gw.example/v1', headers: { 'x-a': '1', 'bad name': '2' } }, 'x-custom': { baseUrl: 'file:///etc/passwd' }, BAD: { baseUrl: 'https://x.example' } }, credential: { kind: 'static', key: 'k' } }), catalog:");
     await install(reg, pack({ 'riffet-plugin.json': manifest('acme.gw', '1.0.0', { capabilities: ['models.provide'] }), 'server/index.mjs': served }));
     const [source] = reg.modelSources();
-    expect(source).toMatchObject({ id: 'acme.gw.gw', protocols: ['openai-responses', 'x-custom'] });
+    expect(source).toMatchObject({ id: 'acme.gw.gw', role: 'adapter', protocols: ['openai-responses', 'x-custom'] });
     expect(source!.backends).toBeUndefined();
     await source!.prepare!({});
     expect(source!.resolve({})).toEqual({ endpoints: { 'openai-responses': { baseUrl: 'https://gw.example/v1', headers: { 'x-a': '1' } } }, credential: { kind: 'static', key: 'k' } });

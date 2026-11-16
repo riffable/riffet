@@ -43,6 +43,8 @@ export interface ViewDeclaration {
   icon?: { svg?: string; sfSymbol?: string };
   locations: ViewLocation[];
   defaultLocation?: ViewLocation;
+  /** Which Agent settings entry links this view; absent keeps it reachable from both categories. */
+  settingsCategory?: 'agent' | 'providers';
   clients: PluginClient[];
   instances: ViewInstancing;
   when?: Condition;
@@ -138,7 +140,7 @@ export const AGENT_ICON_ROUTE = (agentId: string): string => `/api/agent-icons/$
 
 export interface PluginDeclarations {
   /** Discovery metadata remains visible while the provider is disabled; it grants no capability. */
-  modelSources?: Array<{ id: string; title: LocalizedText; protocols?: string[]; backends?: Array<'claude' | 'codex'>; defaultEndpoint?: string; overridable?: Array<'apiEndpoint' | 'apiKey'>; loginAction?: string; hint?: { text: string; command?: string }; hosts?: string[] }>;
+  modelSources?: Array<{ id: string; role?: 'source' | 'adapter'; usage?: boolean; title: LocalizedText; protocols?: string[]; backends?: Array<'claude' | 'codex'>; defaultEndpoint?: string; overridable?: Array<'apiEndpoint' | 'apiKey'>; loginAction?: string; hint?: { text: string; command?: string }; hosts?: string[] }>;
   sharePublisher?: { title: LocalizedText };
   actions?: Array<{ id: string; label: string; kind: 'run' | 'device-flow' }>;
   views?: ViewDeclaration[];

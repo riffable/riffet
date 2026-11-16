@@ -147,9 +147,17 @@ extension PluginDescriptor {
 /// The one-line summary under a provider's name in the list: where it signs in, and the model
 /// count only when it offers a subset.
 func providerSummary(_ profile: NativeBackendProfileSettings, plugins: [PluginDescriptor]) -> String {
-    let place = profile.modelSource.map { modelSourceTitle($0, plugins: plugins) }
-        ?? profile.apiEndpoint.flatMap { $0.isEmpty ? nil : displayEndpoint($0) }
-        ?? String(localized: "CLI 登录")
+    let source = profile.modelSource.flatMap { id in
+        plugins.lazy.compactMap { $0.contributes.modelSources.first { $0.id == id } }.first
+    }
+    let endpoint = profile.apiEndpoint.flatMap { $0.isEmpty ? nil : displayEndpoint($0) }
+    let place: String
+    if source?.role == "adapter" {
+        place = [source?.label, endpoint].compactMap { $0 }.joined(separator: " · ")
+    } else {
+        place = profile.modelSource.map { modelSourceTitle($0, plugins: plugins) }
+            ?? endpoint ?? String(localized: "CLI 登录")
+    }
     guard let models = profile.enabledModels else { return place }
     return "\(place) · \(String(localized: "\(models.count) 个模型"))"
 }

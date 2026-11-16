@@ -129,7 +129,7 @@ export class ChatBackendAdapter implements NativeBackendDriver {
   constructor(private readonly options: ChatBackendOptions) {}
 
   private async endpoint(model: AuxiliaryModelRef, discussion: boolean, signal?: AbortSignal): Promise<GatewayEndpoint> {
-    if (!discussion) return auxiliaryEndpoint(model, this.options.gatewayProfiles);
+    if (!discussion) return auxiliaryEndpoint(model, this.options.gatewayProfiles, signal);
     const profile = this.options.modelProfile?.(model.backendId, model.profileId)
       ?? this.options.gatewayProfiles(model.backendId).find(profile => profile.id === model.profileId);
     if (!profile) throw new AppError('DISCUSSION_PROVIDER_UNAVAILABLE', 'The model provider is unavailable for side chats', 409);
@@ -296,7 +296,7 @@ export class ChatBackendAdapter implements NativeBackendDriver {
     const model = chosen;
     try {
       if (!model) throw new Error('No model is available; add a profile with an API endpoint first');
-      const endpoint = inheritedEndpoint ?? auxiliaryEndpoint(model, this.options.gatewayProfiles);
+      const endpoint = inheritedEndpoint ?? await auxiliaryEndpoint(model, this.options.gatewayProfiles, live.abort.signal);
       result = await streamChat({
         ...endpoint, messages, maxOutputTokens: MAX_OUTPUT_TOKENS, idleTimeoutMs: IDLE_TIMEOUT_MS, signal: live.abort.signal,
         system: summary ? `${system}\n\n<earlier_conversation>\n${summary}\n</earlier_conversation>` : system,
@@ -403,7 +403,7 @@ export class ChatBackendAdapter implements NativeBackendDriver {
       if (effort && effort !== 'default' && !gatewayEfforts(gatewayProtocol(ref.backendId)!).includes(effort as ChatEffort)) throw new AppError('INVALID_MODEL_PARAMETER', 'Unsupported reasoning effort');
       await this.endpoint(ref, true);
       ref.search = false;
-    } else auxiliaryEndpoint(ref, this.options.gatewayProfiles);
+    } else await auxiliaryEndpoint(ref, this.options.gatewayProfiles);
     return { ...mode, model: chatSelection(ref) };
   }
 

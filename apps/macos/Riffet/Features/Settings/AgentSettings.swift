@@ -1,12 +1,10 @@
 import SwiftUI
 import RiffetKit
 
-/// One Agent at a time: its providers and new-session defaults, then links to the project
-/// configuration and to whatever its plugin adds. Every Agent has the same layout; an Agent whose
-/// plugin configures it (`PluginAgentRegistry`) swaps in the plugin's providers and links. Saving
-/// happens in sheets or on change, never with a page button. `section=projectConfigs` opens the
-/// project configuration editor over this pane.
+/// Agent defaults and launch settings, or the selected Agent's model providers.
+/// Both panes keep the existing profile identities and their distinct launch configuration.
 struct AgentSettings: View {
+    var providersOnly = false
     @Environment(AppModel.self) private var model
     @Environment(\.palette) private var palette
     @AppStorage(PreferenceKey.settingsSection) private var sectionID = SettingsSection.agents.rawValue
@@ -29,8 +27,12 @@ struct AgentSettings: View {
     @State private var trusting = false
     @State private var editor: ProviderSelection?
 
-    /// The models offered for an Agent whose default model is chosen here.
+    /// The default provider's catalog; a different provider never reuses its model parameters.
     @State private var modelCatalog: [ModelInfo] = []
+    @State private var modelCatalogKey: String?
+    @State private var modelCatalogDefault: String?
+    @State private var modelCatalogLoading = false
+    @State private var modelCatalogError: String?
     /// The model just picked, shown until the saved settings carry it.
     @State private var pendingModel: String?
 
@@ -64,28 +66,39 @@ struct AgentSettings: View {
         let settings = workbench.settings
         let renderer = renderer(workbench)
         return Form {
-            Section {
-                AgentSegments(backends: agents(workbench), selection: backend, defaultBackend: settings?.defaultAgent) { backend = $0 }
+            if !providersOnly {
+                Section {
+                    Picker("默认 Agent", selection: defaultAgentBinding(workbench, settings: settings)) {
+                        ForEach(agents(workbench), id: \.self) { Text(backendTitle($0)).tag($0) }
+                    }
+                    .formPicker()
+                    .disabled(saving)
+                }
             }
 
-            providerSection(workbench, settings: settings, renderer: renderer)
-            newSessionSection(workbench, settings: settings, renderer: renderer)
-
             Section {
-                renderer?.links?(workbench)
-                SettingsNavigationRow(title: String(localized: "项目配置")) { showProjectConfigs = true }
+                agentTabs(workbench)
+            }
+
+            if providersOnly {
+                providerSection(workbench, settings: settings, renderer: renderer)
+            } else {
+                startupSection(workbench, settings: settings)
+                advancedLaunchSection(workbench)
+                Section {
+                    renderer?.links?(workbench)
+                    SettingsNavigationRow(title: String(localized: "项目配置")) { showProjectConfigs = true }
+                }
             }
             SettingsScopeFooter()
         }
         .riffetForm()
         .task { await bootstrap(workbench) }
-        .task(id: backend) {
-            await loadProfiles(workbench)
-            await loadModelCatalog(workbench)
-        }
+        .task(id: backend) { await loadProfiles(workbench) }
+        .task(id: modelCatalogScope(workbench)) { await loadModelCatalog(workbench) }
         .task(id: backend) { await loadObservation(workbench) }
         .onReceive(NotificationCenter.default.publisher(for: .settingsSectionDidShow)) { note in
-            guard note.object as? String == SettingsSection.agents.rawValue,
+            guard note.object as? String == (providersOnly ? SettingsSection.modelProviders.rawValue : SettingsSection.agents.rawValue),
                   Date.now.timeIntervalSince(refreshedAt) > 30 else { return }
             Task { await refresh(workbench) }
         }
@@ -96,7 +109,8 @@ struct AgentSettings: View {
                     backend: builtin,
                     profile: selection.profile,
                     plugins: plugins,
-                    isDefault: selection.profile.map { defaultProfileId(settings) == $0.id } ?? false
+                    isDefault: selection.profile.map { defaultProfileId(settings) == $0.id } ?? false,
+                    launchSettings: !providersOnly
                 ) {
                     Task { await reloadAfterEditor(workbench) }
                 }
@@ -121,7 +135,9 @@ struct AgentSettings: View {
     @ViewBuilder
     private func providerSection(_ workbench: Workbench, settings: AppSettings?, renderer: PluginAgentRenderer?) -> some View {
         if let providers = renderer?.providers {
-            SettingsBlock("提供商") { providers(workbench) }
+            SettingsBlock("提供商") {
+                providers(workbench)
+            }
         } else if builtinBackend(backend) != nil {
             SettingsBlock("提供商") {
                 if let loadError {
@@ -178,25 +194,60 @@ struct AgentSettings: View {
         }
     }
 
-    // MARK: - New session
+    @ViewBuilder
+    private func advancedLaunchSection(_ workbench: Workbench) -> some View {
+        if builtinBackend(backend) != nil, renderer(workbench)?.providers == nil {
+            let profile = profiles.first { $0.id == defaultProfileId(workbench.settings) && backendWire($0.backendId) == backend }
+            Section {
+                SettingsNavigationRow(title: String(localized: "高级启动配置")) {
+                    if let profile { editor = ProviderSelection(id: profile.id, profile: profile) }
+                }
+                .disabled(loading || saving || profile == nil)
+                if let loadError {
+                    SettingsCallout(.danger, message: loadError, actionTitle: String(localized: "重试"), action: {
+                        Task { await loadProfiles(workbench) }
+                    })
+                }
+            }
+        }
+    }
+
+    // MARK: - Startup defaults
 
     @ViewBuilder
-    private func newSessionSection(_ workbench: Workbench, settings: AppSettings?, renderer: PluginAgentRenderer?) -> some View {
-        SettingsBlock("新会话") {
-            Picker("默认 Agent", selection: defaultAgentBinding(workbench, settings: settings)) {
-                ForEach(agents(workbench), id: \.self) { Text(backendTitle($0)).tag($0) }
+    private func startupSection(_ workbench: Workbench, settings: AppSettings?) -> some View {
+        SettingsBlock("启动设置") {
+            if !profiles.isEmpty {
+                Picker("默认提供商", selection: Binding(
+                    get: { defaultProfileId(settings) ?? profiles.first?.id ?? "" },
+                    set: { id in
+                        if let profile = profiles.first(where: { $0.id == id }) {
+                            Task { await makeDefault(workbench, profile: profile) }
+                        }
+                    }
+                )) {
+                    ForEach(profiles, id: \.id) { Text($0.name).tag($0.id) }
+                }
+                .formPicker()
+                .disabled(loading || saving)
             }
-            .formPicker()
-            .disabled(saving)
+
+            SettingsRow(String(localized: "默认模型")) {
+                if modelCatalogLoading && currentModelCatalog(workbench).isEmpty {
+                    Spinner(size: .small)
+                } else {
+                    modelPicker(catalog: currentModelCatalog(workbench), selection: modelBinding(workbench, settings: settings), explicitSelection: pendingModel ?? settings?.defaultsFor(agent: backend)?.model, disabled: saving || loading || modelCatalogLoading)
+                }
+            }
+            modelParameterRows(workbench, settings: settings)
+            if let modelCatalogError {
+                SettingsCallout(.danger, message: modelCatalogError, actionTitle: String(localized: "重试"), action: {
+                    Task { await loadModelCatalog(workbench) }
+                })
+            }
 
             approvalRow(workbench, settings: settings)
             observationRow(workbench)
-
-            if renderer?.choosesDefaultModelHere == true {
-                SettingsRow(String(localized: "\(backendTitle(backend)) 默认模型")) {
-                    modelPicker(workbench, catalog: modelCatalog, selection: modelBinding(workbench, settings: settings), disabled: saving)
-                }
-            }
 
             if let error {
                 SettingsCallout(.danger, message: error)
@@ -219,13 +270,9 @@ struct AgentSettings: View {
             }
             .formPicker()
             .disabled(saving)
-        } else {
+        } else if entry == nil {
             SettingsRow(title) {
-                if entry != nil {
-                    Text("不支持")
-                        .font(.riffet(size: S(12.5)))
-                        .foregroundStyle(palette.fg3)
-                } else if backendsLoading {
+                if backendsLoading {
                     Spinner(size: .small)
                 } else {
                     HStack(spacing: Space.sm) {
@@ -282,23 +329,114 @@ struct AgentSettings: View {
         }
     }
 
+    private func agentTabs(_ workbench: Workbench) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal) {
+                HStack(spacing: Space.lg) {
+                    ForEach(agents(workbench), id: \.self) { id in
+                        UnderlineTab(title: backendTitle(id), selected: backend == id, style: DisplayPreferences.shared.style, size: RiffetTextSize.sm.size) {
+                            backend = id
+                        }
+                        .id(id)
+                        .accessibilityAddTraits(backend == id ? .isSelected : [])
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+            .frame(height: S(RiffetTextSize.sm.lineHeight) + Space.md)
+            .onAppear { proxy.scrollTo(backend, anchor: .center) }
+            .onChange(of: backend) { _, id in proxy.scrollTo(id, anchor: .center) }
+        }
+        .disabled(saving)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("配置的 Agent")
+    }
+
     // MARK: - Model picker
 
-    @ViewBuilder
-    private func modelPicker(_ workbench: Workbench, catalog: [ModelInfo], selection: Binding<String>, disabled: Bool) -> some View {
-        HStack {
-            if catalog.isEmpty {
-                CommittedModelField(saved: selection.wrappedValue) { selection.wrappedValue = $0 }
-                    .disabled(disabled)
-            } else {
-                if !selection.wrappedValue.isEmpty {
-                    Button("清除") { selection.wrappedValue = "" }.disabled(disabled)
-                }
-                ModelControls(catalog: catalog, selection: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue, scope: backend, refresh: { await loadModelCatalog(workbench, reload: true) }) {
-                    selection.wrappedValue = $0
-                }
-                .disabled(disabled)
+    private func modelPicker(catalog: [ModelInfo], selection: Binding<String>, explicitSelection: String?, disabled: Bool) -> some View {
+        let inherited = selection.wrappedValue
+        let inheritedModel = resolveModelSelection(catalog: catalog, selection: inherited).model
+        let selected = explicitSelection.flatMap { $0.isEmpty ? nil : resolveModelSelection(catalog: catalog, selection: $0).model } ?? ""
+        return Picker("默认模型", selection: Binding(
+            get: { selected },
+            set: { id in
+                selection.wrappedValue = id.isEmpty ? "" : id == inheritedModel && !inherited.isEmpty ? inherited : selectionForModel(catalog: catalog, model: id)
             }
+        )) {
+            Text("自动").tag("")
+            ForEach(catalog, id: \.value) { item in
+                Text(cleanLabel(value: item.name)).tag(item.value)
+            }
+            if !selected.isEmpty, !catalog.contains(where: { $0.value == selected }) {
+                Text(selected).tag(selected)
+            }
+        }
+        .labelsHidden()
+        .formPicker()
+        .disabled(disabled)
+    }
+
+    @ViewBuilder
+    private func modelParameterRows(_ workbench: Workbench, settings: AppSettings?) -> some View {
+        let catalog = currentModelCatalog(workbench)
+        let selection = modelBinding(workbench, settings: settings)
+        let parsed = resolveModelSelection(catalog: catalog, selection: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue)
+        let params = catalogParams(catalog: catalog, model: parsed.model, overrides: parsed.params)
+        ForEach(params, id: \.id) { param in
+            let title = paramTitle(param: param)
+            let value = Binding(
+                get: { param.value },
+                set: { value in
+                    selection.wrappedValue = selectionWithParam(catalog: catalog, currentSelection: selection.wrappedValue.isEmpty ? parsed.model : selection.wrappedValue, paramId: param.id, value: value)
+                }
+            )
+            SettingsRow(title) {
+                if paramKind(param: param) == .fast || paramKind(param: param) == .toggle {
+                    HStack(spacing: Space.sm) {
+                        if param.options.contains(where: { $0.value == "default" }) {
+                            Button("自动") { value.wrappedValue = "default" }
+                                .buttonStyle(.borderless)
+                                .font(RiffetFont.caption)
+                                .foregroundStyle(param.value == "default" ? palette.fg : palette.fg3)
+                                .accessibilityAddTraits(param.value == "default" ? .isSelected : [])
+                        }
+                        Toggle(title, isOn: Binding(
+                            get: { isOn(param: param) },
+                            set: { value.wrappedValue = toggledValue(param: param, on: $0, fallback: nil) }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
+                } else if compactParameter(param) {
+                    FormSegmented(LocalizedStringResource(stringLiteral: title), selection: value) {
+                        ForEach(listValues(param: param), id: \.value) { option in
+                            Text(optionLabel(param: param, value: option.value)).tag(option.value)
+                        }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                } else {
+                    Picker(title, selection: value) {
+                        ForEach(listValues(param: param), id: \.value) { option in
+                            Text(optionLabel(param: param, value: option.value)).tag(option.value)
+                        }
+                    }
+                    .labelsHidden()
+                    .formPicker()
+                }
+            }
+            .disabled(saving || loading || modelCatalogLoading)
+        }
+    }
+
+    /// Only short, fixed choices fit beside a settings-row title.
+    private func compactParameter(_ param: ModelParam_) -> Bool {
+        (2...4).contains(param.options.count) && param.options.allSatisfy { option in
+            let label = optionLabel(param: param, value: option.value)
+            let hasHan = label.unicodeScalars.contains { (0x3400...0x9fff).contains(Int($0.value)) }
+            return hasHan ? label.count <= 4 : label.count <= 10 && !label.contains(where: \.isWhitespace)
         }
     }
 
@@ -312,7 +450,6 @@ struct AgentSettings: View {
         await workbench.loadBackends()
         if backend.isEmpty { backend = agents(workbench).first ?? "" }
         backendsLoading = false
-        await loadModelCatalog(workbench)
         await sources
     }
 
@@ -375,26 +512,41 @@ struct AgentSettings: View {
             workbench.store.applySavedSettings(settings: latest)
         }
         await backendsLoaded
-        await loadModelCatalog(workbench)
         await profilesLoaded
         await pluginsLoaded
+        await loadModelCatalog(workbench)
     }
 
-    /// The model list of an Agent whose default model is chosen on this pane: the backends list's,
-    /// else its catalog read on its own. An Agent with a provider list has no use for one here.
-    private func loadModelCatalog(_ workbench: Workbench, reload: Bool = false) async {
-        guard renderer(workbench)?.choosesDefaultModelHere == true else {
-            if !modelCatalog.isEmpty { modelCatalog = [] }
-            return
+    private func modelCatalogScope(_ workbench: Workbench) -> String {
+        "\(backend)#\(defaultProfileId(workbench.settings) ?? "")"
+    }
+
+    private func currentModelCatalog(_ workbench: Workbench) -> [ModelInfo] {
+        modelCatalogKey == modelCatalogScope(workbench) ? modelCatalog : []
+    }
+
+    /// Read the same default provider the next session will use, including its parameter catalog.
+    private func loadModelCatalog(_ workbench: Workbench) async {
+        guard !providersOnly, !backend.isEmpty, let api = workbench.host.api else { return }
+        let requested = modelCatalogScope(workbench)
+        if modelCatalogKey != requested {
+            modelCatalog = []
+            modelCatalogDefault = nil
+            modelCatalogKey = requested
         }
-        let requested = backend
-        if !reload, let models = workbench.backends.first(where: { $0.agent == requested })?.models, !models.isEmpty {
-            if models != modelCatalog { modelCatalog = models }
-            return
+        modelCatalogLoading = true
+        modelCatalogError = nil
+        defer { if modelCatalogScope(workbench) == requested { modelCatalogLoading = false } }
+        do {
+            let entry = try await api.agentCatalog(agentId: backend, profileId: defaultProfileId(workbench.settings), projectId: nil, allModels: false, global: true)
+            guard !Task.isCancelled, modelCatalogScope(workbench) == requested else { return }
+            modelCatalog = Array(entry.models)
+            modelCatalogDefault = entry.defaultModel
+            if !entry.available { modelCatalogError = entry.reason ?? String(localized: "当前不可用") }
+        } catch {
+            guard !Task.isCancelled, modelCatalogScope(workbench) == requested else { return }
+            modelCatalogError = error.riffetMessage
         }
-        let models = (try? await workbench.host.api?.agentCatalog(agentId: requested, profileId: nil, projectId: nil, allModels: true, global: true))?.models ?? []
-        guard backend == requested, !models.isEmpty, models != modelCatalog else { return }
-        modelCatalog = models
     }
 
     private func save(_ workbench: Workbench, _ body: AppSettingsUpdate) async {
@@ -413,6 +565,8 @@ struct AgentSettings: View {
 
     /// Only this Agent's default provider; the default Agent is its own setting.
     private func makeDefault(_ workbench: Workbench, profile: NativeBackendProfileSettings) async {
+        guard profile.id != defaultProfileId(workbench.settings) else { return }
+        pendingModel = nil
         var map = agentDefaults(from: workbench.settings)
         let previous = map[backend]
         // A model belongs to its provider; the mode and approval are the Agent's, as `Workbench.writeDefaults` keeps them.
@@ -433,18 +587,21 @@ struct AgentSettings: View {
     }
 
     private func modelBinding(_ workbench: Workbench, settings: AppSettings?) -> Binding<String> {
-        let saved = settings?.defaultsFor(agent: backend)?.model ?? workbench.backends.first { $0.agent == backend }?.defaultModel ?? ""
+        let profile = defaultProfileId(settings)
+        let saved = settings?.defaultsFor(agent: backend)?.model
+            ?? workbench.recentModel(agent: backend, profileId: profile)
+            ?? (modelCatalogKey == modelCatalogScope(workbench) ? modelCatalogDefault : nil) ?? ""
         let agent = backend
         return Binding(
             get: { pendingModel ?? saved },
             set: { value in
-                guard value != (pendingModel ?? saved) else { return }
+                guard value != (pendingModel ?? settings?.defaultsFor(agent: agent)?.model) else { return }
                 pendingModel = value
                 Task {
                     saving = true
                     error = nil
                     do {
-                        try await workbench.saveDefaults(agent: agent, model: value)
+                        try await workbench.saveDefaults(agent: agent, profileId: profile, model: value)
                         workbench.store.invalidateBackendCatalog()
                         await workbench.loadBackends()
                     } catch {
@@ -477,7 +634,9 @@ struct AgentSettings: View {
     }
 
     private func defaultProfileId(_ settings: AppSettings?) -> String? {
-        settings?.defaultsFor(agent: backend)?.profileId ?? profiles.first { $0.isDefault?.boolValue == true }?.id
+        settings?.defaultsFor(agent: backend)?.profileId
+            ?? profiles.first { backendWire($0.backendId) == backend && $0.isDefault?.boolValue == true }?.id
+            ?? profiles.first { backendWire($0.backendId) == backend }?.id
     }
 }
 
@@ -546,62 +705,6 @@ struct SettingsNavigationRow: View {
     }
 }
 
-/// The Agents as one segmented row with their marks. Titles drop to marks alone when the pane is
-/// too narrow for both; the tooltip keeps the name.
-private struct AgentSegments: View {
-    let backends: [String]
-    let selection: String
-    let defaultBackend: String?
-    let pick: (String) -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            segments(titled: true)
-            segments(titled: false)
-        }
-    }
-
-    private func segments(titled: Bool) -> some View {
-        HStack(spacing: 0) {
-            ForEach(backends, id: \.self) { id in
-                let on = id == selection
-                Button { pick(id) } label: {
-                    HStack(spacing: 5) {
-                        AgentIcon(id: id, size: 14, color: agentMarkColor(id, palette))
-                        if titled {
-                            Text(backendTitle(id))
-                                .lineLimit(1)
-                                .fixedSize()
-                        }
-                    }
-                    .font(.riffet(size: S(12.5), weight: on ? .medium : .regular))
-                    .foregroundStyle(on ? palette.fg : palette.fg3)
-                    .padding(.horizontal, Space.sm)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 26)
-                    .background {
-                        if on {
-                            RoundedRectangle(cornerRadius: Radius.control, style: .continuous)
-                                .fill(palette.bgElevated)
-                                .elevation(.raised)
-                                .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
-                        }
-                    }
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(id == defaultBackend ? String(localized: "\(backendTitle(id))（新会话默认）") : backendTitle(id))
-                .accessibilityLabel(backendTitle(id))
-                .accessibilityAddTraits(on ? .isSelected : [])
-            }
-        }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(palette.bgSubtle))
-        .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
-    }
-}
-
 /// The project configuration editor at a size its file list and editor need.
 private struct ProjectConfigSheet: View {
     @Environment(\.dismiss) private var dismiss
@@ -624,29 +727,5 @@ private struct ProjectConfigSheet: View {
         }
         // Within the settings window's minimum size, so the sheet never overhangs it.
         .frame(minWidth: 760, idealWidth: 900, minHeight: 520, idealHeight: 580)
-    }
-}
-
-/// A free-text model id, saved on Return or when the field loses focus rather than per keystroke.
-private struct CommittedModelField: View {
-    let saved: String
-    let commit: (String) -> Void
-    @State private var draft: String?
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        TextField("CLI 默认", text: Binding(get: { draft ?? saved }, set: { draft = $0 }))
-            .font(.riffet(size: S(13), design: .monospaced))
-            .formField()
-            .labelsHidden()
-            .focused($focused)
-            .onSubmit(send)
-            .onChange(of: focused) { _, now in if !now { send() } }
-    }
-
-    private func send() {
-        guard let value = draft?.trimmingCharacters(in: .whitespacesAndNewlines) else { return }
-        draft = nil
-        if value != saved { commit(value) }
     }
 }

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { CapabilityReport, CommandResult, ModelInfo } from '@contracts';
-import { Badge, Button, Icon, Input, SettingsGroup as Group, SettingsRow as Row, Spinner, StatusDot, isUnavailable, useMessages, usePluginHost, useProjects, type UnavailableInfo, type ViewProps } from '@riffet/plugin-web';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { CapabilityReport, CommandResult, CursorCliSettings, ModelInfo } from '@contracts';
+import { Badge, Button, Icon, Input, SettingsGroup as Group, SettingsRow as Row, Spinner, StatusDot, Switch, isUnavailable, useMessages, usePluginHost, useProjects, useSettings, type UnavailableInfo, type ViewProps } from '@riffet/plugin-web';
+import { cliSettingsPatch } from './cliSettings';
 import { catalogs } from './messages';
 import { Unavailable } from './Unavailable';
 
@@ -10,7 +11,26 @@ const cleanLabel = (value: string) => value.replace(/[​-‍﻿]/g, '').replace
 /** CLI 管理: what the Cursor CLI reports about itself, and a runner for its allow-listed commands. */
 export default function CliPage({ context }: ViewProps) {
   const m = useMessages(catalogs);
-  const { locale, notify, request, settingsPage } = usePluginHost();
+  const { locale, notify, request, settingsPage, settings: settingsService } = usePluginHost();
+  const settings = useSettings();
+  const [draft, setDraft] = useState<CursorCliSettings>(() => settings.cursorCli ?? {});
+  const baseline = useRef(settings.cursorCli);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const dirty = Object.keys(cliSettingsPatch(draft, settings.cursorCli, 'launch')).length > 0;
+  useEffect(() => {
+    if (!Object.keys(cliSettingsPatch(draft, baseline.current, 'launch')).length) setDraft(settings.cursorCli ?? {});
+    baseline.current = settings.cursorCli;
+  }, [settings.cursorCli]);
+  useEffect(() => { settingsPage.setDirty(dirty); }, [dirty, settingsPage]);
+  const saveSettings = async () => {
+    if (savingSettings || !dirty) return;
+    setSavingSettings(true);
+    try {
+      const saved = await settingsService.update({ cursorCli: cliSettingsPatch(draft, settings.cursorCli, 'launch') });
+      setDraft(saved.cursorCli ?? {});
+    } catch (reason) { notify.error(reason, m.saveIncomplete); }
+    finally { setSavingSettings(false); }
+  };
   const project = useProjects().find((item) => item.id === context.projectId);
   const quickCommands = [
     { label: m.status, operation: 'status', args: [] as string[] },
@@ -28,7 +48,7 @@ export default function CliPage({ context }: ViewProps) {
   const [args, setArgs] = useState('');
   const [output, setOutput] = useState<CommandResult & { operation: string }>();
   const [running, setRunning] = useState(false);
-  useEffect(() => { settingsPage?.setBusy(running); return () => settingsPage?.setBusy(false); }, [running, settingsPage]);
+  useEffect(() => { settingsPage?.setBusy(running || savingSettings); return () => settingsPage?.setBusy(false); }, [running, savingSettings, settingsPage]);
   const [error, setError] = useState('');
   const checked = useMemo(() => capabilities && new Intl.DateTimeFormat(locale, { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(capabilities.checkedAt)), [capabilities, locale]);
 
@@ -78,6 +98,21 @@ export default function CliPage({ context }: ViewProps) {
   return (
     <div className="flex flex-col gap-6">
       {unavailable && <Unavailable info={unavailable} />}
+      <Group title={m.launchSettings}>
+        <Row title={m.executable}>
+          <Input aria-label={m.executableLabel} disabled={savingSettings || running} className="h-8 w-64 font-mono max-md:h-11 max-md:w-full" value={draft.executable ?? ''} placeholder={m.executablePlaceholder} onChange={(event) => setDraft((current) => ({ ...current, executable: event.target.value }))} />
+        </Row>
+        <Row title={m.configDir} description={m.configDirHint}>
+          <Input aria-label={m.configDir} disabled={savingSettings || running} className="h-8 w-64 font-mono max-md:h-11 max-md:w-full" value={draft.configDir ?? ''} placeholder={m.configDirPlaceholder} onChange={(event) => setDraft((current) => ({ ...current, configDir: event.target.value }))} />
+        </Row>
+        <Row title={m.disableAutoUpdate}>
+          <Switch aria-label={m.disableAutoUpdateLabel} disabled={savingSettings || running} checked={draft.disableAutoUpdate === true} onCheckedChange={(value) => setDraft((current) => ({ ...current, disableAutoUpdate: value }))} />
+        </Row>
+      </Group>
+      <p className="text-xs text-fg-3">{m.launchNote}</p>
+      {dirty && <div className="flex justify-end">
+        <Button size="sm" variant="primary" busy={savingSettings} disabled={running} onClick={() => void saveSettings()}><Icon name="save" />{m.save}</Button>
+      </div>}
       <Group title={m.environment} action={<Button size="xs" variant="ghost" disabled={detecting} onClick={() => void detect(true)}>{detecting ? <Spinner /> : <Icon name="refresh-cw" />}{m.detectAgain}</Button>}>
         {capabilities ? <>
           <Row title={m.cliVersion}><span className="text-sm text-fg-2">{capabilities.cliVersion ?? m.unknown}</span></Row>

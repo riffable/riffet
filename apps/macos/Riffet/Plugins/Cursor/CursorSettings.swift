@@ -1,7 +1,7 @@
 import SwiftUI
 import RiffetKit
 
-/// Cursor's settings in 模型设置, drawn by the host from the `riffet.cursor/provider` and
+/// Cursor's settings in Agent and 模型提供商, drawn by the host from the `riffet.cursor/provider` and
 /// `riffet.cursor/cli` views the Cursor plugin declares. Everything Cursor-specific the settings window shows lives in this folder.
 enum CursorPlugin {
     /// The two `settings` views the Cursor plugin declares: the provider page and the CLI page.
@@ -11,7 +11,7 @@ enum CursorPlugin {
             choosesDefaultModelHere: true
         ),
         "riffet.cursor/cli": PluginAgentRenderer(
-            links: { _ in AnyView(CursorCliLink()) },
+            links: { AnyView(CursorCliLink(workbench: $0)) },
             diagnostics: { await cursorDiagnostics($0) },
             commandNeedsTerminal: cursorCommandNeedsTerminal
         ),
@@ -38,9 +38,13 @@ private struct CursorProviderRow: View {
 }
 
 private struct CursorCliLink: View {
+    let workbench: Workbench
     @State private var showCli = false
+    @State private var showLaunch = false
 
     var body: some View {
+        SettingsNavigationRow(title: String(localized: "高级启动配置")) { showLaunch = true }
+            .sheet(isPresented: $showLaunch) { CursorConnectionSheet(workbench: workbench, launchSettings: true) }
         SettingsNavigationRow(title: "Cursor CLI") { showCli = true }
             .sheet(isPresented: $showCli) { CursorCliSheet() }
     }
@@ -50,6 +54,7 @@ private struct CursorCliLink: View {
 /// editors; the connection reaches the CLI on Riffet's next start.
 struct CursorConnectionSheet: View {
     let workbench: Workbench
+    let launchSettings: Bool
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
 
@@ -61,8 +66,9 @@ struct CursorConnectionSheet: View {
     @State private var error: String?
     @State private var confirmDiscard = false
 
-    init(workbench: Workbench) {
+    init(workbench: Workbench, launchSettings: Bool = false) {
         self.workbench = workbench
+        self.launchSettings = launchSettings
         let current = CursorDraft(workbench.settings?.cursorCli)
         _draft = State(initialValue: current)
         _baseline = State(initialValue: current)
@@ -84,47 +90,51 @@ struct CursorConnectionSheet: View {
             .padding(.vertical, Space.md)
             Divider()
             Form {
-                Section {
-                    SettingsFieldRow("网关地址") {
-                        TextField("使用 Cursor 默认服务", text: gatewayBinding)
-                            .font(.riffet(size: S(13), design: .monospaced))
-                            .formField()
-                    }
-                    SettingsFieldRow("API Key") {
-                        HStack(spacing: Space.sm) {
-                            SecureField(clearKey ? String(localized: "保存后清除") : (hasKey ? String(localized: "已配置") : String(localized: "未配置")), text: $key)
+                if !launchSettings {
+                    Section {
+                        SettingsFieldRow("网关地址") {
+                            TextField("使用 Cursor 默认服务", text: gatewayBinding)
                                 .font(.riffet(size: S(13), design: .monospaced))
                                 .formField()
-                                .onChange(of: key) { _, value in if !value.isEmpty { clearKey = false } }
-                            if hasKey {
-                                Button(clearKey ? "取消清除" : "清除") {
-                                    key = ""
-                                    clearKey.toggle()
+                        }
+                        SettingsFieldRow("API Key") {
+                            HStack(spacing: Space.sm) {
+                                SecureField(clearKey ? String(localized: "保存后清除") : (hasKey ? String(localized: "已配置") : String(localized: "未配置")), text: $key)
+                                    .font(.riffet(size: S(13), design: .monospaced))
+                                    .formField()
+                                    .onChange(of: key) { _, value in if !value.isEmpty { clearKey = false } }
+                                if hasKey {
+                                    Button(clearKey ? "取消清除" : "清除") {
+                                        key = ""
+                                        clearKey.toggle()
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                SettingsBlock("高级") {
-                    SettingsFieldRow("CLI 入口") {
-                        TextField("cursor-agent", text: $draft.executable)
-                            .font(.riffet(size: S(13), design: .monospaced))
-                            .formField()
-                    }
-                    SettingsFieldRow("配置目录") {
-                        TextField("~/.cursor", text: $draft.configDir)
-                            .font(.riffet(size: S(13), design: .monospaced))
-                            .formField()
-                    }
-                    Toggle("单独设置 Agent 端点", isOn: separateBinding)
-                    if draft.separateAgent {
-                        SettingsFieldRow("Agent 端点") {
-                            TextField("使用 Cursor 默认端点", text: $draft.agentEndpoint)
+                if launchSettings {
+                    SettingsBlock("高级启动配置") {
+                        SettingsFieldRow("CLI 入口") {
+                            TextField("cursor-agent", text: $draft.executable)
                                 .font(.riffet(size: S(13), design: .monospaced))
                                 .formField()
                         }
+                        SettingsFieldRow("配置目录") {
+                            TextField("~/.cursor", text: $draft.configDir)
+                                .font(.riffet(size: S(13), design: .monospaced))
+                                .formField()
+                        }
+                        Toggle("单独设置 Agent 端点", isOn: separateBinding)
+                        if draft.separateAgent {
+                            SettingsFieldRow("Agent 端点") {
+                                TextField("使用 Cursor 默认端点", text: $draft.agentEndpoint)
+                                    .font(.riffet(size: S(13), design: .monospaced))
+                                    .formField()
+                            }
+                        }
+                        Toggle("关闭自动更新", isOn: $draft.disableAutoUpdate)
                     }
-                    Toggle("关闭自动更新", isOn: $draft.disableAutoUpdate)
                 }
                 if let error {
                     SettingsCallout(.danger, message: error)

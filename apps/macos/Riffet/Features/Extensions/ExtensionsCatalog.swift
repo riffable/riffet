@@ -298,7 +298,7 @@ struct ExtensionsCatalog: View {
         if store.sources.isEmpty {
             VStack(spacing: Space.sm) {
                 Text("暂无 Agent 配置").font(.riffet(size: S(14), weight: .medium)).foregroundStyle(palette.fg2)
-                Text("在设置的「模型设置」中配置 Agent 后查看扩展。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
+                Text("在「Agent」中配置 Agent 后查看扩展。").font(.riffet(size: S(12))).foregroundStyle(palette.fg3)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if store.rows.isEmpty {

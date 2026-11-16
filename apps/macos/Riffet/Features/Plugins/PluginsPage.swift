@@ -533,7 +533,12 @@ struct PluginsPage: View {
             }
         }
         if declared?.modelSources?.isEmpty == false || !item.contributes.modelSources.isEmpty || declared?.agentBackends?.isEmpty == false {
-            Button("模型与 Agent") { UserDefaults.standard.set(SettingsSection.agents.rawValue, forKey: PreferenceKey.settingsSection); openSettings() }
+            if declared?.agentBackends?.isEmpty == false {
+                Button("Agent") { UserDefaults.standard.set(SettingsSection.agents.rawValue, forKey: PreferenceKey.settingsSection); openSettings() }
+            }
+            if declared?.modelSources?.isEmpty == false || !item.contributes.modelSources.isEmpty {
+                Button("模型提供商") { UserDefaults.standard.set(SettingsSection.modelProviders.rawValue, forKey: PreferenceKey.settingsSection); openSettings() }
+            }
         }
         if !views.isEmpty {
             VStack(alignment: .leading, spacing: Space.sm) {

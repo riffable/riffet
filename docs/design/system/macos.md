@@ -201,12 +201,12 @@ PageScaffold(title: "定时任务", column: .document, search: $query) {
 | `Select` | `ChoiceMenu`，经 `popUpStyled` | `.formPicker()`（`Picker` 的菜单样式） |
 | 标题式 `Select` | `ChoiceMenu` 的标题外观（新增参数）：对象名用 `.barTitle`，无边框，后跟下拉箭头 | 同左 |
 | `Switch` | `Toggle` 加 `.switch`；`style.ink == .quiet` 时是墨色 | 同左；分组列表里用 `.controlSize(.mini)` |
-| `UnderlineTabs` | 按 `style.tabs` 画的页签（§3.2） | 不用 |
+| `UnderlineTabs` | 按 `style.tabs` 画的页签（§3.2） | Agent 与模型提供商页的对象导航，横向滚动 |
 
 - 系统的 `.pickerStyle(.segmented)` 只用在设置窗口和工具栏里（[macOS 原生](../macos-native.md) §2.1）。
 - 不用 `.radioGroup`。选项需要看描述或预览才能选时，用带缩略图的单选卡片。
 
-**现状**：模型设置里切换「配置哪个 Agent」的控件，Web 已经改成标题式选择（[决定](../DECISIONS.md) 2026-11-14），Mac 还要核对并跟上。
+Agent 页与模型提供商页复用同一个横向 Agent 栏；上方「默认 Agent」仍用 `.formPicker()`，分别表达配置对象与默认值。
 
 ## 6. 组件对照
 

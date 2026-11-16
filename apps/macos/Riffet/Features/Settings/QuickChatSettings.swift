@@ -32,7 +32,7 @@ struct QuickChatSettingsView: View {
             Section {
                 SettingsRow(
                     String(localized: "默认模型"),
-                    detail: options?.isEmpty == true ? String(localized: "需先在「模型设置」添加带网关的提供商。") : nil
+                    detail: options?.isEmpty == true ? String(localized: "需先在「模型提供商」添加 API 连接。") : nil
                 ) {
                     modelPicker(workbench, settings: settings)
                         .labelsHidden()

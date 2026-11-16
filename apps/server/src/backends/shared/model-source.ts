@@ -15,14 +15,16 @@ export type { ModelSourceBackend, ResolvedSource };
 
 let providers: () => readonly ModelSourceProvider[] = () => [];
 let activate: (source: string) => Promise<void> = async () => undefined;
+let declaredRole: (source: string) => ModelSourceProvider['role'] = () => undefined;
 
 /**
  * Where sources come from: the app's plugin registry, consulted on every lookup so a source
  * follows its plugin being turned on or off. Until this is called no source resolves.
  */
-export function provideModelSources(lookup: () => readonly ModelSourceProvider[], ensure?: (source: string) => Promise<void>): void {
+export function provideModelSources(lookup: () => readonly ModelSourceProvider[], ensure?: (source: string) => Promise<void>, role?: (source: string) => ModelSourceProvider['role']): void {
   providers = lookup;
   activate = ensure ?? (async () => undefined);
+  declaredRole = role ?? (() => undefined);
 }
 
 /** Called from asynchronous launch/catalog boundaries before synchronous credential resolution. */
@@ -36,6 +38,12 @@ export async function prepareSource(config: Record<string, unknown>): Promise<vo
 
 export function modelSourceProvider(source: NativeModelSource): ModelSourceProvider | undefined {
   return providers().find(provider => provider.id === source);
+}
+
+/** Static identity can outlive enablement; asking for it never activates or resolves a source. */
+export function modelSourceRole(source: NativeModelSource): ModelSourceProvider['role'] {
+  const provider = modelSourceProvider(source);
+  return declaredRole(source) ?? provider?.role ?? (provider ? 'source' : undefined);
 }
 
 /** The saved source name, whether or not anything provides it on this server. */

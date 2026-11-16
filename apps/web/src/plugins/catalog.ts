@@ -189,7 +189,11 @@ export function buildSettingsPages({ descriptors, plugins, pending, icons, local
 }
 
 /** The settings pages of the Agent `backendId`: those of the plugin whose declared Agents include it. */
-export function settingsPagesOf(descriptors: readonly PluginDescriptor[] | undefined, pages: readonly ViewEntry[], backendId: string): ViewEntry[] {
+export function settingsPagesOf(descriptors: readonly PluginDescriptor[] | undefined, pages: readonly ViewEntry[], backendId: string, category?: 'agent' | 'providers'): ViewEntry[] {
   const owner = descriptors?.find((descriptor) => descriptor.enabled && descriptor.declared?.agentBackends?.some((agent) => agent.id === backendId));
-  return owner ? pages.filter((page) => page.id.startsWith(`${owner.id}/`)) : [];
+  return owner ? pages.filter((page) => {
+    if (!page.id.startsWith(`${owner.id}/`)) return false;
+    const declared = owner.declared?.views?.find((view) => view.id === page.id);
+    return !category || !declared?.settingsCategory || declared.settingsCategory === category;
+  }) : [];
 }

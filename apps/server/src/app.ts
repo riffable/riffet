@@ -187,7 +187,7 @@ export async function createApp(options: AppOptions = {}) {
       wake:(id,note)=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);orchestrationRef.scheduleWakeup(id,{dueAt:new Date(),note});},
       notify:(id,notice)=>{notices.add({sessionId:id,...(notice.title?{title:notice.title}:{}),body:notice.body,source:'agent'});},
     }});
-  provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source));
+  provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source),source=>plugins.modelSourceRole(source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});
   const backendRegistry=new NativeBackendRegistry()
     .register(new CodexBackendAdapter(undefined, undefined, plugins, {stateDir}))

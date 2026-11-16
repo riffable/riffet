@@ -323,7 +323,7 @@ export class OrchestrationService {
     const ref = settings.getSettings().auxiliaryModels?.handoff;
     if (!ref) return { text: `${writeBrief(material)}${next}` };
     try {
-      const { profileName, ...endpoint } = auxiliaryEndpoint(ref, backendId => nativeBackends.catalog.gatewayProfiles(backendId));
+      const { profileName, ...endpoint } = await auxiliaryEndpoint(ref, backendId => nativeBackends.catalog.gatewayProfiles(backendId), options.signal);
       const note = await requestHandoffSummary(endpoint, writeMaterial(material), { ...(options.goal?.trim() ? { goal: options.goal.trim() } : {}), ...(options.signal ? { signal: options.signal } : {}) });
       return { text: `${summaryHeading(source)}\n\n${note}${next}`, generatedBy: { ...ref, profileName } };
     } catch (error) {

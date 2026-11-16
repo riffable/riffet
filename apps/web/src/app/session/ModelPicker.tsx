@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenu
 import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
 import { cn } from '@/lib/utils';
+import { createStore, useStore } from '@/lib/store';
 import { accountFigures, loadHint, loadTone, statusQuotaTags } from '@/lib/usage';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import type { Choice } from './model';
@@ -139,6 +140,12 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
 /** The last successful figures per usage scope, kept while the next read runs or fails. */
 const lastUsage = new Map<string, NativeBackendUsage>();
 const LAST_USAGE_LIMIT = 32;
+const usageRevision = createStore({ value: 0 });
+/** Credentials are write-only, so a provider save explicitly expires client quota scopes. */
+export function invalidateModelUsage(): void {
+  lastUsage.clear();
+  usageRevision.set((current) => ({ value: current.value + 1 }));
+}
 
 const loadToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-4' } as const;
 /** The account row reads at the parameters' weight; a model row's tags sit a step quieter. */
@@ -290,7 +297,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const isMobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const contentRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const usageScope = `${usageScopeKey ?? ''}|${activeProviderId ?? ''}`;
+  const connectionRevision = useStore(usageRevision, (state) => state.value);
+  const usageScope = `${connectionRevision}|${usageScopeKey ?? ''}|${activeProviderId ?? ''}`;
   const [usageRead, setUsageRead] = useState<{ scope: string; usage?: NativeBackendUsage; loading: boolean }>();
   // A scope read before keeps its figures while this open re-reads them, so the account row is
   // there from the first frame rather than pushing the search and the list down when it lands.

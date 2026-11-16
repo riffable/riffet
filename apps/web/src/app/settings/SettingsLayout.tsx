@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
+import { useLayoutEffect, useRef, type ReactNode } from 'react';
 import { IconChevronRight } from '@/components/icons';
-import { useRoving } from '@/components/ui/controls';
+import { Spinner, useRoving } from '@/components/ui/controls';
 import { cn } from '@/lib/utils';
 
 export function SettingsRow({ title, description, children }: { title: ReactNode; description?: ReactNode; children: ReactNode }) {
@@ -29,14 +29,27 @@ export function SettingsLinkRow({ title, onClick }: { title: ReactNode; onClick:
  * Without a title (one that would only repeat the section's) the card starts the section. `note`
  * is the one line under the card, for what the rows cannot show: where it is saved, what it costs.
  */
-export function SettingsGroup({ title, action, note, children }: { title?: string; action?: ReactNode; note?: ReactNode; children: ReactNode }) {
+export function SettingsGroup({ title, action, note, children, loading }: { title?: string; action?: ReactNode; note?: ReactNode; children: ReactNode; loading?: boolean }) {
+  const body = useRef<HTMLDivElement>(null);
+  const settledHeight = useRef<number | undefined>(undefined);
+  useLayoutEffect(() => {
+    const element = body.current;
+    if (!element || loading === undefined || loading) return;
+    const measure = () => { settledHeight.current = element.getBoundingClientRect().height; };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [loading]);
   return (
     <section className="flex flex-col">
       {(title || action) && <div className="mb-1 flex h-7 items-center justify-between">
         {title && <h3 className="text-xs font-medium text-fg-3">{title}</h3>}
         {action}
       </div>}
-      <div className="flex flex-col [&>*+*]:edge-t rounded-xl border border-line bg-elevated px-4 max-md:px-3">{children}</div>
+      <div ref={body} aria-busy={loading || undefined} style={loading && settledHeight.current ? { minHeight: settledHeight.current } : undefined} className="flex flex-col [&>*+*]:edge-t rounded-xl border border-line bg-elevated px-4 max-md:px-3">
+        {loading ? <div className="flex flex-1 items-center justify-center py-6"><Spinner /></div> : children}
+      </div>
       {note && <p className="mt-2 text-xs text-fg-3">{note}</p>}
     </section>
   );

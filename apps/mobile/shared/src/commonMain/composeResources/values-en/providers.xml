@@ -5,4 +5,17 @@
     <string name="prov_add_model">Add model</string>
     <string name="prov_search_models">Search models</string>
     <string name="prov_clear_key">Clear API Key</string>
+    <string name="settings_agent_settings">Agent</string>
+    <string name="settings_model_providers">Model providers</string>
+    <string name="prov_connection_method">Connection</string>
+    <string name="prov_gateway_type">Gateway type</string>
+    <string name="prov_generic_gateway">Generic</string>
+    <string name="prov_quota">Quota</string>
+    <string name="prov_quota_failed">Could not read quota</string>
+    <string name="prov_unavailable">Unavailable</string>
+    <string name="settings_default_agent">Default Agent</string>
+    <string name="prov_refresh_quota">Refresh quota</string>
+    <string name="settings_advanced_launch_settings">Advanced launch configuration</string>
+    <string name="settings_clear_default_model">Clear default model</string>
+    <string name="settings_model_automatic">Automatic</string>
 </resources>

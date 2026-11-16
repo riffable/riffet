@@ -12,7 +12,7 @@ export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col 
  * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
  * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
 /** The navigation's groups. 通用设置 stands alone at the top, untitled; the others are titled. */
@@ -63,7 +63,8 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'interaction', label: msg`输入`, group: 'behavior', icon: IconCornerDownLeft },
   { id: 'notifications', label: msg`通知`, group: 'behavior', icon: IconActivity },
   { id: 'files', label: msg`文件与编辑器`, group: 'behavior', icon: IconFileCog },
-  { id: 'backends', label: msg`模型设置`, group: 'models', icon: IconSparkles },
+  { id: 'backends', label: msg`Agent`, group: 'models', icon: IconSparkles },
+  { id: 'providers', label: msg`模型提供商`, group: 'models', icon: IconLayers },
   { id: 'auxiliary', label: msg`辅助模型`, group: 'models', icon: IconCpu },
   { id: 'quickchat', label: msg`快速对话`, group: 'models', icon: IconMessagesSquare },
   { id: 'connection', label: msg`连接与访问`, group: 'connection', icon: IconLaptop },

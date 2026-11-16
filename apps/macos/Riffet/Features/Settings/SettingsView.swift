@@ -130,6 +130,7 @@ struct SettingsView: View {
         case .notifications: NotificationSettings()
         case .files: FilesSettings()
         case .agents: AgentSettings()
+        case .modelProviders: AgentSettings(providersOnly: true)
         case .auxiliaryModels: AuxiliaryModelSettings()
         case .quickChat: QuickChatSettingsView()
         case .connection: ConnectionSettings()

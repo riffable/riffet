@@ -139,15 +139,23 @@ describe('TitleService', () => {
   });
 
   it('cancels a preview independently and allows another preview without changing the conversation', async () => {
+    let started!: () => void;
+    const requested = new Promise<void>(resolve => { started = resolve; });
     const request = vi.fn<(value: TitleRequest) => Promise<string>>()
       .mockImplementationOnce(value => new Promise((_resolve, reject) => {
         value.signal?.addEventListener('abort', () => reject(new Error('preview cancelled')), { once: true });
+        started();
       }))
       .mockResolvedValueOnce('新的试用结果');
     const { store, session, service } = setup({ request });
     const before = store.getSession(session.id);
     const controller = new AbortController();
+    const alreadyAborted = new AbortController();
+    alreadyAborted.abort();
+    await expect(service.preview(REF, '尚未开始的试用', alreadyAborted.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(request).not.toHaveBeenCalled();
     const pending = service.preview(REF, '取消这次试用', controller.signal);
+    await requested;
     controller.abort();
     await expect(pending).rejects.toThrow('preview cancelled');
     await expect(service.preview(REF, '重新试用')).resolves.toBe('新的试用结果');

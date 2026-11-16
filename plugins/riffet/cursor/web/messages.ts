@@ -9,7 +9,9 @@ const zhHans = {
   unavailable: (reason?: string) => reason ? `Cursor 不可用：${reason}` : 'Cursor 不可用',
 
   // Provider page
-  savedOnServer: '配置保存在服务端；连接与启动参数需重启 Riffet。',
+  savedOnServer: '连接配置保存在服务器，需重启 Riffet 后生效。',
+  launchNote: '启动配置保存在服务器，需重启 Riffet 后生效。',
+  launchSettings: '启动设置',
   connection: '连接设置',
   gateway: '模型网关',
   gatewayLabel: 'Cursor CLI 模型网关',
@@ -89,7 +91,9 @@ type Messages = typeof zhHans;
 const en: Messages = {
   unavailable: (reason) => reason ? `Cursor unavailable: ${reason}` : 'Cursor unavailable',
 
-  savedOnServer: 'Configuration is saved on the server; connection and launch settings take effect after Riffet restarts.',
+  savedOnServer: 'Connection settings are saved on the server and take effect after Riffet restarts.',
+  launchNote: 'Launch settings are saved on the server and take effect after Riffet restarts.',
+  launchSettings: 'Launch settings',
   connection: 'Connection settings',
   gateway: 'Model gateway',
   gatewayLabel: 'Cursor CLI model gateway',

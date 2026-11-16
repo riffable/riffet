@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge, Field, Input, Kbd, Segmented, Select, Spinner, StatusDot, StatusPill, Switch, UnderlineTabs } from '@/components/ui/controls';
 import { Notice } from '@/components/ui/notice';
 import { Tip } from '@/components/ui/tooltip';
+import { ModelParameterSetting } from '../../settings/AgentSettingsSection';
 import { SettingsGroup, SettingsLinkRow, SettingsRow } from '../../settings/SettingsLayout';
 import { Chapter, Frame, Matrix, Plate } from '../specimen';
 import { Mark, Pair } from './parts';
@@ -127,6 +128,53 @@ function Scene() {
   );
 }
 
+function LaunchSettings() {
+  const { t } = useLingui();
+  const [model, setModel] = useState('model-a');
+  const [effort, setEffort] = useState('high');
+  const [fast, setFast] = useState('true');
+  const [context, setContext] = useState('default');
+  return <Frame className="p-8 max-md:p-4">
+    <SettingsGroup title={t`启动设置`}>
+      <SettingsRow title={t`默认提供商`}><Select label={t`默认提供商`} value="gateway" options={[{ value: 'gateway', label: t`示例网关` }]} onChange={() => undefined} className="w-64 max-md:w-full" /></SettingsRow>
+      <SettingsRow title={t`默认模型`}><Select label={t`默认模型`} value={model} options={[{ value: '', label: t`自动选择` }, { value: 'model-a', label: 'Model A' }, { value: 'model-b', label: 'Model B' }]} onChange={setModel} className="w-64 max-md:w-full" /></SettingsRow>
+      <ModelParameterSetting param={{ id: 'effort', name: 'Effort', category: 'thought_level', value: effort, options: ['low', 'medium', 'high'].map((value) => ({ value, label: value })) }} onChange={setEffort} />
+      <ModelParameterSetting param={{ id: 'fast', name: 'Fast', category: 'model_config', value: fast, options: [{ value: 'false', label: 'Off' }, { value: 'true', label: 'On' }] }} onChange={setFast} />
+      <ModelParameterSetting param={{ id: 'context', name: 'Context', category: 'model_config', value: context, options: [{ value: 'default', label: 'Default' }, { value: '1m', label: '1M' }] }} onChange={setContext} />
+    </SettingsGroup>
+  </Frame>;
+}
+
+function LoadingSettings() {
+  const { t } = useLingui();
+  const [loading, setLoading] = useState(false);
+  return <Frame className="flex flex-col gap-4 p-8 max-md:p-4">
+    <div className="flex justify-end"><Switch aria-label={t`加载`} checked={loading} onCheckedChange={setLoading} /></div>
+    <SettingsGroup title={t`启动设置`} loading={loading}>
+      <SettingsRow title={t`默认提供商`}><Select label={t`默认提供商`} value="gateway" options={[{ value: 'gateway', label: t`示例网关` }]} onChange={() => undefined} className="w-64 max-md:w-full" /></SettingsRow>
+      <SettingsRow title={t`默认模型`}><Select label={t`默认模型`} value="model-a" options={[{ value: 'model-a', label: 'Model A' }]} onChange={() => undefined} className="w-64 max-md:w-full" /></SettingsRow>
+      <SettingsRow title="Fast"><Switch aria-label="Fast" checked disabled /></SettingsRow>
+    </SettingsGroup>
+  </Frame>;
+}
+
+function ProviderSettings() {
+  const { t } = useLingui();
+  const [type, setType] = useState('generic');
+  return <Frame className="p-8 max-md:p-4">
+    <div className="flex flex-col gap-5">
+      <UnderlineTabs scrollable className="h-11" ariaLabel={t`配置的 Agent`} value="codex" options={AGENTS} onChange={() => undefined} />
+      <SettingsGroup title={t`模型提供商`}>
+        <SettingsRow title={t`接入方式`}><Select label={t`接入方式`} value="api" options={[{ value: 'login', label: t`CLI 自带登录` }, { value: 'api', label: 'API' }]} onChange={() => undefined} className="w-48" /></SettingsRow>
+        <SettingsRow title={t`网关类型`}><Select label={t`网关类型`} value={type} options={[{ value: 'generic', label: t`通用` }, { value: 'adapter', label: t`示例网关` }]} onChange={setType} className="w-48" /></SettingsRow>
+        <SettingsRow title={t`服务地址`}><Input aria-label={t`服务地址`} defaultValue="https://gateway.example/v1" className="w-64 font-mono max-md:w-full" /></SettingsRow>
+        <SettingsRow title="API Key" description={t`仅保存到服务器，不会回显`}><Input aria-label="API Key" type="password" defaultValue="example-key" className="w-64 max-md:w-full" /></SettingsRow>
+        {type === 'adapter' && <SettingsRow title={t`额度`}><span className="text-sm text-fg-3 tabular-nums">72%</span></SettingsRow>}
+      </SettingsGroup>
+    </div>
+  </Frame>;
+}
+
 export function FormsChapter() {
   const { t } = useLingui();
   return (
@@ -143,7 +191,12 @@ export function FormsChapter() {
       <Plate number={4} title={t`说明文字`}>
         <Descriptions />
       </Plate>
-      <Plate number={5} title={t`组合示例`} note={t`设置行、状态与通知在一个页面里的样子。`}>
+      <Plate number={5} title={t`启动设置`}><LaunchSettings /></Plate>
+      <Plate number={6} title={t`Agent 与模型提供商`}>
+        <ProviderSettings />
+      </Plate>
+      <Plate number={7} title={t`加载`}><LoadingSettings /></Plate>
+      <Plate number={8} title={t`组合示例`} note={t`设置行、状态与通知在一个页面里的样子。`}>
         <Scene />
       </Plate>
     </Chapter>

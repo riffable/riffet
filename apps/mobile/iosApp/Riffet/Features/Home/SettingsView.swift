@@ -151,7 +151,8 @@ struct SettingsView: View {
                 SettingsEntry(title: String(localized: "文件与编辑器", bundle: .riffet), icon: "doc.text", kind: .link { AnyView(FilesSettingsView(workbench: workbench)) }),
             ]),
             SettingsGroup(title: String(localized: "模型", bundle: .riffet), entries: [
-                SettingsEntry(title: String(localized: "提供商与模型", bundle: .riffet), icon: "server.rack", value: defaultAgentName, identifier: "nativeManagement", kind: .link { AnyView(NativeProvidersView(workbench: workbench)) }),
+                SettingsEntry(title: String(localized: "Agent", bundle: .riffet), icon: "sparkles", value: defaultAgentName, identifier: "agentSettings", kind: .link { AnyView(NativeProvidersView(workbench: workbench, agentSettings: true)) }),
+                SettingsEntry(title: String(localized: "模型提供商", bundle: .riffet), icon: "server.rack", identifier: "nativeManagement", kind: .link { AnyView(NativeProvidersView(workbench: workbench)) }),
                 SettingsEntry(title: String(localized: "辅助模型", bundle: .riffet), icon: "brain", kind: .link { AnyView(AuxiliaryModelsView(workbench: workbench)) }),
                 SettingsEntry(title: String(localized: "快速对话", bundle: .riffet), icon: "bubble.left", kind: .link { AnyView(QuickChatSettingsView(workbench: workbench)) }),
             ]),

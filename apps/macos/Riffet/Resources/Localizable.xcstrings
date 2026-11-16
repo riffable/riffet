@@ -1,6 +1,236 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "高级启动配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Advanced launch configuration"
+          }
+        }
+      }
+    },
+    "%@ 高级启动配置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ advanced launch configuration"
+          }
+        }
+      }
+    },
+    "%@ · 不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · Unavailable"
+          }
+        }
+      }
+    },
+      "模型提供商": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Model providers"
+            }
+          }
+        }
+      },
+      "默认 Agent、审批与启动设置": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Default Agent, approvals, and launch settings"
+            }
+          }
+        }
+      },
+      "连接、模型与额度": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Connections, models, and quota"
+            }
+          }
+        }
+      },
+      "Agent 审批 启动 CLI 项目配置 rules skills commands": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Agent approval launch CLI project configuration rules skills commands"
+            }
+          }
+        }
+      },
+      "模型 提供商 网关 API Key 额度 provider gateway quota": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "model provider gateway API Key quota"
+            }
+          }
+        }
+      },
+      "默认提供商": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Default provider"
+            }
+          }
+        }
+      },
+      "启动设置": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Launch settings"
+            }
+          }
+        }
+      },
+      "配置的 Agent": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Agent to configure"
+            }
+          }
+        }
+      },
+      "接入方式": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Connection method"
+            }
+          }
+        }
+      },
+      "网关类型": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Gateway type"
+            }
+          }
+        }
+      },
+      "通用": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Generic"
+            }
+          }
+        }
+      },
+      "%@ 启动设置": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "%@ launch settings"
+            }
+          }
+        }
+      },
+      "额度": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Quota"
+            }
+          }
+        }
+      },
+      "刷新额度": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Refresh quota"
+            }
+          }
+        }
+      },
+      "保存后读取额度": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Save to read quota"
+            }
+          }
+        }
+      },
+      "额度不可用": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Quota unavailable"
+            }
+          }
+        }
+      },
+      "额度读取失败": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Could not read quota"
+            }
+          }
+        }
+      },
+      "在「Agent」中配置 Agent 后查看扩展。": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Configure an Agent under Settings → Agent to view its extensions."
+            }
+          }
+        }
+      },
+      "需先在「模型提供商」添加 API 连接。": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Add an API connection in Model providers first."
+            }
+          }
+        }
+      },
+      "更换后会切换账号与原生历史范围": {
+        "localizations": {
+          "en": {
+            "stringUnit": {
+              "state": "translated",
+              "value": "Changing this switches the account and native history scope"
+            }
+          }
+        }
+      },
     "套用预设" : {
       "localizations" : {
         "en" : {

@@ -49,6 +49,7 @@ internal fun ProviderEditorPage(
     id: String,
     onBack: () -> Unit,
     onDeleted: () -> Unit,
+    launchOnly: Boolean = false,
 ) {
     val state by controller.state.collectAsState()
     val profile = state.profileLists[backendId]?.firstOrNull { it.id == id }
@@ -59,7 +60,7 @@ internal fun ProviderEditorPage(
         }
         return
     }
-    ProviderEditor(controller, backendId, profile, onBack, onDeleted)
+    ProviderEditor(controller, backendId, profile, onBack, onDeleted, launchOnly)
 }
 
 @Composable
@@ -69,6 +70,7 @@ private fun ProviderEditor(
     profile: NativeBackendProfileSettings,
     onBack: () -> Unit,
     onDeleted: () -> Unit,
+    launchOnly: Boolean,
 ) {
     val state by controller.state.collectAsState()
     val colors = LocalRiffetColors.current
@@ -100,13 +102,15 @@ private fun ProviderEditor(
         clearApiKey = clearKey,
         savedApiEndpoint = profile.apiEndpoint.orEmpty(),
         savedApiProtocol = protocolOf(profile.apiEndpoint, profile.apiProtocol),
-        enabled = !isCursor,
+        enabled = !isCursor && !launchOnly,
+        modelSource = draft.modelSource,
+        savedModelSource = profile.modelSource,
     )
-    val customPi = backendId == NativeBackendId.PI && profile.modelSource == null && draft.apiEndpoint.isNotEmpty()
+    val customPi = backendId == NativeBackendId.PI && draft.modelSource == null && draft.apiEndpoint.isNotEmpty()
     // DSH and a custom pi endpoint carry input types only through the profile Riffet writes.
     val inputs = if (backendId == NativeBackendId.DSH || customPi) draft.modelInputModalities else null
     // Claude Code and a custom pi endpoint read a declared window; a CLI login knows its own models.
-    val contextWindows = if ((backendId == NativeBackendId.CLAUDE && (draft.apiEndpoint.isNotEmpty() || profile.modelSource != null)) || customPi) draft.modelContextWindows else null
+    val contextWindows = if ((backendId == NativeBackendId.CLAUDE && (draft.apiEndpoint.isNotEmpty() || draft.modelSource != null)) || customPi) draft.modelContextWindows else null
 
     fun save() {
         patch?.let { body ->
@@ -114,6 +118,14 @@ private fun ProviderEditor(
             // The saved profile resets the draft; leaving here skips the guard that still sees the old draft.
             controller.updateProfile(backendId, profile.id, sent) { pageBack?.leaveConfirmed() ?: onBack() }
         }
+    }
+
+    if (launchOnly) {
+        EditPage(stringResource(Res.string.settings_advanced_launch_settings), onBack, dirty = dirty, busy = busy, onSave = ::save) {
+            ControllerMessages(controller)
+            ProviderLaunchFields(backendId, draft, !busy) { draft = it }
+        }
+        return
     }
 
     // On the provider's own page, not the editor inside the stack: every way out of the provider,
@@ -188,20 +200,28 @@ private fun ProviderEditorRoot(
     val colors = LocalRiffetColors.current
     EditPage(profile.name, onBack, dirty = dirty, busy = busy, onSave = save, guard = false) {
         ControllerMessages(controller)
+        val (sources, availableSources, sourcesLoaded) = rememberProviderSources(controller, backendId)
+        val choice = connectionChoice(draft, sources)
+        val entry = sources.firstOrNull { it.id == draft.modelSource }
         SettingsGroup("") {
+            if (hasEndpoint(backendId) && !isCursor) ProviderConnectionChoices(draft, sources, !busy && sourcesLoaded, availableSources) { next ->
+                val keepConnection = isApiConnection(choice, sources) && isApiConnection(connectionChoice(next, sources), sources)
+                setDraft(next)
+                if (!keepConnection) { setApiKeyDraft(""); setClearKey(true) }
+            }
             GroupField(value = draft.name, onValueChange = { setDraft(draft.copy(name = it)) }, label = stringResource(Res.string.settings_name), enabled = !busy)
-            if (hasEndpoint(backendId)) GroupField(
+            if (hasEndpoint(backendId) && (isCursor || choice != "login" && (entry == null || "apiEndpoint" in entry.overridable))) GroupField(
                 value = draft.apiEndpoint,
                 onValueChange = { setDraft(if (isCursor) updateCursorProfileGateway(draft, it) else draft.copy(apiEndpoint = it)) },
                 label = stringResource(Res.string.settings_service_address),
-                placeholder = endpointPlaceholder(backendId),
+                placeholder = entry?.defaultEndpoint ?: endpointPlaceholder(backendId),
                 enabled = !busy,
                 mono = true,
             )
             if (backendId == NativeBackendId.PI && draft.apiEndpoint.isNotEmpty()) {
                 SettingsChoiceRow("API", apiProtocols, draft.apiProtocol ?: DEFAULT_API_PROTOCOL, enabled = !busy) { setDraft(draft.copy(apiProtocol = it)) }
             }
-            if (draft.apiEndpoint.isNotEmpty() || isCursor) {
+            if (choice != "login" && (entry == null || "apiKey" in entry.overridable) || isCursor) {
                 GroupField(
                     value = apiKeyDraft,
                     onValueChange = { setApiKeyDraft(it); setClearKey(false) },
@@ -242,6 +262,8 @@ private fun ProviderEditorRoot(
         if (hasEndpoint(backendId)) endpointHint(backendId)?.let { SettingsFootnote(it) }
         if (draft.apiEndpoint.isNotEmpty() || isCursor) SettingsFootnote(stringResource(Res.string.settings_api_key_hint))
 
+        ProviderQuota(controller, backendId, profile, dirty)
+
         SettingsGroup("") {
             if (!isCursor) {
                 SettingsNavigationRow(
@@ -249,7 +271,7 @@ private fun ProviderEditorRoot(
                     draft.enabledModels?.let { stringResource(Res.string.prov_models_enabled, it.size) } ?: stringResource(Res.string.prov_models_all),
                 ) { onOpen(ProviderSub.Models) }
             }
-            SettingsNavigationRow(stringResource(Res.string.settings_launch_settings), "") { onOpen(ProviderSub.Launch) }
+
         }
 
         SettingsGroup("") {

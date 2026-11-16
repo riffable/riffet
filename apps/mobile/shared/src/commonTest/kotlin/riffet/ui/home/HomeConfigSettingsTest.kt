@@ -26,6 +26,8 @@ import riffet.contracts.NativeInteractionTransport
 import riffet.shared.WireJson
 import riffet.shared.RiffetApi
 import kotlin.test.Test
+import riffet.ui.pickers.selectionForDefaultModel
+import kotlin.test.assertNull
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -45,6 +47,15 @@ class HomeConfigSettingsTest {
             supportsModelSelection = true, supportsModeSelection = true, supportsPermissionSelection = true,
         ),
     )
+
+    @Test
+    fun fixingInheritedModelKeepsAllParametersAndSwitchingModelDropsThem() {
+        val catalog = listOf(ModelInfo("model", "Model"), ModelInfo("other", "Other"))
+        val inherited = "model[effort=high,fast=true,context=1m]"
+        assertEquals(inherited, selectionForDefaultModel(catalog, inherited, "model"))
+        assertEquals("other", selectionForDefaultModel(catalog, inherited, "other"))
+        assertNull(selectionForDefaultModel(catalog, inherited, ""))
+    }
 
     @Test
     fun savedDefaultsUpdateTheRetainedComposerButUnrelatedSettingsKeepItsSelection() = runTest {
@@ -86,18 +97,18 @@ class HomeConfigSettingsTest {
 
         holdNextCatalog = true
         config.load("p1", settings.copy(defaultModel = "slow old response"))
-        config.load("p1", settings.copy(defaultBackendId = NativeBackendId.CODEX, nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new default"))))
+        config.load("p1", settings.copy(defaultBackendId = NativeBackendId.CODEX, nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new-default[effort=high,fast=true]"))))
         advanceUntilIdle()
-        assertEquals("new default", config.model)
+        assertEquals("new-default[effort=high,fast=true]", config.model)
         releaseOld.complete(Unit)
         advanceUntilIdle()
         assertEquals(NativeBackendId.CODEX, config.backendId)
-        assertEquals("new default", config.model, "the previous catalog must not overwrite the new backend's defaults")
-        val codexDefaults = settings.copy(defaultBackendId = NativeBackendId.CODEX, nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new default", approval = "read-only")))
+        assertEquals("new-default[effort=high,fast=true]", config.model, "the previous catalog must not overwrite the new backend's defaults")
+        val codexDefaults = settings.copy(defaultBackendId = NativeBackendId.CODEX, nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new-default[effort=high,fast=true]", approval = "read-only")))
         config.load("p1", codexDefaults)
         advanceUntilIdle()
         assertEquals("read-only", config.approval, "saved approval defaults reach the retained new-session composer")
-        config.load("p1", codexDefaults.copy(nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new default"))))
+        config.load("p1", codexDefaults.copy(nativeBackendDefaults = mapOf(NativeBackendId.CODEX to NativeBackendDefaults(model = "new-default[effort=high,fast=true]"))))
         advanceUntilIdle()
         assertEquals("on-request", config.approval, "clearing the override restores the backend's default permission")
         client.close()

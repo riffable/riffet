@@ -179,6 +179,7 @@ const handlers = {
     return {
       modelSources: (contributions.modelSources ?? []).map(source => ({
         id: source.id, label: source.label,
+        ...(source.role ? { role: source.role } : {}),
         ...(Array.isArray(source.protocols) ? { protocols: [...source.protocols] } : {}),
         ...(Array.isArray(source.backends) ? { backends: [...source.backends] } : {}),
         ...(source.defaultEndpoint ? { defaultEndpoint: source.defaultEndpoint } : {}),

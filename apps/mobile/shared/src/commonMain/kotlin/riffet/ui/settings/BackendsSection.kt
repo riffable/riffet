@@ -8,6 +8,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import riffet.ui.design.ViewTabs
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -18,10 +22,7 @@ import riffet.contracts.NativeBackendId
 import riffet.ui.app.PageBarAction
 import riffet.ui.design.GroupRow
 import riffet.ui.design.LocalInterfaceStyle
-import riffet.ui.icons.AgentMark
-import riffet.ui.icons.AgentMarks
 import riffet.ui.icons.RiffetIcons
-import riffet.ui.icons.Icon
 import riffet.ui.settings.providers.AddProviderPage
 import riffet.ui.settings.providers.ProviderEditorPage
 import riffet.ui.theme.LocalRiffetColors
@@ -29,7 +30,6 @@ import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.timeline.Spinner
 import riffet_mobile.shared.generated.resources.*
 import kotlin.random.Random
-import riffet.ui.design.agentMarkTint
 
 /*
  * Agent backends: one CLI at a time, one provider card at a time, exactly the shape of the web's
@@ -104,42 +104,17 @@ internal const val DEFAULT_API_PROTOCOL = "openai-completions"
 /** A profile id the server accepts (`[A-Za-z0-9][A-Za-z0-9._-]{0,99}`), generated client-side. */
 internal fun newProfileId(): String = "p" + Random.nextLong().toULong().toString(36) + Random.nextLong().toULong().toString(36).take(8)
 
-@Composable
-internal fun BackendsSection(controller: SettingsController, onSelect: (NativeBackendId) -> Unit) {
-    val state by controller.state.collectAsState()
-    val settings = state.settings ?: return
-    val colors = LocalRiffetColors.current
-    val typography = LocalRiffetTypography.current
-    SettingsGroup(stringResource(Res.string.settings_agent_backends)) {
-        backendOrder.forEach { id ->
-            val isDefault = (settings.defaultBackendId ?: NativeBackendId.CURSOR) == id
-            // The mark sits bare in its own colour, not on a coloured tile.
-            SettingsLinkRow(
-                title = backendLabel(id),
-                subtitle = if (isDefault) stringResource(Res.string.settings_new_session_default) else null,
-                leading = AgentMarks.vector(id.name.lowercase())?.let { { AgentMark(backendId = id.name.lowercase(), size = 20.dp, tint = colors.agentMarkTint(id.name) ?: colors.fg2) } },
-                onClick = { onSelect(id) },
-            )
-        }
-    }
-    SettingsFootnote(stringResource(Res.string.settings_backend_save_note))
-    SettingsGroup(stringResource(Res.string.settings_new_session)) {
-        DefaultApprovalRow(controller, settings.defaultBackendId ?: NativeBackendId.CURSOR)
-    }
-}
-
-/** Same-provider changes preserve overrides; another provider gets its own model/mode defaults. */
+/** Provider selection changes the model default; approval and mode remain Agent preferences. */
 internal fun defaultProfilePatch(settings: riffet.contracts.AppSettings, backendId: NativeBackendId, profileId: String): AppSettingsUpdate {
     val defaults = settings.nativeBackendDefaults.orEmpty()
     return AppSettingsUpdate(
-        defaultBackendId = backendId,
-        nativeBackendDefaults = defaults + (backendId to (defaults[backendId]?.takeIf { it.profileId == profileId } ?: NativeBackendDefaults()).copy(profileId = profileId)),
+        nativeBackendDefaults = defaults + (backendId to selectDefaultProfile(defaults[backendId], profileId)),
     )
 }
 
 /** A backend's providers (a directory page). */
 @Composable
-internal fun BackendProfilesPage(controller: SettingsController, backend: NativeBackendId, onBack: () -> Unit, onEdit: (String) -> Unit, onAdd: () -> Unit) {
+internal fun BackendProfilesPage(controller: SettingsController, backend: NativeBackendId, onBack: () -> Unit, onEdit: (String) -> Unit, onAdd: () -> Unit, agentSettings: Boolean = false, onSelectBackend: ((NativeBackendId) -> Unit)? = null) {
     val state by controller.state.collectAsState()
     val settings = state.settings
     val loading = state.profilesLoading[backend] == true
@@ -148,23 +123,41 @@ internal fun BackendProfilesPage(controller: SettingsController, backend: Native
     LaunchedEffect(controller, backend) { controller.loadProfiles(backend) }
     val setDefaultMessage = stringResource(Res.string.settings_set_as_default_done)
     SettingsPage(
-        backendLabel(backend), onBack,
+        stringResource(if (agentSettings) Res.string.settings_agent_settings else Res.string.settings_model_providers), onBack,
         refreshing = loading && profiles != null,
         onRefresh = { controller.loadProfiles(backend) },
         actions = {
-            if (backend != NativeBackendId.CURSOR && hasEndpoint(backend)) {
+            if (!agentSettings && backend != NativeBackendId.CURSOR && hasEndpoint(backend)) {
                 PageBarAction(RiffetIcons.Plus, stringResource(Res.string.settings_add_provider), onAdd, enabled = !state.saving)
             }
         },
     ) {
+        if (agentSettings && settings != null) SettingsGroup("") {
+            SettingsChoiceRow(stringResource(Res.string.settings_default_agent), backendOrder.map { it.name to backendLabel(it) }, (settings.defaultBackendId ?: NativeBackendId.CURSOR).name, enabled = !state.saving) { next ->
+                controller.saveSettings(AppSettingsUpdate(defaultBackendId = NativeBackendId.valueOf(next)), setDefaultMessage)
+            }
+        }
+        if (onSelectBackend != null) ViewTabs(backendOrder.map(::backendLabel), backendOrder.indexOf(backend).coerceAtLeast(0), { onSelectBackend(backendOrder[it]) })
         ControllerMessages(controller)
         state.profilesErrors[backend]?.let { message ->
             PageBanner(message, SettingsNoticeKind.ERROR, stringResource(Res.string.settings_retry)) { controller.loadProfiles(backend) }
         }
         val defaultId = defaultProfileId(state, backend)
+        if (agentSettings && settings != null && defaultId != null) {
+            SettingsGroup(stringResource(Res.string.settings_launch_settings)) {
+                SettingsChoiceRow(stringResource(Res.string.settings_provider), profiles.orEmpty().map { it.id to it.name }, defaultId, enabled = !state.saving) { next ->
+                    controller.saveSettings(defaultProfilePatch(settings, backend, next), setDefaultMessage)
+                }
+                AgentLaunchModelSettings(controller, backend, defaultId)
+                DefaultApprovalRow(controller, backend)
+            }
+        }
         when {
             profiles == null -> if (loading) Box(Modifier.fillMaxWidth().padding(vertical = 40.dp), contentAlignment = Alignment.Center) { Spinner(size = 20.dp) }
             profiles.isEmpty() -> Text(stringResource(Res.string.settings_no_providers), style = LocalRiffetTypography.current.bodySmall, color = colors.fg3, modifier = Modifier.padding(LocalInterfaceStyle.current.metrics.pageInset))
+            agentSettings -> if (defaultId != null && profiles.any { it.id == defaultId }) SettingsGroup("") {
+                SettingsNavigationRow(stringResource(Res.string.settings_advanced_launch_settings), "") { onEdit(defaultId) }
+            }
             else -> SettingsGroup(stringResource(Res.string.settings_provider)) {
                 profiles.forEach { profile ->
                     GroupRow(
@@ -177,26 +170,35 @@ internal fun BackendProfilesPage(controller: SettingsController, backend: Native
                 }
             }
         }
-        if (settings != null && defaultId != null) {
-            val isDefaultBackend = (settings.defaultBackendId ?: NativeBackendId.CURSOR) == backend
-            SettingsGroup(stringResource(Res.string.settings_new_session)) {
-                if (isDefaultBackend) {
-                    GroupRow(title = stringResource(Res.string.settings_current_backend, backendLabel(backend)), trailing = { Icon(RiffetIcons.Check, null, tint = colors.accent) })
-                } else {
-                    SettingsActionRow(stringResource(Res.string.settings_set_as_default), enabled = !state.saving, onClick = {
-                        controller.saveSettings(defaultProfilePatch(settings, backend, defaultId), setDefaultMessage)
-                    })
-                }
-                DefaultApprovalRow(controller, backend)
-            }
+
+    }
+}
+
+/** Agent configuration and the provider directory share one horizontal Agent navigation row. */
+@Composable
+internal fun BackendSettingsPage(controller: SettingsController, onBack: () -> Unit, agentSettings: Boolean, onEdit: (NativeBackendId, String) -> Unit, onAdd: (NativeBackendId) -> Unit) {
+    val state by controller.state.collectAsState()
+    var backendName by rememberSaveable(controller) { mutableStateOf((state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: NativeBackendId.CURSOR).name) }
+    var backendChosen by rememberSaveable(controller) { mutableStateOf(state.settings != null) }
+    val backend = NativeBackendId.valueOf(backendName)
+    LaunchedEffect(state.settings?.defaultBackendId) {
+        if (!backendChosen && state.settings != null) {
+            backendName = (state.settings?.defaultBackendId?.takeIf { it in backendOrder } ?: NativeBackendId.CURSOR).name
+            backendChosen = true
         }
     }
+    LaunchedEffect(controller) { if (controller.state.value.settings == null) controller.load() }
+    if (state.settings == null) {
+        SettingsPage(stringResource(if (agentSettings) Res.string.settings_agent_settings else Res.string.settings_model_providers), onBack) { ServerSettingsLoad(controller) }
+        return
+    }
+    BackendProfilesPage(controller, backend, onBack, agentSettings = agentSettings, onEdit = { onEdit(backend, it) }, onAdd = { onAdd(backend) }, onSelectBackend = { backendName = it.name; backendChosen = true })
 }
 
 /** One provider's settings. */
 @Composable
-internal fun BackendProfilePage(controller: SettingsController, backend: NativeBackendId, id: String, onBack: () -> Unit, onDeleted: () -> Unit) {
-    ProviderEditorPage(controller, backend, id, onBack, onDeleted)
+internal fun BackendProfilePage(controller: SettingsController, backend: NativeBackendId, id: String, onBack: () -> Unit, onDeleted: () -> Unit, launchOnly: Boolean = false) {
+    ProviderEditorPage(controller, backend, id, onBack, onDeleted, launchOnly)
 }
 
 /** A new provider for [backend]. */

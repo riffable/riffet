@@ -566,6 +566,8 @@ data class SharePublisherDescriptor(val label: String, val audience: String)
 @Serializable
 data class ModelSourceDescriptor(
     val id: String,
+    val role: String? = null,
+    val usage: Boolean? = null,
     val label: String,
     /** Backend wire ids (`claude`, `codex`). */
     val backends: List<String> = emptyList(),

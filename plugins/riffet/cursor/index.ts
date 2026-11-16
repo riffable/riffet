@@ -36,8 +36,8 @@ export const cursor: Plugin = {
       agentBackends: [{ id: 'cursor', title: { en: 'Cursor', 'zh-Hans': 'Cursor' } }],
       // Pages of the settings dialog, reached from the Agent's row on the models page; the client entry is `web/`.
       views: [
-        { id: 'riffet.cursor/provider', title: { 'zh-Hans': 'Cursor 提供商', en: 'Cursor Provider' }, locations: ['settings'], clients: ['web', 'macos'], instances: 'single' },
-        { id: 'riffet.cursor/cli', title: { 'zh-Hans': 'CLI 管理', en: 'CLI Management' }, locations: ['settings'], clients: ['web', 'macos'], instances: 'single' },
+        { id: 'riffet.cursor/provider', title: { 'zh-Hans': 'Cursor 提供商', en: 'Cursor Provider' }, locations: ['settings'], settingsCategory: 'providers', clients: ['web', 'macos'], instances: 'single' },
+        { id: 'riffet.cursor/cli', title: { 'zh-Hans': 'CLI 管理', en: 'CLI Management' }, locations: ['settings'], settingsCategory: 'agent', clients: ['web', 'macos'], instances: 'single' },
       ],
     },
   },

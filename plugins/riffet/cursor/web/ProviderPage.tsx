@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CapabilityReport, CursorCliSettings, ModelInfo } from '@contracts';
 import { Button, Icon, Input, ModelField, SettingsGroup as Group, SettingsRow as Row, Spinner, StatusDot, Switch, isUnavailable, useMessages, usePluginHost, useSettings, type UnavailableInfo, type ViewProps } from '@riffet/plugin-web';
-import { cliSettingsPatch, hasSeparateAgentEndpoint, normalizeCliSettings, updateGateway } from './cliSettings';
+import { cliSettingsPatch, hasSeparateAgentEndpoint, updateGateway } from './cliSettings';
 import { catalogs } from './messages';
 import { Unavailable } from './Unavailable';
 
@@ -44,12 +44,12 @@ export default function ProviderPage({ context }: ViewProps) {
     modelBaseline.current = saved;
   }, [settings.defaultModel]);
   const modelDirty = defaultModel !== (settings.defaultModel ?? '');
-  const dirty = modelDirty || JSON.stringify(normalizeCliSettings(draft)) !== JSON.stringify(normalizeCliSettings(settings.cursorCli)) || apiKeyDraft.length > 0 || clearApiKey;
+  const dirty = modelDirty || Object.keys(cliSettingsPatch(draft, settings.cursorCli, 'connection')).length > 0 || apiKeyDraft.length > 0 || clearApiKey;
 
   useEffect(() => {
-    if (JSON.stringify(normalizeCliSettings(draft)) === JSON.stringify(normalizeCliSettings(baseline.current))) {
+    if (Object.keys(cliSettingsPatch(draft, baseline.current, 'connection')).length === 0) {
       setDraft(settings.cursorCli ?? {});
-      if (JSON.stringify(normalizeCliSettings(settings.cursorCli)) !== JSON.stringify(normalizeCliSettings(baseline.current))) setSeparateAgentEndpoint(hasSeparateAgentEndpoint(settings.cursorCli));
+      if (Object.keys(cliSettingsPatch(settings.cursorCli ?? {}, baseline.current, 'connection')).length > 0) setSeparateAgentEndpoint(hasSeparateAgentEndpoint(settings.cursorCli));
     }
     baseline.current = settings.cursorCli;
   }, [settings.cursorCli]);
@@ -58,7 +58,7 @@ export default function ProviderPage({ context }: ViewProps) {
 
   const saveSettings = async () => {
     if (savingSettings || !dirty) return;
-    const changed = cliSettingsPatch(draft, settings.cursorCli);
+    const changed = cliSettingsPatch(draft, settings.cursorCli, 'connection');
     const cursorCli = {
       ...changed,
       ...(apiKeyDraft.length > 0 ? { apiKey: apiKeyDraft } : clearApiKey ? { apiKey: null } : {}),
@@ -117,12 +117,6 @@ export default function ProviderPage({ context }: ViewProps) {
             {m.advanced}
           </summary>
           <div className="edge-t [&>*+*]:edge-t">
-            <Row title={m.executable}>
-              <Input aria-label={m.executableLabel} disabled={savingSettings} className="h-8 w-64 font-mono max-md:h-11 max-md:w-full" value={draft.executable ?? ''} placeholder={m.executablePlaceholder} onChange={(event) => setDraft((current) => ({ ...current, executable: event.target.value }))} />
-            </Row>
-            <Row title={m.configDir} description={m.configDirHint}>
-              <Input aria-label={m.configDir} disabled={savingSettings} className="h-8 w-64 font-mono max-md:h-11 max-md:w-full" value={draft.configDir ?? ''} placeholder={m.configDirPlaceholder} onChange={(event) => setDraft((current) => ({ ...current, configDir: event.target.value }))} />
-            </Row>
             <Row title={m.separateAgentEndpoint} description={m.separateAgentEndpointHint}>
               <Switch aria-label={m.separateAgentEndpoint} disabled={savingSettings} checked={separateAgentEndpoint} onCheckedChange={(value) => {
                 setSeparateAgentEndpoint(value);
@@ -132,9 +126,6 @@ export default function ProviderPage({ context }: ViewProps) {
             {separateAgentEndpoint && <Row title={m.agentEndpoint}>
               <Input aria-label={m.agentEndpointLabel} disabled={savingSettings} className="h-8 w-64 font-mono max-md:h-11 max-md:w-full" value={draft.agentEndpoint ?? ''} placeholder={m.agentEndpointPlaceholder} onChange={(event) => setDraft((current) => ({ ...current, agentEndpoint: event.target.value }))} />
             </Row>}
-            <Row title={m.disableAutoUpdate}>
-              <Switch aria-label={m.disableAutoUpdateLabel} disabled={savingSettings} checked={draft.disableAutoUpdate === true} onCheckedChange={(value) => setDraft((current) => ({ ...current, disableAutoUpdate: value }))} />
-            </Row>
           </div>
         </details>
       </Group>

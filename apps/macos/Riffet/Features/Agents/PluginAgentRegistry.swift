@@ -8,14 +8,14 @@ struct PluginDiagnostics {
 }
 
 /// What a plugin's native renderer adds for its Agents: the content of a `settings` view it
-/// declares, drawn in the 模型设置 pane, and the few rules that differ from the host's defaults. A
+/// declares, drawn in the Agent and 模型提供商 panes, and the few rules that differ from the host's defaults. A
 /// plugin with several such views registers one renderer each; they combine for the plugin's Agents.
 struct PluginAgentRenderer {
     /// Replaces the provider list: for an Agent with one implicit provider the plugin configures itself.
     var providers: (@MainActor (Workbench) -> AnyView)?
     /// Rows under the new-session defaults, next to 项目配置.
     var links: (@MainActor (Workbench) -> AnyView)?
-    /// The Agent has no provider list the host edits, so its default model is chosen with the new-session defaults.
+    /// The Agent has no provider list the host edits; startup defaults use its own model catalog.
     var choosesDefaultModelHere = false
     var diagnostics: (@MainActor (Workbench) async -> PluginDiagnostics)?
     /// Whether a slash command the Agent's TUI alone can answer should open its terminal after it is sent.

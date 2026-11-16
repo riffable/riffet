@@ -140,7 +140,7 @@ export class TurnSummaryService {
   private async write(sessionId: string, turn: string, hash: string, source: TurnSource): Promise<string> {
     const ref = this.options.summaryModel();
     if (!ref) throw new Error('no summary model');
-    const { profileName: _name, ...endpoint } = auxiliaryEndpoint(ref, this.options.gatewayProfiles);
+    const { profileName: _name, ...endpoint } = await auxiliaryEndpoint(ref, this.options.gatewayProfiles, this.abortController.signal);
     const summary = await (this.options.request ?? requestTurnSummary)({ ...endpoint, question: source.question, answer: source.answer, signal: this.abortController.signal });
     if (!this.closed && !this.options.deleted?.(sessionId)) {
       this.sql(`INSERT INTO turn_summaries(session_id,turn,answer_hash,summary,created_at) VALUES(?,?,?,?,?)

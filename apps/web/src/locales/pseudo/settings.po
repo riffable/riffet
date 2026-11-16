@@ -33,6 +33,11 @@ msgstr ""
 msgid "“{name}”会从所有设备上移除，正在使用它的设备会回到 Riffet。"
 msgstr ""
 
+#. placeholder {0}: knownSource(named)?.label ?? named
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "{0} · 不可用"
+msgstr ""
+
 #. placeholder {0}: build.version
 #: src/app/settings/UpdateSection.tsx
 msgid "{0} · 开发构建"
@@ -101,6 +106,7 @@ msgstr ""
 
 #. placeholder {0}: minutes / 60
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ProviderUsage.tsx
 msgid "{0} 小时"
 msgstr ""
 
@@ -143,6 +149,10 @@ msgstr ""
 msgid "{days} 天"
 msgstr ""
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "{keep} · 不可用"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "{label} 取色"
 msgstr ""
@@ -152,7 +162,12 @@ msgid "{label}：{message}"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ProviderUsage.tsx
 msgid "{minutes} 分钟"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "{reset} 重置"
 msgstr ""
 
 #: src/app/settings/ServiceCharts.tsx
@@ -175,10 +190,6 @@ msgstr ""
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "/bind <码>"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "~/.riffet/dsh（默认）"
 msgstr ""
 
 #: src/app/design/mac/TypeChapter.tsx
@@ -207,10 +218,6 @@ msgstr ""
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "2–4 个固定的短选项"
-msgstr ""
-
-#: src/app/design/patterns/SelectionChapter.tsx
-msgid "2026-11-14 决定：选项多或切换所属对象时改用 Select。"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx
@@ -267,12 +274,21 @@ msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/settingsSections.ts
 msgid "Agent"
+msgstr ""
+
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/design/patterns/SelectionChapter.tsx
+msgid "Agent 与模型提供商"
 msgstr ""
 
 #: src/app/design/foundations/TypeChapter.tsx
 msgid "Agent 在 3 个文件里做了 12 处修改"
+msgstr ""
+
+#: src/app/design/patterns/SelectionChapter.tsx
+msgid "Agent 配置对象"
 msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
@@ -287,7 +303,7 @@ msgstr ""
 msgid "bg-active，文字 fg；调用方传对应的 ARIA。"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
 msgstr ""
 
@@ -296,6 +312,7 @@ msgstr ""
 msgid "CLI 可用，但读取模型失败：{0}"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "CLI 自带登录"
 msgstr ""
@@ -323,7 +340,7 @@ msgstr ""
 msgid "DropdownMenuContent 默认变成底部面板；贴着光标的菜单传 mobileSheet={false}。"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "DSH 源码目录"
 msgstr ""
 
@@ -707,6 +724,10 @@ msgstr ""
 msgid "不限"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "不限额"
+msgstr ""
+
 #: src/app/design/mac/OverlayChapter.tsx
 msgid "与 Web 弹窗相同的四档；高度随内容，超过窗口高减 64 时正文滚动。"
 msgstr ""
@@ -941,6 +962,7 @@ msgstr ""
 msgid "产品功能"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "仅保存到服务器，不会回显"
 msgstr ""
@@ -1075,6 +1097,7 @@ msgstr ""
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
+#: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "会话"
 msgstr ""
@@ -1193,7 +1216,11 @@ msgstr ""
 msgid "体系的组织"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ProviderUsage.tsx
+msgid "余额"
+msgstr ""
+
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "使用 CLI 默认目录"
 msgstr ""
 
@@ -1294,6 +1321,7 @@ msgstr ""
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/PreferencesSections.tsx
@@ -1317,6 +1345,10 @@ msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "保存后清除已存 Key"
+msgstr ""
+
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "保存后读取额度"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -1351,7 +1383,7 @@ msgstr ""
 msgid "保留英文"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "信任"
 msgstr ""
 
@@ -1567,7 +1599,7 @@ msgstr ""
 msgid "关闭浮层"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "关闭自动更新"
 msgstr ""
 
@@ -1745,10 +1777,6 @@ msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "凭据保存在运行 Riffet 服务器的电脑上"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "凭据由服务器解析。"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
@@ -1987,12 +2015,21 @@ msgstr ""
 msgid "刷新页面"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "刷新额度"
+msgstr ""
+
 #: src/app/design/patterns/KeyboardChapter.tsx
 msgid "前一个命令已占用"
 msgstr ""
 
+#: src/app/settings/ProviderUsage.tsx
+msgid "剩余 {remaining}%"
+msgstr ""
+
 #: src/app/design/foundations/StatesChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
+#: src/app/design/patterns/FormsChapter.tsx
 msgid "加载"
 msgstr ""
 
@@ -2363,10 +2400,6 @@ msgstr ""
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "可选源码 checkout"
-msgstr ""
-
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
 msgid "右侧栏：会话详情，宽 {0}"
@@ -2499,7 +2532,8 @@ msgstr ""
 msgid "启动以来共 {0} 次"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "启动设置"
 msgstr ""
 
@@ -2758,10 +2792,6 @@ msgstr ""
 msgid "地址"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "地址与凭据由服务器解析。"
-msgstr ""
-
 #. placeholder {0}: namedEntry.source.label
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "地址留空则使用 {0} 的默认地址"
@@ -2901,6 +2931,10 @@ msgstr ""
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "套用预设…"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "套餐"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx
@@ -3337,6 +3371,7 @@ msgstr ""
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
+#: src/app/design/patterns/SelectionChapter.tsx
 msgid "工作目录"
 msgstr ""
 
@@ -3487,7 +3522,7 @@ msgstr ""
 msgid "已导入深色代码高亮配色"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "已开启"
 msgstr ""
 
@@ -3563,7 +3598,7 @@ msgid "已选 {0} / {1} 个"
 msgstr ""
 
 #. placeholder {0}: cliVersion.testedThrough ?? ''
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "已验证至 {0}"
 msgstr ""
 
@@ -3806,6 +3841,7 @@ msgstr ""
 msgid "强调色只用于焦点环、文本选区和链接"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "当前不可用"
 msgstr ""
@@ -4304,6 +4340,11 @@ msgctxt "settings-composer-queue"
 msgid "排队"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "接入方式"
+msgstr ""
+
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
@@ -4352,7 +4393,7 @@ msgid "提供商"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
-msgid "提供商来源"
+msgid "提供此类型的插件不可用"
 msgstr ""
 
 #: src/app/design/foundations/ElevationChapter.tsx
@@ -4708,7 +4749,7 @@ msgstr ""
 
 #: src/app/design/catalog.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "新会话"
 msgstr ""
 
@@ -4813,6 +4854,10 @@ msgstr ""
 msgid "无法保存，请检查输入后重试。"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "无法保存，请重试"
+msgstr ""
+
 #: src/app/settings/ThemeEditor.tsx
 msgid "无法保存主题"
 msgstr ""
@@ -4859,19 +4904,7 @@ msgid "无法保存通知设置"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
-msgid "无法保存默认 Agent"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "无法保存默认审批模式"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
 msgid "无法保存默认提供商"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "无法信任"
 msgstr ""
 
 #: src/app/settings/SettingsDialog.tsx
@@ -4888,6 +4921,10 @@ msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法删除提供商"
+msgstr ""
+
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "无法加载启动设置"
 msgstr ""
 
 #: src/app/settings/DefaultApprovalSetting.tsx
@@ -4976,6 +5013,7 @@ msgstr ""
 msgid "无法读取推送设置"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "无法读取插件"
 msgstr ""
@@ -4986,6 +5024,10 @@ msgstr ""
 
 #: src/app/settings/ChannelsSection.tsx
 msgid "无法读取机器人"
+msgstr ""
+
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "无法读取模型"
 msgstr ""
 
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -5138,6 +5180,10 @@ msgstr ""
 msgid "更换凭据"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "更换后会切换账号与原生历史范围"
+msgstr ""
+
 #: src/app/settings/ProfileSection.tsx
 msgid "更换头像"
 msgstr ""
@@ -5208,6 +5254,7 @@ msgstr ""
 msgid "服务器进程"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "服务地址"
 msgstr ""
@@ -5248,7 +5295,7 @@ msgstr ""
 msgid "未检测到"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "未设置"
 msgstr ""
 
@@ -5299,7 +5346,6 @@ msgid "权限、文件选择与分享"
 msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
-#: src/app/settings/BackendProfilesSection.tsx
 msgid "来源"
 msgstr ""
 
@@ -5560,17 +5606,10 @@ msgid "模型与工具名"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
-#: src/app/design/patterns/SelectionChapter.tsx
+#: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/BackendProfilesSection.tsx
-msgid "模型提供商"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "模型来源"
-msgstr ""
-
 #: src/app/settings/settingsSections.ts
-msgid "模型设置"
+msgid "模型提供商"
 msgstr ""
 
 #: src/app/design/catalog.tsx
@@ -5586,6 +5625,10 @@ msgstr ""
 
 #: src/app/design/android/PagesChapter.tsx
 msgid "横向滑动只留给侧栏和返回，列表行不做左滑操作"
+msgstr ""
+
+#: src/app/design/components/NavigationChapter.tsx
+msgid "横向滚动"
 msgstr ""
 
 #: src/app/design/foundations/MotionChapter.tsx
@@ -5685,6 +5728,14 @@ msgstr ""
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "每升一层，底色变化一级。层次由底色表达，阴影留给脱离文档流的浮层。"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "每周"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "每日"
 msgstr ""
 
 #: src/app/design/mac/TypeChapter.tsx
@@ -6139,7 +6190,7 @@ msgstr ""
 msgid "用飞书扫码"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "由 Codex 写入 ~/.codex/config.toml"
 msgstr ""
 
@@ -6202,11 +6253,7 @@ msgstr ""
 msgid "留空则沿用 CLI 自己的默认值。"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "留空沿用 CLI 默认目录；更换后会切换账号与原生历史范围"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "留空沿用服务器启动环境中的 CLI"
 msgstr ""
 
@@ -6338,6 +6385,10 @@ msgstr ""
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
+msgstr ""
+
+#: src/app/design/patterns/FormsChapter.tsx
+msgid "示例网关"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -6882,6 +6933,11 @@ msgstr ""
 msgid "网关模型不在 DSH 目录时会按纯文本处理；勾选「图片」才能收到图。"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "网关类型"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "网格"
 msgstr ""
@@ -6952,8 +7008,9 @@ msgstr ""
 msgid "自动编辑"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "自定义 API"
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "自动选择"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -7192,7 +7249,7 @@ msgstr ""
 msgid "记录中"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "记录命令改动的文件"
 msgstr ""
 
@@ -7733,6 +7790,10 @@ msgstr ""
 msgid "返回{0}"
 msgstr ""
 
+#: src/app/settings/BackendProfilesSection.tsx
+msgid "返回模型提供商"
+msgstr ""
+
 #: src/app/settings/SettingsDialog.tsx
 msgid "返回设置分区"
 msgstr ""
@@ -7752,6 +7813,10 @@ msgstr ""
 
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "还没有带网关的提供商。先在 Claude Code、DSH 或 Codex 下添加一个自定义提供商。"
+msgstr ""
+
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "还没有提供商"
 msgstr ""
 
 #: src/app/settings/BackendProfilesSection.tsx
@@ -8006,6 +8071,7 @@ msgid "逐项调整"
 msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/BackendProfilesSection.tsx
 msgid "通用"
 msgstr ""
 
@@ -8062,12 +8128,15 @@ msgstr ""
 msgid "配方写在 ThemePresets.kt，这张表按它誊写。组件只读这些字段，不判断风格名。"
 msgstr ""
 
+#: src/app/design/components/NavigationChapter.tsx
+#: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "配置的 Agent"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "配置目录"
 msgstr ""
 
@@ -8083,7 +8152,7 @@ msgstr ""
 msgid "配色模式"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "重启会话后生效"
 msgstr ""
 
@@ -8136,6 +8205,7 @@ msgstr ""
 #: src/app/design/foundations/AccessibilityChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/shared.tsx
@@ -8143,6 +8213,7 @@ msgstr ""
 #: src/app/settings/DefaultApprovalSetting.tsx
 #: src/app/settings/DevicesSection.tsx
 #: src/app/settings/PairingDialogs.tsx
+#: src/app/settings/ProviderUsage.tsx
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "重试"
 msgstr ""
@@ -8324,12 +8395,8 @@ msgid "需要"
 msgstr ""
 
 #. placeholder {0}: cliVersion.minimum ?? ''
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "需要 {0} 或更高"
-msgstr ""
-
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "需要包含已构建 lib；也可使用已安装的 dsh 0.2.0-rc.2"
 msgstr ""
 
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -8507,6 +8574,7 @@ msgid "顶栏、单一滚动区、转场后淡入的正文"
 msgstr ""
 
 #: src/app/design/components/NavigationChapter.tsx
+#: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/ThemeEditor.tsx
@@ -8584,6 +8652,20 @@ msgstr ""
 msgid "颜色角色与主题取值；间距、字号、圆角、动效；风格配方"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/settings/ProviderUsage.tsx
+msgid "额度"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "额度已用尽"
+msgstr ""
+
+#: src/app/settings/ProviderUsage.tsx
+msgid "额度读取失败"
+msgstr ""
+
 #: src/app/design/android/StylesChapter.tsx
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/StylesChapter.tsx
@@ -8649,6 +8731,10 @@ msgstr ""
 msgid "高度动画"
 msgstr ""
 
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "高级启动配置"
+msgstr ""
+
 #: src/app/design/foundations/ColorChapter.tsx
 #: src/app/design/mac/notes.ts
 msgid "墨色"
@@ -8682,7 +8768,8 @@ msgid "默认 14 像素、次级文字色；在按钮里用 text-current。"
 msgstr ""
 
 #: src/app/design/patterns/FormsChapter.tsx
-#: src/app/settings/BackendProfilesSection.tsx
+#: src/app/design/patterns/SelectionChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 msgid "默认 Agent"
 msgstr ""
 
@@ -8690,19 +8777,21 @@ msgstr ""
 msgid "默认（{size}）"
 msgstr ""
 
-#: src/app/settings/BackendProfilesSection.tsx
-msgid "默认使用独立目录；更换后会切换配置与原生历史范围"
-msgstr ""
-
 #: src/app/design/mac/StylesChapter.tsx
 msgid "默认图标包"
 msgstr ""
 
-#: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/settings/DefaultApprovalSetting.tsx
 msgid "默认审批模式"
 msgstr ""
 
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
+msgid "默认提供商"
+msgstr ""
+
+#: src/app/design/patterns/FormsChapter.tsx
+#: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "默认模型"

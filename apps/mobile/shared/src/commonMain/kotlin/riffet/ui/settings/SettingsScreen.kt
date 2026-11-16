@@ -79,8 +79,7 @@ import riffet.ui.design.ConfirmDialog
 private sealed interface SettingsPageRoute {
     data object Home : SettingsPageRoute
     data class Section(val section: SettingsSection, val searchTargetId: String? = null) : SettingsPageRoute
-    data class Backend(val id: NativeBackendId) : SettingsPageRoute
-    data class Profile(val backend: NativeBackendId, val id: String) : SettingsPageRoute
+    data class Profile(val backend: NativeBackendId, val id: String, val launchOnly: Boolean = false) : SettingsPageRoute
     data class Add(val backend: NativeBackendId) : SettingsPageRoute
     data object Owner : SettingsPageRoute
     data object QuickChatPresets : SettingsPageRoute
@@ -148,7 +147,10 @@ internal fun SettingsScreen(
             }
             // A section with pages of its own beneath it owns its whole page, top bar included.
             is SettingsPageRoute.Section -> if (route.section == SettingsSection.EXTENSIONS) ExtensionsPage(api, projectId, route.section.label, back)
-            else if (route.section == SettingsSection.APPEARANCE) AppearancePage(
+            else if (route.section == SettingsSection.PROVIDERS || route.section == SettingsSection.BACKENDS) BackendSettingsPage(controller, back, agentSettings = route.section == SettingsSection.BACKENDS,
+                onEdit = { backend, id -> pages.push(SettingsPageRoute.Profile(backend, id, launchOnly = route.section == SettingsSection.BACKENDS)) },
+                onAdd = { backend -> pages.push(SettingsPageRoute.Add(backend)) },
+            ) else if (route.section == SettingsSection.APPEARANCE) AppearancePage(
                 route.section.label, back, sectionSearchTarget(route.searchTargetId),
                 themeMode, onThemeModeChange, themes, themeId, onThemeIdChange,
             ) else if (route.section == SettingsSection.DIAGNOSTICS) DiagnosticsPage(
@@ -187,7 +189,8 @@ internal fun SettingsScreen(
                         SettingsSection.NOTIFICATIONS -> NotificationsSection()
                         SettingsSection.INTERACTION -> InteractionSection(controller)
                         SettingsSection.QUICK_CHAT -> QuickChatSection(controller, auxiliaryOptions.first, auxiliaryOptions.second) { pages.push(SettingsPageRoute.QuickChatPresets) }
-                        SettingsSection.BACKENDS -> BackendsSection(controller) { pages.push(SettingsPageRoute.Backend(it)) }
+                        SettingsSection.BACKENDS -> Unit
+                        SettingsSection.PROVIDERS -> Unit
                         SettingsSection.FILES -> FilesSettingsSection(controller)
                         SettingsSection.EXTENSIONS -> Unit
                         SettingsSection.DEVICES -> DevicesSection(api)
@@ -203,10 +206,7 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            is SettingsPageRoute.Backend -> BackendProfilesPage(controller, route.id, back,
-                onEdit = { pages.push(SettingsPageRoute.Profile(route.id, it)) },
-                onAdd = { pages.push(SettingsPageRoute.Add(route.id)) })
-            is SettingsPageRoute.Profile -> BackendProfilePage(controller, route.backend, route.id, back, onDeleted = { pages.pop() })
+            is SettingsPageRoute.Profile -> BackendProfilePage(controller, route.backend, route.id, back, onDeleted = { pages.pop() }, launchOnly = route.launchOnly)
             is SettingsPageRoute.Add -> AddProfilePage(controller, route.backend, back, onCreated = { pages.pop() })
             SettingsPageRoute.Owner -> OwnerProfilePages(owner, back)
             SettingsPageRoute.QuickChatPresets -> QuickChatPresetsPage(controller, back)

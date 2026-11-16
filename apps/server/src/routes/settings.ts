@@ -101,7 +101,7 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
     reply.raw.once('close',close);
     try{
       if(purpose==='title')return {text:await titles.preview(ref,message,controller.signal)};
-      const {profileName:_name,...endpoint}=auxiliaryEndpoint(ref,id=>nativeBackends.catalog.gatewayProfiles(id));
+      const {profileName:_name,...endpoint}=await auxiliaryEndpoint(ref,id=>nativeBackends.catalog.gatewayProfiles(id),controller.signal);
       return {text:await requestHandoffSummary(endpoint,message,{signal:controller.signal})};
     }catch(error){
       const message=error instanceof Error?error.message:'The auxiliary model returned no result';

@@ -7,6 +7,7 @@ struct AgentProviderEditor: View {
     let workbench: Workbench
     let backend: NativeBackendId
     let isDefault: Bool
+    let launchSettings: Bool
     let onFinished: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -28,7 +29,14 @@ struct AgentProviderEditor: View {
     @State private var confirmDiscard = false
     @State private var confirmDelete = false
     @State private var plugins: [PluginDescriptor]
+    @State private var pluginsLoaded = false
+    @State private var pluginsLoading = false
+    @State private var pluginsError: String?
     @State private var flow: PluginFlow?
+    @State private var usage: NativeBackendUsage?
+    @State private var usageKey: String?
+    @State private var usageLoading = false
+    @State private var usageError: String?
 
     init(
         workbench: Workbench,
@@ -36,11 +44,13 @@ struct AgentProviderEditor: View {
         profile: NativeBackendProfileSettings?,
         plugins: [PluginDescriptor],
         isDefault: Bool,
+        launchSettings: Bool = false,
         onFinished: @escaping () -> Void
     ) {
         self.workbench = workbench
         self.backend = backend
         self.isDefault = isDefault
+        self.launchSettings = launchSettings
         self.onFinished = onFinished
         _plugins = State(initialValue: plugins)
         let next: ProfileDraft
@@ -68,16 +78,79 @@ struct AgentProviderEditor: View {
     private var dirty: Bool { draft != baseline || !apiKey.isEmpty || clearKey }
 
     private var canSave: Bool {
-        guard dirty, !saving else { return false }
+        guard dirty, !saving, sourceChangeAllowed else { return false }
         if draft.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
-        if draft.source == "custom" && draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
+        // Legacy adapters may still inherit their plugin's saved connection.
+        if !launchSettings, isAPI(draft.source), draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           isNew || draft.source != baseline.source || !baseline.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { return false }
         return true
     }
 
-    /// A saved source no enabled plugin offers stays pickable, without its fields.
+    private func knowsSource(_ source: String) -> Bool {
+        source == "login" || source == "custom" || plugins.contains { plugin in
+            plugin.contributes.modelSources.contains { $0.id == source }
+        }
+    }
+
+    /// The initial descriptors are a display cache, not authority for credential transitions.
+    private var canChangeSource: Bool {
+        pluginsLoaded && !pluginsLoading && knowsSource(baseline.source) && knowsSource(draft.source)
+    }
+
+    private var sourceChangeAllowed: Bool {
+        draft.source == baseline.source || canChangeSource
+    }
+
+    private func refreshPluginDescriptors() async {
+        guard !pluginsLoading else { return }
+        pluginsLoading = true
+        pluginsLoaded = false
+        pluginsError = nil
+        defer { pluginsLoading = false }
+        guard let api = workbench.host.api else {
+            pluginsError = String(localized: "当前不可用")
+            return
+        }
+        do {
+            let loaded = try await api.plugins()
+            guard !Task.isCancelled else { return }
+            plugins = loaded
+            PluginsStore.shared.update(loaded)
+            pluginsLoaded = true
+        } catch {
+            guard !Task.isCancelled else { return }
+            pluginsError = error.riffetMessage
+        }
+    }
+
+    private func isAPI(_ source: String) -> Bool {
+        source == "custom" || plugins.contains { plugin in
+            plugin.contributes.modelSources.contains { $0.id == source && $0.role == "adapter" }
+        }
+    }
+
+    /// Independent login sources and API connections have different conversion semantics.
     private var sources: [String] {
-        let listed = modelSources(for: backend, plugins: plugins, consuming: consumedProtocols)
-        return listed.contains(baseline.source) ? listed : Array(listed.dropLast()) + [baseline.source, "custom"]
+        var listed = ["login"] + offeredModelSources(plugins, for: backend, consuming: consumedProtocols)
+            .filter { $0.source.role != "adapter" }.map(\.source.id) + ["custom"]
+        if !isAPI(baseline.source), !listed.contains(baseline.source) { listed.append(baseline.source) }
+        return listed
+    }
+
+    private var gatewayTypes: [String] {
+        var listed = ["custom"] + offeredModelSources(plugins, for: backend, consuming: consumedProtocols)
+            .filter { $0.source.role == "adapter" }.map(\.source.id)
+        if isAPI(baseline.source), !listed.contains(baseline.source) { listed.append(baseline.source) }
+        return listed
+    }
+
+    private func sourceChoiceTitle(_ source: String) -> String {
+        if source == "login" || source == "custom" { return modelSourceTitle(source, plugins: plugins) }
+        if let item = offeredModelSources(plugins, for: backend, consuming: consumedProtocols).first(where: { $0.source.id == source }) {
+            return item.source.label
+        }
+        let title = plugins.lazy.compactMap { $0.contributes.modelSources.first { $0.id == source } }.first?.label ?? source
+        return String(localized: "\(title) · 不可用")
     }
 
     private var offered: OfferedModelSource? {
@@ -90,7 +163,7 @@ struct AgentProviderEditor: View {
     }
 
     private func overrides(_ field: String) -> Bool {
-        draft.source == "custom" || offered?.source.overridable.contains(field) == true
+        isAPI(draft.source) || offered?.source.overridable.contains(field) == true
     }
 
     var body: some View {
@@ -98,99 +171,20 @@ struct AgentProviderEditor: View {
             header
             Divider()
             Form {
-                Section {
-                    SettingsFieldRow("名称") {
-                        TextField(sourceTitlePlaceholder, text: $draft.name)
-                            .formField()
-                            .disabled(saving)
-                    }
-                    if profileAllowsEndpoint(backend) {
-                        Picker("来源", selection: sourceBinding) {
-                            ForEach(sources, id: \.self) { source in
-                                Text(modelSourceTitle(source, plugins: plugins)).tag(source)
-                            }
-                        }
-                        .formPicker()
-                        .disabled(saving)
-                        if backend == .pi && draft.source == "custom" {
-                            SettingsFieldRow("协议") {
-                                Picker("协议", selection: Binding(
-                                    get: { draft.apiProtocol ?? defaultNativeModelApiProtocol },
-                                    set: { draft.apiProtocol = $0 }
-                                )) {
-                                    ForEach(nativeModelApiProtocols, id: \.id) { item in
-                                        Text(item.label).tag(item.id)
-                                    }
-                                }
-                                .labelsHidden()
-                                .pickerStyle(.menu)
-                                .formPicker()
-                                .disabled(saving)
-                            }
-                        }
-                        sourceLoginControls
-                        if overrides("apiEndpoint") {
-                            SettingsFieldRow("服务地址") {
-                                TextField(draft.modelSource != nil ? offered?.source.defaultEndpoint ?? String(localized: "使用来源默认地址") : endpointHint(backend)?.placeholder ?? "https://", text: $draft.apiEndpoint)
-                                    .font(.riffet(size: S(13), design: .monospaced))
-                                    .formField()
-                                    .disabled(saving)
-                            }
-                            if let hint = endpointHint(backend), !draft.apiEndpoint.isEmpty {
-                                SettingsHint(hint.hint)
-                            }
-                        }
-                        if overrides("apiKey") {
-                            SettingsFieldRow("API Key") {
-                                HStack(spacing: Space.sm) {
-                                    SecureField(keyPlaceholder, text: $apiKey)
-                                        .font(.riffet(size: S(13), design: .monospaced))
-                                        .formField()
-                                        .disabled(saving)
-                                        .onChange(of: apiKey) { _, value in if !value.isEmpty { clearKey = false } }
-                                    if current?.hasApiKey?.boolValue == true, draft.source == baseline.source {
-                                        Button(clearKey ? "取消清除" : "清除") {
-                                            apiKey = ""
-                                            clearKey.toggle()
-                                        }
-                                        .disabled(saving)
-                                    }
-                                }
-                            }
-                        }
+                if !launchSettings {
+                    connectionBlock
+
+                    quotaBlock
+
+                    // A new provider picks its models as soon as there is something to read them from.
+                    if current != nil || canProbe {
+                        modelBlock
                     }
                 }
 
-                // A new provider picks its models as soon as there is something to read them from.
-                if current != nil || canProbe {
-                    modelBlock
+                if launchSettings {
+                    launchBlock
                 }
-
-                SettingsBlock("高级") {
-                    SettingsFieldRow("CLI 入口") {
-                        TextField(backendWire(backend), text: $draft.executable)
-                            .font(.riffet(size: S(13), design: .monospaced))
-                            .formField()
-                    }
-                    if profileAllowsConfigDir(backend) {
-                        SettingsFieldRow("配置目录") {
-                            TextField(backend == .dsh ? "~/.riffet/dsh（默认）" : "使用 CLI 默认目录", text: $draft.configDir)
-                                .font(.riffet(size: S(13), design: .monospaced))
-                                .formField()
-                        }
-                    }
-                    if profileAllowsSourceDir(backend) {
-                        SettingsFieldRow("DSH 源码目录") {
-                            TextField("可选", text: $draft.sourceDir)
-                                .font(.riffet(size: S(13), design: .monospaced))
-                                .formField()
-                        }
-                    }
-                    if profileAllowsAutoUpdate(backend) {
-                        Toggle("关闭自动更新", isOn: $draft.disableAutoUpdate)
-                    }
-                }
-                .disabled(saving)
 
                 if let error {
                     SettingsCallout(.danger, message: error)
@@ -203,7 +197,9 @@ struct AgentProviderEditor: View {
         // Shorter than the settings window's minimum, so the sheet never overhangs it.
         .frame(minWidth: 620, idealWidth: 680, minHeight: 460, idealHeight: 560)
         .background(palette.bg)
-        .task(id: catalogToken) { await loadCatalog() }
+        .task { await refreshPluginDescriptors() }
+        .task(id: catalogToken) { if !launchSettings { await loadCatalog() } }
+        .task(id: "\(usageScope)#\(pluginsLoaded)") { if !launchSettings { await loadUsage() } }
         .interactiveDismissDisabled(dirty)
         .confirmationDialog("放弃未保存的更改？", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("放弃更改", role: .destructive) { dismiss() }
@@ -222,19 +218,133 @@ struct AgentProviderEditor: View {
         .sheet(item: $flow) { flow in
             PluginFlowSheet(workbench: workbench, pluginId: flow.pluginId, action: flow.action) {
                 Task {
-                    if let loaded = try? await workbench.host.api?.plugins() { plugins = loaded; PluginsStore.shared.update(loaded) }
+                    await refreshPluginDescriptors()
                     if current != nil { await probe() }
                 }
             }
         }
     }
 
+    private var connectionBlock: some View {
+        Section {
+            SettingsFieldRow("名称") {
+                TextField(sourceTitlePlaceholder, text: $draft.name)
+                    .formField()
+                    .disabled(saving)
+            }
+            if profileAllowsEndpoint(backend) {
+                Picker("接入方式", selection: sourceBinding) {
+                    ForEach(sources, id: \.self) { source in
+                        Text(source == "custom" ? "API" : sourceChoiceTitle(source)).tag(source)
+                    }
+                }
+                .formPicker()
+                .disabled(saving || !canChangeSource)
+                if pluginsLoading {
+                    HStack {
+                        Spacer(minLength: Space.sm)
+                        Spinner(size: .small)
+                    }
+                } else if let pluginsError {
+                    SettingsCallout(.danger, message: pluginsError, actionTitle: String(localized: "重试"), action: {
+                        Task { await refreshPluginDescriptors() }
+                    })
+                }
+                if backend == .pi && draft.source == "custom" {
+                    SettingsFieldRow("协议") {
+                        Picker("协议", selection: Binding(
+                            get: { draft.apiProtocol ?? defaultNativeModelApiProtocol },
+                            set: { draft.apiProtocol = $0 }
+                        )) {
+                            ForEach(nativeModelApiProtocols, id: \.id) { item in
+                                Text(item.label).tag(item.id)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .formPicker()
+                        .disabled(saving)
+                    }
+                }
+                if isAPI(draft.source) {
+                    Picker("网关类型", selection: gatewayTypeBinding) {
+                        ForEach(gatewayTypes, id: \.self) { source in
+                            Text(source == "custom" ? String(localized: "通用") : sourceChoiceTitle(source)).tag(source)
+                        }
+                    }
+                    .formPicker()
+                    .disabled(saving || !canChangeSource)
+                } else {
+                    sourceLoginControls
+                }
+                if overrides("apiEndpoint") {
+                    SettingsFieldRow("服务地址") {
+                        TextField(draft.modelSource != nil ? offered?.source.defaultEndpoint ?? String(localized: "使用来源默认地址") : endpointHint(backend)?.placeholder ?? "https://", text: $draft.apiEndpoint)
+                            .font(.riffet(size: S(13), design: .monospaced))
+                            .formField()
+                            .disabled(saving)
+                    }
+                    if let hint = endpointHint(backend), !draft.apiEndpoint.isEmpty {
+                        SettingsHint(hint.hint)
+                    }
+                }
+                if overrides("apiKey") {
+                    SettingsFieldRow("API Key") {
+                        HStack(spacing: Space.sm) {
+                            SecureField(keyPlaceholder, text: $apiKey)
+                                .font(.riffet(size: S(13), design: .monospaced))
+                                .formField()
+                                .disabled(saving)
+                                .onChange(of: apiKey) { _, value in if !value.isEmpty { clearKey = false } }
+                            if current?.hasApiKey?.boolValue == true, !clearKey || draft.source == baseline.source {
+                                Button(clearKey ? "取消清除" : "清除") {
+                                    apiKey = ""
+                                    clearKey.toggle()
+                                }
+                                .disabled(saving)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var launchBlock: some View {
+        SettingsBlock("高级启动配置") {
+            SettingsFieldRow("CLI 入口") {
+                TextField(backendWire(backend), text: $draft.executable)
+                    .font(.riffet(size: S(13), design: .monospaced))
+                    .formField()
+            }
+            if profileAllowsConfigDir(backend) {
+                SettingsFieldRow("配置目录") {
+                    TextField(backend == .dsh ? "~/.riffet/dsh（默认）" : "使用 CLI 默认目录", text: $draft.configDir)
+                        .font(.riffet(size: S(13), design: .monospaced))
+                        .formField()
+                }
+                SettingsHint("更换后会切换账号与原生历史范围")
+            }
+            if profileAllowsSourceDir(backend) {
+                SettingsFieldRow("DSH 源码目录") {
+                    TextField("可选", text: $draft.sourceDir)
+                        .font(.riffet(size: S(13), design: .monospaced))
+                        .formField()
+                }
+            }
+            if profileAllowsAutoUpdate(backend) {
+                Toggle("关闭自动更新", isOn: $draft.disableAutoUpdate)
+            }
+        }
+        .disabled(saving)
+    }
+
     // MARK: - Chrome
 
     private var header: some View {
         HStack(spacing: Space.sm) {
-            Text(isNew ? String(localized: "添加 \(backendTitle(backend)) 提供商") : (current?.name ?? String(localized: "编辑提供商")))
-                .font(.riffet(size: S(16), weight: .semibold))
+            Text(launchSettings ? String(localized: "\(current?.name ?? backendTitle(backend)) 高级启动配置") : isNew ? String(localized: "添加 \(backendTitle(backend)) 提供商") : (current?.name ?? String(localized: "编辑提供商")))
+                .font(RiffetFont.text(RiffetTextSize.lg, weight: .medium))
                 .foregroundStyle(palette.fg)
             Spacer(minLength: Space.sm)
             if saving { Spinner(size: .small) }
@@ -245,12 +355,12 @@ struct AgentProviderEditor: View {
 
     private var footer: some View {
         HStack(spacing: Space.sm) {
-            if !isNew {
+            if !isNew, !launchSettings {
                 SettingsActionButton("删除", kind: .danger) { confirmDelete = true }
                     .disabled(saving)
             }
             Spacer(minLength: Space.sm)
-            if !isNew, !isDefault {
+            if !isNew, !isDefault, !launchSettings {
                 SettingsActionButton("设为默认", kind: .secondary) { Task { await makeDefault() } }
                     .disabled(saving || dirty)
                     .help(dirty ? String(localized: "先保存更改，再设为默认") : "")
@@ -274,7 +384,7 @@ struct AgentProviderEditor: View {
 
     /// The draft can be probed for models without saving it first.
     private var canProbe: Bool {
-        !draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.modelSource != nil
+        sourceChangeAllowed && (!draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.modelSource != nil)
     }
 
     /// The draft reaches the same models as the saved provider, whose catalogue the server keeps.
@@ -284,7 +394,7 @@ struct AgentProviderEditor: View {
     }
 
     private var sourceTitlePlaceholder: String {
-        draft.source == "custom" ? String(localized: "例如 公司网关") : modelSourceTitle(draft.source, plugins: plugins)
+        isAPI(draft.source) ? String(localized: "例如 公司网关") : modelSourceTitle(draft.source, plugins: plugins)
     }
 
     private func requestClose() {
@@ -293,9 +403,10 @@ struct AgentProviderEditor: View {
 
     private var sourceBinding: Binding<String> {
         Binding(
-            get: { draft.source },
+            get: { isAPI(draft.source) ? "custom" : draft.source },
             set: { next in
-                guard next != draft.source else { return }
+                guard !saving, canChangeSource, knowsSource(next), sources.contains(next),
+                      next != (isAPI(draft.source) ? "custom" : draft.source) else { return }
                 draft.source = next
                 draft.apiEndpoint = ""
                 draft.defaultModel = ""
@@ -307,6 +418,73 @@ struct AgentProviderEditor: View {
                 catalog = []
             }
         )
+    }
+
+    /// A gateway type interprets the same API connection; its identity and selections stay intact.
+    private var gatewayTypeBinding: Binding<String> {
+        Binding(get: { draft.source }, set: { next in
+            guard !saving, canChangeSource, isAPI(draft.source), isAPI(next), gatewayTypes.contains(next),
+                  next != draft.source else { return }
+            draft.source = next
+        })
+    }
+
+    @ViewBuilder
+    private var quotaBlock: some View {
+        if current != nil, draft.modelSource != nil, offered?.source.usage?.boolValue == true {
+            SettingsBlock("额度") {
+                HStack(spacing: Space.sm) {
+                    Spacer(minLength: Space.sm)
+                    if usageLoading { Spinner(size: .mini) }
+                    Button { Task { await loadUsage() } } label: {
+                        Image(icon: "arrow.clockwise")
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(saving || usageLoading || !matchesSaved)
+                    .help("刷新额度")
+                }
+                if !matchesSaved {
+                    Text("保存后读取额度")
+                        .font(RiffetFont.caption)
+                        .foregroundStyle(palette.fg3)
+                } else if let usage, usageKey == usageScope, usage.account != nil {
+                    ModelAccountUsage(account: usage.account, loading: usageLoading)
+                } else if !usageLoading, usageError == nil {
+                    Text("额度不可用")
+                        .font(RiffetFont.caption)
+                        .foregroundStyle(palette.fg3)
+                }
+                if let usageError, matchesSaved {
+                    SettingsCallout(.danger, message: usageError)
+                }
+            }
+        }
+    }
+
+    private var usageScope: String {
+        "\(backendWire(backend))#\(current?.id ?? "")#\(draft.source)#\(draft.apiEndpoint)#\(draft.apiProtocol ?? "")#\(apiKey)#\(clearKey)"
+    }
+
+    private func loadUsage() async {
+        let request = usageScope
+        if usageKey != request {
+            usage = nil
+            usageKey = request
+        }
+        usageError = nil
+        usageLoading = false
+        guard !launchSettings, pluginsLoaded, matchesSaved, offered?.source.usage?.boolValue == true,
+              let id = current?.id, let api = workbench.host.api else { return }
+        usageLoading = true
+        defer { if usageScope == request { usageLoading = false } }
+        do {
+            let result = try await api.agentUsage(agentId: backendWire(backend), projectId: nil, profileId: id, sessionId: nil, global: true)
+            guard !Task.isCancelled, usageScope == request else { return }
+            usage = result
+        } catch {
+            guard !Task.isCancelled, usageScope == request else { return }
+            usageError = String(localized: "额度读取失败")
+        }
     }
 
     @ViewBuilder
@@ -418,25 +596,23 @@ struct AgentProviderEditor: View {
         return catalog.filter { enabled.contains($0.value) }
     }
 
-    @ViewBuilder
     private func modelPicker(catalog: [ModelInfo], selection: Binding<String>, disabled: Bool) -> some View {
-        HStack {
-            if catalog.isEmpty {
-                TextField("CLI 默认", text: selection)
-                    .font(.riffet(size: S(13), design: .monospaced))
-                    .formField()
-                    .labelsHidden()
-                    .disabled(disabled)
-            } else {
-                if !selection.wrappedValue.isEmpty {
-                    Button("清除") { selection.wrappedValue = "" }.disabled(disabled)
-                }
-                ModelControls(catalog: catalog, selection: selection.wrappedValue.isEmpty ? nil : selection.wrappedValue, scope: catalogToken, refresh: { await loadCatalog(quiet: true) }) {
-                    selection.wrappedValue = $0
-                }
-                .disabled(disabled)
+        let selected = selection.wrappedValue.isEmpty ? "" : resolveModelSelection(catalog: catalog, selection: selection.wrappedValue).model
+        return Picker("默认模型", selection: Binding(
+            get: { selected },
+            set: { id in selection.wrappedValue = id.isEmpty ? "" : selectionForModel(catalog: catalog, model: id) }
+        )) {
+            Text("自动").tag("")
+            ForEach(catalog, id: \.value) { item in
+                Text(cleanLabel(value: item.name)).tag(item.value)
+            }
+            if !selected.isEmpty, !catalog.contains(where: { $0.value == selected }) {
+                Text(selected).tag(selected)
             }
         }
+        .labelsHidden()
+        .formPicker()
+        .disabled(disabled)
     }
 
     private func modelToggle(_ id: String) -> Binding<Bool> {
@@ -548,7 +724,8 @@ struct AgentProviderEditor: View {
 
     private func probe() async {
         let endpoint = draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !endpoint.isEmpty || draft.modelSource != nil, let api = workbench.host.api else { return }
+        guard !saving, sourceChangeAllowed, !endpoint.isEmpty || draft.modelSource != nil,
+              let api = workbench.host.api else { return }
         let request = catalogToken
         let key = apiKey
         let clearingKey = clearKey
@@ -557,7 +734,7 @@ struct AgentProviderEditor: View {
         do {
             let body = ProbeBackendModelsBody(
                 apiEndpoint: endpoint.isEmpty ? nil : endpoint,
-                apiKey: apiKey.isEmpty ? (clearKey || draft.source != baseline.source ? "" : nil) : apiKey,
+                apiKey: apiKey.isEmpty ? (clearKey ? "" : nil) : apiKey,
                 profileId: current?.id,
                 modelSource: draft.modelSource,
                 apiProtocol: backend == .antigravity && draft.source == "custom" ? "google-generative-ai" : backend == .pi && draft.source == "custom" ? draft.apiProtocol : nil
@@ -577,6 +754,7 @@ struct AgentProviderEditor: View {
     // MARK: - Save
 
     private func save() async {
+        guard canSave else { return }
         if isNew { await create() } else { await saveProfile() }
     }
 
@@ -605,6 +783,7 @@ struct AgentProviderEditor: View {
     }
 
     private func create() async {
+        guard canSave else { return }
         guard let api = workbench.host.api else { return }
         let name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
         let endpoint = draft.apiEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -651,12 +830,13 @@ struct AgentProviderEditor: View {
         do {
             _ = try await api.deleteBackendProfile(backendId: backend, profileId: profile.id)
             let agent = backendWire(backend)
-            if workbench.settings?.defaultsFor(agent: agent)?.profileId == profile.id {
+            let defaults = workbench.settings?.defaultsFor(agent: agent)
+            if defaults?.profileId == profile.id || (defaults?.profileId == nil && isDefault) {
                 var map = agentDefaults(from: workbench.settings)
                 let previous = map[agent]
                 map[agent] = NativeBackendDefaults(
                     profileId: nil,
-                    model: previous?.model,
+                    model: nil,
                     mode: previous?.mode,
                     approval: previous?.approval
                 )
@@ -707,7 +887,8 @@ struct AgentProviderEditor: View {
     }
 
     private func profileUpdate(_ profile: NativeBackendProfileSettings) -> NativeBackendProfileSettingsUpdate? {
-        let key = apiKey.isEmpty ? (clearKey || draft.source != baseline.source ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: apiKey)
+        guard sourceChangeAllowed else { return nil }
+        let key = apiKey.isEmpty ? (clearKey ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: apiKey)
         let modelsSame = sameStrings(draft.enabledModels, baseline.enabledModels)
         let inputsSame = sameModalities(draft.modalities, baseline.modalities)
         let windowsSame = draft.contextWindows == baseline.contextWindows

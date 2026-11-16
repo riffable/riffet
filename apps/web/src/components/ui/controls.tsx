@@ -141,10 +141,32 @@ export function useRoving<T extends string>(options: Array<Pick<SegmentOption<T>
 }
 
 /** Top-level view tabs: plain labels with an underline, so nested `Segmented` controls read as a sub-level. */
-export function UnderlineTabs<T extends string>({ value, options, onChange, className, ariaLabel }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; className?: string; ariaLabel?: string }) {
+export function UnderlineTabs<T extends string>({ value, options, onChange, className, ariaLabel, scrollable = false }: { value: T; options: SegmentOption<T>[]; onChange: (value: T) => void; className?: string; ariaLabel?: string; scrollable?: boolean }) {
   const roving = useRoving(options, value);
+  // Only scroll this strip; scrollIntoView would also move the surrounding settings form.
+  const reveal = React.useCallback((tab: HTMLElement | null) => {
+    const strip = roving.group.current;
+    if (!scrollable || !strip || !tab) return;
+    const bounds = strip.getBoundingClientRect();
+    const item = tab.getBoundingClientRect();
+    if (item.left < bounds.left) strip.scrollLeft += item.left - bounds.left;
+    else if (item.right > bounds.right) strip.scrollLeft += item.right - bounds.right;
+  }, [scrollable, roving.group]);
+  const keys = options.map(option => option.value).join('\u0000');
+  React.useLayoutEffect(() => {
+    const strip = roving.group.current;
+    if (!scrollable || !strip) return;
+    const showSelected = () => reveal(strip.querySelector<HTMLElement>('[aria-selected="true"]'));
+    showSelected();
+    const resize = new ResizeObserver(showSelected);
+    resize.observe(strip);
+    for (const child of strip.children) resize.observe(child);
+    return () => resize.disconnect();
+  }, [value, keys, scrollable, reveal, roving.group]);
   return (
-    <div ref={roving.group} role="tablist" aria-label={ariaLabel} onKeyDown={roving.onKeyDown} className={cn('flex h-full min-w-0 items-stretch gap-1', className)}>
+    <div ref={roving.group} role="tablist" aria-label={ariaLabel} onKeyDown={roving.onKeyDown}
+      onFocusCapture={(event) => reveal((event.target as HTMLElement).closest<HTMLElement>('[role="tab"]'))}
+      className={cn('flex h-full min-w-0 items-stretch gap-1', scrollable && 'max-w-full overflow-x-auto', className)}>
       {options.map((option) => (
         <button
           key={option.value}
@@ -156,7 +178,8 @@ export function UnderlineTabs<T extends string>({ value, options, onChange, clas
           disabled={option.disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            'relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 text-sm font-medium text-fg-3 outline-none transition-colors hover:text-fg focus-visible:text-fg disabled:opacity-50 max-md:px-3 max-md:text-base [&_svg]:size-3.5',
+            'relative inline-flex items-center gap-1.5 whitespace-nowrap px-2 text-sm font-medium text-fg-3 outline-none transition-colors hover:text-fg focus-visible:text-fg focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus disabled:opacity-50 max-md:px-3 max-md:text-base [&_svg]:size-3.5',
+            scrollable && 'shrink-0',
             'after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent after:transition-colors max-md:after:inset-x-3',
             value === option.value && 'text-fg after:bg-fg',
           )}

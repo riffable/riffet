@@ -20,13 +20,15 @@ export function updateGateway(value: CursorCliSettings, gateway: string, separat
   return { ...value, apiEndpoint: gateway, ...(!separateAgentEndpoint ? { agentEndpoint: gateway } : {}) };
 }
 
-export function cliSettingsPatch(value: CursorCliSettings, saved?: CursorCliSettings): CursorCliSettingsUpdate {
+export function cliSettingsPatch(value: CursorCliSettings, saved?: CursorCliSettings, scope: 'connection' | 'launch' | 'all' = 'all'): CursorCliSettingsUpdate {
   const next = normalizeCliSettings(value);
   const previous = normalizeCliSettings(saved);
   const patch: CursorCliSettingsUpdate = {};
   for (const key of ['executable', 'configDir', 'apiEndpoint', 'agentEndpoint'] as const) {
+    if (scope === 'connection' && (key === 'executable' || key === 'configDir')) continue;
+    if (scope === 'launch' && (key === 'apiEndpoint' || key === 'agentEndpoint')) continue;
     if (next[key] !== previous[key]) patch[key] = next[key];
   }
-  if (next.disableAutoUpdate !== previous.disableAutoUpdate) patch.disableAutoUpdate = next.disableAutoUpdate;
+  if (scope !== 'connection' && next.disableAutoUpdate !== previous.disableAutoUpdate) patch.disableAutoUpdate = next.disableAutoUpdate;
   return patch;
 }

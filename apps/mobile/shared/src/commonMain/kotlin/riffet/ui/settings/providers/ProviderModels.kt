@@ -64,10 +64,12 @@ internal fun rememberModelCatalog(
     savedApiEndpoint: String,
     savedApiProtocol: String?,
     enabled: Boolean,
+    modelSource: String? = null,
+    savedModelSource: String? = null,
 ): ModelCatalog {
     val catalog = remember { ModelCatalog() }
     val scope = rememberCoroutineScope()
-    val catalogConfig = listOf(backendId, profileId, apiEndpoint, apiProtocol, apiKeyDraft, clearApiKey)
+    val catalogConfig = listOf(backendId, profileId, apiEndpoint, apiProtocol, apiKeyDraft, clearApiKey, modelSource)
     val currentConfig by rememberUpdatedState(catalogConfig)
     val selectProjectFirst = stringResource(Res.string.settings_select_project_for_models)
     val unavailable = stringResource(Res.string.settings_model_catalog_unavailable)
@@ -81,7 +83,7 @@ internal fun rememberModelCatalog(
         catalog.probing = false
         if (!enabled) return@LaunchedEffect
         // Saved catalogs do not describe an unsaved provider selection or replacement key.
-        if (apiEndpoint != savedApiEndpoint || apiProtocol != savedApiProtocol || apiKeyDraft.isNotEmpty() || clearApiKey) return@LaunchedEffect
+        if (modelSource != savedModelSource || apiEndpoint != savedApiEndpoint || apiProtocol != savedApiProtocol || apiKeyDraft.isNotEmpty() || clearApiKey) return@LaunchedEffect
         if (controller.projectId == null) {
             catalog.status = selectProjectFirst
             return@LaunchedEffect
@@ -98,7 +100,7 @@ internal fun rememberModelCatalog(
         val requestConfig = currentConfig
         scope.launch {
             catalog.probing = true
-            val result = controller.probeModels(backendId, apiEndpoint, apiKeyDraft, profileId, apiProtocol, clearApiKey)
+            val result = controller.probeModels(backendId, apiEndpoint, apiKeyDraft, profileId, apiProtocol, clearApiKey, modelSource)
             if (requestConfig != currentConfig) return@launch
             result
                 .onSuccess { fetched ->
@@ -265,8 +267,13 @@ internal fun ProviderLaunchPage(
     onChange: (BackendProfileDraft) -> Unit,
     onBack: () -> Unit,
 ) {
-    val metrics = LocalInterfaceStyle.current.metrics
     SettingsPage(stringResource(Res.string.settings_launch_settings), onBack) {
+        ProviderLaunchFields(backendId, draft, enabled, onChange)
+    }
+}
+
+@Composable
+internal fun ProviderLaunchFields(backendId: NativeBackendId, draft: BackendProfileDraft, enabled: Boolean, onChange: (BackendProfileDraft) -> Unit) {
         SettingsGroup("") {
             GroupField(draft.executable, { onChange(draft.copy(executable = it)) }, label = stringResource(Res.string.settings_cli_entry), placeholder = backendId.name.lowercase(), enabled = enabled, mono = true)
             if (hasConfigDir(backendId)) GroupField(draft.configDir, { onChange(draft.copy(configDir = it)) }, label = stringResource(Res.string.settings_config_dir), placeholder = stringResource(Res.string.settings_use_cli_default_dir), enabled = enabled, mono = true)
@@ -276,7 +283,6 @@ internal fun ProviderLaunchPage(
         if (backendId == NativeBackendId.CLAUDE) SettingsGroup("") {
             SettingsSwitchRow(stringResource(Res.string.settings_disable_auto_update), checked = draft.disableAutoUpdate, enabled = enabled) { onChange(draft.copy(disableAutoUpdate = it)) }
         }
-    }
 }
 
 /** The two types DSH's own model editor offers, in the order it shows them. */

@@ -26,6 +26,7 @@ import { SETTINGS_DIALOG_CLASS, settingsGroupTitle, settingsNavigationSections, 
 export type { SettingsSection } from './settingsSections';
 type Section = SettingsSection;
 // The heavier sections load when first opened: the service charts share the statistics chunk.
+const AgentSettingsSection = lazy(() => import('./AgentSettingsSection').then((module) => ({ default: module.AgentSettingsSection })));
 const BackendProfilesSection = lazy(() => import('./BackendProfilesSection').then((module) => ({ default: module.BackendProfilesSection })));
 const AuxiliaryModelsSection = lazy(() => import('./AuxiliaryModelsSection').then((module) => ({ default: module.AuxiliaryModelsSection })));
 const QuickChatSection = lazy(() => import('./QuickChatSection').then((module) => ({ default: module.QuickChatSection })));
@@ -216,8 +217,9 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'terminal' && <TerminalSettingsSection />}
             {section === 'appicon' && <AppIconSection />}
             {section === 'notifications' && <NotificationsSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
-            {section === 'backends' && <Suspense fallback={sectionFallback}><div className="flex flex-col gap-6">
-              <BackendProfilesSection settings={settings} project={project} onSaved={onSettingsChanged} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} />
+            {section === 'backends' && <Suspense fallback={sectionFallback}><AgentSettingsSection settings={settings} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} /></Suspense>}
+            {section === 'providers' && <Suspense fallback={sectionFallback}><div className="flex flex-col gap-6">
+              <BackendProfilesSection settings={settings} project={project} onRefresh={onRefreshBackends} onDirtyChange={setBackendsDirty} onBusyChange={setSectionBusy} onOpenPage={(id) => void openPluginPage(id)} onError={onError} />
             </div></Suspense>}
             {section === 'auxiliary' && <Suspense fallback={sectionFallback}><AuxiliaryModelsSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
             {section === 'quickchat' && <Suspense fallback={sectionFallback}><QuickChatSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}

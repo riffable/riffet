@@ -48,6 +48,21 @@ class BackendProfilePatchTest {
     }
 
     @Test
+    fun changingGatewayTypeKeepsConnectionKeyAndModelSelection() {
+        val profile = saved()
+        val patch = backendProfilePatch(profile, editableDraft(profile).copy(modelSource = "gateway.adapter"))!!
+        assertEquals(JsonPrimitive("gateway.adapter"), patch.modelSource)
+        assertNull(patch.apiEndpoint)
+        assertNull(patch.apiKey)
+        assertNull(patch.enabledModels)
+        val adapterProfile = profile.copy(modelSource = "gateway.adapter")
+        val generic = backendProfilePatch(adapterProfile, editableDraft(adapterProfile).copy(modelSource = null))!!
+        assertEquals(JsonNull, generic.modelSource)
+        assertNull(generic.apiEndpoint)
+        assertNull(generic.apiKey)
+    }
+
+    @Test
     fun clearingSendsJsonNull() {
         val profile = saved()
         val draft = editableDraft(profile).copy(clearApiKey = true)

@@ -170,7 +170,7 @@ export class TitleService {
 
   private async ask(ref: AuxiliaryModelRef, message: string, reply?: string, signal?: AbortSignal): Promise<string> {
     this.assertOpen();
-    const { profileName: _name, ...endpoint } = auxiliaryEndpoint(ref, this.options.gatewayProfiles);
+    const { profileName: _name, ...endpoint } = await auxiliaryEndpoint(ref, this.options.gatewayProfiles, signal ? AbortSignal.any([this.abortController.signal, signal]) : this.abortController.signal);
     return await (this.options.request ?? requestTitle)({
       ...endpoint,
       message,

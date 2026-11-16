@@ -248,12 +248,20 @@ export class PluginRegistry {
     }));
   }
 
+  /** The validated declaration's identity, including when its owner is disabled; never runs plugin code. */
+  modelSourceRole(id: string): ModelSourceProvider['role'] {
+    const owner = this.declared.get(MODEL_SOURCE_CLAIM + id);
+    const declaration = owner ? this.entries.get(owner)?.plugin.manifest.contributes?.modelSources?.find(source => source.id === id) : undefined;
+    return declaration ? declaration.role ?? 'source' : undefined;
+  }
+
   modelSources(): ModelSourceProvider[] {
     return [...this.entries.values()].flatMap(entry => {
       if (entry.active) return entry.active.contributions?.modelSources ?? [];
       if (!this.isLazy(entry) || !this.permitted(entry)) return [];
       return (entry.plugin.manifest.contributes?.modelSources ?? []).map(declared => ({
         id: declared.id, label: declared.title.en ?? Object.values(declared.title)[0] ?? declared.id,
+        ...(declared.role ? { role: declared.role } : {}),
         protocols: declared.protocols,
         backends: declared.backends,
         ...(declared.defaultEndpoint ? { defaultEndpoint: declared.defaultEndpoint } : {}),
@@ -1650,9 +1658,16 @@ export class PluginRegistry {
     const status = rawStatus?.message ? { ...rawStatus, message: this.journal.redact(manifest.id, rawStatus.message) } : rawStatus;
     const available = Boolean(entry.active) || (this.isLazy(entry) && this.permitted(entry) && entry.allowed !== false);
     const declaredSources = entry.plugin.manifest.contributes?.modelSources ?? [];
-    const sourceProviders = contributions?.modelSources ?? (available ? this.modelSources().filter(source => declaredSources.some(declared => declared.id === source.id)) : undefined);
-    const sources = sourceProviders?.map((source): ModelSourceDescriptor => ({
-      id: source.id, label: source.label, backends: protocolBackends(sourceProtocols(source)), protocols: sourceProtocols(source),
+    // Static metadata survives disablement so a saved profile can still identify its gateway type.
+    // These descriptors do not register a usable provider: modelSources() and enabled keep that boundary.
+    const sourceProviders = contributions?.modelSources
+      ?? (available ? this.modelSources().filter(source => declaredSources.some(declared => declared.id === source.id)) : undefined)
+      ?? declaredSources.map(source => ({ ...source, label: source.title.en ?? Object.values(source.title)[0] ?? source.id }));
+    const sources = sourceProviders.map((source): ModelSourceDescriptor => ({
+      id: source.id, label: source.label,
+      ...(source.role ? { role: source.role } : {}),
+      ...(source.usage || declaredSources.find(declared => declared.id === source.id)?.usage ? { usage: true } : {}),
+      backends: protocolBackends(sourceProtocols(source)), protocols: sourceProtocols(source),
       ...(source.defaultEndpoint ? { defaultEndpoint: source.defaultEndpoint } : {}),
       overridable: [...(source.overridable ?? ['apiEndpoint', 'apiKey'])],
       ...(source.loginAction && (contributions?.actions && Object.hasOwn(contributions.actions, source.loginAction) || manifest.contributes?.actions?.some(action => action.id === source.loginAction)) ? { loginAction: source.loginAction } : {}),
