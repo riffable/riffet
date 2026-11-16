@@ -316,16 +316,10 @@ struct ModelPanel: View {
             Spacer(minLength: Space.sm)
             switch kind {
             case .fast, .toggle:
-                if kind == .fast, param.options.contains(where: { $0.value == "default" }) {
-                    Button { value(for: param, "default") } label: { Text(verbatim: "Default") }
-                        .font(.riffet(size: S(11)))
-                        .foregroundStyle(param.value == "default" ? palette.mark : palette.fg3)
-                        .buttonStyle(.plain)
-                        .help(Text(verbatim: "Follows Claude Code's Fast setting"))
-                }
+                // Fast is a switch only, as on the web: a "Default" beside it was a third state with no visible effect.
                 Toggle(Self.title(param, kind), isOn: Binding(get: { isOn(param: param) }, set: { value(for: param, toggledValue(param: param, on: $0, fallback: nil)) }))
                     .toggleStyle(.switch).controlSize(.mini).labelsHidden().tint(quiet ? palette.primary : palette.accent)
-                    .accessibilityValue(Text(verbatim: param.value == "default" ? "Default" : isOn(param: param) ? "On" : "Off"))
+                    .accessibilityValue(Text(verbatim: isOn(param: param) ? "On" : "Off"))
             default:
                 ChoiceMenu(options: (kind == .max ? param.options : listValues(param: param)).map { option in
                     ChoiceOption(title: optionLabel(param: param, value: option.value), selected: param.value == option.value) { value(for: param, option.value) }

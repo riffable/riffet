@@ -37,11 +37,13 @@ export function ModelPill({ agent = 'claude', label, className }: { agent?: stri
  * the toolbar row. The toolbar's permission control is the real `ApprovalPicker`; the rest is
  * static, so nothing here needs a draft store, a model catalogue or a session.
  */
-export function ComposerCard({ shape = 'dock', placeholder, model = 'Opus 5.5 · high', agent, draft, className, running = false, rail }: {
+export function ComposerCard({ shape = 'dock', placeholder, model = 'Opus 5.5 · high', agent, leadingModel = false, draft, className, running = false, rail }: {
   shape?: ComposerShape;
   placeholder: string;
   model?: string;
   agent?: string;
+  /** The model button opens the row, as on the start page where it also picks the agent. */
+  leadingModel?: boolean;
   /** Text typed so far; replaces the placeholder. */
   draft?: string;
   className?: string;
@@ -67,9 +69,10 @@ export function ComposerCard({ shape = 'dock', placeholder, model = 'Opus 5.5 ·
         : (
           <div className="flex flex-wrap items-center gap-1 px-2 pb-2 pt-1 md:flex-nowrap">
             <span className="grid size-7 shrink-0 place-items-center rounded-md text-fg-3"><IconPlus className="size-[18px]" /></span>
+            {leadingModel && <ModelPill label={model} {...(agent ? { agent } : {})} />}
             <ApprovalPicker value="default" options={MODES} onChange={() => undefined} compact size="sm" side="bottom" />
             <div className="ml-auto flex min-w-0 items-center gap-1">
-              <ModelPill label={model} {...(agent ? { agent } : {})} />
+              {!leadingModel && <ModelPill label={model} {...(agent ? { agent } : {})} />}
               {send}
             </div>
           </div>

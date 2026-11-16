@@ -9,7 +9,7 @@ import { formatNumber } from './i18n/format';
 /** A metered window's name, from its length. */
 export function windowName(minutes: number | undefined): string {
   if (!minutes) return 'Quota';
-  if (minutes === 300) return '5 hours';
+  if (minutes === 300) return '5h';
   if (minutes === 1440) return 'Daily';
   if (minutes === 10080) return 'Weekly';
   if (minutes >= 40320 && minutes <= 44640) return 'Monthly';
@@ -100,13 +100,24 @@ function windowSummary(window: UsageWindow, now: number): string {
   return [`${name}: ${left}% left`, resetLabel(window.resetsAt, now)].filter(Boolean).join(' · ');
 }
 
-/** One line for the account: plan, each metered window, then credits. */
-export function accountSummary(account: NonNullable<NativeBackendUsage['account']>, now = Date.now()): string {
-  const plan = account.plan ? account.plan.replace(/_/g, ' ').replace(/^\w/, letter => letter.toUpperCase()) : undefined;
-  let credits: string | undefined;
-  if (account.credits?.unlimited) credits = 'Unlimited credits';
-  else if (account.credits?.balance !== undefined) {
-    credits = `${formatNumber(Math.floor(account.credits.balance))} credits`;
-  }
-  return [plan, ...account.windows.map(window => windowSummary(window, now)), credits].filter(Boolean).join(' · ');
+/** Below this share left a window is the one about to bind, so its reset is worth reading. */
+const LOW_REMAINING = 20;
+
+export interface AccountFigure { name?: string; value: string; tone: 'danger' | 'warning' | 'muted'; reset?: string; hint?: string; }
+
+/**
+ * The account row: what is left of each metered window, then credits. The plan is left out (the
+ * reader knows it), and a reset is spelled out only on a window that is low or used up.
+ */
+export function accountFigures(account: NonNullable<NativeBackendUsage['account']>, now = Date.now()): AccountFigure[] {
+  const figures: AccountFigure[] = account.windows.map((window) => {
+    const left = remainingPercent(window.usedPercent);
+    const tone = left <= 0 ? 'danger' : left < LOW_REMAINING ? 'warning' : 'muted';
+    return { name: windowName(window.windowMinutes), value: `${left}%`, tone, reset: tone === 'muted' ? undefined : resetLabel(window.resetsAt, now), hint: windowSummary(window, now) };
+  });
+  if (account.credits?.unlimited) figures.push({ value: 'Unlimited credits', tone: 'muted' });
+  else if (account.credits?.balance !== undefined) figures.push({ value: `${formatNumber(Math.floor(account.credits.balance))} credits`, tone: 'muted' });
+  // A provider can stop the account without any window reading full.
+  if (account.limitReached && !figures.some((figure) => figure.tone === 'danger')) figures.push({ value: 'Limit reached', tone: 'danger' });
+  return figures;
 }

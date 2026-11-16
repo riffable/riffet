@@ -1292,8 +1292,14 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     attachments.length ? t`${attachments.length} 个附件` : '',
     uploading ? t`上传中` : '',
   ].filter(Boolean).join(' · ');
+  /*
+   * A button that also picks the agent (a new session) opens the row: the agent is the first choice,
+   * and its menu reads left to right from it (agent, provider, model). Inside a session the agent is
+   * fixed, so the button only tunes the model and stays by the send button.
+   */
+  const modelLeadsRow = !isMobile && Boolean(props.modelLeading);
   const renderModelPicker = () => props.onModelChange ? (
-    <ModelPicker align={isMobile ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} leading={props.modelLeading} anchorRef={cardRef} />
+    <ModelPicker align={isMobile || modelLeadsRow ? 'start' : 'end'} models={props.models ?? []} value={props.model} params={props.modelParams} onChange={props.onModelChange} onParamChange={props.onModelParamChange} disabled={disabled || props.pickersDisabled} loading={props.modelsLoading} error={props.modelsError} onRetry={props.onRetryModels} side={hero ? 'bottom' : 'top'} inlineParams={isMobile} loadUsage={props.loadModelUsage} refreshCatalog={props.refreshCatalog} usageScopeKey={props.usageScopeKey} providers={props.providers} activeProviderId={props.activeProviderId} onPreviewProvider={props.onPreviewModelProvider} leading={props.modelLeading} />
   ) : null;
 
   return (
@@ -1572,6 +1578,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               {/* Shrinkable, or a backend that names a permission in a whole sentence pushes the
                   model and send controls off the row instead of truncating itself. */}
               <div className="hidden min-w-0 items-center gap-1 md:flex">
+                {modelLeadsRow && props.onModelChange && <span className="inline-flex min-w-0">{renderModelPicker()}</span>}
                 {!isMobile && props.toolbar}
                 {!isMobile && fullscreenOffered && (text.trim() || fullscreen) && (
                   <Tip label={fullscreen ? t`退出全屏编辑` : t`全屏编辑`}>
@@ -1641,7 +1648,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
             <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1 md:flex-nowrap">
               {!isMobile && props.usage && <span className="hidden md:inline-flex"><ContextMeter usage={props.usage} /></span>}
               {!isMobile && props.startPickers && <span className="hidden min-w-0 md:inline-flex">{props.startPickers}</span>}
-              {!isMobile && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
+              {!isMobile && !modelLeadsRow && props.onModelChange && <span className="hidden min-w-0 md:inline-flex">{renderModelPicker()}</span>}
               {!isMobile && props.endPickers && <span className="hidden min-w-0 md:inline-flex">{props.endPickers}</span>}
               {(!compact || showStop) && (
                 <Tip

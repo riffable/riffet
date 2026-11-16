@@ -5502,8 +5502,8 @@ msgid "桌面 52，手机 48"
 msgstr "Desktop 52, phone 48"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
-msgid "桌面端 Agent 并入模型菜单；手机的设置弹层里仍有 Agent 一行。"
-msgstr "On desktop the agent is merged into the model menu; the phone settings sheet still has an Agent row."
+msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
+msgstr "On desktop the agent is part of the model menu; its button opens the toolbar row and the menu unfolds rightwards from it. Phones keep an Agent row in the settings sheet."
 
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "档位"

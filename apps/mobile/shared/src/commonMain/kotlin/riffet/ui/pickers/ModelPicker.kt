@@ -456,12 +456,9 @@ private fun ParamStrip(
                         title, listValues(param), param, enabled, { onChange(param.id, it) }, { onOpenList(param.id) },
                     )
 
+                    // Fast is a switch only, as on the desktop: no "Default" third state.
                     ParamKind.FAST, ParamKind.TOGGLE ->
-                        if (paramKind(param) == ParamKind.FAST && param.options.any { it.value == "default" }) {
-                            ParamMenuChip(title, listValues(param), param, enabled, { onChange(param.id, it) }, { onOpenList(param.id) })
-                        } else {
-                            ToggleChip(title, isOn(param), { onChange(param.id, toggledValue(param, it)) }, enabled)
-                        }
+                        ToggleChip(title, isOn(param), { onChange(param.id, toggledValue(param, it)) }, enabled)
 
                     ParamKind.MAX -> {
                         ToggleChip(title, isOn(param), { onChange(param.id, toggledValue(param, it)) }, enabled)

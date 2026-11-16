@@ -1,14 +1,14 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
 import type { ModelStatus, NativeBackendUsage } from '@contracts';
 import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch, Spinner, StatusDot } from '@/components/ui/controls';
 import { contextChoices, isOn, optionLabel, paramHint, paramKind, paramTitle, toggledValue, type ModelParam, type ParamKind } from '@/lib/models';
 import { cn } from '@/lib/utils';
-import { accountSummary, loadHint, loadTone, statusQuotaTags } from '@/lib/usage';
+import { accountFigures, loadHint, loadTone, statusQuotaTags } from '@/lib/usage';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import type { Choice } from './model';
 import { isComposingKey } from './composerKeyboard';
@@ -108,10 +108,8 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
         </span>
         {paramHint(param) && <span className="truncate text-2xs text-fg-3">{paramHint(param)}</span>}
       </span>
-      {kind === 'fast' && param.options.some(option => option.value === 'default') && (
-        <button type="button" disabled={disabled} aria-pressed={param.value === 'default'} onClick={() => onChange('default')} className={cn('rounded px-1 py-1 text-xs outline-none focus-visible:ring-2 focus-visible:ring-focus', param.value === 'default' ? 'text-accent' : 'text-fg-3')}>Default</button>
-      )}
-      <Switch checked={on} disabled={disabled} onCheckedChange={(checked) => onChange(toggledValue(param, checked))} aria-label={paramTitle(param)} aria-description={param.value === 'default' ? 'Follows the default' : undefined} />
+      {/* Fast is a switch only: "follow the CLI's own setting" read as a third state nobody could see the effect of. */}
+      <Switch checked={on} disabled={disabled} onCheckedChange={(checked) => onChange(toggledValue(param, checked))} aria-label={paramTitle(param)} />
     </div>
   );
   if (kind !== 'max') return row;
@@ -143,6 +141,8 @@ const lastUsage = new Map<string, NativeBackendUsage>();
 const LAST_USAGE_LIMIT = 32;
 
 const loadToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-4' } as const;
+/** The account row reads at the parameters' weight; a model row's tags sit a step quieter. */
+const figureToneClass = { danger: 'text-danger', warning: 'text-warning', muted: 'text-fg-3' } as const;
 
 /** A model's quota and load, as short figures after its name; nothing when the provider reported neither. */
 function ModelStatusTags({ status }: { status?: ModelStatus }) {
@@ -231,7 +231,7 @@ function sourceTitle(provider: ModelProviderChoices, providers: ModelProviderCho
   return providers.filter((other) => other.agent?.id === agent.id).length > 1 ? `${agent.label} · ${provider.label}` : agent.label;
 }
 
-export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, leading, anchorRef, loading = false, refreshing = false, error, onRetry }: {
+export function ModelPicker({ models, value, params = [], onChange, onParamChange, disabled, side = 'top', align = 'start', placeholder, className, inlineParams = false, loadUsage, refreshCatalog, usageScopeKey, providers, activeProviderId, providerLabel, onPreviewProvider, leading, loading = false, refreshing = false, error, onRetry }: {
   models: Choice[];
   placeholder?: string;
   value?: string;
@@ -251,7 +251,10 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
    */
   onRetry?: () => void;
   side?: 'top' | 'bottom';
-  /** `end` where the trigger closes a right-aligned row, so the open list stays put as its tags change width. */
+  /**
+   * The menu's edge on its trigger's, so the list stays put as the trigger's tags change width:
+   * `end` where the trigger closes a right-aligned row, `start` where it opens a left-aligned one.
+   */
   align?: 'start' | 'end';
   className?: string;
   /** Show parameters below the trigger in a settings sheet, outside the model list. */
@@ -279,11 +282,6 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   onPreviewProvider?: (id: string) => void;
   /** Before the model's name in the trigger: the agent's mark when the menu also picks the agent. */
   leading?: ReactNode;
-  /**
-   * The box the column menu lines up with (the composer's card): its edge rather than the trigger's,
-   * and never wider than it, so a menu wider than the trigger cannot run past the composer.
-   */
-  anchorRef?: RefObject<HTMLElement | null>;
 }) {
   const { t } = useLingui();
   const shownPlaceholder = placeholder ?? 'Default model';
@@ -298,7 +296,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   // there from the first frame rather than pushing the search and the list down when it lands.
   const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined;
   const usageLoading = Boolean(loadUsage) && usageRead?.scope === usageScope && usageRead.loading;
-  const usageSummary = usage?.account ? accountSummary(usage.account) : undefined;
+  const usageFigures = usage?.account ? accountFigures(usage.account) : [];
   const hasUsageLoader = Boolean(loadUsage);
   const loadUsageRef = useRef(loadUsage);
   loadUsageRef.current = loadUsage;
@@ -446,11 +444,32 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
     if (inlineParams || !onParamChange) setOpen(false); else setQuery('');
   };
 
-  const controls = onParamChange && sorted.length > 0 ? (
-    <div className={cn('flex shrink-0 flex-col gap-3', !inlineParams && 'edge-t bg-subtle/60 px-3 py-3')}>
-      {sorted.map((param) => <ParamControl key={param.id} param={param} disabled={disabled} mobile={isMobile} onChange={(next) => onParamChange(param.id, next)} />)}
+  const paramRows = onParamChange ? sorted.map((param) => <ParamControl key={param.id} param={param} disabled={disabled} mobile={isMobile} onChange={(next) => onParamChange(param.id, next)} />) : [];
+  const controls = inlineParams && paramRows.length > 0 ? <div className="flex shrink-0 flex-col gap-3">{paramRows}</div> : null;
+  /*
+   * The account's quota is the last row under the parameters, in their row shape: it describes the
+   * provider in force as they do. "All models" is what a model's own quota tag cannot say — every
+   * model draws on these windows, and a tagged model on its own cap besides. A refresh dims the
+   * figures in place, so the row neither shifts nor empties every 30 seconds.
+   */
+  const accountRow = usageFigures.length > 0 || (usageLoading && !usage) ? (
+    <div aria-busy={usageLoading || undefined} className="flex min-h-6 items-center gap-3">
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
+        <span className="truncate text-2xs text-fg-3">All models</span>
+      </span>
+      <span className={cn('flex shrink-0 items-center gap-2.5 text-xs tabular-nums transition-opacity', usageLoading && usageFigures.length > 0 && 'opacity-60')}>
+        {usageFigures.map((figure, index) => (
+          <span key={`${figure.name ?? ''}:${index}`} title={figure.hint} className={figureToneClass[figure.tone]}>
+            {figure.name && <span className={cn('mr-1', figure.tone === 'muted' && 'text-fg-4')}>{figure.name}</span>}
+            {figure.value}{figure.reset && ` · ${figure.reset}`}
+          </span>
+        ))}
+        {!usageFigures.length && <Spinner className="size-3 text-fg-4" />}
+      </span>
     </div>
   ) : null;
+  const settingsRows = previewIsActive && !inlineParams ? paramRows : [];
 
   const searchHeader = (
     <div className="flex h-11 shrink-0 items-center gap-2 edge-b px-3 md:h-9">
@@ -643,19 +662,21 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         {failure && <StatusDot tone="warning" />}
         {loading ? waited && <Spinner className="size-3 shrink-0 text-fg-4" /> : retryOnly ? <IconRotateCw aria-hidden className="size-3 shrink-0" /> : null}
       </PopoverTrigger>
-      {providerColumn && anchorRef && <PopoverAnchor virtualRef={anchorRef as RefObject<HTMLElement>} />}
       <PopoverContent
         ref={contentRef}
         tabIndex={-1}
         side={side}
         align={align}
+        // Opening rightwards from the agent's mark, the agent column's marks sit under it: the
+        // trigger insets its mark 10px, the column's rows 12 (4 of list padding, 8 of row).
+        alignOffset={agentColumn && align === 'start' ? -2 : 0}
         onOpenAutoFocus={(event) => {
           if (!isMobile) return;
           event.preventDefault();
           contentRef.current?.focus({ preventScroll: true });
         }}
         style={lockedHeight ? { height: lockedHeight } : undefined}
-        className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,var(--radix-popper-anchor-width),calc(100vw-24px))]' : 'w-[min(500px,var(--radix-popper-anchor-width),calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
+        className={cn('flex max-h-[min(64dvh,420px)] flex-col', agentColumn ? providerTier ? 'w-[min(660px,calc(100vw-24px))]' : 'w-[min(500px,calc(100vw-24px))]' : providerColumn ? 'w-[min(440px,calc(100vw-24px))]' : loadUsage ? 'w-[min(360px,calc(100vw-24px))]' : 'w-[min(300px,calc(100vw-24px))]')}
       >
         {/* The failure is the active agent's; another one previewed brings its own note in the list. */}
         {failure && previewIsActive && (
@@ -678,13 +699,12 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
             {modelList}
           </>
         )}
-        {!inlineParams && previewIsActive && controls}
-        {/* Below the list with the parameters: both describe the provider in force and go while
-            another is previewed, and what comes and goes at the bottom moves nothing above it. */}
-        {previewIsActive && (usageSummary || usage?.account?.limitReached || (usageLoading && !usage)) && (
-          <div aria-busy={usageLoading || undefined} className={cn('flex min-h-7 shrink-0 items-center gap-2 edge-t px-3 py-1.5 text-2xs tabular-nums', usage?.account?.limitReached ? 'text-danger' : 'text-fg-3')}>
-            <span className="min-w-0 flex-1">{usage?.account?.limitReached && 'Usage limit reached · '}{usageSummary}</span>
-            <span aria-hidden className="grid size-3 shrink-0 place-items-center">{usageLoading && <Spinner className="size-3 text-fg-4" />}</span>
+        {/* Both describe the provider in force and go while another is previewed; what comes and
+            goes at the bottom moves nothing above it. */}
+        {(settingsRows.length > 0 || (previewIsActive && accountRow)) && (
+          <div className="flex shrink-0 flex-col gap-3 edge-t bg-subtle/60 px-3 py-3">
+            {settingsRows}
+            {previewIsActive && accountRow}
           </div>
         )}
       </PopoverContent>

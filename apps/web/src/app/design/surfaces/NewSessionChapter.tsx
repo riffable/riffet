@@ -71,20 +71,44 @@ function Structure() {
 const COLUMN = 'flex shrink-0 flex-col gap-0.5 overflow-y-auto overscroll-contain edge-r p-1';
 const ROW = (shown: boolean) => cn('flex h-8 w-full shrink-0 items-center gap-2 rounded-lg px-2 text-left text-sm [&_svg]:shrink-0', shown ? 'bg-hover text-fg' : 'text-fg-2');
 
-/** The model menu on the start page: agent, provider, model, each its own column. */
-function ModelMenu({ agents, providers, models }: { agents: Array<[string, string]>; providers: string[]; models: string[] }) {
+/** The model menu on the start page: agent, provider, model, each its own column; parameters and quota below. */
+function ModelMenu({ agents, providers, models }: { agents: Array<[string, string]>; providers: string[]; models: Array<[string, string?]> }) {
   return (
-    <div className={cn(menuSurface, 'flex max-h-[26rem] w-[660px] max-w-full flex-row p-0')}>
-      <div className={cn(COLUMN, 'w-44')}>
-        {agents.map(([id, label], index) => (
-          <span key={id} className={ROW(index === 0)}><AgentMark backend={id} size={14} /><span className="min-w-0 flex-1 truncate">{label}</span>{index === 0 && <IconCheck className="size-3.5 text-fg-2" />}</span>
-        ))}
+    <div className={cn(menuSurface, 'flex max-h-[26rem] w-[660px] max-w-full flex-col p-0')}>
+      <div className="flex min-h-0 flex-row">
+        <div className={cn(COLUMN, 'w-44')}>
+          {agents.map(([id, label], index) => (
+            <span key={id} className={ROW(index === 0)}><AgentMark backend={id} size={14} /><span className="min-w-0 flex-1 truncate">{label}</span>{index === 0 && <IconCheck className="size-3.5 text-fg-2" />}</span>
+          ))}
+        </div>
+        <div className={cn(COLUMN, 'w-40')}>
+          {providers.map((label, index) => <span key={label} className={ROW(index === 0)}><span className="min-w-0 flex-1 truncate">{label}</span>{index === 0 && <IconCheck className="size-3.5 text-fg-2" />}</span>)}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1">
+          {models.map(([label, quota], index) => (
+            <span key={label} className={ROW(index === 1)}>
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+              {quota && <span className="shrink-0 text-2xs tabular-nums text-fg-4">{quota}</span>}
+              {index === 1 && <IconCheck className="size-3.5 text-fg-2" />}
+            </span>
+          ))}
+        </div>
       </div>
-      <div className={cn(COLUMN, 'w-40')}>
-        {providers.map((label, index) => <span key={label} className={ROW(index === 0)}><span className="min-w-0 flex-1 truncate">{label}</span>{index === 0 && <IconCheck className="size-3.5 text-fg-2" />}</span>)}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto p-1">
-        {models.map((label, index) => <span key={label} className={ROW(index === 1)}><span className="min-w-0 flex-1 truncate">{label}</span>{index === 1 && <IconCheck className="size-3.5 text-fg-2" />}</span>)}
+      <div className="flex shrink-0 flex-col gap-3 edge-t bg-subtle/60 px-3 py-3">
+        <div className="flex min-h-6 items-center gap-3">
+          <span className="min-w-0 flex-1 truncate text-xs font-medium text-fg-2">Effort</span>
+          <span className="text-xs text-fg-3">High</span>
+        </div>
+        <div className="flex min-h-6 items-center gap-3">
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-xs font-medium text-fg-2">Quota left</span>
+            <span className="truncate text-2xs text-fg-3">All models</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2.5 text-xs tabular-nums text-fg-3">
+            <span><span className="mr-1 text-fg-4">5h</span>100%</span>
+            <span className="text-warning"><span className="mr-1">Weekly</span>12% · Resets on 11/20</span>
+          </span>
+        </div>
       </div>
     </div>
   );
@@ -97,13 +121,14 @@ function Start() {
       <Frame className="flex flex-col items-center gap-3 p-8 max-md:p-4">
         <div className="flex w-full max-w-[720px] flex-col gap-1.5">
           <ProjectChip name="riffet" />
-          <ComposerCard shape="hero" placeholder={t`描述任务…`} model="Opus 5.5 · high" />
+          <ComposerCard shape="hero" placeholder={t`描述任务…`} model="Opus 5.5 · high" leadingModel />
         </div>
-        <div className="w-full max-w-[720px] overflow-x-auto pb-1">
+        {/* design-rules: allow the menu starts 2px left of the button so both agent marks share one line */}
+        <div className="w-full max-w-[720px] overflow-x-auto pb-1 pl-[38px]">
           <ModelMenu
             agents={[['claude', 'Claude Code'], ['codex', 'Codex'], ['cursor', 'Cursor']]}
             providers={['Anthropic', 'Relay']}
-            models={['Opus 5.5', 'Sonnet 5.5', 'Haiku 5.5']}
+            models={[['Fable 5.2', '90% left'], ['Opus 5.5'], ['Sonnet 5.5'], ['Haiku 5.5']]}
           />
         </div>
       </Frame>
@@ -153,7 +178,7 @@ export function NewSessionChapter() {
   return (
     <Chapter title={t`新会话`} lede={t`项目主页也是起始页：输入框居中，一次选好项目、Agent 与模型。`} tone="canvas" source="apps/web/src/app/ProjectHome.tsx">
       <Plate number={1} title={t`结构`} note={t`内容列 720，输入框居中，宽度跟随输入框；页面骨架的例外。`}><Structure /></Plate>
-      <Plate number={2} title={t`起始输入与模型菜单`} note={t`桌面端 Agent 并入模型菜单；手机的设置弹层里仍有 Agent 一行。`}><Start /></Plate>
+      <Plate number={2} title={t`起始输入与模型菜单`} note={t`桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。`}><Start /></Plate>
       <Plate number={3} title={t`入口与最近会话`}><Entries /></Plate>
     </Chapter>
   );

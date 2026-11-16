@@ -5502,8 +5502,8 @@ msgid "桌面 52，手机 48"
 msgstr "桌面 52，手机 48"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
-msgid "桌面端 Agent 并入模型菜单；手机的设置弹层里仍有 Agent 一行。"
-msgstr "桌面端 Agent 并入模型菜单；手机的设置弹层里仍有 Agent 一行。"
+msgid "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
+msgstr "桌面端 Agent 并入模型菜单，按钮在工具行最前，菜单从它向右展开；手机的设置弹层里仍有 Agent 一行。"
 
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "档位"
