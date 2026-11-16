@@ -2783,7 +2783,7 @@ describe('Claude prompt claiming and late confirmation', () => {
       expect(h.control.keys).toEqual([]);
     });
 
-  it.each(['empty', 'composer-input', 'queued-input', 'background', 'busy', 'wrong-terminal', 'wrong-epoch', 'epoch-changed', 'unreadable'])
+  it.each(['empty', 'composer-input', 'queued-input', 'background', 'busy', 'wrong-terminal', 'reopened-terminal', 'epoch-changed', 'unreadable'])
     ('checks whether input can be released without changing the native terminal: %s', async reason => {
       const h = await makeHarness({ screen: reason === 'composer-input' ? IDLE_SCREEN.replace('❯ ', '❯ remains here') : IDLE_SCREEN });
       const session = h.getSession();
@@ -2819,8 +2819,9 @@ describe('Claude prompt claiming and late confirmation', () => {
       }
       const run = { id: 'run', native: { backendId: 'claude', nativeSessionId: session.nativeSessionId,
         terminalId: reason === 'wrong-terminal' ? 'another-terminal' : session.terminalId,
-        terminalEpoch: reason === 'wrong-epoch' ? 99 : reason === 'epoch-changed' ? 1 : undefined } } as Run;
-      expect(await h.adapter.canReleaseInput(h.host, session, h.profile, run)).toBe(reason === 'empty');
+        terminalEpoch: reason === 'reopened-terminal' ? 99 : reason === 'epoch-changed' ? 1 : undefined } } as Run;
+      // A terminal someone opened and handed back since the send is read as it is now; one that moves during the check is not.
+      expect(await h.adapter.canReleaseInput(h.host, session, h.profile, run)).toBe(reason === 'empty' || reason === 'reopened-terminal');
       expect(h.launches).toEqual([]);
       expect(h.control.pastes).toEqual([]);
       expect(h.control.keys).toEqual([]);

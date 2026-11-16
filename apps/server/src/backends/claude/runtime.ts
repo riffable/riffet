@@ -588,9 +588,11 @@ export class ClaudeSessionRuntime {
       || current.terminalId !== terminalId || binding.terminalId !== terminalId
       || this.transcript.state !== 'ok' || !this.idleForRelaunch() || this.pending.size > 0 || this.pendingSend || this.interrupting || this.stopping
       || this.transcript.activities().some(isLiveActivity)) return false;
+    // The epoch the send was bound to is not asked for: every reader who opens the terminal to look moves it, which is
+    // what an unconfirmed send asks them to do. What is proven here is the terminal now, so it only has to hold still.
     const terminal = await this.host.terminal.get(terminalId).catch(() => undefined);
     if (!terminal || terminal.kind !== 'native' || terminal.sessionId !== current.id || terminal.projectId !== current.projectId
-      || terminal.state === 'exited' || (binding.terminalEpoch !== undefined && terminal.epoch !== binding.terminalEpoch)) return false;
+      || terminal.state === 'exited') return false;
     const screen = await this.host.terminal.screen(terminalId).catch(() => undefined);
     if (!screen || CLAUDE_CODE_BUSY_PATTERN.test(screen) || claudeViewsSubagent(screen) || claudeFooterFocused(screen) || claudeTasksEntryShown(screen)
       || !claudeComposerVisible(screen) || claudeComposerText(screen) !== '') return false;
