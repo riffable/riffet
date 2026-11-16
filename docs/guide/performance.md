@@ -126,29 +126,15 @@
 
 ### Kotlin 共享客户端（Mac、iOS、Android）
 
-- §3.2：`SessionSync.kt` 的同步流用 `Channel.UNLIMITED` 缓冲。
-- §3.3：每次发布整份重建 `TimelineItem` 列表并整份交给 Swift。
-- §3.9：没有任何 GC 与分配器选项；Mac 上 Kotlin 堆常驻 210 MB，抽样只有约 14% 的字节非零。
+- §3.3：每次发布整份重建 `TimelineItem` 列表并整份交给 Swift（`ui/state/SessionSync.kt` 的 `publish`）。未改的行复用原对象，但列表与桥接仍随窗口行数增长；先用 §5 的场景量出每次发布的耗时再改。
+- §3.9：`pagedAllocator=false`、`latin1Strings=true` 尚未在 Mac 上做对照测量。2026-11-16 Mac 上 Kotlin 堆常驻 210 MB，抽样只有约 14% 的字节非零。iOS 已开 `appStateTracking`。
 
 ### Mac
 
-- §3.1 / §3.6：`ImageLoader`（`Features/Conversation/Media.swift`）解码图缓存上限 192 MB、原图 256 MB，不响应内存压力。
-- §3.4：侧栏 `ScrollView { LazyVStack }`（`Features/Sidebar/CustomSidebar.swift`），运行中实例化了 630 行。
-- §3.5：设置页各分区的 `NSHostingView` 常驻（`Features/Settings/SettingsView.swift`）；Mermaid 与公式的离屏 WKWebView 常驻。
-- §3.1：`MathImages`（`Features/Conversation/InlineMath.swift`）无上限；`TranscriptStyle.figures()` 每次新建字体描述符，运行中有 101 个字体实例、字形缓存 25 MB。
-
-### iOS
-
-- §3.1：转录相关缓存（`ConversationLayoutMemo` 图片 48 MB 等）不响应内存警告。
-
-### Android
-
-- §3.1：没有 `onTrimMemory`。
-- §3.6：markdown 内嵌图片按 1024 px 解码，显示框为 240×180 dp（`TimelineImages.kt`）。
-- 终端在所有端保留 1 万行；手机应按 `TERMINAL_KEPT_ROWS.phone`。
+- §3.4：侧栏 `ScrollView { LazyVStack }`（`Features/Sidebar/CustomSidebar.swift`），运行中实例化了 630 行。改成可回收的列表需要在运行的 App 上核对样式、悬停卡、右键菜单与键盘导航。
+- §3.6：`ImageLoader` 的原图缓存仍在内存里（32 MB）；查看器与保存能否改为从磁盘缓存读取，取决于带设备令牌的请求能否命中 `URLCache`。
 
 ### Web
 
 - §3.4：侧栏「按时间」布局与「展开其余」一次挂载全部会话（`app/Sidebar.tsx`）。
-- §3.3：会话列表整份 `JSON.stringify` 后同步写 localStorage（`app/state/listsStore.ts`、`lib/list-cache.ts`），可能超出配额且失败无提示。
-- §3.1：模块级缓存无上限：`Attempts.tsx` 的两个缓存、`useSlashCatalog.ts`、`ToolsPicker.tsx`、`FolderFavorites.tsx`、`gitStatusStore.ts`、`session-deletion.ts`。
+- §3.3：每次发布对整个窗口做 `transcriptTurns` 与 `flatMap`（`app/session/TranscriptView.tsx`、`app/session/useSessionSync.ts`）。增量做法：`timelineItems` 报告首个变化下标，转录分组从该下标续算，并只替换变化的尾部回合；同样先量再改。
