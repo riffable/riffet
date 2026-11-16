@@ -561,6 +561,10 @@ export function userQuery(message: ChatMessage): { text: string; at?: string } |
       return { text: query[1]!, ...(at ? { at } : {}) };
     }
   }
+  // A prompt the CLI took from a person carries its request id. Plain text without one is the agent
+  // talking to itself: "Your previous response was interrupted. Continue…" after a broken stream, or a
+  // summary restated after compaction. Neither is a message from the user, nor the start of a turn.
+  if (!str(message.providerOptions?.cursor?.requestId)) return undefined;
   const plain = texts.map((text) => text.trim()).filter((text) => text && !text.startsWith('<')).join('\n\n');
   return plain ? { text: plain } : undefined;
 }

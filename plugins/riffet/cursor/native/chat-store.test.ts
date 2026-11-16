@@ -449,7 +449,9 @@ describe('transcript mapping', () => {
     expect(parsePromptTimestamp('Monday, Jan 5, 2026, 9:03 PM (UTC-5)')).toBe('2026-01-06T02:03:00.000Z');
     expect(parsePromptTimestamp('yesterday')).toBeUndefined();
     expect(userQuery({ role: 'user', content: '<user_info>x</user_info>' })).toBeUndefined();
-    expect(userQuery({ role: 'user', content: [{ type: 'text', text: 'plain question' }] })).toEqual({ text: 'plain question' });
+    expect(userQuery({ role: 'user', content: [{ type: 'text', text: 'plain question' }], providerOptions: { cursor: { requestId: 'r1' } } })).toEqual({ text: 'plain question' });
+    // The agent's own continuation after a broken stream carries no request id: not a person's prompt.
+    expect(userQuery({ role: 'user', content: 'Your previous response was interrupted. Continue from where you left off.' })).toBeUndefined();
   });
 
   it('maps structural CLI task notifications without inventing a user turn and starts a new assistant boundary', () => {
