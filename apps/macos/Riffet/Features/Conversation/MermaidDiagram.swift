@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import RiffetKit
 
 /// Diagram snapshots use the same resource notifications as formulas; their identity includes the
 /// complete source so a layout never substitutes a previous version of a streaming diagram.
@@ -39,11 +40,20 @@ enum MermaidImages {
     nonisolated(unsafe) private static var recent: [String] = []
     nonisolated(unsafe) private static var requested: Set<String> = []
     nonisolated(unsafe) private static var cost = 0
-    private static let costLimit = 32 * 1024 * 1024
+    /// Diagram snapshots are pictures: a quarter of the decoded-image budget.
+    private static let costLimit = Int(BudgetsKt.IMAGE_CACHE_MAC_DECODED_BYTES) / 4
+    /// The most one snapshot may hold, so a few diagrams fit at once.
+    fileprivate static let itemLimit = costLimit / 2
+    private static let registered: Void = {
+        CacheRegistry.shared.register("mermaid.images", limit: Int64(costLimit), size: { lock.withLock { Int64(cost) } }) {
+            lock.withLock { entries.removeAll(); recent.removeAll(); cost = 0 }
+        }
+    }()
     private static let capacityToken = "mermaid-capacity"
     private static let retryDelay: TimeInterval = 10
 
     static func image(_ request: MermaidRequest) -> Result {
+        _ = registered
         let key = request.key
         lock.lock()
         defer { lock.unlock() }
@@ -87,7 +97,7 @@ enum MermaidImages {
 
     fileprivate static func finish(_ request: MermaidRequest, image: NSImage?, permanentFailure: Bool) {
         let key = request.key
-        let imageCost = image.map { Int(ceil($0.size.width) * ceil($0.size.height) * 16) } ?? 0
+        let imageCost = image.map { $0.cgImage(forProposedRect: nil, context: nil, hints: nil).map { $0.bytesPerRow * $0.height } ?? Int(ceil($0.size.width) * ceil($0.size.height) * 16) } ?? 0
         let retained = imageCost <= costLimit ? image : nil
         if let retained, retained.size.width > 0, retained.size.height > 0 {
             sizes.store(sizeKey(request), [Double(retained.size.width), Double(retained.size.height)])
@@ -128,6 +138,9 @@ private final class MermaidRenderer: NSObject, WKNavigationDelegate {
     private var timeout: Task<Void, Never>?
     private var window: NSWindow?
     private var webView: WKWebView?
+    private var idleRelease: Task<Void, Never>?
+    /// How long the web view (a 1600-px surface and its content process) outlives its last diagram.
+    private static let idleDelay: Duration = .seconds(60)
 
     func enqueue(_ request: MermaidRequest) {
         queue.append(request)
@@ -137,6 +150,8 @@ private final class MermaidRenderer: NSObject, WKNavigationDelegate {
     private func pump() {
         guard current == nil, !queue.isEmpty else { return }
         let request = queue.removeFirst()
+        idleRelease?.cancel()
+        idleRelease = nil
         current = request
         generation += 1
         let page = ["html", "htm", "svg"].contains(request.language) ? "content-preview" : "diagram"
@@ -266,6 +281,10 @@ private final class MermaidRenderer: NSObject, WKNavigationDelegate {
             let configuration = WKSnapshotConfiguration()
             configuration.rect = rect
             configuration.afterScreenUpdates = true
+            // A big diagram is drawn with fewer pixels than points so one snapshot stays within half the cache.
+            let area = Double(rect.width * rect.height)
+            let maxArea = Double(MermaidImages.itemLimit) / 16
+            if area > maxArea { configuration.snapshotWidth = NSNumber(value: Double(rect.width) * (maxArea / area).squareRoot()) }
             let image = try? await view.takeSnapshot(configuration: configuration)
             guard expected == generation, current != nil else { return }
             image?.size = rect.size
@@ -287,5 +306,22 @@ private final class MermaidRenderer: NSObject, WKNavigationDelegate {
         webView?.stopLoading()
         MermaidImages.finish(request, image: image, permanentFailure: permanentFailure)
         pump()
+        if current == nil { scheduleRelease() }
+    }
+
+    /// Drops the web view after a quiet minute; the next diagram makes a new one.
+    private func scheduleRelease() {
+        idleRelease?.cancel()
+        idleRelease = Task { [weak self] in
+            try? await Task.sleep(for: Self.idleDelay)
+            guard !Task.isCancelled, let self, self.current == nil, self.queue.isEmpty else { return }
+            self.webView?.navigationDelegate = nil
+            self.webView?.stopLoading()
+            self.window?.contentView = nil
+            self.window?.close()
+            self.window = nil
+            self.webView = nil
+            self.idleRelease = nil
+        }
     }
 }

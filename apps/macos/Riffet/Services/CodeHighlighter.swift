@@ -1,5 +1,6 @@
 import JavaScriptCore
 import SwiftUI
+import RiffetKit
 
 /// Syntax highlighting with the web's highlighter: refractor (Prism) and the same grammars, bundled
 /// as `highlight.js` (`scripts/build-highlighter.sh`) and run by JavaScriptCore on its own queue.
@@ -32,7 +33,11 @@ final class CodeHighlighter: @unchecked Sendable {
     }
 
     private init() {
-        cache.totalCostLimit = 24 * 1024 * 1024
+        // Markdown's two caches take a quarter each of the text budget.
+        let limit = Int(BudgetsKt.TEXT_CACHE_BYTES_MAC) / 2
+        cache.totalCostLimit = limit
+        let cache = cache
+        CacheRegistry.shared.register("code.highlight", limit: Int64(limit)) { cache.removeAllObjects() }
     }
 
     func cached(_ code: String, language: String) -> [Run]? {

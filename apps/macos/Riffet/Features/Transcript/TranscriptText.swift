@@ -146,7 +146,7 @@ struct TranscriptText {
         if let checked = checkbox {
             return symbol(checked ? "checkmark.square.fill" : "square", size: 13, color: checked ? style.color(style.mark) : style.color(\.fg4), plain: checked ? "[x] " : "[ ] ")
         }
-        let font = ordered ? NSFont.monospacedDigitSystemFont(ofSize: style.s(size), weight: .regular) : style.font(size)
+        let font = ordered ? NSFont.riffetDigits(size: style.s(size)) : style.font(size)
         return NSAttributedString(string: ordered ? "\(number)." : "•", attributes: [.font: font, .foregroundColor: style.color(\.fg3)])
     }
 

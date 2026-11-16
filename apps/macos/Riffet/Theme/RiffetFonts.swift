@@ -70,10 +70,57 @@ extension NSFont {
 
     /// Italic of this font. The bundled faces have no italic file: those are slanted instead.
     nonisolated var riffetItalic: NSFont {
+        FontMemo.shared.get("i|\(fontName)|\(pointSize)") { makeItalic() }
+    }
+
+    /// The system face with tabular figures, one instance per size and weight.
+    nonisolated static func riffetDigits(size: CGFloat, weight: NSFont.Weight = .regular) -> NSFont {
+        FontMemo.shared.get("s|\(size)|\(weight.rawValue)") { .monospacedDigitSystemFont(ofSize: size, weight: weight) }
+    }
+
+    /// The face with tabular figures where it has them (the style's UI face, one instance per face and size).
+    nonisolated var riffetTabular: NSFont {
+        FontMemo.shared.get("t|\(fontName)|\(pointSize)") {
+            let feature: [NSFontDescriptor.FeatureKey: Int] = [.typeIdentifier: kNumberSpacingType, .selectorIdentifier: kMonospacedNumbersSelector]
+            return NSFont(descriptor: fontDescriptor.addingAttributes([.featureSettings: [feature]]), size: pointSize) ?? self
+        }
+    }
+
+    private nonisolated func makeItalic() -> NSFont {
         let traits = fontDescriptor.withSymbolicTraits(.italic)
         if let font = NSFont(descriptor: traits, size: pointSize), font.fontDescriptor.symbolicTraits.contains(.italic) { return font }
         var slant = CGAffineTransform(a: 1, b: 0, c: 0.2, d: 1, tx: 0, ty: 0)
         return CTFontCreateCopyWithAttributes(self as CTFont, pointSize, &slant, nil) as NSFont
+    }
+}
+
+/// Derived fonts (italic, tabular figures) built once per face and size: each new `NSFont` carries its
+/// own glyph cache, and a transcript asked for the same few thousands of times.
+final class FontMemo: @unchecked Sendable {
+    static let shared = FontMemo()
+    private let lock = NSLock()
+    private var fonts: [String: NSFont] = [:]
+    private static let limit = 256
+
+    nonisolated func get(_ key: String, make: () -> NSFont) -> NSFont {
+        lock.lock()
+        if let hit = fonts[key] {
+            lock.unlock()
+            return hit
+        }
+        lock.unlock()
+        let font = make()
+        lock.lock()
+        if fonts.count >= Self.limit { fonts.removeAll() }
+        fonts[key] = font
+        lock.unlock()
+        return font
+    }
+
+    nonisolated func removeAll() {
+        lock.lock()
+        fonts.removeAll()
+        lock.unlock()
     }
 }
 

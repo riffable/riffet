@@ -16,6 +16,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Updater.shared.start()
             WidgetSnapshotWriter.start()
             CursorGuard.install()
+            CacheRegistry.shared.start()
             PerfMonitor.shared.startIfEnabled()
             InstallLocation.warnIfNeeded()
             Task { await AppModel.shared.start() }

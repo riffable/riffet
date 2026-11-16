@@ -27,11 +27,15 @@ final class ImageLoader {
     private var inflight: [String: Task<NSImage?, Never>] = [:]
 
     /// Long edge of the copy a transcript row draws; the viewer decodes the original.
-    private static let displayEdge: CGFloat = 1600
+    private static let displayEdge = CGFloat(BudgetsKt.IMAGE_DISPLAY_EDGE_PX_MAC)
 
     private init() {
-        display.totalCostLimit = 192 * 1024 * 1024
-        originals.totalCostLimit = 256 * 1024 * 1024
+        display.totalCostLimit = Int(BudgetsKt.IMAGE_CACHE_MAC_DECODED_BYTES)
+        originals.totalCostLimit = Int(BudgetsKt.IMAGE_CACHE_MAC_ENCODED_BYTES)
+        // Rows on screen keep their own image, so emptying the caches only costs a reload.
+        let display = display, originals = originals
+        CacheRegistry.shared.register("images.display", limit: BudgetsKt.IMAGE_CACHE_MAC_DECODED_BYTES) { display.removeAllObjects() }
+        CacheRegistry.shared.register("images.originals", limit: BudgetsKt.IMAGE_CACHE_MAC_ENCODED_BYTES) { originals.removeAllObjects() }
     }
 
     private var base: String? { AppModel.shared.host.api?.baseUrl }

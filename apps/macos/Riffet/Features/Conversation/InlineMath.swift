@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import RiffetKit
 
 /// One formula as the transcript asks for it: its TeX, the theme and appearance that colour it, and
 /// whether it is a block (`$$…$$`) or inline formula.
@@ -28,18 +29,34 @@ enum MathImages {
     }
 
     private static let lock = NSLock()
-    nonisolated(unsafe) private static var images: [String: Rendered] = [:]
+    private final class Box { let rendered: Rendered; init(_ rendered: Rendered) { self.rendered = rendered } }
+
+    /// Snapshots are small; a quarter of the decoded-image budget holds thousands of formulas.
+    private static let imageLimit = Int(BudgetsKt.IMAGE_CACHE_MAC_DECODED_BYTES) / 4
+    /// The last few renders, held strongly: a formula too big for the cache, or a share export that
+    /// reads back what it just waited for, still finds its image.
+    private static let recentLimit = 32
+    nonisolated(unsafe) private static var recent: [(key: String, rendered: Rendered)] = []
+    private static let failedLimit = 2_000
+    private static let images: NSCache<NSString, Box> = {
+        let cache = NSCache<NSString, Box>()
+        cache.totalCostLimit = imageLimit
+        CacheRegistry.shared.register("math.images", limit: Int64(imageLimit)) {
+            cache.removeAllObjects()
+            lock.withLock { recent.removeAll() }
+        }
+        return cache
+    }()
     nonisolated(unsafe) private static var failed: Set<String> = []
     nonisolated(unsafe) private static var requested: Set<String> = []
 
     /// The image for [request], or nil while it renders (or when it cannot be rendered).
     static func image(_ request: MathRequest) -> Rendered? {
         let key = request.key
+        if let hit = images.object(forKey: key as NSString) { return hit.rendered }
         lock.lock()
-        if let hit = images[key] {
-            lock.unlock()
-            return hit
-        }
+        if let hit = images.object(forKey: key as NSString) { lock.unlock(); return hit.rendered }
+        if let held = recent.first(where: { $0.key == key }) { lock.unlock(); return held.rendered }
         let start = !failed.contains(key) && requested.insert(key).inserted
         lock.unlock()
         if start {
@@ -75,7 +92,16 @@ enum MathImages {
     fileprivate static func finish(_ request: MathRequest, _ rendered: Rendered?) {
         let key = request.key
         lock.lock()
-        if let rendered { images[key] = rendered } else { failed.insert(key) }
+        if let rendered {
+            let image = rendered.image
+            images.setObject(Box(rendered), forKey: key as NSString, cost: min(imageLimit / 2, max(1, Int(image.size.width * image.size.height * 16))))
+            recent.removeAll { $0.key == key }
+            recent.append((key, rendered))
+            if recent.count > recentLimit { recent.removeFirst() }
+        } else {
+            if failed.count >= failedLimit { failed.removeAll() }
+            failed.insert(key)
+        }
         requested.remove(key)
         lock.unlock()
         if let rendered, request.scale > 0 {
@@ -106,6 +132,9 @@ final class InlineMathRenderer: NSObject, WKNavigationDelegate {
     private var timeout: Task<Void, Never>?
     private var window: NSWindow?
     private var webView: WKWebView?
+    private var idleRelease: Task<Void, Never>?
+    /// How long the web view (and its content process) outlives its last formula.
+    private static let idleDelay: Duration = .seconds(60)
 
     /// The math page lays body text out at 15px; formulas are scaled to the transcript's size.
     private static let pageFontSize: CGFloat = 15
@@ -128,6 +157,8 @@ final class InlineMathRenderer: NSObject, WKNavigationDelegate {
     private func pump() {
         guard current == nil, !queue.isEmpty else { return }
         let next = queue.removeFirst()
+        idleRelease?.cancel()
+        idleRelease = nil
         current = next.request
         currentURL = next.url
         generation += 1
@@ -241,5 +272,22 @@ final class InlineMathRenderer: NSObject, WKNavigationDelegate {
         currentURL = nil
         navigation = nil
         pump()
+        if current == nil { scheduleRelease() }
+    }
+
+    /// Drops the web view after a quiet minute; the next formula makes a new one.
+    private func scheduleRelease() {
+        idleRelease?.cancel()
+        idleRelease = Task { [weak self] in
+            try? await Task.sleep(for: Self.idleDelay)
+            guard !Task.isCancelled, let self, self.current == nil, self.queue.isEmpty else { return }
+            self.webView?.navigationDelegate = nil
+            self.webView?.stopLoading()
+            self.window?.contentView = nil
+            self.window?.close()
+            self.window = nil
+            self.webView = nil
+            self.idleRelease = nil
+        }
     }
 }

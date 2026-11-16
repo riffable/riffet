@@ -1,5 +1,6 @@
 import AppKit
 import ImageIO
+import RiffetKit
 
 /// Thumbnails for the canvas's cards (a prompt's attached images, an artifact shelf), by the key the layout names them with.
 /// Registered with the request that fetches them when a layout arrives, loaded a few at a time, read by the painters from any
@@ -23,7 +24,34 @@ final class CanvasImages: @unchecked Sendable {
 
     private final class Box { let image: CGImage; init(_ image: CGImage) { self.image = image } }
 
-    init() { cache.totalCostLimit = 96 * 1024 * 1024 }
+    private let registryName = "canvas.images.\(UUID().uuidString)"
+
+    init() {
+        // A quarter of the decoded-image budget: several canvases and the transcript share it.
+        let limit = BudgetsKt.IMAGE_CACHE_MAC_DECODED_BYTES / 4
+        cache.totalCostLimit = Int(limit)
+        // Cards still on the canvas need their thumbnails back, so a purge reloads what was loaded.
+        CacheRegistry.shared.register(registryName, limit: limit) { [weak self] in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.reloadLoaded() } }
+        }
+    }
+
+    /// Empties the cache and queues every thumbnail that was in it again; `onLoaded` redraws the cards as they land.
+    @MainActor
+    private func reloadLoaded() {
+        lock.lock()
+        guard !stopped else { lock.unlock(); return }
+        let held = requests.keys.filter { cache.object(forKey: $0 as NSString) != nil }
+        cache.removeAllObjects()
+        for key in held where !loading.contains(key) && !waiting.contains(key) {
+            attempts[key] = 0
+            waiting.append(key)
+        }
+        lock.unlock()
+        pump()
+    }
+
+    deinit { CacheRegistry.shared.unregister(registryName) }
 
     /// The thumbnail if it has loaded; any thread.
     func image(_ key: String) -> CGImage? { cache.object(forKey: key as NSString)?.image }

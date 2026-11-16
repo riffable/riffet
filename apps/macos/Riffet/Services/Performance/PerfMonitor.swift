@@ -227,6 +227,8 @@ final class PerfMonitor: NSObject {
     }
 
     func startIfEnabled() {
+        // Memory is sampled whether or not frame monitoring is on; it costs one syscall per five minutes.
+        MemorySampler.shared.start()
         if UserDefaults.standard.bool(forKey: Self.enabledKey) { start() }
         if UserDefaults.standard.bool(forKey: Self.hudKey) { PerfHUD.shared.show() }
     }
@@ -404,6 +406,8 @@ final class PerfMonitor: NSObject {
         var result = store.report()
         result["generatedAt"] = ISO8601DateFormatter().string(from: Date())
         result["environment"] = Self.environment
+        result["memory"] = MemorySampler.shared.samples.map(\.json)
+        result["steadyFootprintBudgetBytes"] = BudgetsKt.STEADY_FOOTPRINT_BYTES_MAC
         for (key, value) in extra { result[key] = value }
         return result
     }

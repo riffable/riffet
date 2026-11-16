@@ -151,16 +151,26 @@ enum MarkdownModel {
     nonisolated(unsafe) private static let cache: NSCache<NSString, Box> = {
         let cache = NSCache<NSString, Box>()
         cache.countLimit = 600
-        cache.totalCostLimit = 12 * 1024 * 1024
+        cache.totalCostLimit = textCacheBytes / 4
+        CacheRegistry.shared.register("markdown.documents", limit: Int64(textCacheBytes / 4), evictsOnWarning: false) { cache.removeAllObjects() }
         return cache
     }()
 
     nonisolated(unsafe) private static let blockCache: NSCache<NSString, Pieces> = {
         let cache = NSCache<NSString, Pieces>()
         cache.countLimit = 4_000
-        cache.totalCostLimit = 12 * 1024 * 1024
+        cache.totalCostLimit = textCacheBytes / 4
+        CacheRegistry.shared.register("markdown.blocks", limit: Int64(textCacheBytes / 4), evictsOnWarning: false) { cache.removeAllObjects() }
         return cache
     }()
+
+    /// A quarter of the text-cache budget each; the highlighter and the other text caches share the other half.
+    /// This file is compiled into the iPhone app too, which has the phone's budget.
+    #if os(iOS)
+    private static let textCacheBytes = Int(BudgetsKt.TEXT_CACHE_BYTES_PHONE)
+    #else
+    private static let textCacheBytes = Int(BudgetsKt.TEXT_CACHE_BYTES_MAC)
+    #endif
 
     static func segments(_ source: String, live: Bool = false) -> [MarkdownSegmentModel] {
         if let hit = cache.object(forKey: source as NSString) { return hit.segments }

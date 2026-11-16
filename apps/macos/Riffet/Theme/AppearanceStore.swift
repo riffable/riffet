@@ -45,6 +45,7 @@ private final class ResolvedFontCache: @unchecked Sendable {
         if italic { descriptor = descriptor.withSymbolicTraits(.italic) }
         guard let font = NSFont(descriptor: descriptor, size: size) else { return nil }
         lock.lock()
+        if fonts.count >= 256 { fonts.removeAll() }
         fonts[key] = font
         lock.unlock()
         return font
@@ -190,6 +191,7 @@ private final class AppearanceDisk: @unchecked Sendable {
             for (sha, url) in freshUnique { registered[sha] = url }
         }
         ResolvedFontCache.shared.removeAll()
+        FontMemo.shared.removeAll()
     }
 
     private func backgroundLayer(for item: PackBackground, serverKey: String) -> BackgroundLayer? {

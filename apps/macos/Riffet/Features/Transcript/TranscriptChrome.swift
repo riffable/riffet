@@ -505,7 +505,7 @@ final class TurnPreviewView: NSView {
         text.textColor = style.color(\.fg)
         text.stringValue = tick.preview
         let stamp = formatDateTime(value: tick.time)
-        time.font = NSFont.monospacedDigitSystemFont(ofSize: style.s(11), weight: .regular)
+        time.font = NSFont.riffetDigits(size: style.s(11))
         time.textColor = style.color(\.fg4)
         time.stringValue = stamp ?? ""
         time.isHidden = stamp == nil

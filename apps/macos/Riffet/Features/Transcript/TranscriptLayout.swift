@@ -478,7 +478,7 @@ struct RowBuilder {
             cursor += 20
         } else {
             // The footer takes only its time and copy, so the actions can stand beside it.
-            let timeWidth = formatDateTime(value: time).map { ceil(Self.lineWidth($0, font: NSFont.monospacedDigitSystemFont(ofSize: style.s(11), weight: .regular))) } ?? 0
+            let timeWidth = formatDateTime(value: time).map { ceil(Self.lineWidth($0, font: NSFont.riffetDigits(size: style.s(11)))) } ?? 0
             let footerWidth = min(width, timeWidth + (item.text.isEmpty ? 0 : (timeWidth > 0 ? 8 : 0) + 20))
             fragments.append(Fragment(frame: CGRect(x: x + width - footerWidth, y: cursor, width: footerWidth, height: 20), kind: .footer(footer)))
             let gap: CGFloat = footerWidth > 0 ? 8 : 0
@@ -1730,9 +1730,8 @@ extension TranscriptStyle {
     /// The style's UI face with tabular figures, for text whose digits tick (the system face's own variant where the style has none).
     nonisolated func figures(_ size: CGFloat, _ weight: NSFont.Weight = .regular) -> NSFont {
         guard let face = RiffetFace.nsFont(size: s(size), weight: weight, mono: false, plugin: fonts, style: styleFonts) else {
-            return .monospacedDigitSystemFont(ofSize: s(size), weight: weight)
+            return .riffetDigits(size: s(size), weight: weight)
         }
-        let feature: [NSFontDescriptor.FeatureKey: Int] = [.typeIdentifier: kNumberSpacingType, .selectorIdentifier: kMonospacedNumbersSelector]
-        return NSFont(descriptor: face.fontDescriptor.addingAttributes([.featureSettings: [feature]]), size: face.pointSize) ?? face
+        return face.riffetTabular
     }
 }

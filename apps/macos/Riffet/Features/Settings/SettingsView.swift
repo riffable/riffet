@@ -170,6 +170,9 @@ final class SettingsPaneController: NSViewController {
     }
 
     private var panes: [SettingsSection: NSHostingView<AnyView>] = [:]
+    private static let keepsWork: Set<SettingsSection> = [
+        .backup, .diagnostics, .input, .general, .window, .shares, .agents, .modelProviders, .server, .connection,
+    ]
     private var current: SettingsSection?
     private var style = ""
     private var closing: NSObjectProtocol?
@@ -215,15 +218,23 @@ final class SettingsPaneController: NSViewController {
         }()
         // Hidden rather than removed: a hosting view taken out of the window rebuilds and measures
         // everything when it comes back.
+        let previous = current
         if let current, let old = panes[current] {
             old.isHidden = true
         }
         current = section
+        // The section just left stays warm for a quick return; the others are released, except panes
+        // that can hold unfinished work in their @State (a running backup, a save, a test), which a
+        // rebuilt view would lose and let the user repeat.
+        for (key, stale) in panes where key != section && key != previous && !Self.keepsWork.contains(key) {
+            stale.removeFromSuperview()
+            panes[key] = nil
+        }
         // Adopt the available column size now; the initial size is finalized in viewWillAppear.
         pane.frame = view.bounds
         if pane.superview == nil { view.addSubview(pane) }
         pane.isHidden = false
-        // Cached panes keep their tasks alive; tell the one on screen that this is the moment to
+        // Kept panes keep their tasks alive; tell the one on screen that this is the moment to
         // re-read anything another device may have changed.
         NotificationCenter.default.post(name: .settingsSectionDidShow, object: section.rawValue)
     }

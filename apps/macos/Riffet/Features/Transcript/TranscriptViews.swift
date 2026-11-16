@@ -469,7 +469,7 @@ final class DisclosureView: FragmentView, HoverTarget {
     private var trailingPieces: [DisclosureSpec.Piece] {
         guard let spec, let style = host?.style else { return [] }
         var pieces = spec.trailing
-        if let elapsed { pieces.append(.init(text: elapsed, font: NSFont.monospacedDigitSystemFont(ofSize: style.s(11.5), weight: .regular), color: style.color(\.fg4))) }
+        if let elapsed { pieces.append(.init(text: elapsed, font: NSFont.riffetDigits(size: style.s(11.5)), color: style.color(\.fg4))) }
         return pieces
     }
 
@@ -813,7 +813,7 @@ final class FooterView: FragmentView {
 
     private func pieces() -> [(NSAttributedString, String?)] {
         guard let spec, let style = host?.style else { return [] }
-        let font = NSFont.monospacedDigitSystemFont(ofSize: style.s(11), weight: .regular)
+        let font = NSFont.riffetDigits(size: style.s(11))
         var result: [(NSAttributedString, String?)] = []
         if let status = spec.status {
             let label = NSMutableAttributedString(string: "")
@@ -1670,7 +1670,7 @@ final class WorkingView: FragmentView {
     override func draw(_ dirtyRect: NSRect) {
         guard let spec, let style = host?.style else { return }
         var x = 24 + labelWidth + 8
-        let font = NSFont.monospacedDigitSystemFont(ofSize: style.s(12), weight: .regular)
+        let font = NSFont.riffetDigits(size: style.s(12))
         if let since = spec.since {
             let seconds = max(0, Int(Date().timeIntervalSince(since)))
             if seconds > 0 {
