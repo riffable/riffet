@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { NativeBackendId, Session, StatsRunRow, WorkItem } from '@contracts';
 import type { ReactNode } from 'react';
@@ -168,6 +168,14 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   }, [assistantProject, sessions]);
   const homeTab: HomeTab = quickChat ? 'chat' : 'task';
   const session = sessions.find((item) => item.id === selectedSessionId && item.projectId === selectedProjectId);
+  // Each conversation keeps its own side panel; swapped before paint so the one entered never shows the last one's.
+  const panelSession = useRef(selectedSessionId);
+  useLayoutEffect(() => {
+    if (panelSession.current === selectedSessionId) return;
+    ui.switchSession(panelSession.current, selectedSessionId);
+    panelSession.current = selectedSessionId;
+  }, [selectedSessionId, ui]);
+  useEffect(() => { if (loaded) ui.keepSessionPanels(new Set(sessions.map((item) => item.id))); }, [loaded, sessions, ui]);
   // The 助理 page's composer starts with the 助理's own agent and model, and a pick made there is the
   // 助理's, not the composer's everywhere else (docs/ASSISTANT.md).
   const assistantHome = isAssistantProject(project) && !session;

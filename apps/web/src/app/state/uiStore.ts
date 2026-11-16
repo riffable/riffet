@@ -142,6 +142,12 @@ export function createUiStore() {
   });
   let previewToken = 0;
   let floatSaved = '';
+  /**
+   * The side panel belongs to a conversation: the view of each one that left it open, keyed by
+   * session id ('' is the new-conversation page). Closing the panel or deleting the conversation
+   * drops its entry, so this never outgrows the session list.
+   */
+  const panelBySession = new Map<string, string>();
   store.subscribe(() => {
     const { panelFloating, panelFrame } = store.get();
     const next = panelFloating || panelFrame ? JSON.stringify({ floating: panelFloating, frame: panelFrame }) : '';
@@ -170,6 +176,24 @@ export function createUiStore() {
     layoutChanged(desktop: boolean) {
       const { panelOpen } = store.get();
       store.set(!desktop && panelOpen ? { mobileSidebar: false, dockOpen: false } : { mobileSidebar: false });
+    },
+    /**
+     * Moving from one conversation to another stores the panel with the one left and restores the
+     * one entered. The new-conversation page hands an open panel to the conversation it creates.
+     */
+    switchSession(previous: string, next: string) {
+      const { panelOpen, panelTab, creating } = store.get();
+      if (panelOpen) panelBySession.set(previous, panelTab); else panelBySession.delete(previous);
+      if (previous === '' && creating && panelOpen && !panelBySession.has(next)) {
+        panelBySession.delete('');
+        panelBySession.set(next, panelTab);
+      }
+      const tab = phone() ? undefined : panelBySession.get(next);
+      store.set(tab ? { panelOpen: true, panelTab: tab } : { panelOpen: false });
+    },
+    /** Drops the panels of conversations that no longer exist. */
+    keepSessionPanels(live: ReadonlySet<string>) {
+      for (const id of panelBySession.keys()) if (id && !live.has(id)) panelBySession.delete(id);
     },
     /** Primary file affordance: reveal the file in the right-hand context panel instead of leaving the app. */
     preview(path: string, line?: number) {
