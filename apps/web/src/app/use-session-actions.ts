@@ -68,8 +68,15 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
       const current = nav.get();
       const selected = lists.get().projects.find((item) => item.id === current.projectId);
       if (selected?.system === 'task-workspace') nav.rememberTaskProject(null);
+      const { projects, projectlessTasks } = lists.get();
+      const taskProjects = projects.filter((item) => !item.system && !item.archivedAt);
+      // The 助理 has one conversation, so a new session from there is a new task, never its empty page.
+      const taskProjectId = projectlessTasks
+        ? taskProjects.find((item) => item.id === current.taskProjectId)?.id ?? ''
+        : taskProjects.sort((a, b) => (current.projectVisits[b.id] ?? 0) - (current.projectVisits[a.id] ?? 0))[0]?.id ?? '';
       const projectId = selected?.system === 'task-workspace' ? ''
-        : selected?.system !== 'quick-chat' && lists.get().projectlessTasks ? current.taskProjectId ?? '' : current.projectId;
+        : selected?.system === 'assistant' ? taskProjectId
+        : selected?.system !== 'quick-chat' && projectlessTasks ? current.taskProjectId ?? '' : current.projectId;
       if (projectId !== current.projectId) clearContext(ui);
       nav.set({ projectId, sessionId: '', ...NO_PAGE });
       ui.setMobileSidebar(false);
@@ -286,7 +293,7 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         acceptedCreation.current = body;
         if (result.project) lists.upsertProject(result.project);
         // Persist the full accepted selector, including effort, even when the first turn used a catalog default.
-        // A 助理 conversation's choice is the 助理's (docs/TASK-BOARD.md §5), not the composer's everywhere else.
+        // A 助理 conversation's choice is the 助理's (docs/ASSISTANT.md), not the composer's everywhere else.
         if (!matching && targetBackendId !== 'chat' && body.model && isAssistantProject(lists.get().projects.find((item) => item.id === targetProjectId))) settingsStore.rememberAssistant({ backendId: targetBackendId, profileId: result.session.backendProfileId ?? targetProfileId ?? null, model: result.session.model ?? body.model });
         else if (!matching && targetBackendId !== 'chat' && body.model && settingsStore.revision() === defaultsRevision) settingsStore.remember(targetBackendId, { model: result.session.model ?? body.model, profileId: result.session.backendProfileId ?? targetProfileId });
         upsertSession(result.session);
@@ -414,21 +421,30 @@ export function useSessionActions({ loaded, project, session, sessions, terminal
         upsertSession(updated);
         // Only if the reader is still on it: switching away while the request ran is not overruled.
         if (archiving && wasSelected && nav.get().sessionId === target.id) {
+          // Any of the 助理's conversations leaves you on its page: they are not listed, so none is a
+          // neighbour, and a new session would leave the page (docs/ASSISTANT.md).
+          if (isAssistantProject(lists.get().projects.find((item) => item.id === target.projectId))) { clearContext(ui); nav.set({ projectId: target.projectId, sessionId: '', ...NO_PAGE }); }
+          else {
           // Land on the neighbouring conversation, as the sidebar lists it, rather than an empty composer.
           const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === target.projectId && (item.id === target.id || !item.archivedAt)));
           const at = siblings.findIndex((item) => item.id === target.id);
           const neighbour = siblings[at + 1] ?? siblings[at - 1];
           if (neighbour) selectSession(neighbour); else newSession();
+          }
         }
         const undo = async () => {
           try {
             const restored = await api.updateSession(target.id, { archived: false });
             upsertSession(restored);
             // Through the handler: the closure's selection is from before the archive moved off this conversation.
-            if (wasSelected) handlers.selectSession(restored);
+            // A 助理 conversation restored after another took its place is no longer its page: stay put.
+            const replaced = lists.get().projects.some((item) => isAssistantProject(item) && item.id === restored.projectId && item.mainSessionId !== restored.id);
+            if (wasSelected && !replaced) handlers.selectSession(restored);
           } catch (error) { toast.error(errorMessage(error, t`撤销失败`)); }
         };
-        if (archiving) toast.success(t`已归档「${target.title}」`, { action: { label: t`撤销`, onClick: () => void undo() } });
+        // Its page's name, not the stored title, as the header shows it.
+        const shownTitle = lists.get().projects.some((item) => item.mainSessionId === target.id) ? t`个人助理` : target.title;
+        if (archiving) toast.success(t`已归档「${shownTitle}」`, { action: { label: t`撤销`, onClick: () => void undo() } });
       }
     } catch (error) { toast.error(errorMessage(error, t({ message: '操作失败', context: 'workbench-action-failed' }))); }
   };

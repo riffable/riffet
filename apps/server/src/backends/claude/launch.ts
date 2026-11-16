@@ -25,6 +25,13 @@ const probes = new Map<string, Promise<ClaudeCliProbe>>();
  */
 export const CLAUDE_CLI_VERSIONS: CliVersionRange = { minimum: '2.1.200', testedThrough: '2.1.322' };
 
+/**
+ * What keeps a standing conversation (docs/ASSISTANT.md §4) on its own directory: the owner's settings, instructions,
+ * skills and plugins are not read, and only the MCP servers named on the command line are started. Sign-in is not a
+ * setting source, so it still comes from the profile's config directory.
+ */
+export const STANDING_ISOLATION = ['--setting-sources', 'project,local', '--strict-mcp-config'];
+
 export const CLAUDE_PERMISSIONS = [
   { id: 'default', label: 'Claude default', shortLabel: 'Default' },
   { id: 'manual', label: 'Ask before each permission', shortLabel: 'Ask' },
@@ -92,6 +99,37 @@ async function statusLineCommandIn(file: string): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** How the reader's own CLI reaches its model, as their settings file says it. */
+export interface OwnerConnection { env?: Record<string, string>; settings: Record<string, string> }
+
+/** Settings that sign a CLI in or name its model; nothing here loads code into the conversation. */
+const CONNECTION_KEYS = ['apiKeyHelper', 'model', 'awsAuthRefresh', 'awsCredentialExport', 'forceLoginMethod'];
+
+async function settingsIn(file: string): Promise<Record<string, unknown> | undefined> {
+  try { return record(JSON.parse(await readFile(file, 'utf8'))); } catch { return undefined; }
+}
+
+/**
+ * The reader's settings file is where many keep their endpoint and token (`env`), their key command and their
+ * model. A launch that leaves user settings out ({@link STANDING_ISOLATION}) would start a CLI that cannot sign
+ * in, so those are read here and carried in the launch's own settings. Nothing else of the file is: its hooks,
+ * plugins and permissions are what the isolation is for. Launch settings outrank the directory's own, which a
+ * user file never does, so whatever the directory in `cwd` sets for itself is left to it.
+ */
+export async function readOwnerConnection(configDir: string, cwd: string): Promise<OwnerConnection> {
+  const owner = await settingsIn(join(configDir, 'settings.json'));
+  if (!owner) return { settings: {} };
+  const own = (await Promise.all([join(cwd, '.claude', 'settings.json'), join(cwd, '.claude', 'settings.local.json')].map(settingsIn))).filter(value => value !== undefined);
+  const ownEnv = new Set(own.flatMap(settings => Object.keys(record(settings.env) ?? {})));
+  const env = Object.fromEntries(Object.entries(record(owner.env) ?? {})
+    .filter(([name, value]) => !ownEnv.has(name) && ['string', 'number', 'boolean'].includes(typeof value)).map(([name, value]) => [name, String(value)]));
+  const settings = Object.fromEntries(CONNECTION_KEYS.flatMap(key => {
+    const value = string(owner[key])?.trim();
+    return value && !own.some(item => item[key] !== undefined) ? [[key, value]] : [];
+  }));
+  return { ...(Object.keys(env).length ? { env } : {}), settings };
 }
 
 export function profileEnv(profile: NativeBackendProfileConfig): Record<string, string> {

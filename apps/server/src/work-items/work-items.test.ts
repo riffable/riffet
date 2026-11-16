@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -162,11 +162,29 @@ describe('work items', () => {
     const { store, call, project, items, riffetMcp, assistant } = await boot();
     const home = store.listProjects().find(entry => entry.system === 'assistant')!;
     // The assistant's own conversation is not a task, and only it is given the board tools.
-    expect((await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a1', initialMessage: { commandId: 'c-a1', text: 'Fix the login and add a test' } })).statusCode).toBe(202);
+    const mainReply = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a1', initialMessage: { commandId: 'c-a1', text: 'Fix the login and add a test' } });
+    expect(mainReply.statusCode).toBe(202);
+    // The reply names the main conversation, so a client never shows it as an ordinary one first.
+    expect(mainReply.json().project).toMatchObject({ id: home.id, mainSessionId: 'a1' });
     expect(store.getSession('a1').workItemId).toBeUndefined();
     expect(riffetMcp.tools(store.getSession('a1')).map(tool => tool.name)).toContain('task_create');
+    // A scheduled task would open conversations in its project that no list shows; it wakes itself instead.
+    expect(riffetMcp.tools(store.getSession('a1')).map(tool => tool.name)).not.toContain('schedule_task');
+    expect(riffetMcp.tools(store.getSession('a1')).map(tool => tool.name)).toContain('schedule_wakeup');
     expect((await call('POST', '/api/sessions', { kind: 'native', projectId: project.id, backendId: 'cursor', clientSessionId: 's1', initialMessage: { commandId: 'c-s1', text: 'Other work' } })).statusCode).toBe(202);
     expect(riffetMcp.tools(store.getSession('s1')).map(tool => tool.name)).not.toContain('task_create');
+    expect(riffetMcp.tools(store.getSession('s1')).map(tool => tool.name)).not.toContain('session_read');
+
+    // The first conversation opened there is the 助理's main one, and stays it until it is archived.
+    expect(store.getProject(home.id).mainSessionId).toBe('a1');
+    expect(store.getSession('a1')).toMatchObject({ title: '个人助理', titleSource: 'user' });
+    expect((await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a2', initialMessage: { commandId: 'c-a2', text: 'Another' } })).statusCode).toBe(202);
+    expect(store.getProject(home.id).mainSessionId).toBe('a1');
+    expect(store.getProject(project.id).mainSessionId).toBeUndefined();
+    // It sees the owner's conversations, never its own project's or another system project's.
+    const listed = await assistant.call('session_list', {}, { sessionId: 'a1' }) as { sessions: Array<{ id: string }> };
+    expect(listed.sessions.map(session => session.id)).toEqual(['s1']);
+    await expect(assistant.call('session_read', { session: 'a2' }, { sessionId: 'a1' })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
 
     // A planned change waits for the owner; starting it opens one conversation that carries the brief.
     const planned = await assistant.call('task_create', { title: 'Fix the login', criteria: ['Tests pass'], project: 'Tasks', agent: 'cursor', start: false }) as { created: { task: number; status: string } };
@@ -189,10 +207,28 @@ describe('work items', () => {
     const read = async () => (await call('GET', '/api/assistant/instructions')).json() as { text: string; custom: boolean };
     const builtIn = await read();
     expect(builtIn.custom).toBe(false);
-    expect(readFileSync(join(stateDir, 'assistant', 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n');
+    expect(readFileSync(join(stateDir, 'assistant', 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n@USER.md\n');
     expect((await call('PUT', '/api/assistant/instructions', { text: 'Answer in one line.' })).json()).toEqual({ text: 'Answer in one line.\n', custom: true });
     assistantProject(store, stateDir);
     expect(readFileSync(join(stateDir, 'assistant', 'AGENTS.md'), 'utf8')).toBe('Answer in one line.\n');
     expect((await call('PUT', '/api/assistant/instructions', { text: null })).json()).toEqual(builtIn);
+  });
+
+  it("shows the owner the assistant's memory and nothing a link in it points at", async () => {
+    const { call, stateDir, projectDir } = await boot();
+    const read = async () => (await call('GET', '/api/assistant/memory')).json() as { profile: string; index: string; entries: Array<{ name: string; text: string }> };
+    const home = join(stateDir, 'assistant');
+    await read();
+    writeFileSync(join(projectDir, 'secret.md'), 'outside');
+    writeFileSync(join(home, 'memory', 'tea.md'), 'Longjing');
+    symlinkSync(join(projectDir, 'secret.md'), join(home, 'memory', 'linked.md'));
+    expect((await read()).entries).toEqual([expect.objectContaining({ name: 'tea.md', text: 'Longjing' })]);
+    // The directory itself replaced by a link is no longer its memory.
+    rmSync(join(home, 'memory'), { recursive: true });
+    mkdirSync(join(projectDir, 'elsewhere'));
+    writeFileSync(join(projectDir, 'elsewhere', 'MEMORY.md'), 'outside');
+    writeFileSync(join(projectDir, 'elsewhere', 'note.md'), 'outside');
+    symlinkSync(join(projectDir, 'elsewhere'), join(home, 'memory'));
+    expect(await read()).toMatchObject({ index: '', entries: [] });
   });
 });

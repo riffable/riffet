@@ -12,7 +12,7 @@ Agent 会话除了读写代码，还可以调用 Riffet 自身的能力（定时
 定时 / 唤醒 / 触发器        经 Riffet MCP 调用           Mac：通知、剪贴板（后续）
 ```
 
-- **入口**只把一句话送进某个会话。手机、Web、Mac、定时任务与设备触发器地位相同。
+- **入口**只把一句话送进某个会话。手机、Web、Mac、自动化与设备触发器地位相同。
 - **大脑**始终是服务端上的 Agent。手机不运行模型与 Agent 循环。
 - **设备**按能力清单接入，手机是能力最多的一台；其他设备复用同一协议。
 
@@ -61,7 +61,7 @@ Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（
 
 ### 一次性唤醒
 
-现有定时任务是 cron + 模板（[ORCHESTRATION.md](ORCHESTRATION.md) §5），不能表达“20 分钟后在这个会话里继续”。`schedule_wakeup` 补的是一次性、绑定当前会话的唤醒：到点在同一会话发起新回合，带上创建时的说明；会话已归档或已交接则记为失败并通知。复用现有调度器的“先记账再派发、同一时间点最多一次”规则。
+现有自动化是 cron + 模板（[ORCHESTRATION.md](ORCHESTRATION.md) §5），不能表达“20 分钟后在这个会话里继续”。`schedule_wakeup` 补的是一次性、绑定当前会话的唤醒：到点在同一会话发起新回合，带上创建时的说明；会话已归档或已交接则记为失败并通知。复用现有调度器的“先记账再派发、同一时间点最多一次”规则。
 
 ### 实现（R1）
 
@@ -74,12 +74,12 @@ Riffet 自己的基础工具在支持按次注入的后端里**始终带上**（
 | `apps/server/src/riffet-mcp/service.ts` | 受限路由：凭据→会话，只按该会话的 `toolGroups` 列出和执行工具 |
 | `apps/server/src/riffet-mcp/groups.ts` | 工具组校验 |
 | `apps/server/src/riffet-mcp/notices.ts` | `notify_user` 的通知记录与推送 |
-| `apps/server/src/orchestration/service.ts` | 一次性唤醒，与 cron 定时任务共用调度器 |
+| `apps/server/src/orchestration/service.ts` | 一次性唤醒，与 cron 自动化共用调度器 |
 
 **契约与接口**
 
 - `ToolGroupId` 实际只用 `device:<id>`（`riffet.core` 已退役，服务端收到即丢弃）。2026-11-10 删除了按端默认（`AppSettings.riffetTools.byClient`）。
-- `Session.toolGroups?: ToolGroupId[]`：`resolveNativeSessionInput` 只从创建请求的 `toolGroups` 取（输入框的选择，缺省或空数组即不带），写入会话（不计入 `creationFingerprint`）。已撤销的设备在创建时直接去掉、不报错：创建请求会从 outbox 重放，不能因此丢掉第一条消息。服务端内部的创建不认这个字段。分叉、交接继承来源会话；模板、定时任务、并行尝试没有端，不带工具；快速对话不带。
+- `Session.toolGroups?: ToolGroupId[]`：`resolveNativeSessionInput` 只从创建请求的 `toolGroups` 取（输入框的选择，缺省或空数组即不带），写入会话（不计入 `creationFingerprint`）。已撤销的设备在创建时直接去掉、不报错：创建请求会从 outbox 重放，不能因此丢掉第一条消息。服务端内部的创建不认这个字段。分叉、交接继承来源会话；模板、自动化、并行尝试没有端，不带工具；快速对话不带。
 - `PATCH /api/sessions/:id { toolGroups }`：按会话覆盖，下次启动 CLI 时生效。去掉的设备立即拒绝调用。
 - `NativeBackendCapabilities.supportsRiffetTools`：该后端能按次注入（下表）。
 - `POST /api/riffet-mcp`：只供 shim。只认会话凭据，不认 cookie 与设备令牌；凭据也打不开其他接口。
@@ -124,7 +124,7 @@ Codex 的两条实测结论：
 - **设备记录**：`DeviceRecord` 现在只有 `{id, name, hash, createdAt, lastSeenAt}`，增加平台、能力清单、在线状态与权限档位。iOS 设备另存 APNs 注册（见「后台推送」）。
 - **调用队列**：调用先落盘，`callId` 幂等，带截止时间；重试返回第一次的结果。
 - **定向下发**：设备开一条自己的事件流（拟定 `/api/devices/me/stream`），结果用 HTTP 回传。会话的 SSE 保持只读广播，不改。
-- **预约唤醒**：没有 FCM 时，后台手机只有前台服务常驻才收得到请求。凡是能预知“T 时刻要用设备 X”的调用（`schedule_wakeup`、定时任务），服务端提前把预约下发到设备；设备用 `setExactAndAllowWhileIdle` 设闹钟，T−60s 拉起前台服务并连上。临时调用仍要求设备当时在线，因此保活是前提（MOBILE.md「路线」R0）。
+- **预约唤醒**：没有 FCM 时，后台手机只有前台服务常驻才收得到请求。凡是能预知“T 时刻要用设备 X”的调用（`schedule_wakeup`、自动化），服务端提前把预约下发到设备；设备用 `setExactAndAllowWhileIdle` 设闹钟，T−60s 拉起前台服务并连上。临时调用仍要求设备当时在线，因此保活是前提（MOBILE.md「路线」R0）。
 
 ### 协议（R2）
 
@@ -162,7 +162,7 @@ Codex 的两条实测结论：
 
 **等待与错误码**：调用默认等待 30 秒（拍照默认 120 秒）；工具可传 `timeoutSeconds`，上限 120，拍照上限 300。设备离线时在截止前等待重连，到期返回 `DEVICE_UNREACHABLE`。其余：`DEVICE_NOT_ALLOWED`（设备最后上报的 `allowControl` 不是 `true`，或会话快照不含该设备）、`DEVICE_CAPABILITY_MISSING`（设备最后上报的能力不含此项）、`DEVICE_TIMEOUT`（调用已送达设备但未在截止前回传）、`DEVICE_DENIED`（用户在设备上拒绝）、`DEVICE_FAILED`（设备尝试过但做不到：参数不合法、取不到定位、没有能处理的 App，`message` 说明原因）。设备回传的 `code` 原样交给 Agent；设备侧只用上述 `DEVICE_*` 码。
 
-**预约的来源**：`schedule_wakeup` 所在会话的快照含 `device:<id>` 组时，为这些设备各下发一个预约，唤醒取消或触发后撤销。定时任务的预约在 R5 处理。
+**预约的来源**：`schedule_wakeup` 所在会话的快照含 `device:<id>` 组时，为这些设备各下发一个预约，唤醒取消或触发后撤销。自动化的预约在 R5 处理。
 
 **设备侧开关**：「允许被调用」以设备本机为准，开启需本人验证；关闭时设备拒绝一切调用并上报 `allowControl: false`。服务端的 `allowControl` 只用于提前报错与界面显示，不替代设备侧判断。
 

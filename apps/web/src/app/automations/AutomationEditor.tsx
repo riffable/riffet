@@ -119,7 +119,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
       onSaved();
     } catch (error) {
       if (error instanceof HttpError && error.code === 'INVALID_CRON') setCronError(t`无法识别这个时间表达式`);
-      else onError(errorMessage(error, t`无法保存定时任务`));
+      else onError(errorMessage(error, t`无法保存自动化`));
     } finally { setBusy(false); }
   };
 
@@ -132,7 +132,7 @@ export function AutomationEditor({ state, projects, backends, defaultProjectId, 
     <Dialog open={Boolean(state)} onOpenChange={(open) => { if (!open && !busy) close(); }}>
       <DialogContent aria-describedby={undefined}>
         <DialogHeader>
-          <DialogTitle>{editingExisting ? t`编辑定时任务` : t`新建定时任务`}</DialogTitle>
+          <DialogTitle>{editingExisting ? t`编辑自动化` : t`新建自动化`}</DialogTitle>
         </DialogHeader>
         <DialogBody className="flex flex-col gap-5">
           <section className="flex flex-col gap-3">

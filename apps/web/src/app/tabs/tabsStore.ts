@@ -155,6 +155,9 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
 
   const sessionMap = () => new Map(lists.get().sessions.map((session) => [session.id, session]));
   const sessionOf = (id: string) => lists.get().sessions.find((session) => session.id === id);
+  /** The 助理's main conversation is its own page, never a tab (docs/ASSISTANT.md). */
+  const isMain = (id: string) => lists.get().projects.some((project) => project.mainSessionId === id);
+  const ofAssistant = (projectId: string) => lists.get().projects.some((project) => project.id === projectId && project.system === 'assistant');
   const zonesNow = () => tabZones(store.get().tabs, sessionMap());
   const orderedIds = () => { const zones = zonesNow(); return [...zones.pinned, ...zones.normal].map((entry) => entry.sessionId); };
   /** Whether [sessionId] is one Riffet just created and 新建会话时 keeps its tab. */
@@ -178,7 +181,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
   const select = (sessionId: string, wantKeep: boolean) => {
     const sessions = sessionMap();
     const session = sessions.get(sessionId);
-    if (!session || session.archivedAt) return;
+    if (!session || session.archivedAt || isMain(sessionId)) return;
     const keep = wantKeep || store.get().openMode === 'keep';
     store.set((state) => {
       const unread = withoutUnread(state.unread, [sessionId]);
@@ -247,6 +250,9 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       else if (!before.pinned && pinned) pinnedNow.push(session.id);
     }
     seen = next;
+    // Tabs stored before the main conversation became a page.
+    const mainTabs = store.get().tabs.filter((tab) => isMain(tab.sessionId)).map((tab) => tab.sessionId);
+    if (mainTabs.length) remove(new Set(mainTabs));
     if (store.get().style === 'off') return;
     // A pinned conversation is one the reader keeps, so its tab is no longer the one the next open replaces.
     for (const id of pinnedNow) keepTab(id);
@@ -333,7 +339,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     /** 加入标签栏: a kept tab for [sessionId], without opening it. */
     add(sessionId: string) {
       const session = sessionOf(sessionId);
-      if (store.get().style === 'off' || !session || session.archivedAt) return;
+      if (store.get().style === 'off' || !session || session.archivedAt || isMain(sessionId)) return;
       if (store.get().tabs.some((tab) => tab.sessionId === sessionId)) { keepTab(sessionId); return; }
       const sessions = sessionMap();
       store.set((state) => {
@@ -374,7 +380,8 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       const projectId = selected?.projectId ?? nav.get().projectId;
       const siblings = sortSessionsByActivity(lists.get().sessions.filter((item) => item.projectId === projectId && (item.id === selectedId || (!item.archivedAt && !gone.has(item.id)))));
       const at = siblings.findIndex((item) => item.id === selectedId);
-      const next = hit ? siblings[at + 1] ?? siblings[at - 1] : undefined;
+      // Any of the 助理's conversations leaves you on its page, not on one that no list shows.
+      const next = hit && !ofAssistant(projectId) ? siblings[at + 1] ?? siblings[at - 1] : undefined;
       for (let index = closedStack.length - 1; index >= 0; index -= 1) if (gone.has(closedStack[index]!.sessionId)) closedStack.splice(index, 1);
       remove(gone);
       if (hit) leave({ projectId }, next);
@@ -401,7 +408,7 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     reopen() {
       for (let closed = closedStack.pop(); closed; closed = closedStack.pop()) {
         const session = sessionOf(closed.sessionId);
-        if (!session || session.archivedAt) continue;
+        if (!session || session.archivedAt || isMain(closed.sessionId)) continue;
         if (!store.get().tabs.some((tab) => tab.sessionId === closed.sessionId)) {
           const sessions = sessionMap();
           store.set((state) => {

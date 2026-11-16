@@ -177,8 +177,8 @@ msgid "在终端中"
 msgstr "在终端中"
 
 #: src/app/terminal/NativeSession.tsx
-msgid "存为定时任务…"
-msgstr "存为定时任务…"
+msgid "存为自动化…"
+msgstr "存为自动化…"
 
 #: src/app/terminal/NativeSession.tsx
 msgid "对话会保留；正在回复时，本轮结束后生效"

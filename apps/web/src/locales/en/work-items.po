@@ -13,15 +13,14 @@ msgstr ""
 msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
-#. placeholder {0}: counts[kind]
-#: src/app/work-items/AssistantSetup.tsx
-msgid "{0} 个"
-msgstr "{0}"
-
 #. placeholder {0}: sessions.length
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "{0} 个会话"
 msgstr "{0} conversations"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{abilities} 项"
+msgstr "{abilities}"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
@@ -47,9 +46,17 @@ msgstr "Its conversations stay but no longer belong to it. This can’t be undon
 msgid "保存"
 msgstr "Save"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "保存为 AGENTS.md，下次启动时生效"
+msgstr "Saved as AGENTS.md. Takes effect on the next start"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
 msgstr "All projects"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "关于你"
+msgstr "About you"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关闭"
@@ -124,6 +131,10 @@ msgstr "Cancel"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "取消任务"
 msgstr "Cancel task"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "只读。要增删或更正，直接告诉个人助理"
+msgstr "Read-only. To add, remove or correct something, tell the assistant"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
@@ -234,10 +245,6 @@ msgstr "Question"
 msgid "提问：{0}"
 msgstr "Asked: {0}"
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "插件"
-msgstr "Plugins"
-
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr "Inbox"
@@ -245,10 +252,6 @@ msgstr "Inbox"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "改动的文件"
 msgstr "Files changed"
-
-#: src/app/work-items/AssistantSetup.tsx
-msgid "新对话生效"
-msgstr "Applies to new conversations"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -275,6 +278,10 @@ msgstr "Couldn't send the answer"
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
 msgstr "Couldn't start this task"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法读取记忆"
+msgstr "Could not read memory"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法返工"
@@ -360,9 +367,25 @@ msgstr "Result unknown"
 msgid "编辑描述"
 msgstr "Edit description"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "能力"
+msgstr "Abilities"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
 msgstr "What to change"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "规则"
+msgstr "Rules"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记下的事"
+msgstr "Notes"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记忆"
+msgstr "Memory"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"
@@ -393,6 +416,10 @@ msgstr "{0} more"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
 msgstr "No tasks yet"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有记忆"
+msgstr "Nothing remembered yet"
 
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"

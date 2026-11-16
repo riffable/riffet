@@ -90,6 +90,42 @@ describe('ExtensionService static discovery and documents', () => {
     expect(inventory.items.every(item => item.runtimeState === 'unknown')).toBe(true);
   });
 
+  it('lists Riffet skills read-only for the assistant project on Claude, and nowhere else', async () => {
+    const user = path.join(tempRoot, 'claude-user');
+    const projectRoot = path.join(tempRoot, 'assistant');
+    await mkdir(path.join(user, 'skills', 'owner'), { recursive: true });
+    await writeFile(path.join(user, 'skills', 'owner', 'SKILL.md'), '---\nname: owner\ndescription: The owner\'s own skill\n---\n');
+    await mkdir(path.join(projectRoot, '.claude', 'skills', 'added'), { recursive: true });
+    await writeFile(path.join(projectRoot, '.claude', 'skills', 'added', 'SKILL.md'), '---\nname: added\ndescription: Added for the assistant\n---\n');
+    const service = new ExtensionService(path.join(tempRoot, 'state'));
+    const assistant: Project = { ...makeProject(projectRoot), system: 'assistant' };
+    const ctx = makeContext('claude', user, assistant);
+    const items = (await service.list(ctx)).items.filter(item => item.scope === 'riffet');
+    expect(items.length).toBeGreaterThan(0);
+    for (const item of items) {
+      expect(item).toMatchObject({ kind: 'skill', enabled: true, actions: [], readOnlyReason: 'Provided by Riffet. Updated with the server.' });
+      expect(item.name.startsWith('riffet:')).toBe(true);
+    }
+    const document = await service.readDocument(ctx, items[0]!.documentId!);
+    expect(document).toMatchObject({ editable: false, language: 'markdown' });
+    expect(document.content.startsWith('---\n')).toBe(true);
+    await expect(service.writeDocument(ctx, document.id, { content: 'x', expectedHash: document.hash })).rejects.toMatchObject({ code: 'EXTENSION_READ_ONLY' });
+    // Its launch leaves the owner's configuration directory out, so only its own files and Riffet's are in effect.
+    const listed = await service.list(ctx);
+    expect(listed.items.filter(item => item.kind === 'skill' && item.scope !== 'riffet').map(item => [item.name, item.scope])).toEqual([['added', 'project']]);
+    expect(listed.createTargets.every(target => target.scope === 'project')).toBe(true);
+    const elsewhere = await service.list(makeContext('claude', user, makeProject(projectRoot)));
+    // What it does not list it does not open either, by an id learnt elsewhere. (A second service: the two
+    // contexts here share a project id, which a real project and the assistant's never do.)
+    const owners = elsewhere.items.find(item => item.name === 'owner')!;
+    const again = new ExtensionService(path.join(tempRoot, 'state'));
+    await expect(again.readDocument(ctx, owners.documentId!)).rejects.toMatchObject({ code: 'EXTENSION_DOCUMENT_NOT_FOUND' });
+    await expect(again.detail(ctx, owners.id)).rejects.toMatchObject({ code: 'EXTENSION_NOT_FOUND' });
+    expect(elsewhere.items.some(item => item.scope === 'riffet')).toBe(false);
+    expect(elsewhere.items.filter(item => item.kind === 'skill').map(item => item.name).sort()).toEqual(['added', 'owner']);
+    expect((await service.list(makeContext('codex', user, assistant))).items.some(item => item.scope === 'riffet')).toBe(false);
+  });
+
   it('discovers pi agent and project layouts without reading credentials', async () => {
     const user = path.join(tempRoot, 'pi-agent');
     const projectRoot = path.join(tempRoot, 'pi-project');

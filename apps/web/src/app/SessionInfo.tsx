@@ -3,10 +3,11 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
-import { IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconSquareKanban, IconTerminal } from '@/components/icons';
+import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconShieldCheck, IconSparkles, IconSquareKanban, IconTerminal } from '@/components/icons';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
 import { ListRow, listRowClass, rowReveal } from '@/components/ui/list-row';
 import { AgentLogo } from '@/components/AgentLogo';
+import { isAssistantProject, mainSessionIdOf } from '@/lib/project-family';
 import { api, type ProjectRecord } from '@/lib/api';
 import { agentMarkStyle, sessionBackend } from '@/lib/backends';
 import { copyText } from '@/lib/files';
@@ -18,6 +19,7 @@ import { isSessionDeleted } from '@/lib/session-deletion';
 import { compactTokens } from './session/Composer';
 import type { ContextUsage } from './session/model';
 import { useStores, useWorkItems } from './state/stores';
+import type { AssistantSetupState } from './work-items/AssistantSetup';
 import { useStatusLabel } from './work-items/parts';
 
 export interface GitChanges { changes: number; added: number; removed: number }
@@ -150,6 +152,8 @@ export interface SessionInfoProps {
   onToggleTerminal: () => void;
   /** Called when a place row leaves for its target, so the surface hosting this can close. */
   onNavigate: () => void;
+  /** The 助理's main conversation: its instructions, skills, MCP servers and plugins, which its page no longer shows. */
+  assistant?: AssistantSetupState;
   /** The title and status. The phone's sheet already has its own. */
   head?: boolean;
   /** The session's own groups: side discussions, subagents, background tasks, marks. */
@@ -161,9 +165,10 @@ export interface SessionInfoProps {
  * the top — who is working, on what, and how it is going — then the facts as a labelled list, the
  * places it can take you, and what is running in it.
  */
-export function SessionInfo({ session, quickChat, project, projectName, model, modelDetail, branch, changes, changesVisible, state, usage, approval, panelTab, terminalOpen, onTogglePanel, onToggleTerminal, onNavigate, head = true, children }: SessionInfoProps) {
+export function SessionInfo({ session, quickChat, project, projectName, model, modelDetail, branch, changes, changesVisible, state, usage, approval, panelTab, terminalOpen, onTogglePanel, onToggleTerminal, onNavigate, assistant, head = true, children }: SessionInfoProps) {
   const { t } = useLingui();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
+  const title = mainSessionIdOf(project) === session.id ? t`个人助理` : session.title;
   const go = (action: () => void) => () => { onNavigate(); action(); };
   const backend = sessionBackend(session);
   const tags = session.tags.filter(Boolean);
@@ -190,7 +195,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <div className="line-clamp-2 break-words text-(length:--text-h3) font-semibold leading-[22px] text-fg" title={session.title}>{session.title}</div>
+            <div className="line-clamp-2 break-words text-(length:--text-h3) font-semibold leading-[22px] text-fg" title={title}>{title}</div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-fg-3" role="status">
               {state?.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : state && <StatusDot tone={state.tone} pulse={state.pulse} />}
               <span className={cn('min-w-0 truncate', state?.tone === 'warning' && 'text-warning', state?.tone === 'danger' && 'text-danger')}>
@@ -215,9 +220,15 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
         <section className="edge-t p-1.5">
           {session.workItemId && <TaskPlaceRow workItemId={session.workItemId} onNavigate={onNavigate} />}
           {project && changesVisible && <PlaceRow icon={<IconGitCompare />} label={t`变更`} hint={compactChanges(changes)} active={panelTab === 'changes'} onClick={go(() => onTogglePanel('changes'))} />}
-          {project && <>
+          {project && !isAssistantProject(project) && <>
             <PlaceRow icon={<IconFolder />} label={t({ message: '文件', context: 'workbench-files-panel' })} active={panelTab === 'files'} onClick={go(() => onTogglePanel('files'))} />
             <PlaceRow icon={<IconTerminal />} label={t`终端`} hint={mobile ? undefined : '⌃`'} active={terminalOpen} onClick={go(onToggleTerminal)} />
+          </>}
+          {/* What the 个人助理 is made of, in place of a project's changes, files and terminal (docs/ASSISTANT.md §3). */}
+          {assistant && <>
+            <PlaceRow icon={<IconBrain />} label={t`记忆`} hint={assistant.memoryNote} onClick={go(() => assistant.setMemoryOpen(true))} />
+            <PlaceRow icon={<IconShieldCheck />} label={t`规则`} hint={assistant.instructionsNote} onClick={go(assistant.openRules)} />
+            <PlaceRow icon={<IconSparkles />} label={t`能力`} hint={assistant.abilitiesNote} onClick={go(assistant.openAbilities)} />
           </>}
         </section>
       )}

@@ -142,7 +142,7 @@ struct SettingsView: View {
         return [
             SettingsGroup(title: String(localized: "通用", bundle: .riffet), entries: [
                 SettingsEntry(title: String(localized: "语言", bundle: .riffet), icon: "globe", value: AppLanguage.current.name, kind: .link { AnyView(LanguageSettingsView()) }),
-                SettingsEntry(title: String(localized: "Agent 扩展", bundle: .riffet), icon: "puzzlepiece.extension", kind: .link { AnyView(NativeExtensionsView(workbench: workbench)) }),
+                SettingsEntry(title: String(localized: "扩展管理", bundle: .riffet), icon: "puzzlepiece.extension", kind: .link { AnyView(NativeExtensionsView(workbench: workbench)) }),
             ]),
             SettingsGroup(title: String(localized: "外观", bundle: .riffet), entries: appearance),
             SettingsGroup(title: String(localized: "行为", bundle: .riffet), entries: [

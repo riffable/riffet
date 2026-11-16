@@ -19,12 +19,12 @@ const PROVIDER_SWITCHES = ['CLAUDE_CODE_USE_BEDROCK', 'CLAUDE_CODE_USE_VERTEX', 
  * `initialize` does not tell a bundled skill from a built-in command, so only skills the CLI marks are listed: those
  * from the user's or the project's skill folders (`(user)` / `(project)`) and plugins (`plugin:name`).
  */
-export async function probeClaudeLoadedExtensions(executable: string, cwd: string, env: Record<string, string>): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
+export async function probeClaudeLoadedExtensions(executable: string, cwd: string, env: Record<string, string>, launchArgs: readonly string[] = []): Promise<Omit<LoadedExtensions, 'checkedAt'>> {
   const settings = JSON.stringify({ disableAllHooks: true, env: { ANTHROPIC_BASE_URL: UNREACHABLE_BASE_URL } });
   const childEnv: Record<string, string | undefined> = { ...process.env, ...env, ANTHROPIC_BASE_URL: UNREACHABLE_BASE_URL };
   for (const name of PROVIDER_SWITCHES) delete childEnv[name];
   const child = spawn(executable, [
-    '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--settings', settings, '--no-session-persistence',
+    '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose', '--settings', settings, '--no-session-persistence', ...launchArgs,
   ], { cwd, env: childEnv, stdio: ['pipe', 'pipe', 'ignore'] });
   return await new Promise((resolve, reject) => {
     let buffer = '';

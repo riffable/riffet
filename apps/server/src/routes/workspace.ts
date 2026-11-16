@@ -12,6 +12,7 @@ import { renderFilePreview } from '../previews/index.js';
 import { MAX_PREVIEW_FILE_BYTES } from '../previews/formats.js';
 import type { PreviewQuery } from '../previews/document.js';
 import { EMPTY_INDEX_MARKER, extractIndexable, likePattern, normalizeQuery, snippet } from '../search/messages.js';
+import { mergeMessageHits } from '../search/merge.js';
 import { sequence, pageSize } from './params.js';
 import type { RouteDeps } from './deps.js';
 import { sendsQuickChat } from '../chat/quick-chat.js';
@@ -43,19 +44,12 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     const limit=request.query.limit===undefined?50:pageSize(request.query.limit);
     const sessionId=request.query.sessionId===undefined?undefined:requireString(request.query.sessionId,'sessionId',512);
     const pattern=likePattern(query);
-    // A question is both a stored run and, once its transcript passed through, an indexed message.
-    // Keyed by conversation and text so the reader sees one row, and the run's copy wins because it
-    // holds the whole prompt rather than one window of it.
-    const seen=new Set<string>();
     // A client without quick chat or pi support must not see those conversations. Hiding them after
     // each source's LIMIT would let recent chats crowd older matches out of the result entirely.
     const hidden=hiddenBackendIds(request.headers);
     const excludeTaskWorkspaces=!clientSupportsFeature(request.headers,'projectless-tasks');
     const excludedBackendIds=[...(quickChats?[]:['chat']),...hidden];
-    const hits=[...store.searchPrompts(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers)),...store.searchIndexedMessages(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers))]
-      .filter(hit=>{const key=`${hit.sessionId}\u0000${hit.text}`;if(seen.has(key))return false;seen.add(key);return true;})
-      .sort((left,right)=>right.at.localeCompare(left.at))
-      .slice(0,limit)
+    const hits=mergeMessageHits([store.searchPrompts(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers)),store.searchIndexedMessages(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers))],limit)
       .map(hit=>({sessionId:hit.sessionId,projectId:hit.projectId,sessionTitle:hit.sessionTitle,archived:hit.archived,backendId:hit.backendId,messageId:hit.messageId,kind:hit.kind,at:hit.at,snippet:snippet(hit.text,query),...(hit.runId?{runId:hit.runId}:{})}));
     const backendIds=nativeBackends.readOnlyTranscriptBackendIds().filter(backendId=>(quickChats||backendId!=='chat')&&backendVisibleToClient(request.headers,backendId));
     const pending=store.countSessionsMissingMessages(backendIds,sessionId,excludeTaskWorkspaces);

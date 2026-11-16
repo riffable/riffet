@@ -15,9 +15,9 @@ enum WorkbenchPage: String, Equatable {
 
     var title: String {
         switch self {
-        case .tasks: String(localized: "定时任务")
+        case .tasks: String(localized: "自动化")
         case .plugins: String(localized: "插件")
-        case .extensions: String(localized: "Agent 扩展")
+        case .extensions: String(localized: "扩展管理")
         case .marks: String(localized: "收藏夹")
         case .stats: String(localized: "数据统计")
         case .activity: String(localized: "活动")

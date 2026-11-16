@@ -73,7 +73,7 @@ export function SubagentSession({ stack, onBack, onClose, onOpen, findEvent, ses
   /** The main conversation needs a response; its form stays on that conversation's page. */
   pendingConfirmation?: boolean;
   root?: string;
-  onOpenPath: (path: string, line?: number) => void;
+  onOpenPath?: ((path: string, line?: number) => void) | undefined;
   onOpenInEditor?: (path: string, line?: number) => void;
 }) {
   const { t } = useLingui();

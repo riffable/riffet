@@ -1196,12 +1196,12 @@
         }
       }
     },
-    "存为定时任务…": {
+    "存为自动化…": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Save as scheduled task…"
+            "value": "Save as automation…"
           }
         }
       }
@@ -1538,12 +1538,12 @@
         }
       }
     },
-    "无法创建定时任务：%@": {
+    "无法创建自动化：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cannot create scheduled task: %@"
+            "value": "Cannot create automation: %@"
           }
         }
       }
@@ -6982,12 +6982,12 @@
         }
       }
     },
-    "删除定时任务「%@」？": {
+    "删除自动化「%@」？": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Delete scheduled task “%@”?"
+            "value": "Delete automation “%@”?"
           }
         }
       }
@@ -9130,12 +9130,12 @@
         }
       }
     },
-    "定时任务": {
+    "自动化": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Scheduled tasks"
+            "value": "Automations"
           }
         }
       }
@@ -11077,12 +11077,12 @@
         }
       }
     },
-    "打开定时任务": {
+    "打开自动化": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open scheduled tasks"
+            "value": "Open Automations"
           }
         }
       }
@@ -12517,12 +12517,12 @@
         }
       }
     },
-    "新建定时任务": {
+    "新建自动化": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "New scheduled task"
+            "value": "New automation"
           }
         }
       }
@@ -12627,12 +12627,12 @@
         }
       }
     },
-    "无法保存定时任务：%@": {
+    "无法保存自动化：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cannot save scheduled task: %@"
+            "value": "Cannot save automation: %@"
           }
         }
       }
@@ -12687,12 +12687,12 @@
         }
       }
     },
-    "无法删除定时任务：%@": {
+    "无法删除自动化：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cannot delete scheduled task: %@"
+            "value": "Cannot delete automation: %@"
           }
         }
       }
@@ -12897,12 +12897,12 @@
         }
       }
     },
-    "无法更新定时任务：%@": {
+    "无法更新自动化：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Can't update scheduled task: %@"
+            "value": "Can't update automation: %@"
           }
         }
       }
@@ -13107,12 +13107,12 @@
         }
       }
     },
-    "无法运行定时任务：%@": {
+    "无法运行自动化：%@": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Cannot run scheduled task: %@"
+            "value": "Cannot run automation: %@"
           }
         }
       }
@@ -16926,12 +16926,12 @@
         }
       }
     },
-    "编辑定时任务": {
+    "编辑自动化": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Edit scheduled task"
+            "value": "Edit automation"
           }
         }
       }
@@ -18670,12 +18670,12 @@
         }
       }
     },
-    "连接服务器后可以查看和管理 Agent 扩展。": {
+    "连接服务器后可以查看和管理扩展。": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "View and manage Agent extensions after connecting to the server."
+            "value": "View and manage extensions after connecting to the server."
           }
         }
       }
@@ -21375,12 +21375,12 @@
         }
       }
     },
-    "Agent 扩展": {
+    "扩展管理": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Agent extensions"
+            "value": "Extensions"
           }
         }
       }
@@ -21605,12 +21605,12 @@
         }
       }
     },
-    "打开 Agent 扩展": {
+    "打开扩展管理": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open Agent extensions"
+            "value": "Open extensions"
           }
         }
       }

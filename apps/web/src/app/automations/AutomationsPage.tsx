@@ -132,7 +132,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
       else if (result.result === 'failed') onError(result.error ?? t`运行失败`);
       else if (result.reason) onError(reasonText(result));
       void reload();
-    } catch (error) { onError(errorMessage(error, t`无法运行定时任务`)); }
+    } catch (error) { onError(errorMessage(error, t`无法运行自动化`)); }
     finally { setRunning(undefined); }
   };
   const reasonText = (item: AutomationRun): string => {
@@ -152,13 +152,13 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
       setAutomations((current) => current?.map((entry) => entry.id === next.id ? next : entry));
     } catch (error) {
       setAutomations((current) => current?.map((entry) => entry.id === item.id ? item : entry));
-      onError(errorMessage(error, t`无法更新定时任务`));
+      onError(errorMessage(error, t`无法更新自动化`));
     } finally { setToggling((current) => { const next = new Set(current); next.delete(item.id); return next; }); }
   };
   const remove = async (item: Automation) => {
-    if (!item.followUp && !await confirmDialog({ title: t`删除定时任务「${item.name}」？`, description: t`已经运行出的会话会保留。`, confirmLabel: t({ message: '删除', context: 'tasks-delete-action' }), destructive: true })) return;
+    if (!item.followUp && !await confirmDialog({ title: t`删除自动化「${item.name}」？`, description: t`已经运行出的会话会保留。`, confirmLabel: t({ message: '删除', context: 'tasks-delete-action' }), destructive: true })) return;
     try { await api.deleteAutomation(item.id); await reload(); }
-    catch (error) { onError(errorMessage(error, t`无法删除定时任务`)); }
+    catch (error) { onError(errorMessage(error, t`无法删除自动化`)); }
   };
 
   const hasSession = (id: string | undefined): id is string => Boolean(id && sessionById.has(id));
@@ -192,7 +192,7 @@ export function AutomationsPage({ projects, project, sessions, backends, enterBe
   const empty = automations?.length === 0;
   return (
     <PageScaffold
-      title={<Trans>定时任务</Trans>}
+      title={<Trans>自动化</Trans>}
       actions={<Tip label={t`新建`}><Button size="icon-sm" variant="quiet" className="max-md:size-11" aria-label={t`新建`} onClick={() => setEditing({ seed: { projectId: project?.id } })}><IconPlus /></Button></Tip>}
       columnClassName="flex flex-col gap-8"
       sidebarCollapsed={sidebarCollapsed}

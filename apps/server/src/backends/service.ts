@@ -22,7 +22,7 @@ import { backendIdOf } from '../session-identity.js';
 import { activityOfEvent, summarizeActivities } from '../journal/activity.js';
 import type { TranscriptIngest } from '../sync/ingest.js';
 import type { JournalFeed } from '../journal/feed.js';
-import type { ExternalSessionEntry, ExternalSessionScan, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding, NativePtyLaunchSpec, NativeRiffetMcpHost } from './types.js';
+import type { ExternalSessionEntry, ExternalSessionScan, NativeBackendDriver, NativeBackendHost, NativeBackendOpenOptions, NativeBackendOpenResult, NativeBackendProfileConfig, NativeControlMessage, NativeDispatchBinding, NativePtyLaunchSpec, NativeRiffetMcpHost, NativeStandingHost } from './types.js';
 import { stopWorkbenchAppServerAt } from './shared/app-server-daemons.js';
 import { appServerCredentialDirs } from './codex/config.js';
 import { OutputRateTracker } from '../metrics/output-rate.js';
@@ -131,6 +131,8 @@ export interface NativeBackendServiceOptions {
   };
   /** The Riffet MCP server launches carry, handed to drivers through the host. */
   riffetMcp?: NativeRiffetMcpHost;
+  /** Standing conversations (docs/ASSISTANT.md §4), handed to drivers through the host. */
+  standing?: NativeStandingHost;
   prepareContextInput?: (run: Run) => Promise<NativeRunInput>;
 }
 
@@ -233,6 +235,7 @@ export class NativeBackendService {
       terminal: options.terminal,
       withSessionLock: (sessionId, operation) => options.runtime.withSession(sessionId, () => Promise.resolve(operation())),
       ...(options.riffetMcp ? { riffetMcp: options.riffetMcp } : {}),
+      ...(options.standing ? { standing: options.standing } : {}),
       withDetachedSessionLock: (sessionId, operation) => options.runtime.withDetachedSession(sessionId, () => Promise.resolve(operation())),
     };
     this.catalog = new BackendCatalog(options.registry, this.host, { profiles: options.profiles, defaultProfileId: options.defaultProfileId }, session => this.resolveSync(session).profile);

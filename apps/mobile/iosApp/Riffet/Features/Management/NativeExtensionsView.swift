@@ -23,6 +23,7 @@ private enum ExtText {
         case "project": String(localized: "项目级", bundle: .riffet)
         case "managed": String(localized: "外部维护", bundle: .riffet)
         case "builtin": String(localized: "内置", bundle: .riffet)
+        case "riffet": "Riffet"
         default: scope
         }
     }
@@ -174,7 +175,7 @@ struct NativeExtensionsView: View {
                 else if grouped.isEmpty && !needle.isEmpty { ContentUnavailableView.search(text: needle) }
             }
         }
-        .navigationTitle(String(localized: "Agent 扩展", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "扩展管理", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .riffetSearchable(text: $filter, prompt: String(localized: "搜索名称或类型", bundle: .riffet))
         .toolbar {
             if canCreate || canInstall {

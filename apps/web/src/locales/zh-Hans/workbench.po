@@ -47,10 +47,6 @@ msgstr "「{0}」{body}"
 msgid "Agent 与模型"
 msgstr "Agent 与模型"
 
-#: src/app/SidebarUserMenu.tsx
-msgid "Agent 扩展"
-msgstr "Agent 扩展"
-
 #: src/app/ProjectHome.tsx
 msgid "CLI 与终端工具"
 msgstr "CLI 与终端工具"
@@ -108,6 +104,14 @@ msgstr "不可用"
 #: src/app/DirectoryPicker.tsx
 msgid "不存在"
 msgstr "不存在"
+
+#: src/app/Header.tsx
+#: src/app/SessionInfo.tsx
+#: src/app/Sidebar.tsx
+#: src/app/use-session-actions.ts
+#: src/app/Workbench.tsx
+msgid "个人助理"
+msgstr "个人助理"
 
 #: src/app/SidebarUserMenu.tsx
 msgid "个人资料"
@@ -418,11 +422,6 @@ msgstr "刷新"
 msgid "加入标签栏"
 msgstr "加入标签栏"
 
-#: src/app/Sidebar.tsx
-#: src/app/Workbench.tsx
-msgid "助理"
-msgstr "助理"
-
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "卸载"
 msgstr "卸载"
@@ -644,11 +643,6 @@ msgstr "安装到当前连接的服务器"
 msgid "安装和启停影响连接这台服务器的所有客户端"
 msgstr "安装和启停影响连接这台服务器的所有客户端"
 
-#: src/app/Sidebar.tsx
-#: src/app/Workbench.tsx
-msgid "定时任务"
-msgstr "定时任务"
-
 #: src/plugins/hostViews.ts
 msgctxt "session-view"
 msgid "对话"
@@ -727,10 +721,9 @@ msgstr "已完成"
 msgid "已归档"
 msgstr "已归档"
 
-#. placeholder {0}: target.title
 #: src/app/use-session-actions.ts
-msgid "已归档「{0}」"
-msgstr "已归档「{0}」"
+msgid "已归档「{shownTitle}」"
+msgstr "已归档「{shownTitle}」"
 
 #: src/app/Sidebar.tsx
 msgid "已收藏"
@@ -845,12 +838,16 @@ msgid "所选后端不可用"
 msgstr "所选后端不可用"
 
 #: src/app/Workbench.tsx
-msgid "打开 Agent 扩展"
-msgstr "打开 Agent 扩展"
+msgid "打开个人助理"
+msgstr "打开个人助理"
 
 #: src/app/Workbench.tsx
 msgid "打开任务看板"
 msgstr "打开任务看板"
+
+#: src/app/Header.tsx
+msgid "打开侧板"
+msgstr "打开侧板"
 
 #: src/app/Workbench.tsx
 msgid "打开侧栏"
@@ -867,8 +864,8 @@ msgid "打开变更面板"
 msgstr "打开变更面板"
 
 #: src/app/Workbench.tsx
-msgid "打开定时任务"
-msgstr "打开定时任务"
+msgid "打开扩展管理"
+msgstr "打开扩展管理"
 
 #: src/app/Workbench.tsx
 msgid "打开收藏夹"
@@ -883,9 +880,14 @@ msgid "打开统计"
 msgstr "打开统计"
 
 #: src/app/Workbench.tsx
+msgid "打开自动化"
+msgstr "打开自动化"
+
+#: src/app/Workbench.tsx
 msgid "打开设置"
 msgstr "打开设置"
 
+#: src/app/SidebarUserMenu.tsx
 #: src/app/Workbench.tsx
 msgid "扩展管理"
 msgstr "扩展管理"
@@ -1777,9 +1779,18 @@ msgstr "置顶会话"
 msgid "聚焦输入框"
 msgstr "聚焦输入框"
 
+#: src/app/SessionInfo.tsx
+msgid "能力"
+msgstr "能力"
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "自动"
 msgstr "自动"
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "自动化"
+msgstr "自动化"
 
 #: src/app/SessionInfo.tsx
 msgid "自动压缩阈值"
@@ -1801,6 +1812,14 @@ msgstr "获取配对码"
 #: src/app/ProjectHome.tsx
 msgid "要在 {0} 做什么？"
 msgstr "要在 {0} 做什么？"
+
+#: src/app/SessionInfo.tsx
+msgid "规则"
+msgstr "规则"
+
+#: src/app/SessionInfo.tsx
+msgid "记忆"
+msgstr "记忆"
 
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/SidebarUserMenu.tsx

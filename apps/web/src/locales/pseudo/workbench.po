@@ -47,10 +47,6 @@ msgstr ""
 msgid "Agent 与模型"
 msgstr ""
 
-#: src/app/SidebarUserMenu.tsx
-msgid "Agent 扩展"
-msgstr ""
-
 #: src/app/ProjectHome.tsx
 msgid "CLI 与终端工具"
 msgstr ""
@@ -107,6 +103,14 @@ msgstr ""
 
 #: src/app/DirectoryPicker.tsx
 msgid "不存在"
+msgstr ""
+
+#: src/app/Header.tsx
+#: src/app/SessionInfo.tsx
+#: src/app/Sidebar.tsx
+#: src/app/use-session-actions.ts
+#: src/app/Workbench.tsx
+msgid "个人助理"
 msgstr ""
 
 #: src/app/SidebarUserMenu.tsx
@@ -418,11 +422,6 @@ msgstr ""
 msgid "加入标签栏"
 msgstr ""
 
-#: src/app/Sidebar.tsx
-#: src/app/Workbench.tsx
-msgid "助理"
-msgstr ""
-
 #: src/app/plugins/PluginVersionsDialog.tsx
 msgid "卸载"
 msgstr ""
@@ -644,11 +643,6 @@ msgstr ""
 msgid "安装和启停影响连接这台服务器的所有客户端"
 msgstr ""
 
-#: src/app/Sidebar.tsx
-#: src/app/Workbench.tsx
-msgid "定时任务"
-msgstr ""
-
 #: src/plugins/hostViews.ts
 msgctxt "session-view"
 msgid "对话"
@@ -727,9 +721,8 @@ msgstr ""
 msgid "已归档"
 msgstr ""
 
-#. placeholder {0}: target.title
 #: src/app/use-session-actions.ts
-msgid "已归档「{0}」"
+msgid "已归档「{shownTitle}」"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -845,11 +838,15 @@ msgid "所选后端不可用"
 msgstr ""
 
 #: src/app/Workbench.tsx
-msgid "打开 Agent 扩展"
+msgid "打开个人助理"
 msgstr ""
 
 #: src/app/Workbench.tsx
 msgid "打开任务看板"
+msgstr ""
+
+#: src/app/Header.tsx
+msgid "打开侧板"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -867,7 +864,7 @@ msgid "打开变更面板"
 msgstr ""
 
 #: src/app/Workbench.tsx
-msgid "打开定时任务"
+msgid "打开扩展管理"
 msgstr ""
 
 #: src/app/Workbench.tsx
@@ -883,9 +880,14 @@ msgid "打开统计"
 msgstr ""
 
 #: src/app/Workbench.tsx
+msgid "打开自动化"
+msgstr ""
+
+#: src/app/Workbench.tsx
 msgid "打开设置"
 msgstr ""
 
+#: src/app/SidebarUserMenu.tsx
 #: src/app/Workbench.tsx
 msgid "扩展管理"
 msgstr ""
@@ -1777,8 +1779,17 @@ msgstr ""
 msgid "聚焦输入框"
 msgstr ""
 
+#: src/app/SessionInfo.tsx
+msgid "能力"
+msgstr ""
+
 #: src/app/plugins/PluginsPage.tsx
 msgid "自动"
+msgstr ""
+
+#: src/app/Sidebar.tsx
+#: src/app/Workbench.tsx
+msgid "自动化"
 msgstr ""
 
 #: src/app/SessionInfo.tsx
@@ -1800,6 +1811,14 @@ msgstr ""
 #. placeholder {0}: project.name
 #: src/app/ProjectHome.tsx
 msgid "要在 {0} 做什么？"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "规则"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "记忆"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx

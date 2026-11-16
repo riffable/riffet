@@ -45,7 +45,7 @@ struct ExtensionsPage: View {
     var body: some View {
         Group {
             if workbench.host.api == nil {
-                DisconnectedSettings(detail: String(localized: "连接服务器后可以查看和管理 Agent 扩展。"))
+                DisconnectedSettings(detail: String(localized: "连接服务器后可以查看和管理扩展。"))
             } else {
                 VStack(spacing: 0) {
                     notices

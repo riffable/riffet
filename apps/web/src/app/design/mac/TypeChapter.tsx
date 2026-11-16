@@ -27,7 +27,7 @@ export function TypeChapter() {
     { name: t`侧栏`, api: 'style.text.sidebar', sample: t`修复首帧跳变`, size: (style) => points(style.tokens.text.sidebar) },
     { name: t`注脚`, api: 'RiffetFont.footnote', sample: '1m 41s · 2.3k tok/s', size: () => 11 },
     { name: t`弹窗标题`, api: 'RiffetFont.dialogTitle', sample: t`删除这个会话？`, size: () => 16, weight: 500 },
-    { name: t`栏标题`, api: 'RiffetFont.barTitle', sample: t`定时任务`, size: (style) => points(style.tokens.text.body), weight: 500 },
+    { name: t`栏标题`, api: 'RiffetFont.barTitle', sample: t`自动化`, size: (style) => points(style.tokens.text.body), weight: 500 },
     { name: t`代码`, api: 'RiffetFont.code', sample: 'TIMEOUT_MS = 30_000', size: () => 13, mono: true },
   ];
   const rows: CompareRow[] = roles.map((role) => ({

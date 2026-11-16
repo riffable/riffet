@@ -22,7 +22,7 @@ import { ClaudeTranscript, claudePromptKey, findClaudeTranscript, parseRow, mapR
 import { ClaudeTranscriptChanges, ClaudeTranscriptSource } from './transcript-source.js';
 import { claudeHolders, scanClaudeSessions } from './external.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
-import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability } from './launch.js';
+import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, providerEnv, pause, screenDialogEndorsed, claudeAvailability , STANDING_ISOLATION } from './launch.js';
 import { normalizeClaudeModel, selectedModel, validateModelSelection, gatewayCatalogs, claudeGatewayModels, claudeModels } from './models.js';
 import { QUICK_EXIT_MS, QUICK_EXIT_LIMIT, rewriteKey, ClaudeSessionRuntime } from './runtime.js';
 import { workspaceObserver, type WorkspaceObserver } from '../shared/workspace-observer.js';
@@ -288,8 +288,11 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     return await claudeSlashItems(profile, await queryDirectory(project, profile), 0);
   }
 
-  private async loadedExtensions(_host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {
-    return await probeClaudeLoadedExtensions(executableOf(profile), await queryDirectory(project, profile), profileEnv(profile));
+  private async loadedExtensions(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {
+    // A standing conversation loads its own directory's extensions only, so that is what is listed for it.
+    const standing = host.standing?.launch(project);
+    const launchArgs = standing ? [...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir]), ...(standing.mcpConfigFiles.length ? ['--mcp-config', ...standing.mcpConfigFiles] : [])] : [];
+    return await probeClaudeLoadedExtensions(executableOf(profile), await queryDirectory(project, profile), profileEnv(profile), launchArgs);
   }
 
   async available(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {

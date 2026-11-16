@@ -85,8 +85,8 @@ msgstr "Delete"
 
 #. placeholder {0}: item.name
 #: src/app/automations/AutomationsPage.tsx
-msgid "删除定时任务「{0}」？"
-msgstr "Delete schedule \"{0}\"?"
+msgid "删除自动化「{0}」？"
+msgstr "Delete automation \"{0}\"?"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "即将运行"
@@ -118,10 +118,6 @@ msgstr "Weekends at {time}"
 #: src/app/automations/AutomationEditor.tsx
 msgid "在同一会话继续"
 msgstr "Continue in the same conversation"
-
-#: src/app/automations/AutomationsPage.tsx
-msgid "定时任务"
-msgstr "Schedules"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "已删除的任务"
@@ -176,20 +172,20 @@ msgid "新建"
 msgstr "New"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "新建定时任务"
-msgstr "New scheduled task"
+msgid "新建自动化"
+msgstr "New automation"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "无法保存定时任务"
-msgstr "Couldn't save the schedule"
+msgid "无法保存自动化"
+msgstr "Couldn't save the automation"
 
 #: src/app/automations/QuickCreate.tsx
-msgid "无法创建定时任务"
-msgstr "Could not create the task"
+msgid "无法创建自动化"
+msgstr "Couldn't create the automation"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法删除定时任务"
-msgstr "Couldn't delete the schedule"
+msgid "无法删除自动化"
+msgstr "Couldn't delete the automation"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "无法加载任务"
@@ -204,16 +200,16 @@ msgid "无法安排发送"
 msgstr "Could not schedule the message"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法更新定时任务"
-msgstr "Couldn't update the schedule"
+msgid "无法更新自动化"
+msgstr "Couldn't update the automation"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "无法识别这个时间表达式"
 msgstr "Couldn't read this time expression"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法运行定时任务"
-msgstr "Couldn't run the schedule"
+msgid "无法运行自动化"
+msgstr "Couldn't run the automation"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "日期时间"
@@ -316,8 +312,12 @@ msgid "编辑"
 msgstr "Edit"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "编辑定时任务"
-msgstr "Edit schedule"
+msgid "编辑自动化"
+msgstr "Edit automation"
+
+#: src/app/automations/AutomationsPage.tsx
+msgid "自动化"
+msgstr "Automations"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "自定义"

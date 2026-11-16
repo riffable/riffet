@@ -19,10 +19,13 @@ export function useSidebarViews(project: ProjectRecord | undefined, sessionId: s
   const order = useViewPrefs((state) => state.sidebarOrder);
   const hidden = useViewPrefs((state) => state.sidebarHidden);
   return useMemo(() => {
-    const capabilities = hasGit ? GIT_CAPABILITIES : NO_CAPABILITIES;
-    const offered = catalog.filter((view) => view.location === 'sidebar' && !hidden.includes(view.id) && matches(view.when, { hasProject, hasSession, capabilities, projectTypes }));
+    // The 个人助理's directory is not a project to browse: its git history is its memory, not changes to review,
+    // and the file routes refuse it (it lives in the state directory). Its memory has its own reader (docs/ASSISTANT.md §3.2).
+    const own = project?.system === 'assistant';
+    const capabilities = hasGit && !own ? GIT_CAPABILITIES : NO_CAPABILITIES;
+    const offered = catalog.filter((view) => view.location === 'sidebar' && !hidden.includes(view.id) && !(own && view.id === 'files') && matches(view.when, { hasProject, hasSession, capabilities, projectTypes }));
     return orderViews(offered, order);
-  }, [catalog, order, hidden, hasProject, hasSession, hasGit, projectTypes]);
+  }, [catalog, order, hidden, hasProject, hasSession, hasGit, projectTypes, project?.system]);
 }
 
 /**

@@ -34,7 +34,7 @@ export interface NavState {
   statsOpen: boolean;
   /** 任务 (docs/TASK-BOARD.md). */
   tasksOpen: boolean;
-  /** 定时任务. */
+  /** 自动化. */
   automationsOpen: boolean;
   extensionsOpen: boolean;
   marksOpen: boolean;

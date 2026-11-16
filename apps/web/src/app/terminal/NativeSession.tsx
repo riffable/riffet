@@ -255,7 +255,8 @@ interface Props {
   referenceProjects?: import('@/lib/api').ProjectRecord[];
   references: PromptContextReference[];
   onReferencesChange: (references: PromptContextReference[]) => void;
-  onOpenPath: (path: string, line?: number) => void;
+  /** Absent where the conversation's files cannot be previewed: its paths are then plain text. */
+  onOpenPath?: ((path: string, line?: number) => void) | undefined;
   onOpenInEditor?: (path: string, line?: number) => void;
   renderHeader: (slots: HeaderSlots) => ReactNode;
   /** A search result asked to see one message in this conversation. */
@@ -361,7 +362,10 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const [discussionRequest, setDiscussionRequest] = useState<{ session: Session; nonce: number }>();
   useEffect(() => { if (discussionOpen) setDiscussionMounted(true); }, [discussionOpen]);
   useEffect(() => { setDiscussionFocus(undefined); }, [focus]);
-  const discussionAllowed = session.origin?.kind !== 'discussion';
+  // The 个人助理's conversation is not work in a project: no side chats, forks, rewinds, hand-offs, view pager
+  // or file mentions, which all act on a project's code or open another conversation there (docs/ASSISTANT.md §3).
+  const assistant = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'assistant');
+  const discussionAllowed = session.origin?.kind !== 'discussion' && !assistant;
   const overview = useViewPrefs((state) => state.side === 'overview');
   const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!quickChat && !mobileViewport && overview);
   // The view dots sit on the reading column's centre line, which an aside pushes left of the
@@ -397,7 +401,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const prefs = useViewPrefs((state) => state);
   const offered = useSessionViews({ hasProject: Boolean(session.projectId), hasSession: true, capabilities: NO_CAPABILITIES });
   const hostView = chosenView === 'chat' || chosenView === 'terminal';
-  const view = !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
+  const view = assistant || !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
   const native = useSessionSync(session, { onSessionChanged, onError, notificationsEnabled, initialRun }, view === 'chat');
   const marks = useSessionMarks(session.id, native.history?.generation);
   const discuss = useCallback((source: DiscussionSource) => {
@@ -815,7 +819,6 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   /** The queue card is on screen, closing included: the composer card keeps its seam until the card has gone. */
   const [queueShown, setQueueShown] = useState(false);
   const followUps = useSessionFollowUps(session.id);
-  const assistant = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'assistant');
   const followUpList = useMemo(() => followUps.items.length ? <FollowUpList items={followUps.items} onCancel={(id) => void followUps.cancel(id)} /> : undefined, [followUps.items, followUps.cancel]);
   const sendLater = useCallback(async (prompt: string, attachments: Attachment[], context: PromptContextReference[], at: Date) => {
     const ok = await scheduleFollowUp(session.id, prompt, attachments, context, at);
@@ -927,7 +930,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // A phone switches views from its menu; a subagent's transcript has no views of its own.
   const viewIds = visibleViews(prefs, offered, (id) => id !== 'terminal' || supportsTerminal);
   const views = viewIds.flatMap((id) => offered.filter((entry) => entry.id === id));
-  const switcher = !quickChat && !mobileViewport && !subagentOpen && views.length > 1;
+  const switcher = !quickChat && !assistant && !mobileViewport && !subagentOpen && views.length > 1;
   const viewsKey = viewIds.join();
   useViewShortcuts(viewIds, changeView, switcher);
   const header = useMemo(() => renderHeader({
@@ -964,7 +967,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         onSelect: () => void restartBackend(),
       }] : []),
       // On a desktop the views are tabs under the title.
-      ...(supportsTerminal && mobileViewport ? [{
+      ...(supportsTerminal && mobileViewport && !assistant ? [{
         id: 'view',
         icon: view === 'chat' ? <IconSquareTerminal /> : <IconMessagesSquare />,
         label: view === 'chat' ? t`切换终端视图` : t`切换对话视图`,
@@ -983,12 +986,13 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           disabled: action.disabled || !runtimeActionsEnabled, onSelect: () => void runRuntimeAction(action),
         }] : [];
       }),
-      ...(quickChat || archived ? [] : [
+      // Either would start another conversation in the 助理's directory, which has one (docs/ASSISTANT.md §3).
+      ...(quickChat || archived || assistant ? [] : [
         ...(session.handedOffTo ? [] : [{ id: 'handoff', icon: <IconArrowRightLeft />, label: t`交接会话…`, onSelect: () => setDialog('handoff') }]),
-        { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为定时任务…`, onSelect: () => setDialog('automation') },
+        { id: 'automation', icon: <IconBookmarkPlus />, label: t`存为自动化…`, onSelect: () => setDialog('automation') },
       ]),
     ],
-  }), [working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, t]);
+  }), [assistant, working, backendCapabilities?.supportsTargetedStop, backendCapabilities?.supportsInterrupt, native.interrupting, native.connected, stop, openDiscussion, runningSubagents, discussionAllowed, native.status.profilePending, restartingBackend, restartBackend, renderHeader, imageSource, fileAccess, renderer, native.subagents, native.jobs, activityControls, backgroundActivities, changeView, subagentOpen, native.context, approval, backendCapabilities?.permissions, native.status.activity?.background, infoNotice, subagentBriefs, onOpenPath, headerStatus, tabbedAlert, connectingLong, connectionNotice, supportsTerminal, view, archived, quickChat, session.handedOffTo, runtimeControl, runtimeActionsEnabled, runRuntimeAction, runtimeProgressShown, runtimeActionPending, reopen, reopenDisabled, held, repairingNativeModel, pickerBlocked, native.retryConnection, drawer, terminalLive, live, starting, sendingInitial, native.statusKnown, mobileViewport, session.id, switcher, prefs.placement, viewsKey, offered, t]);
   const dialogs = (
     <>
       {(dialog === 'share' || dialog === 'pdf') && <ShareDialog key={dialog} sessionId={session.id} title={session.title} purpose={dialog} open onOpenChange={(open) => { if (!open) setDialog(undefined); }} />}
@@ -1061,7 +1065,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     commands: slashCommands,
     inlineSkills: slash.catalog?.inlineSkills ?? backendCapabilities?.inlineSkills,
     onSlashMenuOpen: slash.refresh,
-    fileMentions: !quickChat && Boolean(root),
+    fileMentions: !quickChat && !assistant && Boolean(root),
     sessionMentions: !quickChat && sessionReferences && backendCapabilities?.supportsSessionReferences === true,
     referenceSessions: referenceSessions,
     referenceProjects: referenceProjects,
@@ -1195,7 +1199,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             if (!draft || !recipientAlive.current) return;
             setRestoreDraft({ text: draft.text, attachments: draft.attachments, context: draft.context, onPersisted: draft.onPersisted, nonce: Date.now() });
           }}
-          onTurnAction={quickChat || archived ? undefined : turnAction}
+          onTurnAction={quickChat || archived || assistant ? undefined : turnAction}
           onDiscuss={discussionAllowed && !archived ? discuss : undefined}
           lead={lineage}
           runActionPending={runActionPending}
@@ -1328,6 +1332,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             timelineVersion={native.timelineVersion}
             root={root}
             onOpenPath={onOpenPath}
+            outputs={!assistant}
           />
           </ActivityContext.Provider>
         </SubagentContext.Provider>

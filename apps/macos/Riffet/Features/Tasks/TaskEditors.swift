@@ -88,7 +88,7 @@ struct AutomationEditorSheet: View {
 
     var body: some View {
         EditorSheet(
-            title: automation == nil ? String(localized: "新建定时任务") : String(localized: "编辑定时任务"),
+            title: automation == nil ? String(localized: "新建自动化") : String(localized: "编辑自动化"),
             subtitle: "",
             canSave: canSave,
             busy: busy,
@@ -242,7 +242,7 @@ struct AutomationEditorSheet: View {
             if error.riffetCode == "INVALID_CRON" {
                 cronError = String(localized: "无法识别这个时间表达式")
             } else {
-                self.error = String(localized: "无法保存定时任务：\(error.riffetMessage)")
+                self.error = String(localized: "无法保存自动化：\(error.riffetMessage)")
             }
         }
     }

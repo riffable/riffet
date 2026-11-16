@@ -91,10 +91,10 @@
 
 ### 3.2 页面骨架
 
-非会话的页面（定时任务、收藏、插件、统计、扩展、并行尝试）都用 `PageScaffold`（新增，放在 `Features/Workbench/`）。它与 Web 的 `PageScaffold` 对应：
+非会话的页面（自动化、收藏、插件、统计、扩展、并行尝试）都用 `PageScaffold`（新增，放在 `Features/Workbench/`）。它与 Web 的 `PageScaffold` 对应：
 
 ```swift
-PageScaffold(title: "定时任务", column: .document, search: $query) {
+PageScaffold(title: "自动化", column: .document, search: $query) {
     // 页面内容：只放内容，不再自己写宽度、内边距和 ScrollView
 } actions: {
     PageActionButton(…)
@@ -112,7 +112,7 @@ PageScaffold(title: "定时任务", column: .document, search: $query) {
 
 | 页面 | 文件 | 现在 | 目标 |
 |---|---|---|---|
-| 定时任务 | `Features/Tasks/TasksPage.swift` | 760，左右 16、上 16、下 32 | `.document` |
+| 自动化 | `Features/Tasks/TasksPage.swift` | 760，左右 16、上 16、下 32 | `.document` |
 | 收藏 | `Features/Marks/MarksPage.swift` | 760，左右 24、上 16、下 64 | `.document` |
 | 插件 | `Features/Plugins/PluginsPage.swift` | 720，`Form` | `.document` |
 | 统计 | `Features/Stats/StatsView.swift` | 1180，左右 16、上 12、下 32 | `.board` |

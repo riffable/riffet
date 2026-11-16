@@ -1,4 +1,4 @@
-import type { ExtensionCreateTarget, ExtensionDetail, ExtensionInventory, ExtensionItem, ExtensionFile } from '../../../../packages/contracts/src/extensions.js';
+import type { ExtensionCreateTarget, ExtensionDetail, ExtensionInventory, ExtensionItem, ExtensionFile, ExtensionScope } from '../../../../packages/contracts/src/extensions.js';
 import type { Project } from '../../../../packages/contracts/src/index.js';
 import type { AgentExtensionLayout } from '@riffet/plugin-api/experimental/agent';
 import type { NativeBackendProfileConfig } from '../backends/types.js';
@@ -17,11 +17,13 @@ export interface ExtensionDocumentDescriptor extends ExtensionFile {
   absolutePath: string;
   root: string;
   relativePath: string;
-  scope: 'user' | 'project' | 'managed' | 'builtin';
+  scope: ExtensionScope;
   language: 'json' | 'toml' | 'yaml' | 'markdown' | 'text';
   itemId?: string;
   applyEffect: string;
   projection?: 'claudeMcpServers';
+  /** Document body held in memory; such a document is never read from or written to disk. */
+  content?: string;
 }
 
 export interface ExtensionSnapshot {

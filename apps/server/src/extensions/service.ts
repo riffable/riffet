@@ -134,7 +134,7 @@ export class ExtensionService {
     // Enrich this response, never the mutable cache: concurrent list/detail requests
     // can hold different snapshots while sharing the same native state read.
     return items.map(item => {
-      if (item.kind !== 'skill' || !item.documentId || item.scope === 'builtin') return item;
+      if (item.kind !== 'skill' || !item.documentId || item.scope === 'builtin' || item.scope === 'riffet') return item;
       const descriptor = snapshot.documents.get(item.documentId);
       if (!descriptor || descriptor.path !== item.sourcePath || descriptor.absolutePath.endsWith('.riffet-disabled')) return item;
       const enabled = statePaths.get(descriptor.absolutePath);

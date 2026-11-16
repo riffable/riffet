@@ -258,7 +258,7 @@ struct ThemeWindowPreview: View {
             .padding(.bottom, 6)
             navRow("square.and.pencil", "新会话")
             navRow("magnifyingglass", "搜索内容")
-            navRow("calendar.badge.clock", "定时任务")
+            navRow("calendar.badge.clock", "自动化")
             Text("项目")
                 .font(.riffet(size: S(10)))
                 .foregroundStyle(colors.fg4)

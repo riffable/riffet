@@ -27,9 +27,32 @@ export const turnSummaryPrompt = () => render('turn-summary');
 export const handoffSummaryPrompt = () => render('handoff-summary');
 export const quickChatSystemPrompt = () => render('quick-chat-system');
 export const assistantInstructions = () => render('assistant');
+export const assistantSystemPrompt = () => render('assistant-system');
 export const historyCompactionPrompt = () => render('history-compaction');
 export const deviceObserveDescription = () => render('device-observe');
 export const screenRules = (topic: 'observe' | 'steps' | 'flow' | 'errors') => render(`screen-help-${topic}`);
+
+/** Where a set of Riffet's own skills applies; each conversation gets the set of its scenario. */
+export type SkillScenario = 'assistant';
+/** One skill Riffet ships: `text` is the whole `SKILL.md`, front matter included. */
+export interface RiffetSkill { name: string; description: string; text: string }
+
+/**
+ * The skills Riffet itself gives the conversations of `scenario`, by name. Each is a prompt file named
+ * `skill.<scenario>.<name>.md` whose front matter carries the name and the description the model reads
+ * to decide when to load it.
+ */
+export function riffetSkills(scenario: SkillScenario): RiffetSkill[] {
+  const prefix = `skill.${scenario}.`;
+  return (Object.keys(PROMPT_SOURCES) as PromptName[]).filter(key => key.startsWith(prefix)).sort().map(key => {
+    const text = PROMPT_SOURCES[key];
+    const front = /^---\n([\s\S]*?)\n---\n/.exec(text)?.[1] ?? '';
+    const field = (name: string) => new RegExp(`^${name}:\\s*(.+)$`, 'm').exec(front)?.[1]?.trim() ?? '';
+    const name = field('name');
+    if (name !== key.slice(prefix.length) || !field('description')) throw new Error(`${key}: front matter needs name "${key.slice(prefix.length)}" and a description`);
+    return { name, description: field('description'), text: `${text}\n` };
+  });
+}
 
 export type BriefLanguage = 'zh' | 'en';
 export type BriefPart = 'head' | 'turn' | 'continues' | 'actions' | 'replies' | 'earlier' | 'changed' | 'transcript' | 'transcriptOmitted' | 'empty';

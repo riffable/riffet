@@ -77,6 +77,7 @@ async function checkedExistingFile(descriptor: ExtensionDocumentDescriptor): Pro
 }
 
 export async function readExtensionFile(descriptor: ExtensionDocumentDescriptor): Promise<ExtensionDocument> {
+  if (descriptor.content !== undefined) return publicDocument(descriptor, descriptor.content, hashConfigContent(Buffer.from(descriptor.content, 'utf8')));
   try {
     const { raw } = await checkedExistingFile(descriptor);
     const source = raw.toString('utf8');

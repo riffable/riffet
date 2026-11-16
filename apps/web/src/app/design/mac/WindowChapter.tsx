@@ -31,7 +31,7 @@ function PageAnatomy() {
     <Frame className="p-10 max-md:p-4">
       <div className="relative mx-auto flex h-80 max-w-2xl flex-col overflow-hidden rounded-lg bg-bg shadow-[0_0_0_1px_var(--line-strong)]">
         <div className="flex h-11 shrink-0 items-center gap-2 px-4 edge-b">
-          <span className="text-sm font-medium text-fg">{t`定时任务`}</span>
+          <span className="text-sm font-medium text-fg">{t`自动化`}</span>
           <span className="ml-auto flex items-center gap-2" aria-hidden><span className="size-4 rounded-xs bg-fg/[0.12]" /><span className="h-6 w-14 rounded-md bg-primary" /></span>
         </div>
         <div className="relative flex-1">

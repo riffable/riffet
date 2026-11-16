@@ -60,6 +60,9 @@ import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.j
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
 import { AssistantBoard, WorkItemService, assistantProject } from './work-items/index.js';
+import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
+import { AssistantStanding } from './assistant/standing.js';
+import { assistantSearch } from './search/assistant-search.js';
 import { savedDefaultBackendId } from './session-identity.js';
 import { registerShareRoutes } from './routes/shares.js';
 import { ShareService } from './shares/service.js';
@@ -197,10 +200,13 @@ export async function createApp(options: AppOptions = {}) {
     .register(new PiBackendAdapter({stateDir}))
     .register(new CodexBackendAdapter(undefined, traexFlavor, plugins))
     .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS}));
+  // The 助理's directory is made on first use, like its project; its files are checked once per server.
+  let assistantHome:AssistantHome|undefined;
+  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),timeZone:()=>settings.getSettings().assistant?.timeZone});
   const nativeBackends=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
     profiles:{get:backendId=>settings.getNativeBackendProfiles(backendId),getConfig:(backendId,profileId)=>settings.getNativeBackendProfileConfig(backendId,profileId)},
-    riffetMcp, prepareContextInput:run=>contextReferences.render(run),
+    riffetMcp, standing:assistantStanding, prepareContextInput:run=>contextReferences.render(run),
   });
   // A plugin's Agent backends are registered while it is enabled and withdrawn when it is not; evaluated by `refreshWithin` below.
   const pluginBackends=new PluginBackends({plugins,registry:backendRegistry,service:nativeBackends,workspaceObserver:workspaceObserver(stateDir)});
@@ -321,7 +327,8 @@ export async function createApp(options: AppOptions = {}) {
     open:async(target,text,attach)=>(await orchestration.open(target,text,attach)).id,
   }));
   workItemsRef=workItems;
-  assistantRef=new AssistantBoard({store,workItems,defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds())});
+  assistantRef=new AssistantBoard({store,workItems,defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
+    search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[]});
   const deps:RouteDeps={workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
@@ -395,7 +402,8 @@ export async function createApp(options: AppOptions = {}) {
   reclaimer.start();
   // Made before anyone can ask for it, so a phone opening the list sees it at once. A failure costs quick chat, not the server.
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
-  try{assistantProject(store,stateDir);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
+  try{assistantHome=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
+  const stopAssistantWatch=assistantStanding.watch();
   workItems.retitleBriefConversations();
   workItems.dropComposerItems();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
@@ -420,7 +428,7 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['assistant',()=>stopAssistantWatch()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }

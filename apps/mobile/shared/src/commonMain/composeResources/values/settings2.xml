@@ -6,7 +6,7 @@
     <string name="settings_extra_section_interaction">交互与输入</string>
     <string name="settings_extra_section_connection">连接与配对</string>
     <string name="settings_extra_section_backends">Agent 与模型</string>
-    <string name="settings_extra_section_extensions">Agent 扩展</string>
+    <string name="settings_extra_section_extensions">扩展管理</string>
     <string name="settings_extra_section_files">文件与编辑器</string>
     <string name="settings_extra_section_service">服务状态</string>
     <string name="settings_extra_section_diagnostics">诊断与日志</string>

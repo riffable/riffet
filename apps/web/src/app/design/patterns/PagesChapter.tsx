@@ -120,7 +120,7 @@ function PageHeader() {
       <div className="flex justify-between"><span className={label}>{t`左内边距 16 · 手机 12`}</span><span className={label}>{t`高 52 · 手机 48`}</span></div>
       <div className="flex h-13 items-center gap-2 rounded-lg bg-bg pl-4 pr-3 shadow-[0_0_0_1px_var(--line)]">
         <Button size="icon-sm" variant="quiet" tabIndex={-1} aria-hidden><IconPanelLeft /></Button>
-        <span className="text-sm font-medium text-fg">{t`定时任务`}</span>
+        <span className="text-sm font-medium text-fg">{t`自动化`}</span>
         <span className="ml-auto flex items-center gap-1">
           <Button size="icon-sm" variant="quiet" tabIndex={-1} aria-hidden><IconSearch /></Button>
           <Button size="sm" variant="primary" tabIndex={-1}><IconPlus />{t`新建`}</Button>

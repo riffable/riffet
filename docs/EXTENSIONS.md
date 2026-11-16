@@ -1,4 +1,4 @@
-# Agent 扩展管理
+# 扩展管理
 
 ## 目标与边界
 
@@ -51,7 +51,7 @@
 
 ## Web 独立页面（2026-10-18）
 
-侧栏「定时任务」下提供「扩展管理」入口，支持命令面板与 `/extensions` 直达。设置中原「Agent 扩展」分区已迁移。页面分为「概览」和「管理」，默认打开概览。概览复用统计页的卡片与图表工具，展示目录条目、Skills、插件、停用数量，以及 Agent 和类型分布；点击图表、图例或数量进入对应管理筛选。数字来自当前扫描目录，按 Agent/profile 分别计数，共享文件可能重复，不代表使用次数或已安装数量；未声明启停状态单独统计。
+侧栏「自动化」下提供「扩展管理」入口，支持命令面板与 `/extensions` 直达。设置中原有的扩展分区已迁移。页面分为「概览」和「管理」，默认打开概览。概览复用统计页的卡片与图表工具，展示目录条目、Skills、插件、停用数量，以及 Agent 和类型分布；点击图表、图例或数量进入对应管理筛选。数字来自当前扫描目录，按 Agent/profile 分别计数，共享文件可能重复，不代表使用次数或已安装数量；未声明启停状态单独统计。
 
 管理页默认隐藏长描述，保留搜索、类型、筛选入口和新建。Agent、配置、作用域、来源、状态与排序收进筛选弹层，启用的筛选显示为可移除标签。列表保留可视区渲染。详情以短标记展示只读、内置和插件来源，原始描述折叠；管理影响保留在操作确认中。详情内容与文件编辑器分别滚动，CodeMirror 的容器高度有界，长路径单行显示。布局按扩展工作区的实际宽度切换，窄工作区使用覆盖式详情，避免侧栏挤压列表。
 
@@ -141,6 +141,16 @@ Droid 运行时未提供已验证的自定义 `configDir` 映射，因此扩展�
 DSH 用户扩展改为稳定 profile 身份；桥接与模型配置位于独立 overlay。升级时迁移当前旧身份对应的 profile，保留原目录；其他历史配置 hash 目录不自动合并。默认 session、storage 和 attachment 位于共享 DSH_HOME；用户自定义数据路径仍按原 patch 决定。相同 profile 变更配置时，活跃任务阻止第二个写入进程启动，空闲旧进程先关闭。
 
 写入复用 1 MB 上限、脱敏字段回填、SHA-256 冲突检查、同路径保存串行化、原子替换和备份。修改成功使服务端和 Web slash 目录缓存失效，下一次菜单刷新读取新目录。编辑器只针对发现到的原生路径；扫描深度和文件数量有界。
+
+## Riffet 自带 Skills
+
+Riffet 随服务器提供自己的 Skills（`apps/server/src/prompts/`），不放在任何 Agent 的目录里，按启动附加。扩展目录把它们列为独立来源：`scope: 'riffet'`，界面显示为「Riffet」，可按作用域筛选。
+
+- 何时列出：后端为 `claude`，且项目是个人助理项目（`Project.system === 'assistant'`）。其他后端或项目的目录不变。「哪个场景适用」只在 `extensions/riffet-skills.ts` 的 `riffetSkillScenario` 决定；后续场景在此增加映射。
+- 条目：每个 Skill 一项，`kind: 'skill'`，名称 `riffet:<name>`（模型看到的名字），描述取自 Skill 的 front matter，`enabled: true`，`actions: []`，`readOnlyReason` 为「Provided by Riffet. Updated with the server.」。
+- 文档：`GET …/extensions/documents/:docId` 返回完整 `SKILL.md`，内容来自服务器内存，不读磁盘，也不经工作区文件路由；`editable: false`。文档 ID 由 backend、profile、场景和 Skill 名哈希得到，与普通文档同为 40 位十六进制。保存、停用、删除等写操作对这些 ID 与其他只读项一样返回 `EXTENSION_READ_ONLY`。
+- 更新：随服务器版本变化，不能在此编辑；统计按 Skills 类型计入，与其他来源一致。
+- 隔离启动的目录范围：个人助理在 Claude Code 上启动时不读用户配置目录（[ASSISTANT.md](ASSISTANT.md) §4）。这个上下文的目录只保留 `riffet` 作用域和位于项目目录里的条目（项目目录里链接进来的 skill 作用域是 `managed`，同样保留），新建位置只保留项目级的；条目、详情和文档按同一条件过滤，被隐藏条目的 ID 在这个上下文里读不到、写不了，也不能对它执行操作；原生命令报告的已安装插件同样过滤。判断在 `extensions/riffet-skills.ts` 的 `scopeInEffect` 和 `discovery.ts` 末尾。在助理目录的 `.claude/settings.json` 里启用的插件目前不作为条目列出，它提供的 skill 仍计入助理页的「能力」数量。
 
 ## 验证与限制
 

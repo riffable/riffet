@@ -2,7 +2,7 @@
 
 手机只有一列、一只手、一个拇指。组件做对了，页面仍然可能难用：信息放错了层级，一屏里塞了三件事，低频的工具压在内容上面。本文规定 Android 与 iPhone 的二级页面、浮层和面板怎么组织，是[模式](patterns.md)在手机上的版本；单个组件的写法见 [Android](android.md) 和 [iOS](ios.md)。
 
-范例是 iPhone 的「Agent 扩展」页（`apps/mobile/iosApp/Riffet/Features/Management/NativeExtensionsView.swift`，2026-11 随设置页一起重做）。反例是 Android 的同一页（`ui/settings/ExtensionsSection.kt`），§6 逐项对照。
+范例是 iPhone 的「扩展管理」页（`apps/mobile/iosApp/Riffet/Features/Management/NativeExtensionsView.swift`，2026-11 随设置页一起重做）。反例是 Android 的同一页（`ui/settings/ExtensionsSection.kt`），§6 逐项对照。
 
 ## 1. 原则
 
@@ -148,7 +148,7 @@
 - **`EmptyState`**：没有内容时在内容的位置：可选图标（三级墨色）、可选标题、一句话、下一步的按钮。占满剩余高度时上下居中；在列表里时上下留白、不居中。
 - **`SkeletonBlock` / `SkeletonRows`**：局部加载时画出将要出现的形状，尺寸与真实内容一致，缓慢明暗变化，减弱动效时静止。整页加载仍是居中转圈。
 
-## 6. 范例：Agent 扩展
+## 6. 范例：扩展管理
 
 | | Android 原来（2026-11-15 前的 `ExtensionsSection.kt`） | 按本文（iPhone 与现在的 Android） |
 |---|---|---|
@@ -238,7 +238,7 @@ ios 风格浅色下，分组卡片与页面底色几乎一样（设置首页同�
 先补骨架，再按页面重做；同一页面 Android 与 iPhone 一起对齐。
 
 1. ~~**骨架**~~（2026-11-15）：顶栏操作、搜索与下拉刷新，编辑页，确认框，设置行四种；写法见 [Android](android.md) §3.2、§3.3、§4.2。`SettingsRow { SettingsButton }` 与 `SettingsButtonsRow` 由 `pnpm check:compose` 拦截。
-2. ~~**重做 3 级页面**~~（2026-11-15）：Agent 扩展、会话详情面板、Git 面板、外观、提供商编辑、诊断；其余文件里的确认框换成 `ConfirmDialog`。
+2. ~~**重做 3 级页面**~~（2026-11-15）：扩展管理、会话详情面板、Git 面板、外观、提供商编辑、诊断；其余文件里的确认框换成 `ConfirmDialog`。
 3. ~~**浮层**~~（2026-11-15）：引用详情、会话提示、在终端恢复改为底部面板，预设编辑改为编辑页；两侧侧栏按 §2.7，模型选择的参数改为底部一行胶囊。
 4. **2 级页面与浮层**：2026-11-15 第二轮已改大部分，余下见 §7。
 5. ~~**iPhone**~~（2026-11-15）：组件按 [iOS](ios.md) §9 第 1、2 步补齐，§7.4 的 3 级、2 级页面已重做；余下见 §7.4，画面待在真机上核对。

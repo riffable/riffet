@@ -3033,14 +3033,6 @@ msgstr ""
 msgid "定位重定向问题"
 msgstr ""
 
-#: src/app/design/components/InputsChapter.tsx
-#: src/app/design/mac/TypeChapter.tsx
-#: src/app/design/mac/WindowChapter.tsx
-#: src/app/design/patterns/PagesChapter.tsx
-#: src/app/settings/ThemeEditor.tsx
-msgid "定时任务"
-msgstr ""
-
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "实底卡片，与转录同宽同轴；悬浮玻璃只用于移动端。"
 msgstr ""
@@ -7015,6 +7007,14 @@ msgstr ""
 
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "自动"
+msgstr ""
+
+#: src/app/design/components/InputsChapter.tsx
+#: src/app/design/mac/TypeChapter.tsx
+#: src/app/design/mac/WindowChapter.tsx
+#: src/app/design/patterns/PagesChapter.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "自动化"
 msgstr ""
 
 #: src/app/design/surfaces/SessionChapter.tsx

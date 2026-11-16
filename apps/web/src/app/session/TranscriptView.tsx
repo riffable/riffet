@@ -371,7 +371,7 @@ interface RowContext {
   /** Rows that arrived after the transcript first showed, until when their entrance may play. */
   fresh: ReadonlyMap<string, Fresh> | undefined;
   root?: string;
-  onOpenPath: (path: string, line?: number) => void;
+  onOpenPath?: ((path: string, line?: number) => void) | undefined;
   onOpenInEditor?: (path: string, line?: number) => void;
   onOpenTerminal?: () => void;
   onRetryNativeRun?: (run: Run) => void;
@@ -567,7 +567,7 @@ interface Props {
   running: boolean;
   activeTurnId?: string;
   root?: string;
-  onOpenPath: (path: string, line?: number) => void;
+  onOpenPath?: ((path: string, line?: number) => void) | undefined;
   onOpenInEditor?: (path: string, line?: number) => void;
   /** Shown once loaded when there is nothing in the timeline yet. */
   empty?: ReactNode;
@@ -1278,7 +1278,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const handlers = useRef({ onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onExpandRow });
   useLayoutEffect(() => { handlers.current = { onOpenPath, onOpenInEditor, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onExpandRow }; });
   const stable = useMemo(() => ({
-    openPath: (path: string, line?: number) => handlers.current.onOpenPath(path, line),
+    openPath: (path: string, line?: number) => handlers.current.onOpenPath?.(path, line),
     openInEditor: (path: string, line?: number) => handlers.current.onOpenInEditor?.(path, line),
     openTerminal: () => handlers.current.onOpenTerminal?.(),
     retry: (run: Run) => handlers.current.onRetryNativeRun?.(run),
@@ -1294,7 +1294,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const rowContext = useMemo<RowContext>(() => ({
     sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, following: scroll.following,
     measure: rowObserver.measure,
-    onOpenPath: stable.openPath,
+    ...(onOpenPath ? { onOpenPath: stable.openPath } : {}),
     ...(onOpenInEditor ? { onOpenInEditor: stable.openInEditor } : {}),
     ...(onOpenTerminal ? { onOpenTerminal: stable.openTerminal } : {}),
     ...(onRetryNativeRun ? { onRetryNativeRun: stable.retry } : {}),
@@ -1306,7 +1306,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
     ...(onSendQueuedNow ? { onSendQueuedNow: stable.sendNow } : {}),
     ...(onTurnAction ? { onTurnAction: stable.turnAction } : {}),
     ...(onExpandRow ? { onExpandRow: stable.expand } : {}),
-  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, rowObserver, stable, Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onSendQueuedNow), Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
+  }), [sessionId, onOpenSession, fresh, root, completedProcessesOpen, virtual, rowObserver, stable, Boolean(onOpenPath), Boolean(onOpenInEditor), Boolean(onOpenTerminal), Boolean(onRetryNativeRun), Boolean(onCancelNativeRun), Boolean(onCheckNativeRun), Boolean(onContinueNativeRun), nativeRecoveries, Boolean(onSendQueuedNow), Boolean(onRestoreNativeRun), Boolean(onTurnAction), Boolean(onExpandRow)]);
 
   // The working line holds the turn's footer unless a later inline activity has taken its place.
   const heldFooter = heldFooterRow(rowsAll);

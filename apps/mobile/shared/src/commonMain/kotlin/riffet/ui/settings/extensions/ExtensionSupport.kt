@@ -59,6 +59,7 @@ internal fun extensionScope(value: String): String = when (value) {
     "project" -> stringResource(Res.string.settings_extra_ext_scope_project)
     "managed" -> stringResource(Res.string.settings_extra_ext_scope_managed)
     "builtin" -> stringResource(Res.string.settings_extra_ext_scope_builtin)
+    "riffet" -> "Riffet"
     else -> value
 }
 

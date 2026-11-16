@@ -11,6 +11,7 @@ export const extensionScopes = {
   get project() { return i18n._(msg({ message: '项目级', context: 'common-scope-project' })); },
   get managed() { return i18n._(msg`外部维护`); },
   get builtin() { return i18n._(msg`内置`); },
+  riffet: 'Riffet',
 };
 
 export function extensionTemplate(target: ExtensionCreateTarget): string {

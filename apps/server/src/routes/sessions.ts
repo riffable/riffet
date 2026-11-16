@@ -14,6 +14,7 @@ import { requirePairedDevices, toolGroupList } from '../riffet-mcp/groups.js';
 import { applicableExtensionsOff, extensionsOffList } from '../extensions/toggles.js';
 import type { PreparedSessionReference } from '../context-references/service.js';
 import { registerDiscussionRoutes } from '../chat/discussions.js';
+import { claimMainConversation } from '../assistant/standing.js';
 
 /** `toolGroups` overrides the conversation's snapshot; a running CLI keeps the tools it was launched with until its next launch. */
 export interface SessionPatch { title?: string; tags?: string[]; archived?: boolean; pinned?: boolean; toolGroups?: unknown; extensionsOff?: unknown }
@@ -110,7 +111,10 @@ export function registerSessionRoutes(app: FastifyInstance, deps: RouteDeps): vo
         // Quick chats and the 助理's own conversations are not work on the board.
         const workItemId=project.system==='quick-chat'||project.system==='assistant'?undefined:startedWorkItem(body.workItemId);
         const accepted=store.createNativeSubmission(clientSessionId,input,commandId,message,snapshots);
-        if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));return accepted;});
+        const main=claimMainConversation(store,project,clientSessionId);
+        if(workItemId)workItems.attachSession(clientSessionId,workItemId);if(message.references?.length)store.setSetting(`session-reference-creation:${clientSessionId}`,submissionFingerprint(body));
+        // With the project, so the client knows this is the main conversation before it selects it.
+        return main?{...accepted,session:main,project:store.getProject(project.id)}:accepted;});
       reply.code(202);dispatch.kick();return result;
     }
     const input=await resolveNativeSessionInput(deps,body,request.headers);

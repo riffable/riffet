@@ -1,7 +1,8 @@
 import type { NativeBackendId, TextRef } from './index.js';
 
 export type ExtensionKind = 'skill' | 'mcp' | 'plugin' | 'hook' | 'rule' | 'command' | 'config';
-export type ExtensionScope = 'user' | 'project' | 'managed' | 'builtin';
+/** `riffet`: skills Riffet itself attaches to a conversation, served from the server bundle. */
+export type ExtensionScope = 'user' | 'project' | 'managed' | 'builtin' | 'riffet';
 export type ExtensionRuntimeState = 'unknown' | 'loaded' | 'error' | 'pending';
 export type ExtensionAction = 'enable' | 'disable' | 'install' | 'update' | 'uninstall' | 'reload' | 'login';
 

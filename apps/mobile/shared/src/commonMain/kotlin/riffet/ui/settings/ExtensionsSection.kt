@@ -121,7 +121,7 @@ internal class ExtensionsController(val api: RiffetApi, private val scope: Corou
 
 private const val PREVIEW = 5
 
-/** The Agent extensions page and the pages above it, each its own page of a nested stack (mobile.md §2.1). */
+/** The extensions page and the pages above it, each its own page of a nested stack (mobile.md §2.1). */
 @Composable
 internal fun ExtensionsPage(api: RiffetApi, projectId: String?, title: String, onBack: () -> Unit) {
     val scope = rememberCoroutineScope()

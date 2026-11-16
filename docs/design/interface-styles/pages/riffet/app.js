@@ -82,7 +82,7 @@ function sidebar(sel = true) {
   <nav class="sb-nav">
     <div class="nrow">${ico('compose', 18)}新会话</div>
     <div class="nrow">${ico('search', 18)}搜索内容<span class="k">⌘K</span></div>
-    <div class="nrow">${ico('clock', 18)}定时任务</div>
+    <div class="nrow">${ico('clock', 18)}自动化</div>
     <div class="nrow">${ico('bookmark', 18)}收藏夹</div>
     <div class="nrow">${ico('puzzle', 18)}插件</div>
   </nav>

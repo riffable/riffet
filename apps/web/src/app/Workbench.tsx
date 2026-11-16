@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ResizeHandle } from '@/components/ui/resize-handle';
 import { UnderlineTabs } from '@/components/ui/controls';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { IconArchive, IconSquareKanban, IconBookmark, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal } from '@/components/icons';
+import { IconArchive, IconSquareKanban, IconBookmark, IconBot, IconBrain, IconCalendarClock, IconChartColumn, IconFolder, IconGitCompare, IconPuzzle, IconMessageCirclePlus, IconMoon, IconPanelLeft, IconPencilLine, IconSettings, IconSquare, IconTerminal } from '@/components/icons';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery, useMobileViewport } from '@/lib/use-media-query';
 import { BrandMark, LiveBrandMark } from '@/components/BrandMark';
 import { api, type PromptContextReference } from '@/lib/api';
@@ -46,7 +46,7 @@ import { TabBar } from './tabs/TabBar';
 import { useTabs } from './tabs/useTabs';
 import { AppearanceBackdrop } from '@/components/appearance-backdrop';
 import { WorkbenchOverlays } from './WorkbenchOverlays';
-import { isAssistantProject, isQuickChatProject, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
+import { isAssistantProject, isQuickChatProject, mainSessionIdOf, regularProjects, sortProjectsByRecentUse } from '@/lib/project-family';
 import { assistantChoice, withAssistantDefaults } from './work-items/assistant';
 const StatsPage = lazy(() => import('./stats/StatsPage').then((module) => ({ default: module.StatsPage })));
 const WorkItemsPage = lazy(() => import('./work-items/WorkItemsPage').then((module) => ({ default: module.WorkItemsPage })));
@@ -67,8 +67,8 @@ const noReferences = () => undefined;
  * component wires them to the server and to the pages; panels, dock and dialogs read their own
  * slices, so toggling one does not re-render the page.
  */
-/** The new-conversation page's three targets: a task in a project, a quick chat, the 助理. */
-type HomeTab = 'task' | 'chat' | 'assistant';
+/** The new-conversation page's two targets: a task in a project, a quick chat. */
+type HomeTab = 'task' | 'chat';
 
 export function Workbench({ onLogout }: { onLogout?: () => void }) {
   const [stores] = useState(createWorkbenchStores);
@@ -138,7 +138,6 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const tabbed = desktop && tabStyle !== 'off';
   /** The slot at the right end of the tab bar, where the page header puts its actions once the bar has mounted. */
   const [tabActions, setTabActions] = useState<HTMLDivElement | null>(null);
-  const tabChrome = useMemo(() => tabbed ? { actions: tabActions } : null, [tabbed, tabActions]);
   const sidebarWidth = useUi((state) => state.sidebarWidth);
   const panelDockMin = useUi((state) => panelDockMinWidth(state.sidebarCollapsed ? undefined : state.sidebarWidth, state.panelWidth));
   const wideViewport = useMediaQuery(`(min-width: ${panelDockMin}px)`);
@@ -158,13 +157,19 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const quickChatProject = useMemo(() => projects.find((item) => isQuickChatProject(item)), [projects]);
   const assistantProject = useMemo(() => projects.find((item) => isAssistantProject(item) && !item.archivedAt), [projects]);
   // The 助理's directory has extensions of its own, reached from its page.
-  const extensionProjects = useMemo(() => assistantProject ? [...regular, { ...assistantProject, name: t`助理` }] : regular, [regular, assistantProject, t]);
+  const extensionProjects = useMemo(() => assistantProject ? [...regular, { ...assistantProject, name: t`个人助理` }] : regular, [regular, assistantProject, t]);
   const project = projects.find((item) => item.id === selectedProjectId);
   const quickChat = isQuickChatProject(project);
-  const homeTab: HomeTab = quickChat ? 'chat' : isAssistantProject(project) ? 'assistant' : 'task';
+  // The 助理 is one long conversation: once it exists, its page is that conversation (docs/ASSISTANT.md).
+  const assistantMain = useMemo(() => {
+    const id = mainSessionIdOf(assistantProject);
+    const found = id ? sessions.find((item) => item.id === id && item.projectId === assistantProject?.id) : undefined;
+    return found && !found.archivedAt ? found : undefined;
+  }, [assistantProject, sessions]);
+  const homeTab: HomeTab = quickChat ? 'chat' : 'task';
   const session = sessions.find((item) => item.id === selectedSessionId && item.projectId === selectedProjectId);
   // The 助理 page's composer starts with the 助理's own agent and model, and a pick made there is the
-  // 助理's, not the composer's everywhere else (docs/TASK-BOARD.md §5).
+  // 助理's, not the composer's everywhere else (docs/ASSISTANT.md).
   const assistantHome = isAssistantProject(project) && !session;
   const assistantPick = useMemo(() => assistantHome ? assistantChoice(settings.assistant, backends) : undefined, [assistantHome, settings.assistant, backends]);
   const homeBackendId = assistantPick?.backendId ?? pickedBackendId;
@@ -222,7 +227,11 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const pageOpen = pluginsOpen || statsOpen || tasksOpen || automationsOpen || extensionsOpen || marksOpen || designOpen;
   /** Every page that covers the conversation, the attempts comparison included. */
   const anyPageOpen = pageOpen || Boolean(attemptsGroupId);
-  useDocumentTitle(pageOpen ? undefined : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`定时任务` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : project?.name);
+  /** On the 助理 page: its project, with no page over it, showing its main conversation or the empty state. Derived, so it has no address of its own. */
+  const assistantPage = isAssistantProject(project) && !anyPageOpen && (!session || session.id === mainSessionIdOf(project));
+  // On the 助理 page the inline style has no tab bar to host the header's actions, so the header keeps its own row.
+  const tabChrome = useMemo(() => tabbed && !(tabStyle === 'inline' && assistantPage) ? { actions: tabActions } : null, [tabbed, tabStyle, assistantPage, tabActions]);
+  useDocumentTitle(pageOpen ? undefined : assistantPage && session ? { ...session, title: t`个人助理` } : session, sessions, pluginsOpen ? t`插件` : extensionsOpen ? t`扩展管理` : statsOpen ? t`统计` : tasksOpen ? t`任务看板` : automationsOpen ? t`自动化` : marksOpen ? t`收藏夹` : designOpen ? t`设计规范` : quickChat ? t`快速对话` : assistantPage ? t`个人助理` : project?.name);
 
   const upsertSession = lists.upsertSession;
   const upsertTerminal = lists.upsertTerminal;
@@ -251,13 +260,29 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   const pluginCommands = usePluginCommands({ project: quickChat ? undefined : project, sessionId: session?.id, openSession: openSessionById });
   const selectHomeTab = (tab: HomeTab) => {
     if (tab === homeTab) return;
-    const target = tab === 'chat' ? quickChatProject : tab === 'assistant' ? assistantProject : projectlessTasks ? regular.find((item) => item.id === taskProjectId && !item.archivedAt) : lastTaskProject;
+    const target = tab === 'chat' ? quickChatProject : projectlessTasks ? regular.find((item) => item.id === taskProjectId && !item.archivedAt) : lastTaskProject;
     // These are two launch targets for one draft. Task references stay parked while chat is active.
     void nav.navigate(() => {
       nav.set({ projectId: target?.id ?? '', sessionId: '', ...NO_PAGE });
       ui.set({ previewTarget: undefined });
     });
   };
+  /** Its page: sidebar row, then the main conversation or, before there is one, the empty state (docs/ASSISTANT.md). */
+  const openAssistant = () => {
+    if (!assistantProject) return;
+    void nav.navigate(() => {
+      nav.set({ projectId: assistantProject.id, sessionId: assistantMain?.id ?? '', ...NO_PAGE });
+      ui.set({ previewTarget: undefined });
+      ui.setMobileSidebar(false);
+    });
+  };
+  // Every way onto the 助理 with no conversation selected (a restored position, a link, the sidebar's
+  // group) lands on its main conversation instead of a page that would start a second one.
+  useEffect(() => {
+    if (loaded && assistantMain && selectedProjectId === assistantMain.projectId && !selectedSessionId) nav.set({ sessionId: assistantMain.id });
+  }, [loaded, assistantMain, selectedProjectId, selectedSessionId, nav]);
+  const onAssistantMain = Boolean(assistantMain && session?.id === assistantMain.id);
+  useEffect(() => { if (onAssistantMain) settingsStore.syncAssistantTimeZone(); }, [onAssistantMain, settings.assistant?.timeZone]);
   const inboxCount = useMemo(() => workItemList ? viewWorkItems(workItemList, sessions).filter((entry) => entry.inInbox).length : 0, [workItemList, sessions]);
   /** 开始 on a 任务: its first conversation, with its assignee's defaults, while the reader stays on the board. */
   const startWorkItem = async (item: WorkItem): Promise<boolean> => {
@@ -361,6 +386,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onOpenSettings={() => openSettingsAt()}
       onOpenProfile={() => openSettingsAt('profile')}
       onOpenStats={() => openPage('stats')}
+      {...(assistantProject ? { onOpenAssistant: openAssistant, assistantActive: assistantPage, ...(assistantMain ? { assistantSession: assistantMain } : {}) } : {})}
       {...(workItemsSupported ? { onOpenTasks: () => openPage('tasks'), tasksActive: tasksOpen, tasksCount: inboxCount } : {})}
       onOpenAutomations={() => openPage('automations')}
       onOpenExtensions={() => openPage('extensions')}
@@ -414,13 +440,13 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
     onRememberModel: rememberModel,
   };
 
-  const homeHeader = <WorkbenchHeader center={(quickChatProject || assistantProject) && <UnderlineTabs
+  // The 助理's empty state is its page, not the new-session page: its header is the 助理 title row.
+  const homeHeader = <WorkbenchHeader center={quickChatProject && !assistantPage && <UnderlineTabs
     value={homeTab}
     onChange={selectHomeTab}
     ariaLabel={t`新建会话`}
     className="h-9"
     options={[
-      ...(assistantProject ? [{ value: 'assistant' as const, label: t`助理` }] : []),
       { value: 'task' as const, label: t`新建任务` },
       ...(quickChatProject ? [{ value: 'chat' as const, label: t`快速对话` }] : []),
     ]}
@@ -549,7 +575,8 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         referenceProjects={projects}
         references={quickChat ? NO_REFERENCES : references}
         onReferencesChange={quickChat ? noReferences : ui.setReferences}
-        onOpenPath={ui.preview}
+        // The 个人助理's files are not read through the workspace routes, so a path in its conversation is plain text.
+        {...(isAssistantProject(project) ? {} : { onOpenPath: ui.preview })}
         onOpenInEditor={openInEditor}
         renderHeader={renderSessionHeader}
         onLaunched={openLaunched}
@@ -595,15 +622,16 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
   /** Built when the palette opens, so the labels describe the workbench as it is then. */
   const paletteActions = (): PaletteAction[] => [
     { id: 'new-session', label: t`新建会话`, keywords: 'new conversation', icon: <IconMessageCirclePlus className="size-4 shrink-0 text-fg-3" />, run: newSession },
+    ...(assistantProject ? [{ id: 'open-assistant', label: t`打开个人助理`, keywords: 'assistant', icon: <IconBot className="size-4 shrink-0 text-fg-3" />, run: openAssistant }] : []),
     { id: 'open-stats', label: t`打开统计`, keywords: 'stats statistics 统计 用量', icon: <IconChartColumn className="size-4 shrink-0 text-fg-3" />, run: () => openPage('stats') },
     // i18n-ignore: search keywords in both languages, not interface text
     ...(workItemsSupported ? [{ id: 'open-work-items', label: t`打开任务看板`, keywords: 'tasks board kanban inbox 任务 看板 收件箱', icon: <IconSquareKanban className="size-4 shrink-0 text-fg-3" />, run: () => openPage('tasks') }] : []),
-    { id: 'open-automations', label: t`打开定时任务`, keywords: 'automations templates schedules cron 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('automations') },
+    { id: 'open-automations', label: t`打开自动化`, keywords: 'automations templates schedules cron 模板 定时', icon: <IconCalendarClock className="size-4 shrink-0 text-fg-3" />, run: () => openPage('automations') },
     { id: 'open-marks', label: t`打开收藏夹`, keywords: 'marks bookmarks highlights saved 收藏 收藏夹 高亮 书签', icon: <IconBookmark className="size-4 shrink-0 text-fg-3" />, run: () => openPage('marks') },
     { id: 'open-plugins', label: t`管理插件`, keywords: 'plugins install packages', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('plugins') },
-    { id: 'open-extensions', label: t`打开 Agent 扩展`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },
+    { id: 'open-extensions', label: t`打开扩展管理`, keywords: 'extensions skills mcp plugins hooks rules commands 拓展 扩展 管理', icon: <IconPuzzle className="size-4 shrink-0 text-fg-3" />, run: () => openPage('extensions') },
     { id: 'toggle-sidebar', label: desktop ? (sidebarCollapsed ? t`展开侧栏` : t`收起侧栏`) : t`打开侧栏`, keywords: 'sidebar 侧栏', icon: <IconPanelLeft className="size-4 shrink-0 text-fg-3" />, run: () => { if (desktop) ui.setSidebarCollapsed((value) => !value); else ui.setMobileSidebar((value) => !value); } },
-    ...(quickChat ? [] : [{ id: 'toggle-terminal', label: ui.get().dockOpen ? t`隐藏终端` : t`显示终端`, keywords: 'terminal 终端', icon: <IconTerminal className="size-4 shrink-0 text-fg-3" />, run: () => { void nav.navigate(() => ui.setDockOpen((value) => !value)); } }]),
+    ...(quickChat || isAssistantProject(project) ? [] : [{ id: 'toggle-terminal', label: ui.get().dockOpen ? t`隐藏终端` : t`显示终端`, keywords: 'terminal 终端', icon: <IconTerminal className="size-4 shrink-0 text-fg-3" />, run: () => { void nav.navigate(() => ui.setDockOpen((value) => !value)); } }]),
     ...(project && !quickChat && !pageOpen ? [
       ...(sidebarViews.some((view) => view.id === 'changes') ? [{ id: 'toggle-changes', label: panelShows('changes') ? t`收起变更面板` : t`打开变更面板`, keywords: 'git diff changes panel 变更 改动 差异', icon: <IconGitCompare className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'changes', shownTab()) }] : []),
       ...(sidebarViews.some((view) => view.id === 'files') ? [{ id: 'toggle-files', label: panelShows('files') ? t`收起文件面板` : t`打开文件面板`, keywords: 'files explorer panel 文件 目录', icon: <IconFolder className="size-4 shrink-0 text-fg-3" />, run: () => togglePanelTab(ui, 'files', shownTab()) }] : []),
@@ -694,7 +722,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       <div className="flex min-w-0 flex-1 flex-col">
       {tabbed && tabStyle === 'strip' && (
         // Stats, tasks, marks and extensions carry their own expand button under the strip.
-        <TabBar variant="strip" activeId={anyPageOpen ? '' : session?.id ?? ''} sidebarCollapsed={sidebarCollapsed && !pageOpen} onExpandSidebar={expandSidebar} onNewSession={newSession} actionsRef={setTabActions} />
+        <TabBar variant="strip" activeId={anyPageOpen || assistantPage ? '' : session?.id ?? ''} sidebarCollapsed={sidebarCollapsed && !pageOpen} onExpandSidebar={expandSidebar} onNewSession={newSession} actionsRef={setTabActions} />
       )}
       <div className="flex min-h-0 min-w-0 flex-1">
       <main
@@ -702,7 +730,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         aria-hidden={(panelMaximized && wide) || undefined}
         inert={panelMaximized && wide}
       >
-        {tabbed && tabStyle === 'inline' && !anyPageOpen && (
+        {tabbed && tabStyle === 'inline' && !anyPageOpen && !assistantPage && (
           <TabBar variant="inline" activeId={session?.id ?? ''} sidebarCollapsed={sidebarCollapsed} onExpandSidebar={expandSidebar} onNewSession={newSession} actionsRef={setTabActions} />
         )}
         {/* Scoped to the conversation/home region so a bad row cannot take the sidebar or the
@@ -725,7 +753,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
         <ErrorBoundary resetKey={`${project?.id ?? ''}:${session?.id ?? ''}`}>
           <Suspense fallback={loadingPanel}>{content}</Suspense>
         </ErrorBoundary>
-        <DockHost mode="desktop" show={desktop && Boolean(project) && !pageOpen && !quickChat} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
+        <DockHost mode="desktop" show={desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
       </main>
 
       <PanelHost
@@ -744,7 +772,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       </div>
       </TabChromeContext.Provider>
       </SidebarPeekTrigger.Provider>
-      <DockHost mode="mobile" show={!desktop && Boolean(project) && !pageOpen && !quickChat} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
+      <DockHost mode="mobile" show={!desktop && Boolean(project) && !pageOpen && !quickChat && !isAssistantProject(project)} onCreate={() => void createShell()} onChanged={upsertTerminal} onClose={(terminal) => void closeTerminal(terminal)} onError={pushError} />
 
       <WorkbenchOverlays
         addProject={addProject}

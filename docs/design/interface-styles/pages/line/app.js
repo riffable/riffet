@@ -286,7 +286,7 @@ function spec() {
       ${tr('箭头', '140ms', 'ease-out · 旋转 90°')}
       ${tr('运行中', '900ms', 'linear 循环 · 12px 弧形，唯一的运行态')}
     </table></div>
-    <div class="sec"><h2>自定义 / 更多 菜单</h2><div style="display:flex;gap:12px;align-items:flex-start">${menu([['puzzle', '插件'], ['sparkle', 'Agent 扩展']], 0)}${menu([['clock', '定时任务'], ['star', '收藏夹'], ['chart', '数据统计'], ['activity', '活动']], 2)}</div></div>
+    <div class="sec"><h2>自定义 / 更多 菜单</h2><div style="display:flex;gap:12px;align-items:flex-start">${menu([['puzzle', '插件'], ['sparkle', 'Agent 扩展']], 0)}${menu([['clock', '自动化'], ['star', '收藏夹'], ['chart', '数据统计'], ['activity', '活动']], 2)}</div></div>
     <div class="sec"><h2>工具汇总 · 失败</h2><div class="tlist" style="margin:0"><div class="tr"><span>Bash</span><span class="v m">./gradlew :app:lint</span><span class="bad">失败</span>${tri('right', 9)}</div></div></div>
     <div class="sec"><h2>agent 图标放哪</h2><table>
       ${tr('置顶行', '16px', '行首，保留品牌色')}

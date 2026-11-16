@@ -6,7 +6,7 @@
     <string name="settings_extra_section_interaction">Interaction &amp; input</string>
     <string name="settings_extra_section_connection">Connection &amp; pairing</string>
     <string name="settings_extra_section_backends">Agents &amp; models</string>
-    <string name="settings_extra_section_extensions">Agent extensions</string>
+    <string name="settings_extra_section_extensions">Extensions</string>
     <string name="settings_extra_section_files">Files &amp; editor</string>
     <string name="settings_extra_section_service">Service status</string>
     <string name="settings_extra_section_diagnostics">Diagnostics &amp; logs</string>

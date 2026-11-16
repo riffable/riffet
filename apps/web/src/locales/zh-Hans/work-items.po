@@ -13,15 +13,14 @@ msgstr ""
 msgid "{0} → {1}"
 msgstr "{0} → {1}"
 
-#. placeholder {0}: counts[kind]
-#: src/app/work-items/AssistantSetup.tsx
-msgid "{0} 个"
-msgstr "{0} 个"
-
 #. placeholder {0}: sessions.length
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "{0} 个会话"
 msgstr "{0} 个会话"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{abilities} 项"
+msgstr "{abilities} 项"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
@@ -47,9 +46,17 @@ msgstr "会话会保留，只是不再属于它。删除后无法恢复。"
 msgid "保存"
 msgstr "保存"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "保存为 AGENTS.md，下次启动时生效"
+msgstr "保存为 AGENTS.md，下次启动时生效"
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
 msgstr "全部项目"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "关于你"
+msgstr "关于你"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "关闭"
@@ -124,6 +131,10 @@ msgstr "取消"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "取消任务"
 msgstr "取消任务"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "只读。要增删或更正，直接告诉个人助理"
+msgstr "只读。要增删或更正，直接告诉个人助理"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
@@ -234,10 +245,6 @@ msgstr "提问"
 msgid "提问：{0}"
 msgstr "提问：{0}"
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "插件"
-msgstr "插件"
-
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr "收件箱"
@@ -245,10 +252,6 @@ msgstr "收件箱"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "改动的文件"
 msgstr "改动的文件"
-
-#: src/app/work-items/AssistantSetup.tsx
-msgid "新对话生效"
-msgstr "新对话生效"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
@@ -275,6 +278,10 @@ msgstr "无法发送回答"
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
 msgstr "无法开始这个任务"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法读取记忆"
+msgstr "无法读取记忆"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法返工"
@@ -360,9 +367,25 @@ msgstr "结果未知"
 msgid "编辑描述"
 msgstr "编辑描述"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "能力"
+msgstr "能力"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
 msgstr "要改什么"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "规则"
+msgstr "规则"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记下的事"
+msgstr "记下的事"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记忆"
+msgstr "记忆"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"
@@ -393,6 +416,10 @@ msgstr "还有 {0} 个"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
 msgstr "还没有任务"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有记忆"
+msgstr "还没有记忆"
 
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"

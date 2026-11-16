@@ -475,7 +475,7 @@ context window 使用与累计用量分开；压缩后上下文可能下降，�
 
 title 优先级沿现有用户标题、原生标题、首条输入规则，原生异步标题不能覆盖用户改名。搜索、分享、收藏、引用均消费同一 source 与 Journal；大内容按既有 blob 限制处理，私人 hook 字段不进入公开分享。
 
-定时任务、唤醒、并行尝试和通知复用现有 SessionCommands/Run，尊重 backend/profile、toolGroups 快照和归档/holder 状态。普通后台任务需要审批时进入 waiting，并按现有渠道通知；不能因为无人值守自动启用高权限。完成通知来自有终止时间的 outline，重连不重发。
+自动化、唤醒、并行尝试和通知复用现有 SessionCommands/Run，尊重 backend/profile、toolGroups 快照和归档/holder 状态。普通后台任务需要审批时进入 waiting，并按现有渠道通知；不能因为无人值守自动启用高权限。完成通知来自有终止时间的 outline，重连不重发。
 
 讨论、交接和自动摘要继续使用用户已配置的辅助模型。Antigravity CLI 不是隐式的辅助模型 RPC；现有 auxiliary gateway 尚未支持 Gemini 协议，不能因此给所有标题请求偷偷起 `agy`。允许 Antigravity provider 作为辅助模型是独立的协议扩展工作。
 

@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
-import { IconArchive, IconArchiveRestore, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconPuzzle, IconSearch, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
+import { IconArchive, IconArchiveRestore, IconBot, IconBookmark, IconBookmarkFilled, IconCalendarClock, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconPuzzle, IconSearch, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
 import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
@@ -18,7 +18,7 @@ import { errorMessage } from '@/lib/errors';
 import { toast } from '@/lib/toast';
 import { cn, isJustNow, readStored, relativeTime, writeStored } from '@/lib/utils';
 import { isActiveSession, sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
-import { sidebarProjectMap } from '@/lib/project-family';
+import { isAssistantProject, sidebarProjectMap } from '@/lib/project-family';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { useLocale } from '@/lib/i18n';
 import { shortcutLabel } from '@/lib/platform';
@@ -56,6 +56,11 @@ interface Props {
   /** What the 任务 inbox holds, shown at the end of its row. */
   tasksCount?: number;
   tasksActive?: boolean;
+  /** The 个人助理 page (docs/ASSISTANT.md), second in the navigation; absent while there is no 助理 project. */
+  onOpenAssistant?: () => void;
+  assistantActive?: boolean;
+  /** Its main conversation, whose state the row shows: the sidebar's lists do not hold it. */
+  assistantSession?: Session;
   onOpenAutomations: () => void;
   onOpenMarks: () => void;
   onOpenExtensions: () => void;
@@ -109,7 +114,7 @@ function offlineLabel(savedAt: number): string {
   return isJustNow(new Date(savedAt).toISOString()) ? i18n._(msg`离线 · 显示刚刚保存的列表`) : i18n._(msg`离线 · 显示 ${age} 前保存的列表`);
 }
 
-function SessionIndicator({ session, mobile, selected }: { session: Session; mobile: boolean; selected: boolean }) {
+export function SessionIndicator({ session, mobile, selected }: { session: Session; mobile: boolean; selected: boolean }) {
   const { t } = useLingui();
   // Finished while nobody looked; the open conversation is being read.
   const unread = !selected && isDoneUnseen(session);
@@ -273,7 +278,8 @@ export function Sidebar(props: Props) {
   // Quick chats live on their own page; the sidebar lists only the ordinary conversations.
   const listedSessions = useMemo(() => sessions.filter((session) => sessionBackend(session) !== 'chat'), [sessions]);
   const tags = useMemo(() => [...new Set(listedSessions.filter((session) => !session.archivedAt).flatMap((session) => session.tags ?? []))].sort(), [listedSessions]);
-  const visibleProjects = useMemo(() => sidebarProjectMap(projects, showArchived, t`未关联项目`, t`助理`), [projects, showArchived, t]);
+  // The 助理 has its own row above and its conversations are not listed (docs/ASSISTANT.md).
+  const visibleProjects = useMemo(() => sidebarProjectMap(projects.filter((project) => !isAssistantProject(project)), showArchived, t`未关联项目`), [projects, showArchived, t]);
   const selectedSidebarProjectId = visibleProjects.get(selectedProjectId)?.id;
   const groups = useMemo(() => {
     if (layout !== 'project') return [];
@@ -356,6 +362,19 @@ export function Sidebar(props: Props) {
             <IconSquarePen className="size-[15px] shrink-0" /><Trans context="workbench-sidebar-new-action">新会话</Trans>
           </button>
         )}
+        {props.onOpenAssistant && (
+          <button
+            type="button"
+            aria-current={props.assistantActive ? 'page' : undefined}
+            onClick={props.onOpenAssistant}
+            className={mobile
+              ? cn(mobileNavRow, props.assistantActive && 'bg-active')
+              : cn(navRow, props.assistantActive && 'bg-active text-fg')}
+          >
+            <IconBot className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>个人助理</Trans>
+            {props.assistantSession && <span className="ml-auto inline-flex"><SessionIndicator session={props.assistantSession} mobile={mobile} selected={Boolean(props.assistantActive)} /></span>}
+          </button>
+        )}
         <button type="button" data-touch-row onClick={props.onOpenSearch} className={mobile ? mobileNavRow : navRow}>
           <IconSearch className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} />
           <span><Trans>搜索内容</Trans></span>
@@ -384,7 +403,7 @@ export function Sidebar(props: Props) {
             ? cn(mobileNavRow, props.automationsActive && 'bg-active')
             : cn(navRow, props.automationsActive && 'bg-active text-fg')}
         >
-          <IconCalendarClock className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>定时任务</Trans>
+          <IconCalendarClock className={cn('shrink-0', mobile ? 'size-4 text-fg-2' : 'size-[15px]')} /><Trans>自动化</Trans>
         </button>
         <button
           type="button"

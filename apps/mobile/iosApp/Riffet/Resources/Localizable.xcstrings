@@ -101,11 +101,6 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Next" } }
       }
     },
-    "Agent 扩展" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Agent extensions" } }
-      }
-    },
     "辅助模型" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Auxiliary models" } }
@@ -5002,7 +4997,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Extension management"
+            "value" : "Extensions"
           }
         }
       }

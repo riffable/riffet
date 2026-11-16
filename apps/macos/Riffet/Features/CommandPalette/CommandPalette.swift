@@ -21,9 +21,9 @@ struct PaletteCommand: Identifiable {
         var result: [PaletteCommand] = [
             PaletteCommand(id: "new", title: String(localized: "新会话"), detail: "⌘N", symbol: "square.and.pencil") { workbench.showHome() },
             PaletteCommand(id: "stats", title: String(localized: "打开统计"), detail: "⇧⌘U", symbol: "chart.bar") { workbench.page = .stats },
-            PaletteCommand(id: "tasks", title: String(localized: "打开定时任务"), detail: "⇧⌘J", symbol: "clock") { workbench.page = .tasks },
+            PaletteCommand(id: "tasks", title: String(localized: "打开自动化"), detail: "⇧⌘J", symbol: "clock") { workbench.page = .tasks },
             PaletteCommand(id: "plugins", title: String(localized: "管理插件"), detail: "", symbol: WorkbenchPage.plugins.symbol) { workbench.page = .plugins },
-            PaletteCommand(id: "extensions", title: String(localized: "打开 Agent 扩展"), detail: "⇧⌘E", symbol: WorkbenchPage.extensions.symbol) { workbench.page = .extensions },
+            PaletteCommand(id: "extensions", title: String(localized: "打开扩展管理"), detail: "⇧⌘E", symbol: WorkbenchPage.extensions.symbol) { workbench.page = .extensions },
             PaletteCommand(id: "marks", title: String(localized: "打开收藏夹"), detail: "⇧⌘L", symbol: "bookmark") { workbench.page = .marks },
             PaletteCommand(id: "activity", title: String(localized: "打开活动"), detail: "", symbol: WorkbenchPage.activity.symbol) { workbench.page = .activity },
             PaletteCommand(id: "sidebar", title: String(localized: "收起/展开侧栏"), detail: "⌘B", symbol: "sidebar.left") {

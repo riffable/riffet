@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { riffetSkillEntries, scopeInEffect } from './riffet-skills.js';
 import { lstat, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -885,6 +886,17 @@ export async function discoverExtensions(ctx: ExtensionContext): Promise<Extensi
   }
 
   if (skillSettings) diagnostics.push(...skillSettings.diagnostics);
+  for (const { item, document } of riffetSkillEntries(ctx)) {
+    docs.set(document.id, document);
+    addItem(item, [document]);
+  }
+  // An isolated launch reads the project's own files whatever scope they were filed under (a linked skill is
+  // `managed`), and nothing of the owner's: what it does not read is not listed, opened or written from here.
+  const projectRoots = new Set(sources.filter(source => source.scope === 'project').map(source => source.root));
+  const read = (scope: ExtensionScope, root?: string) => scopeInEffect(ctx, scope) || (root !== undefined && projectRoots.has(root));
+  for (const [id, item] of items) if (!read(item.scope, item.documentId ? docs.get(item.documentId)?.root : undefined)) { items.delete(id); details.delete(id); }
+  for (const [id, document] of docs) if (!read(document.scope, document.root)) docs.delete(id);
+  for (const [id, target] of createTargets) if (!scopeInEffect(ctx, target.contract.scope)) createTargets.delete(id);
   const inventory = {
     backendId: ctx.backendId,
     profileId: ctx.profile.id,

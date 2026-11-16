@@ -23,6 +23,7 @@ enum ExtensionText {
         case "project": String(localized: "项目级")
         case "managed": String(localized: "外部维护")
         case "builtin": String(localized: "内置")
+        case "riffet": "Riffet"
         default: scope
         }
     }

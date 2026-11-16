@@ -177,6 +177,37 @@ export interface NativeBackendHost {
   transcript?: NativeTranscriptHost;
   /** The Riffet MCP server a launch carries; absent in a bare test host. */
   riffetMcp?: NativeRiffetMcpHost;
+  /** What a standing conversation launches with and is told between turns (docs/ASSISTANT.md §4); absent in a bare test host. */
+  standing?: NativeStandingHost;
+}
+
+/**
+ * How the CLI of a standing conversation is launched. A standing conversation belongs to the owner rather than to
+ * a project's work (the 助理): it runs on its own directory's instructions, skills and MCP servers, never the owner's.
+ */
+export interface StandingLaunch {
+  /** Replaces the CLI's built-in system prompt, which is about writing code. */
+  systemPromptFile: string;
+  /** Where the CLI keeps the notes it writes for later. */
+  memoryDir: string;
+  /** MCP server files of the conversation's own directory; the owner's are not loaded. */
+  mcpConfigFiles: string[];
+  /** Directories in the CLI's plugin layout that hold Riffet's own skills for this conversation, loaded for the launch only. */
+  pluginDirs: string[];
+  /** Files of the directory the owner writes and the CLI's file tools must not: its rules, and what it launches with. */
+  protectedFiles: string[];
+  /** The context size at which the CLI summarizes on its own, applied when the model's window is larger. */
+  compactAtTokens: number;
+}
+
+/** `prompt`: a message is about to be read. `start`: a newly launched CLI session, with no history of its own. `compact`: the history was just summarized. */
+export type StandingMoment = 'prompt' | 'start' | 'compact';
+
+export interface NativeStandingHost {
+  /** Undefined for a project whose conversations are not standing ones. */
+  launch(project: Project): StandingLaunch | undefined;
+  /** Text for the model's context at this moment (the time, what it missed); it is never shown as a message. */
+  context(sessionId: string, moment: StandingMoment): string | undefined;
 }
 
 /** A stdio MCP server for one conversation's CLI: the Riffet shim and its credential file. */

@@ -484,7 +484,7 @@ function PathLink({ path, line, canOpen = true, onOpenPath, className, quiet = f
   if (files && !resources && onOpenPath) {
     return <a href={projectFileUrl(files.projectId, path)} target="_blank" rel="noopener" onClick={previewOnPlainClick(onOpenPath, path, line)} className={cn(className, quiet ? 'hover:text-fg-2' : 'hover:text-accent')} title={title}>{children}</a>;
   }
-  return <button type="button" disabled={!canOpen} onClick={() => onOpenPath?.(path, line)} className={cn(className, quiet ? 'enabled:hover:text-fg-2' : 'enabled:hover:text-accent', 'disabled:cursor-text')} title={title}>{children}</button>;
+  return <button type="button" disabled={!canOpen || !onOpenPath} onClick={() => onOpenPath?.(path, line)} className={cn(className, quiet ? 'enabled:hover:text-fg-2' : 'enabled:hover:text-accent', 'disabled:cursor-text')} title={title}>{children}</button>;
 }
 
 /** Copy, download and open-in-editor beside a path: one size, one colour. */

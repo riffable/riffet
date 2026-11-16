@@ -66,15 +66,26 @@ export interface AppSettings {
   assistant?: AssistantSettings;
 }
 /**
- * The agent and model a client's 助理 composer starts with (docs/TASK-BOARD.md §5), on every device.
+ * The agent and model a client's 助理 composer starts with (docs/ASSISTANT.md §2), on every device.
  * Unset, it follows the composer's own choice. The 助理's instructions are the `AGENTS.md` of its
  * project (`/api/assistant/instructions`), not a setting.
  */
-export interface AssistantSettings { backendId?: NativeBackendId; profileId?: string; model?: string; }
+export interface AssistantSettings {
+  backendId?: NativeBackendId; profileId?: string; model?: string;
+  /** The owner's IANA time zone, as the client they last used reports it: the 助理 is told the time in it. Unset, the server's. */
+  timeZone?: string;
+}
 /** Each field given replaces its own; `null` clears it. */
 export type AssistantSettingsUpdate = { [K in keyof AssistantSettings]?: AssistantSettings[K] | null };
 /** `GET`/`PUT /api/assistant/instructions`; `custom` is false while the file holds Riffet's own text. A `PUT` of `null` restores it. */
 export interface AssistantInstructions { text: string; custom: boolean; }
+/** One topic file of the 助理's memory, as it wrote it. */
+export interface AssistantMemoryEntry { name: string; text: string; modifiedAt: string; }
+/**
+ * What the 助理 remembers, for its owner to read (docs/ASSISTANT.md §2): its profile of them (`USER.md`), the
+ * index it keeps, and the topic files beside the index, newest first. `updatedAt` is the latest change to any of them.
+ */
+export interface AssistantMemory { profile: string; index: string; entries: AssistantMemoryEntry[]; updatedAt?: string; }
 export interface QuickChatSettings {
   /**
    * Days a quick chat may go without a new message before it is archived; unset means

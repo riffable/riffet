@@ -179,7 +179,7 @@ function Outputs({ projectId, timeline, timelineVersion, root, onOpenPath }: { p
  * on screen is `useSessionLayout`'s call, never its contents': an empty column stays a column.
  */
 /** Streamed frames only reach `Outputs`: the plan and the work list keep their memo while the timeline moves. */
-export const SessionAside = memo(function SessionAside({ projectId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, timeline, timelineVersion, root, onOpenPath }: {
+export const SessionAside = memo(function SessionAside({ projectId, outlineRef, goal, todos, subagentStore, jobStore, backgroundTasks, reportedBackground, subagentBriefs, timeline, timelineVersion, root, onOpenPath, outputs = true }: {
   projectId: string;
   outlineRef: Ref<HTMLDivElement>;
   goal?: SessionGoal;
@@ -193,6 +193,8 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
   timelineVersion: number;
   root?: string;
   onOpenPath?: (path: string) => void;
+  /** 产出 lists a project's changed files with their diffs; off where the directory is not a project (the 个人助理's). */
+  outputs?: boolean;
 }) {
   const { t } = useLingui();
   const entries = useMemo(() => todoEntries(todos ?? []), [todos]);
@@ -202,7 +204,7 @@ export const SessionAside = memo(function SessionAside({ projectId, outlineRef, 
       {(goal || entries.length > 0) && <Plan goal={goal} todos={entries} />}
       <div ref={outlineRef} className="contents" />
       <Work subagentStore={subagentStore} jobStore={jobStore} tasks={backgroundTasks} reportedBackground={reportedBackground} briefs={subagentBriefs} />
-      <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />
+      {outputs && <Outputs key={projectId} projectId={projectId} timeline={timeline} timelineVersion={timelineVersion} root={root} onOpenPath={onOpenPath} />}
     </aside>
   );
 });

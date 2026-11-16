@@ -5,8 +5,11 @@ import { sessionActivityAt } from './session-order';
 /** The workbench's own project: quick chats live here, but it is never a directory to pick or list. */
 export const isQuickChatProject = (project?: Pick<ProjectRecord, 'system'>): boolean => project?.system === 'quick-chat';
 
-/** Where the 助理's conversations live (docs/TASK-BOARD.md §5): a project of the workbench's own, like quick chat's. */
+/** Where the 助理's conversations live (docs/ASSISTANT.md): a project of the workbench's own, like quick chat's. */
 export const isAssistantProject = (project?: Pick<ProjectRecord, 'system'>): boolean => project?.system === 'assistant';
+
+/** The 助理's one long-running conversation, once it has been started; it may name one since archived or deleted. */
+export const mainSessionIdOf = (project?: Pick<ProjectRecord, 'mainSessionId'>): string | undefined => project?.mainSessionId;
 
 /** Everything a project picker, directory list or project group may show. */
 export const regularProjects = (projects: readonly ProjectRecord[]): ProjectRecord[] => projects.filter((project) => !project.system);
@@ -22,15 +25,14 @@ export function sortProjectsByRecentUse(projects: readonly ProjectRecord[], sess
 }
 
 /** Keep each checkout's execution identity while listing its conversations under the original project. */
-export function sidebarProjectMap(projects: readonly ProjectRecord[], showArchived: boolean, projectlessName = '', assistantName = ''): Map<string, ProjectRecord> {
+export function sidebarProjectMap(projects: readonly ProjectRecord[], showArchived: boolean, projectlessName = ''): Map<string, ProjectRecord> {
   const byId = new Map(projects.map((project) => [project.id, project]));
   const result = new Map<string, ProjectRecord>();
   const managed = projects.find((project) => project.system === 'task-workspace' && (showArchived || !project.archivedAt));
   const projectless = managed && { ...managed, id: 'riffet:projectless', name: projectlessName, cwd: '', archivedAt: undefined };
   for (const project of projects) {
     if (project.system === 'quick-chat') continue;
-    // Its stored name is the server's; the reader sees it in their own language.
-    if (project.system === 'assistant') { result.set(project.id, assistantName ? { ...project, name: assistantName } : project); continue; }
+    if (project.system === 'assistant') { result.set(project.id, project); continue; }
     if (project.system === 'task-workspace') {
       if (projectless && (showArchived || !project.archivedAt)) result.set(project.id, projectless);
       continue;

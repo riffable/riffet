@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tip } from '@/components/ui/tooltip';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isAssistantProject, mainSessionIdOf } from '@/lib/project-family';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import type { ProjectRecord } from '@/lib/api';
 import { agentMarkStyle, sessionBackend, useBackendLabel } from '@/lib/backends';
@@ -17,6 +18,8 @@ import { parseSelection } from '@/lib/models';
 import { cleanLabel, closesOverlay, cn, tildePath } from '@/lib/utils';
 import { useGitStatus, watchGitStatus } from './state/gitStatusStore';
 import { SessionInfo } from './SessionInfo';
+import { AssistantInstructions, useAssistantSetup } from './work-items/AssistantSetup';
+import { useCatalog } from './state/stores';
 import type { ContextUsage } from './session/model';
 import { TabChromeContext } from './tabs/chrome';
 import { altShortcut } from './tabs/keys';
@@ -65,6 +68,8 @@ export interface HeaderProps extends HeaderSlots {
   onOpenMobileSidebar: () => void;
   /** The open context panel tab, or undefined when the panel is closed. */
   panelTab?: string | undefined;
+  /** False where the side panel would have nothing to show: the 个人助理 page without a plugin view. */
+  panelOffered?: boolean;
   onTogglePanel: (tab: string) => void;
   terminalOpen: boolean;
   onToggleTerminal: () => void;
@@ -95,7 +100,7 @@ function ActionMenuItem({ action, onSelect }: { action: HeaderAction; onSelect: 
   );
 }
 
-export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
+export function Header({ project, originProject, session, sidebarCollapsed, onExpandSidebar, onOpenMobileSidebar, panelTab, panelOffered = true, onTogglePanel, terminalOpen, onToggleTerminal, infoOpen, onInfoOpenChange, onRename, onEditTags, onTogglePin, onToggleArchive, onDelete, deleteDisabled, quickChat = false, center, info, alerts, infoBadge = false, views, usage, approval, status, menu = [] }: HeaderProps) {
   const { t } = useLingui();
   const label = useBackendLabel();
   const stateMeta: Partial<Record<Session['state'], { label: string; tone: 'accent' | 'warning' | 'danger' | 'idle'; pulse?: boolean }>> = {
@@ -107,6 +112,14 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     failed: { label: t`出错`, tone: 'danger' },
   };
   const state = session ? stateMeta[session.state] : undefined;
+  // The 助理's main conversation carries its setup in 会话信息, in place of its page's cards.
+  const isAssistantMain = Boolean(project && session && mainSessionIdOf(project) === session.id);
+  // The 助理 page is the main conversation, or its empty state: a title row of its own, even under tabs (docs/ASSISTANT.md).
+  const assistantPage = isAssistantProject(project) && (!session || isAssistantMain);
+  // Its page has one name; the stored title only matters where the conversation is listed among others.
+  const title = isAssistantMain ? t`个人助理` : session?.title ?? '';
+  const backends = useCatalog((state) => state.backends);
+  const assistantSetup = useAssistantSetup({ projectId: project?.id ?? '', backendId: session ? sessionBackend(session) : 'chat', profileId: session?.backendProfileId, enabled: isAssistantMain });
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const [detailsOpen, setDetailsOpen] = useState(false);
   // While session tabs are on (desktop only) the tab bar owns the top row and hosts this header's actions.
@@ -119,8 +132,10 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const hasGit = Boolean(git);
   const managedWorkspace = project?.system === 'task-workspace';
   // An unread status is pending rather than "no repository".
-  const changesVisible = !managedWorkspace || hasGit || !gitEntry;
-  const branch = session ? git?.branch ?? '' : '';
+  // The 个人助理's directory is not a checkout to review: no changes view, no branch.
+  const ownDirectory = isAssistantProject(project);
+  const changesVisible = !ownDirectory && (!managedWorkspace || hasGit || !gitEntry);
+  const branch = session && !ownDirectory ? git?.branch ?? '' : '';
 
   // Shared with the changes panel. A turn ending or the panel opening is when the count most likely moved.
   useEffect(() => (projectId ? watchGitStatus(projectId, true) : undefined), [projectId, session?.id, session?.state, panelTab]);
@@ -144,7 +159,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   const modelLabel = cleanLabel(selection.model);
   // Switches (fast=true) are the composer's icons, not words; only valued parameters such as effort read here.
   const modelDetail = Object.values(selection.params).filter((value) => value !== 'true' && value !== 'false').join(' · ');
-  const projectName = managedWorkspace ? t`未关联项目` : originProject?.name ?? project?.name;
+  const projectName = managedWorkspace ? t`未关联项目` : ownDirectory ? t`个人助理` : originProject?.name ?? project?.name;
   const worktreeBadge = project?.worktree && (
     <Badge className="min-w-0 max-w-32 shrink rounded-full md:max-w-48">
       <IconGitBranch className="shrink-0" aria-hidden="true" />
@@ -171,6 +186,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       onTogglePanel={onTogglePanel}
       onToggleTerminal={onToggleTerminal}
       onNavigate={onNavigate}
+      {...(isAssistantMain ? { assistant: assistantSetup } : {})}
       head={!sheet}
     >
       {info}
@@ -198,9 +214,9 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
         </Popover>
       )}
       {/* The quick chat home keeps it, unusable: switching 新建任务 / 快速对话 does not move the tab bar. */}
-      {(project || (quickChat && center)) && (
-        <Tip label={panelTab ? t`收起侧板` : t`变更与文件`} disabled={!project}>
-          <Button size="icon-sm" variant="quiet" disabled={!project} aria-label={panelTab ? t`收起侧板` : t`变更与文件`} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
+      {(project || (quickChat && center)) && panelOffered && (
+        <Tip label={panelTab ? t`收起侧板` : ownDirectory ? t`打开侧板` : t`变更与文件`} disabled={!project}>
+          <Button size="icon-sm" variant="quiet" disabled={!project} aria-label={panelTab ? t`收起侧板` : ownDirectory ? t`打开侧板` : t`变更与文件`} aria-pressed={Boolean(panelTab)} className={cn('size-7', panelTab && 'bg-active text-fg')} onClick={() => onTogglePanel(panelTab ?? (changesVisible ? 'changes' : 'files'))}><IconPanelRight /></Button>
         </Tip>
       )}
       {desktopGroups.length > 0 && (
@@ -219,8 +235,8 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     </div>
   );
 
-  // The tab bar stands in for the title row: only the project home's centered switcher keeps one.
-  if (tabbed) {
+  // The tab bar stands in for the title row: only the project home's centered switcher and the 助理 page keep one.
+  if (tabbed && !assistantPage) {
     return (
       <>
         {center && <header className="workbench-header flex min-h-12 shrink-0 items-center justify-center bg-bg px-3 md:h-13">{center}</header>}
@@ -233,13 +249,13 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-1 bg-bg px-1.5 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
       <div className={center ? 'flex min-w-0 items-center gap-1' : 'contents'}>
         <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenMobileSidebar}><IconMenu /></Button>
-        {sidebarCollapsed && (
+        {sidebarCollapsed && !tabbed && (
           <ExpandSidebarButton onClick={onExpandSidebar} />
         )}
 
         <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-sm">
-          {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{projectName}</span>{worktreeBadge}</>}
-          {project && session && !mobile && (
+          {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{assistantPage ? t`个人助理` : projectName}</span>{worktreeBadge}</>}
+          {project && session && !mobile && !isAssistantMain && (
             <>
               <span className="max-w-48 shrink truncate text-fg-3" title={tildePath(project.cwd)}>{projectName}</span>
               <span aria-hidden className="shrink-0 text-fg-4">/</span>
@@ -247,7 +263,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
           )}
           {session && mobile && (
             <button type="button" onClick={() => setDetailsOpen(true)} className="flex min-h-11 min-w-0 max-w-full flex-1 items-center gap-1.5 overflow-hidden rounded-md px-1 text-left hover:bg-hover" aria-label={t`会话信息与操作`}>
-              <span className="min-w-0 truncate font-medium leading-5 text-fg" title={session.title}>{session.title}</span>
+              <span className="min-w-0 truncate font-medium leading-5 text-fg" title={title}>{title}</span>
               {worktreeBadge}
               {state && status === undefined && <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}>{state.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />}</span>}
               {/* Inside this button a status pill stays a badge: the phone keeps its own row for the
@@ -255,10 +271,11 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
               {status && <span className="flex shrink-0" role="status"><StatusPillActions.Provider value={false}>{status}</StatusPillActions.Provider></span>}
             </button>
           )}
-          {session && !mobile && (
+          {isAssistantMain && !mobile && <span className="min-w-0 truncate font-medium text-fg">{title}</span>}
+          {session && !mobile && !isAssistantMain && (
             <>
-              <button type="button" onClick={onRename} disabled={!onRename} className="-mx-1 min-w-0 truncate rounded-md px-1 py-0.5 font-medium text-fg hover:bg-hover disabled:hover:bg-transparent" title={session.title} aria-label={t`重命名会话`}>
-                {session.title}
+              <button type="button" onClick={onRename} disabled={!onRename} className="-mx-1 min-w-0 truncate rounded-md px-1 py-0.5 font-medium text-fg hover:bg-hover disabled:hover:bg-transparent" title={title} aria-label={t`重命名会话`}>
+                {title}
               </button>
               {worktreeBadge}
             </>
@@ -267,7 +284,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
               wait as `state` — "等待确认" next to a badge that also says "等待确认" — so it replaces
               the state label instead of sitting beside it, exactly as the phone row already does. */}
           {session && !mobile && <div className="flex min-w-0 shrink-0 items-center gap-1.5 pl-1 text-xs text-fg-3">
-            {!quickChat && <Tip label={label(sessionBackend(session))}>
+            {!quickChat && !isAssistantMain && <Tip label={label(sessionBackend(session))}>
               <span role="img" aria-label={label(sessionBackend(session))} tabIndex={0} className="inline-flex shrink-0 items-center rounded-sm focus-visible:outline-2 focus-visible:outline-focus">
                 <AgentLogo backend={sessionBackend(session)} size={14} style={agentMarkStyle(sessionBackend(session))} />
               </span>
@@ -282,11 +299,12 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       </div>
 
       {center && <div className="flex h-full min-h-12 min-w-0 items-center justify-center">{center}</div>}
-      {actions}
+      {tabbed ? chrome?.actions && createPortal(actions, chrome.actions) : actions}
+      {isAssistantMain && <AssistantInstructions setup={assistantSetup} />}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent mobileSheet>
           <DialogHeader className="gap-2">
-            <DialogTitle className="break-words">{session?.title}</DialogTitle>
+            <DialogTitle className="break-words">{title}</DialogTitle>
             <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
               {state && <Badge tone={state.tone === 'idle' ? 'neutral' : state.tone}><StatusDot tone={state.tone} pulse={state.pulse} />{state.label}</Badge>}
               {!quickChat && <span>{session ? label(sessionBackend(session)) : 'Agent'}</span>}

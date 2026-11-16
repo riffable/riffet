@@ -7,7 +7,7 @@ import type { Project, Session } from '../../../../../packages/contracts/src/ind
 import { modelSourceOf } from '../shared/model-source.js';
 import type { NativeBackendHost, NativeBackendProfileConfig } from '../types.js';
 import type { ClaudeHookBridge } from './hook-bridge.js';
-import { shellQuote, readStatusLineForward, configDirOf, gatewayBearer, apiKeyHelper, providerEnv } from './launch.js';
+import { shellQuote, readStatusLineForward, readOwnerConnection, configDirOf, gatewayBearer, apiKeyHelper, providerEnv } from './launch.js';
 import { selectedFast, gatewayContextEnv } from './models.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -28,6 +28,9 @@ const statuslineScriptPath = resolve(moduleDir, 'statusline-cli.mjs');
  */
 const INTERACTION_HOOK_TIMEOUT_MS = 24 * 60 * 60_000;
 const HOOK_TIMEOUT_MS = 10 * 60_000;
+const STANDING_TRANSCRIPT_DAYS = 3650;
+/** Skills of the CLI's built-in plugins, which `disableBundledSkills` does not cover (verified on 2.1.322). */
+const STANDING_OFF_SKILLS = ['plugin-authoring'];
 
 function interactionHookTimeoutMs(): number {
   const override = Number(process.env.RIFFET_CLAUDE_INTERACTION_HOOK_TIMEOUT_MS);
@@ -108,21 +111,37 @@ export class ClaudeHookOverlay {
       await writeFile(this.mcpConfigFile, `${JSON.stringify({ mcpServers: { [riffetMcp.name]: { type: 'stdio', command: riffetMcp.command, args: riffetMcp.args } } })}\n`, { mode: 0o600 });
     } else this.mcpConfigFile = undefined;
     // Extensions this conversation switched off (docs/EXTENSIONS.md): read from the session record, so a change applies at the next launch like its tool groups.
+    const standing = this.deps.host.standing?.launch(this.deps.project);
+    // Left out with the rest of the reader's settings, their sign-in is carried here; the profile's own still wins.
+    const owner = standing ? await readOwnerConnection(configDirOf(this.deps.profile()), this.deps.project.cwd) : { settings: {} };
     const extensionsOff = this.deps.host.getSession(this.deps.session().id).extensionsOff;
-    const offSkills = extensionsOffNames(extensionsOff, 'skill');
+    // A standing conversation's skills are the ones in its directory. The CLI's own (code review, plugin authoring…)
+    // are for coding work: `disableBundledSkills` drops them, and `plugin-authoring`, which comes with a built-in
+    // plugin that switch leaves in place, is turned off by name.
+    const offSkills = [...extensionsOffNames(extensionsOff, 'skill'), ...(standing ? STANDING_OFF_SKILLS : [])];
     const offMcp = extensionsOffNames(extensionsOff, 'mcp');
     const overlay = {
-      ...(Object.keys(provider).length ? { env: provider } : {}),
+      ...owner.settings,
+      ...(Object.keys(provider).length || owner.env ? { env: { ...owner.env, ...provider } } : {}),
       ...(offSkills.length ? { skillOverrides: Object.fromEntries(offSkills.map(name => [name, 'off'])) } : {}),
+      ...(standing ? { disableBundledSkills: true } : {}),
       ...(offMcp.length ? { deniedMcpServers: offMcp.map(serverName => ({ serverName })) } : {}),
       // The workbench's own tools act only on this conversation; asking before each would make a
       // wake-up or notice wait for a reader who may be away. Permission rules merge across sources.
-      ...(riffetMcp ? { permissions: { allow: [`mcp__${riffetMcp.name}`] } } : {}),
+      ...(riffetMcp || standing ? { permissions: {
+        ...(riffetMcp ? { allow: [`mcp__${riffetMcp.name}`] } : {}),
+        // A deny rule holds in every permission mode. It stops the CLI's file tools, not a shell command.
+        ...(standing?.protectedFiles.length ? { deny: standing.protectedFiles.map(file => `Edit(/${file})`) } : {}),
+      } } : {}),
       // A flag-scoped helper takes precedence over saved Console and OAuth credentials. Native
       // client construction awaits it, keeping both auth paths on the selected profile. The
       // command reads the child's scoped environment, so it also survives server restarts that
       // detach the still-running CLI and remove its temporary settings file.
       ...(helper ? { apiKeyHelper: helper } : {}),
+      // A standing conversation keeps its notes in its own directory. Its launches read no user settings, so
+      // without a period of their own they would clean the whole config directory at the CLI's 30-day default,
+      // whatever the reader had set. Other conversations' CLIs still clean by their own setting.
+      ...(standing ? { autoMemoryDirectory: standing.memoryDir, cleanupPeriodDays: STANDING_TRANSCRIPT_DAYS } : {}),
       ...(fastMode === undefined ? {} : { fastMode }),
       // Publishing to claude.ai requires Anthropic account auth, absent from this bearer gateway.
       ...(gateway || modelSourceOf(this.deps.profile().config) ? { enableArtifact: false } : {}),

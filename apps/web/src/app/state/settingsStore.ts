@@ -125,9 +125,15 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
         await api.updateSettings(body);
       }).catch((error) => { console.warn('无法保存后端默认值', error); });
     },
+    /** Reports this client's time zone to the 助理 when it differs from the saved one. */
+    syncAssistantTimeZone(): void { this.rememberAssistant({}); },
     /** The 助理's agent, provider and model: shown at once, saved in the background. `null` clears a field. */
-    rememberAssistant(patch: AssistantSettingsUpdate): void {
+    rememberAssistant(given: AssistantSettingsUpdate): void {
       const latest = get();
+      // The 助理 tells the time in the owner's zone, which only a client knows: report it with whatever is saved, once per change.
+      const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const patch: AssistantSettingsUpdate = zone && given.timeZone === undefined && latest.assistant?.timeZone !== zone ? { ...given, timeZone: zone } : given;
+      if (Object.keys(patch).length === 0) return;
       const next: Record<string, unknown> = { ...latest.assistant };
       for (const [key, value] of Object.entries(patch)) {
         if (value === null || value === undefined || value === '') delete next[key];

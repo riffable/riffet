@@ -2,6 +2,7 @@ import { memo, useLayoutEffect, useRef, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ExtensionRuntimeReport } from '@contracts';
 import { IconChevronRight, IconFolder, IconLock, IconPackage, IconPuzzle, IconSearch, IconTrash2, IconX } from '@/components/icons';
+import { BrandMark } from '@/components/BrandMark';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge, EmptyState, Spinner } from '@/components/ui/controls';
@@ -24,11 +25,11 @@ const CatalogRow = memo(function CatalogRow({ entry, active, checked, batchMode,
   const description = item.description || (item.ownerPluginId ? entry.sourceLabel : '');
   const showStatus = status.tone === 'warning' || item.enabled === false;
   const skillSource = item.kind !== 'skill' ? undefined : item.ownerPluginId ? t`插件提供`
-    : item.scope === 'builtin' ? t`内置` : item.scope === 'project' ? t({ message: '项目级', context: 'extensions-scope-project' }) : undefined;
+    : item.scope === 'riffet' ? extensionScopes.riffet : item.scope === 'builtin' ? t`内置` : item.scope === 'project' ? t({ message: '项目级', context: 'extensions-scope-project' }) : undefined;
   // File ownership and native management are independent: a read-only Skill can still be toggled.
   const skillReadOnly = item.kind === 'skill' && Boolean(item.readOnlyReason);
   const skillDeletable = item.kind === 'skill' && extensionActions(entry).includes('uninstall');
-  const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'builtin' ? IconPackage : IconFolder;
+  const SourceIcon = item.ownerPluginId ? IconPuzzle : item.scope === 'riffet' ? BrandMark : item.scope === 'builtin' ? IconPackage : IconFolder;
   return <div role="listitem" aria-posinset={rowIndex} aria-setsize={rowCount} className={cn('extensions-row', active && 'is-active', checked && 'is-checked')}>
     {batchMode && <label className="flex h-full w-8 shrink-0 cursor-pointer items-center justify-center"><Checkbox checked={checked} disabled={disabled} aria-label={t`选择 ${item.name} · ${label(entry.context.backendId)}`} onCheckedChange={() => onSelect(entry.key)} /></label>}
     <button type="button" disabled={disabled} className="extensions-open" onClick={event => onOpen(entry.key, event.currentTarget)} aria-expanded={active} aria-label={t`查看 ${item.name}`}>

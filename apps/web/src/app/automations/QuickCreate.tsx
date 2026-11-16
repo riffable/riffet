@@ -62,7 +62,7 @@ export function QuickCreate({ projects, defaultProjectId, backends, enterBehavio
       });
       setText('');
       onCreated();
-    } catch (error) { onError(errorMessage(error, t`无法创建定时任务`)); }
+    } catch (error) { onError(errorMessage(error, t`无法创建自动化`)); }
     finally { setBusy(false); }
   };
   const openEditor = () => onCustom({

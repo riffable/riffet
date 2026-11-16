@@ -16,7 +16,7 @@ export type AddressPage = (typeof PAGES)[number];
  *
  * - `/c/<sessionId>`: a conversation; its project comes with it. `?mark=<markId>` locates a 收藏.
  * - `/p/<projectId>`: a project's new-conversation page.
- * - `/tasks` (任务), `/automations` (定时任务), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
+ * - `/tasks` (任务), `/automations` (自动化), `/marks`, `/extensions`, `/stats?range=…`, `/plugins?id=<pluginId>`.
  * - `/design/<chapter>?platform=macos`: a chapter of the design system; no chapter is its overview.
  *
  * Plugin ids always contain a dot, and the server answers a path with an extension as a file, so

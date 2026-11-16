@@ -34,7 +34,7 @@ const zhHans = {
   failed: '失败',
   noBody: '没有正文',
   autoContinue: '自动继续',
-  scheduled: '定时任务',
+  scheduled: '自动化',
   taskTemplate: '任务模板',
   handoffSummary: '交接摘要',
   forkBrief: '分叉摘要',

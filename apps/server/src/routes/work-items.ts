@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import type { AssistantInstructions, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
+import type { AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { projectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
-import { assistantInstructionsFile } from '../work-items/index.js';
+import { readAssistantMemory } from '../assistant/home.js';
+import { assistantInstructionsFile, assistantProject } from '../work-items/index.js';
 import { revisionedList } from './params.js';
 import type { RouteDeps } from './deps.js';
 
@@ -35,6 +36,8 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
     if(text!==null&&typeof text!=='string')throw new AppError('INVALID_ARGUMENT','text must be text or null');
     return assistantInstructionsFile(store,deps.stateDir,text);
   });
+  // What the 助理 remembers, read-only: the owner changes it by telling the 助理 (docs/ASSISTANT.md §3.2).
+  app.get('/api/assistant/memory',async():Promise<AssistantMemory>=>readAssistantMemory(assistantProject(store,deps.stateDir).cwd));
   app.post<{Params:{id:string};Body:Partial<WorkItemRework>}>('/api/work-items/:id/rework',async(request)=>workItems.rework(request.params.id,request.body?.text,request.body?.commandId));
   app.post<{Params:{id:string};Body:SessionWorkItemRequest}>('/api/sessions/:id/work-item',async(request)=>{
     const session=store.getSession(request.params.id);

@@ -130,7 +130,7 @@ final class TasksModel {
             await load()
             return true
         } catch {
-            show(TasksNotice(text: String(localized: "无法创建定时任务：\(error.riffetMessage)"), isError: true))
+            show(TasksNotice(text: String(localized: "无法创建自动化：\(error.riffetMessage)"), isError: true))
             return false
         }
     }
@@ -161,7 +161,7 @@ final class TasksModel {
             default: show(TasksNotice(text: Self.reason(result) ?? String(localized: "这次已跳过")))
             }
         } catch {
-            show(TasksNotice(text: String(localized: "无法运行定时任务：\(error.riffetMessage)"), isError: true))
+            show(TasksNotice(text: String(localized: "无法运行自动化：\(error.riffetMessage)"), isError: true))
         }
     }
 
@@ -182,7 +182,7 @@ final class TasksModel {
             generation += 1
             if let index = automations?.firstIndex(where: { $0.id == next.id }) { automations?[index] = next }
         } catch {
-            show(TasksNotice(text: String(localized: "无法更新定时任务：\(error.riffetMessage)"), isError: true))
+            show(TasksNotice(text: String(localized: "无法更新自动化：\(error.riffetMessage)"), isError: true))
         }
     }
 
@@ -194,7 +194,7 @@ final class TasksModel {
             generation += 1
             await load()
         } catch {
-            show(TasksNotice(text: String(localized: "无法删除定时任务：\(error.riffetMessage)"), isError: true))
+            show(TasksNotice(text: String(localized: "无法删除自动化：\(error.riffetMessage)"), isError: true))
         }
     }
 

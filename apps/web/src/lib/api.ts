@@ -2,7 +2,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantInstructions, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
+  AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -142,6 +142,8 @@ export interface ProjectRecord {
   worktree?: { originProjectId: string; branch: string };
   /** The workbench's own project, e.g. the one holding every quick chat; never listed as a project. */
   system?: 'quick-chat' | 'task-workspace' | 'assistant';
+  /** The 助理's one standing conversation, on its project only (docs/ASSISTANT.md §3). */
+  mainSessionId?: string;
 }
 
 export interface Bootstrap {
@@ -901,6 +903,7 @@ export const api = {
   workItemBrief: (id: string) => request<WorkItemBrief>(`/api/work-items/${encodeURIComponent(id)}/brief`),
   /** 开始 done by the server; the 助理's planned tasks start this way. */
   assistantInstructions: () => request<AssistantInstructions>('/api/assistant/instructions'),
+  assistantMemory: () => request<AssistantMemory>('/api/assistant/memory'),
   /** `null` restores Riffet's own text. */
   saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
   startWorkItem: (id: string) => request<{ item: WorkItem; sessionId: string }>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),

@@ -41,7 +41,7 @@ struct TasksPage: View {
         }
         .navigationTitle(WorkbenchPage.tasks.title)
         .pageChrome(.tasks, workbench: workbench) {
-            PageActionButton(title: String(localized: "新建定时任务"), symbol: "plus") { sheet = .new(nil) }
+            PageActionButton(title: String(localized: "新建自动化"), symbol: "plus") { sheet = .new(nil) }
                 .disabled(model.automations == nil)
         }
         .onDisappear { model.dismissNotice() }
@@ -64,7 +64,7 @@ struct TasksPage: View {
             }
         }
         .confirmationDialog(
-            deletion.map { String(localized: "删除定时任务「\($0.name)」？") } ?? "",
+            deletion.map { String(localized: "删除自动化「\($0.name)」？") } ?? "",
             isPresented: Binding(get: { deletion != nil }, set: { if !$0 { deletion = nil } }),
             titleVisibility: .visible
         ) {

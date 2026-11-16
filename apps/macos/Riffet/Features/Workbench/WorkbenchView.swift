@@ -1507,7 +1507,7 @@ struct SessionMenu: View {
             if session.handedOffTo == nil {
                 _ = add(String(localized: "交接会话…"), "arrow.left.arrow.right") { orchestrator.handoff() }
             }
-            _ = add(String(localized: "存为定时任务…"), "clock") { orchestrator.saveAsAutomation(session: session, workbench: workbench) }
+            _ = add(String(localized: "存为自动化…"), "clock") { orchestrator.saveAsAutomation(session: session, workbench: workbench) }
         }
         _ = add(String(localized: "分享会话…"), "link") { sharePurpose = .link }
         _ = add(String(localized: "导出为 PDF…"), "doc.richtext") { sharePurpose = .pdf }

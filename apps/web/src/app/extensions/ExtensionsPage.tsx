@@ -119,6 +119,8 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
     } satisfies ExtensionEntry));
   }), [sources, projects, projectId, t]);
   const entriesByKey = useMemo(() => new Map(entries.map(entry => [entry.key, entry])), [entries]);
+  // Riffet's own skills exist only where Riffet attaches them; elsewhere the scope would filter to nothing.
+  const ownScope = useMemo(() => entries.some(entry => entry.item.scope === 'riffet'), [entries]);
   const selected = selectedKey ? entriesByKey.get(selectedKey) ?? (selectedSnapshot.current?.key === selectedKey
     ? { ...selectedSnapshot.current, inventoryError: t`当前目录不再包含此扩展，请刷新目录后重试管理操作。` } : undefined) : undefined;
   const lastDetail = useRef<{ entry?: ExtensionEntry; creation?: ExtensionCreation }>({});
@@ -407,7 +409,7 @@ export function ExtensionsPage({ active, projects, backends, initialBackend, foc
             <Popover open={filtersOpen} onOpenChange={setFiltersOpen}><PopoverTrigger asChild><Button size="icon-sm" title={t({ message: '筛选', context: 'extensions-filters-label' })} variant={activeFilters.length ? 'secondary' : 'quiet'} aria-label={activeFilters.length ? t`筛选，${activeFilters.length} 项已启用` : t({ message: '筛选', context: 'extensions-filters-label' })}><IconSettings2 />{activeFilters.length > 0 && <span className="text-2xs tabular-nums">{activeFilters.length}</span>}</Button></PopoverTrigger><PopoverContent mobileSheet align="end" className="w-[340px] max-w-[calc(100vw-24px)] p-4">
               <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-medium"><Trans context="extensions-filters-label">筛选</Trans></h2><Button size="xs" variant="quiet" onClick={resetFilters}><Trans>重置</Trans></Button></div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label={t`作用域`}><Select label={t`作用域筛选`} value={scope} onChange={setScope} options={[{ value: 'all', label: t`全部作用域` }, ...Object.entries(extensionScopes).map(([value, label]) => ({ value, label }))]} /></Field>
+                <Field label={t`作用域`}><Select label={t`作用域筛选`} value={scope} onChange={setScope} options={[{ value: 'all', label: t`全部作用域` }, ...Object.entries(extensionScopes).filter(([value]) => value !== 'riffet' || ownScope).map(([value, label]) => ({ value, label }))]} /></Field>
                 <Field label={t({ message: '状态', context: 'extensions-status-filter' })}><Select<string> label={t`扩展状态`} value={status} onChange={next => setStatus(next as Status)} options={Object.entries(statusLabels).map(([value, label]) => ({ value, label: `${label}${value === 'attention' ? ` · ${attention}` : ''}` }))} /></Field>
                 <Field label={t`来源`}><Select label={t`扩展来源筛选`} value={origin} onChange={setOrigin} options={[{ value: 'all', label: t`全部来源` }, { value: 'own', label: t`独立配置` }, { value: 'plugin', label: t`插件提供` }]} /></Field>
                 <Field label={t({ message: '排序', context: 'extensions-sort-field' })}><Select label={t`排序方式`} value={sort} onChange={setSort} options={[{ value: 'default', label: t`默认排序` }, { value: 'name', label: t`名称 A–Z` }]} /></Field>

@@ -52,7 +52,7 @@ const LAYERS = [
   ['kit', ['backends/shared', 'adapters']],
   ['drivers', ['backends/*']],
   ['features', ['git', 'workspace', 'task-workspaces', 'orchestration', 'shares', 'stats', 'search', 'tasks', 'extensions',
-    'titles', 'turn-summary', 'context-references', 'chat', 'marks.ts', 'work-items', 'owner', 'appearance', 'themes', 'previews', 'push',
+    'titles', 'turn-summary', 'context-references', 'chat', 'marks.ts', 'work-items', 'assistant', 'owner', 'appearance', 'themes', 'previews', 'push',
     'plugins', 'plugins-host', 'riffet-mcp', 'monitor.ts', 'system.ts', 'session-deletion.ts', 'update.ts', 'update-npm.ts',
     'visualization.ts', 'static-assets.ts', 'math-assets.ts', 'diagram-assets.ts']],
   ['surfaces', ['routes', 'channels']],

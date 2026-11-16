@@ -13,14 +13,13 @@ msgstr ""
 msgid "{0} → {1}"
 msgstr ""
 
-#. placeholder {0}: counts[kind]
-#: src/app/work-items/AssistantSetup.tsx
-msgid "{0} 个"
-msgstr ""
-
 #. placeholder {0}: sessions.length
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "{0} 个会话"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{abilities} 项"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -47,8 +46,16 @@ msgstr ""
 msgid "保存"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "保存为 AGENTS.md，下次启动时生效"
+msgstr ""
+
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "全部项目"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "关于你"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -123,6 +130,10 @@ msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "取消任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "只读。要增删或更正，直接告诉个人助理"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -234,20 +245,12 @@ msgstr ""
 msgid "提问：{0}"
 msgstr ""
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "插件"
-msgstr ""
-
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "收件箱"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "改动的文件"
-msgstr ""
-
-#: src/app/work-items/AssistantSetup.tsx
-msgid "新对话生效"
 msgstr ""
 
 #: src/app/work-items/NewWorkItemDialog.tsx
@@ -274,6 +277,10 @@ msgstr ""
 
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法读取记忆"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -360,8 +367,24 @@ msgstr ""
 msgid "编辑描述"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "能力"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "规则"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记下的事"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "记忆"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -392,6 +415,10 @@ msgstr ""
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有记忆"
 msgstr ""
 
 #: src/app/work-items/parts.tsx

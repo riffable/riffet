@@ -85,8 +85,8 @@ msgstr "删除"
 
 #. placeholder {0}: item.name
 #: src/app/automations/AutomationsPage.tsx
-msgid "删除定时任务「{0}」？"
-msgstr "删除定时任务「{0}」？"
+msgid "删除自动化「{0}」？"
+msgstr "删除自动化「{0}」？"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "即将运行"
@@ -118,10 +118,6 @@ msgstr "周末 {time}"
 #: src/app/automations/AutomationEditor.tsx
 msgid "在同一会话继续"
 msgstr "在同一会话继续"
-
-#: src/app/automations/AutomationsPage.tsx
-msgid "定时任务"
-msgstr "定时任务"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "已删除的任务"
@@ -176,20 +172,20 @@ msgid "新建"
 msgstr "新建"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "新建定时任务"
-msgstr "新建定时任务"
+msgid "新建自动化"
+msgstr "新建自动化"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "无法保存定时任务"
-msgstr "无法保存定时任务"
+msgid "无法保存自动化"
+msgstr "无法保存自动化"
 
 #: src/app/automations/QuickCreate.tsx
-msgid "无法创建定时任务"
-msgstr "无法创建定时任务"
+msgid "无法创建自动化"
+msgstr "无法创建自动化"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法删除定时任务"
-msgstr "无法删除定时任务"
+msgid "无法删除自动化"
+msgstr "无法删除自动化"
 
 #: src/app/automations/AutomationsPage.tsx
 msgid "无法加载任务"
@@ -204,16 +200,16 @@ msgid "无法安排发送"
 msgstr "无法安排发送"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法更新定时任务"
-msgstr "无法更新定时任务"
+msgid "无法更新自动化"
+msgstr "无法更新自动化"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "无法识别这个时间表达式"
 msgstr "无法识别这个时间表达式"
 
 #: src/app/automations/AutomationsPage.tsx
-msgid "无法运行定时任务"
-msgstr "无法运行定时任务"
+msgid "无法运行自动化"
+msgstr "无法运行自动化"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "日期时间"
@@ -316,8 +312,12 @@ msgid "编辑"
 msgstr "编辑"
 
 #: src/app/automations/AutomationEditor.tsx
-msgid "编辑定时任务"
-msgstr "编辑定时任务"
+msgid "编辑自动化"
+msgstr "编辑自动化"
+
+#: src/app/automations/AutomationsPage.tsx
+msgid "自动化"
+msgstr "自动化"
 
 #: src/app/automations/AutomationEditor.tsx
 msgid "自定义"

@@ -593,7 +593,7 @@ function Preview({ draft, mode }: { draft: Draft; mode: Mode }) {
   const nav = [
     { icon: IconSquarePen, label: <Trans context="workbench-sidebar-new-action">新会话</Trans> },
     { icon: IconSearch, label: <Trans>搜索内容</Trans> },
-    { icon: IconCalendarClock, label: <Trans>定时任务</Trans> },
+    { icon: IconCalendarClock, label: <Trans>自动化</Trans> },
   ];
   return (
     <div

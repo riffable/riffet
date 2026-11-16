@@ -65,7 +65,7 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
           <IconChevronRight className="size-3.5 text-fg-4" />
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <DropdownMenuItem aria-current={extensionsActive ? 'page' : undefined} onSelect={onOpenExtensions}><IconPuzzle /><Trans>Agent 扩展</Trans></DropdownMenuItem>
+        <DropdownMenuItem aria-current={extensionsActive ? 'page' : undefined} onSelect={onOpenExtensions}><IconPuzzle /><Trans>扩展管理</Trans></DropdownMenuItem>
         {mobile && onOpenPlugins && <DropdownMenuItem aria-current={pluginsActive ? 'page' : undefined} onSelect={onOpenPlugins}><IconPuzzle /><Trans>插件</Trans></DropdownMenuItem>}
         <DropdownMenuItem aria-current={statsActive ? 'page' : undefined} onSelect={onOpenStats}><IconChartColumn /><Trans>数据统计</Trans></DropdownMenuItem>
         <DropdownMenuSeparator />

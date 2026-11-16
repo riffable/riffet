@@ -11,7 +11,7 @@ import { DORMANT_POLL_MS, DormancyClock } from '../shared/dormancy.js';
 import { ensureClaudeWorkspaceTrust } from '../shared/cli-trust.js';
 import { materializeNativeInput } from '../attachments.js';
 import { cliVersionStatus, type CliVersionRange } from '../shared/cli-version.js';
-import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRequest, NativeControlMessage } from '../types.js';
+import type { NativeBackendHost, NativeBackendProfileConfig, NativeBackendSendRequest, NativeControlMessage, StandingLaunch, StandingMoment } from '../types.js';
 import { CLAUDE_CODE_BUSY_PATTERN, claudeAgentRows, claudeComposer, claudeComposerHoldsPrompt, claudeComposerText, claudeComposerVisible, claudeFooterFocused, claudeTasksEntryFocused, claudeTasksEntryShown, claudeViewsSubagent } from '../../adapters/cli/claude-code.js';
 import type { TerminalInteractionControl } from '../../terminal/service.js';
 import { ClaudeHookBridge } from './hook-bridge.js';
@@ -24,13 +24,13 @@ import { claudeNativeContext } from './context.js';
 import { claudeScreenInteraction, isClaudeScreenInteraction, parseClaudeScreenDialog } from './screen-dialog.js';
 import { parseDialog } from '../../agent-host/interaction-screen.js';
 import { activeTurnOf, initialState, phaseOf, reduce, replay, type ClaudeProcess, type ClaudeSessionState, type ClaudeSignal, type ClaudeTurnOrigin, type Transition } from './session-state.js';
-import { string, executableOf, runHelp, backendId, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, pause, screenDialogEndorsed, inspectSavedTerminal, permissionArgs, claudeAvailability } from './launch.js';
+import { string, executableOf, runHelp, backendId, STANDING_ISOLATION, CLAUDE_CLI_VERSIONS, CLAUDE_PERMISSIONS, asRecord, configDirOf, profileEnv, pause, screenDialogEndorsed, inspectSavedTerminal, permissionArgs, claudeAvailability } from './launch.js';
 import { ComposerDriver, FOOTER_KEY_MS, checkSendInterrupt, type PendingSend, type ScreenAnswer } from './composer.js';
 import { ClaudeHookOverlay } from './hook-overlay.js';
 import { TranscriptAdoption } from './title-adoption.js';
 import { LaunchCrashGuard } from './launch-guard.js';
 import { READY_GATE_MS, ReadyGate } from './ready-gate.js';
-import { normalizeClaudeModel, declaredLongContext, selectedModel, modelArgs, validateModelSelection } from './models.js';
+import { normalizeClaudeModel, declaredLongContext, selectedModel, modelArgs, validateModelSelection, gatewayContextEnv } from './models.js';
 import type { WorkspaceObserver } from '../shared/workspace-observer.js';
 
 const MAX_INTERACTION_TEXT = 4000;
@@ -1300,11 +1300,15 @@ export class ClaudeSessionRuntime {
       // What the old CLI left behind is history: it is read before the launch, which then starts turn-free.
       await this.refreshTranscript();
     }
+    const standing = this.host.standing?.launch(this.project);
+    const mcpConfigs = [this.overlay.mcpConfigFile, ...(standing?.mcpConfigFiles ?? [])].filter((file): file is string => Boolean(file));
     const args = [
       ...(oldTranscript ? ['--resume', this.nativeSessionId] : ['--session-id', this.nativeSessionId]),
-      // Riffet's own MCP server for this launch only; the reader's MCP configuration still loads beside it.
-      ...(this.overlay.mcpConfigFile ? ['--mcp-config', this.overlay.mcpConfigFile] : []),
+      // Riffet's own MCP server for this launch only; the reader's MCP configuration still loads beside it
+      // (a standing conversation loads its own directory's instead).
+      ...(mcpConfigs.length ? ['--mcp-config', ...mcpConfigs] : []),
       '--settings', this.overlay.overlayFile!,
+      ...(standing ? await this.standingArgs(standing, model) : []),
       ...modelArgs(model, await declaredLongContext(this.profile, model)),
       ...permissionArgs(current.approval ?? string(this.profile.config.approval)),
     ];
@@ -2169,6 +2173,28 @@ export class ClaudeSessionRuntime {
     this.emit({ type: 'context', context: next });
   }
 
+  /**
+   * A standing conversation (docs/ASSISTANT.md §4) runs on its own directory: its system prompt replaces the CLI's,
+   * and the owner's instructions, skills, plugins and MCP servers are left out. Sign-in is unaffected, since the
+   * profile's config directory is still the one in use.
+   */
+  private async standingArgs(standing: StandingLaunch, model: string | undefined): Promise<string[]> {
+    const args = ['--system-prompt-file', standing.systemPromptFile, ...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir])];
+    // A gateway model with a declared window no larger than the threshold already summarizes before it.
+    const declared = Number((await gatewayContextEnv(this.profile, model)).CLAUDE_CODE_MAX_CONTEXT_TOKENS);
+    const probe = await runHelp(executableOf(this.profile)).catch(() => undefined);
+    if (probe?.help.includes('--autocompact') && !(declared <= standing.compactAtTokens)) args.push('--autocompact', String(standing.compactAtTokens));
+    return args;
+  }
+
+  /** What a hook of a standing conversation answers with: context for the model, shown to no one. */
+  private standingReply(event: 'SessionStart' | 'UserPromptSubmit', moment: StandingMoment | undefined): Record<string, unknown> {
+    if (!moment) return {};
+    let context: string | undefined;
+    try { context = this.host.standing?.context(this.session.id, moment); } catch { context = undefined; }
+    return context ? { hookSpecificOutput: { hookEventName: event, additionalContext: context } } : {};
+  }
+
   private async handleHook(payload: Record<string, unknown>, deliveryId: string, signal: AbortSignal): Promise<Record<string, unknown> | void> {
     if (this.disposed) return {};
     const event = string(payload.hook_event_name);
@@ -2218,7 +2244,9 @@ export class ClaudeSessionRuntime {
           await this.refreshScreenState();
         }
       }
-      return {};
+      // A resumed or forked session still holds its history; only a new one, or one just summarized, is told what it lacks.
+      const source = string(payload.source);
+      return this.standingReply('SessionStart', source === 'compact' ? 'compact' : source === 'startup' ? 'start' : undefined);
     }
     const mainThread = payload.agent_id === undefined;
     if (!mainThread && ['UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd'].includes(event)) return {};
@@ -2232,9 +2260,11 @@ export class ClaudeSessionRuntime {
       const promptId = hookPromptId;
       const claimant = this.claimingSend(prompt, promptId, payload);
       const text = prompt === undefined ? '' : shellPrompt(prompt);
+      // A command is not a message to the model, so it carries no context of its own.
+      const told = this.standingReply('UserPromptSubmit', text && !text.startsWith('/') ? 'prompt' : undefined);
       // The transcript can announce the turn before its delayed hook names the Riffet input.
       // Ignore duplicate hooks only after giving that input a chance to claim its existing row.
-      if (promptId && this.nativeTurn?.turnId === promptId && !claimant) return {};
+      if (promptId && this.nativeTurn?.turnId === promptId && !claimant) return told;
       if (promptId) {
         this.seenPromptIds.add(promptId);
         if (this.seenPromptIds.size > MAX_REMEMBERED_PROMPTS) this.seenPromptIds.delete(this.seenPromptIds.values().next().value!);
@@ -2251,7 +2281,7 @@ export class ClaudeSessionRuntime {
         this.bindWebTurn(claimant, promptId);
         this.setStatus(this.status);
       }
-      return {};
+      return told;
     }
     // A delayed hook from a previous prompt must never mutate or consume the new target.
     const matchesTurn = mainThread && this.nativeTurn !== undefined && hookPromptId === this.nativeTurn.turnId;

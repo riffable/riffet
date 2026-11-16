@@ -375,14 +375,14 @@ const SCENES = [
   { id: 'checkpoint', label: '2 检查点 · 回退 · 分叉', ab: ['A 悬停分隔线', 'B 左侧时间轴'] },
   { id: 'attempts', label: '3 并行尝试', ab: ['A 卡片列', 'B 对比表格'] },
   { id: 'handoff', label: '4 跨后端交接', ab: ['A 单页对话框', 'B 两步向导'] },
-  { id: 'tasks', label: '5 模板 · 定时任务', ab: ['A 卡片', 'B 表格'] },
+  { id: 'tasks', label: '5 模板 · 自动化', ab: ['A 卡片', 'B 表格'] },
 ];
 const NOTES = {
   review: ['行评论锚定新行号还是 hunk 内容？Agent 再次改动后，旧评论是重新定位还是标记为「已过期」？', '「发回给 Agent」是直接发送，还是填入输入框让用户再改？Agent 正在运行时：排队还是作为引导（steer）插入？', '审阅意见是否持久化（刷新/换设备仍在）？绑定会话还是绑定分支？', '发布区放「变更」顶部（A）还是独立「发布」页（B）？PR / CI 状态是否也要上浮到会话标题栏？', '创建 PR 走 gh CLI 还是平台 API？Codebase / GitLab 等非 GitHub 远端如何降级？', 'CI 失败时「让 Agent 修复」带哪些日志？日志过长如何截断？', '合并回 main 冲突时：中止、交给 Agent 解决，还是打开终端？'],
   checkpoint: ['每回合自动检查点的存储成本：大文件 / 二进制如何排除？保留多少个、多久？', '回退只回退文件，还是同时截断对话？原生 CLI 历史无法删除时，「已回退」的回合怎么呈现？', '检查点之后在 Agent 之外手动改过的文件：覆盖、跳过还是阻止回退？', '分叉「之前 / 之后」的语义是否直观？分叉到另一后端时是否复用交接上下文的生成逻辑？', '入口用悬停分隔线（A）还是左侧时间轴圆点（B）？触屏没有 hover 时怎么办？', '回合检查点与手动检查点放同一列表（带筛选），还是分组？'],
   attempts: ['同一后端不同模型能否重复选择？上限 4 个是否合适（资源、费用、并发配额）？', '每个尝试强制独立 worktree：node_modules 等依赖如何复用？是否需要项目级「准备脚本」？', '对比以卡片列（A）还是表格（B）为主？文件级对比是否需要并排 diff？', '「采用此方案」后其他尝试：归档、删除 worktree，还是保留分支 N 天？', '尝试组在侧栏是可展开的组，还是 N 个独立会话加标记？', '是否支持「让另一个 Agent 评审并推荐」？token / 费用如何汇总展示？'],
   handoff: ['交接上下文的长度预算：保留首条任务 + 最近 K 回合，K 如何决定？要不要先让模型总结？', '同目录交接时原会话若仍在运行，是否要求先停止？如何避免两个 Agent 同时写同一工作区？', '预览是否可编辑？编辑后的内容是否存进新会话的元数据，方便追溯？', '「交接」与「从这里分叉 + 换后端」是否合并成一个入口？', '来源横幅能否折叠？交接链（A → B → C）如何展示？', '工具调用、附件图片、计划 / 待办是否一起交接？'],
-  tasks: ['模板是否支持变量（{{branch}}、{{date}}）和按项目覆盖？全局模板 vs 项目模板？', '入口放侧栏「任务」页、命令面板，还是两者都要？列表用卡片（A）还是表格（B）？', '定时任务由 Riffet 服务端触发：电脑睡眠 / 服务未运行时错过的任务是否补跑？', '需要审批的权限模式：直接禁止保存，还是只警告？等待审批超时后停止还是挂起并通知？', '结果通知方式：桌面通知、移动端推送，还是仅侧栏红点？', 'cron 时区按本机还是可选？是否值得支持自然语言输入（「每个工作日早上 9 点」）？'],
+  tasks: ['模板是否支持变量（{{branch}}、{{date}}）和按项目覆盖？全局模板 vs 项目模板？', '入口放侧栏「任务」页、命令面板，还是两者都要？列表用卡片（A）还是表格（B）？', '自动化由 Riffet 服务端触发：电脑睡眠 / 服务未运行时错过的任务是否补跑？', '需要审批的权限模式：直接禁止保存，还是只警告？等待审批超时后停止还是挂起并通知？', '结果通知方式：桌面通知、移动端推送，还是仅侧栏红点？', 'cron 时区按本机还是可选？是否值得支持自然语言输入（「每个工作日早上 9 点」）？'],
 };
 
 /* ============ 会话数据 ============ */
@@ -878,7 +878,7 @@ function handoffDialog() {
   }
 }
 
-/* ============ 场景 5：任务模板与定时任务 ============ */
+/* ============ 场景 5：任务模板与自动化 ============ */
 const projName = (id) => PROJECTS.find((p) => p.id === id).name;
 const modeChip = (m) => `<span class="chip ${MODES[m].approvals ? 'warn' : ''}">${MODES[m].label}</span>`;
 function lastRun(s) {
@@ -908,9 +908,9 @@ function renderTasksMain() {
       : `<div class="card" style="padding:4px 8px"><table class="t"><thead><tr><th></th><th>名称</th><th>计划</th><th>下次运行</th><th>上次运行</th><th>模板 / 项目</th><th></th></tr></thead><tbody>${rows.map(({ s, t, nx }) => `<tr style="${s.on ? '' : 'opacity:.6'}"><td><span class="switch ${s.on ? 'on' : ''}" data-act="sch-toggle" data-arg="${s.id}"></span></td><td><b>${esc(s.name)}</b>${MODES[s.mode].approvals ? `<div><span class="chip warn" style="margin-top:4px">${ic('alert', 's')}需要审批</span></div>` : ''}</td><td>${cronHuman(s.cron)}<div class="mono xxs faint">${s.cron}</div></td><td class="xs">${s.on && nx ? fmtWhen(nx) : '—'}</td><td>${lastRun(s)}</td><td class="xs">${esc(t.name)}<div class="faint">${esc(projName(s.project))}</div></td><td style="white-space:nowrap"><button class="btn sm" data-act="sch-run" data-arg="${s.id}">运行</button> <button class="btn sm ghost" data-act="sch-edit" data-arg="${s.id}">编辑</button></td></tr>`).join('')}</tbody></table></div>`;
   }
   $('main').innerHTML = `<div class="hdr"><b>任务</b><span class="sp"></span><button class="btn sm ghost" data-act="palette">${ic('search', 's')}命令面板 ⌘K</button></div>
-    <div class="page"><div class="row" style="margin-bottom:16px"><div class="seg">${[['templates', `模板 ${S.templates.length}`], ['schedules', `定时任务 ${S.schedules.length}`]].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="tasks-tab" data-arg="${k}">${l}</button>`).join('')}</div><span class="sp"></span>
-    <button class="btn pri" data-act="${tab === 'templates' ? 'tpl-edit' : 'sch-new'}" data-arg="">${ic('plus', 's')}${tab === 'templates' ? '新建模板' : '新建定时任务'}</button></div>${body}
-    <div class="xs faint" style="margin-top:16px">定时任务由本机 Riffet 服务触发；服务未运行时错过的任务不会补跑（待讨论）。</div></div>`;
+    <div class="page"><div class="row" style="margin-bottom:16px"><div class="seg">${[['templates', `模板 ${S.templates.length}`], ['schedules', `自动化 ${S.schedules.length}`]].map(([k, l]) => `<button class="${tab === k ? 'on' : ''}" data-act="tasks-tab" data-arg="${k}">${l}</button>`).join('')}</div><span class="sp"></span>
+    <button class="btn pri" data-act="${tab === 'templates' ? 'tpl-edit' : 'sch-new'}" data-arg="">${ic('plus', 's')}${tab === 'templates' ? '新建模板' : '新建自动化'}</button></div>${body}
+    <div class="xs faint" style="margin-top:16px">自动化由本机 Riffet 服务触发；服务未运行时错过的任务不会补跑（待讨论）。</div></div>`;
 }
 
 function tplDialog(id) {
@@ -938,7 +938,7 @@ function schDialog(sid, tplId) {
   const s = S.schedules.find((x) => x.id === sid) || { id: '', name: '', tpl: tplId || S.templates[0].id, project: 'billing', cron: '0 9 * * 1-5', on: true, mode: (S.templates.find((x) => x.id === (tplId || S.templates[0].id)) || {}).mode || 'readonly', skip: true };
   const presets = [['hourly', '每小时', '0 * * * *'], ['daily', '每天', '0 9 * * *'], ['weekday', '工作日', '0 9 * * 1-5'], ['custom', '自定义 cron', '']];
   const cur = presets.find((p) => p[2] === s.cron) ? presets.find((p) => p[2] === s.cron)[0] : 'custom';
-  dialog(`<h3>${s.id ? '编辑定时任务' : '新建定时任务'}</h3>
+  dialog(`<h3>${s.id ? '编辑自动化' : '新建自动化'}</h3>
     <div class="row" style="gap:10px"><label class="fld grow">名称<input class="inp" type="text" id="sc-name" value="${esc(s.name)}" placeholder="例如：工作日依赖巡检"></label>
       <label class="fld grow">模板<select class="inp" id="sc-tpl">${S.templates.map((t) => `<option value="${t.id}" ${t.id === s.tpl ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></label>
       <label class="fld grow">项目<select class="inp" id="sc-proj">${PROJECTS.map((p) => `<option value="${p.id}" ${p.id === s.project ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select></label></div>
@@ -974,7 +974,7 @@ function schDialog(sid, tplId) {
 function palette() {
   const items = [
     ...S.templates.map((t) => ({ g: '任务模板', l: `运行模板：${t.name}`, act: 'tpl-run', arg: t.id, icon: 'play' })),
-    { g: '任务模板', l: '新建任务模板…', act: 'tpl-edit', arg: '', icon: 'plus' }, { g: '任务模板', l: '新建定时任务…', act: 'sch-new', arg: '', icon: 'clock' },
+    { g: '任务模板', l: '新建任务模板…', act: 'tpl-edit', arg: '', icon: 'plus' }, { g: '任务模板', l: '新建自动化…', act: 'sch-new', arg: '', icon: 'clock' },
     { g: '会话', l: '新建会话', act: 'close', icon: 'msg' }, { g: '会话', l: '交接当前会话给其他后端…', act: 'handoff-open', icon: 'handoff' }, { g: '会话', l: '并行尝试…', act: 'scene', arg: 'attempts', icon: 'layers' },
   ];
   $('overlay').innerHTML = `<div class="scrim" data-act="scrim"><div class="palette"><input id="pal-q" placeholder="搜索命令、模板…" autofocus><div id="pal-l" style="max-height:380px;overflow:auto;padding:6px"></div></div></div>`;
@@ -1116,7 +1116,7 @@ const ACT = {
   'sch-toggle': (a) => { const s = S.schedules.find((x) => x.id === a); s.on = !s.on; renderMain(); renderSidebar(); },
   'sch-run': (a) => { const s = S.schedules.find((x) => x.id === a); s.last = { st: 'running', when: NOW, title: `${s.name} · 手动触发`, dur: '刚刚开始' }; renderMain(); setTimeout(() => { s.last = { ...s.last, st: MODES[s.mode].approvals ? 'stalled' : 'ok', dur: MODES[s.mode].approvals ? '停在审批：执行 git push' : '1分48秒' }; if (S.scene === 'tasks') renderMain(); }, 2500); },
   'sch-save': (a) => {
-    const s = { id: a || 's' + Date.now(), name: val('sc-name').trim() || '未命名定时任务', tpl: val('sc-tpl'), project: val('sc-proj'), cron: val('sc-cron').trim(), mode: val('sc-mode'), skip: val('sc-skip'), on: true };
+    const s = { id: a || 's' + Date.now(), name: val('sc-name').trim() || '未命名自动化', tpl: val('sc-tpl'), project: val('sc-proj'), cron: val('sc-cron').trim(), mode: val('sc-mode'), skip: val('sc-skip'), on: true };
     const i = S.schedules.findIndex((x) => x.id === a); if (i >= 0) S.schedules[i] = { ...S.schedules[i], ...s }; else S.schedules.push(s);
     closeDialog(); render(); toast(`已保存：${cronHuman(s.cron)}`);
   },

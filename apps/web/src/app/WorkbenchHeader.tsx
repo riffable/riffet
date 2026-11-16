@@ -37,12 +37,16 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
   const quickChat = project?.system === 'quick-chat';
   const originProject = useLists((state) => state.projects.find((item) => item.id === project?.worktree?.originProjectId));
   const session = useLists((state) => sessionId ? state.sessions.find((item) => item.id === sessionId) : undefined);
+  // Resumed in a terminal it would start without the 助理's own prompt and isolation (docs/ASSISTANT.md §4).
+  // None of the 个人助理's conversations is listed, tabbed or resumed outside its launch (docs/ASSISTANT.md §3.1).
+  const assistantOwned = project?.system === 'assistant';
   const deletable = useLists((state) => state.sessionDelete);
   const deleting = useDeletionLoading(sessionId ?? '');
   const sidebarCollapsed = useUi((state) => state.sidebarCollapsed);
   const panelOpen = useUi((state) => state.panelOpen);
   const panelTab = useUi((state) => state.panelTab);
-  const shownTab = shownView(useSidebarViews(project, sessionId), panelTab)?.id;
+  const sidebarViews = useSidebarViews(project, sessionId);
+  const shownTab = shownView(sidebarViews, panelTab)?.id;
   const dockOpen = useUi((state) => state.dockOpen);
   const infoOpen = useUi((state) => state.sessionInfoOpen);
   // The popover describes one session; it does not follow the reader to the next, and closes before the next one paints.
@@ -60,22 +64,26 @@ export function WorkbenchHeader({ sessionId, slots, center }: { sessionId?: stri
       onExpandSidebar={() => ui.setSidebarCollapsed(false)}
       onOpenMobileSidebar={() => ui.setMobileSidebar(true)}
       panelTab={panelOpen ? shownTab : undefined}
+      panelOffered={project?.system !== 'assistant' || sidebarViews.length > 0}
       onTogglePanel={(tab) => togglePanelTab(ui, tab, shownTab)}
       terminalOpen={dockOpen}
       infoOpen={infoOpen}
       onInfoOpenChange={(open) => ui.set({ sessionInfoOpen: open })}
       onToggleTerminal={() => ui.setDockOpen((value) => !value)}
       {...(session ? {
-        onRename: () => handlers.sessionAction(session, 'rename'),
-        onEditTags: () => handlers.sessionAction(session, 'tags'),
-        onTogglePin: () => handlers.sessionAction(session, 'pin'),
+        // A name, tags and a pin place a conversation in the lists; the 助理's is a page, in none of them.
+        ...(assistantOwned ? {} : {
+          onRename: () => handlers.sessionAction(session, 'rename'),
+          onEditTags: () => handlers.sessionAction(session, 'tags'),
+          onTogglePin: () => handlers.sessionAction(session, 'pin'),
+        }),
         onToggleArchive: () => handlers.sessionAction(session, 'archive'),
         ...(deletable ? { onDelete: () => handlers.sessionAction(session, 'delete'), deleteDisabled: deleting } : {}),
       } : {})}
       {...slots}
       menu={[
         ...(slots?.menu ?? []),
-        ...(session && session.kind === 'native' && !session.archivedAt && !quickChat && session.nativeSessionId && !session.terminalHold ? [{ id: 'resume-in-terminal', icon: <IconSquareTerminal />, label: t`在终端恢复…`, onSelect: () => setResumeOpen(true) }] : []),
+        ...(session && session.kind === 'native' && !session.archivedAt && !quickChat && !assistantOwned && session.nativeSessionId && !session.terminalHold ? [{ id: 'resume-in-terminal', icon: <IconSquareTerminal />, label: t`在终端恢复…`, onSelect: () => setResumeOpen(true) }] : []),
         ...(project?.system === 'task-workspace' && session ? [{
           id: 'promote-project', icon: <IconFolderPlus />, label: t`保存为项目`, onSelect: () => {
             void (async () => {

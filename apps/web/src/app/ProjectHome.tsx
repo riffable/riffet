@@ -361,7 +361,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         // One composer and one draft across task/chat tabs; only task references are project-bound.
         draftKey="new:home"
         enterBehavior={settings.composerEnterBehavior}
-        placeholder={quickChat ? t`输入消息…` : t`描述任务…`}
+        placeholder={quickChat || assistant ? t`输入消息…` : t`描述任务…`}
         commands={(!quickChat ? slash.catalog?.items : undefined) ?? capabilities?.slashCommands ?? []}
         inlineSkills={!quickChat && (slash.catalog?.inlineSkills ?? capabilities?.inlineSkills)}
         onSlashMenuOpen={quickChat ? undefined : slash.refresh}
@@ -488,7 +488,7 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
 
           <div key={quickChat ? 'chat' : project?.id ?? 'projectless'} className="animate-in fade-in-0 duration-[var(--duration-base)]">
             {quickChat && project ? <QuickChatHistory project={project} sessions={sessions} onSelectSession={onSelectSession} onSessionAction={onSessionAction} /> : <>
-              {project && isAssistantProject(project) && <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} backends={backends} />}
+              {project && isAssistantProject(project) && <AssistantSetup projectId={project.id} backendId={backendId} profileId={composer.profileId} />}
               {project && !isAssistantProject(project) && <><details open={!mobile} className="group/tools mt-4 md:mt-8"><summary className="flex cursor-pointer list-none select-none items-center gap-1.5 py-3 text-sm text-fg-3 md:hidden [&::-webkit-details-marker]:hidden"><IconChevronRight className="size-3.5 shrink-0 text-fg-4 transition-transform duration-[var(--duration-base)] ease-[var(--ease-standard)] group-open/tools:rotate-90" /><Trans>CLI 与终端工具</Trans></summary><div className="grid gap-2 sm:grid-cols-3">
                 <QuickAction icon={<IconTerminal />} title={t`Shell 终端`} onClick={onOpenShell} />
                 <QuickAction icon={<IconColumns2 />} title={t`并行尝试`} note={t`各自在独立 Worktree`} disabled={busy || Boolean(project.system)} onClick={() => setAttemptsOpen(true)} />
@@ -503,7 +503,7 @@ export function NewSessionHome({ sessions, onOpenShell, onAttemptsStarted, onOpe
 
               <AttemptsHistory projectId={project.id} onOpenGroup={onOpenAttemptGroup} /></>}
 
-              {recent.length > 0 && (
+              {recent.length > 0 && !isAssistantProject(project) && (
                 <section className="mt-6 md:mt-10">
                   <h2 className="mb-1 px-2 text-xs font-medium text-fg-3"><Trans>最近会话</Trans></h2>
                   <div className="flex flex-col">

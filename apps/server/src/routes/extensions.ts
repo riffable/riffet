@@ -3,6 +3,7 @@ import { AppError, requireString } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { ExtensionService } from '../extensions/service.js';
 import { ExtensionManagement } from '../extensions/management.js';
+import { scopeInEffect } from '../extensions/riffet-skills.js';
 import { requireBackendVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
 import type { ExtensionActionRequest, ExtensionItem, ExtensionRuntimeReport } from '../../../../packages/contracts/src/index.js';
 import type { RouteDeps } from './deps.js';
@@ -40,7 +41,7 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
     }
     catch (error) {
       if (!(error instanceof AppError) || error.code !== 'EXTENSION_NOT_FOUND') throw error;
-      const item = (await management.installedPlugins(ctx)).items.find(value => value.id === id);
+      const item = (await management.installedPlugins(ctx)).items.find(value => value.id === id && scopeInEffect(ctx, value.scope));
       if (!item) throw error;
       return { item, files: [] };
     }
@@ -49,7 +50,7 @@ export function registerExtensionRoutes(app: FastifyInstance, deps: RouteDeps): 
     const ctx = context(request.params.id, request.query, request.headers);
     const [inventory, installed] = await Promise.all([service.list(ctx), management.installedPlugins(ctx)]);
     const skills = inventory.items.some(item => item.kind === 'skill') ? await skillStates(ctx, inventory.items) : { items: inventory.items, diagnostics: [] };
-    return { ...inventory, items: [...skills.items, ...installed.items], diagnostics: [...inventory.diagnostics, ...installed.diagnostics, ...skills.diagnostics] };
+    return { ...inventory, items: [...skills.items, ...installed.items.filter(item => scopeInEffect(ctx, item.scope))], diagnostics: [...inventory.diagnostics, ...installed.diagnostics, ...skills.diagnostics] };
   });
   // What a launch in this project loads, for the per-conversation switches (docs/EXTENSIONS.md); not the static catalog.
   app.get<{ Params: Params; Querystring: Selection }>('/api/backends/:id/loaded-extensions', request => {

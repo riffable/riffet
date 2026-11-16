@@ -118,7 +118,7 @@ export function InputsChapter() {
         <Specimen name={t`与标签配对`} prop="label" note={t`标签包住复选框，点文字即切换。`}>
           <div className="flex flex-col gap-1">
             <label className="flex items-center gap-2 text-sm text-fg"><Checkbox checked={all} onCheckedChange={(on) => setPicks(on === true ? ['a', 'b'] : [])} />{t`全选本页`}</label>
-            {[['a', t`收藏夹`], ['b', t`定时任务`]].map(([id, label]) => (
+            {[['a', t`收藏夹`], ['b', t`自动化`]].map(([id, label]) => (
               <label key={id} className="flex items-center gap-2 text-sm text-fg"><Checkbox checked={picks.includes(id!)} onCheckedChange={(on) => { setPicks((current) => on === true ? [...current, id!] : current.filter((item) => item !== id)); }} />{label}</label>
             ))}
           </div>

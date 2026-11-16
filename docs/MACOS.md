@@ -974,7 +974,7 @@ CSV / JSON 导出；页面可见时订阅
 
 | 功能 | Web 位置 | Mac |
 | --- | --- | --- |
-| 任务页：任务模板与定时任务（cron 预设、启停、立即运行、每次新 Worktree） | `automations/AutomationsPage.tsx` | ✅ `Features/Tasks/`；模板目标是完整的 Agent / 配置 / 模型 / 模式 / 审批 |
+| 任务页：任务模板与自动化（cron 预设、启停、立即运行、每次新 Worktree） | `automations/AutomationsPage.tsx` | ✅ `Features/Tasks/`；模板目标是完整的 Agent / 配置 / 模型 / 模式 / 审批 |
 | 独立扩展页：跨 Agent 与配置聚合、概览、多选批量启停、筛选 | `extensions/*` | ✅ `Features/Extensions/`，与设置页共用详情、文档编辑、安装与动作规则 |
 | 右侧面板全屏 | `WorkbenchPanels.tsx` | ✅ 盖住对话区（对话不重排），⌥⌘F；面板开关、标签、全屏按会话记忆 |
 | 发布区：推送、PR 状态与 CI、让 Agent 修复 CI；合并 Worktree | `panels/PublishSection.tsx` | ✅ `Inspector/PublishSection.swift` |
