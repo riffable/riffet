@@ -27,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.Project
+import riffet.contracts.TurnOutlineV3
 import riffet.shared.DownloadCenter
 import riffet.shared.RiffetApi
 import riffet.shared.downloadsSupported
@@ -47,6 +48,7 @@ import riffet.ui.timeline.layoutTimeline
 import riffet.ui.timeline.TimelineLayout
 import riffet.ui.timeline.subagentPresentation
 import riffet_mobile.shared.generated.resources.Res
+import riffet_mobile.shared.generated.resources.session_failed
 import riffet_mobile.shared.generated.resources.session_subagent_empty
 import riffet_mobile.shared.generated.resources.session_subagent_finished
 import riffet_mobile.shared.generated.resources.session_subagent_pending
@@ -92,6 +94,16 @@ internal fun SubagentScreen(
     val previous = remember(target.toolCallId) { PreviousTimeline() }
     val items = page?.items.orEmpty()
     val running = page?.running == true
+    val failed = !running && transcript?.status == TurnOutlineV3.Status.FAILED
+    val title = page?.info?.title ?: target.name
+    val type = page?.info?.type?.takeIf { it != title }
+    val stateLabel = when {
+        transcript == null -> null
+        running -> stringResource(Res.string.session_subagent_running)
+        failed -> stringResource(Res.string.session_failed)
+        else -> stringResource(Res.string.session_subagent_finished)
+    }
+    val subtitle = listOfNotNull(type, stateLabel).joinToString(" · ").ifEmpty { null }
     val entering = !riffet.ui.app.LocalPageContentReady.current
     val grouping = page?.grouping.takeUnless { entering }
     // The gaps are baked into the entries, so a new 会话间距 lays the transcript out again.
@@ -128,13 +140,14 @@ internal fun SubagentScreen(
             modifier = modifier.fillMaxSize().blurOnTap(),
             topBar = {
                 PageTopBar(
-                    title = target.name,
+                    title = title,
                     onBack = onBack,
-                    subtitle = listOfNotNull(
-                        transcript?.subagentType?.takeIf { it.isNotBlank() },
-                        if (running) stringResource(Res.string.session_subagent_running) else stringResource(Res.string.session_subagent_finished),
-                    ).joinToString(" · "),
-                    subtitleColor = if (running) colors.accent else colors.fg3,
+                    subtitle = subtitle,
+                    subtitleColor = when {
+                        running -> colors.accent
+                        failed -> colors.danger
+                        else -> colors.fg3
+                    },
                     actions = {
                         if (interaction != null) PageBarAction(
                             icon = RiffetIcons.CircleAlert,

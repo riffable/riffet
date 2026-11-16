@@ -3,11 +3,13 @@ package riffet.ui.session
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -17,7 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
@@ -36,7 +37,6 @@ import riffet.core.subagentEntries
 import riffet.shared.RiffetApi
 import riffet.shared.SessionUpdate
 import riffet.ui.app.PageBackHandler
-import riffet.ui.app.PageBarAction
 import riffet.ui.app.PaneAction
 import riffet.ui.app.PaneActionBar
 import riffet.ui.app.PaneDot
@@ -54,6 +54,7 @@ import riffet.ui.design.GroupTitle
 import riffet.ui.design.IconTile
 import riffet.ui.design.LocalInterfaceStyle
 import riffet.ui.design.LocalRiffetSurfaces
+import riffet.ui.design.RiffetTextButton
 import riffet.ui.design.materialContentBackground
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.pickers.modelLabel
@@ -341,8 +342,15 @@ private fun StopTaskDialog(request: StopRequest?, store: SessionStore, onDismiss
 
 /** The one trailing control of a running item; the caller confirms before stopping. */
 @Composable
-private fun StopButton(tint: Color, onClick: () -> Unit) {
-    PageBarAction(RiffetIcons.Stop, stringResource(Res.string.session_stop), onClick, tint = tint)
+private fun StopButton(onClick: () -> Unit) {
+    val metrics = LocalInterfaceStyle.current.metrics
+    RiffetTextButton(
+        onClick = onClick,
+        danger = true,
+        contentPadding = PaddingValues(horizontal = metrics.controlInset / 2),
+    ) {
+        Text(stringResource(Res.string.session_stop), maxLines = 1, softWrap = false)
+    }
 }
 
 /**
@@ -384,7 +392,7 @@ private fun SubagentSection(tasks: SubTasks, store: SessionStore, onOpen: ((Suba
                     })
                 },
                 value = status.takeIf { view?.canStop != true },
-                trailing = if (view?.canStop == true) ({ StopButton(colors.danger) { confirming = StopRequest(task, entry.name) } }) else null,
+                trailing = if (view?.canStop == true) ({ StopButton { confirming = StopRequest(task, entry.name) } }) else null,
                 onClick = onOpen?.let { { it(entry) } },
             )
         }
@@ -412,7 +420,7 @@ private fun TaskSection(tasks: List<NativeActivity>, store: SessionStore, limit:
                 title = name,
                 subtitle = view.stats,
                 leading = { PaneDot(colors.accent) },
-                trailing = if (view.canStop) ({ StopButton(colors.danger) { confirming = StopRequest(task, name) } }) else null,
+                trailing = if (view.canStop) ({ StopButton { confirming = StopRequest(task, name) } }) else null,
             )
         }
         if (limit != null && tasks.size > limit) PaneRow(stringResource(Res.string.details_all, tasks.size), tone = colors.accent, chevron = true, onClick = onAll)

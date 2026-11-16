@@ -121,20 +121,28 @@ internal fun PageTopBar(
     }
     val colors = LocalRiffetColors.current
     val typography = LocalRiffetTypography.current
-    Column(modifier) {
-        StyleTopBar(
-            title = {
+    val centered = LocalInterfaceStyle.current.components.navigation.centeredTitle
+    StyleTopBar(
+        modifier = modifier,
+        title = {
+            Column(horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start) {
                 Box(Modifier.alpha(titleAlpha)) {
                     Text(title, style = typography.barTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-            },
-            navigation = { PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_back), onBack) },
-            actions = actions,
-        )
-        if (!subtitle.isNullOrEmpty()) Text(subtitle, style = typography.caption, color = subtitleColor ?: colors.fg3,
-            maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.fillMaxWidth()
-                .padding(horizontal = LocalInterfaceStyle.current.metrics.groupInset, vertical = LocalInterfaceStyle.current.metrics.controlInset / 2))
-    }
+                if (!subtitle.isNullOrEmpty()) {
+                    Text(
+                        subtitle,
+                        style = typography.caption,
+                        color = subtitleColor ?: colors.fg3,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        },
+        navigation = { PageBarAction(RiffetIcons.ArrowLeft, stringResource(Res.string.app_back), onBack) },
+        actions = actions,
+    )
 }
 
 /** A plain icon action with a full touch target for [PageTopBar]. */
