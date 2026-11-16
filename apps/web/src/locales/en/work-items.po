@@ -22,6 +22,23 @@ msgstr "{0} conversations"
 msgid "{abilities} 项"
 msgstr "{abilities}"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{openDelegations} 项进行中"
+msgstr "{openDelegations} active"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 发版"
+msgstr "{source} releases"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 有变化"
+msgstr "{source} changes"
+
+#. placeholder {0}: file.path
+#: src/app/work-items/AssistantSetup.tsx
+msgid "下载 {0}"
+msgstr "Download {0}"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
 msgstr "Delivery"
@@ -106,6 +123,11 @@ msgstr "Delete task"
 msgid "删除这个任务？"
 msgstr "Delete this task?"
 
+#. placeholder {0}: new Date(item.until).toLocaleDateString()
+#: src/app/work-items/AssistantSetup.tsx
+msgid "到 {0}"
+msgstr "Until {0}"
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -132,10 +154,6 @@ msgstr "Cancel"
 msgid "取消任务"
 msgstr "Cancel task"
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "只读。要增删或更正，直接告诉个人助理"
-msgstr "Read-only. To add, remove or correct something, tell the assistant"
-
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
 msgstr "Answer"
@@ -155,6 +173,10 @@ msgstr "Sending the first message on the new conversation page creates one."
 msgid "失败"
 msgstr "Failed"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "委托"
+msgstr "Delegations"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "子任务"
 msgstr "Subtasks"
@@ -169,6 +191,11 @@ msgctxt "work-item-status"
 msgid "完成"
 msgstr "Done"
 
+#. placeholder {0}: trigger.cron
+#: src/app/work-items/AssistantSetup.tsx
+msgid "定时 {0}"
+msgstr "Schedule {0}"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "已修改"
 msgstr "Edited"
@@ -177,6 +204,11 @@ msgstr "Edited"
 msgctxt "work-item-status"
 msgid "已取消"
 msgstr "Cancelled"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgctxt "delegation"
+msgid "已结束"
+msgstr "Ended"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "已达成"
@@ -208,6 +240,18 @@ msgid "待验收"
 msgstr "In review"
 
 #: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉"
+msgstr "Forget"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」"
+msgstr "Forget “{title}”"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」？"
+msgstr "Forget “{title}”?"
+
+#: src/app/work-items/AssistantSetup.tsx
 msgid "恢复默认"
 msgstr "Reset to default"
 
@@ -229,6 +273,11 @@ msgstr "Or write an answer…"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "执行者"
 msgstr "Assignee"
+
+#. placeholder {0}: event.note
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "推不动：{0}"
+msgstr "Stuck: {0}"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -253,6 +302,10 @@ msgstr "Inbox"
 msgid "改动的文件"
 msgstr "Files changed"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "文件"
+msgstr "Files"
+
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "新建任务"
@@ -267,6 +320,10 @@ msgstr "New subtask"
 msgid "无法保存"
 msgstr "Couldn't save"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法删除"
+msgstr "Couldn't delete"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发表评论"
 msgstr "Couldn’t post the comment"
@@ -278,6 +335,10 @@ msgstr "Couldn't send the answer"
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
 msgstr "Couldn't start this task"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法结束"
+msgstr "Couldn't end it"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法读取记忆"
@@ -359,6 +420,14 @@ msgstr "Remove label {label}"
 msgid "筛选"
 msgstr "Filter"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束"
+msgstr "End"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束这项委托？"
+msgstr "End this delegation?"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "结果未知"
 msgstr "Result unknown"
@@ -371,9 +440,17 @@ msgstr "Edit description"
 msgid "能力"
 msgstr "Abilities"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要增加或更正，直接告诉个人助理"
+msgstr "To add or correct something, tell the personal assistant"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
 msgstr "What to change"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要新增或修改，直接告诉个人助理"
+msgstr "To add or change one, tell the personal assistant"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "规则"
@@ -390,6 +467,16 @@ msgstr "Memory"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"
 msgstr "Comment"
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进：{0}"
+msgstr "Follow-up: {0}"
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进返工：{0}"
+msgstr "Follow-up rework: {0}"
 
 #: src/app/work-items/parts.tsx
 msgid "运行中"
@@ -416,6 +503,14 @@ msgstr "{0} more"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
 msgstr "No tasks yet"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有委托"
+msgstr "No delegations yet"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有文件"
+msgstr "No files yet"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "还没有记忆"

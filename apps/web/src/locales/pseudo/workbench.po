@@ -625,6 +625,10 @@ msgstr ""
 msgid "失败"
 msgstr ""
 
+#: src/app/SessionInfo.tsx
+msgid "委托"
+msgstr ""
+
 #: src/app/plugins/PluginGrantDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1074,6 +1078,10 @@ msgstr ""
 
 #: src/app/sidebarDestinations.ts
 msgid "数据统计"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgid "文件"
 msgstr ""
 
 #: src/plugins/hostViews.ts
@@ -1830,6 +1838,7 @@ msgid "记忆"
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
+#: src/app/SessionInfo.tsx
 #: src/app/SidebarUserMenu.tsx
 #: src/app/WorkbenchOverlays.tsx
 msgid "设置"

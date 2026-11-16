@@ -12,7 +12,7 @@ export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col 
  * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
  * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'sidebar' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'assistant' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
 /** The navigation's groups. 通用设置 stands alone at the top, untitled; the others are titled. */
@@ -53,6 +53,7 @@ interface SettingsSectionDefinition extends Omit<SettingsSectionItem, 'label'> {
 const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'profile', label: msg`个人资料`, group: 'general', icon: IconUser },
   { id: 'general', label: msg`通用设置`, group: 'general', icon: IconSettings2 },
+  { id: 'assistant', label: msg`个人助理`, group: 'general', icon: IconBot },
   { id: 'appearance', label: msg`主题`, group: 'appearance', icon: IconSun },
   { id: 'typography', label: msg`排版`, group: 'appearance', icon: IconWrapText },
   { id: 'sidebar', label: msg`侧栏`, group: 'appearance', icon: IconPanelLeft },

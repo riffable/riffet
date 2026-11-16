@@ -625,6 +625,10 @@ msgstr "多个标签用逗号分隔"
 msgid "失败"
 msgstr "失败"
 
+#: src/app/SessionInfo.tsx
+msgid "委托"
+msgstr "委托"
+
 #: src/app/plugins/PluginGrantDialog.tsx
 #: src/app/plugins/PluginMarket.tsx
 #: src/app/plugins/PluginsPage.tsx
@@ -1075,6 +1079,10 @@ msgstr "收起文件面板"
 #: src/app/sidebarDestinations.ts
 msgid "数据统计"
 msgstr "数据统计"
+
+#: src/app/SessionInfo.tsx
+msgid "文件"
+msgstr "文件"
 
 #: src/plugins/hostViews.ts
 msgctxt "panels-files-tab"
@@ -1830,6 +1838,7 @@ msgid "记忆"
 msgstr "记忆"
 
 #: src/app/plugins/PluginsPage.tsx
+#: src/app/SessionInfo.tsx
 #: src/app/SidebarUserMenu.tsx
 #: src/app/WorkbenchOverlays.tsx
 msgid "设置"

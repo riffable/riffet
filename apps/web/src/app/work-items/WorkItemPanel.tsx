@@ -470,7 +470,9 @@ function Activity({ item, views }: { item: WorkItem; views: WorkItemView[] }) {
       case 'question': return <span className="whitespace-pre-wrap break-words select-text">{t`提问：${event.question.text}`}</span>;
       case 'answer': return <span className="whitespace-pre-wrap break-words select-text">{t`回答：${event.text}`}</span>;
       case 'submit': return t`交付`;
-      case 'rework': return <span className="whitespace-pre-wrap break-words select-text">{t`返工：${event.text}`}</span>;
+      case 'rework': return <span className="whitespace-pre-wrap break-words select-text">{event.by === 'assistant' ? t`跟进返工：${event.text}` : t`返工：${event.text}`}</span>;
+      case 'nudge': return <span className="whitespace-pre-wrap break-words select-text">{t`跟进：${event.text}`}</span>;
+      case 'stuck': return <span className="whitespace-pre-wrap break-words select-text">{t`推不动：${event.note}`}</span>;
     }
   };
 

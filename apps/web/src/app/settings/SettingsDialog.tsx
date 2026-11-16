@@ -30,6 +30,7 @@ type Section = SettingsSection;
 const AgentSettingsSection = lazy(() => import('./AgentSettingsSection').then((module) => ({ default: module.AgentSettingsSection })));
 const BackendProfilesSection = lazy(() => import('./BackendProfilesSection').then((module) => ({ default: module.BackendProfilesSection })));
 const AuxiliaryModelsSection = lazy(() => import('./AuxiliaryModelsSection').then((module) => ({ default: module.AuxiliaryModelsSection })));
+const AssistantSettingsSection = lazy(() => import('./AssistantSettingsSection').then((module) => ({ default: module.AssistantSettingsSection })));
 const QuickChatSection = lazy(() => import('./QuickChatSection').then((module) => ({ default: module.QuickChatSection })));
 const ServiceStatusSection = lazy(() => import('./ServiceStatusSection').then((module) => ({ default: module.ServiceStatusSection })));
 const StorageSection = lazy(() => import('./StorageSection').then((module) => ({ default: module.StorageSection })));
@@ -226,6 +227,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             </div></Suspense>}
             {section === 'auxiliary' && <Suspense fallback={sectionFallback}><AuxiliaryModelsSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
             {section === 'quickchat' && <Suspense fallback={sectionFallback}><QuickChatSection settings={settings} onSaved={onSettingsChanged} onError={onError} /></Suspense>}
+            {section === 'assistant' && <Suspense fallback={sectionFallback}><AssistantSettingsSection /></Suspense>}
             {section === 'interaction' && <InteractionSection settings={settings} onSaved={onSettingsChanged} onError={onError} />}
             {section === 'files' && <FilesSettingsSection settings={settings} onSaved={onSettingsChanged} onError={onError} onDirtyChange={setFilesDirty} onBusyChange={setSectionBusy} />}
             {section === 'connection' && <ConnectionSection onLogout={onLogout} onOpenShares={() => void selectSection('shares')} />}

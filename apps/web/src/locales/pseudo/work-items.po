@@ -22,6 +22,23 @@ msgstr ""
 msgid "{abilities} 项"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{openDelegations} 项进行中"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 发版"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 有变化"
+msgstr ""
+
+#. placeholder {0}: file.path
+#: src/app/work-items/AssistantSetup.tsx
+msgid "下载 {0}"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
 msgstr ""
@@ -106,6 +123,11 @@ msgstr ""
 msgid "删除这个任务？"
 msgstr ""
 
+#. placeholder {0}: new Date(item.until).toLocaleDateString()
+#: src/app/work-items/AssistantSetup.tsx
+msgid "到 {0}"
+msgstr ""
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -132,10 +154,6 @@ msgstr ""
 msgid "取消任务"
 msgstr ""
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "只读。要增删或更正，直接告诉个人助理"
-msgstr ""
-
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
 msgstr ""
@@ -155,6 +173,10 @@ msgstr ""
 msgid "失败"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "委托"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "子任务"
 msgstr ""
@@ -169,6 +191,11 @@ msgctxt "work-item-status"
 msgid "完成"
 msgstr ""
 
+#. placeholder {0}: trigger.cron
+#: src/app/work-items/AssistantSetup.tsx
+msgid "定时 {0}"
+msgstr ""
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "已修改"
 msgstr ""
@@ -176,6 +203,11 @@ msgstr ""
 #: src/app/work-items/parts.tsx
 msgctxt "work-item-status"
 msgid "已取消"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgctxt "delegation"
+msgid "已结束"
 msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
@@ -208,6 +240,18 @@ msgid "待验收"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」？"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
 msgid "恢复默认"
 msgstr ""
 
@@ -228,6 +272,11 @@ msgstr ""
 #: src/app/work-items/WorkItemPanel.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "执行者"
+msgstr ""
+
+#. placeholder {0}: event.note
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "推不动：{0}"
 msgstr ""
 
 #: src/app/work-items/NewWorkItemDialog.tsx
@@ -253,6 +302,10 @@ msgstr ""
 msgid "改动的文件"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "文件"
+msgstr ""
+
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "新建任务"
@@ -267,6 +320,10 @@ msgstr ""
 msgid "无法保存"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法删除"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发表评论"
 msgstr ""
@@ -277,6 +334,10 @@ msgstr ""
 
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法结束"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
@@ -359,6 +420,14 @@ msgstr ""
 msgid "筛选"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束这项委托？"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "结果未知"
 msgstr ""
@@ -371,8 +440,16 @@ msgstr ""
 msgid "能力"
 msgstr ""
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要增加或更正，直接告诉个人助理"
+msgstr ""
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要新增或修改，直接告诉个人助理"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx
@@ -389,6 +466,16 @@ msgstr ""
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"
+msgstr ""
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进：{0}"
+msgstr ""
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进返工：{0}"
 msgstr ""
 
 #: src/app/work-items/parts.tsx
@@ -415,6 +502,14 @@ msgstr ""
 
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有委托"
+msgstr ""
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有文件"
 msgstr ""
 
 #: src/app/work-items/AssistantSetup.tsx

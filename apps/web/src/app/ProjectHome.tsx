@@ -13,6 +13,7 @@ import { catalogEntry, catalogParams, catalogSelection, parseSelection } from '@
 import { agentMarkStyle, backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { isAssistantProject } from '@/lib/project-family';
+import { AssistantEntries } from './work-items/AssistantEntries';
 import { cleanLabel, cn, relativeTime } from '@/lib/utils';
 import { sessionActivityAt, sortSessionsByActivity } from '@/lib/session-order';
 import { ApprovalPicker, ApprovalSummary } from './session/ApprovalPicker';
@@ -138,6 +139,8 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
   const quickChat = backendId === 'chat';
   // The 助理 works in a directory of its own: there is nothing to pick and no file to mention.
   const assistant = isAssistantProject(project);
+  /** A capability pack's command, put in the draft by its entry above the composer. */
+  const [entryDraft, setEntryDraft] = useState<NonNullable<ComposerProps['restoreDraft']>>();
   const label = useBackendLabel();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const capabilities = backend?.capabilities;
@@ -386,6 +389,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         </DropdownMenu>}
       </div>
 
+      {assistant && <AssistantEntries className="mb-2" onPick={(text) => setEntryDraft({ text, attachments: [], nonce: Date.now() })} />}
       <Composer
         variant="hero"
         autoFocus
@@ -478,7 +482,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           <p className="line-clamp-2 break-words text-fg-2">{body.initialMessage.text}</p>
           <div className="mt-1 flex flex-wrap items-center gap-3"><span>{body.rejected ? <Trans>发送失败</Trans> : <Trans>暂时无法确认是否已发送</Trans>}</span>{body.rejected ? <button type="button" disabled={busy} onClick={() => onRecoverCreation?.(body, 'restore')} className="underline underline-offset-2 disabled:opacity-50"><Trans>恢复到输入框</Trans></button> : <><button type="button" disabled={busy} onClick={() => onRecoverCreation?.(body)} className="underline underline-offset-2 disabled:opacity-50"><Trans>检查状态</Trans></button><button type="button" disabled={busy} onClick={() => onRecoverCreation?.(body, true)} className="underline underline-offset-2 disabled:opacity-50"><Trans>重试发送</Trans></button></>}{busy && <Spinner className="size-3" />}</div>
         </div>)}</div> : undefined}
-        restoreDraft={creationRestore && creationRestore.projectId === project?.id ? creationRestore.draft : undefined}
+        restoreDraft={creationRestore && creationRestore.projectId === project?.id ? creationRestore.draft : entryDraft}
         onSubmitPersisted={onCreationPersisted}
         onSubmit={(prompt, attachments, context) => submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}) })}
         onError={onError}

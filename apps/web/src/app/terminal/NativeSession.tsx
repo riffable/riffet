@@ -25,6 +25,7 @@ import { Composer, type ComposerProps } from '../session/Composer';
 import { TerminalHoldBar } from '../session/TerminalHoldBar';
 import type { ComposerSlotProps } from '@riffet/plugin-web';
 import { ComposerDock } from '../session/ComposerDock';
+import { AssistantEntries } from '../work-items/AssistantEntries';
 import { PlanDock } from '../work-items/PlanDock';
 import { FollowUpList, scheduleFollowUp, useSessionFollowUps } from '../automations/SendLater';
 import { pickerBlockReason } from '../session/pickers';
@@ -365,6 +366,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // The 个人助理's conversation is not work in a project: no side chats, forks, rewinds, hand-offs, view pager
   // or file mentions, which all act on a project's code or open another conversation there (docs/ASSISTANT.md §3).
   const assistant = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.system === 'assistant');
+  // Its main conversation, where `/new` and the packs' entries are offered (docs/ASSISTANT.md §5.5, §8.2).
+  const assistantMain = useLists((state) => { const project = state.projects.find((item) => item.id === session.projectId); return project?.system === 'assistant' && project.mainSessionId === session.id; });
   const discussionAllowed = session.origin?.kind !== 'discussion' && !assistant;
   const overview = useViewPrefs((state) => state.side === 'overview');
   const { containerRef: sessionRef, columnRef: sessionColumnRef, layout } = useSessionLayout(!quickChat && !mobileViewport && overview);
@@ -401,7 +404,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const prefs = useViewPrefs((state) => state);
   const offered = useSessionViews({ hasProject: Boolean(session.projectId), hasSession: true, capabilities: NO_CAPABILITIES });
   const hostView = chosenView === 'chat' || chosenView === 'terminal';
-  const view = assistant || !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
+  const view = !hostView && (mobileViewport || quickChat || !offered.some((entry) => entry.id === chosenView)) || !mobileViewport && !quickChat && prefs.hidden.includes(chosenView) ? 'chat' : chosenView;
   const native = useSessionSync(session, { onSessionChanged, onError, notificationsEnabled, initialRun }, view === 'chat');
   const marks = useSessionMarks(session.id, native.history?.generation);
   const discuss = useCallback((source: DiscussionSource) => {
@@ -930,7 +933,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   // A phone switches views from its menu; a subagent's transcript has no views of its own.
   const viewIds = visibleViews(prefs, offered, (id) => id !== 'terminal' || supportsTerminal);
   const views = viewIds.flatMap((id) => offered.filter((entry) => entry.id === id));
-  const switcher = !quickChat && !assistant && !mobileViewport && !subagentOpen && views.length > 1;
+  const switcher = !quickChat && !mobileViewport && !subagentOpen && views.length > 1;
   const viewsKey = viewIds.join();
   useViewShortcuts(viewIds, changeView, switcher);
   const header = useMemo(() => renderHeader({
@@ -967,7 +970,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         onSelect: () => void restartBackend(),
       }] : []),
       // On a desktop the views are tabs under the title.
-      ...(supportsTerminal && mobileViewport && !assistant ? [{
+      ...(supportsTerminal && mobileViewport ? [{
         id: 'view',
         icon: view === 'chat' ? <IconSquareTerminal /> : <IconMessagesSquare />,
         label: view === 'chat' ? t`切换终端视图` : t`切换对话视图`,
@@ -1296,6 +1299,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             </Button> : undefined} />
         {/* The composer stays mounted, so its draft survives the hold; `contents` keeps its layout as it was. */}
         <div className={held ? 'hidden' : 'contents'} inert={held}>
+          {assistantMain && !archived && <AssistantEntries onPick={(text) => setRestoreDraft({ text, attachments: [], nonce: Date.now() })} />}
           <Composer
             {...composerProps}
             autoFocus={!discussionOpen && !held}

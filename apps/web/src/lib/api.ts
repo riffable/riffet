@@ -2,7 +2,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type {
   ListRevisions, SessionListDelta,
-  AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
+  AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, NorthStarReport, WorkItem, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemEvent, WorkItemList, WorkItemPatch, WorkItemRework, SessionWorkItemRequest,
   CommandObservation,
   ActionStep,
   ApiError,
@@ -910,6 +910,16 @@ export const api = {
   /** 开始 done by the server; the 助理's planned tasks start this way. */
   assistantInstructions: () => request<AssistantInstructions>('/api/assistant/instructions'),
   assistantMemory: () => request<AssistantMemory>('/api/assistant/memory'),
+  forgetAssistantMemory: (name: string) => request<void>(`/api/assistant/memory/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  assistantFiles: () => request<{ files: AssistantFile[] }>('/api/assistant/files'),
+  /** A download link: the browser sends the session cookie itself. */
+  assistantFileUrl: (path: string) => `/api/assistant/file?${new URLSearchParams({ path })}`,
+  assistantDelegations: () => request<{ delegations: AssistantDelegation[] }>('/api/assistant/delegations'),
+  assistantRunUsage: () => request<AssistantRunUsage>('/api/assistant/runs/usage'),
+  assistantPacks: () => request<{ packs: AssistantPack[] }>('/api/assistant/packs'),
+  addAssistantPack: (id: string) => request<{ packs: AssistantPack[] }>(`/api/assistant/packs/${encodeURIComponent(id)}`, { method: 'PUT' }),
+  removeAssistantPack: (id: string) => request<{ packs: AssistantPack[] }>(`/api/assistant/packs/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  endAssistantDelegation: (id: string) => request<AssistantDelegation>(`/api/assistant/delegations/${encodeURIComponent(id)}/end`, json('POST', {})),
   /** `null` restores Riffet's own text. */
   saveAssistantInstructions: (text: string | null) => request<AssistantInstructions>('/api/assistant/instructions', json('PUT', { text })),
   startWorkItem: (id: string) => request<{ item: WorkItem; sessionId: string }>(`/api/work-items/${encodeURIComponent(id)}/start`, json('POST', {})),

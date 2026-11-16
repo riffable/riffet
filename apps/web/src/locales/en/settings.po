@@ -141,9 +141,17 @@ msgstr "Window thumbnail in the {0} style"
 msgid "{0}（提供商里已不可用）"
 msgstr "{0} (unavailable in the provider)"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "{active} 项进行中"
+msgstr "{active} active"
+
 #: src/app/settings/SupportSections.tsx
 msgid "{count} 条"
 msgstr "{count, plural, one {# record} other {# records}}"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "{count} 次"
+msgstr "{count} runs"
 
 #: src/app/settings/QuickChatSection.tsx
 msgid "{days} 天"
@@ -219,6 +227,10 @@ msgstr "2–4, fixed, short labels"
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "2–4 个固定的短选项"
 msgstr "2–4 fixed, short options"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "24 小时内最多"
+msgstr "Per 24 hours, at most"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "248，会话宽度 ≥ {SESSION_ASIDE_MIN_WIDTH} 时出现"
@@ -803,6 +815,14 @@ msgstr "Discard files that cannot be backed up, delete a conversation"
 msgid "两种字体、{0} 档字号、两种字重。行高取 2px 的整数倍。"
 msgstr "Two typefaces, {0} font sizes, two weights. Line height is a multiple of 2px."
 
+#: src/app/settings/settingsSections.ts
+msgid "个人助理"
+msgstr "Assistant"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "个人助理空闲时生效；去掉后记忆保留"
+msgstr "Takes effect when the assistant is idle; its memory stays after removal"
+
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/settingsSections.ts
 msgid "个人资料"
@@ -1096,6 +1116,10 @@ msgstr "Code highlighting (14 colours)"
 msgid "以本地版本覆盖"
 msgstr "Overwrite with local version"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "任务"
+msgstr "Task"
+
 #: src/app/design/android/PagesChapter.tsx
 #: src/app/design/android/TypeChapter.tsx
 msgctxt "design-sample"
@@ -1105,6 +1129,10 @@ msgstr "Tasks"
 #: src/app/settings/PreferencesSections.tsx
 msgid "任务文件位置"
 msgstr "Task file location"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "任务的会话停下、你不在时，核对交付或推动它"
+msgstr "When a task's conversation stops while you're away, checks the delivery or moves it on"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "会丢失输入"
@@ -2237,6 +2265,15 @@ msgstr "The Native style uses the window toolbar; Drawn styles use CustomPageBar
 msgid "去哪里，用什么搭"
 msgstr "Where to go, and what to build with"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "去掉"
+msgstr "Remove"
+
+#. placeholder {0}: pack.title
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "去掉「{0}」？"
+msgstr "Remove “{0}”?"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "去申请"
 msgstr "Request"
@@ -2581,6 +2618,10 @@ msgstr "Background task"
 #: src/app/settings/DevicesSection.tsx
 msgid "后台推送"
 msgstr "Background push"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "后台运行"
+msgstr "Background runs"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "后台运行中"
@@ -3036,6 +3077,10 @@ msgstr "Apply preset…"
 msgid "套餐"
 msgstr "Plan"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "委托"
+msgstr "Delegations"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "子进程"
 msgstr "Child process"
@@ -3110,6 +3155,10 @@ msgstr "Storage"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "它所在的会话"
 msgstr "its session"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "它的文件夹会删除，可以从个人助理目录的提交历史找回"
+msgstr "Its folder is deleted; the assistant directory's commit history keeps it"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -3642,6 +3691,17 @@ msgstr "Imported dark code highlighting palette"
 msgid "已开启"
 msgstr "On"
 
+#. placeholder {0}: usage.started
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "已开始 {0} 次"
+msgstr "{0} started"
+
+#. placeholder {0}: usage.started
+#. placeholder {1}: usage.waiting
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "已开始 {0} 次，{1} 次在等"
+msgstr "{0} started, {1} waiting"
+
 #: src/app/design/components/DisplayChapter.tsx
 msgid "已归档"
 msgstr "Archived"
@@ -3893,6 +3953,10 @@ msgstr "Switch"
 #: src/app/settings/UpdateSection.tsx
 msgid "开发版本"
 msgstr "Development version"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "开始任务前"
+msgstr "Before starting a task"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "开始新会话"
@@ -4743,6 +4807,10 @@ msgstr "Changed 3 files"
 msgid "改了3个文件"
 msgstr "改了3个文件"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "改代码的先问我"
+msgstr "Ask before code changes"
+
 #: src/app/design/components/NavigationChapter.tsx
 msgid "改动"
 msgstr "Changes"
@@ -5001,6 +5069,7 @@ msgstr "Without a provider bar"
 msgid "无气泡，占满阅读列"
 msgstr "No bubble, fills the reading column"
 
+#: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 #: src/app/settings/channels/CardSettings.tsx
@@ -5792,6 +5861,7 @@ msgstr "Checked at"
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/channels/CardSettings.tsx
 #: src/app/settings/settingsSections.ts
@@ -5946,6 +6016,10 @@ msgstr "Weekly"
 #: src/app/settings/ProviderUsage.tsx
 msgid "每日"
 msgstr "Daily"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "每晚，以及主对话压缩前"
+msgstr "Nightly, and before the main conversation is compacted"
 
 #: src/app/design/mac/TypeChapter.tsx
 msgid "每格用该风格的字体与字号排出；取值在各风格间相同的行颜色变淡。"
@@ -6363,6 +6437,10 @@ msgstr "Use"
 #: src/app/design/android/notes.ts
 msgid "用 Compose 画出的 iOS 外观；iPhone 原生端与它取同样的值。"
 msgstr "An iOS look drawn in Compose; the native iPhone app takes the same values."
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "用个人助理的模型，按用量计费"
+msgstr "Uses the assistant's model, billed by usage"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "用户元信息"
@@ -7212,6 +7290,10 @@ msgstr "Capsule"
 msgid "胶囊、圆形按钮、开关"
 msgstr "Pill, round buttons, switches"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "能力包"
+msgstr "Capability packs"
+
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "能撤销的操作直接执行并给出撤销；不能撤销的才询问。询问只出现在代价无法挽回之前。"
 msgstr "Undoable actions run directly and offer undo; only irreversible ones ask. Ask only before the cost becomes unrecoverable."
@@ -7500,6 +7582,10 @@ msgstr "Record browser interactions"
 #: src/app/settings/SupportSections.tsx
 msgid "记录浏览器版本、页面加载和历史记录操作，不包含聊天内容、输入内容或令牌。"
 msgstr "Records the browser version, page loads, and history navigation. Chat content, input, and tokens are not included."
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "记忆整理"
+msgstr "Memory consolidation"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "设为默认"
@@ -7834,6 +7920,10 @@ msgstr "Follows the platform and follows the web"
 msgid "跟平台与跟共用的规范"
 msgstr "Follow the platform, or the shared spec"
 
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "跟进任务"
+msgstr "Follow up on tasks"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随界面主题"
 msgstr "Follow theme"
@@ -8033,6 +8123,13 @@ msgstr "Run the matching gen command"
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "运行时长"
 msgstr "Uptime"
+
+#. placeholder {0}: usage!.days
+#. placeholder {1}: row.runs
+#. placeholder {2}: formatTokens(row.tokens)
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "近 {0} 天 {1} 次 · {2} tokens"
+msgstr "{1} runs in {0} days · {2} tokens"
 
 #: src/app/design/android/PagesChapter.tsx
 msgid "返回"
@@ -8357,6 +8454,10 @@ msgstr "The scrim sits at the window level, over the top bar and tab bar"
 #: src/app/design/patterns/parts.tsx
 msgid "避免"
 msgstr "Avoid"
+
+#: src/app/settings/AssistantSettingsSection.tsx
+msgid "都先问我"
+msgstr "Always ask"
 
 #. placeholder {0}: formatDate(device.createdAt, { month: 'numeric', day: 'numeric' })
 #: src/app/settings/DevicesSection.tsx
@@ -9063,6 +9164,7 @@ msgstr "Default provider"
 
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
+#: src/app/settings/AssistantSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 #: src/app/settings/QuickChatSection.tsx
 msgid "默认模型"

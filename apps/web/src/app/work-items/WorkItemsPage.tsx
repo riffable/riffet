@@ -316,7 +316,9 @@ function InboxRow({ entry, selected, onOpen, onDone }: { entry: WorkItemView; se
   const { t } = useLingui();
   const statusLabel = useStatusLabel();
   const { item, title, live, liveSession } = entry;
-  const reason = live === 'failed' ? liveSession?.error?.split('\n')[0] || t`失败`
+  const stuck = live !== 'waiting' ? item.stuck : undefined;
+  const reason = stuck ? stuck.note.split('\n')[0]
+    : live === 'failed' ? liveSession?.error?.split('\n')[0] || t`失败`
     : entry.question && !(liveSession && liveSession.id !== entry.question.sessionId) ? entry.question.text.split('\n')[0]
       : live === 'waiting' ? t({ message: '待确认', context: 'workbench-session-pending' }) : statusLabel(item.status);
   return (
@@ -332,7 +334,7 @@ function InboxRow({ entry, selected, onOpen, onDone }: { entry: WorkItemView; se
       <span className="grid size-4 shrink-0 place-items-center">{live ? <LiveMark live={live} words={false} /> : <StatusIcon status={item.status} />}</span>
       <WorkItemNumber number={item.number} className="w-9" />
       <span className="min-w-0 flex-1 truncate">{title}</span>
-      <span className={cn('min-w-0 max-w-[38%] shrink truncate text-xs', live === 'waiting' ? 'text-warning' : live === 'failed' ? 'text-danger' : 'text-fg-3')}>{reason}</span>
+      <span className={cn('min-w-0 max-w-[38%] shrink truncate text-xs', live === 'waiting' || stuck ? 'text-warning' : live === 'failed' ? 'text-danger' : 'text-fg-3')} title={stuck?.note}>{reason}</span>
       <AssigneeMark assignee={item.assignee} />
       <span className="grid shrink-0 items-center justify-items-end">
         <span className={cn('col-start-1 row-start-1 min-w-12 text-right text-2xs tabular-nums text-fg-4', item.status === 'review' && 'transition-opacity group-hover/row:opacity-0 group-focus-within/row:opacity-0 no-hover:opacity-0')}>{relativeTime(item.updatedAt)}</span>

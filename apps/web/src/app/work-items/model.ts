@@ -65,7 +65,8 @@ export function viewWorkItems(items: readonly WorkItem[], sessions: readonly Ses
       live,
       liveSession: session,
       question,
-      inInbox: !closed && (live === 'waiting' || live === 'failed' || item.status === 'review'),
+      // 推不动: the 助理's supervision could not move it on (docs/TASK-BOARD.md §7).
+      inInbox: !closed && (live === 'waiting' || live === 'failed' || item.status === 'review' || Boolean(item.stuck)),
     };
   });
 }
@@ -75,8 +76,8 @@ export function byAttention(a: WorkItemView, b: WorkItemView): number {
   return (a.live ? LIVE_RANK[a.live] : 9) - (b.live ? LIVE_RANK[b.live] : 9) || b.item.updatedAt.localeCompare(a.item.updatedAt);
 }
 
-/** The inbox: what needs the reader, waiting before failed before review. */
+/** The inbox: what needs the reader, waiting before failed before stuck before review. */
 export function byInbox(a: WorkItemView, b: WorkItemView): number {
-  const rank = (view: WorkItemView) => view.live === 'waiting' ? 0 : view.live === 'failed' ? 1 : 2;
+  const rank = (view: WorkItemView) => view.live === 'waiting' ? 0 : view.live === 'failed' ? 1 : view.item.stuck ? 2 : 3;
   return rank(a) - rank(b) || b.item.updatedAt.localeCompare(a.item.updatedAt);
 }

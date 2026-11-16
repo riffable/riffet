@@ -3,7 +3,7 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
-import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconMessageSquareText, IconShieldCheck, IconSparkles, IconSquareKanban, IconTerminal } from '@/components/icons';
+import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconFileText, IconMessageSquareText, IconRepeat, IconSettings2, IconShieldCheck, IconSparkles, IconSquareKanban, IconTerminal } from '@/components/icons';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
 import { ListRow, listRowClass, rowReveal } from '@/components/ui/list-row';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -229,6 +229,9 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
             <PlaceRow icon={<IconBrain />} label={t`记忆`} hint={assistant.memoryNote} onClick={go(() => assistant.setMemoryOpen(true))} />
             <PlaceRow icon={<IconShieldCheck />} label={t`规则`} hint={assistant.instructionsNote} onClick={go(assistant.openRules)} />
             <PlaceRow icon={<IconSparkles />} label={t`能力`} hint={assistant.abilitiesNote} onClick={go(assistant.openAbilities)} />
+            {assistant.hasFiles && <PlaceRow icon={<IconFileText />} label={t`文件`} hint={assistant.filesNote} onClick={go(() => assistant.setFilesOpen(true))} />}
+            {assistant.hasDelegations && <PlaceRow icon={<IconRepeat />} label={t`委托`} hint={assistant.delegationsNote} onClick={go(() => assistant.setDelegationsOpen(true))} />}
+            <PlaceRow icon={<IconSettings2 />} label={t`设置`} onClick={go(assistant.openSettings)} />
           </>}
         </section>
       )}

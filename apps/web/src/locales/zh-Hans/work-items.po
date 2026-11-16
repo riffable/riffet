@@ -22,6 +22,23 @@ msgstr "{0} 个会话"
 msgid "{abilities} 项"
 msgstr "{abilities} 项"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{openDelegations} 项进行中"
+msgstr "{openDelegations} 项进行中"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 发版"
+msgstr "{source} 发版"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "{source} 有变化"
+msgstr "{source} 有变化"
+
+#. placeholder {0}: file.path
+#: src/app/work-items/AssistantSetup.tsx
+msgid "下载 {0}"
+msgstr "下载 {0}"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "交付"
 msgstr "交付"
@@ -106,6 +123,11 @@ msgstr "删除任务"
 msgid "删除这个任务？"
 msgstr "删除这个任务？"
 
+#. placeholder {0}: new Date(item.until).toLocaleDateString()
+#: src/app/work-items/AssistantSetup.tsx
+msgid "到 {0}"
+msgstr "到 {0}"
+
 #. placeholder {0}: sessionTitle(event.sessionId) ?? '…'
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "加入会话「{0}」"
@@ -132,10 +154,6 @@ msgstr "取消"
 msgid "取消任务"
 msgstr "取消任务"
 
-#: src/app/work-items/AssistantSetup.tsx
-msgid "只读。要增删或更正，直接告诉个人助理"
-msgstr "只读。要增删或更正，直接告诉个人助理"
-
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "回答"
 msgstr "回答"
@@ -155,6 +173,10 @@ msgstr "在新会话页发出第一条消息时会建一个任务。"
 msgid "失败"
 msgstr "失败"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "委托"
+msgstr "委托"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "子任务"
 msgstr "子任务"
@@ -169,6 +191,11 @@ msgctxt "work-item-status"
 msgid "完成"
 msgstr "完成"
 
+#. placeholder {0}: trigger.cron
+#: src/app/work-items/AssistantSetup.tsx
+msgid "定时 {0}"
+msgstr "定时 {0}"
+
 #: src/app/work-items/AssistantSetup.tsx
 msgid "已修改"
 msgstr "已修改"
@@ -177,6 +204,11 @@ msgstr "已修改"
 msgctxt "work-item-status"
 msgid "已取消"
 msgstr "已取消"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgctxt "delegation"
+msgid "已结束"
+msgstr "已结束"
 
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "已达成"
@@ -208,6 +240,18 @@ msgid "待验收"
 msgstr "待验收"
 
 #: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉"
+msgstr "忘掉"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」"
+msgstr "忘掉「{title}」"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "忘掉「{title}」？"
+msgstr "忘掉「{title}」？"
+
+#: src/app/work-items/AssistantSetup.tsx
 msgid "恢复默认"
 msgstr "恢复默认"
 
@@ -229,6 +273,11 @@ msgstr "或者写下回答…"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "执行者"
 msgstr "执行者"
+
+#. placeholder {0}: event.note
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "推不动：{0}"
+msgstr "推不动：{0}"
 
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemPanel.tsx
@@ -253,6 +302,10 @@ msgstr "收件箱"
 msgid "改动的文件"
 msgstr "改动的文件"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "文件"
+msgstr "文件"
+
 #: src/app/work-items/NewWorkItemDialog.tsx
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "新建任务"
@@ -267,6 +320,10 @@ msgstr "新建子任务"
 msgid "无法保存"
 msgstr "无法保存"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法删除"
+msgstr "无法删除"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "无法发表评论"
 msgstr "无法发表评论"
@@ -278,6 +335,10 @@ msgstr "无法发送回答"
 #: src/app/work-items/PlanDock.tsx
 msgid "无法开始这个任务"
 msgstr "无法开始这个任务"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "无法结束"
+msgstr "无法结束"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "无法读取记忆"
@@ -359,6 +420,14 @@ msgstr "移除标签 {label}"
 msgid "筛选"
 msgstr "筛选"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束"
+msgstr "结束"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "结束这项委托？"
+msgstr "结束这项委托？"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "结果未知"
 msgstr "结果未知"
@@ -371,9 +440,17 @@ msgstr "编辑描述"
 msgid "能力"
 msgstr "能力"
 
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要增加或更正，直接告诉个人助理"
+msgstr "要增加或更正，直接告诉个人助理"
+
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "要改什么"
 msgstr "要改什么"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "要新增或修改，直接告诉个人助理"
+msgstr "要新增或修改，直接告诉个人助理"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "规则"
@@ -390,6 +467,16 @@ msgstr "记忆"
 #: src/app/work-items/WorkItemPanel.tsx
 msgid "评论"
 msgstr "评论"
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进：{0}"
+msgstr "跟进：{0}"
+
+#. placeholder {0}: event.text
+#: src/app/work-items/WorkItemPanel.tsx
+msgid "跟进返工：{0}"
+msgstr "跟进返工：{0}"
 
 #: src/app/work-items/parts.tsx
 msgid "运行中"
@@ -416,6 +503,14 @@ msgstr "还有 {0} 个"
 #: src/app/work-items/WorkItemsPage.tsx
 msgid "还没有任务"
 msgstr "还没有任务"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有委托"
+msgstr "还没有委托"
+
+#: src/app/work-items/AssistantSetup.tsx
+msgid "还没有文件"
+msgstr "还没有文件"
 
 #: src/app/work-items/AssistantSetup.tsx
 msgid "还没有记忆"
