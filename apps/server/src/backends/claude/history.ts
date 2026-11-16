@@ -696,7 +696,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         events.push(...activities.shellLost(createdAt, state.turnId));
         if (/^\/compact(?:\s|$)/.test(raw) && row.isMeta !== true) events.push(...activities.compactionStarted(uuid, promptId, createdAt, state.turnId));
         else if (interrupted) events.push(...activities.interrupted(createdAt, state.turnId));
-        else events.push(...activities.promptSubmitted(createdAt, state.turnId));
+        else events.push(...activities.promptSubmitted(promptId, createdAt, state.turnId));
       }
     }
     return events;
@@ -1592,9 +1592,9 @@ export class ClaudeTranscript {
   }
 
   /** A compaction its PreCompact hook announced: running under `id` until the boundary row read later completes it. */
-  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string): void {
+  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string, promptId?: string): void {
     const state = this.progress?.state;
-    if (!state?.activities?.compactionHooked(id, trigger, at, state.turnId).length) return;
+    if (!state?.activities?.compactionHooked(id, trigger, at, state.turnId, promptId).length) return;
     // Injected, so a full remap of the file keeps it.
     this.injectActivity(state.activities.get(id)!, { at });
   }

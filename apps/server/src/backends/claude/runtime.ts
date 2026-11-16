@@ -992,9 +992,10 @@ export class ClaudeSessionRuntime {
 
   /**
    * A compaction the CLI is starting (its PreCompact hook). Rows it wrote before (a bare `/compact` up to 2.1.302) are
-   * read first so the hook joins that compaction; since 2.1.322 there are none until its boundary.
+   * read first so the hook joins that compaction; since 2.1.322 there are none until its boundary. `promptId` is the
+   * prompt the CLI is answering: an automatic compaction on one whose row is not on disk yet waits for that row.
    */
-  private async compactionHooked(trigger: 'manual' | 'auto', deliveryId: string): Promise<void> {
+  private async compactionHooked(trigger: 'manual' | 'auto', deliveryId: string, promptId: string | undefined): Promise<void> {
     await this.refreshTranscript().catch(() => undefined);
     if (this.disposed) return;
     const id = activityId('claude', `compaction:${deliveryId}`);
@@ -1005,9 +1006,9 @@ export class ClaudeSessionRuntime {
       send.compactionStarted = true;
       send.receiptWake?.();
     }
-    this.transcript.compactionHooked(id, trigger, at);
+    this.transcript.compactionHooked(id, trigger, at, promptId);
     await this.host.transcript?.withSource(this.session.id, (source, w) =>
-      source instanceof ClaudeTranscriptSource ? source.compactionHooked(w, id, trigger, at) : undefined).catch(() => undefined);
+      source instanceof ClaudeTranscriptSource ? source.compactionHooked(w, id, trigger, at, promptId) : undefined).catch(() => undefined);
     this.dispatchSignal({ type: 'compact_start', origin: trigger === 'manual' ? 'human' : 'other' });
   }
 
@@ -2252,7 +2253,7 @@ export class ClaudeSessionRuntime {
     if (!mainThread && ['UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd'].includes(event)) return {};
     const hookPromptId = string(payload.prompt_id);
     if (event === 'PreCompact') {
-      if (mainThread) await this.compactionHooked(payload.trigger === 'auto' ? 'auto' : 'manual', deliveryId);
+      if (mainThread) await this.compactionHooked(payload.trigger === 'auto' ? 'auto' : 'manual', deliveryId, hookPromptId);
       return {};
     }
     if (event === 'UserPromptSubmit') {

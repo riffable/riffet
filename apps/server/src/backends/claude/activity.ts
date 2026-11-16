@@ -280,6 +280,9 @@ function launchOf(call: { name: string; input: Record<string, unknown> }, result
   return undefined;
 }
 
+/** An automatic compaction its hook announced for a prompt whose row has not been read yet. */
+interface HeldCompaction { id: string; promptId: string; at: string }
+
 /** Everything a {@link ClaudeActivities} holds, as JSON: one restored from it carries on exactly where this one stood. */
 export interface ClaudeActivitiesState {
   items: NativeActivity[];
@@ -290,6 +293,8 @@ export interface ClaudeActivitiesState {
   queued?: Array<[string, number]>;
   agentsOver?: string[];
   compaction?: string;
+  heldCompaction?: HeldCompaction;
+  prompt?: string;
   awaitingSummary?: string;
   bareCommand?: { name: string; promptId?: string };
   lastCommand?: { name: string; promptId?: string };
@@ -330,6 +335,13 @@ export class ClaudeActivities {
   private readonly over = new Set<string>();
   /** The compaction a `/compact` is running, until its boundary arrives. */
   private compaction?: { id: string };
+  /**
+   * An automatic compaction the CLI started on a prompt whose row is not on disk yet. It waits for that row,
+   * so it lands in the prompt's turn rather than at the end of the one before.
+   */
+  private heldCompaction?: HeldCompaction;
+  /** The `promptId` of the last prompt row read. */
+  private prompt?: string;
   /** The compaction whose summary row has not been seen yet. */
   private awaitingSummary?: string;
   /** The bare `/compact` row that stands for the user's command; its `<command-name>` twin adds nothing. */
@@ -352,6 +364,8 @@ export class ClaudeActivities {
     for (const [key, count] of state.queued ?? []) restored.queued.set(key, count);
     for (const id of state.agentsOver ?? []) restored.over.add(id);
     if (state.compaction) restored.compaction = { id: state.compaction };
+    restored.heldCompaction = state.heldCompaction;
+    restored.prompt = state.prompt;
     restored.awaitingSummary = state.awaitingSummary;
     restored.bareCommand = state.bareCommand;
     restored.lastCommand = state.lastCommand;
@@ -369,6 +383,8 @@ export class ClaudeActivities {
       ...(this.queued.size ? { queued: [...this.queued] } : {}),
       ...(this.over.size ? { agentsOver: [...this.over] } : {}),
       ...(this.compaction ? { compaction: this.compaction.id } : {}),
+      ...(this.heldCompaction ? { heldCompaction: this.heldCompaction } : {}),
+      ...(this.prompt ? { prompt: this.prompt } : {}),
       ...(this.awaitingSummary ? { awaitingSummary: this.awaitingSummary } : {}),
       ...(this.bareCommand ? { bareCommand: this.bareCommand } : {}),
       ...(this.lastCommand ? { lastCommand: this.lastCommand } : {}),
@@ -621,6 +637,7 @@ export class ClaudeActivities {
   /** The bare `/compact` row: the command was submitted and the context is being compacted. */
   compactionStarted(uuid: string, promptId: string | undefined, at: string, runId: string | undefined): MappedEvent[] {
     this.bareCommand = { name: 'compact', ...(promptId ? { promptId } : {}) };
+    this.promptRead(promptId);
     // Its PreCompact hook may have been heard first: the row names that compaction, not another one.
     if (this.compaction) return [];
     const id = activityId('claude', `compaction:${promptId ?? uuid}`);
@@ -631,11 +648,31 @@ export class ClaudeActivities {
   /**
    * The CLI's PreCompact hook, heard beside the rows: a compaction runs under `id` until its boundary. Since 2.1.322 a
    * `/compact` writes no row before that boundary, so this is the only sign of one in progress.
+   *
+   * `promptId` is the prompt the CLI is answering. An automatic compaction on a prompt just submitted can be heard
+   * before that prompt's row is on disk; it is held until the row is read. A `/compact` is not held: its row only
+   * comes at the boundary.
    */
-  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string, runId: string | undefined): MappedEvent[] {
-    if (this.compaction) return [];
+  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string, runId: string | undefined, promptId?: string): MappedEvent[] {
+    if (this.compaction || this.heldCompaction) return [];
+    if (trigger === 'auto' && promptId && this.prompt && promptId !== this.prompt) {
+      this.heldCompaction = { id, promptId, at };
+      return [];
+    }
+    return this.openCompaction(id, trigger, at, runId);
+  }
+
+  private openCompaction(id: string, trigger: 'manual' | 'auto', at: string, runId: string | undefined): MappedEvent[] {
     this.compaction = { id };
     return this.put({ id, kind: 'compaction', status: 'running', title: COMPACTION_TITLE, startedAt: at, compaction: { trigger } }, at, runId);
+  }
+
+  /** A prompt row was read: the compaction held for it opens in its turn; one held for another prompt will not. */
+  private promptRead(promptId: string | undefined): HeldCompaction | undefined {
+    if (promptId) this.prompt = promptId;
+    const held = this.heldCompaction;
+    this.heldCompaction = undefined;
+    return held && held.promptId === promptId ? held : undefined;
   }
 
   /** `system/compact_boundary`: the compaction is over (manual, or one the CLI started by itself). */
@@ -643,8 +680,9 @@ export class ClaudeActivities {
     const durationMs = number(metadata?.durationMs);
     const hooked = this.compaction ? this.states.get(this.compaction.id)?.compaction?.trigger : undefined;
     const trigger = metadata?.trigger === 'auto' ? 'auto' : hooked ?? (this.compaction ? 'manual' : metadata?.trigger === 'manual' ? 'manual' : 'auto');
-    const id = this.compaction?.id ?? activityId('claude', `compaction:${uuid}`);
+    const id = this.compaction?.id ?? this.heldCompaction?.id ?? activityId('claude', `compaction:${uuid}`);
     this.compaction = undefined;
+    this.heldCompaction = undefined;
     this.awaitingSummary = id;
     const preTokens = number(metadata?.preTokens), postTokens = number(metadata?.postTokens);
     const started = Date.parse(at);
@@ -677,13 +715,19 @@ export class ClaudeActivities {
     return known ? this.put({ ...known, status: 'stopped', endedAt: at }, at, runId) : [];
   }
 
-  /** A person typed another prompt: a compaction that never reported its end is lost. */
-  promptSubmitted(at: string, runId: string | undefined): MappedEvent[] {
+  /**
+   * A person typed another prompt: a compaction that never reported its end is lost. One held for this very
+   * prompt starts now, in its turn.
+   */
+  promptSubmitted(promptId: string | undefined, at: string, runId: string | undefined): MappedEvent[] {
+    const events: MappedEvent[] = [];
     const open = this.compaction;
-    if (!open) return [];
     this.compaction = undefined;
-    const known = this.states.get(open.id);
-    return known ? this.put({ ...known, status: 'unknown', endedAt: at }, at, runId) : [];
+    const known = open && this.states.get(open.id);
+    if (known) events.push(...this.put({ ...known, status: 'unknown', endedAt: at }, at, runId));
+    const held = this.promptRead(promptId);
+    if (held) events.push(...this.openCompaction(held.id, 'auto', held.at, runId));
+    return events;
   }
 
   // ---- local commands ----

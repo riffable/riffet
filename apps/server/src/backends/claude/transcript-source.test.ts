@@ -666,6 +666,33 @@ describe('Claude transcript source', () => {
     checkSession(journal, 'wb');
   });
 
+  it('places an automatic compaction heard before its prompt row in that prompt\'s turn, after the prompt', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-precompact-auto-'));
+    dirs.push(dir);
+    const file = new SessionFile(dir, '11111111-2222-4333-8444-555555555555').turn('t1');
+    const source = () => new ClaudeTranscriptSource({ sessionId: 'wb', nativeSessionId: () => file.id, locate: async () => file.path });
+    const journal = new Journal(new DatabaseSync(':memory:'));
+    const writer = await importAll(source(), journal);
+    const id = 'claude:compaction:hook-auto';
+    const rows = () => rowsOf(journal, 'wb');
+    const compactionRows = () => rows().filter(row => activityOfEvent(row.payload)?.kind === 'compaction');
+    // The CLI compacts on submit before the prompt's row is on disk.
+    await source().compactionHooked(writer, id, 'auto', '2026-10-20T00:00:10.000Z', 'p-t2');
+    expect(compactionRows()).toEqual([]);
+
+    file.prompt('t2');
+    await importAll(source(), journal);
+    const prompt = rows().find(row => row.kind === 'user_message_chunk' && row.turnId === 'p-t2')!;
+    expect(compactionRows().map(row => [activityOfEvent(row.payload)!.id, activityOfEvent(row.payload)!.status, row.turnId, row.seq > prompt.seq]))
+      .toEqual([[id, 'running', 'p-t2', true]]);
+
+    file.write({ type: 'system', subtype: 'compact_boundary', uuid: 'b', compactMetadata: { trigger: 'auto', preTokens: 900, postTokens: 100 } }).answer('t2').duration('t2');
+    await importAll(source(), journal);
+    expect(new Set(compactionRows().map(row => activityOfEvent(row.payload)!.id))).toEqual(new Set([id]));
+    expect(activityOfEvent(compactionRows().at(-1)!.payload)).toMatchObject({ status: 'completed', compaction: { trigger: 'auto' } });
+    checkSession(journal, 'wb');
+  });
+
   it('settles a finished background subagent and an ended task from the files beside the transcript, once, across restarts', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'riffet-claude-settle-'));
     // Only a file under the CLI's own temporary directory is read as a task's output.

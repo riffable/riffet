@@ -367,11 +367,11 @@ export class ClaudeTranscriptSource implements TranscriptSource {
    * A compaction its PreCompact hook announced before any row of it, written as the lane's own activity after what is
    * on disk, so the boundary read later completes the same one.
    */
-  async compactionHooked(w: LaneWriter, id: string, trigger: 'manual' | 'auto', at: string): Promise<void> {
+  async compactionHooked(w: LaneWriter, id: string, trigger: 'manual' | 'auto', at: string, promptId?: string): Promise<void> {
     await this.drain(w);
     const target = w.scratch ?? w;
     const cursor = decode(target.cursor);
-    if (cursor) new LaneRead(this, target, cursor, true).compactionHooked(id, trigger, at);
+    if (cursor) new LaneRead(this, target, cursor, true).compactionHooked(id, trigger, at, promptId);
   }
 
   /** A control-path end survives a missing JSONL marker; only that exact, already-read prompt is closed. */
@@ -949,9 +949,9 @@ class LaneRead {
   }
 
   /** See `ClaudeTranscriptSource.compactionHooked`. */
-  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string): void {
-    if (!this.mapper.activities?.compactionHooked(id, trigger, at, this.mapper.turnId).length) return;
-    this.ops.push(['act', id, at]);
+  compactionHooked(id: string, trigger: 'manual' | 'auto', at: string, promptId?: string): void {
+    // A compaction held for its prompt's row changes only the cursor, which still has to be written.
+    if (this.mapper.activities?.compactionHooked(id, trigger, at, this.mapper.turnId, promptId).length) this.ops.push(['act', id, at]);
     this.flush();
     this.apply();
     this.flush();
