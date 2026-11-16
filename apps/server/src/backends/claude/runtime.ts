@@ -238,6 +238,11 @@ function isInside(root: string, target: string): boolean {
 
 export class ClaudeSessionRuntime {
   readonly nativeSessionId: string;
+  /**
+   * The id `/clear` moved the CLI to. This observer belongs to the id it was made for, so the backend replaces it
+   * with one for the new id (the same CLI, taken over as after a restart) before the next message.
+   */
+  clearedTo?: string;
   readonly transcript: ClaudeTranscript;
   readonly listeners = new Set<(message: NativeControlMessage) => void>();
   /** Listeners of the service itself rather than of a client: they do not make the conversation worth polling closely. */
@@ -489,7 +494,7 @@ export class ClaudeSessionRuntime {
     if (!changed && this.pollTimer) return;
     if (this.pollTimer) clearInterval(this.pollTimer);
     if (this.terminalPollTimer) clearInterval(this.terminalPollTimer);
-    this.pollTimer = setInterval(() => { void this.refreshTranscript(false); }, dormant ? DORMANT_POLL_MS : TRANSCRIPT_POLL_MS);
+    this.pollTimer = setInterval(() => { void this.refreshTranscript(false).catch(() => undefined); }, dormant ? DORMANT_POLL_MS : TRANSCRIPT_POLL_MS);
     this.pollTimer.unref?.();
     this.terminalPollTimer = setInterval(() => {
       void this.refreshTerminalStatus();
@@ -501,7 +506,7 @@ export class ClaudeSessionRuntime {
     }, dormant ? DORMANT_POLL_MS : SCREEN_POLL_MS);
     this.terminalPollTimer.unref?.();
     // Whatever happened while polls were sparse is read now rather than at the next tick.
-    if (waking) { void this.refreshTranscript(); void this.refreshScreenState(); }
+    if (waking) { void this.refreshTranscript().catch(() => undefined); void this.refreshScreenState(); }
   }
 
   /** A recorded switch survives old hooks and is applied only once nothing is running. */
@@ -2203,6 +2208,11 @@ export class ClaudeSessionRuntime {
     // states the context window (see `context.ts` and `statusline-cli.mjs`).
     if (!event) {
       this.noteStatusLine(payload);
+      return {};
+    }
+    // `/clear` starts a new Claude session in the same CLI; its hooks carry the new id from here on.
+    if (event === 'SessionStart' && string(payload.source) === 'clear' && string(payload.session_id) && string(payload.session_id) !== this.nativeSessionId) {
+      this.clearedTo = string(payload.session_id);
       return {};
     }
     if (string(payload.session_id) !== this.nativeSessionId) return {};

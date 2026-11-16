@@ -27,6 +27,16 @@ describe('Claude hook bridge for a conversation with no runtime', () => {
     expect(asked).toEqual(['ours', 'theirs']);
   });
 
+  it('sends a session the CLI moved to (`/clear`) to the runtime of the conversation that launched it', async () => {
+    const bridge = new ClaudeHookBridge();
+    const unregister = bridge.register('before', async payload => ({ routed: payload.session_id }), 'conversation');
+    const dispatch = dispatchOf(bridge);
+    expect(await dispatch({ session_id: 'after', hook_event_name: 'SessionStart', riffet_owner: 'conversation' })).toEqual({ routed: 'after' });
+    expect(await dispatch({ session_id: 'after', hook_event_name: 'SessionStart', riffet_owner: 'another' })).toEqual({});
+    unregister();
+    expect(await dispatch({ session_id: 'after', hook_event_name: 'SessionStart', riffet_owner: 'conversation' })).toEqual({});
+  });
+
   it('publishes its descriptor again when it is started after a close', async () => {
     const stateDir = await mkdtemp(join(tmpdir(), 'claude-bridge-'));
     const bridge = new ClaudeHookBridge({ stateDir });

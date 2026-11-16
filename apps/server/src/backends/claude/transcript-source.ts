@@ -429,6 +429,14 @@ export class ClaudeTranscriptSource implements TranscriptSource {
         const prefix = `claude:${nativeSessionId}:`;
         if (id?.startsWith(prefix) && id.endsWith(':0') && !id.startsWith(`${prefix}queue:`)) this.inputCommands.set(id.slice(prefix.length, -2), run.commandId);
       }
+      // After `/clear` the earlier files are read again under the new id, but their runs keep the id they
+      // were received under: the row finds its run by command, as ids no longer say.
+      const earlier = (this.options.previousNativeSessionIds?.() ?? []).map(id => `claude:${id}:`);
+      for (const run of earlier.length ? runs : []) {
+        const id = run.native?.nativeMessageId;
+        const prefix = id?.endsWith(':0') ? earlier.find(item => id.startsWith(item) && !id.startsWith(`${item}queue:`)) : undefined;
+        if (prefix) this.inputCommands.set(id!.slice(prefix.length, -2), run.commandId);
+      }
       if (!eligible.length) { this.inputScan = key; return []; }
       const from = Math.min(...eligible.map(fence => fence.offset));
       // A fence captured in the middle of an unfinished JSONL row must not make that row claimable.

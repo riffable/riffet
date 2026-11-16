@@ -67,7 +67,7 @@ export class ClaudeHookOverlay {
     if (this.deps.isDisposed() || this.unregisterHooks) return;
     this.hookUrl = bridge.url;
     this.hookToken = bridge.token;
-    this.unregisterHooks = this.deps.bridge.register(this.deps.nativeSessionId, this.deps.onHook);
+    this.unregisterHooks = this.deps.bridge.register(this.deps.nativeSessionId, this.deps.onHook, this.deps.session().id);
   }
 
   async ensureHookServer(model: string | undefined): Promise<void> {
@@ -80,7 +80,8 @@ export class ClaudeHookOverlay {
     // The descriptor is how a CLI finds the server again after it restarts: it is read on every hook.
     const descriptor = this.deps.bridge.descriptorPath ? ` --descriptor ${shellQuote(this.deps.bridge.descriptorPath)}` : '';
     const hookCommand = `${shellQuote(process.execPath)} ${shellQuote(hookScriptPath)}`;
-    const hookWith = (timeoutMs: number) => ({ type: 'command', command: `${hookCommand} ${timeoutMs}${descriptor}`, timeout: Math.ceil(timeoutMs / 1000) });
+    const ownerArg = ` --owner ${shellQuote(this.deps.session().id)}`;
+    const hookWith = (timeoutMs: number) => ({ type: 'command', command: `${hookCommand} ${timeoutMs}${descriptor}${ownerArg}`, timeout: Math.ceil(timeoutMs / 1000) });
     const commandHook = hookWith(HOOK_TIMEOUT_MS);
     const interactionHook = hookWith(interactionHookTimeoutMs());
     /**

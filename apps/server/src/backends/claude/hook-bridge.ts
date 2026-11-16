@@ -48,6 +48,8 @@ export class ClaudeHookBridge {
   readonly bootInstanceId = randomUUID();
   readonly descriptorPath?: string;
   private readonly routes = new Map<string, ClaudeHookRoute>();
+  /** The Claude session each Riffet conversation's runtime is registered under, for hooks of a session it has not taken up yet. */
+  private readonly owners = new Map<string, string>();
   private readonly server = new NativeHookServer((payload, deliveryId, signal) => this.dispatch(payload, deliveryId, signal));
   private starting?: Promise<{ url: string; token: string }>;
   private heartbeat?: NodeJS.Timeout;
@@ -116,15 +118,24 @@ export class ClaudeHookBridge {
   }
 
   /** Routes one conversation to its runtime. A newer registration for the id replaces the older. */
-  register(sessionId: string, route: ClaudeHookRoute): () => void {
+  register(sessionId: string, route: ClaudeHookRoute, owner?: string): () => void {
     this.routes.set(sessionId, route);
-    return () => { if (this.routes.get(sessionId) === route) this.routes.delete(sessionId); };
+    if (owner) this.owners.set(owner, sessionId);
+    return () => {
+      if (this.routes.get(sessionId) === route) this.routes.delete(sessionId);
+      if (owner && this.owners.get(owner) === sessionId) this.owners.delete(owner);
+    };
   }
 
   private async dispatch(payload: Record<string, unknown>, deliveryId: string, signal: AbortSignal): Promise<Record<string, unknown> | void> {
     const sessionId = payload.session_id;
     if (typeof sessionId !== 'string') return {};
     let route = this.routes.get(sessionId);
+    // A session the CLI moved to (`/clear`) goes to the runtime of the conversation that launched it, which takes it up.
+    if (!route && typeof payload.riffet_owner === 'string') {
+      const registered = this.owners.get(payload.riffet_owner);
+      route = registered ? this.routes.get(registered) : undefined;
+    }
     // A CLI that outlived a restart posts hooks before anything has opened its conversation here: bring the
     // conversation up (if it is ours) rather than let the report fall on the floor.
     if (!route && this.wake && STATEFUL_HOOKS.has(String(payload.hook_event_name ?? '')) && await this.wakeRoute(sessionId)) route = this.routes.get(sessionId);
@@ -176,6 +187,7 @@ export class ClaudeHookBridge {
     if (this.heartbeat) clearInterval(this.heartbeat);
     this.heartbeat = undefined;
     this.routes.clear();
+    this.owners.clear();
     await this.writing;
     // Only the owner removes the file: a successor that already replaced it keeps its own.
     const path = this.descriptorPath;

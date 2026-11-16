@@ -16,6 +16,9 @@ const flagValue = flag => {
 };
 const configPath = flagValue('--config');
 const descriptorPath = flagValue('--descriptor');
+// The Riffet conversation the CLI was launched for. Its hooks name the CLI's own session, which a
+// `/clear` replaces; this lets the server find the conversation's runtime for the new one.
+const owner = flagValue('--owner');
 
 // Where to post, in order. The server's address changes on every restart, so the descriptor is read
 // now and never remembered. A CLI started before descriptors existed only has the old environment
@@ -52,7 +55,7 @@ for await (const part of process.stdin) {
 }
 try {
   const payload = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-  const body = JSON.stringify({ deliveryId: randomUUID(), payload });
+  const body = JSON.stringify({ deliveryId: randomUUID(), payload: owner && payload && typeof payload === 'object' ? { ...payload, riffet_owner: owner } : payload });
   // `node:http`, not `fetch`: fetch gives up on a response that has not started after five minutes
   // (undici's headers timeout), which would end every hook that waits on a person long before its own
   // deadline. A server that closes the connection (it exited, or the turn ended) ends this at once.

@@ -610,6 +610,19 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     const pending = this.creating.get(session.id);
     if (pending) {
       const runtime = await pending;
+    const cleared = this.runtimes.get(session.id);
+    if (cleared?.clearedTo) {
+      // After `/clear` the conversation goes on under the CLI's new id: the old one leads its history.
+      const stored = host.getSession(session.id);
+      if (stored.nativeSessionId === cleared.nativeSessionId) {
+        host.updateSession(session.id, { previousNativeSessionIds: [...(stored.previousNativeSessionIds ?? []), cleared.nativeSessionId].slice(-MAX_PREVIOUS_SESSION_IDS) });
+        host.setNativeSessionId(session.id, cleared.clearedTo);
+      }
+      this.runtimes.delete(session.id);
+      await cleared.dispose();
+      session = host.getSession(session.id);
+      resumeRequested = true;
+    }
       if (start) await runtime.setStartRequested();
       return runtime;
     }
