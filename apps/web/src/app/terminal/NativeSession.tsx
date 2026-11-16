@@ -40,7 +40,7 @@ import { TabChromeContext } from '../tabs/chrome';
 import { SessionMarksSection, SessionMarksContext, useSessionMarks } from '../session/marks';
 import { SubagentSession } from '../session/SubagentSession';
 import { NativeJobStoreContext, SubagentContext, SubagentStoreContext, useRunningSubagentCount, type SubagentRenderer, type SubagentTarget } from '../session/subagents';
-import { WorkingIndicator, type TurnAction } from '../session/Timeline';
+import { BackgroundWorkIndicator, WorkingIndicator, type TurnAction } from '../session/Timeline';
 import { ActivityContext, liveBackgroundActivities, useActivityControls } from '../session/Activities';
 import { ImageSourceContext, projectImageSource } from '../session/imageSource';
 import { conversationFiles, FileAccessContext, resolveFileMention } from '../session/fileAccess';
@@ -56,7 +56,7 @@ import { useSlashCatalog } from '../session/useSlashCatalog';
 import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
 import { ShareSessionContext, type ShareSession } from '../marks/ShareImage';
-import { useLists } from '../state/stores';
+import { useLists, useStores } from '../state/stores';
 import { ViewDots, useViewShortcuts, viewShortcut } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
 import type { SessionView } from '../state/navStore';
@@ -534,6 +534,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince } = useSessionTranscript(native, { working, busy, compacting, root, goal: session.goal });
   const timelineRef = useRef(visibleTimeline);
   timelineRef.current = visibleTimeline;
+  const stores = useStores();
   const projectName = useLists((state) => state.projects.find((project) => project.id === session.projectId)?.name);
   const shareSession = useMemo<ShareSession>(() => ({
     title: session.title || t`未命名会话`, backendId, ...(projectName ? { projectName } : {}),
@@ -555,6 +556,10 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   const backgroundKey = liveActivities.map((activity) => `${activity.id}:${activity.status}:${activity.title}:${activity.startedAt ?? ''}`).join('\n');
   const backgroundActivities = useMemo(() => liveActivities, [backgroundKey]);
   const activityControls = useActivityControls(session.id, () => backgroundActivities);
+  // Delegated work hands its result back and opens the next turn; a shell or a monitor may run for as long as the session does, so only the former is waited on.
+  const runningOf = (kind: 'agent' | 'workflow') => backgroundActivities.filter((activity) => activity.status === 'running' && activity.task?.kind === kind).length;
+  const delegatedAgents = phase === 'idle' ? Math.max(runningSubagents, runningOf('agent')) : 0;
+  const delegatedWorkflows = phase === 'idle' ? runningOf('workflow') : 0;
 
   const [subagentStack, setSubagentStack] = useState<SubagentTarget[]>([]);
   const [outlineSlot, setOutlineSlot] = useState<HTMLDivElement | null>(null);
@@ -1195,7 +1200,15 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           lead={lineage}
           runActionPending={runActionPending}
           focus={discussionFocus ?? focus}
-          progress={native.interrupting || showWorking ? <WorkingIndicator startedAt={native.interrupting ? undefined : workingSince} outputRate={native.interrupting ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : undefined} /> : undefined}
+          progress={native.interrupting || showWorking
+            ? <WorkingIndicator startedAt={native.interrupting ? undefined : workingSince} outputRate={native.interrupting ? undefined : native.status.outputRate} connected={native.connected} label={native.interrupting ? t`停止中` : compacting ? t`正在压缩上下文` : undefined} />
+            : delegatedAgents + delegatedWorkflows > 0 && visibleTimeline.length > 0
+              ? <BackgroundWorkIndicator
+                  agents={delegatedAgents}
+                  workflows={delegatedWorkflows}
+                  onOpen={quickChat ? undefined : () => stores.ui.set({ sessionInfoOpen: true })}
+                />
+              : undefined}
           empty={!working && (
             <div className="flex flex-col items-center gap-2 py-24 text-center">
               <p className="text-xl font-semibold text-fg">{session.title}</p>

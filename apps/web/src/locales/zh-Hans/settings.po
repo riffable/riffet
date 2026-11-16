@@ -2519,6 +2519,10 @@ msgstr "名称由 Tip 与 aria-label 给出。"
 msgid "后台推送"
 msgstr "后台推送"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "后台运行中"
+msgstr "后台运行中"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "否"
 msgstr "否"

@@ -63,6 +63,14 @@ msgstr ""
 msgid "{active} 运行"
 msgstr ""
 
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent 运行中"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent、{workflows} 个工作流运行中"
+msgstr ""
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "{alt}，可缩放"
 msgstr ""
@@ -125,6 +133,10 @@ msgstr ""
 
 #: src/app/session/ComposerDock.tsx
 msgid "{used} token"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
+msgid "{workflows} 个工作流运行中"
 msgstr ""
 
 #: src/app/session/useSessionSync.ts

@@ -10,6 +10,7 @@ import { revealOnOwnHover, useRestReveal } from './sessionLayout';
 import { useTranscriptResources } from './transcriptResources';
 import { previewOnPlainClick, useFileAccess } from './fileAccess';
 import type { CapturedSessionReference, NativeJob, NativeRunRecovery, OutputRate, Run, RunMetrics } from '@contracts';
+import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -923,6 +924,27 @@ export function WorkingIndicator({ startedAt, outputRate, connected = true, labe
           {estimated ? '~' : ''}{formatTokensPerSecond(rate)} tok/s
         </span>
       )}
+    </div>
+  );
+}
+
+/**
+ * The main agent's turn has ended but work it delegated is still running, and its results will open
+ * the next turn. Shells and monitors are not counted: they may never end. Quieter than
+ * `WorkingIndicator`: nothing is being written, so no clock and no rate.
+ */
+export function BackgroundWorkIndicator({ agents, workflows = 0, onOpen }: { agents: number; workflows?: number; onOpen?: () => void }) {
+  const { t } = useLingui();
+  const label = !workflows ? t`${agents} 个子 Agent 运行中`
+    : !agents ? t`${workflows} 个工作流运行中`
+    : t`${agents} 个子 Agent、${workflows} 个工作流运行中`;
+  const dot = <span className="grid size-4 shrink-0 place-items-center"><span className="size-2 rounded-full bg-fg-4" /></span>;
+  return (
+    <div role="status" className="flex min-h-6 items-center text-sm">
+      {onOpen
+        // As tall as `WorkingIndicator`, with its dot in the same column: the button's padding sits outside it.
+        ? <Button variant="quiet" size="sm" className="-ml-2.5 h-6 gap-2" onClick={onOpen}>{dot}{label}</Button>
+        : <span className="flex items-center gap-2 font-medium text-fg-3">{dot}{label}</span>}
     </div>
   );
 }

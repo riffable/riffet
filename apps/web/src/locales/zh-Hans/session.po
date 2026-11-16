@@ -63,6 +63,14 @@ msgstr "{0} 还在运行，先停止当前任务再交接。"
 msgid "{active} 运行"
 msgstr "{active} 运行"
 
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent 运行中"
+msgstr "{agents} 个子 Agent 运行中"
+
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent、{workflows} 个工作流运行中"
+msgstr "{agents} 个子 Agent、{workflows} 个工作流运行中"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "{alt}，可缩放"
 msgstr "{alt}，可缩放"
@@ -126,6 +134,10 @@ msgstr "{used} / {budget} token"
 #: src/app/session/ComposerDock.tsx
 msgid "{used} token"
 msgstr "{used} token"
+
+#: src/app/session/Timeline.tsx
+msgid "{workflows} 个工作流运行中"
+msgstr "{workflows} 个工作流运行中"
 
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」已完成"

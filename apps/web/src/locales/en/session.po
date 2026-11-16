@@ -63,6 +63,14 @@ msgstr "{0} is still running. Stop the current task before handing it off."
 msgid "{active} 运行"
 msgstr "{active} running"
 
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent 运行中"
+msgstr "{agents, plural, one {# subagent running} other {# subagents running}}"
+
+#: src/app/session/Timeline.tsx
+msgid "{agents} 个子 Agent、{workflows} 个工作流运行中"
+msgstr "{agents, plural, one {# subagent} other {# subagents}} and {workflows, plural, one {# workflow} other {# workflows}} running"
+
 #: src/app/session/ZoomPanImage.tsx
 msgid "{alt}，可缩放"
 msgstr "{alt}, zoomable"
@@ -126,6 +134,10 @@ msgstr "{used} / {budget} tokens"
 #: src/app/session/ComposerDock.tsx
 msgid "{used} token"
 msgstr "{used} tokens"
+
+#: src/app/session/Timeline.tsx
+msgid "{workflows} 个工作流运行中"
+msgstr "{workflows, plural, one {# workflow running} other {# workflows running}}"
 
 #: src/app/session/useSessionSync.ts
 msgid "「{title}」已完成"

@@ -2519,6 +2519,10 @@ msgstr ""
 msgid "后台推送"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "后台运行中"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "否"
 msgstr ""

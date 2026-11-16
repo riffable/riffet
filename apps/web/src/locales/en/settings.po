@@ -2519,6 +2519,10 @@ msgstr "The name comes from Tip and aria-label."
 msgid "后台推送"
 msgstr "Background push"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "后台运行中"
+msgstr "Running in background"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "否"
 msgstr "No"

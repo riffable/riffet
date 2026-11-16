@@ -9,7 +9,7 @@ import { MIN_CONTENT_WIDTH, MAX_CONTENT_WIDTH, DEFAULT_CONTENT_WIDTH } from '@/l
 import { COLUMN_GUTTER_TOTAL, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from '@/app/session/ContentWidthHandle';
 import { Markdown } from '@/app/session/Markdown';
 import { SESSION_ASIDE_MIN_WIDTH } from '@/app/session/sessionLayout';
-import { AssistantMessage, CodeBlock, DiffView, Disclosure, MessageFooter, StatusRow, ThoughtRow, UserMessage, WorkingIndicator } from '@/app/session/Timeline';
+import { AssistantMessage, BackgroundWorkIndicator, CodeBlock, DiffView, Disclosure, MessageFooter, StatusRow, ThoughtRow, UserMessage, WorkingIndicator } from '@/app/session/Timeline';
 import { TurnProcess } from '@/app/session/TurnProcess';
 import { cn } from '@/lib/utils';
 import { Chapter, Frame, Matrix, PaintRevision, Plate, Specimen, useRootValue, Value } from '../specimen';
@@ -349,9 +349,12 @@ function States() {
   const following = useRef(true);
   const [started] = useState(() => Date.now() - 83_000);
   return (
-    <div className="grid gap-6 md:grid-cols-3">
+    <div className="grid gap-6 md:grid-cols-2">
       <Specimen name={t`处理中`} prop="WorkingIndicator">
         <div className="w-full"><WorkingIndicator startedAt={started} /></div>
+      </Specimen>
+      <Specimen name={t`后台运行中`} prop="BackgroundWorkIndicator">
+        <div className="w-full"><BackgroundWorkIndicator agents={3} onOpen={() => {}} /></div>
       </Specimen>
       <Specimen name={t`已停止`} prop="stopped">
         <div className="flex w-full flex-col">
