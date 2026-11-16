@@ -48,7 +48,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case profile, general, appearance, window, tabs, typography, terminal, appIcon
     case input, shortcuts, notifications, files
     case agents, modelProviders, auxiliaryModels, quickChat
-    case connection, shares, channels, server, backup
+    case connection, shares, channels, server, storage, backup
     case diagnostics, about
     case cli, service, projectConfigs
 
@@ -84,6 +84,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shares: String(localized: "会话分享")
         case .channels: String(localized: "机器人")
         case .server: String(localized: "本机服务器")
+        case .storage: String(localized: "存储空间")
         case .backup: String(localized: "备份与恢复")
         case .diagnostics: String(localized: "诊断")
         case .about: String(localized: "关于 Riffet")
@@ -112,6 +113,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shares: "square.and.arrow.up"
         case .channels: "paperplane"
         case .server: "server.rack"
+        case .storage: "internaldrive"
         case .backup: "externaldrive"
         case .diagnostics: "stethoscope"
         case .about: "info.circle"
@@ -124,7 +126,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .appearance, .window, .tabs, .typography, .terminal, .appIcon: .appearance
         case .input, .shortcuts, .notifications, .files: .behavior
         case .agents, .modelProviders, .auxiliaryModels, .quickChat: .models
-        case .connection, .shares, .channels, .server, .backup: .connection
+        case .connection, .shares, .channels, .server, .storage, .backup: .connection
         case .diagnostics, .about: .support
         default: .general
         }
@@ -152,6 +154,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shares: String(localized: "已发布的分享链接")
         case .channels: String(localized: "飞书机器人与可用账号")
         case .server: String(localized: "状态、数据目录与资源回收")
+        case .storage: String(localized: "各部分占用与数据库整理")
         case .backup: String(localized: "备份位置与恢复")
         case .diagnostics: String(localized: "诊断信息与性能监测")
         case .about: String(localized: "版本与更新")
@@ -181,6 +184,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .shares: String(localized: "分享 链接 发布 取消分享 share publish link", comment: "Search terms, space-separated")
         case .channels: String(localized: "机器人 飞书 lark 卡片 绑定 群聊 话题 bot feishu channel", comment: "Search terms, space-separated")
         case .server: String(localized: "守护进程 启动 重启 日志 doctor 托管 daemon 回收 监控 cpu 内存 进程", comment: "Search terms, space-separated")
+        case .storage: String(localized: "存储 空间 磁盘 占用 数据库 整理 清理 storage disk database compact", comment: "Search terms, space-separated")
         case .backup: String(localized: "备份 恢复 backup restore", comment: "Search terms, space-separated")
         case .diagnostics: String(localized: "诊断 导出 性能 帧率 基准 diagnostics performance", comment: "Search terms, space-separated")
         case .about: String(localized: "版本 更新 关于 version update", comment: "Search terms, space-separated")
@@ -210,7 +214,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         .appearance, .window, .tabs, .typography, .terminal, .appIcon,
         .input, .shortcuts, .notifications, .files,
         .agents, .modelProviders, .auxiliaryModels, .quickChat,
-        .connection, .shares, .channels, .server, .backup,
+        .connection, .shares, .channels, .server, .storage, .backup,
         .diagnostics, .about,
     ]
 }

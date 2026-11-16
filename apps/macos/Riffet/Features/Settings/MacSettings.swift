@@ -515,8 +515,11 @@ struct ServerSettings: View {
         }
     }
 
+    private var compacting: Bool { model.server.databaseCompaction != nil && model.server.state.running == nil }
+
     private var stateTitle: String {
-        switch model.server.state {
+        if compacting { return String(localized: "正在整理数据库") }
+        return switch model.server.state {
         case .running: String(localized: "运行中")
         case .stopped: String(localized: "未运行")
         case .starting: String(localized: "正在启动")
@@ -526,7 +529,8 @@ struct ServerSettings: View {
     }
 
     private var stateTint: Color {
-        switch model.server.state {
+        if compacting { return palette.warning }
+        return switch model.server.state {
         case .running: palette.success
         case .stopped: palette.fg3
         case .starting: palette.warning
@@ -536,7 +540,8 @@ struct ServerSettings: View {
     }
 
     private var failureMessage: String? {
-        if case let .failed(message) = model.server.state { message } else { nil }
+        if compacting { return nil }
+        return if case let .failed(message) = model.server.state { message } else { nil }
     }
 
     private func run(_ action: @escaping () async throws -> Void) {

@@ -89,6 +89,21 @@ final class ServerMaintenance: Identifiable {
     }
 }
 
+/// `<state dir>/maintenance.json`: the server is rebuilding its database before it starts listening,
+/// so neither daemon.json nor a health answer exists yet.
+struct DatabaseCompaction: Decodable, Equatable, Sendable {
+    let pid: Int32
+    let bytes: Int64?
+
+    /// The record, only while the process that wrote it is alive: a crashed run leaves the file behind.
+    nonisolated static func read(in stateDirectory: URL) -> DatabaseCompaction? {
+        guard let data = try? Data(contentsOf: stateDirectory.appending(path: "maintenance.json")),
+              let record = try? JSONDecoder().decode(DatabaseCompaction.self, from: data),
+              record.pid > 0, kill(record.pid, 0) == 0 else { return nil }
+        return record
+    }
+}
+
 enum ServerState: Equatable {
     case checking
     case running(RunningServer)
@@ -111,6 +126,8 @@ final class ServerHost {
     /// A failed start stays in [state] until the server is seen running or another start begins:
     /// the check that follows a failed start would otherwise overwrite it with `.stopped`.
     private var stickyFailure = false
+    /// Set while the server's start is held by a database compaction; the settings status line names it.
+    private(set) var databaseCompaction: DatabaseCompaction?
 
     let stateDirectory: URL = {
         if let custom = ProcessInfo.processInfo.environment["RIFFET_STATE_DIR"], !custom.isEmpty {
@@ -149,6 +166,7 @@ final class ServerHost {
         if appAgentStatus != probe.status { appAgentStatus = probe.status }
         if hasLoginService != probe.hasLoginService { hasLoginService = probe.hasLoginService }
         probedRecord = .some(probe.record)
+        setCompaction(probe.compaction)
         guard let record = probe.record else {
             keepOrStop()
             return
@@ -171,6 +189,7 @@ final class ServerHost {
         let status: SMAppService.Status
         let hasLoginService: Bool
         let record: DaemonRecord?
+        let compaction: DatabaseCompaction?
     }
 
     private nonisolated static func probe(stateDirectory: URL, agentPlist: String) async -> Probe {
@@ -178,7 +197,8 @@ final class ServerHost {
             Probe(
                 status: SMAppService.agent(plistName: agentPlist).status,
                 hasLoginService: FileManager.default.fileExists(atPath: loginServicePlistURL.path),
-                record: readDaemonRecord(in: stateDirectory)
+                record: readDaemonRecord(in: stateDirectory),
+                compaction: DatabaseCompaction.read(in: stateDirectory)
             )
         }.value
     }
@@ -186,6 +206,10 @@ final class ServerHost {
     /// An unchanged state is not written: every window observing it would redraw for nothing.
     private func setState(_ next: ServerState) {
         if state != next { state = next }
+    }
+
+    private func setCompaction(_ next: DatabaseCompaction?) {
+        if databaseCompaction != next { databaseCompaction = next }
     }
 
     private func keepOrStop() {
@@ -207,18 +231,27 @@ final class ServerHost {
         if case .failed = state { state = .stopped }
     }
 
-    /// Polls until the server answers or [timeout] passes.
+    /// Polls until the server answers or [timeout] passes. While the server is rebuilding its database
+    /// (maintenance.json names a live process) the wait goes on, up to [compactionCeiling] in all.
     @discardableResult
     func waitUntilRunning(timeout: Duration = .seconds(20), since started: Date = .now) async -> RunningServer? {
-        let deadline = ContinuousClock.now + timeout
+        let begun = ContinuousClock.now
+        var deadline = begun + timeout
+        defer { setCompaction(nil) }
         while ContinuousClock.now < deadline {
             await refreshDuringStart()
             if let server = state.running { return server }
+            let directory = stateDirectory
+            let compaction = await Task.detached(priority: .userInitiated) { DatabaseCompaction.read(in: directory) }.value
+            setCompaction(compaction)
+            if compaction != nil { deadline = min(max(deadline, ContinuousClock.now + timeout), begun + Self.compactionCeiling) }
             try? await Task.sleep(for: .milliseconds(400))
         }
         if case .starting = state { markFailed(await startFailureReason(since: started, timeout: timeout)) }
         return nil
     }
+
+    private static let compactionCeiling: Duration = .seconds(30 * 60)
 
     private func refreshDuringStart() async {
         let directory = stateDirectory

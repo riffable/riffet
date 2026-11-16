@@ -137,6 +137,7 @@ struct SettingsView: View {
         case .shares: SharesSettings()
         case .channels: ChannelsSettings()
         case .server: ServerSettings()
+        case .storage: StorageSettings()
         case .backup: BackupSettings()
         case .diagnostics: DiagnosticsSettings()
         default: AboutSettings()

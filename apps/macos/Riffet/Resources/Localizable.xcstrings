@@ -1,6 +1,447 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "存储空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage"
+          }
+        }
+      }
+    },
+    "各部分占用与数据库整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage by part and database compaction"
+          }
+        }
+      }
+    },
+    "存储 空间 磁盘 占用 数据库 整理 清理 storage disk database compact": {
+      "comment": "Search terms, space-separated",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "storage disk database compact"
+          }
+        }
+      }
+    },
+    "正在整理数据库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compacting database"
+          }
+        }
+      }
+    },
+    "立即重启": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart now"
+          }
+        }
+      }
+    },
+    "无法读取存储空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read storage"
+          }
+        }
+      }
+    },
+    "在服务下次启动时整理数据库？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact the database at the next service start?"
+          }
+        }
+      }
+    },
+    "预计收回 %@。重建期间所有设备都连不上服务，可能持续几分钟。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About %@ will be reclaimed. No device can reach the service while it rebuilds, which can take a few minutes."
+          }
+        }
+      }
+    },
+    "重建期间所有设备都连不上服务，可能持续几分钟。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No device can reach the service while it rebuilds, which can take a few minutes."
+          }
+        }
+      }
+    },
+    "安排整理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Schedule"
+          }
+        }
+      }
+    },
+    "正在统计": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanning"
+          }
+        }
+      }
+    },
+    "统计于 %@ · 用时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scanned %@ · took %@"
+          }
+        }
+      }
+    },
+    "重新统计": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rescan"
+          }
+        }
+      }
+    },
+    "数据库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database"
+          }
+        }
+      }
+    },
+    "磁盘可用 %@ / %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ free of %@"
+          }
+        }
+      }
+    },
+    "数据库 · %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database · %@"
+          }
+        }
+      }
+    },
+    "可回收": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reclaimable"
+          }
+        }
+      }
+    },
+    "整理数据库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact database"
+          }
+        }
+      }
+    },
+    "上次整理未完成（%@）：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last compaction did not finish (%@): %@"
+          }
+        }
+      }
+    },
+    "上次整理 %@ · %@ → %@ · 用时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last compacted %@ · %@ → %@ · took %@"
+          }
+        }
+      }
+    },
+    "将在服务下次启动时进行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs at the next service start"
+          }
+        }
+      }
+    },
+    "可用空间不足，需要 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough free space; needs %@"
+          }
+        }
+      }
+    },
+    "在服务下次启动时重建文件，期间服务不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rebuilds the file at the next service start; the service is unavailable meanwhile"
+          }
+        }
+      }
+    },
+    "按项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By project"
+          }
+        }
+      }
+    },
+    "构成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Breakdown"
+          }
+        }
+      }
+    },
+    "检查点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checkpoints"
+          }
+        }
+      }
+    },
+    "合计": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        }
+      }
+    },
+    "已删除的项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted projects"
+          }
+        }
+      }
+    },
+    "占用最多的会话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Largest conversations"
+          }
+        }
+      }
+    },
+    "大小": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Size"
+          }
+        }
+      }
+    },
+    "会话记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Transcript"
+          }
+        }
+      }
+    },
+    "时间线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Timeline"
+          }
+        }
+      }
+    },
+    "图片与长输出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images and long output"
+          }
+        }
+      }
+    },
+    "搜索索引": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search index"
+          }
+        }
+      }
+    },
+    "运行与用量": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs and usage"
+          }
+        }
+      }
+    },
+    "其他": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other"
+          }
+        }
+      }
+    },
+    "随会话删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted with its conversation"
+          }
+        }
+      }
+    },
+    "7 天未活动的会话清空，打开时重建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleared after 7 days without activity; rebuilt on open"
+          }
+        }
+      }
+    },
+    "不再引用时回收": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reclaimed once nothing refers to it"
+          }
+        }
+      }
+    },
+    "回合检查点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn checkpoints"
+          }
+        }
+      }
+    },
+    "工作树": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Worktrees"
+          }
+        }
+      }
+    },
+    "日志与诊断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logs and diagnostics"
+          }
+        }
+      }
+    },
+    "每个项目保留最近 50 个回合": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last 50 turns kept per project"
+          }
+        }
+      }
+    },
+    "30 天未用即清理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleared after 30 days unused"
+          }
+        }
+      }
+    },
     "高级启动配置": {
       "localizations": {
         "en": {

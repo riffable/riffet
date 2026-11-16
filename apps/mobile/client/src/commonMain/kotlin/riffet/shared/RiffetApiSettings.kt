@@ -26,6 +26,7 @@ import riffet.contracts.PushKeyStatus
 import riffet.contracts.QuickChatPreset
 import riffet.contracts.RiffetJson
 import riffet.contracts.ServiceMonitorSnapshot
+import riffet.contracts.StorageReport
 import riffet.contracts.ThemeLibrary
 import riffet.contracts.ThemeLibraryUpdate
 import riffet.core.formatJson
@@ -72,6 +73,19 @@ suspend fun RiffetApi.machineReport(): MachineReport = get("/api/system/machine"
 /** `GET /api/system/monitor`: the service's load, request counts and process tree. */
 @Throws(Exception::class)
 suspend fun RiffetApi.serviceMonitor(): ServiceMonitorSnapshot = get("/api/system/monitor").decode()
+
+/** `GET /api/system/storage`: what the service keeps on disk. It starts a background scan itself when the last one is old. */
+@Throws(Exception::class)
+suspend fun RiffetApi.storage(): StorageReport = get("/api/system/storage").decode()
+
+/** `POST /api/system/storage/scan`: starts the breakdown scan; `scanning` is set on the report until it ends. */
+@Throws(Exception::class)
+suspend fun RiffetApi.scanStorage(): StorageReport = post("/api/system/storage/scan").decode()
+
+/** `PUT /api/system/storage/compaction`: schedules (or cancels) rebuilding the database at the service's next start. */
+@Throws(Exception::class)
+suspend fun RiffetApi.scheduleCompaction(scheduled: Boolean): StorageReport =
+    put("/api/system/storage/compaction", buildJsonObject { put("scheduled", scheduled) }).decode()
 
 /** `POST /api/system/client-metrics`: this app's own figures (docs/guide/performance.md §4); best effort. */
 @Throws(Exception::class)
