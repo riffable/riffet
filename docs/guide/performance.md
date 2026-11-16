@@ -95,6 +95,61 @@
 
 ## 4. 度量
 
+### 3.10 子进程有所有者、有最后使用时间、有内存预算
+
+服务为会话拉起的长期进程（会话的 CLI、tmux 服务、Codex app-server，以及 CLI 自己启动的 MCP 子进程）由 `native/reclaim.ts` 统一回收。Droid、Pi 是无终端的子进程，是否忙碌只有各自的 runtime 知道，所以由 runtime 自己在空闲后停止；DSH 的桥接进程由所有 DSH 会话共用，也自己停止。这三者的阈值同样取自 §2 的 `AGENT_PROCESS_BUDGET`。
+
+**所有者**
+
+- tmux 服务带两个标记：它服务的状态目录（`@riffet-state-dir`）和它的所有者进程（`@riffet-owner-pid`），见 `terminal/orphans.ts`。拉起时写在命令行里；接管了旧实例 tmux 服务的服务，每轮巡检把这两个选项重写成自己。CLI 与它的 MCP 子进程在 tmux 面板里，随面板或 tmux 服务一起结束。app-server 的所有者标识在它的 socket 目录名或 token 文件名里（`backends/shared/app-server-daemons.ts`）。
+- 巡检按可达性扫除。以下几种情况说明 tmux 服务还有主人，一律保留：有存活进程的 control client 连着它；所有者进程还活着；持有状态目录 `server.lock` 的服务还活着。其余的满足下列任一条件，连同其中的 CLI 一起结束：
+  - socket 已不存在；
+  - 状态目录已不存在；
+  - 状态目录在系统临时目录下。
+
+  状态目录在别处的 tmux 服务，只要 socket 还在就保留，服务重启后会接管它。会话记录引用不到的 tmux 会话和 app-server 照旧扫除。
+- 状态目录在系统临时目录下的实例（测试、探针、演示）：
+  - 服务连续 `tempInstanceIdleMinutes` 没有请求、没有打开的连接、也没有进行中的回合时，自行退出；
+  - 关闭时同时结束自己的 tmux 服务（`TerminalService` 的 `ephemeral`）；
+  - vitest 跑完后，`tests/global-teardown.ts` 按同样的规则结束测试留下的 tmux 服务。
+
+**最后使用时间**
+
+- 每个会话进程有一个 `lastUsedAt`，持久化在状态目录的 `agent-usage.json`，服务重启后保留。以下三种情况算作使用：
+  - 回合开始或结束（会话的 `lastActivityAt`）；
+  - 每次巡检时会话事件流或终端 WebSocket 上有订阅（终端输入只能经由订阅，因此一并覆盖）；
+  - 面板文字相比上一次截取有变化。
+- 面板文字先去掉自己会动的部分（`settledScreen`），再取摘要与上一次比较；摘要也持久化。还没有可比较的上一次截取时，这个面板处于 `unobserved`，本轮不回收。tmux 的 `window_activity` 只用来判断要不要重新截取，不能单独作为使用依据：tmux 会周期性地把所有窗口一起标为有绘制。
+
+**保留条件**
+
+满足任一条件的进程不回收；条件记在巡检结果里：
+
+| 条件 | 判定 |
+|---|---|
+| `turn` | 有未结束的回合或 run |
+| `interaction` | 在等待权限确认或用户回复，或会话处于失败状态 |
+| `background` | 有后台任务，或正在压缩上下文 |
+| `subscribed` | 会话事件流或终端 WebSocket 至少有一个订阅 |
+| `terminal-held` | 终端已转交给外部终端程序（`terminalHold`） |
+| `launching` | 启动未满 `minLaunchAgeMinutes` |
+| `unobserved` | 面板还没有可比较的上一次截取 |
+| `not-resumable` | 后端不能按原生会话 ID 恢复，或会话还没有可恢复的转录 |
+
+**回收**
+
+- 没有保留条件、并且 `now - lastUsedAt` 超过空闲阈值的进程被回收。回收时保留原生会话 ID，下一条消息在同一个线程上重新拉起。
+- 各会话进程树（面板进程及其子孙，加上 app-server 的进程组）的 RSS 总和超出内存预算时，从 `lastUsedAt` 最早、没有保留条件、且至少 `memoryMinIdleMinutes` 没用过的会话开始回收，直到回到预算以内。
+- 系统报告内存压力（macOS 的 `kern.memorystatus_vm_pressure_level`，Linux 的 PSI）时，空闲阈值除以 `pressureIdleDivisor`。
+- 空闲阈值与内存预算的默认值取自 `AGENT_PROCESS_BUDGET`；设置里的 `idleReclaimMinutes`、`maxAgentMemoryMb` 只作为用户覆盖值。
+
+**可观测**
+
+- `GET /api/system/monitor` 的 `agentProcesses` 是上一轮巡检的结果：
+  - 本轮实际用的空闲阈值和内存预算、内存压力、合计 RSS；
+  - 按会话列出 RSS、`lastUsedAt`、保留条件和预计回收时间。
+- 各端设置页的进程列表在会话行上显示保留条件或预计停止时间，列表头显示合计 RSS 与预算。
+
 各端按同一组指标名上报，汇总到服务端 `GET /api/system/monitor` 的 `clients`，设置页的服务监控里能看到所有设备。
 
 | 指标 | 含义 |
@@ -125,6 +180,7 @@
 - §3.8：Claude 用量补算整读转录文件并做完整投影（`backends/claude/index.ts` 的 `usageTranscript` → `ClaudeTranscript.setFile`）。本机 46 个转录超过 32 MB，最大 242 MB；改法是像 Codex 的 `RolloutUsageReader` 一样单独按行读取用量。
 
 ### Kotlin 共享客户端（Mac、iOS、Android）
+- §3.10：旧版本拉起的 tmux 服务没有所有者标记。socket 不在临时状态目录里的（`<临时目录>/riffet-<uid>-<hash>/tmux.sock`，状态目录路径过长时的位置）无法判断所有者，只在 socket 消失后扫除。这类服务只会越来越少，不另做迁移。
 
 - §3.3：每次发布整份重建 `TimelineItem` 列表并整份交给 Swift（`ui/state/SessionSync.kt` 的 `publish`）。未改的行复用原对象，但列表与桥接仍随窗口行数增长；先用 §5 的场景量出每次发布的耗时再改。
 - §3.9：`pagedAllocator=false`、`latin1Strings=true` 尚未在 Mac 上做对照测量。2026-11-16 Mac 上 Kotlin 堆常驻 210 MB，抽样只有约 14% 的字节非零。iOS 已开 `appStateTracking`。

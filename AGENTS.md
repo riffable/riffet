@@ -74,7 +74,7 @@ pnpm test               # vitest；单个目录：npx vitest run apps/web
 
 ## 性能
 
-- 缓存、流缓冲、轮询、长列表、持久化数据按 [性能与资源规范](docs/guide/performance.md) 做：上限取自 `packages/contracts/src/budgets.ts`，不在业务代码里另写数字；每份常驻数据要有释放时机。
+- 缓存、流缓冲、轮询、长列表、持久化数据、服务拉起的长期子进程按 [性能与资源规范](docs/guide/performance.md) 做：上限取自 `packages/contracts/src/budgets.ts`，不在业务代码里另写数字；每份常驻数据要有释放时机，每个子进程要有所有者和回收条件。
 - 规范 §6「现状」列着不符合规则的现有代码。迁移了哪条就删哪条；新留下的不一致也记进去。
 
 ## 服务端

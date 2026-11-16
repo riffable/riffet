@@ -8,6 +8,7 @@ import type {
   NativeRunConfig, NativeRunInput, NativeStatus, NativeWorkbenchEvent,
   Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { activityEvent, activityId, withActivity } from '../../journal/activity.js';
 import type { TranscriptSource } from '../../journal/ingest.js';
@@ -31,7 +32,7 @@ import { PiTranscriptSource } from './transcript.js';
 import { PiRpcError, PiRpcTransport } from './transport.js';
 
 /** A conversation with nothing running gives its process back after this long (droid's own choice). */
-const IDLE_STOP_MS = 10 * 60_000;
+const IDLE_STOP_MS = AGENT_PROCESS_BUDGET.headlessIdleMinutes * 60_000;
 const START_TIMEOUT_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 30_000;
 /** How long a written prompt may go unacknowledged before pi is stopped; until then a late ack still confirms it. */

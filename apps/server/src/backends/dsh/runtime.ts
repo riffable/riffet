@@ -7,6 +7,7 @@ import type {
   ModelConfigOption, ModelInfo, NativeActivity, NativeRunConfig, NativeSlashItem, NativeInteraction, NativeInteractionResponse,
   NativeInteractionResult, NativeStatus, NativeWorkbenchEvent, Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { estimateTokens } from '../../metrics/tokens.js';
 import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { AppError } from '../../errors.js';
@@ -44,7 +45,7 @@ export { dshProfilePatch } from './bridge.js';
 /** Records of a conversation kept for what later ones need of them (a prompt's echo, a subagent's result). */
 const REMEMBERED_EVENTS = 8_000;
 const TRANSCRIPT_PAGE_SIZE = 200;
-const IDLE_STOP_MS = 30_000;
+const IDLE_STOP_MS = AGENT_PROCESS_BUDGET.bridgeIdleSeconds * 1000;
 const STARTUP_TIMEOUT_MS = 25_000;
 const PUMP_INTERVAL_MS = 1_000;
 /** Every transcript read replays the whole DSH log, so an idle session is checked less often. */

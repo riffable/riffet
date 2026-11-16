@@ -18,9 +18,10 @@ export default defineConfig({
   },
   test: {
     setupFiles: ['./tests/setup-i18n.ts'],
+    globalSetup: ['./tests/global-teardown.ts'],
     // Installed plugin packages run under macOS's sandbox; where there is none the suite accepts the documented gap so the packages still run.
     env: process.platform === 'darwin' ? {} : { RIFFET_UNSAFE_PLUGIN_PROCESS: '1' },
-    include: ['apps/**/*.test.ts', 'packages/**/*.test.ts', 'plugins/**/*.test.ts', 'tests/**/*.test.ts'], exclude: ['apps/mobile/**', '**/node_modules/**', '**/build/**', '**/dist/**'], testTimeout: 20_000, hookTimeout: 20_000, pool: 'forks',
+    include: ['apps/**/*.test.ts', 'packages/**/*.test.ts', 'plugins/**/*.test.ts', 'official/**/*.test.ts', 'tests/**/*.test.ts'], exclude: ['apps/mobile/**', '**/node_modules/**', '**/build/**', '**/dist/**'], testTimeout: 20_000, hookTimeout: 20_000, pool: 'forks',
     // Codex recovery logs one diagnostic line per recovered thread; in production that is the audit
     // trail, in the suite it buries the actual failures.
     onConsoleLog: (log) => (log.startsWith('[codex-recovery]') ? false : undefined),

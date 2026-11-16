@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { STEADY_FOOTPRINT_BYTES, type ClientMetrics, type ServiceMonitorSnapshot, type ServiceProcess } from '@contracts';
+import { STEADY_FOOTPRINT_BYTES, type AgentProcessReport, type AgentProcessUsage, type ClientMetrics, type ServiceMonitorSnapshot, type ServiceProcess } from '@contracts';
 import { AgentMark } from '@/components/agent-marks';
 import { IconActivity, IconBot, IconCircleAlert, IconCpu, IconGauge, IconMemoryStick, IconMessagesSquare, IconOctagonX, IconRefreshCw, IconServer, IconSquareTerminal, IconTerminal, IconTimer, IconZap } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,30 @@ const KIND_META: Record<ServiceProcess['kind'], { label: MessageDescriptor | str
 
 /** Process kinds the platform names (`Agent`) stay as they are; only the words are localized. */
 const kindLabel = (label: MessageDescriptor | string): string => typeof label === 'string' ? label : i18n._(label);
+
+const RETAINED_LABEL: Record<string, MessageDescriptor> = {
+  turn: msg`回合进行中`,
+  interaction: msg`等待回复`,
+  background: msg`后台任务`,
+  subscribed: msg`已打开`,
+  'terminal-held': msg`终端接管`,
+  launching: msg`刚启动`,
+  unobserved: msg`观察中`,
+  'not-resumable': msg`不可恢复`,
+};
+
+/** One short line on why an agent's CLI is kept, or when the idle rule stops it. */
+function agentStatus(usage: AgentProcessUsage | undefined): string | undefined {
+  if (!usage) return undefined;
+  if (usage.retainedBy.length) {
+    const label = RETAINED_LABEL[usage.retainedBy[0]];
+    return label ? i18n._(label) : undefined;
+  }
+  if (!usage.reclaimAt) return undefined;
+  const left = Date.parse(usage.reclaimAt) - Date.now();
+  if (!Number.isFinite(left)) return undefined;
+  return left <= 0 ? i18n._(msg`即将停止`) : i18n._(msg`${formatElapsed(left)} 后停止`);
+}
 
 const formatCpu = (value: number) => `${value.toFixed(value >= 10 ? 0 : 1)}%`;
 const formatLoad = (value: number) => value.toFixed(2);
@@ -167,7 +191,7 @@ export function ServiceStatusSection() {
       </div>
       <ServerCard data={data} />
       {data.clients && data.clients.length > 0 && <ClientTable clients={data.clients} />}
-      <ProcessTable processes={data.processes} terminating={terminating} onTerminate={(process) => void terminate(process)} />
+      <ProcessTable processes={data.processes} agentProcesses={data.agentProcesses} terminating={terminating} onTerminate={(process) => void terminate(process)} />
     </div>
   );
 }
@@ -485,13 +509,20 @@ function ClientTable({ clients }: { clients: ClientMetrics[] }) {
   );
 }
 
-function ProcessTable({ processes, terminating, onTerminate }: { processes: ServiceProcess[]; terminating?: number; onTerminate: (process: ServiceProcess) => void }) {
+function ProcessTable({ processes, agentProcesses, terminating, onTerminate }: { processes: ServiceProcess[]; agentProcesses?: AgentProcessReport; terminating?: number; onTerminate: (process: ServiceProcess) => void }) {
   const { t } = useLingui();
   const rows = processTree(processes);
   const agents = processes.filter((process) => process.kind === 'agent').length;
   const title = agents ? t`进程 · ${processes.length} 个，其中 Agent ${agents} 个` : t`进程 · ${processes.length} 个`;
+  const usageBySession = new Map(agentProcesses?.agents.map((usage) => [usage.sessionId, usage]));
+  const memory = agentProcesses && (
+    <span className="inline-flex items-center gap-1.5 text-2xs text-fg-3">
+      <span className="tabular-nums">{agentProcesses.memoryLimitBytes > 0 ? `${formatBytes(agentProcesses.memoryBytes)} / ${formatBytes(agentProcesses.memoryLimitBytes)}` : formatBytes(agentProcesses.memoryBytes)}</span>
+      {agentProcesses.pressure !== 'normal' && <Badge tone={agentProcesses.pressure === 'critical' ? 'danger' : 'warning'}><Trans>内存紧张</Trans></Badge>}
+    </span>
+  );
   return (
-    <Group title={title}>
+    <Group title={title} action={memory}>
       <MemoryShare processes={processes} />
       {rows.length === 0 ? <p className="py-6 text-center text-xs text-fg-3"><Trans>没有读取到进程信息</Trans></p> : (
         <div className="-mx-4 overflow-x-auto max-md:-mx-3">
@@ -510,6 +541,7 @@ function ProcessTable({ processes, terminating, onTerminate }: { processes: Serv
               {rows.map(({ process, depth }) => {
                 const meta = KIND_META[process.kind];
                 const Icon = meta.icon;
+                const status = process.kind === 'agent' && process.sessionId ? agentStatus(usageBySession.get(process.sessionId)) : undefined;
                 const cpuShare = Math.min(1, process.cpuPercent / 100);
                 return (
                   <tr key={process.pid} className="hover:bg-hover [&>td]:border-t [&>td]:border-line-soft [&>td]:px-2 [&>td]:py-2.5 [&>td]:align-middle [&>td:first-child]:pl-4 [&>td:last-child]:pr-4">
@@ -537,6 +569,7 @@ function ProcessTable({ processes, terminating, onTerminate }: { processes: Serv
                               <span className="truncate">{backendLabel(process.backendId)}</span>
                             </span>
                           )}
+                          {status && <span className="truncate text-2xs text-fg-4">{status}</span>}
                         </span>
                       ) : <span className="text-fg-4">—</span>}
                     </td>

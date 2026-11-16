@@ -18,6 +18,39 @@ export interface ServiceProcess {
   /** Only processes in the service's own tree that are not the server itself may be stopped. */
   canTerminate: boolean;
 }
+/**
+ * What keeps a conversation's CLI running (docs/guide/performance.md §3.10): `turn` an unfinished turn
+ * or run, `interaction` a pending permission or question, `background` background work or compaction,
+ * `subscribed` an open conversation stream or terminal socket, `terminal-held` a terminal handed to an
+ * external terminal program, `launching` started too recently, `unobserved` its pane not yet compared
+ * against an earlier capture, `not-resumable` a backend or conversation that cannot resume by its native id.
+ */
+export type AgentRetention = 'turn' | 'interaction' | 'background' | 'subscribed' | 'terminal-held' | 'launching' | 'unobserved' | 'not-resumable';
+/** One conversation's running CLI as the reclaimer's last pass saw it. */
+export interface AgentProcessUsage {
+  sessionId: string;
+  terminalId?: string;
+  /** RSS of the CLI's process tree and of its app-server, if any. */
+  rssBytes: number;
+  lastUsedAt: string;
+  /** Empty when nothing retains it. */
+  retainedBy: AgentRetention[];
+  /** When the idle rule stops it, if nothing retains it by then. Absent while retained or when idle reclaim is off. */
+  reclaimAt?: string;
+}
+/** The reclaimer's last pass: the limits it applied and every conversation CLI it found running. */
+export interface AgentProcessReport {
+  checkedAt: string;
+  /** The idle threshold in effect, after any memory-pressure reduction; 0 when idle reclaim is off. */
+  idleMinutes: number;
+  /** 0 when there is no memory limit. */
+  memoryLimitBytes: number;
+  /** RSS of all `agents` together. */
+  memoryBytes: number;
+  pressure: 'normal' | 'warning' | 'critical';
+  /** Least recently used first. */
+  agents: AgentProcessUsage[];
+}
 /** A 10-second bucket of the service's own load. */
 export interface ServiceMonitorSample {
   at: number;
@@ -73,6 +106,8 @@ export interface ServiceMonitorSnapshot {
   /** Oldest first, at most the last 30 minutes. */
   series: ServiceMonitorSample[];
   processes: ServiceProcess[];
+  /** Absent until the reclaimer's first pass, a couple of minutes after the service starts. */
+  agentProcesses?: AgentProcessReport;
   /** Clients that reported in the last six hours (§4), most recent first. */
   clients?: ClientMetrics[];
 }

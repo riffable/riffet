@@ -101,3 +101,27 @@ export const SERVER_BUDGET = {
   /** An event-loop block this long is a defect: it is logged and profiled (`loop-health.ts`). */
   loopBlockMs: 200,
 } as const;
+
+/** Processes the server starts for conversations, and how long they may stay (docs/guide/performance.md §3.10). */
+export const AGENT_PROCESS_BUDGET = {
+  /** A conversation's CLI unused this long, with nothing retaining it, is stopped; `AppSettings.idleReclaimMinutes` overrides it. */
+  idleMinutes: 360,
+  /** Under memory pressure the idle threshold is divided by this. */
+  pressureIdleDivisor: 2,
+  /** Resident memory of all conversation CLIs together; past it the least recently used are stopped. `AppSettings.maxAgentMemoryMb` overrides it. */
+  memoryBytes: 4 * 1024 * MIB,
+  /** The memory budget never takes a CLI used more recently than this. */
+  memoryMinIdleMinutes: 30,
+  /** A CLI launched this recently is left alone: Claude Code reads a quick exit as a crashed launch. */
+  minLaunchAgeMinutes: 10,
+  /** How often the reclaimer passes. */
+  passMinutes: 5,
+  /** Droid and Pi stop their own process after this long without work (their busy state lives in the runtime). */
+  headlessIdleMinutes: 10,
+  /** The DSH bridge, shared by every DSH conversation, stops after this long without one. */
+  bridgeIdleSeconds: 30,
+  /** A service whose state directory is in the system temp directory exits after this long without a request or a running turn. */
+  tempInstanceIdleMinutes: 240,
+  /** An unreachable tmux server or session is at least this old before it is ended: creating one saves its record after. */
+  orphanGraceMinutes: 10,
+} as const;

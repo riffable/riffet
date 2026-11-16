@@ -104,6 +104,11 @@ msgstr "{0} 分钟前"
 msgid "{0} 到窗口宽 − {1}"
 msgstr "{0} 到窗口宽 − {1}"
 
+#. placeholder {0}: formatElapsed(left)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "{0} 后停止"
+msgstr "{0} 后停止"
+
 #. placeholder {0}: minutes / 60
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderUsage.tsx
@@ -181,10 +186,6 @@ msgstr "{reset} 重置"
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "{value} 个"
-msgstr "{value} 个"
 
 #. placeholder {0}: formatCount(terminals.total)
 #: src/app/settings/ServiceStatusSection.tsx
@@ -326,6 +327,10 @@ msgstr "bg-active，文字 fg；调用方传对应的 ARIA。"
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
 msgstr "CLI 入口"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "CLI 内存上限"
+msgstr "CLI 内存上限"
 
 #. placeholder {0}: entry.reason
 #: src/app/settings/BackendProfilesSection.tsx
@@ -711,6 +716,7 @@ msgid "不再引用时回收"
 msgstr "不再引用时回收"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
+#: src/app/settings/ServiceStatusSection.tsx
 msgid "不可恢复"
 msgstr "不可恢复"
 
@@ -1700,6 +1706,10 @@ msgstr "内存"
 msgid "内存占用分布"
 msgstr "内存占用分布"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "内存紧张"
+msgstr "内存紧张"
+
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "内容"
 msgstr "内容"
@@ -1783,10 +1793,6 @@ msgstr "最多 {0} 个字符"
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "最多 {limit} 个字符"
 msgstr "最多 {limit} 个字符"
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "最多同时运行"
-msgstr "最多同时运行"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
@@ -2008,6 +2014,10 @@ msgstr "列表行高 56，分组之间 24"
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "刚启动"
+msgstr "刚启动"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "创建"
 msgstr "创建"
@@ -2217,6 +2227,10 @@ msgstr "危险操作与可撤销的操作"
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "危险确认打开时焦点在取消上；输入一个值用 promptDialog。"
 msgstr "危险确认打开时焦点在取消上；输入一个值用 promptDialog。"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "即将停止"
+msgstr "即将停止"
 
 #: src/app/settings/ProfileSection.tsx
 msgid "历史头像"
@@ -2611,6 +2625,7 @@ msgstr "名称在上、目录在下"
 msgid "名称由 Tip 与 aria-label 给出。"
 msgstr "名称由 Tip 与 aria-label 给出。"
 
+#: src/app/settings/ServiceStatusSection.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "后台任务"
 msgstr "后台任务"
@@ -2710,6 +2725,10 @@ msgstr "回合状态"
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
 msgstr "回合结束后执行过程收成一行"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "回合进行中"
+msgstr "回合进行中"
 
 #: src/app/design/overview/Opening.tsx
 msgid "回复 Claude Code"
@@ -3705,6 +3724,10 @@ msgstr "已开始 {0} 次，{1} 次在等"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "已归档"
 msgstr "已归档"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "已打开"
+msgstr "已打开"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "已拒绝"
@@ -6879,6 +6902,10 @@ msgstr "等宽数字"
 msgid "等待不产生通知，结束后也不留下「已完成」。"
 msgstr "等待不产生通知，结束后也不留下「已完成」。"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "等待回复"
+msgstr "等待回复"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "等待授权…"
 msgstr "等待授权…"
@@ -7113,6 +7140,10 @@ msgstr "终端只接受 #rrggbb，透明度会被忽略。"
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
 msgstr "终端字号"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "终端接管"
+msgstr "终端接管"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "终端更新命令"
@@ -7516,6 +7547,10 @@ msgstr "表面高亮"
 msgid "见声明式页面"
 msgstr "见声明式页面"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "观察中"
+msgstr "观察中"
+
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -7852,10 +7887,6 @@ msgstr "资源回收"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
 msgstr "起始输入与模型菜单"
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
-msgstr "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
 
 #: src/app/design/android/OverlayChapter.tsx
 msgid "超大字体时确认框的操作改为竖排"

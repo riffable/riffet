@@ -332,7 +332,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -394,7 +394,8 @@ export class SettingsService {
       if (typeof values.composerSendLater !== 'boolean') throw new AppError('INVALID_SETTINGS', 'composerSendLater must be a boolean');
       result.composerSendLater = values.composerSendLater;
     }
-    for (const [key, max] of [['idleReclaimMinutes', 7 * 24 * 60], ['maxLiveAgents', 500]] as const) {
+    // `maxLiveAgents` is what clients before the memory budget send; it is accepted and dropped.
+    for (const [key, max] of [['idleReclaimMinutes', 7 * 24 * 60], ['maxAgentMemoryMb', 1024 * 1024]] as const) {
       const value = values[key];
       if (value === undefined) continue;
       if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value > max) throw new AppError('INVALID_SETTINGS', `${key} must be an integer from 0 to ${max}`);

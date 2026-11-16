@@ -104,6 +104,11 @@ msgstr ""
 msgid "{0} 到窗口宽 − {1}"
 msgstr ""
 
+#. placeholder {0}: formatElapsed(left)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "{0} 后停止"
+msgstr ""
+
 #. placeholder {0}: minutes / 60
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderUsage.tsx
@@ -180,10 +185,6 @@ msgstr ""
 
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
-msgstr ""
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "{value} 个"
 msgstr ""
 
 #. placeholder {0}: formatCount(terminals.total)
@@ -325,6 +326,10 @@ msgstr ""
 
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
+msgstr ""
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "CLI 内存上限"
 msgstr ""
 
 #. placeholder {0}: entry.reason
@@ -711,6 +716,7 @@ msgid "不再引用时回收"
 msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
+#: src/app/settings/ServiceStatusSection.tsx
 msgid "不可恢复"
 msgstr ""
 
@@ -1700,6 +1706,10 @@ msgstr ""
 msgid "内存占用分布"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "内存紧张"
+msgstr ""
+
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "内容"
 msgstr ""
@@ -1782,10 +1792,6 @@ msgstr ""
 
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "最多 {limit} 个字符"
-msgstr ""
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "最多同时运行"
 msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -2008,6 +2014,10 @@ msgstr ""
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "刚启动"
+msgstr ""
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "创建"
 msgstr ""
@@ -2216,6 +2226,10 @@ msgstr ""
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "危险确认打开时焦点在取消上；输入一个值用 promptDialog。"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "即将停止"
 msgstr ""
 
 #: src/app/settings/ProfileSection.tsx
@@ -2611,6 +2625,7 @@ msgstr ""
 msgid "名称由 Tip 与 aria-label 给出。"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "后台任务"
 msgstr ""
@@ -2709,6 +2724,10 @@ msgstr ""
 
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "回合进行中"
 msgstr ""
 
 #: src/app/design/overview/Opening.tsx
@@ -3704,6 +3723,10 @@ msgstr ""
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "已归档"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "已打开"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
@@ -6879,6 +6902,10 @@ msgstr ""
 msgid "等待不产生通知，结束后也不留下「已完成」。"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "等待回复"
+msgstr ""
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "等待授权…"
 msgstr ""
@@ -7112,6 +7139,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "终端接管"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
@@ -7516,6 +7547,10 @@ msgstr ""
 msgid "见声明式页面"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "观察中"
+msgstr ""
+
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -7851,10 +7886,6 @@ msgstr ""
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
-msgstr ""
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
 msgstr ""
 
 #: src/app/design/android/OverlayChapter.tsx

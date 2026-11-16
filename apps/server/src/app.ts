@@ -32,6 +32,7 @@ import { ClientLogs } from './clientLogs.js';
 import { ServiceMonitor } from './monitor.js';
 import { AgentReclaimer } from './native/reclaim.js';
 import { TerminalHolds } from './native/terminal-hold.js';
+import { isTempStateDir, sweepOrphanTmuxServers } from './terminal/orphans.js';
 import { ExternalSessions } from './native/external-sessions.js';
 import { registerExternalSessionRoutes } from './routes/external-sessions.js';
 import { setAppServerOwner } from './backends/shared/codex-app-server.js';
@@ -109,7 +110,7 @@ import { DispatchFeed } from './backends/dispatch-feed.js';
 import { SyncService } from './sync/service.js';
 import { registerSyncRoutes } from './routes/sync.js';
 import type { NativeMessageBody, RouteDeps } from './routes/deps.js';
-import { DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, type NativeRunInput } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, DEFAULT_QUICK_CHAT_PRESETS, PROTOCOL_INFO, type NativeRunInput } from '../../../packages/contracts/src/index.js';
 import { TaskWorkspaceService } from './task-workspaces/index.js';
 import { RiffetMcpCredentials } from './riffet-mcp/credentials.js';
 import { NoticeLog } from './riffet-mcp/notices.js';
@@ -190,7 +191,8 @@ export async function createApp(options: AppOptions = {}) {
   let reclaimerRef:AgentReclaimer|undefined;
   let assistantMainRef:(()=>string|undefined)|undefined;
   const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins});
-  const terminal:TerminalService=new TerminalService(store,{stateDir,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
+  // A state directory in the system temp directory is a test's, a probe's or a demo's: its tmux server goes with it.
+  const terminal:TerminalService=new TerminalService(store,{stateDir,ephemeral:isTempStateDir(stateDir),behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   const git=new GitService({stateDir});
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;
@@ -277,7 +279,7 @@ export async function createApp(options: AppOptions = {}) {
   const loopbackBinding=['127.0.0.1','localhost','::1'].includes((options.host??'127.0.0.1').replace(/^\[|\]$/g,'').toLowerCase());
   const allowOutsideRead=(headers?:import('node:http').IncomingHttpHeaders)=>settings.getSettings().allowOutsideRead??(loopbackBinding&&!proxiedRequest(headers));
   const effectiveSettings=(headers?:import('node:http').IncomingHttpHeaders)=>({...effectiveSettingsForClient(headers,settings.getSettings(),backendRegistry.list().map(driver=>driver.id)),allowOutsideRead:allowOutsideRead(headers)});
-  const monitor=new ServiceMonitor({store,terminal,streams});
+  const monitor=new ServiceMonitor({store,terminal,streams,agentProcesses:()=>reclaimerRef?.report()});
   monitor.observe(app);
   app.addHook('onRequest',async(request,reply)=>{
     auth.checkOrigin(request);
@@ -415,7 +417,7 @@ export async function createApp(options: AppOptions = {}) {
   // Not app.log: the daemon runs without a Fastify logger, and a stall nobody sees is the problem this reports.
   const loopHealthMonitor=startLoopHealth({warn:(fields,message)=>console.warn(`[riffet] ${message}`,fields)},options.profileStalls?join(stateDir,'diagnostics'):undefined);
   monitor.start();
-  const reclaimer=new AgentReclaimer({store,terminal,nativeBackends,runtime:sessionLock,settings:()=>settings.getSettings(),log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
+  const reclaimer=new AgentReclaimer({store,terminal,nativeBackends,runtime:sessionLock,settings:()=>settings.getSettings(),log:(message,fields)=>console.info(`[riffet] ${message}`,fields),usageFile:join(stateDir,'agent-usage.json'),sweepOrphans:()=>sweepOrphanTmuxServers({ownSocket:terminal.socket,graceMs:AGENT_PROCESS_BUDGET.orphanGraceMinutes*60_000})});
   reclaimer.start();
   reclaimerRef=reclaimer;
   // Made before anyone can ask for it, so a phone opening the list sees it at once. A failure costs quick chat, not the server.

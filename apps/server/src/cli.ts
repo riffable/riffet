@@ -7,7 +7,8 @@ import { homedir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import type { BuildInfo, ReleaseTag } from '../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET, type BuildInfo, type ReleaseTag } from '../../../packages/contracts/src/index.js';
+import { isTempStateDir } from './terminal/orphans.js';
 import { requestCliPairing, formatCliPairing, publicOrigin } from './cli-pairing.js';
 import { drainForRestart } from './cli-drain.js';
 import { resumeInTerminal } from './cli-resume.js';
@@ -129,8 +130,28 @@ export async function serve(options:CliOptions){
   let shuttingDown=false;
   const stop=async()=>{if(shuttingDown){process.exit(1);}shuttingDown=true;const timeout=setTimeout(()=>process.exit(1),8000);timeout.unref();try{await discovery?.stop();await services!.app.close();if(readDaemon(options)?.instanceId===instanceId)unlinkSync(path);}finally{releaseState();clearTimeout(timeout);process.exit(0);}};
   process.on('SIGINT',()=>void stop());process.on('SIGTERM',()=>void stop());
+  if(isTempStateDir(state(options)))stopWhenUnused(services!,()=>void stop());
   // Node exits on an unhandled rejection; one stray background promise must not take every session down with it.
   process.on('unhandledRejection',reason=>console.error('[riffet] unhandled rejection:',reason));
+}
+/**
+ * A service whose state directory is in the system temp directory is a test's, a probe's or a demo's:
+ * it exits once nothing has used it for `AGENT_PROCESS_BUDGET.tempInstanceIdleMinutes` — no request,
+ * no open connection, no turn going (docs/guide/performance.md §3.10).
+ */
+function stopWhenUnused(services:Awaited<ReturnType<typeof createApp>>,stop:()=>void){
+  const idleMs=AGENT_PROCESS_BUDGET.tempInstanceIdleMinutes*60_000;
+  let usedAt=Date.now();
+  services.app.server.on('request',()=>{usedAt=Date.now();});
+  const timer=setInterval(()=>{
+    services.app.server.getConnections((error,open)=>{
+      const sessions=services.store.stateCounts().sessions;
+      const working=['starting','running','waiting','cancelling'].some(state=>(sessions[state]??0)>0);
+      if(working||(!error&&open>0))usedAt=Date.now();
+      else if(Date.now()-usedAt>=idleMs){clearInterval(timer);console.log('[riffet] temp instance unused; stopping');stop();}
+    });
+  },60_000);
+  timer.unref();
 }
 async function start(options:CliOptions){
   assertSourceStartable();

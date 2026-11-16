@@ -104,6 +104,11 @@ msgstr "{0} min ago"
 msgid "{0} 到窗口宽 − {1}"
 msgstr "{0} to window width − {1}"
 
+#. placeholder {0}: formatElapsed(left)
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "{0} 后停止"
+msgstr "Stops in {0}"
+
 #. placeholder {0}: minutes / 60
 #: src/app/settings/PreferencesSections.tsx
 #: src/app/settings/ProviderUsage.tsx
@@ -181,10 +186,6 @@ msgstr "Resets at {reset}"
 #: src/app/settings/ServiceCharts.tsx
 msgid "{title}，最近 30 分钟。方向键逐个查看 10 秒区间。"
 msgstr "{title}, last 30 minutes. Use the arrow keys to step through 10-second intervals."
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "{value} 个"
-msgstr "{value, plural, one {# agent} other {# agents}}"
 
 #. placeholder {0}: formatCount(terminals.total)
 #: src/app/settings/ServiceStatusSection.tsx
@@ -326,6 +327,10 @@ msgstr "bg-active, text fg; the caller passes the matching ARIA."
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "CLI 入口"
 msgstr "CLI executable"
+
+#: src/app/settings/PreferencesSections.tsx
+msgid "CLI 内存上限"
+msgstr "CLI memory limit"
 
 #. placeholder {0}: entry.reason
 #: src/app/settings/BackendProfilesSection.tsx
@@ -711,6 +716,7 @@ msgid "不再引用时回收"
 msgstr "Reclaimed once nothing refers to it"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
+#: src/app/settings/ServiceStatusSection.tsx
 msgid "不可恢复"
 msgstr "Unrecoverable"
 
@@ -1700,6 +1706,10 @@ msgstr "Memory"
 msgid "内存占用分布"
 msgstr "Memory breakdown"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "内存紧张"
+msgstr "Memory pressure"
+
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "内容"
 msgstr "Content"
@@ -1783,10 +1793,6 @@ msgstr "At most {0, plural, one {# character} other {# characters}}"
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "最多 {limit} 个字符"
 msgstr "Up to {limit} characters"
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "最多同时运行"
-msgstr "Maximum concurrent agents"
 
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
@@ -2008,6 +2014,10 @@ msgstr "Rows 56 high, 24 between groups"
 msgid "列表页共用 SearchField；浮层里的查询行是组合框，另有写法。"
 msgstr "List pages share SearchField; the query row in overlays is a combobox and is built separately."
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "刚启动"
+msgstr "Just started"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "创建"
 msgstr "Create"
@@ -2217,6 +2227,10 @@ msgstr "Dangerous and undoable actions"
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "危险确认打开时焦点在取消上；输入一个值用 promptDialog。"
 msgstr "When a dangerous confirmation opens, focus is on Cancel; use promptDialog to enter a value."
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "即将停止"
+msgstr "Stopping soon"
 
 #: src/app/settings/ProfileSection.tsx
 msgid "历史头像"
@@ -2611,6 +2625,7 @@ msgstr "Name above, directory below"
 msgid "名称由 Tip 与 aria-label 给出。"
 msgstr "The name comes from Tip and aria-label."
 
+#: src/app/settings/ServiceStatusSection.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "后台任务"
 msgstr "Background task"
@@ -2710,6 +2725,10 @@ msgstr "Turn state"
 #: src/app/design/overview/SystemChapter.tsx
 msgid "回合结束后执行过程收成一行"
 msgstr "After the turn ends the execution process collapses into one row"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "回合进行中"
+msgstr "Turn running"
 
 #: src/app/design/overview/Opening.tsx
 msgid "回复 Claude Code"
@@ -3705,6 +3724,10 @@ msgstr "{0} started, {1} waiting"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "已归档"
 msgstr "Archived"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "已打开"
+msgstr "Open"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "已拒绝"
@@ -6879,6 +6902,10 @@ msgstr "Tabular figures"
 msgid "等待不产生通知，结束后也不留下「已完成」。"
 msgstr "Waiting produces no toast and leaves no \"Completed\" behind when it ends."
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "等待回复"
+msgstr "Awaiting reply"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "等待授权…"
 msgstr "Waiting for authorization…"
@@ -7113,6 +7140,10 @@ msgstr "The terminal accepts only #rrggbb; transparency is ignored."
 #: src/app/settings/PreferencesSections.tsx
 msgid "终端字号"
 msgstr "Terminal font size"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "终端接管"
+msgstr "In terminal"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "终端更新命令"
@@ -7516,6 +7547,10 @@ msgstr "Surface highlight"
 msgid "见声明式页面"
 msgstr "See declarative pages"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "观察中"
+msgstr "Observing"
+
 #: src/app/design/android/OverlayChapter.tsx
 #: src/app/design/android/TypeChapter.tsx
 #: src/app/design/mac/TypeChapter.tsx
@@ -7852,10 +7887,6 @@ msgstr "Resource reclaim"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "起始输入与模型菜单"
 msgstr "Start input and model menu"
-
-#: src/app/settings/PreferencesSections.tsx
-msgid "超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。"
-msgstr "When the limit is exceeded, the idle sessions unused longest are stopped first; sessions used in the last 30 minutes are not stopped."
 
 #: src/app/design/android/OverlayChapter.tsx
 msgid "超大字体时确认框的操作改为竖排"

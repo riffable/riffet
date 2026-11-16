@@ -11,7 +11,7 @@ import { loopHealth } from './loop-health.js';
 import { SERVER_VERSION } from './version.js';
 import type { Store } from './store.js';
 import type { TerminalService } from './terminal/index.js';
-import type { ClientCacheSample, ClientMetrics, ClientMetricsPlatform, ClientMetricsSample, ServiceMonitorSample, ServiceMonitorSnapshot, ServiceProcess, ServiceRouteStat } from '../../../packages/contracts/src/index.js';
+import type { AgentProcessReport, ClientCacheSample, ClientMetrics, ClientMetricsPlatform, ClientMetricsSample, ServiceMonitorSample, ServiceMonitorSnapshot, ServiceProcess, ServiceRouteStat } from '../../../packages/contracts/src/index.js';
 
 const SAMPLE_MS = 10_000;
 /** 30 minutes of samples. */
@@ -41,7 +41,11 @@ class LatencyRing {
 interface RouteTally { method: string; route: string; count: number; errors: number; totalMs: number; latencies: LatencyRing }
 interface PsRow { pid: number; ppid: number; cpu: number; rssKiB: number; elapsedSec: number; command: string }
 
-export interface ServiceMonitorDeps { store: Store; terminal: TerminalService; streams: Set<ServerResponse> }
+export interface ServiceMonitorDeps {
+  store: Store; terminal: TerminalService; streams: Set<ServerResponse>;
+  /** The reclaimer's last pass (docs/guide/performance.md §3.10). */
+  agentProcesses?: () => AgentProcessReport | undefined;
+}
 
 /**
  * The running service's own load for the settings page: request accounting fed by app hooks, a
@@ -119,6 +123,7 @@ export class ServiceMonitor {
     const topRoutes: ServiceRouteStat[] = [...this.routes.values()].sort((a, b) => b.count - a.count).slice(0, TOP_ROUTES)
       .map(tally => ({ method: tally.method, route: tally.route, count: tally.count, errors: tally.errors, avgMs: round(tally.totalMs / tally.count), p95Ms: tally.latencies.p95() }));
     const counts = this.deps.store.stateCounts();
+    const agentProcesses = this.deps.agentProcesses?.();
     const sessions = (...states: string[]) => states.reduce((sum, state) => sum + (counts.sessions[state] ?? 0), 0);
     const terminalsTotal = Object.values(counts.terminals).reduce((sum, n) => sum + n, 0);
     const [load1, load5, load15] = loadavg() as [number, number, number];
@@ -141,6 +146,7 @@ export class ServiceMonitor {
       sessions: { total: Object.values(counts.sessions).reduce((sum, n) => sum + n, 0), running: sessions('starting', 'running', 'cancelling'), waiting: sessions('waiting') },
       series: [...this.series],
       processes: (await this.processes()).slice(0, PROCESSES_SHOWN),
+      ...(agentProcesses ? { agentProcesses } : {}),
       clients: this.clients.list(now),
     };
   }

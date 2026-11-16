@@ -18,6 +18,7 @@ import { OuterTerminalState } from './protocol-state.js';
 import { ControlClient, sendKeysLines, tmuxTooOld, TMUX_MIN_VERSION } from './control.js';
 import { assembleSeed, seedCommands, seedLine, SEED_BLOCKS, type Seed } from './seed.js';
 import { resolveTerminalAppearance, sameTerminalAppearance } from './appearance.js';
+import { claimTmuxServerCommands } from './orphans.js';
 import { stripTerminalSequences } from '../../../../packages/plugin-api/src/kit/terminal-text.js';
 
 /**
@@ -50,6 +51,11 @@ export interface TerminalBehaviourSource {
 export interface TerminalServiceOptions {
   stateDir: string;
   behaviour?: TerminalBehaviourSource;
+  /**
+   * A temp instance (a test, a probe, a demo): `closeAll` also ends the tmux server and the CLIs in it,
+   * since nothing comes back for them (docs/guide/performance.md §3.10).
+   */
+  ephemeral?: boolean;
 }
 
 export interface TerminalCreateInput {
@@ -336,6 +342,7 @@ class OutputTail {
 
 export class TerminalService {
   private readonly socketPath: string;
+  private readonly stateDir: string;
   private readonly socketDirectory: string;
   /** Capability of the tmux server on our socket, not the version of a different CLI binary. */
   private tmuxPaneFeatures?: Promise<boolean>;
@@ -369,6 +376,7 @@ export class TerminalService {
 
   constructor(private readonly store: Store, private readonly options: TerminalServiceOptions) {
     const stateDir = resolve(options.stateDir);
+    this.stateDir = stateDir;
     mkdirSync(stateDir, { recursive: true, mode: 0o700 });
     chmodSync(stateDir, 0o700);
     const candidate = join(stateDir, 'tmux.sock');
@@ -470,7 +478,8 @@ export class TerminalService {
       // opened after a restart would otherwise inherit a stale PATH — or none of the toolchain the
       // user installed since. Every session states the daemon's own environment explicitly.
       const sessionEnv = { ...terminalEnvironment(), ...(tmuxEnv ?? {}) };
-      const tmuxCommands=['start-server',...[...this.launchEnv().managed,...Object.keys(secretEnv)].flatMap(name=>[';','if-shell','-F',`#{m:*${name}*,#{update-environment}}`,'',`set-option -ga update-environment ${name}`]),';','set-option','-g','history-limit',String(HISTORY_LIMIT),';','set-option','-g','remain-on-exit','on',';','new-session'];
+      // The markers go first: whatever else the command does, `ps` shows whose server this is (`terminal/orphans.ts`).
+      const tmuxCommands=['start-server',';',...claimTmuxServerCommands(this.stateDir),...[...this.launchEnv().managed,...Object.keys(secretEnv)].flatMap(name=>[';','if-shell','-F',`#{m:*${name}*,#{update-environment}}`,'',`set-option -ga update-environment ${name}`]),';','set-option','-g','history-limit',String(HISTORY_LIMIT),';','set-option','-g','remain-on-exit','on',';','new-session'];
       await this.runTmux([
         ...tmuxCommands,
         ...Object.entries(sessionEnv).flatMap(([key, value]) => ['-e', `${key}=${value}`]), '-d', '-P', '-F', '#{session_id}',
@@ -1380,6 +1389,18 @@ export class TerminalService {
     this.observers.clear();
     for (const timer of this.snapshotTimers.values()) clearTimeout(timer);
     this.snapshotTimers.clear();
+    if (this.options.ephemeral) await this.runTmux(['kill-server'], 3000).catch(() => undefined);
+  }
+
+  /** The socket of this service's tmux server; the orphan sweep never ends it. */
+  get socket(): string { return this.socketPath; }
+
+  /**
+   * Restates this service as the owner of its tmux server, which an earlier instance may have started
+   * (`terminal/orphans.ts`). Starts nothing: without a running server the command fails and is ignored.
+   */
+  async claimServer(): Promise<void> {
+    await this.runTmux(claimTmuxServerCommands(this.stateDir), 2000).catch(() => undefined);
   }
 
   private async restoreMany(ids: string[]): Promise<void> {

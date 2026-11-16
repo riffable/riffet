@@ -53,16 +53,16 @@ export interface AppSettings {
    */
   auxiliaryModels?: AuxiliaryModels;
   /**
-   * Minutes a conversation's CLI may sit idle — no turn, nothing pending, nobody viewing it — before
-   * its terminal and app-server are stopped. Reopening the conversation resumes it. Unset means
-   * `DEFAULT_IDLE_RECLAIM_MINUTES`; 0 never reclaims for idleness.
+   * Minutes a conversation's CLI may go unused, with nothing retaining it (docs/guide/performance.md
+   * §3.10), before its terminal and app-server are stopped. The next message resumes it. Unset means
+   * `AGENT_PROCESS_BUDGET.idleMinutes`; 0 never reclaims for idleness.
    */
   idleReclaimMinutes?: number;
   /**
-   * Most conversation CLIs kept running at once; past it the least recently active idle ones are
-   * reclaimed first. Unset means `DEFAULT_MAX_LIVE_AGENTS`; 0 sets no limit.
+   * Resident memory, in MiB, all conversation CLIs may hold together; past it the least recently used
+   * ones nothing retains are stopped first. Unset means `AGENT_PROCESS_BUDGET.memoryBytes`; 0 sets no limit.
    */
-  maxLiveAgents?: number;
+  maxAgentMemoryMb?: number;
   quickChat?: QuickChatSettings;
   assistant?: AssistantSettings;
   /**
@@ -185,8 +185,6 @@ export const DEFAULT_QUICK_CHAT_PRESETS: readonly QuickChatPreset[] = [
   { id: 'explain', name: '解释', prompt: '用用户的语言简明解释用户发来的内容：先说它是什么，再说最要紧的一两点。不要开场白。' },
   { id: 'polish', name: '润色', prompt: '改写用户发来的文字，使其清楚自然，保持原有语言、意思和语气。只回复改写后的文字。' },
 ];
-export const DEFAULT_IDLE_RECLAIM_MINUTES = 360;
-export const DEFAULT_MAX_LIVE_AGENTS = 24;
 /** A model behind one backend profile's gateway, as `AppSettings.auxiliaryModels` stores it. */
 export interface AuxiliaryModelRef { backendId: NativeBackendId; profileId: string; model: string; }
 /** One choice for an auxiliary model: a gateway model plus the profile name it is listed under. */

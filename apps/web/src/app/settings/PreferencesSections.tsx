@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, DEFAULT_IDLE_RECLAIM_MINUTES, DEFAULT_MAX_LIVE_AGENTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
+import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, AGENT_PROCESS_BUDGET, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
 import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
@@ -397,7 +397,7 @@ export function InteractionSection({ settings, onSaved, onError }: ServerSetting
 }
 
 const IDLE_RECLAIM_PRESETS = [0, 60, 360, 1440];
-const MAX_LIVE_PRESETS = [0, 12, 24, 48];
+const MEMORY_LIMIT_PRESETS_MB = [0, 2048, 4096, 8192, 16384];
 /** The presets, plus a value set elsewhere (another client, the API) so the control still shows it. */
 const withCurrent = (presets: number[], current: number) => presets.includes(current) ? presets : [...presets, current].sort((a, b) => a - b);
 
@@ -406,9 +406,9 @@ export function ReclaimSection({ settings, onSaved, onError }: ServerSettingsPro
   const { t } = useLingui();
   const idleLabel = (minutes: number) => minutes === 0 ? t({ message: '关闭', context: 'option-off' }) : minutes % 60 === 0 ? t`${minutes / 60} 小时` : t`${minutes} 分钟`;
   const [busy, setBusy] = useState(false);
-  const idle = settings.idleReclaimMinutes ?? DEFAULT_IDLE_RECLAIM_MINUTES;
-  const maxLive = settings.maxLiveAgents ?? DEFAULT_MAX_LIVE_AGENTS;
-  const persist = async (patch: Pick<AppSettings, 'idleReclaimMinutes' | 'maxLiveAgents'>) => {
+  const idle = settings.idleReclaimMinutes ?? AGENT_PROCESS_BUDGET.idleMinutes;
+  const memoryMb = settings.maxAgentMemoryMb ?? AGENT_PROCESS_BUDGET.memoryBytes / (1024 * 1024);
+  const persist = async (patch: Pick<AppSettings, 'idleReclaimMinutes' | 'maxAgentMemoryMb'>) => {
     if (busy) return;
     setBusy(true);
     try { onSaved(await api.updateSettings(patch), patch); }
@@ -421,9 +421,9 @@ export function ReclaimSection({ settings, onSaved, onError }: ServerSettingsPro
         <Segmented<string> size="xs" value={String(idle)} onChange={(next) => { if (Number(next) !== idle) void persist({ idleReclaimMinutes: Number(next) }); }} ariaLabel={t`空闲后停止 CLI`} options={withCurrent(IDLE_RECLAIM_PRESETS, idle).map((value) => ({ value: String(value), label: idleLabel(value), disabled: busy }))} />
       </div>
     </Row>
-    <Row title={t`最多同时运行`} description={t`超出时先停止最久没用的空闲会话；30 分钟内用过的不会被停止。`}>
+    <Row title={t`CLI 内存上限`}>
       <div className={busy ? 'pointer-events-none opacity-50' : ''} aria-busy={busy}>
-        <Segmented<string> size="xs" value={String(maxLive)} onChange={(next) => { if (Number(next) !== maxLive) void persist({ maxLiveAgents: Number(next) }); }} ariaLabel={t`最多同时运行`} options={withCurrent(MAX_LIVE_PRESETS, maxLive).map((value) => ({ value: String(value), label: value === 0 ? t`不限` : t`${value} 个`, disabled: busy }))} />
+        <Segmented<string> size="xs" value={String(memoryMb)} onChange={(next) => { if (Number(next) !== memoryMb) void persist({ maxAgentMemoryMb: Number(next) }); }} ariaLabel={t`CLI 内存上限`} options={withCurrent(MEMORY_LIMIT_PRESETS_MB, memoryMb).map((value) => ({ value: String(value), label: value === 0 ? t`不限` : value % 1024 === 0 ? `${value / 1024} GB` : `${value} MB`, disabled: busy }))} />
       </div>
     </Row>
   </Group>;

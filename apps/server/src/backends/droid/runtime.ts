@@ -8,6 +8,7 @@ import type {
   NativeInteractionResult, NativeRunConfig, NativeRunInput, NativeSlashItem, NativeStatus, NativeWorkbenchEvent,
   Project, Session,
 } from '../../../../../packages/contracts/src/index.js';
+import { AGENT_PROCESS_BUDGET } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { measuredWindow, runTracker, type RunMetricsTracker } from '../../metrics/turn-metrics.js';
 import { estimateTokens } from '../../metrics/tokens.js';
@@ -28,7 +29,7 @@ import { DROID_NO_REPLY, DROID_RPC_ERRORS, DroidRpcClient, DroidRpcError } from 
 import { DroidTranscriptSource, type DroidStreamingBlock } from './transcript.js';
 
 /** A conversation with nothing running gives its process back after this long. */
-const IDLE_STOP_MS = 10 * 60_000;
+const IDLE_STOP_MS = AGENT_PROCESS_BUDGET.headlessIdleMinutes * 60_000;
 const START_TIMEOUT_MS = 60_000;
 /** Events of this process's conversation kept for what they tell later ones (a tool call's input, a prompt's echo). */
 const REMEMBERED_EVENTS = 8_000;
