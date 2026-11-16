@@ -620,6 +620,10 @@ msgstr ""
 msgid "上层引用下层的名字，下层不知道上层。"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "上报"
+msgstr ""
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "上方的线"
 msgstr ""
@@ -3062,6 +3066,15 @@ msgstr ""
 msgid "审查当前改动"
 msgstr ""
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "客户端"
+msgstr ""
+
+#. placeholder {0}: clients.length
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "客户端 · {0} 个"
+msgstr ""
+
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "容器"
@@ -3312,6 +3325,10 @@ msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "展示稍后发送按钮"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "峰值"
 msgstr ""
 
 #: src/app/design/foundations/RadiusChapter.tsx
@@ -4104,6 +4121,10 @@ msgstr ""
 #: src/app/settings/channels/AddBotDialog.tsx
 #: src/app/settings/channels/BotDetail.tsx
 msgid "打开开发者后台"
+msgstr ""
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "托管堆"
 msgstr ""
 
 #: src/app/design/catalog.tsx

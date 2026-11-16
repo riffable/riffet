@@ -620,6 +620,10 @@ msgstr "上下文长度"
 msgid "上层引用下层的名字，下层不知道上层。"
 msgstr "上层引用下层的名字，下层不知道上层。"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "上报"
+msgstr "上报"
+
 #: src/app/design/android/StylesChapter.tsx
 msgid "上方的线"
 msgstr "上方的线"
@@ -3062,6 +3066,15 @@ msgstr "审批可以只用键盘回答"
 msgid "审查当前改动"
 msgstr "审查当前改动"
 
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "客户端"
+msgstr "客户端"
+
+#. placeholder {0}: clients.length
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "客户端 · {0} 个"
+msgstr "客户端 · {0} 个"
+
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/StylesChapter.tsx
 msgid "容器"
@@ -3313,6 +3326,10 @@ msgstr "展示时序见"
 #: src/app/settings/PreferencesSections.tsx
 msgid "展示稍后发送按钮"
 msgstr "展示稍后发送按钮"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "峰值"
+msgstr "峰值"
 
 #: src/app/design/foundations/RadiusChapter.tsx
 msgid "嵌套"
@@ -4105,6 +4122,10 @@ msgstr "打开会话时"
 #: src/app/settings/channels/BotDetail.tsx
 msgid "打开开发者后台"
 msgstr "打开开发者后台"
+
+#: src/app/settings/ServiceStatusSection.tsx
+msgid "托管堆"
+msgstr "托管堆"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/overview/SystemChapter.tsx

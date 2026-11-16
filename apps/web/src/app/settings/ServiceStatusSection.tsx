@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { ServiceMonitorSnapshot, ServiceProcess } from '@contracts';
+import { STEADY_FOOTPRINT_BYTES, type ClientMetrics, type ServiceMonitorSnapshot, type ServiceProcess } from '@contracts';
 import { AgentMark } from '@/components/agent-marks';
 import { IconActivity, IconBot, IconCircleAlert, IconCpu, IconGauge, IconMemoryStick, IconMessagesSquare, IconOctagonX, IconRefreshCw, IconServer, IconSquareTerminal, IconTerminal, IconTimer, IconZap } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { confirmDialog } from '@/lib/dialogs';
 import { formatDuration as formatElapsed } from '@/lib/format-duration';
 import { formatCount, formatDuration, formatExactTimestamp, formatPercent } from '@/lib/stats-format';
 import { toast } from '@/lib/toast';
-import { cn, errorMessage, formatBytes, formatClock } from '@/lib/utils';
+import { cn, errorMessage, formatBytes, formatClock, timeAgo } from '@/lib/utils';
 import { Spark } from '../stats/KpiCards';
 import { useAnimatedNumber, useReducedMotion } from '../stats/chart-shared';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -166,6 +166,7 @@ export function ServiceStatusSection() {
         </div>
       </div>
       <ServerCard data={data} />
+      {data.clients && data.clients.length > 0 && <ClientTable clients={data.clients} />}
       <ProcessTable processes={data.processes} terminating={terminating} onTerminate={(process) => void terminate(process)} />
     </div>
   );
@@ -431,6 +432,56 @@ function MemoryShare({ processes }: { processes: ServiceProcess[] }) {
         ))}
       </div>
     </div>
+  );
+}
+
+const CLIENT_PLATFORM: Record<ClientMetrics['platform'], string> = { mac: 'Mac', web: 'Web', ios: 'iPhone', android: 'Android' };
+
+/** What each client reports about itself (docs/guide/performance.md §4), against its steady-footprint budget. */
+function ClientTable({ clients }: { clients: ClientMetrics[] }) {
+  const { t } = useLingui();
+  return (
+    <Group title={t`客户端 · ${clients.length} 个`}>
+      <div className="-mx-4 overflow-x-auto max-md:-mx-3">
+        <table className="w-full min-w-[560px] border-separate border-spacing-0 text-left text-xs">
+          <thead>
+            <tr className="[&>th]:border-t [&>th]:border-line-soft [&>th]:px-2 [&>th]:py-2 [&>th]:text-2xs [&>th]:font-medium [&>th]:text-fg-3 [&>th:first-child]:pl-4 [&>th:last-child]:pr-4">
+              <th scope="col"><Trans>客户端</Trans></th>
+              <th scope="col" className="w-48"><Trans>内存</Trans></th>
+              <th scope="col" className="w-20 text-right"><Trans>峰值</Trans></th>
+              <th scope="col" className="w-20 text-right"><Trans>托管堆</Trans></th>
+              <th scope="col" className="w-24 text-right"><Trans>上报</Trans></th>
+            </tr>
+          </thead>
+          <tbody>
+            {clients.map((client) => {
+              const footprint = client.latest.footprintBytes;
+              const budget = STEADY_FOOTPRINT_BYTES[client.platform];
+              const share = footprint === undefined ? 0 : footprint / budget;
+              return (
+                <tr key={client.key} className="hover:bg-hover [&>td]:border-t [&>td]:border-line-soft [&>td]:px-2 [&>td]:py-2.5 [&>td]:align-middle [&>td:first-child]:pl-4 [&>td:last-child]:pr-4">
+                  <td className="max-w-[16rem]">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-medium text-fg">{client.name ?? CLIENT_PLATFORM[client.platform]}</span>
+                      <Badge tone="neutral">{CLIENT_PLATFORM[client.platform]}</Badge>
+                      {client.appVersion && <span className="shrink-0 font-mono text-2xs text-fg-4">{client.appVersion}</span>}
+                    </span>
+                  </td>
+                  <td>
+                    {footprint === undefined ? <span className="text-fg-4">—</span> : (
+                      <Meter value={share} tone={share > 1 ? 'warning' : 'accent'} label={`${formatBytes(footprint)} / ${formatBytes(budget)}`} />
+                    )}
+                  </td>
+                  <td className="text-right tabular-nums text-fg-2">{client.peakFootprintBytes === undefined ? '—' : formatBytes(client.peakFootprintBytes)}</td>
+                  <td className="text-right tabular-nums text-fg-2">{client.latest.managedHeapBytes === undefined ? '—' : formatBytes(client.latest.managedHeapBytes)}</td>
+                  <td className="text-right text-fg-3">{timeAgo(new Date(client.latest.at).toISOString())}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Group>
   );
 }
 
