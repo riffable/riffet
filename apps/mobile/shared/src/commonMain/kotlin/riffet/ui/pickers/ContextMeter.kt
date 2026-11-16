@@ -1,6 +1,9 @@
 package riffet.ui.pickers
 
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,6 +133,20 @@ internal fun ContextSummaryRow(usage: NativeContext?, onClick: () -> Unit) {
         }
         Spacer(Modifier.width(metrics.controlInset))
         Icon(RiffetIcons.ChevronRight, contentDescription = null, tint = colors.fg3, modifier = Modifier.size(metrics.iconSize))
+    }
+}
+
+/**
+ * The ring alone, for the composer's settings chip, where it leads the model name. It reads its share
+ * aloud; the breakdown stays in the sheet the chip opens.
+ */
+@Composable
+internal fun ContextGlyph(usage: NativeContext, size: Dp) {
+    if (usage.size <= 0L) return
+    val ratio = ratioOf(usage)
+    val description = "${titleOf(usage)} ${percentOf(usage)}%"
+    Box(modifier = Modifier.semantics { stateDescription = description }) {
+        ContextRing(ratio = ratio, tone = toneFor(ratio, LocalRiffetColors.current), size = size)
     }
 }
 

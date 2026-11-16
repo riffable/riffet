@@ -51,10 +51,8 @@ private fun approvalDescription(id: String): String? = when (id) {
     else -> null
 }
 
-/** Modes the trigger and summaries mark with the warning colour; list rows stay plain. */
+/** Modes the approval page warns about; list rows stay plain. */
 private val RISKY_PERMISSIONS = setOf("unrestricted", "bypassPermissions", "danger-full-access", "never", "high")
-
-internal fun isRiskyApproval(id: String): Boolean = id in RISKY_PERMISSIONS
 
 /**
  * The mode list as one page of a sheet. Picking applies [onSelect] and then lets the sheet leave
@@ -168,7 +166,3 @@ internal fun ApprovalPickerSheet(
 internal fun optionLabelOf(options: List<NativeBackendOption>, value: String, fallback: String): String =
     options.firstOrNull { it.id == value }?.label?.takeIf { it.isNotBlank() } ?: value.ifBlank { fallback }
 
-/** The compact name for a tight row: the option's short label, else its label. */
-internal fun approvalShortLabelOf(options: List<NativeBackendOption>, value: String, fallback: String): String =
-    options.firstOrNull { it.id == value }?.let { it.shortLabel?.takeIf(String::isNotBlank) ?: it.label.takeIf(String::isNotBlank) }
-        ?: value.ifBlank { fallback }

@@ -110,6 +110,8 @@ import riffet.contracts.NativeSlashCatalog
 import riffet.contracts.Run
 import riffet.contracts.Session
 import riffet.shared.PromptContextReference
+import riffet.contracts.NativeContext
+import riffet.ui.pickers.ContextGlyph
 import riffet.shared.rankedSessionReferences
 import riffet.shared.sessionReference
 import riffet.ui.focus.keepsFocusOnTap
@@ -134,8 +136,8 @@ import androidx.compose.runtime.rememberUpdatedState
  * ## Layout (the web's mobile composer)
  *
  * One rounded card: the input on top, then a footer row with the attach button, a single "发送设置"
- * chip (the permission's short name + the model's name; it opens the sheet with mode, permission and model), the
- * context ring, and the send button — which turns into a stop button while a turn runs and the
+ * chip (the context ring + the model's name; it opens the sheet with mode, permission and model), and the
+ * send button — which turns into a stop button while a turn runs and the
  * draft is empty. The agent's todo list (`TodoDock`) and queued runs sit above
  * the card, like `ComposerDock`.
  *
@@ -179,10 +181,8 @@ class ComposerSettings(
     val error: Boolean = false,
     /** `Color.Unspecified` keeps an agent mark's own colours (the Codex gradient). */
     val iconTint: Color? = null,
-    /** The permission's short name, shown before the model with a muted `·`; null shows none. */
-    val prefix: String? = null,
-    /** The permission is a risky one: the prefix takes the warning colour. */
-    val prefixRisky: Boolean = false,
+    /** How full the agent's context window is; the ring leads the model name. Null, or not yet reported, draws none. */
+    val context: NativeContext? = null,
 )
 
 /** A message to quote into the draft; [token] lets the same text be quoted twice. */
@@ -747,8 +747,6 @@ internal fun ComposerCard(
                     Spacer(Modifier.width(metrics.controlInset * 2 / 3))
                 }
                 // The settings chip takes whatever the send button leaves and truncates only then.
-                // Context occupancy is not here: it is a detail of the model, so it lives in the
-                // sheet this chip opens.
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                     if (settings != null) SettingsChip(settings)
                 }
@@ -845,9 +843,9 @@ private fun SettingsChip(settings: ComposerSettings, modifier: Modifier = Modifi
             indicator()
             Spacer(Modifier.width(metrics.controlInset / 2))
         }
-        settings.prefix?.let { prefix ->
-            Text(text = prefix, style = typography.buttonSmall, color = if (settings.prefixRisky && settings.enabled) colors.warning else ink, maxLines = 1)
-            Text(text = " · ", style = typography.buttonSmall, color = if (settings.enabled) colors.fg4 else ink, maxLines = 1)
+        settings.context?.takeIf { it.size > 0L }?.let { usage ->
+            ContextGlyph(usage, size = metrics.smallIconSize)
+            Spacer(Modifier.width(metrics.controlInset / 2))
         }
         Text(text = settings.label, style = typography.buttonSmall, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         if (!leading && status) {

@@ -54,8 +54,6 @@ import riffet.ui.pickers.rememberToolDevices
 import riffet.ui.pickers.rememberPluginToolGroups
 import riffet.ui.pickers.toolsOffered
 import riffet.ui.pickers.toolsSummary
-import riffet.ui.pickers.approvalShortLabelOf
-import riffet.ui.pickers.isRiskyApproval
 import riffet.ui.pickers.modelSelectionSummary
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -761,9 +759,7 @@ fun SessionScreen(
                             settings = ComposerSettings(
                                 label = currentModelSummary.ifEmpty { stringResource(Res.string.session_select_model) },
                                 icon = null,
-                                prefix = capabilities?.permissions?.takeIf { it.isNotEmpty() && !quickChat && intended.approval != null }
-                                    ?.let { approvalShortLabelOf(it, intended.approval.orEmpty(), "") }?.takeIf { it.isNotBlank() },
-                                prefixRisky = isRiskyApproval(intended.approval.orEmpty()),
+                                context = context.takeUnless { quickChat },
                                 enabled = controller != null,
                                 onOpen = { sheet = SessionSheet.Settings },
                                 loading = detail?.catalogLoading == true,
