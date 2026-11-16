@@ -3,6 +3,8 @@ import type { TerminalHolds } from '../native/terminal-hold.js';
 import type { IncomingHttpHeaders, ServerResponse } from 'node:http';
 import type { AppSettings, NativeRunInput, Run, Session } from '../../../../packages/contracts/src/index.js';
 import type { Auth } from '../auth.js';
+import type { AssistantDelegations } from '../assistant/delegations.js';
+import type { AssistantRuns } from '../assistant/runs.js';
 import type { NativeBackendService } from '../backends/service.js';
 import type { GitService } from '../git/index.js';
 import type { PluginRegistry } from '../plugins/registry.js';
@@ -32,6 +34,12 @@ export type NativeMessageBody = { commandId?: string; text: string; attachments?
 
 /** What `createApp` hands every route group: its services and the request helpers they share. */
 export interface RouteDeps {
+  /** The 助理's delegations (docs/ASSISTANT.md §7.3); made after the routes' dependencies. */
+  assistantDelegations?: () => AssistantDelegations | undefined;
+  /** The 助理's background runs (docs/ASSISTANT.md §7.1); made after the routes' dependencies. */
+  assistantRuns?: () => AssistantRuns | undefined;
+  /** Restarts the 助理's main conversation's CLI once it rests, so it loads what its launch gained (a pack). */
+  restartAssistant?: () => void;
   /** IM channels: accounts, bound users and chats (docs/design/channels.md). */
   channels: ChannelService;
   stateDir: string;

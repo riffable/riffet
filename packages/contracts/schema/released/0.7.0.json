@@ -1221,7 +1221,8 @@
                   "template",
                   "schedule",
                   "discussion",
-                  "channel"
+                  "channel",
+                  "assistant"
                 ]
               },
               "sessionId": {
@@ -1260,6 +1261,18 @@
                   "account",
                   "chatId"
                 ]
+              },
+              "job": {
+                "open": true,
+                "type": "string",
+                "enum": [
+                  "supervise",
+                  "consolidate",
+                  "delegation"
+                ]
+              },
+              "assistantRunId": {
+                "type": "string"
               },
               "discussion": {
                 "type": "object",
@@ -1669,7 +1682,8 @@
                         "template",
                         "schedule",
                         "discussion",
-                        "channel"
+                        "channel",
+                        "assistant"
                       ]
                     },
                     "sessionId": {
@@ -1708,6 +1722,18 @@
                         "account",
                         "chatId"
                       ]
+                    },
+                    "job": {
+                      "open": true,
+                      "type": "string",
+                      "enum": [
+                        "supervise",
+                        "consolidate",
+                        "delegation"
+                      ]
+                    },
+                    "assistantRunId": {
+                      "type": "string"
                     },
                     "discussion": {
                       "type": "object",
@@ -3173,7 +3199,8 @@
                           "template",
                           "schedule",
                           "discussion",
-                          "channel"
+                          "channel",
+                          "assistant"
                         ]
                       },
                       "sessionId": {
@@ -3212,6 +3239,18 @@
                           "account",
                           "chatId"
                         ]
+                      },
+                      "job": {
+                        "open": true,
+                        "type": "string",
+                        "enum": [
+                          "supervise",
+                          "consolidate",
+                          "delegation"
+                        ]
+                      },
+                      "assistantRunId": {
+                        "type": "string"
                       },
                       "discussion": {
                         "type": "object",
@@ -10196,7 +10235,8 @@
                           "template",
                           "schedule",
                           "discussion",
-                          "channel"
+                          "channel",
+                          "assistant"
                         ]
                       },
                       "sessionId": {
@@ -10235,6 +10275,18 @@
                           "account",
                           "chatId"
                         ]
+                      },
+                      "job": {
+                        "open": true,
+                        "type": "string",
+                        "enum": [
+                          "supervise",
+                          "consolidate",
+                          "delegation"
+                        ]
+                      },
+                      "assistantRunId": {
+                        "type": "string"
                       },
                       "discussion": {
                         "type": "object",

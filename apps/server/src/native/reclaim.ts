@@ -91,6 +91,7 @@ export class AgentReclaimer {
 
   async stop(): Promise<void> {
     clearTimeout(this.timer); clearInterval(this.timer); this.timer = undefined;
+    for (const id of [...this.restarts.keys()]) this.finishRestart(id);
     await this.pass?.catch(() => undefined);
   }
 
@@ -173,6 +174,36 @@ export class AgentReclaimer {
       return false;
     });
   }
+
+  /**
+   * Stops [sessionId]'s CLI as soon as it rests, watched or not, so its next message starts it again with what
+   * changed in its launch (a pack added to the 助理). One that is working is stopped when that work ends.
+   */
+  restartWhenRested(sessionId: string): void {
+    if (this.restarts.has(sessionId)) return;
+    const attempt = async (): Promise<boolean> => await this.deps.runtime.withDetachedSession(sessionId, async () => {
+      let session: Session;
+      try { session = this.deps.store.getSession(sessionId); } catch { return true; }
+      if (session.archivedAt) return true;
+      const terminal = this.liveTerminal(session);
+      if (!terminal) return true;
+      if (!RESTING.has(session.state) || !this.resumable(session) || session.terminalHold || this.deps.store.listUnfinishedNativeRuns(session.id).length) return false;
+      let status;
+      try { status = this.deps.nativeBackends.status(session.id); } catch { return false; }
+      if (status.phase === 'starting' || status.phase === 'busy' || status.phase === 'attention' || status.interaction || status.activity?.background || status.activity?.compacting) return false;
+      await this.stopAgent(session, terminal);
+      return true;
+    }).catch(() => false);
+    const off = this.deps.store.onSessionState((session) => {
+      if (session.id !== sessionId || !RESTING.has(session.state)) return;
+      setImmediate(() => { void attempt().then(done => { if (done) this.finishRestart(sessionId); }); });
+    });
+    this.restarts.set(sessionId, off);
+    void attempt().then(done => { if (done) this.finishRestart(sessionId); });
+  }
+
+  private readonly restarts = new Map<string, () => void>();
+  private finishRestart(sessionId: string): void { this.restarts.get(sessionId)?.(); this.restarts.delete(sessionId); }
 
   /** Stops an archived conversation's CLI that is still running; whatever it was doing, nobody can reach it. */
   private async release(sessionId: string): Promise<boolean> {

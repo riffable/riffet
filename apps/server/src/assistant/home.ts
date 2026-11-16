@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import type { AssistantMemory } from '../../../../packages/contracts/src/index.js';
+import type { AssistantFile, AssistantMemory } from '../../../../packages/contracts/src/index.js';
 import { assistantSystemPrompt, riffetSkills } from '../prompts/index.js';
 import { SERVER_VERSION } from '../version.js';
 
@@ -24,12 +24,17 @@ const IGNORED = '.claude/settings.local.json\n';
  * What is kept under git: the 助理's rules, its notes and its skills. Anything else it leaves in the directory
  * (a download, an MCP file holding a token) stays out of a history that deleting the file would not clean.
  */
-const COMMITTED = ['AGENTS.md', 'CLAUDE.md', USER_FILE, MEMORY_DIR, '.claude/skills', '.gitignore'];
+const COMMITTED = ['AGENTS.md', 'CLAUDE.md', USER_FILE, MEMORY_DIR, '.claude/skills', 'packs', '.gitignore'];
+/**
+ * Capability packs (docs/ASSISTANT.md §8.2): each folder here is a Claude Code plugin the owner put in (skills, the MCP
+ * servers they need), loaded with Riffet's own. A pack's `memory.md` seeds a topic file of the same name once.
+ */
+const PACKS_DIR = 'packs';
 /**
  * The owner's files: the rules the 助理 runs under and what its CLI starts with. It reads them; a change is the
  * owner's to make. MCP files are here because the launch starts their servers without asking again.
  */
-const PROTECTED = ['AGENTS.md', 'CLAUDE.md', '.mcp.json', '.claude/settings.json', '.claude/settings.local.json'];
+const PROTECTED = ['AGENTS.md', 'CLAUDE.md', '.mcp.json', '.claude/settings.json', '.claude/settings.local.json', `${PACKS_DIR}/**`];
 
 export interface AssistantHome {
   /** Riffet's text, rewritten on every start; outside the directory, so the 助理 cannot edit what it runs under. */
@@ -37,6 +42,8 @@ export interface AssistantHome {
   memoryDir: string;
   /** Riffet's own skills for the 助理, as a plugin directory its CLI loads for one launch (docs/ASSISTANT.md §8). */
   pluginDir: string;
+  /** The capability packs the owner put in its `packs/` folder, read at each launch. */
+  packDirs(): string[];
   /** The directory's own MCP servers, when it declares any. */
   mcpConfigFiles(): string[];
   protectedFiles: string[];
@@ -57,7 +64,21 @@ export function ensureAssistantHome(stateDir: string, cwd: string): AssistantHom
   const pluginDir = join(runtimeDir, 'riffet');
   writeSkillPlugin(pluginDir);
   const mcp = join(cwd, '.mcp.json');
-  return { systemPromptFile, memoryDir, pluginDir, mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles: PROTECTED.map(file => join(cwd, file)) };
+  return { systemPromptFile, memoryDir, pluginDir, packDirs: () => packs(cwd, memoryDir), mcpConfigFiles: () => existsSync(mcp) ? [mcp] : [], protectedFiles: PROTECTED.map(file => join(cwd, file)) };
+}
+
+/** The pack folders that are plugins; each one's memory seed is written once, beside the index, as `<pack>.md`. */
+function packs(cwd: string, memoryDir: string): string[] {
+  const root = join(cwd, PACKS_DIR);
+  let names: string[];
+  try { if (!lstatSync(root).isDirectory()) return []; names = readdirSync(root); } catch { return []; }
+  return names.filter(name => !name.startsWith('.')).flatMap(name => {
+    const dir = join(root, name);
+    try { if (!lstatSync(dir).isDirectory() || !lstatSync(join(dir, '.claude-plugin', 'plugin.json')).isFile()) return []; } catch { return []; }
+    const seedFile = join(dir, 'memory.md');
+    try { if (lstatSync(seedFile).isFile() && /^[\w.-]+$/.test(name)) seed(join(memoryDir, `${name}.md`), readFileSync(seedFile, 'utf8')); } catch { /* no seed */ }
+    return [dir];
+  });
 }
 
 function read(path: string): string | undefined { try { return readFileSync(path, 'utf8'); } catch { return undefined; } }
@@ -116,6 +137,53 @@ export function readAssistantMemory(cwd: string): AssistantMemory {
     .flatMap(({ name, modifiedAt }) => { const read = file(join(dir, name), modifiedAt); return read ? [{ name, ...read }] : []; });
   return { profile: file(join(cwd, USER_FILE))?.text ?? '', index: own ? file(join(dir, MEMORY_INDEX))?.text ?? '' : '', entries, ...(updatedAt ? { updatedAt } : {}) };
 }
+/**
+ * The owner removes one topic file of the 助理's memory. Only a regular Markdown file beside the index, named as
+ * `readAssistantMemory` lists it; the removal is committed at once, so the history can bring it back.
+ */
+export async function forgetAssistantMemory(cwd: string, name: string): Promise<void> {
+  const dir = join(cwd, MEMORY_DIR);
+  const valid = /^[^/\\\0]+\.md$/.test(name) && name !== MEMORY_INDEX && !name.startsWith('.');
+  let file = false;
+  try { file = valid && lstatSync(dir).isDirectory() && lstatSync(join(dir, name)).isFile(); } catch { file = false; }
+  if (!file) throw Object.assign(new Error('No such memory'), { code: 'MEMORY_NOT_FOUND' });
+  rmSync(join(dir, name));
+  await commitAssistantHome(cwd);
+}
+
+/** Where the 助理 leaves what it made for the owner: drafts, research, exports (docs/ASSISTANT.md §3.2). */
+export const FILES_DIR = 'files';
+const LISTED_FILES = 200;
+
+/**
+ * The files the 助理 made for the owner, newest first: regular files directly in `files/` and one folder below it.
+ * Links are not followed, so nothing outside the folder is listed or served.
+ */
+export function listAssistantFiles(cwd: string): AssistantFile[] {
+  const root = join(cwd, FILES_DIR);
+  try { if (!lstatSync(root).isDirectory()) return []; } catch { return []; }
+  const found: AssistantFile[] = [];
+  const visit = (relative: string, depth: number) => {
+    let names: string[];
+    try { names = readdirSync(join(root, relative)); } catch { return; }
+    for (const name of names.slice(0, MEMORY_SCANNED)) {
+      if (name.startsWith('.')) continue;
+      const path = relative ? `${relative}/${name}` : name;
+      let stat;
+      try { stat = lstatSync(join(root, path)); } catch { continue; }
+      if (stat.isDirectory() && depth < 1) visit(path, depth + 1);
+      else if (stat.isFile()) found.push({ path, size: stat.size, modifiedAt: stat.mtime.toISOString() });
+    }
+  };
+  visit('', 0);
+  return found.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt)).slice(0, LISTED_FILES);
+}
+
+/** The absolute path of one listed file, or undefined for anything that is not one. */
+export function assistantFilePath(cwd: string, path: string): string | undefined {
+  return listAssistantFiles(cwd).some(file => file.path === path) ? join(cwd, FILES_DIR, path) : undefined;
+}
+
 function seed(path: string, text: string): void { if (!existsSync(path)) writeFileSync(path, text, { mode: 0o600 }); }
 
 const GIT = ['-c', 'core.hooksPath=/dev/null', '-c', 'core.fsmonitor=false', '-c', 'user.name=Riffet', '-c', 'user.email=riffet@localhost', '-c', 'commit.gpgsign=false'];

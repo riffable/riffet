@@ -4,7 +4,7 @@
  * is copied read-only into the temp state dir, with its endpoint replaced by a local proxy that forwards every model
  * request to the real one and keeps the request bodies (never the headers) to read what the model was actually sent.
  *
- *   node --import tsx scripts/probe-assistant-e2e.ts --profile <name> [--model <id>] [--only b,c,e,f,g,h,s] [--timeout <seconds>] [--keep]
+ *   node --import tsx scripts/probe-assistant-e2e.ts --profile <name> [--model <id>] [--only b,c,e,f,g,h,p,r,s] [--timeout <seconds>] [--keep]
  *
  * a. launch: the first conversation opened in the 助理's project becomes its main one; the model request carries
  *    Riffet's system prompt instead of the CLI's, the directory's `AGENTS.md` and `USER.md`, the time, the 助理's
@@ -52,7 +52,7 @@ await services.app.listen({ host: '127.0.0.1', port: 0 });
 const origin = { host: '127.0.0.1:4317', origin: 'http://127.0.0.1:4317' };
 const status = await services.app.inject({ url: '/api/auth/status', headers: origin });
 const base = { ...origin, cookie: String(status.headers['set-cookie']).split(';')[0]!, 'x-csrf-token': String(status.json().csrfToken) };
-async function call<T>(method: 'GET' | 'POST' | 'PATCH', url: string, payload?: unknown): Promise<T> {
+async function call<T>(method: 'GET' | 'POST' | 'PATCH' | 'PUT', url: string, payload?: unknown): Promise<T> {
   const response = await services.app.inject({ method, url, headers: base, ...(payload === undefined ? {} : { payload: payload as object }) });
   if (response.statusCode >= 400) throw new Error(`${method} ${url}: ${response.statusCode} ${response.body}`);
   return (response.body ? response.json() : undefined) as T;
@@ -78,7 +78,8 @@ const proxy = createServer((req, res) => {
       res.writeHead(up.statusCode ?? 502, up.headers);
       up.pipe(res);
     });
-    out.on('error', () => { res.writeHead(502); res.end(); });
+    // An upstream socket can fail after the response started; then only end it.
+    out.on('error', () => { if (!res.headersSent) res.writeHead(502); res.end(); });
     out.end(body);
   });
 });
@@ -148,8 +149,9 @@ function ownInstructionsLine(): string | undefined {
 
 try {
   const claude = await copyRiffetProfile((url, body) => {
-    // The copy talks to the proxy; the proxy talks to the profile's own endpoint.
-    if (typeof body.apiEndpoint === 'string') { upstream = new URL(body.apiEndpoint); return call('POST', url, { ...body, apiEndpoint: proxyUrl }); }
+    // The copy talks to the proxy; the proxy talks to the profile's own endpoint. A plugin's model source is left
+    // out: its plugin is not on the probe's server, and the proxy goes to that endpoint anyway.
+    if (typeof body.apiEndpoint === 'string') { upstream = new URL(body.apiEndpoint); const { modelSource: _source, ...rest } = body; return call('POST', url, { ...rest, apiEndpoint: proxyUrl }); }
     return call('POST', url, body);
   }, 'claude', profileName);
   if (!upstream) throw new Error(`profile ${profileName} has no endpoint of its own to forward to`);
@@ -177,8 +179,8 @@ try {
     const mcp = [...new Set([...launch.tools, ...(launch.messages.match(/mcp__[A-Za-z0-9-]+__[A-Za-z0-9_]+/g) ?? [])].filter(name => name.startsWith('mcp__')))];
     check('a', 'its tools are offered and no other MCP server', ['session_list', 'session_read', 'history_search', 'server_status', 'task_list'].every(tool => mcp.includes(`mcp__riffet__${tool}`)) && mcp.every(name => name.startsWith('mcp__riffet__')), mcp);
     const own = ownInstructionsLine();
-    const unlisted = ['tasks', 'progress', 'reminders', 'briefing', 'phone', 'browser', 'riffet'].filter(name => !launch.messages.includes(`- riffet:${name}: `));
-    check('a', "Riffet's skills are offered", unlisted.length === 0, unlisted.length ? { missing: unlisted } : 'all seven are listed');
+    const unlisted = ['tasks', 'progress', 'reminders', 'delegations', 'briefing', 'phone', 'browser', 'riffet'].filter(name => !launch.messages.includes(`- riffet:${name}: `));
+    check('a', "Riffet's skills are offered", unlisted.length === 0, unlisted.length ? { missing: unlisted } : 'all of them are listed');
     check('a', 'scheduled tasks are not among its tools', !launch.messages.includes('mcp__riffet__schedule_task') && !launch.tools.includes('mcp__riffet__schedule_task'), 'schedule_task was looked for');
     // The CLI's own skills are listed to the model as `- name: description`.
     const bundled = ['code-review', 'simplify', 'security-review', 'claude-api', 'plugin-authoring', 'init'].filter(name => launch.messages.includes(`- ${name}: `));
@@ -214,12 +216,64 @@ try {
   check('s', 'the time is told back', /\d{1,2}[:：]\d{2}/.test(await lastAnswer(sessionId)), { answer: await lastAnswer(sessionId) });
 
   }
+  if (only.has('r')) {
+  // r. a background run: started on the 助理's own choice, ends with run_report, and its note reaches the next message
+  services.settings.setSettings({ assistant: { backendId: 'claude', profileId: claude.backendProfileId, model } });
+  const runs$ = services.assistantRuns!;
+  const run = runs$.enqueue('delegation', 'probe:r:v2', {
+    goal: 'Tell me when the acme-parser project ships a release that changes its public parse() API.',
+    attention: 'Only releases that change or remove parse(); stay quiet about anything else.',
+    trigger: '{"kind":"github-release","repo":"acme/acme-parser"}', until: '2027-02-16T00:00:00Z', cursor: 'v1.9.0',
+    reason: 'acme/acme-parser 发布了 v2.0.0。', payload: '发布说明：\nBREAKING: parse(text) is now parse(text, options); the one-argument form is removed.',
+  }, 'probe-delegation');
+  const ended = await until('the background run', turnSeconds, () => { const current = runs$.get(run.id); return current && (current.state === 'done' || current.state === 'failed') ? current : undefined; });
+  const runSession = ended?.sessionId ? services.store.getSession(ended.sessionId) : undefined;
+  check('r', 'the run ran on the 助理\'s choice without asking', runSession?.approval === 'dontAsk' && runSession.backendProfileId === claude.backendProfileId && runSession.origin?.kind === 'assistant', { approval: runSession?.approval, origin: runSession?.origin });
+  check('r', 'it ended with run_report', ended?.state === 'done' && rpcLog.some(line => line.includes('run_report') && line.includes('-> ok')), { state: ended?.state, outcome: ended?.outcome, text: ended?.text, error: ended?.error, calls: rpcLog.filter(line => line.includes('run_report')) });
+  check('r', 'a breaking release was judged worth telling', ended?.outcome === 'tell' || ended?.outcome === 'ask', { outcome: ended?.outcome, text: ended?.text });
+  check('r', 'its conversation was archived', Boolean(runSession && services.store.getSession(runSession.id).archivedAt), { archivedAt: runSession && services.store.getSession(runSession.id).archivedAt });
+  const next = await turn(sessionId, 'probe-r2', 'Anything new while I was away? One sentence.');
+  check('r', 'the next message carried the note', next.requests.some(request => request.messages.includes('your background runs left these')), next.requests.length ? 'looked for the pending notes' : 'no model request');
+  }
+  // Messages since the last `/new`: the CLI's context holds only those.
+  let topicFrom = 0;
+  if (only.has('p')) {
+  // p. a capability pack: added in Settings, loaded once the CLI rests, started by its entry; then /new starts a new topic
+  const terminalBefore = services.store.getSession(sessionId).terminalId;
+  await call('PUT', '/api/assistant/packs/travel');
+  const restarted = await until('the CLI to stop for the pack', 60, () => {
+    const id = services.store.getSession(sessionId).terminalId;
+    try { return !id || id !== terminalBefore || services.store.getTerminal(id).state === 'exited' ? true : undefined; } catch { return true; }
+  });
+  check('p', 'the resting CLI stopped to load the pack', Boolean(restarted), { terminalBefore, now: services.store.getSession(sessionId).terminalId });
+  const slash = await call<{ items: Array<{ name: string }> }>('GET', `/api/backends/claude/slash?projectId=${assistant.id}&sessionId=${sessionId}&refresh=1`);
+  check('p', 'the main conversation offers /new and the pack\'s command', slash.items.some(item => item.name === 'new') && slash.items.some(item => item.name === 'travel:plan'), slash.items.map(item => item.name).filter(name => name === 'new' || name.startsWith('travel')));
+  const plan = await turn(sessionId, 'probe-p1', '/travel:plan 周末从上海去杭州一日游。不要查资料，直接给三行大纲。');
+  check('p', 'the pack\'s skill was read', plan.requests.some(request => request.messages.includes('你在帮用户规划出行')), plan.requests.length ? 'looked for the skill text' : 'no model request');
+  check('p', 'its memory topic was seeded', existsSync(join(assistant.cwd, 'memory', 'travel.md')), readdirSync(join(assistant.cwd, 'memory')));
+  const segments = (services.store.getSession(sessionId).previousNativeSessionIds ?? []).length;
+  const nativeBefore = services.store.getSession(sessionId).nativeSessionId;
+  const fresh = await turn(sessionId, 'probe-p2', '/new');
+  check('p', '/new ended as a command', fresh.run?.state === 'completed', { state: fresh.run?.state, error: fresh.run?.error });
+  topicFrom = runs(sessionId).length;
+  // The CLI's new session is taken up as the next message starts.
+  const after = await turn(sessionId, 'probe-p3', 'Which city did I just ask you to plan a trip to? If it is not in this conversation, reply "unknown".');
+  check('p', 'the next message finished', after.run?.state === 'completed', { state: after.run?.state, error: after.run?.error });
+  check('p', 'a new CLI session, the same conversation', services.store.getSession(sessionId).nativeSessionId !== nativeBefore && (services.store.getSession(sessionId).previousNativeSessionIds ?? []).length > segments && services.store.getProject(assistant.id).mainSessionId === sessionId, { before: nativeBefore, now: services.store.getSession(sessionId).nativeSessionId, segments: services.store.getSession(sessionId).previousNativeSessionIds });
+  check('p', 'the previous topic is not in the context', after.requests.length > 0 && after.requests.every(request => !request.messages.includes('杭州一日游')), { answer: await lastAnswer(sessionId) });
+  check('p', 'the new topic still carries the time', after.requests.some(request => request.messages.includes('<riffet-context>')), { requests: after.requests.length });
+  const shownRows = await shown(sessionId);
+  check('p', '/new is shown as typed', shownRows.some(row => row.kind === 'user' && row.text.trim() === '/new'), shownRows.filter(row => row.kind === 'user').map(row => row.text.slice(0, 40)));
+  const typed = shownRows.filter(row => row.kind === 'user').map(row => row.text.trim());
+  if (new Set(typed).size !== typed.length) log(`timeline rows: ${JSON.stringify((await call<{ rows?: unknown[] }>('GET', `/api/v3/sessions/${sessionId}/timeline?lane=main&rows=300&from=0`)).rows, null, 1).slice(0, 6000)}`);
+  check('p', 'each message is shown once across the topics', new Set(typed).size === typed.length, typed.map(text => text.slice(0, 40)));
+  }
   // d. record
   const sum = await turn(sessionId, 'probe-4', 'What is 17 + 25? Reply with the number only.');
   check('d', 'turn completed', sum.run?.state === 'completed', { state: sum.run?.state, error: sum.run?.error });
   const rows = await shown(sessionId);
   check('d', 'messages are shown as typed', rows.some(row => row.kind === 'user' && row.text.trim() === 'What is 17 + 25? Reply with the number only.') && !rows.some(row => row.text.includes('riffet-context')), rows.filter(row => row.kind === 'user').map(row => row.text.slice(0, 60)));
-  check('d', 'each message carried the time', sum.requests.some(request => (request.messages.match(/<riffet-context>/g) ?? []).length >= runs(sessionId).length), { contexts: sum.requests.map(request => (request.messages.match(/<riffet-context>/g) ?? []).length), messages: runs(sessionId).length });
+  check('d', 'each message carried the time', sum.requests.some(request => (request.messages.match(/<riffet-context>/g) ?? []).length >= runs(sessionId).length - topicFrom), { contexts: sum.requests.map(request => (request.messages.match(/<riffet-context>/g) ?? []).length), messages: runs(sessionId).length - topicFrom });
 
   if (only.has('e')) {
   // e. summary

@@ -6,6 +6,7 @@ import type { NativeBackendProfileSettingsUpdate, NativeModelApiProtocol, Native
 import { loopHealth } from '../loop-health.js';
 import { clientSupportsFeature, requireBackendVisibleToClient, requireProjectVisibleToClient, requireSessionVisibleToClient, visibleBackendsForClient } from '../native/client-features.js';
 import type { RouteDeps } from './deps.js';
+import { NEW_TOPIC } from '../assistant/standing.js';
 
 export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): void {
   const {stateDir,store,settings,nativeBackends}=deps;
@@ -50,7 +51,10 @@ export function registerBackendRoutes(app: FastifyInstance, deps: RouteDeps): vo
   app.get<{Params:{id:string};Querystring:{scope?:string;projectId?:string;profileId?:string;sessionId?:string;refresh?:string}}>('/api/backends/:id/slash',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);
     const {project,session}=queryContext(request);
-    return nativeBackends.catalog.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
+    const catalog=await nativeBackends.catalog.slashCatalog(request.params.id,project,session?.backendProfileId??request.query.profileId,session,{refresh:request.query.refresh==='1'});
+    // The 个人助理's main conversation starts a new topic in place of a new conversation (docs/ASSISTANT.md §5.5).
+    if(project?.system!=='assistant'||!session||project.mainSessionId!==session.id)return catalog;
+    return {...catalog,items:[{name:NEW_TOPIC.slice(1),description:'Start a new topic: the context is cleared, memory stays',kind:'command' as const},...catalog.items.filter(item=>item.name!==NEW_TOPIC.slice(1))]};
   });
   app.get<{Params:{id:string}}>('/api/backends/:id/command-observation',async(request)=>{
     requireBackendVisibleToClient(request.headers,request.params.id);

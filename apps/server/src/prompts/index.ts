@@ -29,6 +29,10 @@ export const quickChatSystemPrompt = () => render('quick-chat-system');
 export const assistantInstructions = () => render('assistant');
 export const assistantSystemPrompt = () => render('assistant-system');
 export const historyCompactionPrompt = () => render('history-compaction');
+/** The first message of one of the 助理's background runs (docs/ASSISTANT.md §7); every value is filled by the server. */
+export const assistantRunBrief = (job: 'supervise' | 'consolidate' | 'delegation', vars: Record<string, string | number>) => render(`assistant-run-${job}`, vars);
+/** A file of one of Riffet's capability packs for the 助理 (`pack.<id>.<part>.md`). */
+export const assistantPackFile = (name: Extract<PromptName, `pack.${string}`>) => render(name);
 export const deviceObserveDescription = () => render('device-observe');
 export const screenRules = (topic: 'observe' | 'steps' | 'flow' | 'errors') => render(`screen-help-${topic}`);
 

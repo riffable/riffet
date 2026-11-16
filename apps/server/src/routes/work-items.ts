@@ -1,8 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import type { AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET } from '../../../../packages/contracts/src/index.js';
+import type { AssistantDelegation, AssistantFile, AssistantPack, AssistantRunUsage, AssistantInstructions, AssistantMemory, SessionWorkItemRequest, WorkItemAnswer, WorkItemBrief, WorkItemCreate, WorkItemList, WorkItemPatch, WorkItemRework } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { projectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
-import { readAssistantMemory } from '../assistant/home.js';
+import { createReadStream, constants, openSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import { basename } from 'node:path';
+import { assistantFilePath, forgetAssistantMemory, listAssistantFiles, readAssistantMemory } from '../assistant/home.js';
+import { addAssistantPack, listAssistantPacks, removeAssistantPack } from '../assistant/packs.js';
 import { assistantInstructionsFile, assistantProject } from '../work-items/index.js';
 import { revisionedList } from './params.js';
 import type { RouteDeps } from './deps.js';
@@ -38,6 +43,35 @@ export function registerWorkItemRoutes(app: FastifyInstance, deps: RouteDeps): v
   });
   // What the 助理 remembers, read-only: the owner changes it by telling the 助理 (docs/ASSISTANT.md §3.2).
   app.get('/api/assistant/memory',async():Promise<AssistantMemory>=>readAssistantMemory(assistantProject(store,deps.stateDir).cwd));
+  // The owner forgets one topic; anything else they tell the 助理.
+  app.delete<{Params:{name:string}}>('/api/assistant/memory/:name',async(request,reply)=>{
+    try{await forgetAssistantMemory(assistantProject(store,deps.stateDir).cwd,request.params.name);}
+    catch(error){if((error as {code?:string}).code==='MEMORY_NOT_FOUND')throw new AppError('MEMORY_NOT_FOUND','No such memory',404);throw error;}
+    reply.code(204);
+  });
+  // What the 助理 made for the owner: read-only, and only inside its files folder.
+  // Capability packs (docs/ASSISTANT.md §8.2): the main conversation's CLI picks a change up when it next rests.
+  const assistantCwd=()=>assistantProject(store,deps.stateDir).cwd;
+  app.get('/api/assistant/packs',async():Promise<{packs:AssistantPack[]}>=>({packs:listAssistantPacks(assistantCwd())}));
+  app.put<{Params:{id:string}}>('/api/assistant/packs/:id',async(request):Promise<{packs:AssistantPack[]}>=>{const packs=await addAssistantPack(assistantCwd(),request.params.id);deps.restartAssistant?.();return {packs};});
+  app.delete<{Params:{id:string}}>('/api/assistant/packs/:id',async(request):Promise<{packs:AssistantPack[]}>=>{const packs=await removeAssistantPack(assistantCwd(),request.params.id);deps.restartAssistant?.();return {packs};});
+  app.get('/api/assistant/files',async():Promise<{files:AssistantFile[]}>=>({files:listAssistantFiles(assistantProject(store,deps.stateDir).cwd)}));
+  app.get<{Querystring:{path?:string}}>('/api/assistant/file',async(request,reply)=>{
+    const path=typeof request.query.path==='string'?request.query.path:'';
+    const file=path&&path.length<=1024?assistantFilePath(assistantProject(store,deps.stateDir).cwd,path):undefined;
+    if(!file)throw new AppError('FILE_NOT_FOUND','No such file',404);
+    const size=(await stat(file)).size;
+    if(size>ASSISTANT_BUDGET.servedFileBytes)throw new AppError('FILE_TOO_LARGE','This file is too large to download here',413);
+    const name=basename(file);
+    reply.header('Content-Type','application/octet-stream').header('Content-Disposition',`attachment; filename*=UTF-8''${encodeURIComponent(name)}`).header('X-Content-Type-Options','nosniff').header('Cache-Control','no-store');
+    // A link put in its place after the listing is not followed.
+    return reply.send(createReadStream(file,{fd:openSync(file,constants.O_RDONLY|constants.O_NOFOLLOW)}));
+  });
+  // What the 助理 follows over time (docs/ASSISTANT.md §7.3): the owner reads and ends them; the 助理 makes them.
+  const delegations=()=>deps.assistantDelegations?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})();
+  app.get('/api/assistant/runs/usage',async():Promise<AssistantRunUsage>=>(deps.assistantRuns?.()??(()=>{throw new AppError('SERVICE_STARTING','The workbench is starting',503);})()).usage());
+  app.get('/api/assistant/delegations',async():Promise<{delegations:AssistantDelegation[]}>=>({delegations:delegations().list()}));
+  app.post<{Params:{id:string}}>('/api/assistant/delegations/:id/end',async(request):Promise<AssistantDelegation>=>delegations().end(request.params.id,'owner'));
   app.post<{Params:{id:string};Body:Partial<WorkItemRework>}>('/api/work-items/:id/rework',async(request)=>workItems.rework(request.params.id,request.body?.text,request.body?.commandId));
   app.post<{Params:{id:string};Body:SessionWorkItemRequest}>('/api/sessions/:id/work-item',async(request)=>{
     const session=store.getSession(request.params.id);

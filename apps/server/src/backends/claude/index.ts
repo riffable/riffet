@@ -94,17 +94,24 @@ const MAX_SLASH_CATALOGS = 32;
 /** How stale a catalog a send may decide by; skills change when files do, not per message. */
 const SEND_SLASH_CATALOG_MAX_AGE_MS = 10 * 60_000;
 
-function claudeSlashItems(profile: NativeBackendProfileConfig, cwd: string, maxAgeMs: number): Promise<NativeSlashItem[]> {
-  const key = JSON.stringify([profile.id, executableOf(profile), configDirOf(profile), cwd]);
+/** [launchArgs] are a standing conversation's (its isolation and plugin folders): it lists what that launch loads. */
+function claudeSlashItems(profile: NativeBackendProfileConfig, cwd: string, maxAgeMs: number, launchArgs: readonly string[] = []): Promise<NativeSlashItem[]> {
+  const key = JSON.stringify([profile.id, executableOf(profile), configDirOf(profile), cwd, launchArgs]);
   const entry = slashCatalogs.get(key) ?? { at: 0 };
   slashCatalogs.delete(key);
   slashCatalogs.set(key, entry);
   if (slashCatalogs.size > MAX_SLASH_CATALOGS) slashCatalogs.delete(slashCatalogs.keys().next().value!);
   if (entry.items && Date.now() - entry.at <= maxAgeMs) return Promise.resolve(entry.items);
-  entry.request ??= probeClaudeSlashItems(executableOf(profile), cwd, profileEnv(profile))
+  entry.request ??= probeClaudeSlashItems(executableOf(profile), cwd, profileEnv(profile), launchArgs)
     .then(items => { entry.items = items; entry.at = Date.now(); return items; })
     .finally(() => { entry.request = undefined; });
   return entry.request;
+}
+
+/** What a probe adds to list a standing conversation's extensions as its launch loads them; nothing for any other. */
+function standingArgs(host: NativeBackendHost, project: Project): string[] {
+  const standing = host.standing?.launch(project);
+  return standing ? [...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir]), ...(standing.mcpConfigFiles.length ? ['--mcp-config', ...standing.mcpConfigFiles] : [])] : [];
 }
 
 function isClaudeSessionId(value: string): boolean {
@@ -284,15 +291,13 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
     };
   }
 
-  async slashItems(_host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
-    return await claudeSlashItems(profile, await queryDirectory(project, profile), 0);
+  async slashItems(host: NativeBackendHost, project: Project | undefined, profile: NativeBackendProfileConfig): Promise<NativeSlashItem[]> {
+    return await claudeSlashItems(profile, await queryDirectory(project, profile), 0, project ? standingArgs(host, project) : []);
   }
 
   private async loadedExtensions(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig) {
     // A standing conversation loads its own directory's extensions only, so that is what is listed for it.
-    const standing = host.standing?.launch(project);
-    const launchArgs = standing ? [...STANDING_ISOLATION, ...standing.pluginDirs.flatMap(dir => ['--plugin-dir', dir]), ...(standing.mcpConfigFiles.length ? ['--mcp-config', ...standing.mcpConfigFiles] : [])] : [];
-    return await probeClaudeLoadedExtensions(executableOf(profile), await queryDirectory(project, profile), profileEnv(profile), launchArgs);
+    return await probeClaudeLoadedExtensions(executableOf(profile), await queryDirectory(project, profile), profileEnv(profile), standingArgs(host, project));
   }
 
   async available(_host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<NativeBackendAvailability> {
@@ -331,8 +336,11 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       // Only a message naming a `/token` needs the catalog; one that cannot be listed is sent as
       // typed and judged by its text alone.
       const sourceText = request.sourceText ?? request.input.text;
+      // A standing conversation's own command, which the CLI knows by another name.
+      const standing = host.standing?.rewrite?.(request.session.id, sourceText);
+      if (standing) { await runtime.send(request, { deliverText: standing, command: true }); return; }
       const items = slashTokens(sourceText).length
-        ? await claudeSlashItems(request.profile, request.project.cwd, SEND_SLASH_CATALOG_MAX_AGE_MS).catch(() => undefined)
+        ? await claudeSlashItems(request.profile, request.project.cwd, SEND_SLASH_CATALOG_MAX_AGE_MS, standingArgs(host, request.project)).catch(() => undefined)
         : undefined;
       const leading = items ? leadWithInlineSkill(sourceText, items) : sourceText;
       const text = leading === sourceText ? request.input.text : `${leading}${request.input.text.slice(sourceText.length)}`;
@@ -602,14 +610,6 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
   }
 
   private async ensureRuntime(host: NativeBackendHost, session: Session, project: Project, profile: NativeBackendProfileConfig, start: boolean, resumeRequested = Boolean(session.nativeSessionId), launchNotice?: string): Promise<ClaudeSessionRuntime> {
-    const current = this.runtimes.get(session.id);
-    if (current) {
-      if (start) await current.setStartRequested();
-      return current;
-    }
-    const pending = this.creating.get(session.id);
-    if (pending) {
-      const runtime = await pending;
     const cleared = this.runtimes.get(session.id);
     if (cleared?.clearedTo) {
       // After `/clear` the conversation goes on under the CLI's new id: the old one leads its history.
@@ -623,6 +623,14 @@ export class ClaudeBackendAdapter implements NativeBackendDriver {
       session = host.getSession(session.id);
       resumeRequested = true;
     }
+    const current = this.runtimes.get(session.id);
+    if (current) {
+      if (start) await current.setStartRequested();
+      return current;
+    }
+    const pending = this.creating.get(session.id);
+    if (pending) {
+      const runtime = await pending;
       if (start) await runtime.setStartRequested();
       return runtime;
     }

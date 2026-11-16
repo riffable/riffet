@@ -198,16 +198,22 @@ export interface StandingLaunch {
   protectedFiles: string[];
   /** The context size at which the CLI summarizes on its own, applied when the model's window is larger. */
   compactAtTokens: number;
+  /** Permission rules allowed without asking, for a conversation nobody answers (the 助理's background runs). */
+  allow?: string[];
 }
 
 /** `prompt`: a message is about to be read. `start`: a newly launched CLI session, with no history of its own. `compact`: the history was just summarized. */
 export type StandingMoment = 'prompt' | 'start' | 'compact';
 
 export interface NativeStandingHost {
-  /** Undefined for a project whose conversations are not standing ones. */
-  launch(project: Project): StandingLaunch | undefined;
+  /** Undefined for a project whose conversations are not standing ones. [session] is the one launching, when there is one. */
+  launch(project: Project, session?: Pick<Session, 'origin'>): StandingLaunch | undefined;
   /** Text for the model's context at this moment (the time, what it missed); it is never shown as a message. */
   context(sessionId: string, moment: StandingMoment): string | undefined;
+  /** The conversation's CLI is about to summarize it on its own. */
+  compacting?(sessionId: string): void;
+  /** What the CLI is given instead of a message the owner typed (`/new` → `/clear`); undefined sends it as typed. */
+  rewrite?(sessionId: string, text: string): string | undefined;
 }
 
 /** A stdio MCP server for one conversation's CLI: the Riffet shim and its credential file. */

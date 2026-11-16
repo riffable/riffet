@@ -66,6 +66,30 @@ export const STEADY_FOOTPRINT_BYTES = {
   server: 512 * MIB,
 } as const;
 
+/** The 助理's background runs (docs/ASSISTANT.md §7). */
+export const ASSISTANT_BUDGET = {
+  /** Background runs going at once; the rest wait their turn. */
+  concurrentRuns: 2,
+  /** Background runs started in any 24 hours unless the owner set their own (`AssistantSettings.dailyRuns`). */
+  dailyRuns: 30,
+  /** The most the owner may set it to. */
+  dailyRunsMax: 200,
+  /** Finished run records kept; older ones and their archived conversations are dropped. */
+  keptRuns: 200,
+  /** Notes waiting for the main conversation; past it the oldest is dropped. */
+  pendingNotices: 20,
+  /** Characters of the main conversation a memory consolidation is handed; past it the newest are kept. */
+  consolidationChars: 40_000,
+  /** Delegations open at once. */
+  delegations: 50,
+  /** The shortest gap between two checks of a watched source. */
+  watchMinMinutes: 15,
+  /** Bytes read from a watched page or feed. */
+  watchFetchBytes: 512 * KIB,
+  /** Largest file of its `files/` folder handed out; a bigger one is listed but not served. */
+  servedFileBytes: 50 * MIB,
+} as const;
+
 /** The server's own budgets. */
 export const SERVER_BUDGET = {
   /** Timeline rows of a session idle this long, and not held open, are dropped; they refold from the journal on open. */

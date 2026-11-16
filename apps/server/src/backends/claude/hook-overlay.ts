@@ -112,7 +112,7 @@ export class ClaudeHookOverlay {
       await writeFile(this.mcpConfigFile, `${JSON.stringify({ mcpServers: { [riffetMcp.name]: { type: 'stdio', command: riffetMcp.command, args: riffetMcp.args } } })}\n`, { mode: 0o600 });
     } else this.mcpConfigFile = undefined;
     // Extensions this conversation switched off (docs/EXTENSIONS.md): read from the session record, so a change applies at the next launch like its tool groups.
-    const standing = this.deps.host.standing?.launch(this.deps.project);
+    const standing = this.deps.host.standing?.launch(this.deps.project, this.deps.host.getSession(this.deps.session().id));
     // Left out with the rest of the reader's settings, their sign-in is carried here; the profile's own still wins.
     const owner = standing ? await readOwnerConnection(configDirOf(this.deps.profile()), this.deps.project.cwd) : { settings: {} };
     const extensionsOff = this.deps.host.getSession(this.deps.session().id).extensionsOff;
@@ -130,7 +130,7 @@ export class ClaudeHookOverlay {
       // The workbench's own tools act only on this conversation; asking before each would make a
       // wake-up or notice wait for a reader who may be away. Permission rules merge across sources.
       ...(riffetMcp || standing ? { permissions: {
-        ...(riffetMcp ? { allow: [`mcp__${riffetMcp.name}`] } : {}),
+        ...(riffetMcp || standing?.allow?.length ? { allow: [...(riffetMcp ? [`mcp__${riffetMcp.name}`] : []), ...(standing?.allow ?? [])] } : {}),
         // A deny rule holds in every permission mode. It stops the CLI's file tools, not a shell command.
         ...(standing?.protectedFiles.length ? { deny: standing.protectedFiles.map(file => `Edit(/${file})`) } : {}),
       } } : {}),

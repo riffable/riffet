@@ -178,13 +178,15 @@ describe('work items', () => {
     // The first conversation opened there is the 助理's main one, and stays it until it is archived.
     expect(store.getProject(home.id).mainSessionId).toBe('a1');
     expect(store.getSession('a1')).toMatchObject({ title: '个人助理', titleSource: 'user' });
-    expect((await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a2', initialMessage: { commandId: 'c-a2', text: 'Another' } })).statusCode).toBe(202);
+    // While it can be opened, no client starts a second one there.
+    const another = await call('POST', '/api/sessions', { kind: 'native', projectId: home.id, backendId: 'cursor', clientSessionId: 'a2', initialMessage: { commandId: 'c-a2', text: 'Another' } });
+    expect([another.statusCode, (another.json() as { error: { code: string } }).error.code]).toEqual([409, 'ASSISTANT_CONVERSATION_EXISTS']);
     expect(store.getProject(home.id).mainSessionId).toBe('a1');
     expect(store.getProject(project.id).mainSessionId).toBeUndefined();
     // It sees the owner's conversations, never its own project's or another system project's.
     const listed = await assistant.call('session_list', {}, { sessionId: 'a1' }) as { sessions: Array<{ id: string }> };
     expect(listed.sessions.map(session => session.id)).toEqual(['s1']);
-    await expect(assistant.call('session_read', { session: 'a2' }, { sessionId: 'a1' })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    await expect(assistant.call('session_read', { session: 'a1' }, { sessionId: 'a1' })).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
 
     // A planned change waits for the owner; starting it opens one conversation that carries the brief.
     const planned = await assistant.call('task_create', { title: 'Fix the login', criteria: ['Tests pass'], project: 'Tasks', agent: 'cursor', start: false }) as { created: { task: number; status: string } };
@@ -230,5 +232,26 @@ describe('work items', () => {
     writeFileSync(join(projectDir, 'elsewhere', 'note.md'), 'outside');
     symlinkSync(join(projectDir, 'elsewhere'), join(home, 'memory'));
     expect(await read()).toMatchObject({ index: '', entries: [] });
+  });
+
+  it("lets supervision push a stopped task twice, then only the owner's word moves it on", async () => {
+    const { store, call, create, workItems } = await boot();
+    const id = ((await call('POST', '/api/work-items', { id: 'w-push', title: 'Ship it', assignee: { kind: 'agent', backendId: 'cursor' } })).json() as WorkItem).id;
+    expect((await create('s1', 'Ship it', 'c-s1', { workItemId: id })).statusCode).toBe(202);
+    const sent = () => store.listRuns('s1').filter(run => run.commandId.startsWith('supervise-')).length;
+    workItems.nudge(id, '继续', 'supervise-r1-0');
+    // The same message again sends nothing new.
+    workItems.nudge(id, '继续', 'supervise-r1-0');
+    workItems.superviseRework(id, 'The tests still fail', 'supervise-r2-0');
+    expect(sent()).toBe(2);
+    expect(() => workItems.nudge(id, '继续', 'supervise-r3-0')).toThrow(/pushed twice/);
+    workItems.markStuck(id, 'Needs a decision on the API');
+    expect(workItems.get(id).stuck?.note).toBe('Needs a decision on the API');
+    // The owner answers in the conversation: supervision may push again, and it is no longer stuck once the conversation runs.
+    expect((await call('POST', '/api/sessions/s1/native/send', { commandId: 'owner-1', text: 'Use the new API' })).statusCode).toBeLessThan(300);
+    workItems.nudge(id, '继续', 'supervise-r4-0');
+    expect(sent()).toBe(3);
+    workItems.clearStuck(id);
+    expect(workItems.get(id).stuck).toBeUndefined();
   });
 });

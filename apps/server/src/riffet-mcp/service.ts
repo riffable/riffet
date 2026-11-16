@@ -157,7 +157,53 @@ const ASSISTANT_TOOLS: readonly ToolDefinition[] = [...BOARD_TOOLS,
   },
   { name: 'server_status', description: 'Riffet itself: server version and uptime, which agents are available, how many conversations are running, waiting, idle or failed, and the next automation runs.', inputSchema: object() },
 ];
-const ASSISTANT_NAMES = new Set(ASSISTANT_TOOLS.map(tool => tool.name));
+/** Delegations (docs/ASSISTANT.md §7.3): the 助理's conversations manage what it follows over time. */
+const TRIGGER = {
+  type: 'object',
+  description: 'What starts a run: {"kind":"schedule","cron":"0 9 * * 5"} (five fields, the owner\'s time zone), {"kind":"github-release","repo":"owner/name"} or {"kind":"page","url":"https://…"}. A watched source may add "everyMinutes" (15 or more, default 60).',
+  properties: {
+    kind: { type: 'string', enum: ['schedule', 'github-release', 'page'] },
+    cron: { type: 'string' }, timeZone: { type: 'string' }, repo: { type: 'string' }, url: { type: 'string' },
+    everyMinutes: { type: 'integer', minimum: 15 },
+  },
+  required: ['kind'],
+};
+const DELEGATION_REF = { type: 'string', description: 'The delegation id, from delegation_list.' };
+const DELEGATION_TOOLS: readonly ToolDefinition[] = [
+  {
+    name: 'delegation_create',
+    description: 'Record something the owner handed you to follow over time. The server checks the trigger without you and starts a background run of yours when it fires; that run decides whether to tell the owner. Repeat the trigger and the end date back to the owner.',
+    inputSchema: object({
+      goal: { type: 'string', description: "What the owner wants, in their words, with the scope you agreed. At most 4000 characters." },
+      attention: { type: 'string', description: 'What is worth acting on, and what is worth telling the owner about.' },
+      trigger: TRIGGER,
+      until: { type: 'string', description: 'When it ends, an ISO time; default three months, at most a year.' },
+    }, ['goal', 'attention', 'trigger']),
+  },
+  { name: 'delegation_list', description: 'The delegations: open ones, then those ended in the last 30 days, with their trigger, end date and what was handled last.', inputSchema: object({}, []) },
+  {
+    name: 'delegation_update',
+    description: "Change an open delegation when the owner adds to it or changes its scope. A new trigger starts from where its source stands now.",
+    inputSchema: object({ delegation: DELEGATION_REF, goal: { type: 'string' }, attention: { type: 'string' }, trigger: TRIGGER, until: { type: 'string' } }, ['delegation']),
+  },
+  { name: 'delegation_end', description: 'End a delegation: the owner no longer wants it, or its goal is met.', inputSchema: object({ delegation: DELEGATION_REF }, ['delegation']) },
+];
+/** A background run's own tools (docs/ASSISTANT.md §7.1–§7.2), listed only to the run's conversation. */
+const RUN_TOOLS: readonly ToolDefinition[] = [
+  {
+    name: 'run_report',
+    description: 'End this background run with what it found. silent: nothing worth saying. tell: worth mentioning when the owner is next here. ask: the owner should know or decide soon; it reaches their phone. After it, end your turn.',
+    inputSchema: object({
+      outcome: { type: 'string', enum: ['silent', 'tell', 'ask'] },
+      text: { type: 'string', description: 'For tell and ask: one or two sentences for the owner, saying what it is about. At most 2000 characters.' },
+    }, ['outcome']),
+  },
+];
+const SUPERVISE_TOOLS: readonly ToolDefinition[] = [
+  { name: 'task_continue', description: "Send the task's stopped conversation 「继续」 or an answer to its question. Refused after two pushes without progress.", inputSchema: object({ text: { type: 'string', description: 'The message, at most 10000 characters.' } }, ['text']) },
+  { name: 'task_rework', description: "Send the task's delivery back with what does not meet its criteria. Refused after two rounds without progress.", inputSchema: object({ text: { type: 'string', description: 'What to change, at most 10000 characters.' } }, ['text']) },
+];
+const ASSISTANT_NAMES = new Set([...ASSISTANT_TOOLS, ...DELEGATION_TOOLS, ...RUN_TOOLS, ...SUPERVISE_TOOLS].map(tool => tool.name));
 
 export interface McpToolResult { content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>; structuredContent?: Record<string, unknown>; isError?: boolean }
 
@@ -275,7 +321,7 @@ export interface AssistantTools { call(name: string, args: Record<string, unknow
 
 export interface RiffetMcpDeps { workItems?: () => TaskReports | undefined; assistant?: () => AssistantTools | undefined; contextReferences?: SessionReferenceService; store: Store; auth: Auth; credentials: RiffetMcpCredentials; notices: NoticeLog; orchestration: () => OrchestrationService; devices: DeviceChannel; workspace: WorkspaceService; plugins?: () => PluginToolSource | undefined }
 
-const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...ASSISTANT_TOOLS].map(tool => tool.name));
+const CORE_NAMES = new Set([...TOOLS, ...TASK_TOOLS, ...ASSISTANT_TOOLS, ...DELEGATION_TOOLS, ...RUN_TOOLS, ...SUPERVISE_TOOLS].map(tool => tool.name));
 
 /**
  * The Riffet MCP server behind each conversation's stdio shim (docs/DEVICES.md §2). A request is
@@ -331,7 +377,10 @@ export class RiffetMcpService implements NativeRiffetMcpHost {
     const assistant = this.inAssistant(session);
     // A scheduled task opens conversations in its project. In the 助理's that is one nobody is shown: it has a
     // single conversation, which it wakes with `schedule_wakeup` instead (docs/ASSISTANT.md §6).
-    const core = [...(assistant ? TOOLS.filter(tool => tool.name !== 'schedule_task') : TOOLS), ...(session.workItemId ? TASK_TOOLS : []), ...(assistant ? ASSISTANT_TOOLS : []), ...this.pluginTools(session)];
+    // A background run of the 助理 reports how it ended, and a supervision run may push its task (docs/ASSISTANT.md §7).
+    const run = assistant && session.origin?.kind === 'assistant';
+    const core = [...(assistant ? TOOLS.filter(tool => tool.name !== 'schedule_task') : TOOLS), ...(session.workItemId ? TASK_TOOLS : []), ...(assistant ? [...ASSISTANT_TOOLS, ...DELEGATION_TOOLS] : []),
+      ...(run ? RUN_TOOLS : []), ...(run && session.origin?.job === 'supervise' ? SUPERVISE_TOOLS : []), ...this.pluginTools(session)];
     const devices = this.devicesOf(session);
     if (!devices.length) return core;
     const names = Object.fromEntries(devices.map(id => [id, this.deps.auth.device(id)!.name]));

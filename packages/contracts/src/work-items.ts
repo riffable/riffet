@@ -48,6 +48,11 @@ export interface WorkItem {
   questions?: WorkItemQuestion[];
   /** The latest submission (`task_submit`); kept after review so the panel can show what was delivered. */
   submission?: WorkItemSubmission;
+  /**
+   * Set by the 助理's supervision when it could not move the task on (docs/TASK-BOARD.md §3): its
+   * judgment, for the inbox's 推不动. Cleared when the task's conversation runs again or the owner acts.
+   */
+  stuck?: { note: string; at: string };
   /** When `status` last changed. */
   statusAt: string;
   createdAt: string;
@@ -133,8 +138,12 @@ export type WorkItemEvent = { id: string; workItemId: string; at: string } & (
   /** The owner answered `questionId`; the text went to the conversation that asked. */
   | { kind: 'answer'; questionId: string; text: string }
   | { kind: 'submit'; submission: WorkItemSubmission }
-  /** Sent back for more work with the owner's reasons, which went to the conversation as a message. */
-  | { kind: 'rework'; sessionId: string; text: string });
+  /** Sent back for more work with the owner's reasons (or the 助理's, `by`), which went to the conversation as a message. */
+  | { kind: 'rework'; sessionId: string; text: string; by?: 'assistant' }
+  /** The 助理's supervision moved a stopped conversation on: 「继续」, or an answer to its question. */
+  | { kind: 'nudge'; sessionId: string; text: string }
+  /** The 助理's supervision could not move it on; the note is its judgment, shown in the inbox. */
+  | { kind: 'stuck'; note: string });
 
 /** `POST /api/work-items/:id/questions/:questionId/answer`. `commandId` makes a retry send the answer once. */
 export interface WorkItemAnswer { text: string; commandId: string }

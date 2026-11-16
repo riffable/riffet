@@ -1,4 +1,5 @@
 import type { NativeBackendId } from './agent-ids.js';
+import type { AssistantJob } from './session.js';
 
 /** What a message's `{name}` placeholders are filled with. */
 export type TextParams = Record<string, string | number>;
@@ -89,11 +90,73 @@ export interface AssistantSettings {
   backendId?: NativeBackendId; profileId?: string; model?: string;
   /** The owner's IANA time zone, as the client they last used reports it: the 助理 is told the time in it. Unset, the server's. */
   timeZone?: string;
+  /** 跟进 (docs/ASSISTANT.md §7.2): the 助理 looks at a task's conversation once it stops. Off unless switched on: each look is a run the owner pays for. */
+  supervision?: boolean;
+  /** 记忆整理 (docs/ASSISTANT.md §7.4), nightly and before the main conversation is summarized. Unset means on. */
+  consolidation?: boolean;
+  /** Background runs started in any 24 hours; past it the rest wait. Unset, `ASSISTANT_BUDGET.dailyRuns`. */
+  dailyRuns?: number;
+  /**
+   * 助理派发任务 (docs/TASK-BOARD.md §10): `edits` (unset) lets it start work that changes nothing; `all` leaves
+   * every task it plans as a card the owner starts, which the server holds it to.
+   */
+  dispatch?: 'edits' | 'all';
 }
 /** Each field given replaces its own; `null` clears it. */
 export type AssistantSettingsUpdate = { [K in keyof AssistantSettings]?: AssistantSettings[K] | null };
+/** What starts a delegation's run: a time, or a change the server watches for without the model. */
+export type AssistantDelegationTrigger =
+  | { kind: 'schedule'; cron: string; timeZone?: string }
+  | { kind: 'github-release'; repo: string; everyMinutes?: number }
+  | { kind: 'page'; url: string; everyMinutes?: number };
+/**
+ * Something the owner handed the 助理 to follow over time (docs/ASSISTANT.md §7.3). It ends on `until`,
+ * or when the owner or the 助理 ends it. `cursor` is what was handled last: a release tag or a page digest.
+ */
+export interface AssistantDelegation {
+  id: string;
+  goal: string;
+  /** What is worth acting on, and what is worth telling the owner about. */
+  attention: string;
+  trigger: AssistantDelegationTrigger;
+  until: string;
+  state: 'active' | 'ended';
+  endedReason?: 'expired' | 'owner' | 'assistant';
+  cursor?: string;
+  lastCheckedAt?: string;
+  lastRunAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+/**
+ * `GET /api/assistant/runs/usage`: the background runs of the last `days` days by job, with the tokens their
+ * conversations reported; `started` counts the last 24 hours against `limit`, and `waiting` the runs held back by it.
+ */
+export interface AssistantRunUsage {
+  days: number;
+  jobs: Array<{ job: AssistantJob; runs: number; tokens: number }>;
+  started: number;
+  limit: number;
+  waiting: number;
+}
+/**
+ * A capability pack of the 助理 (docs/ASSISTANT.md §8.2): a plugin folder under its `packs/`, with a skill, the
+ * memory topic it keeps, and the MCP servers it needs. `entry` is the command that starts its work (`/travel:plan`),
+ * shown as an entry above the 助理's composer once installed. `builtIn` packs ship with Riffet and can be added or
+ * removed; others were put there by the owner.
+ */
+export interface AssistantPack {
+  id: string;
+  title: string;
+  description?: string;
+  entry?: string;
+  installed: boolean;
+  builtIn: boolean;
+}
 /** `GET`/`PUT /api/assistant/instructions`; `custom` is false while the file holds Riffet's own text. A `PUT` of `null` restores it. */
 export interface AssistantInstructions { text: string; custom: boolean; }
+/** A file the 助理 made for the owner in its `files/` folder; `path` is relative to it. */
+export interface AssistantFile { path: string; size: number; modifiedAt: string }
 /** One topic file of the 助理's memory, as it wrote it. */
 export interface AssistantMemoryEntry { name: string; text: string; modifiedAt: string; }
 /**

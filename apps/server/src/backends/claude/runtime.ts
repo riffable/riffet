@@ -1306,7 +1306,7 @@ export class ClaudeSessionRuntime {
       // What the old CLI left behind is history: it is read before the launch, which then starts turn-free.
       await this.refreshTranscript();
     }
-    const standing = this.host.standing?.launch(this.project);
+    const standing = this.host.standing?.launch(this.project, this.session);
     const mcpConfigs = [this.overlay.mcpConfigFile, ...(standing?.mcpConfigFiles ?? [])].filter((file): file is string => Boolean(file));
     const args = [
       ...(oldTranscript ? ['--resume', this.nativeSessionId] : ['--session-id', this.nativeSessionId]),
@@ -2263,7 +2263,10 @@ export class ClaudeSessionRuntime {
     if (!mainThread && ['UserPromptSubmit', 'Stop', 'StopFailure', 'SessionEnd'].includes(event)) return {};
     const hookPromptId = string(payload.prompt_id);
     if (event === 'PreCompact') {
-      if (mainThread) await this.compactionHooked(payload.trigger === 'auto' ? 'auto' : 'manual', deliveryId, hookPromptId);
+      if (mainThread) {
+        await this.compactionHooked(payload.trigger === 'auto' ? 'auto' : 'manual', deliveryId, hookPromptId);
+        try { this.host.standing?.compacting?.(this.session.id); } catch { /* a standing host's trouble is not the turn's */ }
+      }
       return {};
     }
     if (event === 'UserPromptSubmit') {

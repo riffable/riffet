@@ -27,7 +27,7 @@ export type CommandSection = '会话' | '设置' | '其他';
 
 /** What `/help` lists, by section; the command panel and the text fallback share it. */
 export const COMMANDS: ReadonlyArray<{ section: CommandSection; usage: string; description: string }> = [
-  { section: '会话', usage: '/new', description: '开始新会话' },
+  { section: '会话', usage: '/new', description: '开始新会话；个人助理里是开始新话题' },
   { section: '会话', usage: '/stop', description: '停止进行中的回合' },
   { section: '会话', usage: '/status', description: '查看项目、会话和模型' },
   { section: '设置', usage: '/project', description: '切换这个聊天的项目' },
@@ -69,6 +69,7 @@ export const REPLY = {
   bound: '已绑定',
   bindFailed: '绑定码无效或已过期',
   newSession: '已开始新会话',
+  newTopic: '已开始新话题，记忆保留',
   noSession: '还没有会话',
   stopped: '已请求停止',
   nothingRunning: '没有进行中的回合',

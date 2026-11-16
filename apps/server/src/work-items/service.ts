@@ -14,6 +14,10 @@ import { WorkItemStore } from './store.js';
 const invalid = (message: string) => new AppError('INVALID_WORK_ITEM', message);
 const notFound = () => new AppError('WORK_ITEM_NOT_FOUND', 'This task does not exist', 404);
 const now = () => new Date().toISOString();
+/** Pushes in a row supervision may make before the task goes to the owner (docs/TASK-BOARD.md §3). */
+const SUPERVISION_PUSHES = 2;
+/** Turns the server sends on someone's behalf: wake-ups, follow-ups, supervision and the 助理's background runs. */
+export const isSystemCommand = (commandId: string) => /^(?:wakeup-|follow-up-|supervise-|assistant-run-)/.test(commandId);
 
 function title(value: unknown): string {
   if (typeof value !== 'string' || !value.trim()) throw invalid('title must not be empty');
@@ -177,6 +181,7 @@ export class WorkItemService {
       const stamp = now();
       if (patch.status !== undefined && status(patch.status) !== current.status) this.changeStatus(next, patch.status, stamp);
       next.updatedAt = stamp;
+      delete next.stuck;
       this.items.update(next);
       return next;
     });
@@ -348,14 +353,18 @@ export class WorkItemService {
       const questions = (current.questions ?? []).filter(entry => entry.id !== questionId);
       this.record(id, { kind: 'answer', questionId, text: reply });
       const next: WorkItem = { ...current, updatedAt: now() };
+      delete next.stuck;
       if (questions.length) next.questions = questions; else delete next.questions;
       this.items.update(next);
       return next;
     });
   }
 
-  /** Not accepted: the owner's reasons go to the conversation that submitted (else the latest), and the item is back in progress. */
-  rework(id: string, reason: unknown, commandId: unknown): WorkItem {
+  /**
+   * Not accepted: the reasons go to the conversation that submitted (else the latest), and the item is back in
+   * progress. The owner's, or the 助理's supervision (`by`), which the owner's clears from the inbox.
+   */
+  rework(id: string, reason: unknown, commandId: unknown, by?: 'assistant'): WorkItem {
     const why = text(reason, 'text', WORK_ITEM_LIMITS.comment);
     const command = clientId(commandId, 'commandId') ?? (() => { throw invalid('commandId is required'); })();
     const item = this.get(id);
@@ -366,10 +375,87 @@ export class WorkItemService {
       const current = this.get(id);
       if (this.items.event(command)) return current;
       const next: WorkItem = { ...current, updatedAt: now() };
-      this.record(id, { kind: 'rework', sessionId, text: why }, command);
+      if (!by) delete next.stuck;
+      this.record(id, { kind: 'rework', sessionId, text: why, ...(by ? { by } : {}) }, command);
       if (current.status !== 'doing') this.changeStatus(next, 'doing', next.updatedAt);
       this.items.update(next);
       return next;
+    });
+  }
+
+  // ---- The 助理's supervision (docs/TASK-BOARD.md §3, docs/ASSISTANT.md §7.2) -------------------
+
+  /** The conversation supervision talks to: the one that submitted, else the latest. */
+  latestSession(id: string): string | undefined { return this.get(id).submission?.sessionId ?? this.sessionsOf(id).at(-1); }
+  /** The task's conversations, oldest first. */
+  sessions(id: string): string[] { return this.sessionsOf(id); }
+
+  /**
+   * How many times in a row supervision has pushed this task (「继续」, an answer, a rework) with nothing since: no
+   * delivery, no word from the owner on the task or in its conversations. Two is the most (§3).
+   */
+  pushesWithoutProgress(id: string): number {
+    const events = this.items.events(id);
+    let count = 0, since: string | undefined;
+    for (let index = events.length - 1; index >= 0; index--) {
+      const event = events[index]!;
+      if (event.kind === 'nudge' || (event.kind === 'rework' && event.by === 'assistant')) { count++; since = event.at; continue; }
+      if (event.kind === 'submit' || event.kind === 'answer' || (event.kind === 'rework' && !event.by) || event.kind === 'status') break;
+    }
+    if (!count || !since) return count;
+    // The owner said something in one of its conversations after the first of those pushes.
+    const placeholders = this.sessionsOf(id).map(() => '?').join(',');
+    if (!placeholders) return count;
+    const typed = this.store.db.prepare(`SELECT command_id AS commandId FROM runs WHERE session_id IN (${placeholders}) AND json_extract(json,'$.createdAt')>?`).all(...this.sessionsOf(id), since) as Array<{ commandId: string }>;
+    return typed.some(row => !isSystemCommand(row.commandId)) ? 0 : count;
+  }
+
+  /** Supervision's 「继续」 or answer, sent once per [commandId]. Refused after two pushes without progress. */
+  nudge(id: string, message: unknown, commandId: string): WorkItem {
+    const body = text(message, 'text', WORK_ITEM_LIMITS.comment);
+    const item = this.get(id);
+    if (this.items.event(commandId)) return item;
+    if (this.pushesWithoutProgress(id) >= SUPERVISION_PUSHES) throw new AppError('SUPERVISION_LIMIT', 'This task was pushed twice without progress; report it to the owner instead', 409);
+    const sessionId = this.latestSession(id);
+    if (!sessionId) throw new AppError('NO_SESSION', 'This task has no conversation to send it to', 409);
+    this.sendTo(sessionId, body, commandId);
+    return this.write(() => {
+      const current = this.get(id);
+      if (!this.items.event(commandId)) this.record(id, { kind: 'nudge', sessionId, text: body }, commandId);
+      return current;
+    });
+  }
+
+  /** Supervision's rework, refused like a nudge after two pushes without progress. */
+  superviseRework(id: string, reason: unknown, commandId: string): WorkItem {
+    if (!this.items.event(commandId) && this.pushesWithoutProgress(id) >= SUPERVISION_PUSHES) throw new AppError('SUPERVISION_LIMIT', 'This task was pushed twice without progress; report it to the owner instead', 409);
+    return this.rework(id, reason, commandId, 'assistant');
+  }
+
+  /**
+   * Supervision's word for the owner. A delivery it checked is already waiting for 验收, so the check goes on the
+   * task as a comment; anything else is 推不动: the task goes to the inbox with the judgment.
+   */
+  markStuck(id: string, note: string): void {
+    this.write(() => {
+      const current = this.items.get(id);
+      if (!current || current.status === 'done' || current.status === 'cancelled') return;
+      if (current.status === 'review') { this.record(id, { kind: 'comment', text: note }); this.items.update({ ...current, updatedAt: now() }); return; }
+      const at = now();
+      this.record(id, { kind: 'stuck', note });
+      this.items.update({ ...current, stuck: { note, at }, updatedAt: at });
+    });
+  }
+
+  /** Its conversation moved again: the task is no longer stuck. */
+  clearStuck(id: string): void {
+    const current = this.items.get(id);
+    if (!current?.stuck) return;
+    this.write(() => {
+      const latest = this.items.get(id);
+      if (!latest?.stuck) return;
+      const { stuck: _stuck, ...rest } = latest;
+      this.items.update({ ...rest, updatedAt: now() });
     });
   }
 

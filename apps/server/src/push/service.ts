@@ -7,7 +7,7 @@ import type { DeviceChannel } from '../riffet-mcp/devices.js';
 import type { Store } from '../store.js';
 import type { ApnsClient, ApnsMessage } from './apns.js';
 
-export type SessionAlertKind = 'finished' | 'waiting' | 'failed' | 'interrupted';
+export type SessionAlertKind = 'finished' | 'waiting' | 'failed' | 'interrupted' | 'notice';
 
 const ACTIVE: ReadonlySet<SessionState> = new Set(['running', 'starting', 'cancelling', 'waiting']);
 
@@ -230,7 +230,9 @@ export class PushService {
   private listedFor(deviceId: string, sessions: readonly Session[]): Session[] {
     const request = { headers: { [CLIENT_FEATURES_HEADER]: (this.deps.auth.deviceFeatures(deviceId) ?? []).join(',') } };
     const getProject = (id: string) => this.deps.store.getProject(id);
+    // The 助理's background runs are its own work, not the owner's conversations (docs/ASSISTANT.md §7.1).
     return withoutQuickChats(sessions, request).filter(session => {
+      if (session.origin?.kind === 'assistant') return false;
       try { return sessionVisibleToClient(request.headers, session, getProject); } catch { return false; }
     });
   }
@@ -314,6 +316,17 @@ export class PushService {
       body: body ? plainSummary(body) : undefined, expiration: this.dayAhead(),
       info: kind === 'finished' ? { configRevision: current.configRevision ?? 0 } : {},
     });
+  }
+
+  /**
+   * Something the 助理 says the owner should know now (docs/ASSISTANT.md §7.1), as an alert in [sessionId], its main
+   * conversation. True when a device took it, or when there is no device it could reach.
+   */
+  async notice(sessionId: string, body: string, key: string): Promise<boolean> {
+    const session = this.session(sessionId);
+    if (this.closed || !session || !this.deps.apns.configured()) return true;
+    const outcome = await this.alert(session, 'notice', { body: plainSummary(body), timeSensitive: true, expiration: this.dayAhead(), info: { notice: key } });
+    return outcome.delivered || !outcome.attempted;
   }
 
   private dayAhead(): number { return Math.floor(Date.now() / 1000) + 24 * 60 * 60; }

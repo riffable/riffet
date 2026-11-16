@@ -129,6 +129,27 @@ describe('channel core', () => {
     await vi.waitFor(() => expect(configure).toHaveBeenCalledWith(expect.objectContaining({ id: sessionId }), { model: 'opus[effort=high]' }));
   });
 
+  it("continues the 个人助理's one main conversation from any thread of a private chat, and never offers it to a group", async () => {
+    const { store, account, inbound, bind, message, pickers, context, sent } = await boot();
+    await bind();
+    inbound(message('m1', 'hello'));
+    await vi.waitFor(() => expect(pickers).toHaveLength(1));
+    const assistant = store.listProjects().find(project => project.system === 'assistant')!;
+    expect(pickers[0]!.projects[0]).toMatchObject({ id: assistant.id });
+    await context().action({ account: account.id, eventId: 'e1', operator: { id: 'ou_owner' }, ref: pickers[0]!.ref, action: 'pick', selectedIds: [assistant.id] });
+    // Its agent is chosen from the catalog, which a first read probes.
+    await vi.waitFor(() => expect({ main: store.getProject(assistant.id).mainSessionId, sent }).toMatchObject({ main: expect.any(String) }), { timeout: 15_000 });
+    const main = store.getProject(assistant.id).mainSessionId!;
+    // Another topic of the same chat is the same conversation, not a second one in its directory.
+    inbound({ ...message('m2', 'again'), address: { account: account.id, chatId: 'oc_1', chatType: 'p2p', threadKey: 't2' } });
+    await vi.waitFor(() => expect(store.listRuns(main).map(run => run.commandId)).toEqual(['m1', 'm2']));
+    expect(store.listSessions().filter(session => session.projectId === assistant.id)).toHaveLength(1);
+
+    inbound({ ...message('g1', 'hi', 'ou_owner', 'group'), address: { account: account.id, chatId: 'oc_group', chatType: 'group', threadKey: 'g1' } });
+    await vi.waitFor(() => expect(pickers).toHaveLength(2));
+    expect(pickers[1]!.projects.some(project => project.id === assistant.id)).toBe(false);
+  });
+
   it('keeps one session for two quick messages, and turns away a press from a superseded question card', async () => {
     const { channels, store, project, account, inbound, bind, message, pickers, cards, context } = await boot();
     await bind();

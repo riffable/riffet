@@ -11,10 +11,10 @@ const MAX_PROBE_OUTPUT_BYTES = 8 * 1024 * 1024;
  * sent, so no model is called; hooks are disabled and nothing is persisted, so the probe leaves no
  * trace in the user's sessions or hook pipelines.
  */
-export async function probeClaudeSlashItems(executable: string, cwd: string, env: Record<string, string>): Promise<NativeSlashItem[]> {
+export async function probeClaudeSlashItems(executable: string, cwd: string, env: Record<string, string>, launchArgs: readonly string[] = []): Promise<NativeSlashItem[]> {
   const child = spawn(executable, [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
-    '--settings', JSON.stringify({ disableAllHooks: true }), '--no-session-persistence',
+    '--settings', JSON.stringify({ disableAllHooks: true }), '--no-session-persistence', ...launchArgs,
   ], { cwd, env: { ...process.env, ...env }, stdio: ['pipe', 'pipe', 'ignore'] });
   const requestId = 'riffet-slash';
   return await new Promise<NativeSlashItem[]>((resolve, reject) => {

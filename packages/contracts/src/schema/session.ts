@@ -16,7 +16,7 @@ export const SessionStateSchema = z.enum([
 /** Kotlin keeps this as a string, so a newer server may add a stronger source. */
 export const SessionTitleSourceSchema = z.enum(['prompt', 'provider', 'generated', 'user']).meta({ open: true });
 
-export const SessionOriginKindSchema = z.enum(['fork', 'handoff', 'attempt', 'automation', 'template', 'schedule', 'discussion', 'channel']).meta({ open: true });
+export const SessionOriginKindSchema = z.enum(['fork', 'handoff', 'attempt', 'automation', 'template', 'schedule', 'discussion', 'channel', 'assistant']).meta({ open: true });
 
 export const SessionOriginSchema = z.object({
   kind: SessionOriginKindSchema,
@@ -27,6 +27,8 @@ export const SessionOriginSchema = z.object({
   templateId: z.string().optional(),
   scheduleId: z.string().optional(),
   channel: z.object({ kind: z.string(), account: z.string(), chatId: z.string() }).optional(),
+  job: z.enum(['supervise', 'consolidate', 'delegation']).meta({ open: true }).optional(),
+  assistantRunId: z.string().optional(),
   discussion: z.object({
     anchor: z.object({
       messageId: z.string(), aliases: z.array(z.string()).optional(),

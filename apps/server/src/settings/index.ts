@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -475,7 +475,7 @@ const QUICK_CHAT_PRESET_ID=/^[a-z0-9-]{1,32}$/;
 function validateAssistant(raw: unknown): AssistantSettings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'assistant must be an object');
   const values = raw as Record<string, unknown>;
-  if (Object.keys(values).some(key => !['backendId', 'profileId', 'model', 'timeZone'].includes(key))) throw new AppError('INVALID_SETTINGS', 'assistant contains an unknown field');
+  if (Object.keys(values).some(key => !['backendId', 'profileId', 'model', 'timeZone', 'supervision', 'consolidation', 'dailyRuns', 'dispatch'].includes(key))) throw new AppError('INVALID_SETTINGS', 'assistant contains an unknown field');
   const result: AssistantSettings = {};
   if (values.backendId !== undefined) {
     if (typeof values.backendId !== 'string' || !isNativeBackendId(values.backendId) || values.backendId === 'chat') throw new AppError('INVALID_SETTINGS', 'assistant.backendId is invalid');
@@ -491,6 +491,19 @@ function validateAssistant(raw: unknown): AssistantSettings {
     if (typeof values.timeZone !== 'string' || values.timeZone.length > 64) throw new AppError('INVALID_SETTINGS', 'assistant.timeZone is invalid');
     // A client reports its zone with whatever else it saves; one this server's ICU does not know is left out rather than failing the save.
     if (isTimeZone(values.timeZone)) result.timeZone = values.timeZone;
+  }
+  for (const key of ['supervision', 'consolidation'] as const) {
+    if (values[key] === undefined) continue;
+    if (typeof values[key] !== 'boolean') throw new AppError('INVALID_SETTINGS', `assistant.${key} is invalid`);
+    result[key] = values[key];
+  }
+  if (values.dailyRuns !== undefined) {
+    if (!Number.isInteger(values.dailyRuns) || (values.dailyRuns as number) < 1 || (values.dailyRuns as number) > ASSISTANT_BUDGET.dailyRunsMax) throw new AppError('INVALID_SETTINGS', 'assistant.dailyRuns is invalid');
+    result.dailyRuns = values.dailyRuns as number;
+  }
+  if (values.dispatch !== undefined) {
+    if (values.dispatch !== 'edits' && values.dispatch !== 'all') throw new AppError('INVALID_SETTINGS', 'assistant.dispatch is invalid');
+    result.dispatch = values.dispatch;
   }
   return result;
 }

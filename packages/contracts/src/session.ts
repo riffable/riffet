@@ -215,7 +215,7 @@ export interface ExternalSessionDirectory {
  * `groupId` and `automationId` name what launched it.
  */
 export interface SessionOrigin {
-  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel';
+  kind: 'fork' | 'handoff' | 'attempt' | 'automation' | 'template' | 'schedule' | 'discussion' | 'channel' | 'assistant';
   /** An IM chat the conversation was opened from (docs/design/channels.md). */
   channel?: { kind: string; account: string; chatId: string };
   sessionId?: string; runId?: string; groupId?: string; automationId?: string;
@@ -223,7 +223,11 @@ export interface SessionOrigin {
   templateId?: string; scheduleId?: string;
   /** A discussion keeps its source separately from its own visible messages. */
   discussion?: DiscussionOrigin;
+  /** A background run of the 助理 (docs/ASSISTANT.md §7): which work it does and its record. */
+  job?: AssistantJob; assistantRunId?: string;
 }
+/** The 助理's work outside its main conversation (docs/ASSISTANT.md §7). */
+export type AssistantJob = 'supervise' | 'consolidate' | 'delegation';
 export interface DiscussionSource { anchor: MarkAnchor; quote: MarkQuote }
 export interface DiscussionOrigin extends DiscussionSource {
   capturedAt: string;

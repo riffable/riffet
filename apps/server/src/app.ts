@@ -3,7 +3,7 @@ import { eventLoopBusy, startLoopHealth } from './loop-health.js';
 import { LAUNCHED_BY, SERVER_BUILD, SERVER_VERSION } from './version.js';
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, utimes } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { promisify } from 'node:util';
@@ -39,6 +39,8 @@ import { CodexBackendAdapter } from './backends/codex/index.js';
 import { workspaceObserver } from './backends/shared/workspace-observer.js';
 import { traexFlavor } from './backends/codex/flavors.js';
 import { ClaudeBackendAdapter } from './backends/claude/index.js';
+import { configDirOf } from './backends/claude/launch.js';
+import { findClaudeTranscript } from './backends/claude/history.js';
 import { DshBackendAdapter } from './backends/dsh/index.js';
 import { DroidBackendAdapter } from './backends/droid/index.js';
 import { PiBackendAdapter } from './backends/pi/index.js';
@@ -59,9 +61,13 @@ import { patchSession, registerSessionRoutes } from './routes/sessions.js';
 import { registerBrowserDiagnosticsRoutes } from './routes/browser-diagnostics.js';
 import { registerMarkRoutes } from './routes/marks.js';
 import { registerWorkItemRoutes } from './routes/work-items.js';
-import { AssistantBoard, WorkItemService, assistantProject } from './work-items/index.js';
+import { AssistantBoard, Supervision, WorkItemService, assistantProject, type AssistantWork } from './work-items/index.js';
 import { ensureAssistantHome, type AssistantHome } from './assistant/home.js';
 import { AssistantStanding } from './assistant/standing.js';
+import { AssistantRuns } from './assistant/runs.js';
+import { AssistantDelegations } from './assistant/delegations.js';
+import { Consolidation } from './assistant/consolidation.js';
+import { nextCronTime, parseCron } from './orchestration/cron.js';
 import { assistantSearch } from './search/assistant-search.js';
 import { savedDefaultBackendId } from './session-identity.js';
 import { registerShareRoutes } from './routes/shares.js';
@@ -178,6 +184,11 @@ export async function createApp(options: AppOptions = {}) {
   const adb=new DeviceAdb(options.adbRunner?{runner:options.adbRunner,locate:()=>'adb'}:{});
   let workItemsRef:WorkItemService|undefined;
   let assistantRef:AssistantBoard|undefined;
+  let assistantWork:AssistantWork|undefined;
+  let assistantDelegationsRef:AssistantDelegations|undefined;
+  // Made below the routes' dependencies, which reach them through these.
+  let reclaimerRef:AgentReclaimer|undefined;
+  let assistantMainRef:(()=>string|undefined)|undefined;
   const riffetMcp=new RiffetMcpService({workItems:()=>workItemsRef,assistant:()=>assistantRef,store,auth,contextReferences,credentials:riffetMcpCredentials,notices,devices,workspace,orchestration:()=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);return orchestrationRef;},plugins:()=>plugins});
   const terminal:TerminalService=new TerminalService(store,{stateDir,behaviour:{resolve:target=>nativeBackends.terminalBehaviour(target),launchEnv:()=>nativeBackends.catalog.terminalLaunchEnv()}});
   const git=new GitService({stateDir});
@@ -203,7 +214,12 @@ export async function createApp(options: AppOptions = {}) {
     .register(new ChatBackendAdapter({stateDir,modelProfile:(backendId,profileId)=>nativeBackends.catalog.validateProfile(backendId,profileId),gatewayProfiles:backendId=>nativeBackends.catalog.gatewayProfiles(backendId),defaultModel:()=>settings.getSettings().auxiliaryModels?.chat,latestModel:except=>store.listSessions().find(session=>session.backendId==='chat'&&session.origin?.kind!=='discussion'&&session.id!==except&&session.model)?.model,presets:()=>settings.getSettings().quickChat?.presets??DEFAULT_QUICK_CHAT_PRESETS}));
   // The 助理's directory is made on first use, like its project; its files are checked once per server.
   let assistantHome:AssistantHome|undefined;
-  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),timeZone:()=>settings.getSettings().assistant?.timeZone});
+  // The 助理's background work (docs/ASSISTANT.md §7) is made further down; the standing conversation reaches it through these.
+  let assistantRuns:AssistantRuns|undefined;
+  let consolidation:Consolidation|undefined;
+  const assistantStanding=new AssistantStanding({store,home:()=>assistantHome??=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd),timeZone:()=>settings.getSettings().assistant?.timeZone,
+    pending:{offer:()=>assistantRuns?.offerPending()??[],settle:delivered=>assistantRuns?.settlePending(delivered)},
+    compacting:sessionId=>consolidation?.compacting(sessionId)});
   const nativeBackends=new NativeBackendService({store,terminal,workspace,runtime:sessionLock,registry:backendRegistry,stats,
     defaultProfileId:backendId=>settings.getSettings().nativeBackendDefaults?.[backendId]?.profileId,
     profiles:{get:backendId=>settings.getNativeBackendProfiles(backendId),getConfig:(backendId,profileId)=>settings.getNativeBackendProfileConfig(backendId,profileId)},
@@ -329,8 +345,8 @@ export async function createApp(options: AppOptions = {}) {
   }));
   workItemsRef=workItems;
   assistantRef=new AssistantBoard({store,workItems,defaultBackend:()=>defaultBackendForClient(undefined,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()),
-    search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[]});
-  const deps:RouteDeps={workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
+    search:assistantSearch,transcript:id=>nativeBackends.indexableTranscript(id),backends:()=>nativeBackends.catalog.listBackends(),automations:()=>orchestrationRef?.automations()??[],work:()=>assistantWork,dispatch:()=>settings.getSettings().assistant?.dispatch??'edits'});
+  const deps:RouteDeps={assistantDelegations:()=>assistantDelegationsRef,assistantRuns:()=>assistantRuns,restartAssistant:()=>{const id=assistantMainRef?.();if(id)reclaimerRef?.restartWhenRested(id);},workItems,channels,stateDir,contextReferences,store,auth,settings,taskWorkspaces,themes,owner,terminal,workspace,git,sessionLock,nativeBackends,plugins,tasks,dispatch,orchestration,titles,riffetMcp,devices,adb,notices,streams,monitor,sessionCommands,allowOutsideRead,effectiveSettings,renameNative,readNativeInput,nativeRuns,externalSessions,terminalHolds};
   registerAuthRoutes(app,deps);
   registerBackendRoutes(app,deps);
   // `serverId` stays across restarts (pushes name it as `server`); `instanceId` is this process.
@@ -401,10 +417,68 @@ export async function createApp(options: AppOptions = {}) {
   monitor.start();
   const reclaimer=new AgentReclaimer({store,terminal,nativeBackends,runtime:sessionLock,settings:()=>settings.getSettings(),log:(message,fields)=>console.info(`[riffet] ${message}`,fields)});
   reclaimer.start();
+  reclaimerRef=reclaimer;
   // Made before anyone can ask for it, so a phone opening the list sees it at once. A failure costs quick chat, not the server.
   try{quickChatProject(store,stateDir);}catch(error){console.warn('[riffet] quick chat project unavailable',error);}
   try{assistantHome=ensureAssistantHome(stateDir,assistantProject(store,stateDir).cwd);}catch(error){console.warn('[riffet] assistant project unavailable',error);}
   const stopAssistantWatch=assistantStanding.watch();
+  // ---- The 助理's background runs (docs/ASSISTANT.md §7) ----
+  const ownerZone=()=>settings.getSettings().assistant?.timeZone??Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const assistantMain=()=>{try{const id=assistantProject(store,stateDir).mainSessionId;if(!id)return undefined;return store.getSession(id).archivedAt?undefined:id;}catch{return undefined;}};
+  // Set while a background run adds its notice: its push is the run's own.
+  let addingForRun=false;
+  // Made below: a queued run asks it whether it is still wanted.
+  let supervision:Supervision|undefined;
+  const runs=new AssistantRuns({store,settings:()=>settings.getSettings(),backends:()=>nativeBackends.catalog.listBackends(),project:()=>assistantProject(store,stateDir),
+    start:(body,text,origin,ids)=>orchestration.start(body,text,origin,ids),
+    archive:async sessionId=>{await patchSession(deps,sessionId,{archived:true});},
+    remove:async sessionId=>{await deletion.delete(sessionId,[sessionId]);},
+    markStuck:(workItemId,note)=>workItems.markStuck(workItemId,note),
+    notice:(sessionId,body)=>{addingForRun=true;try{notices.add({sessionId,body,source:'agent'});}finally{addingForRun=false;}},
+    push:(sessionId,body,key)=>push.notice(sessionId,body,key),
+    wanted:run=>{
+      const assistant=settings.getSettings().assistant;
+      if(run.job==='supervise')return Boolean(run.subject&&supervision?.wanted(run.subject,run.key));
+      if(run.job==='consolidate')return assistant?.consolidation!==false;
+      try{return Boolean(run.subject&&assistantDelegationsRef?.get(run.subject).state==='active');}catch{return false;}
+    }});
+  runs.mainSession=assistantMain;
+  assistantMainRef=assistantMain;
+  // What an agent tells the owner with notify_user, or a wake-up's notice, reaches their phone too; a background run
+  // pushes its own, and records whether it went out (docs/ASSISTANT.md §7.1).
+  const stopNoticePush=notices.subscribe(notice=>{
+    if(addingForRun)return;
+    void push.notice(notice.sessionId,[notice.title,notice.body].filter(Boolean).join(' · '),`notice-${notice.id}`).catch(()=>undefined);
+  });
+  assistantRuns=runs;
+  const queue=(job:'supervise'|'consolidate'|'delegation',key:string,brief:Record<string,string|number>,subject?:string)=>{const before=runs.has(key);return runs.enqueue(job,key,brief,subject).state==='queued'&&!before;};
+  const delegations=new AssistantDelegations({store,timeZone:ownerZone,nextCron:(cron,after,zone)=>nextCronTime(parseCron(cron),after,zone),
+    fire:({delegation,reason,payload,key})=>{queue('delegation',key,{goal:delegation.goal,attention:delegation.attention,trigger:JSON.stringify(delegation.trigger),until:delegation.until,cursor:delegation.cursor??'（还没有）',reason,payload:payload||'（没有附带内容）'},delegation.id);},
+    expired:delegation=>runs.addPending(undefined,`委托「${delegation.goal.slice(0,80)}」已到期结束。`),
+    changed:()=>store.workItemsChanged()});
+  assistantDelegationsRef=delegations;
+  consolidation=new Consolidation({store,cwd:()=>assistantProject(store,stateDir).cwd,mainSessionId:assistantMain,timeZone:ownerZone,
+    enabled:()=>settings.getSettings().assistant?.consolidation!==false,
+    enqueue:(key,brief)=>queue('consolidate',key,brief),has:key=>runs.has(key),
+    keepAlive:async sessionId=>{
+      const session=store.getSession(sessionId);
+      if(session.backendId!=='claude'||!session.backendProfileId)return;
+      const configDir=configDirOf({config:settings.getNativeBackendProfileConfig('claude',session.backendProfileId)??{}} as Parameters<typeof configDirOf>[0]);
+      const at=new Date();
+      for(const id of new Set([session.nativeSessionId,...session.previousNativeSessionIds??[]].filter((value):value is string=>Boolean(value)))){
+        const path=await findClaudeTranscript(configDir,id);
+        if(path)await utimes(path,at,at);
+      }
+    }});
+  supervision=new Supervision({store,workItems,enabled:()=>settings.getSettings().assistant?.supervision===true,
+    enqueue:(key,brief,workItemId)=>{queue('supervise',key,brief,workItemId);},pending:workItemId=>runs.pending('supervise',workItemId),
+    agentLabel:backendId=>(backendId&&isNativeBackendId(backendId)?backendRegistry.get(backendId)?.label:undefined)??backendId??'Agent'});
+  assistantWork={
+    report:(sessionId,outcome,text)=>runs.report(sessionId,outcome,text,assistantMain()) as {outcome:string},
+    supervised:sessionId=>{const run=runs.bySession(sessionId);return run?.job==='supervise'&&run.subject?{workItemId:run.subject,runId:run.id}:undefined;},
+    delegations:{list:()=>delegations.list(),create:input=>delegations.create(input),update:(id,input)=>delegations.update(id,input),end:(id,by)=>delegations.end(id,by)},
+  };
+  const stopAssistantWork=[runs.watch(),delegations.start(),consolidation.start(),supervision.start()];
   workItems.retitleBriefConversations();
   workItems.dropComposerItems();
   const quickChats=new QuickChatSweeper({store,settings:()=>settings.getSettings(),
@@ -429,12 +503,12 @@ export async function createApp(options: AppOptions = {}) {
   const journalSweepEvery=setInterval(sweepJournal,JOURNAL_SWEEP_MS);journalSweepEvery.unref();
   app.addHook('onClose',async()=>{
     // Each step runs even when an earlier one throws: a failed backend shutdown must not leave the database open.
-    const steps:Array<[string,()=>unknown]>=[['assistant',()=>stopAssistantWatch()],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
+    const steps:Array<[string,()=>unknown]>=[['assistant',()=>{stopAssistantWatch();stopNoticePush();for(const stop of stopAssistantWork)stop();}],['titles',()=>titles.close()],['turn-summaries',()=>turnSummaries.close()],['stats-backfill',()=>statsBackfill.close()],['orchestration',()=>orchestration.close()],['channels',()=>channels.close()],['push',()=>{push.close();apns.close();}],['devices',()=>devices.close()],['dispatch',()=>dispatch.close()],['reclaim',()=>reclaimer.stop()],['terminal-holds',()=>terminalHolds.stop()],['quick-chat',()=>quickChats.stop()],['sync-ingest',()=>ingest.close()],['plugin-backends',()=>pluginBackends.close()],['native-backends',()=>nativeBackends.closeAll()],['tasks',()=>tasks.close()],['integrations',()=>plugins.close()],['terminal',()=>terminal.closeAll()],['stats',()=>stats.close()],['work-items',()=>workItems.close()],['search-index',()=>{offIndexFeed();offServiceFeed();liveIndex.close();}],['loop-health',()=>loopHealthMonitor.stop()],['monitor',()=>monitor.stop()],['maintenance',()=>{clearTimeout(maintenance);clearTimeout(journalSweep);clearInterval(journalSweepEvery);}],['timeline',()=>timeline.close()],['journal-feed',()=>journalFeed.close()],['git',()=>git.close()],['wal-checkpoints',()=>stopWalCheckpoints()],['store',()=>store.close()]];
     for(const [name,step] of steps){
       try{await step();}catch(error){console.error(`[riffet] shutdown step ${name} failed:`,error);}
     }
   });
-  return {app,workItems,assistant:assistantRef,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
+  return {app,workItems,assistant:assistantRef,assistantRuns:runs,assistantDelegations:delegations,channels,contextReferences,store,auth,riffetMcp,devices,push,notices,terminal,nativeBackends,plugins,tasks,dispatch,orchestration,workspace,git,settings,taskWorkspaces,themes,stateDir,timeline,ingest,quickChats};
 }
 const gzipAsync=promisify(gzip);
 /** How often the journal drops superseded draft chunks and unreferenced blobs. */

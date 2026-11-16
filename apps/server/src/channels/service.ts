@@ -2,7 +2,7 @@ import { randomUUID, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import QRCode from 'qrcode';
-import { catalogEntry, catalogSelection, parseSelection, resolveCatalogSelection, type ModelInfo, type NativeBackendCatalogEntry, type NativeInteraction, type NativeStatus, type Project, type Run, type Session } from '../../../../packages/contracts/src/index.js';
+import { assistantChoice, catalogEntry, catalogSelection, parseSelection, resolveCatalogSelection, type ModelInfo, type NativeBackendCatalogEntry, type NativeInteraction, type NativeStatus, type Project, type Run, type Session } from '../../../../packages/contracts/src/index.js';
 import type { ChannelCardOptions, ChannelAccountInfo, ChannelAccountInput, ChannelBindCode, ChannelChat, ChannelConnectionStatus, ChannelHealth, ChannelKind, ChannelRegistration, ChannelRegistrationInput, ChannelRegistrationState, ChannelsState } from '../../../../packages/contracts/src/channels.js';
 import { AppError, requireString } from '../errors.js';
 import type { SessionLock } from '../agent-host/session-lock.js';
@@ -11,6 +11,7 @@ import type { NativeDispatcher } from '../native/dispatch.js';
 import { configureNative } from '../native/configure.js';
 import { defaultBackendForClient } from '../native/client-features.js';
 import { resolveNativeSessionInput } from '../native/session-input.js';
+import { NEW_TOPIC, claimMainConversation } from '../assistant/standing.js';
 import { savedDefaultBackendId } from '../session-identity.js';
 import type { OwnerService } from '../owner/index.js';
 import type { SessionCommands } from '../orchestration/session-commands.js';
@@ -426,7 +427,7 @@ export class ChannelService {
   patchChat(key: string, patch: { projectId?: string | null; flat?: boolean }): ChannelChat {
     const chat = this.bindings.chat(key);
     if (!chat) throw new AppError('CHANNEL_CHAT_NOT_FOUND', 'No such chat', 404);
-    if (typeof patch.projectId === 'string') this.requireProject(patch.projectId);
+    if (typeof patch.projectId === 'string') this.requireProject(patch.projectId, chat.chatType);
     const updated = patch.projectId === null ? this.bindings.clearChatProject(key)! : this.bindings.touchChat(chat.account, chat.chatId, chat.chatType, { ...(typeof patch.projectId === 'string' ? { projectId: patch.projectId } : {}), ...(patch.flat !== undefined ? { flat: Boolean(patch.flat) } : {}) });
     this.changed();
     return updated;
@@ -532,7 +533,7 @@ export class ChannelService {
     if (command) { await this.command(command, m, chat, conversation?.sessionId, connection); return; }
     if (!m.text.trim() && !m.attachments.length) return;
     void connection.acknowledge(m.anchor, 'received').catch(() => undefined);
-    if (!chat.projectId || !this.projectUsable(chat.projectId)) { await this.askProject(m, chat, connection, true); return; }
+    if (!chat.projectId || !this.projectUsable(chat.projectId, chat.chatType)) { await this.askProject(m, chat, connection, true); return; }
     await this.submit(m, chat.projectId, connection);
   }
 
@@ -540,6 +541,12 @@ export class ChannelService {
     switch (command.name) {
       case 'bind': await this.reply(connection, m, REPLY.bound); return;
       case 'new':
+        // The 个人助理 has one conversation; a new one would not be it.
+        if (chat.projectId && this.projectOf(chat.projectId)?.system === 'assistant') {
+          await this.submit({ ...m, text: NEW_TOPIC }, chat.projectId, connection);
+          await this.reply(connection, m, REPLY.newTopic);
+          return;
+        }
         this.bindings.unbind(m.address, chat.flat);
         await this.reply(connection, m, REPLY.newSession);
         return;
@@ -771,22 +778,30 @@ export class ChannelService {
   // ---- projects ----------------------------------------------------------------------------------
 
   private projectOf(id: string): Project | undefined { try { return this.deps.store.getProject(id); } catch { return undefined; } }
-  private projectUsable(id: string): boolean { const project = this.projectOf(id); return Boolean(project && !project.archivedAt && !project.system); }
-  private requireProject(id: string): Project {
+  /**
+   * What a chat may send to: an open project, or, in a private chat, the 个人助理, whose one main conversation the
+   * chat then continues (docs/ASSISTANT.md §3). The 助理 does not join groups.
+   */
+  private offered(project: Project | undefined, chatType: ChannelChat['chatType']): project is Project {
+    return Boolean(project && !project.archivedAt && (!project.system || (project.system === 'assistant' && chatType === 'p2p')));
+  }
+  private projectUsable(id: string, chatType: ChannelChat['chatType']): boolean { return this.offered(this.projectOf(id), chatType); }
+  private requireProject(id: string, chatType: ChannelChat['chatType']): Project {
     const project = this.projectOf(id);
-    if (!project || project.archivedAt || project.system) throw new AppError('INVALID_PROJECT', 'Choose an open project');
+    if (!this.offered(project, chatType)) throw new AppError('INVALID_PROJECT', 'Choose an open project');
     return project;
   }
 
-  private projectChoices(): ProjectPickerView['projects'] {
-    return this.deps.store.listProjects().filter(project => !project.archivedAt && !project.system)
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)).slice(0, PICKER_LIMIT)
-      .map(project => ({ id: project.id, name: project.name, path: project.cwd }));
+  private projectChoices(chatType: ChannelChat['chatType']): ProjectPickerView['projects'] {
+    const projects = this.deps.store.listProjects();
+    const assistant = chatType === 'p2p' ? projects.filter(project => project.system === 'assistant' && !project.archivedAt) : [];
+    return [...assistant, ...projects.filter(project => !project.archivedAt && !project.system).sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))].slice(0, PICKER_LIMIT)
+      .map(project => ({ id: project.id, name: project.name, path: project.system === 'assistant' ? '' : project.cwd }));
   }
 
   /** Shows the picker; with `hold` the message waits (the latest one only) and is sent once a project is picked. */
   private async askProject(m: InboundMessage, chat: ChannelChat, connection: ChannelConnection, hold: boolean): Promise<void> {
-    const projects = this.projectChoices();
+    const projects = this.projectChoices(chat.chatType);
     if (!projects.length) { await this.reply(connection, m, REPLY.noProjects); return; }
     if (hold) this.held.set(chat.key, { message: m, at: Date.now() });
     const ref = this.addRef({ kind: 'picker', account: m.account, chat: chat.key, at: Date.now() });
@@ -813,19 +828,34 @@ export class ChannelService {
       // Looked up inside the per-conversation queue: an earlier message may have just created the session.
       const existing = this.bindings.conversation(m.address, chat.flat);
       let session = existing ? (() => { try { return store.getSession(existing.sessionId); } catch { return undefined; } })() : undefined;
+      const project = store.getProject(projectId);
+      const assistant = project.system === 'assistant';
+      // The 个人助理's chat continues its main conversation, whichever client opened it.
+      if (assistant && (!session || session.archivedAt || session.id !== project.mainSessionId)) {
+        const main = project.mainSessionId ? (() => { try { const found = store.getSession(project.mainSessionId!); return found.archivedAt ? undefined : found; } catch { return undefined; } })() : undefined;
+        session = main;
+        if (main) this.bindings.bind(m.address, chat.flat, main.id, m.anchor.messageId);
+      }
       const attachmentIds = await this.upload(m, session?.projectId ?? projectId);
       const input = { text: m.text.trim() || '请查看附件', attachmentIds, context: [] };
       this.anchors.set(m.messageId, m.anchor);
       if (!session) {
-        const defaults = this.bindings.chatModel(chat.key);
+        // The 个人助理 starts on its own agent and model (docs/ASSISTANT.md §4); a chat otherwise on its own defaults.
+        const choice = assistant ? assistantChoice(this.deps.settings.getSettings().assistant, await nativeBackends.catalog.listBackends()) : undefined;
+        const defaults = choice ? { backendId: choice.backendId, model: choice.model, profileId: choice.profileId } : { ...this.bindings.chatModel(chat.key), profileId: undefined };
         // A default the backend no longer accepts is dropped silently: the chat still gets its conversation.
-        const sessionInput = await resolveNativeSessionInput(this.deps, { projectId, ...(defaults.backendId ? { backendId: defaults.backendId } : {}), ...(defaults.model ? { model: defaults.model } : {}) }, undefined)
+        const sessionInput = await resolveNativeSessionInput(this.deps, { projectId, ...(defaults.backendId ? { backendId: defaults.backendId } : {}), ...(defaults.profileId ? { backendProfileId: defaults.profileId } : {}), ...(defaults.model ? { model: defaults.model } : {}) }, undefined)
           .catch(error => defaults.backendId || defaults.model ? resolveNativeSessionInput(this.deps, { projectId }, undefined) : Promise.reject(error));
         const sessionId = randomUUID();
         // Bound before the run exists, so the run's first change already finds where to write back.
         this.bindings.bind(m.address, chat.flat, sessionId, m.anchor.messageId);
         created = sessionId;
-        const result = store.createNativeSubmission(sessionId, { ...sessionInput, origin: { kind: 'channel', channel: { kind: this.account(m.account).kind, account: m.account, chatId: m.address.chatId } } }, m.messageId, input);
+        const result = store.transaction(() => {
+          const made = store.createNativeSubmission(sessionId, { ...sessionInput, origin: { kind: 'channel', channel: { kind: this.account(m.account).kind, account: m.account, chatId: m.address.chatId } } }, m.messageId, input);
+          // Opened from the chat as from any client: with no main conversation, this one becomes it.
+          if (assistant) claimMainConversation(store, store.getProject(projectId), sessionId);
+          return made;
+        });
         dispatch.kick();
         this.track(result.run);
       } else {
@@ -917,14 +947,14 @@ export class ChannelService {
     const projectId = a.selectedIds?.[0] ?? (a.action !== 'pick' ? a.action : undefined);
     const project = projectId ? this.projectOf(projectId) : undefined;
     const chat = this.bindings.chat(entry.chat);
-    if (!projectId || !project || project.archivedAt || project.system || !chat) return { toast: { tone: 'error', text: '这个项目不可用' } };
+    if (!projectId || !chat || !this.offered(project, chat.chatType)) return { toast: { tone: 'error', text: '这个项目不可用' } };
     this.bindings.touchChat(chat.account, chat.chatId, chat.chatType, { projectId });
     this.changed();
     const held = this.held.get(chat.key);
     this.held.delete(chat.key);
     const connection = this.connectionOf(a.account);
     if (held && connection && Date.now() - held.at < HOLD_MS) void this.submit(held.message, projectId, connection);
-    return { toast: { tone: 'success', text: REPLY.projectChanged(project.name) }, redraw: { kind: 'project-picker', ref, projects: this.projectChoices(), selectedId: projectId, closed: true } };
+    return { toast: { tone: 'success', text: REPLY.projectChanged(project.name) }, redraw: { kind: 'project-picker', ref, projects: this.projectChoices(chat.chatType), selectedId: projectId, closed: true } };
   }
 
   private async answer(a: InboundAction, entry: Extract<RefEntry, { kind: 'interaction' }>): Promise<ActionReply> {

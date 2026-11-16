@@ -7,7 +7,7 @@ import { AppError, requireString } from '../errors.js';
 import type { IdentifiedSession } from '../session-identity.js';
 import { generatedBranch, type GitService } from '../git/index.js';
 import type { NativeDispatcher } from '../native/dispatch.js';
-import { resolveNativeSessionInput } from '../native/session-input.js';
+import { resolveNativeSessionInput, type NativeSessionRequest } from '../native/session-input.js';
 import { servingKey } from '../journal/ingest.js';
 import { NativeEventLog } from '../journal/native-log.js';
 import { extractIndexable } from '../search/messages.js';
@@ -242,6 +242,20 @@ export class OrchestrationService {
     });
     this.deps.dispatch.kick();
     return this.deps.store.getSession(result.session.id);
+  }
+
+  /**
+   * A conversation the server opens on someone's behalf, like the 助理's background runs (docs/ASSISTANT.md §7):
+   * resolved as the composer would, with [origin] recorded. The same [ids] return the conversation the first try made.
+   */
+  async start(body: NativeSessionRequest, text: string, origin: SessionOrigin, ids: Required<Ids>): Promise<Session> {
+    const { session } = await this.withOperation(`launch:${ids.sessionId}`, async () => {
+      const again = this.relaunched(ids, origin, body.projectId);
+      if (again) return again;
+      const input = await resolveNativeSessionInput(this.deps, body);
+      return this.launch(input, text, origin, ids);
+    });
+    return session;
   }
 
   review(sessionId: string, commandId: string, comments: ReviewComment[], note?: string): Run {

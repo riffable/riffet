@@ -50,6 +50,8 @@ export function registerWorkspaceRoutes(app: FastifyInstance, deps: RouteDeps): 
     const excludeTaskWorkspaces=!clientSupportsFeature(request.headers,'projectless-tasks');
     const excludedBackendIds=[...(quickChats?[]:['chat']),...hidden];
     const hits=mergeMessageHits([store.searchPrompts(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers)),store.searchIndexedMessages(pattern,limit,sessionId,excludedBackendIds,excludeTaskWorkspaces,hidesPluginAgents(request.headers))],limit)
+      // The 助理's background runs quote other conversations in their briefs; they are its work, not the owner's history.
+      .filter(hit=>{try{return store.getSession(hit.sessionId).origin?.kind!=='assistant';}catch{return true;}})
       .map(hit=>({sessionId:hit.sessionId,projectId:hit.projectId,sessionTitle:hit.sessionTitle,archived:hit.archived,backendId:hit.backendId,messageId:hit.messageId,kind:hit.kind,at:hit.at,snippet:snippet(hit.text,query),...(hit.runId?{runId:hit.runId}:{})}));
     const backendIds=nativeBackends.readOnlyTranscriptBackendIds().filter(backendId=>(quickChats||backendId!=='chat')&&backendVisibleToClient(request.headers,backendId));
     const pending=store.countSessionsMissingMessages(backendIds,sessionId,excludeTaskWorkspaces);

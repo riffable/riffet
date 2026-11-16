@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
-import type { Automation, AssistantInstructions, NativeBackendCatalogEntry, NativeBackendId, Project, Session, WorkItem, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
+import type { AssistantDelegation, Automation, AssistantInstructions, NativeBackendCatalogEntry, NativeBackendId, Project, Session, WorkItem, WorkbenchEvent } from '../../../../packages/contracts/src/index.js';
 import { isRunningSession, needsYou } from '../../../../packages/contracts/src/session-attention.js';
 import { AppError } from '../errors.js';
 import { servingKey } from '../journal/ingest.js';
@@ -100,6 +100,20 @@ export interface AssistantSearch {
 /** The conversation calling a tool. */
 export interface ToolContext { sessionId: string }
 
+/** The 助理's background runs and delegations (docs/ASSISTANT.md §7), given by `app.ts`. */
+export interface AssistantWork {
+  /** `run_report`: how the run calling it ended. */
+  report(sessionId: string, outcome: 'silent' | 'tell' | 'ask', text: string | undefined): { outcome: string };
+  /** The task a supervision run is about, when [sessionId] is one. */
+  supervised(sessionId: string): { workItemId: string; runId: string } | undefined;
+  delegations: {
+    list(): AssistantDelegation[];
+    create(input: Args): AssistantDelegation;
+    update(id: string, input: Args): AssistantDelegation;
+    end(id: string, by: 'assistant'): AssistantDelegation;
+  };
+}
+
 /** What the 助理's tools do; `app.ts` hands it to the Riffet MCP service. */
 export class AssistantBoard {
   constructor(private readonly deps: {
@@ -115,7 +129,28 @@ export class AssistantBoard {
     backends(): Promise<NativeBackendCatalogEntry[]>;
     /** The automations with their next runs; a getter, since the orchestration service starts after this one. */
     automations(): Automation[];
+    work?(): AssistantWork | undefined;
+    /** 助理派发任务: with `all`, the owner starts every task it plans. */
+    dispatch?(): 'edits' | 'all';
   }) {}
+
+  private assertMayStart(): void {
+    if (this.deps.dispatch?.() === 'all') throw new AppError('OWNER_STARTS_TASKS', 'The owner starts every task you plan: leave it as a card for them', 409);
+  }
+
+  private work(): AssistantWork {
+    const work = this.deps.work?.();
+    if (!work) throw new AppError('SERVICE_STARTING', 'The workbench is starting', 503);
+    return work;
+  }
+
+  /** The task of the supervision run calling, and a command id per message it sends. */
+  private supervised(context: ToolContext | undefined): { workItemId: string; commandId: string } {
+    const found = context ? this.work().supervised(context.sessionId) : undefined;
+    if (!found) throw new AppError('TOOL_NOT_AVAILABLE', 'This tool is for a supervision run');
+    const sent = this.deps.workItems.events(found.workItemId).filter(event => event.kind === 'nudge' || (event.kind === 'rework' && event.by === 'assistant')).length;
+    return { workItemId: found.workItemId, commandId: `supervise-${found.runId}-${sent}` };
+  }
 
   /** The reading of a conversation's state every client shares: waiting on the owner, running, failed or stopped, else idle. */
   private stateOf(session: Pick<Session, 'state'>): ConversationState {
@@ -204,8 +239,13 @@ export class AssistantBoard {
     // already leaves their backend out. Archived conversations are history like any other and are marked: leaving
     // them out after the query's limit would let recent archived matches crowd older ones out of the result.
     const hits = search.mergeMessageHits([store.searchPrompts(pattern, limit, sessionId, ['chat']), store.searchIndexedMessages(pattern, limit, sessionId, ['chat'])], limit)
-      .filter(hit => !quickChats.has(hit.projectId));
+      .filter(hit => !quickChats.has(hit.projectId) && !this.isRun(hit.sessionId));
     return { hits: hits.map(hit => ({ session: hit.sessionId, title: hit.sessionTitle, project: this.projectName(hit.projectId) ?? hit.projectId, role: hit.kind, at: hit.at, ...(hit.archived ? { archived: true } : {}), snippet: search.snippet(hit.text, query) })), note: DATA_NOTE };
+  }
+
+  /** A background run's brief quotes other conversations; finding the quote again would only repeat them. */
+  private isRun(sessionId: string): boolean {
+    try { return this.deps.store.getSession(sessionId).origin?.kind === 'assistant'; } catch { return false; }
   }
 
   private async serverStatus(): Promise<Record<string, unknown>> {
@@ -292,11 +332,12 @@ export class AssistantBoard {
           ...(args.criteria !== undefined ? { criteria: args.criteria as string[] } : {}),
           assignee: { kind: 'agent', backendId: agent as NativeBackendId }, projectId,
         }, { source: 'assistant' });
-        if (args.start !== true) return { created: this.summary(item), next: 'It waits in this conversation for the owner to start it.' };
+        if (args.start !== true || this.deps.dispatch?.() === 'all') return { created: this.summary(item), next: args.start === true ? 'The owner starts every task you plan; it waits in this conversation as a card.' : 'It waits in this conversation for the owner to start it.' };
         const started = await this.deps.workItems.start(item.id);
         return { created: this.summary(started.item), started: true };
       }
       case 'task_start': {
+        this.assertMayStart();
         const started = await this.deps.workItems.start(this.task(args.task).id);
         return { started: this.summary(started.item) };
       }
@@ -305,8 +346,47 @@ export class AssistantBoard {
         this.deps.workItems.addComment(item.id, args.text);
         return { commented: item.number };
       }
+      case 'run_report': {
+        if (!context) throw invalid('run_report needs its conversation');
+        const outcome = args.outcome;
+        if (outcome !== 'silent' && outcome !== 'tell' && outcome !== 'ask') throw invalid('outcome must be silent, tell or ask');
+        const reported = this.work().report(context.sessionId, outcome, optionalText(args, 'text'));
+        return { reported: reported.outcome, next: 'End your turn.' };
+      }
+      case 'task_continue': {
+        const { workItemId, commandId } = this.supervised(context);
+        const item = this.deps.workItems.nudge(workItemId, args.text, commandId);
+        return { sent: item.number };
+      }
+      case 'task_rework': {
+        const { workItemId, commandId } = this.supervised(context);
+        const item = this.deps.workItems.superviseRework(workItemId, args.text, commandId);
+        return { reworked: item.number };
+      }
+      case 'delegation_list': return { delegations: this.work().delegations.list().map(delegationView) };
+      case 'delegation_create': return { created: delegationView(this.work().delegations.create(args)) };
+      case 'delegation_update': {
+        const id = optionalText(args, 'delegation');
+        if (!id) throw invalid('delegation is required; call delegation_list');
+        const { delegation: _id, ...changes } = args;
+        return { updated: delegationView(this.work().delegations.update(id, changes)) };
+      }
+      case 'delegation_end': {
+        const id = optionalText(args, 'delegation');
+        if (!id) throw invalid('delegation is required; call delegation_list');
+        return { ended: delegationView(this.work().delegations.end(id, 'assistant')) };
+      }
       default:
         throw new AppError('TOOL_NOT_FOUND', `Unknown tool ${name}`, 404);
     }
   }
+}
+
+/** A delegation as the 助理 reads it. */
+function delegationView(item: AssistantDelegation): Record<string, unknown> {
+  return {
+    id: item.id, goal: item.goal, attention: item.attention, trigger: item.trigger, until: item.until, state: item.state,
+    ...(item.endedReason ? { endedReason: item.endedReason } : {}), ...(item.cursor ? { handledLast: item.cursor } : {}),
+    ...(item.lastRunAt ? { lastRunAt: item.lastRunAt } : {}),
+  };
 }
