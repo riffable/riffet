@@ -10,7 +10,7 @@ enum SessionTabStyle: String, CaseIterable, Identifiable {
 }
 
 /// 打开会话时. `preview`: a newly opened conversation is a temporary tab, kept only by the reader's
-/// own keep (double-click, 加入标签栏, pin); sending there does not. `keep`: it is kept at once.
+/// own keep (double-click, 加入标签栏); sending there or a pin does not. `keep`: it is kept at once.
 enum SessionTabOpenMode: String, CaseIterable, Identifiable {
     case preview, keep
 
@@ -227,18 +227,15 @@ final class SessionTabs {
         next.reserveCapacity(sessions.count)
         let tabbed = Set(entries.map(\.sessionId))
         var finished: [String] = []
-        var pinnedNow: [String] = []
         var unpinned: Set<String> = []
         for (id, session) in sessions {
             let pinned = session.pinnedAt != nil
             next[id] = (session.state, pinned)
             guard let before = seen[id], tabbed.contains(id) else { continue }
             if id != current, before.state.isActive, session.state == .idle { finished.append(id) }
-            if before.pinned && !pinned { unpinned.insert(id) } else if !before.pinned && pinned { pinnedNow.append(id) }
+            if before.pinned && !pinned { unpinned.insert(id) }
         }
         seen = next
-        // A pinned conversation is one the reader keeps.
-        for id in pinnedNow { keep(id) }
         unread.formUnion(finished)
         // An unpinned one returns to the front of the normal zone, where it is easy to find.
         if !unpinned.isEmpty {

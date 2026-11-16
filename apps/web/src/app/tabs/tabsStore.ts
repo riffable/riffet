@@ -24,7 +24,7 @@ const DEFAULT_TAB_STYLE: TabStyle = 'inline';
 
 /**
  * 打开会话时. `preview`: a newly opened conversation is a temporary tab, kept only by the reader's own
- * keep (double-click, ⌘-click, 加入标签栏, pin); sending there or a run starting does not. `keep`: it is
+ * keep (double-click, ⌘-click, 加入标签栏); sending there, a run starting or a pin does not. `keep`: it is
  * kept at once.
  */
 export type TabOpenMode = 'preview' | 'keep';
@@ -238,7 +238,6 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
     const selected = nav.get().sessionId;
     const unread: string[] = [];
     const unpinned: string[] = [];
-    const pinnedNow: string[] = [];
     const tabbed = new Set(store.get().tabs.map((tab) => tab.sessionId));
     for (const session of sessions) {
       const pinned = Boolean(session.pinnedAt);
@@ -247,15 +246,12 @@ export function createTabsStore({ lists, nav, ui, handlers }: TabsDeps) {
       if (!before || !tabbed.has(session.id)) continue;
       if (session.id !== selected && isActiveSession({ state: before.state }) && session.state === 'idle') unread.push(session.id);
       if (before.pinned && !pinned) unpinned.push(session.id);
-      else if (!before.pinned && pinned) pinnedNow.push(session.id);
     }
     seen = next;
     // Tabs stored before the main conversation became a page.
     const mainTabs = store.get().tabs.filter((tab) => isMain(tab.sessionId)).map((tab) => tab.sessionId);
     if (mainTabs.length) remove(new Set(mainTabs));
     if (store.get().style === 'off') return;
-    // A pinned conversation is one the reader keeps, so its tab is no longer the one the next open replaces.
-    for (const id of pinnedNow) keepTab(id);
     if (unread.length) store.set((state) => ({ unread: { ...state.unread, ...Object.fromEntries(unread.map((id) => [id, true as const])) } }));
     if (unpinned.length) {
       // An unpinned conversation returns to the front of the normal zone, where it is easy to find.
