@@ -65,6 +65,8 @@ export const SERVER_BUDGET = {
   coldTimelineDays: 7,
   /** Largest single native transcript a background job (usage backfill) reads; larger ones are skipped. */
   backgroundReadBytes: 32 * MIB,
+  /** Native transcripts kept parsed in memory for reuse, counted by file size. */
+  parsedTranscriptBytes: 64 * MIB,
   /** An event-loop block this long is a defect: it is logged and profiled (`loop-health.ts`). */
   loopBlockMs: 200,
 } as const;

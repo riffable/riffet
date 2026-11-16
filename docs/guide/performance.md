@@ -25,7 +25,7 @@
 | `STREAM_QUEUE_FRAMES`、`STREAM_QUEUE_BYTES` | 流与应用代码之间的帧队列上限，按帧数和字节数 |
 | `LIST_POLL_MS` | 会话列表轮询间隔：推送在线、推送断开、后台 |
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
-| `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、事件循环阻塞阈值 |
+| `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、解析后转录缓存上限、事件循环阻塞阈值 |
 
 各端的占用口径：Mac 用活动监视器的「内存」（`footprint` 的 phys_footprint），Web 用 JS 堆，iOS 用 phys_footprint，Android 用总 PSS，服务端用 RSS。
 

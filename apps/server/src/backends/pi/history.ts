@@ -2,6 +2,7 @@ import { open, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
 import { AppError } from '../../errors.js';
+import { SERVER_BUDGET } from '../../../../../packages/contracts/src/index.js';
 
 /*
  * pi's own session file (docs/PI.md): an append-only JSONL tree. The first line is a session header
@@ -229,8 +230,16 @@ export async function readPiTranscript(path: string, nativeSessionId: string): P
   const cached = parsed.get(key);
   if (cached && cached.size === info.size && cached.mtimeMs === info.mtimeMs) return cached.transcript;
   const transcript = parsePiTranscript(await readFile(path, 'utf8'), path, nativeSessionId);
+  parsed.delete(key);
   parsed.set(key, { size: info.size, mtimeMs: info.mtimeMs, transcript });
-  if (parsed.size > 32) parsed.delete(parsed.keys().next().value!);
+  // Oldest first, past 32 files or the parsed-transcript budget (docs/guide/performance.md §3.1).
+  let held = 0;
+  for (const entry of parsed.values()) held += entry.size;
+  while (parsed.size > 1 && (parsed.size > 32 || held > SERVER_BUDGET.parsedTranscriptBytes)) {
+    const [oldest, entry] = parsed.entries().next().value!;
+    held -= entry.size;
+    parsed.delete(oldest);
+  }
   return transcript;
 }
 
