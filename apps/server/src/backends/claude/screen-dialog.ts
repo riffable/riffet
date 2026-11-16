@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { NativeInteraction, TerminalInfo } from '../../../../../packages/contracts/src/index.js';
+import { claudeComposerBounds } from '../../adapters/cli/claude-code.js';
 import { parseDialog } from '../../agent-host/interaction-screen.js';
 
 const ID_PREFIX = 'claude-screen:';
@@ -32,7 +33,7 @@ const QUESTION_FOOTER = /^Enter to select\s+·\s+↑\/↓ to navigate(?:\s+·\s+
 const FREE_TEXT_LABEL = 'Type something.';
 const QUESTION_OPTION = /^(\s*)([❯›]\s*)?(\d+)\.\s+(.+)$/;
 
-const VERB_LABELS: Record<string, string> = { continue: '继续', confirm: '确认', accept: '接受', cancel: '取消', exit: '退出', 'go back': '返回', skip: '跳过' };
+const VERB_LABELS: Record<string, string> = { continue: '继续', confirm: '确认', accept: '接受', apply: '应用', cancel: '取消', exit: '退出', 'go back': '返回', skip: '跳过' };
 
 export interface ClaudeScreenDialog {
   body: string;
@@ -62,6 +63,26 @@ function parseFooter(line: string): { confirm: string; cancel: string } | undefi
 }
 
 /**
+ * Where a panel drawn above the input box ends. A slash command's panel (`/autocompact`) opened while a
+ * turn or a shell runs is stacked over the box instead of replacing it: the box stays drawn, but the
+ * keyboard is the panel's, so a paste is dropped and Enter applies the panel. The frame is a notice's —
+ * a rule as wide as the box, the body, the key hints — ending right above the box's top edge.
+ */
+function panelAboveComposer(lines: string[]): number | undefined {
+  const bounds = claudeComposerBounds(lines);
+  if (!bounds) return undefined;
+  let footer = bounds.top - 1;
+  while (footer >= 0 && !lines[footer]!.trim()) footer -= 1;
+  if (footer < 0 || !parseFooter(lines[footer]!.trim())) return undefined;
+  // A reply that happens to end in a hint-shaped line has no frame of its own above it.
+  const width = lines[bounds.bottom]!.trim().length;
+  for (let index = footer - 1; index >= Math.max(0, footer - MAX_BODY_LINES); index -= 1) {
+    if (RULE.test(lines[index]!)) return lines[index]!.trim().length === width ? footer : undefined;
+  }
+  return undefined;
+}
+
+/**
  * Claude Code's own full-screen notices (billing changes, release notes, and similar) are drawn by
  * the TUI and never reach a hook, so a turn behind one looks busy forever. They share one shape: the
  * frame's key hints as the last line of the screen, above them the dialog, and — when the TUI draws
@@ -74,6 +95,9 @@ function parseFooter(line: string): { confirm: string; cancel: string } | undefi
 export function parseClaudeScreenDialog(screen: string): ClaudeScreenDialog | undefined {
   const lines = screen.split(/\r?\n/).map(line => line.trimEnd());
   while (lines.length && !lines.at(-1)) lines.pop();
+  // The box under a stacked panel is not the dialog's: read the screen as if it ended with the panel.
+  const panelEnd = panelAboveComposer(lines);
+  if (panelEnd !== undefined) lines.splice(panelEnd + 1);
   // This notice has three direct actions, with long descriptions that may wrap. Keep the
   // generic footer grammar strict: navigation surfaces must not become confirmation cards.
   const boundary = lines.findLastIndex(line => RULE.test(line));

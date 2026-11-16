@@ -1,0 +1,23 @@
+! sleep 40
+  ⎿  Running… (10s)
+     (ctrl+b ctrl+b (twice) to run in background)
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────
+  Auto-compact window
+  Current setting for Sonnet 5: 1m tokens (default for this model)
+
+  This command configures when auto-compaction happens. The actual threshold is the minimum of this
+  setting and your model's maximum context window.
+
+  The auto setting picks a window tuned for your model and is strongly recommended for the best cost
+  and performance. You can override it below.
+
+  Select auto-compact window: auto
+
+  ←/→ to adjust · Enter to apply · Esc to cancel
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────
+❯
+────────────────────────────────────────────────────────────────────────────────────────────────────────
+    Sonnet 5 · /tmp/…
+  ⏵⏵ auto mode on (shift+tab to cycle)

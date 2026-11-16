@@ -5,7 +5,7 @@ import type { TerminalInteractionControl } from '../../terminal/service.js';
 import { waitFor } from '../shared/wait-for.js';
 import type { NativeBackendHost } from '../types.js';
 import { pause } from './launch.js';
-import { parseClaudeScreenQuestion } from './screen-dialog.js';
+import { parseClaudeScreenDialog, parseClaudeScreenQuestion } from './screen-dialog.js';
 
 const MAX_WIPE_ROUNDS = 12;
 const INTERACTION_RETRY_MS = 4_000;
@@ -170,6 +170,8 @@ export class ComposerDriver {
       let screen = await control.screen();
       const box = claudeComposerText(screen);
       if (box === undefined) throw refuse('Claude Code input box is not visible, so its background tasks cannot be stopped from here');
+      // A panel stacked over the box has the keyboard: Down and Enter would work it instead.
+      if (parseClaudeScreenDialog(screen ?? '')) throw refuse('Claude Code has a panel open over its input box; close it in the terminal first');
       if (!claudeTasksEntryShown(screen ?? '')) throw refuse('Claude Code does not show its background tasks entry');
       // Down and Enter would walk the agent list instead.
       if (claudeFooterFocused(screen ?? '') || claudeViewsSubagent(screen ?? '')) throw refuse('Claude Code is showing its agent list; switch its terminal back to the main agent');

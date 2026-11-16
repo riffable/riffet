@@ -53,6 +53,16 @@ const expectations: Record<string, (screen: string) => void> = {
     expect(claudeTasksEntryShown(screen)).toBe(true);
     expect(claudeFooterFocused(screen)).toBe(false);
   },
+  // `/autocompact` opened while a shell runs: the panel is stacked over a box that stays drawn but has lost the keyboard.
+  'composer-panel': screen => {
+    expect(claudeComposerVisible(screen)).toBe(true);
+    expect(parseDialog(screen, terminal)).toBeUndefined();
+    const card = claudeScreenInteraction(screen, terminal);
+    expect(card).toMatchObject({ kind: 'confirmation', transport: 'terminal' });
+    expect(card?.actions.map(action => action.label)).toEqual(['应用', '取消']);
+    expect(card?.message).toMatch(/^Auto-compact window\n/);
+    expect(card?.message).toMatch(/Select auto-compact window: auto$/);
+  },
   'agent-view': screen => {
     atComposer(screen);
     expect(claudeViewsSubagent(screen)).toBe(true);
