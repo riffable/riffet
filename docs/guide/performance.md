@@ -26,6 +26,7 @@
 | `LIST_POLL_MS` | 会话列表轮询间隔：推送在线、推送断开、后台 |
 | `STEADY_FOOTPRINT_BYTES` | 正常使用一天后的稳定占用；峰值不超过 1.5 倍 |
 | `SERVER_BUDGET` | 冷会话时间线保留天数、后台任务单次读取上限、解析后转录缓存上限、事件循环阻塞阈值 |
+| `AGENT_PROCESS_BUDGET` | 会话 CLI 的空闲阈值与内存预算、内存压力下的缩短倍数、最短存活时间、Droid/Pi/DSH 的空闲停止时间、临时实例的空闲退出时间、扫除的宽限时间 |
 
 各端的占用口径：Mac 用活动监视器的「内存」（`footprint` 的 phys_footprint），Web 用 JS 堆，iOS 用 phys_footprint，Android 用总 PSS，服务端用 RSS。
 
@@ -93,8 +94,6 @@
 - Kotlin/Native：`kotlin.native.binary` 的 GC 与分配器选项在 `apps/mobile/client/build.gradle.kts` 里集中设置，改动前后用 §5 的场景测 Kotlin 堆（vmmap 的 "Memory Tag 246"）。
 - Node：不设 `--max-old-space-size` 之外的 V8 参数；插件子进程的上限见 `plugins-host/process.ts`。
 
-## 4. 度量
-
 ### 3.10 子进程有所有者、有最后使用时间、有内存预算
 
 服务为会话拉起的长期进程（会话的 CLI、tmux 服务、Codex app-server，以及 CLI 自己启动的 MCP 子进程）由 `native/reclaim.ts` 统一回收。Droid、Pi 是无终端的子进程，是否忙碌只有各自的 runtime 知道，所以由 runtime 自己在空闲后停止；DSH 的桥接进程由所有 DSH 会话共用，也自己停止。这三者的阈值同样取自 §2 的 `AGENT_PROCESS_BUDGET`。
@@ -150,6 +149,8 @@
   - 按会话列出 RSS、`lastUsedAt`、保留条件和预计回收时间。
 - 各端设置页的进程列表在会话行上显示保留条件或预计停止时间，列表头显示合计 RSS 与预算。
 
+## 4. 度量
+
 各端按同一组指标名上报，汇总到服务端 `GET /api/system/monitor` 的 `clients`，设置页的服务监控里能看到所有设备。
 
 | 指标 | 含义 |
@@ -178,9 +179,9 @@
 
 - §3.7：冷会话只丢弃主车道；子 Agent 车道的行（2026-11-16 本机约占时间线一半）要等子 Agent 摘要落进主车道的行之后才能丢弃。
 - §3.8：Claude 用量补算整读转录文件并做完整投影（`backends/claude/index.ts` 的 `usageTranscript` → `ClaudeTranscript.setFile`）。本机 46 个转录超过 32 MB，最大 242 MB；改法是像 Codex 的 `RolloutUsageReader` 一样单独按行读取用量。
+- §3.10：旧版本拉起的 tmux 服务没有所有者标记。socket 不在临时状态目录里的（`<临时目录>/riffet-<uid>-<hash>/tmux.sock`，状态目录路径过长时的位置）无法判断所有者，只在 socket 消失后扫除。这类服务只会越来越少，不另做迁移。
 
 ### Kotlin 共享客户端（Mac、iOS、Android）
-- §3.10：旧版本拉起的 tmux 服务没有所有者标记。socket 不在临时状态目录里的（`<临时目录>/riffet-<uid>-<hash>/tmux.sock`，状态目录路径过长时的位置）无法判断所有者，只在 socket 消失后扫除。这类服务只会越来越少，不另做迁移。
 
 - §3.3：每次发布整份重建 `TimelineItem` 列表并整份交给 Swift（`ui/state/SessionSync.kt` 的 `publish`）。未改的行复用原对象，但列表与桥接仍随窗口行数增长；先用 §5 的场景量出每次发布的耗时再改。
 - §3.9：`pagedAllocator=false`、`latin1Strings=true` 尚未在 Mac 上做对照测量。2026-11-16 Mac 上 Kotlin 堆常驻 210 MB，抽样只有约 14% 的字节非零。iOS 已开 `appStateTracking`。
