@@ -155,7 +155,9 @@ export function toolGroup(browsers: Browsers, host: PluginHost): AgentToolGroup 
           ? await (async () => { const locator = tab.page.getByRef(ref); if (!(await locator.count().catch(() => 0))) throw error('BROWSER_STALE_REF', `No element ${ref}; take a new browser_snapshot`, 409); return locator.first().screenshot({ type: 'jpeg', quality: 85, timeout: 15_000 }); })()
           : await tab.page.screenshot({ type: 'jpeg', quality: 85, fullPage: args.fullPage === true, timeout: 15_000 });
         const image = await sharp(raw, { limitInputPixels: 128 * 1024 * 1024 }).resize({ width: IMAGE_EDGE, height: IMAGE_EDGE, fit: 'inside', withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
-        return { content: [{ type: 'text', text: JSON.stringify({ untrusted: true, ...await pageInfo(tab), ...extras(session) }) }, { type: 'image', data: image.toString('base64'), mimeType: 'image/jpeg' }] };
+        // The timeline cannot hold an inline picture this large; a registered attachment is shown by its path.
+        const saved = await host.sessions?.saveImage?.(context.sessionId, { name: 'screenshot.jpg', mimeType: 'image/jpeg', data: image }).then(file => file.path, () => undefined);
+        return { content: [{ type: 'text', text: JSON.stringify({ untrusted: true, ...await pageInfo(tab), ...(saved ? { screenshot: saved } : {}), ...extras(session) }) }, { type: 'image', data: image.toString('base64'), mimeType: 'image/jpeg' }] };
       }
       case 'browser_tabs': {
         const action = args.action;

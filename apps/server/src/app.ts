@@ -189,6 +189,7 @@ export async function createApp(options: AppOptions = {}) {
       get:id=>{let session;try{session=store.getSession(id);}catch{return undefined;}let projectPath:string|undefined;try{projectPath=store.getProject(session.projectId).cwd;}catch{/* removed project */}return {id:session.id,title:session.title,projectId:session.projectId,...(projectPath?{projectPath}:{}),archived:Boolean(session.archivedAt)};},
       wake:(id,note)=>{if(!orchestrationRef)throw new AppError('SERVICE_STARTING','The workbench is starting',503);orchestrationRef.scheduleWakeup(id,{dueAt:new Date(),note});},
       notify:(id,notice)=>{notices.add({sessionId:id,...(notice.title?{title:notice.title}:{}),body:notice.body,source:'agent'});},
+      saveImage:async(id,image)=>{const attachment=await workspace.upload(store.getProject(store.getSession(id).projectId),{name:image.name,mimeType:image.mimeType,dataBase64:image.data.toString('base64')});return {id:attachment.id,path:attachment.path};},
     }});
   provideModelSources(()=>plugins.modelSources(),source=>plugins.ensureContribution('model-source',source),source=>plugins.modelSourceRole(source));
   const claudeAdapter=new ClaudeBackendAdapter({stateDir});

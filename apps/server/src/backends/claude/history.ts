@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { open, readFile, readdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import type { NativeActivity, NativeHistoryState, NativeWorkbenchEvent, Session, SessionGoal } from '../../../../../packages/contracts/src/index.js';
 import { AppError } from '../../errors.js';
 import { INLINE_IMAGE_LIMIT, isImagePath, toolImageContent } from '../shared/tool-images.js';
@@ -457,6 +457,14 @@ function* transcriptLines(bytes: Buffer): Generator<string> {
   }
 }
 
+/** The absolute `screenshot` path in a `browser_screenshot` result's JSON text, if it named one. */
+function savedScreenshot(text: string): string | undefined {
+  try {
+    const value = string(record(JSON.parse(text))?.screenshot);
+    return value && isAbsolute(value) && !/[\r\n]/.test(value) ? value : undefined;
+  } catch { return undefined; }
+}
+
 /** A tool_result is either a string or text/image blocks; Read of an image file answers with the latter. */
 function toolResultContent(value: unknown, call: ToolCall | undefined, failed: boolean, unbounded = false): Array<Record<string, unknown>> {
   const single = string(value);
@@ -464,15 +472,18 @@ function toolResultContent(value: unknown, call: ToolCall | undefined, failed: b
   if (!Array.isArray(value)) return [];
   const blocks = value.map(record).filter((item): item is Record<string, unknown> => Boolean(item));
   const text = rowText(blocks);
+  // The browser's screenshot saves the picture as an attachment and names its path in the JSON text; the row then loads it by that path.
+  const savedPath = call && /(?:^|__)browser_screenshot$/.test(call.name) ? savedScreenshot(text) : undefined;
   const sourcePath = string(call?.input.file_path);
   const images = failed ? [] : blocks.filter(block => block.type === 'image').slice(0, unbounded ? undefined : 4).map((block, index) => {
     const source = record(block.source);
     const data = source?.type === 'base64' ? string(source.data) : undefined;
     const mimeType = string(source?.media_type);
-    const path = index === 0 && isImagePath(sourcePath) ? sourcePath : undefined;
+    const path = index === 0 ? savedPath ?? (isImagePath(sourcePath) ? sourcePath : undefined) : undefined;
     // A picture slimmed out of its row (`slim`) still says how big it was, as its data would have.
     const omitted = !path && typeof source?.omittedBytes === 'number' ? source.omittedBytes : undefined;
-    return toolImageContent({ ...(path ? { path } : {}), ...(data ? { data } : {}), ...(omitted ? { bytes: omitted } : {}), ...(mimeType ? { mimeType } : {}) }, { unbounded });
+    // A saved screenshot's path is an attachment object (`<id>.bin`); the row names the picture instead.
+    return toolImageContent({ ...(path ? { path } : {}), ...(path && path === savedPath ? { name: 'screenshot.jpg' } : {}), ...(data ? { data } : {}), ...(omitted ? { bytes: omitted } : {}), ...(mimeType ? { mimeType } : {}) }, { unbounded });
   });
   return [...(text ? [{ type: 'content', content: { type: 'text', text: unbounded ? text : clip(text) } }] : []), ...images];
 }

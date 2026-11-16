@@ -305,6 +305,12 @@ export interface PluginHost {
     get(sessionId: string): PluginSessionView | undefined;
     wake(sessionId: string, note: string): void;
     notify(sessionId: string, notice: { title?: string; body: string }): void;
+    /**
+     * Saves an image as one of Riffet's own attachments and returns its absolute `path`: a tool result that names that path
+     * is shown by the conversation's timeline on every client, which an inline image over 40 KB is not. Old files are pruned
+     * with the other attachments. Absent on a host that predates it.
+     */
+    saveImage?(sessionId: string, image: { name: string; mimeType: string; data: Buffer }): Promise<{ id: string; path: string }>;
   };
   /** An error whose message reaches the client unchanged when `statusCode` is below 500. */
   error(code: string, message: string, statusCode?: number): Error;
