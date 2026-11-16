@@ -494,6 +494,8 @@ export interface AgentBackend {
   loginLaunch?(host: AgentHost, project: AgentProjectView, profile: AgentProfile): AgentLaunchSpec | Promise<AgentLaunchSpec>;
   /** Starts an unused process ahead of the first message of a new session, held as a reservation (`host.terminals.reserve`). */
   prewarm?(host: AgentHost, project: AgentProjectView, profile: AgentProfile, request: AgentPrewarmRequest): Promise<AgentPrewarmResult>;
+  /** Stops the unused process `prewarm` answered with `claimId`, when no session has claimed it; the page that asked for it closed. */
+  releasePrewarm?(host: AgentHost, claimId: string): Promise<void>;
   /** Whether a screen that shows no dialog has the Agent back at its own prompt, which completes a dialog answer (`host.dialogs`) at once. */
   settledScreen?(screen: string): boolean;
   /** Whether a dialog recognised on the Agent's screen is backed by something it waits on; every dialog is accepted when absent. */
@@ -598,6 +600,10 @@ export interface AgentPrewarmRequest {
   model?: string;
   mode?: string;
   approval?: string;
+  /** A renewal by the page holding this claim: it renews that process and never replaces one another page holds. */
+  claimId?: string;
+  /** Renew only; nothing is started (the project is busy). */
+  renewOnly?: boolean;
 }
 
 /** `ready`: a reservation exists and is idle; `preparing`: it is being started; `skipped`: nothing was started, and `reason` says why. */

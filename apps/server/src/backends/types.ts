@@ -273,10 +273,10 @@ export interface NativeBackendOpenOptions {
   restartAddress?: string;
   initialPrompt?: string;
   /**
-   * Called synchronously right before a process carrying `initialPrompt` is spawned; the caller
+   * Called right before a process carrying `initialPrompt` is spawned, and awaited; the caller
    * commits its no-replay fence here. A throw must abort the spawn (see `runBeforeSpawn`).
    */
-  beforeSpawn?: () => void;
+  beforeSpawn?: () => void | Promise<void>;
 }
 
 export interface NativeBackendOpenResult {
@@ -396,6 +396,9 @@ export interface NativePrewarmRequest {
   model?: string;
   mode?: string;
   approval?: string;
+  /** See `AgentPrewarmRequest.claimId`. */
+  claimId?: string;
+  renewOnly?: boolean;
 }
 
 export interface NativePrewarmResult {
@@ -607,6 +610,8 @@ export interface NativeBackendDriver {
   start?(host: NativeBackendHost, profile: NativeBackendProfileConfig): Promise<void>;
   /** Starts an unused process held for the next session of this project; `skipped` with the reason when it cannot. */
   prewarm?(host: NativeBackendHost, project: Project, profile: NativeBackendProfileConfig, request: Omit<NativePrewarmRequest, 'project' | 'backendProfileId'>): Promise<NativePrewarmResult>;
+  /** Stops the unused process `prewarm` answered with `claimId`, unless a session has claimed it. */
+  releasePrewarm?(host: NativeBackendHost, claimId: string): Promise<void>;
   /** The project files the backend's CLI reads its configuration from, behind `/api/projects/:id/configs`. */
   readonly projectConfigs?: NativeProjectConfigs;
   /** Skills, MCP servers and plugins of the provider. */

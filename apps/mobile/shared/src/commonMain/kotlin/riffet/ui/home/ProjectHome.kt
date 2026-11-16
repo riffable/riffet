@@ -98,6 +98,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.IntState
 import androidx.compose.ui.graphics.vector.ImageVector
 import riffet.shared.createShellTerminal
+import riffet.shared.PrewarmBody
+import riffet.ui.app.LocalPageActive
 import riffet.shared.terminals
 import riffet.contracts.TerminalState
 import riffet.contracts.TerminalKind
@@ -830,6 +832,7 @@ private fun HomeContent(
     val typography = LocalRiffetTypography.current
     val list by store.list.collectAsState()
     val scope = rememberCoroutineScope()
+    val pageActive = LocalPageActive.current
 
     val drafts = LocalComposerDrafts.current
     val draft = remember(drafts) { drafts?.draftFor(HOME_DRAFT_ID) ?: ComposerDraft() }
@@ -913,11 +916,22 @@ private fun HomeContent(
         }
     }
 
+    // While the page shows an Agent that keeps a warm CLI (only Cursor does), one is held for its choice;
+    // leaving the page or choosing otherwise releases it, and a send hands it to the new conversation.
+    val prewarm = remember { PrewarmLease() }
+    val prewarmBody = if (pageActive && !chat && config.capabilities?.supportsPrewarm == true) PrewarmBody(
+        projectId = target.id, backendId = config.backendId, backendProfileId = config.profileId,
+        model = config.model.takeIf { it.isNotBlank() }, mode = config.mode, approval = config.approval,
+    ) else null
+    LaunchedEffect(api, prewarmBody) { prewarm.hold(api, prewarmBody) }
+    DisposableEffect(prewarm) { onDispose { prewarm.close() } }
+
     fun create() {
         val prompt = text.trim()
         if (prompt.isEmpty() || creating || uploading) return
         creating = true
         error = null
+        prewarm.sent()
         scope.launch {
             try {
                 val session = store.createSession(
@@ -943,6 +957,7 @@ private fun HomeContent(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Throwable) {
+                prewarm.sendFailed()
                 error = failure.message?.takeIf { it.isNotBlank() } ?: getString(Res.string.session_create_session_failed)
             } finally {
                 creating = false

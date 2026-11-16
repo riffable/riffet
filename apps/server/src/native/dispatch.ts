@@ -115,7 +115,7 @@ export interface NativeDispatcherBackend {
 interface NativeDispatcherRuntime {
   withSession<T>(sessionId: string, operation: () => Promise<T>): Promise<T>;
   /** With `initialPrompt`, must call `beforeSpawn` right before spawning and abort the spawn if it throws. */
-  ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void }): Promise<unknown>;
+  ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<unknown>;
 }
 
 /** What keeps a restart waiting: a write still being confirmed, a turn or a background task that a restart would end. */
@@ -132,6 +132,8 @@ export class NativeDispatcher {
   private readonly startReservations = new Map<string, number>();
   /** Destructive file operations exclude native work in the directory and its nested projects. */
   private readonly workspaceReservations = new Map<symbol, string[]>();
+  /** Workspaces a warm CLI is being set up in, by how many calls (`holdWorkspaceForPrewarm`). */
+  private readonly prewarmHolds = new Map<string, number>();
   /** A confirmed-interrupt request fences delivery and idle reconciliation until it settles. */
   private readonly interruptingSessions = new Set<string>();
   private readonly interruptionTasks = new Map<string, { commandId?: string; fingerprint?: string; task: Promise<Run | undefined> }>();
@@ -384,11 +386,31 @@ export class NativeDispatcher {
     return [...this.workspaceReservations.values()].some(paths => paths.some(path => overlappingPaths(path, cwd)));
   }
 
+  /**
+   * Holds the project's workspace while a warm CLI is set up in it: a restore/merge is refused meanwhile,
+   * conversations are not (a warm CLI changes no file). Throws `PROJECT_BUSY` while a restore/merge holds it.
+   */
+  holdWorkspaceForPrewarm(projectId: string): () => void {
+    if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is shutting down', 503);
+    const path = workspacePath(this.store.getProject(projectId).cwd);
+    if ([...this.workspaceReservations.values()].some(paths => paths.some(held => overlappingPaths(held, path)))) throw this.workspaceBusy();
+    this.prewarmHolds.set(path, (this.prewarmHolds.get(path) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const remaining = (this.prewarmHolds.get(path) ?? 1) - 1;
+      if (remaining) this.prewarmHolds.set(path, remaining);
+      else this.prewarmHolds.delete(path);
+    };
+  }
+
   /** Atomically excludes native dispatch and startup until a restore/merge finishes its writes. */
   reserveWorkspace(projectIds: string[]): () => void {
     if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is shutting down', 503);
     const paths = projectIds.map(id => workspacePath(this.store.getProject(id).cwd));
     if ([...this.workspaceReservations.values()].some(existing => existing.some(path => paths.some(candidate => overlappingPaths(path, candidate))))) throw this.workspaceBusy();
+    if ([...this.prewarmHolds.keys()].some(held => paths.some(candidate => overlappingPaths(held, candidate)))) throw this.workspaceBusy();
     for (const session of this.store.listSessions()) {
       const cwd = workspacePath(this.store.getProject(session.projectId).cwd);
       if (!paths.some(path => overlappingPaths(path, cwd))) continue;
@@ -423,6 +445,13 @@ export class NativeDispatcher {
    * live TUI to coordinate against, and no slash command. Everything else keeps the legacy
    * paste-into-composer path intact.
    */
+  /** Whether the session's terminal is running; a backend without one never has a CLI to wait for. */
+  private hasLiveTerminal(session: Session): boolean {
+    if (!session.terminalId) return false;
+    try { return this.store.getTerminal(session.terminalId).state !== 'exited'; }
+    catch { return false; }
+  }
+
   private canUseArgvInitialPrompt(session: Session, initial: NonNullable<Run['native']>): boolean {
     if (initial.stage === 'interrupt_followup') return false;
     if (!initial.input.text || initial.input.text.trimStart().startsWith('/')) return false;
@@ -434,11 +463,17 @@ export class NativeDispatcher {
     // streams through a tmux paste-buffer and has no comparable limit.
     if (Buffer.byteLength(initial.input.text, 'utf8') > 64 * 1024) return false;
     // A live terminal cannot absorb a positional argv prompt retroactively — fall back to paste.
-    if (session.terminalId) {
-      try { if (this.store.getTerminal(session.terminalId).state !== 'exited') return false; }
-      catch { /* terminal row gone; a fresh spawn will be created */ }
-    }
-    return true;
+    return !this.hasLiveTerminal(session);
+  }
+
+  /** `beforeTurn`, with how long it took recorded on the run. Never rejects, as `beforeTurn` does not. */
+  private async checkpointed(session: Session, run: Run): Promise<void> {
+    const started = now();
+    await this.beforeTurn(session, run);
+    try {
+      const current = this.store.getRun(run.id).native;
+      if (current?.delivery === 'preparing') this.store.transitionNativeRun(run.id, ['preparing'], { timings: { ...current.timings, checkpointMs: now() - started } });
+    } catch { /* the run is gone; there is nothing to record on */ }
   }
 
   private async beforeTurn(session: Session, run: Run): Promise<void> {
@@ -461,13 +496,22 @@ export class NativeDispatcher {
     const initial = run.native;
     const checkpoint = Boolean(this.options.beforeTurn && !initial.checkpointAttempted && !isSlashCommand(initial));
     if (!this.store.transitionNativeRun(runId, ['queued'], { delivery: 'preparing', stage: 'runtime', attempt: initial.attempt + 1, ...(checkpoint ? { checkpointAttempted: true } : {}), timings: { ...initial.timings, prepareAt: now() } })) return;
+    let checkpointTask: Promise<void> | undefined;
     try {
       let session = this.store.getSession(run.sessionId);
       if (session.archivedAt) throw new AppError('ARCHIVED_SESSION', 'This conversation is archived', 409);
       if (this.store.getProject(session.projectId).archivedAt) throw new AppError('ARCHIVED_PROJECT', 'Restore this project before running a conversation', 409);
-      if (checkpoint) await this.beforeTurn(session, run);
-      // Checkpoint I/O may outlive cancellation or shutdown. Neither may start a CLI as a side
-      // effect after the caller has already stopped this still-uncommitted turn.
+      // The checkpoint has to be taken before the CLI can change a file, not before it starts: a CLI that
+      // has yet to start takes seconds, and the checkpoint is taken meanwhile. A CLI carrying the first
+      // prompt from its spawn waits for it at the spawn (`beforeSpawn`); a message for one started
+      // without it waits for it after `ensure`. To a CLI already running, any other send waits here.
+      const argvEligible = this.canUseArgvInitialPrompt(session, initial) && await this.native.supportsInitialPromptArgs?.(session) === true;
+      const coldStart = !this.hasLiveTerminal(session);
+      checkpointTask = checkpoint ? this.checkpointed(session, run) : undefined;
+      if (checkpointTask && !argvEligible && !coldStart) await checkpointTask;
+      // Checkpoint I/O may outlive cancellation or shutdown. Neither may deliver the message as a side
+      // effect after the caller has already stopped this still-uncommitted turn; a CLI started meanwhile
+      // without it stays idle.
       if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
       if (this.store.getRun(runId).native?.delivery !== 'preparing') return;
       session = this.store.getSession(run.sessionId);
@@ -490,9 +534,7 @@ export class NativeDispatcher {
       // Only a backend that declares the capability can absorb a launch-time prompt; everything
       // else keeps its own send path. render() has no side effects here because the gate above
       // already rejected attachments and context extras.
-      const argvPrompt = this.canUseArgvInitialPrompt(session, initial) && await this.native.supportsInitialPromptArgs?.(session) === true
-        ? await this.render(initial.input)
-        : undefined;
+      const argvPrompt = argvEligible ? await this.render(initial.input) : undefined;
       // A resumed chat already has rows; only an echo after them can be this prompt's receipt.
       const argvBaseline = argvPrompt !== undefined && session.nativeSessionId
         ? (await this.native.snapshot(session.id)).events.at(-1)?.sequence ?? 0
@@ -501,7 +543,8 @@ export class NativeDispatcher {
       // The argv prompt is delivered by the spawn itself, so the write fence has to be committed
       // before the process exists: recovery then sees an uncertain delivery and never replays it,
       // and a cancel is refused because the CLI may already be running it.
-      const beforeSpawn = () => {
+      const beforeSpawn = async () => {
+        await checkpointTask;
         if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
         if (this.interruptingSessions.has(session.id)) throw new AppError('NATIVE_INTERRUPT_IN_PROGRESS', 'The current turn is stopping; the message was not sent', 409);
         const latest = this.store.getSession(session.id);
@@ -522,6 +565,11 @@ export class NativeDispatcher {
       // A launch-time prompt may already have committed its input fence while ensure was running.
       if (resuming) this.store.transitionNativeRun(runId, ['preparing'], { stage: 'runtime' });
       if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting', 409);
+      if (argvPrompt === undefined && checkpointTask) {
+        await checkpointTask;
+        if (this.closed) throw new AppError('DISPATCH_STOPPED', 'The service is restarting; the message was not sent', 409);
+        if (this.store.getRun(runId).native?.delivery !== 'preparing') return;
+      }
       session = this.store.getSession(run.sessionId);
       // The launch returned without passing through the fence hook, so whether a CLI got the prompt
       // on its argv is unknown; pasting it as well could run it twice.
@@ -616,6 +664,9 @@ export class NativeDispatcher {
         }
       }
     } catch (error) {
+      // A launch that failed while its checkpoint ran lets it finish: a retry does not take another
+      // (`checkpointAttempted`), and leaving `preparing` first would make it give the snapshot up.
+      if (this.store.getRun(runId).native?.delivery === 'preparing') await checkpointTask;
       run = this.store.getRun(runId);
       const delivery = run.native?.delivery;
       if (delivery === 'cancelled' || delivery === 'observed') return;

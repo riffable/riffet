@@ -33,6 +33,8 @@ struct NewTaskView: View {
     @State private var remembered: [String]?
     /// MCP servers and Skills switched off for this task only; a new one starts with everything on.
     @State private var extensionsOff: [String] = []
+    /// A warm CLI held for this page's choice while it is open; a send hands it to the new conversation.
+    @State private var prewarm = PrewarmLease()
     @FocusState private var writing: Bool
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var textSize
@@ -51,6 +53,13 @@ struct NewTaskView: View {
         return workbench.backends.first { $0.backendId.name == draft.backendName }?.backendId ?? workbench.settings?.defaultBackendId ?? .cursor
     }
     private var project: Project? { workbench.projects.first { $0.id == draft.projectID } }
+    /// What a warm CLI is held for: only an Agent that keeps one (Cursor) asks for it.
+    private var prewarmBody: PrewarmBody? {
+        guard !chat, let project, let catalog, catalog.capabilities.supportsPrewarm?.boolValue == true else { return nil }
+        let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: workbench.settings)
+        return PrewarmBody(projectId: project.id, backendId: backend, backendProfileId: draft.profileID, model: draft.model,
+                           mode: choice.mode, approval: choice.approval, agentId: nil, claimId: nil)
+    }
     private var toolsKey: String { "riffet.ios.\(workbench.baseURL.absoluteString).tool-groups" }
     /// The last pick on this device; only the phones online now are shown and sent.
     private var rememberedTools: [String] { remembered ?? ToolGroups.shared.decode(raw: UserDefaults.standard.string(forKey: toolsKey)) }
@@ -194,6 +203,9 @@ struct NewTaskView: View {
             // Project and model are choices the user makes before opening the keyboard.
         }
         .task(id: contextKey) { await loadCatalog() }
+        .onAppear { prewarm.hold(api: workbench.api, body: prewarmBody) }
+        .onChange(of: prewarmBody) { _, body in prewarm.hold(api: workbench.api, body: body) }
+        .onDisappear { prewarm.close() }
         .onChange(of: chatProject?.id, initial: true) { _, id in
             let quick = workbench.drafts.draft("chat")
             if quick.projectID != id { quick.projectID = id }
@@ -468,7 +480,10 @@ struct NewTaskView: View {
                 }
                 draft.pendingCreationID = request.id
             }
-            let session = try await workbench.store.createPreparedSession(request: request)
+            prewarm.sent()
+            let session: Session
+            do { session = try await workbench.store.createPreparedSession(request: request) }
+            catch { prewarm.sendFailed(); throw error }
             let input = request.body.initialMessage
             let ids = Set(input?.attachments?.map(\.id) ?? [])
             draft.clear(sentText: input?.text ?? "", sentAttachments: draft.attachments.filter { ids.contains($0.id) }, sentReferences: draft.references)

@@ -216,6 +216,11 @@ export class BackendCatalog {
     return await driver.prewarm(this.host, project, profile, rest);
   }
 
+  /** Stops the unused process a prewarm answered with `claimId`; nothing when the backend is gone or a session claimed it. */
+  async releasePrewarm(backendId: NativeBackendId, claimId: string): Promise<void> {
+    await this.registry.get(backendId)?.releasePrewarm?.(this.host, claimId);
+  }
+
   /** The gateway protocols a backend's profiles can be pointed at; none for a backend that is not registered. */
   consumesProtocols(backendId: NativeBackendId): readonly GatewayProtocol[] {
     return this.registry.get(backendId)?.traits?.consumesProtocols ?? [];

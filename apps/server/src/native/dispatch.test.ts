@@ -168,9 +168,9 @@ class FakeProtocolBackend extends FakeNative {
 }
 
 /** What the Cursor plugin's runtime does with a launch hook: a refusal becomes `NATIVE_LAUNCH_ABORTED`. */
-function runBeforeSpawn(beforeSpawn: (() => void) | undefined): void {
+async function runBeforeSpawn(beforeSpawn: (() => void | Promise<void>) | undefined): Promise<void> {
   if (!beforeSpawn) return;
-  try { beforeSpawn(); }
+  try { await beforeSpawn(); }
   catch (error) { throw new AppError('NATIVE_LAUNCH_ABORTED', error instanceof Error ? error.message : 'Launch was aborted before the CLI started', 409, { reason: error instanceof AppError ? error.code : undefined }); }
 }
 
@@ -203,14 +203,14 @@ class FakeRuntime {
   /** Holds the worker after the CLI has spawned, before `ensure` returns: a crash window. */
   afterSpawn?: Promise<void>;
 
-  async ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void }): Promise<void> {
+  async ensure(session: Session, options?: { initialPrompt?: string; beforeSpawn?: () => void | Promise<void> }): Promise<void> {
     this.ensureCalls.push(session.id);
     this.ensureOptions.push(options?.initialPrompt !== undefined ? { initialPrompt: options.initialPrompt } : options && {});
     if (this.blockedSessionId === session.id && this.gate) await this.gate;
     if (this.ensureError) throw this.ensureError;
     // Mirrors `NativeRuntimeManager.ensureLocked`: the fence hook runs right before the spawn.
     if (options?.initialPrompt !== undefined) {
-      runBeforeSpawn(options.beforeSpawn);
+      await runBeforeSpawn(options.beforeSpawn);
       this.argvSpawns.push(options.initialPrompt);
     }
     this.attachTerminal?.(session);
@@ -340,7 +340,8 @@ describe('NativeDispatcher durable delivery', () => {
     gate.resolve();
     await until(() => store.getRun(run.id).native?.delivery !== 'preparing', 'checkpoint worker released');
     await closing;
-    expect(runtime.ensureCalls).toEqual([]);
+    // The launch may be prepared meanwhile; the CLI carrying the prompt waits for the checkpoint at its spawn.
+    expect(runtime.argvSpawns).toEqual([]);
     expect(backend.writes).toEqual([]);
     expect(store.getRun(run.id).native?.delivery).toBe(action === 'cancel' ? 'cancelled' : 'queued');
   });

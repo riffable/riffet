@@ -605,7 +605,9 @@ export const api = {
   /** Confirms a live CLI interrupt and accepts this follow-up before releasing the dispatch queue. */
   nativeInterruptAndSend: (id: string, body: NativeMessageInput) => requireReferenceProtocol(body).then(() => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/interrupt-and-send`, json('POST', body))),
   sendQueuedNativeRunNow: (id: string, runId: string, stop: NativeStopRequest) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/send-now`, json('POST', { stop })),
-  nativePrewarm: (body: { projectId: string; backendId?: NativeBackendId; backendProfileId?: string; model?: string; mode?: string; approval?: string }, signal?: AbortSignal) => request<{ state: string; reason?: string }>('/api/native/prewarm', { ...json('POST', body), signal }),
+  nativePrewarm: (body: { projectId: string; backendId?: NativeBackendId; backendProfileId?: string; model?: string; mode?: string; approval?: string; claimId?: string }) => request<{ state: string; reason?: string; claimId?: string }>('/api/native/prewarm', json('POST', body)),
+  // `keepalive` lets it leave with a closing page.
+  nativePrewarmRelease: (body: { backendId?: NativeBackendId; claimId: string }) => request<void>('/api/native/prewarm/release', { ...json('POST', body), keepalive: true }),
   cancelNativeRun: (id: string, runId: string) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/cancel`, json('POST')),
   checkNativeRun: (id: string, runId: string) => request<NativeRunRecovery>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/check`, json('POST')),
   resolveNativeRun: (id: string, runId: string, queuedRunIds: string[]) => request<Run>(`/api/sessions/${encodeURIComponent(id)}/native/runs/${encodeURIComponent(runId)}/resolve`, json('POST', { outcome: 'continue', queuedRunIds })),

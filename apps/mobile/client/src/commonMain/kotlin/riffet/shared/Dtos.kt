@@ -838,10 +838,21 @@ data class PrewarmBody(
     val approval: String? = null,
     /** A plugin Agent's raw id, which [backendId] cannot hold (see `AgentWire`). */
     val agentId: String? = null,
+    /** The warm CLI a renewal is for; a renewal never takes the slot from another page's. */
+    val claimId: String? = null,
 )
 
 @Serializable
-data class PrewarmResult(val state: String, val reason: String? = null)
+data class PrewarmResult(val state: String, val reason: String? = null, val claimId: String? = null)
+
+/** `POST /api/native/prewarm/release`: the page that asked for [claimId] closed. */
+@Serializable
+data class PrewarmReleaseBody(
+    val claimId: String,
+    val backendId: NativeBackendId? = null,
+    /** A plugin Agent's raw id, which [backendId] cannot hold (see `AgentWire`). */
+    val agentId: String? = null,
+)
 
 
 @Serializable

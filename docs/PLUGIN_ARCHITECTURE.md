@@ -86,7 +86,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 同步读 `host.view`：本 Agent 的会话、项目、终端、首条消息与某一轮的 run。`updateSession`、`setNativeSessionId`、`recordActivity` 在调用返回时即对 `view` 可见，promise 只报告失败。
 - 状态补丁：`AgentSessionPatch` 另含 `state`、`error`，只有声明 `traits.ownsSessionObservation` 的后端可写，其余得 403 `AGENT_PATCH_REFUSED`。`observe(host, context, report)` 的 `report` 只发给当前订阅者（首次回放），`host.emit` 广播；`host.stats.observeEvents` 把读到的事件交给统计。
-- 终端：`AgentLaunchSpec` 带 `kind`（`native`，或旧值 `cursor`）和 `reuseLive`（会话已有活终端则复用，并发启动合并）。`host.terminals` 另有 `interact`（独占读屏与按键）、`observe`、`panePid` 和预留池（`reserve`/`claim`/`extendReservation`/`reservations`/`releaseReservation`，`POST /api/native/prewarm` 驱动 `AgentBackend.prewarm`）。`AgentBackend.terminal`（默认标题、就绪判断、启动失败提示）、`launchEnv`（交给 pane 与不许泄漏进 tmux 服务端的环境名）、`loginLaunch`（终端登录）。
+- 终端：`AgentLaunchSpec` 带 `kind`（`native`，或旧值 `cursor`）和 `reuseLive`（会话已有活终端则复用，并发启动合并）。`host.terminals` 另有 `interact`（独占读屏与按键）、`observe`、`panePid` 和预留池（`reserve`/`claim`/`extendReservation`/`reservations`/`releaseReservation`，`POST /api/native/prewarm` 驱动 `AgentBackend.prewarm`，同一请求续租；`POST /api/native/prewarm/release` 驱动 `releasePrewarm`，新会话已认领的不受影响）。`AgentBackend.terminal`（默认标题、就绪判断、启动失败提示）、`launchEnv`（交给 pane 与不许泄漏进 tmux 服务端的环境名）、`loginLaunch`（终端登录）。
 - 对话框：`host.dialogs` 识别并应答终端上的信任、提问类对话框；`settledScreen` 判断应答后 Agent 是否已回到自己的提示符。
 - 转录：除批量的 `transcript.read`，可实现 `transcriptSource`（`identity`/`pull`/`watch`/`drain`），写入 `AgentLaneWriter`（草稿、撤回、重投影、轮次起止、活动账本、子 Agent 车道、scratch 窗口），journal 直接承载；hook 驱动的写入走 `host.transcript.withSource`。
 - 工具包：核心与插件共用的纯函数在 `packages/plugin-api/src/kit/`，经 `@riffet/plugin-api/kit` 导出，核心旧路径只留转出；`AppError` 是同一个类。

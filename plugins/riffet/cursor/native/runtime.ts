@@ -4,7 +4,7 @@ import type { TerminalAppearance } from '@contracts';
 import { AppError, resolveTerminalAppearance } from '@riffet/plugin-api/kit';
 import { type AgentProjectView, type AgentReservation, type AgentSessionView, type AgentTerminalHandle } from '@riffet/plugin-api/experimental/agent';
 import { cursorAgentAdapter } from '../cli-adapter.js';
-import { cursorConfigDirectory, cursorLaunchSpec, runCursor, type CursorLaunchProfile } from '../cli-driver.js';
+import { cursorConfigDirectory, cursorLaunchSpec, type CursorLaunchProfile } from '../cli-driver.js';
 import type { CursorPort } from '../host-port.js';
 import type { CursorLive } from './live.js';
 import { parseScreen } from './screen.js';
@@ -29,14 +29,26 @@ export interface NativeRuntimeManagerOptions {
   profileKey?: string;
   /** Where the CLIs it starts write the step they stream (`live.ts`). */
   live?: CursorLive;
+  /** The id a new chat is created under; a fresh UUID unless a test fixes it. */
   createChatId?(cwd: string): Promise<string | undefined>;
-  /** Warmup is background work, so it can tolerate more launcher initialization than cold start. */
-  warmCreateChatIdTimeoutMs?: number;
-  warmTtlMs?: number;
+  /**
+   * How long a warm CLI outlives the last request for it. The page that wants it renews it while it
+   * is open and releases it when it closes (`releasePrewarm`); this only bounds a page that vanished.
+   */
+  warmLeaseMs?: number;
+  /** How long a send waits for a warmup still booting before it starts a CLI of its own. */
+  warmClaimWaitMs?: number;
   readinessTimeoutMs?: number;
   readinessPollMs?: number;
   failureBackoffMs?: number;
   now?(): number;
+}
+
+export interface NativePrewarmRenewal {
+  /** The claim the asking page holds: its renewal never replaces a warm CLI another page holds. */
+  claimId?: string;
+  /** Renew only, start nothing. */
+  renewOnly?: boolean;
 }
 
 export interface NativePrewarmResult {
@@ -61,6 +73,15 @@ export interface NativeEnsureOptions {
   beforeSpawn?: () => void | Promise<void>;
 }
 
+export interface NativeEnsureResult {
+  terminal: AgentTerminalHandle;
+  /**
+   * The `initialPrompt` was not put on a command line: a warm CLI took the conversation and the
+   * caller submits the prompt to it, committing its fence (`beforeSpawn`) before the write.
+   */
+  promptPending?: true;
+}
+
 /** Runs a launch hook; a refusal becomes `NATIVE_LAUNCH_ABORTED` so callers can tell it from a start failure. */
 export function runBeforeSpawn(beforeSpawn: (() => void | Promise<void>) | undefined): void | Promise<void> {
   if (!beforeSpawn) return;
@@ -83,6 +104,8 @@ interface WarmEntry {
   reason?: string;
   terminalId?: string;
   expiresAt?: number;
+  /** Until when the page that asked for it is taken to still want it. */
+  leaseUntil: number;
   cancelled: boolean;
   task: Promise<void>;
   createTask?: Promise<AgentReservation>;
@@ -115,7 +138,8 @@ export class NativeRuntimeManager {
   /** The operations `withSession` has started and not finished, for `close` to wait on. */
   private readonly sessionOperations = new Set<Promise<unknown>>();
   private warmTail?: Promise<void>;
-  private readonly warmTtlMs: number;
+  private readonly warmLeaseMs: number;
+  private readonly warmClaimWaitMs: number;
   private readonly readinessTimeoutMs: number;
   private readonly readinessPollMs: number;
   private readonly failureBackoffMs: number;
@@ -130,7 +154,8 @@ export class NativeRuntimeManager {
 
   constructor(private readonly options: NativeRuntimeManagerOptions) {
     this.port = options.port;
-    this.warmTtlMs = Math.max(1, options.warmTtlMs ?? 120_000);
+    this.warmLeaseMs = Math.max(1, options.warmLeaseMs ?? 90_000);
+    this.warmClaimWaitMs = Math.max(0, options.warmClaimWaitMs ?? 15_000);
     this.readinessTimeoutMs = Math.max(1, options.readinessTimeoutMs ?? 30_000);
     this.readinessPollMs = Math.max(10, options.readinessPollMs ?? 160);
     this.failureBackoffMs = Math.max(0, options.failureBackoffMs ?? 5_000);
@@ -158,16 +183,16 @@ export class NativeRuntimeManager {
    * Reuses a live process, claims a matching warm process, or creates a new native CLI.
    *
    * When `initialPrompt` is set the caller is dispatching the FIRST user message of a brand-new
-   * session; the prompt is appended as a positional argv so cursor-agent receives it before its
-   * TUI boots. In that mode warmup claim is skipped — a prewarmed CLI has no way to retroactively
-   * accept a prompt, and a fresh spawn with argv is already sub-second. See
-   * `plans/replicated-gathering-hammock.md` (Phase 1).
+   * session. A matching warm CLI is claimed first, even one still booting: a CLI's own start takes
+   * seconds (its runtime, MCP servers, skills), so one that began earlier is ready sooner than a new
+   * one. The prompt is then left to the caller (`promptPending`). Without one, the prompt is put on
+   * the command line of a new CLI, which takes it as soon as it has started.
    *
    * `beforeSpawn` runs (and is awaited) immediately before the CLI carrying `initialPrompt` is created,
    * so the caller can commit its no-replay fence first. If it throws, nothing is spawned and the
    * launch fails with `NATIVE_LAUNCH_ABORTED`, leaving the session state as it was.
    */
-  async ensure(session: AgentSessionView, options: NativeEnsureOptions = {}): Promise<AgentTerminalHandle> {
+  async ensure(session: AgentSessionView, options: NativeEnsureOptions = {}): Promise<NativeEnsureResult> {
     return this.withSession(session.id, async () => {
       let current = this.port.getSession(session.id);
       const previous = { state: current.state, error: current.error };
@@ -188,7 +213,7 @@ export class NativeRuntimeManager {
     });
   }
 
-  private async ensureLocked(sessionId: string, options: NativeEnsureOptions = {}): Promise<AgentTerminalHandle> {
+  private async ensureLocked(sessionId: string, options: NativeEnsureOptions = {}): Promise<NativeEnsureResult> {
     if (this.closed) throw new AppError('NATIVE_RUNTIME_CLOSED', 'Native runtime manager is closed', 503);
     await this.ensureStartupReap();
     let session = this.port.getSession(sessionId);
@@ -201,10 +226,14 @@ export class NativeRuntimeManager {
       // The caller must guard against this (dispatcher only sets initialPrompt when the session
       // has no terminal yet); surface a clear error if the contract is violated.
       if (options.initialPrompt) throw new AppError('CLI_ALREADY_RUNNING', 'The CLI is already ready; the first message should use the normal submit path', 409);
-      return existing;
+      return { terminal: existing };
     }
 
     const requestedModel = session.model;
+    const fresh = !session.resumePicker && !session.nativeSessionId;
+    // The model check and the hook plugin do not depend on each other.
+    const pluginTask = this.launchPlugin?.(session) ?? Promise.resolve([]);
+    void pluginTask.catch(() => undefined);
     let launchModel = session.model;
     if (!session.resumePicker) {
       const started = this.now();
@@ -215,16 +244,11 @@ export class NativeRuntimeManager {
       }
     }
 
-    if (!session.resumePicker && !session.nativeSessionId) {
+    if (fresh) {
       const resourceKey = this.resourceKey(project, { ...this.sessionConfig(session), model: launchModel });
       const requestKey = this.resourceKey(project, { ...this.sessionConfig(session), model: requestedModel });
-      // A warmup CLI has already booted its TUI; it cannot accept a positional argv prompt
-      // retroactively. Skip warmup claim when the caller is dispatching the first user message
-      // via argv; a fresh spawn with the prompt baked into argv is already sub-second.
-      if (!options.initialPrompt) {
-        const warm = await this.claimReadyWarmup(resourceKey, requestKey, session.id, launchModel);
-        if (warm) return warm;
-      }
+      const warm = await this.claimReadyWarmup(resourceKey, requestKey, session.id, launchModel);
+      if (warm) return { terminal: warm, ...(options.initialPrompt ? { promptPending: true as const } : {}) };
     }
 
     let chatId = session.nativeSessionId;
@@ -235,7 +259,7 @@ export class NativeRuntimeManager {
       if (chatId) session = this.port.setNativeSessionId(session.id, chatId);
     }
 
-    const pluginArgs = await this.launchPlugin?.(session) ?? [];
+    const pluginArgs = await pluginTask;
     const args = [...pluginArgs, ...cursorAgentAdapter.buildArgs({
       ...(session.resumePicker ? { resumePicker: true } : {}),
       hasStoredSession: Boolean(chatId),
@@ -245,46 +269,52 @@ export class NativeRuntimeManager {
       ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
     })];
     if (options.initialPrompt) await runBeforeSpawn(options.beforeSpawn);
-    const started = this.now();
+    const launchStarted = this.now();
     const info = await this.port.terminals.launch(session.id, {
       ...cursorLaunchSpec(this.options.profile ?? this.options.cliPath, [...(chatId ? ['--resume', chatId] : []), ...args], {}, project.cwd, { paneEnv: this.options.live?.launchEnv() }),
       kind: 'cursor',
       reuseLive: true,
     });
-    this.recordStage('terminalCreate', started);
+    this.recordStage('terminalCreate', launchStarted);
     // This launch read the record, so any switch that was waiting for a relaunch has just been
     // honored: leaving the flag set would make the workbench restart a CLI that is already current.
     this.port.updateSession(session.id, { terminalId: info.id, state: 'running', error: undefined, configPending: false });
-    return info;
+    return { terminal: info };
   }
 
   /**
    * Start warmup in the background. Repeated calls with the same resource key return the
-   * existing claim state; only one unused persistent CLI is allowed per manager.
+   * existing claim state and renew its lease; only one unused persistent CLI is allowed per manager.
    */
-  async prewarm(projectId: string, config: NativeRuntimeConfig): Promise<NativePrewarmResult> {
-    return this.withWarmLock(() => this.prewarmLocked(projectId, config));
+  async prewarm(projectId: string, config: NativeRuntimeConfig, renewal: NativePrewarmRenewal = {}): Promise<NativePrewarmResult> {
+    return this.withWarmLock(() => this.prewarmLocked(projectId, config, renewal));
   }
 
-  private async prewarmLocked(projectId: string, config: NativeRuntimeConfig): Promise<NativePrewarmResult> {
+  private async prewarmLocked(projectId: string, config: NativeRuntimeConfig, renewal: NativePrewarmRenewal): Promise<NativePrewarmResult> {
     if (this.closed) return this.skipped('manager-closed');
     await this.ensureStartupReap();
     if (this.closed) return this.skipped('manager-closed');
     const project = this.port.getProject(projectId);
     if (project.archivedAt) return this.skipped('project-archived');
     const requestKey = this.resourceKey(project, config);
+    const current = this.warm;
+    const live = current && !current.cancelled && current.state !== 'failed' ? current : undefined;
+    if (live && (live.resourceKey === requestKey || live.requestKey === requestKey)) {
+      if (live.state === 'ready' && (live.expiresAt ?? 0) > this.now()) {
+        await this.renewLease(live);
+        return { state: 'ready', claimId: live.claimId, expiresAt: live.expiresAt };
+      }
+      if (live.state === 'preparing') {
+        live.leaseUntil = this.now() + this.warmLeaseMs;
+        return { state: 'preparing', claimId: live.claimId };
+      }
+    }
+    if (renewal.renewOnly) return this.skipped('workspace_busy');
+    // One slot: a page's first request takes it over, its renewals never take it from another page.
+    if (renewal.claimId && live && live.claimId !== renewal.claimId) return this.skipped('held_elsewhere');
     const previousFailure = this.failedWarmups.get(requestKey);
     if (previousFailure && previousFailure.until > this.now()) return this.skipped(previousFailure.reason);
     if (previousFailure) this.failedWarmups.delete(requestKey);
-
-    const current = this.warm;
-    if (current && (current.resourceKey === requestKey || current.requestKey === requestKey) && !current.cancelled) {
-      if (current.state === 'ready' && (current.expiresAt ?? 0) > this.now()) {
-        return { state: 'ready', claimId: current.claimId, expiresAt: current.expiresAt };
-      }
-      if (current.state === 'preparing') return { state: 'preparing', claimId: current.claimId };
-      if (current.state === 'failed') return this.skipped(current.reason ?? 'warmup-failed');
-    }
 
     if (current) await this.invalidateWarmLocked(current, 'replaced');
     if (this.closed) return this.skipped('manager-closed');
@@ -295,6 +325,7 @@ export class NativeRuntimeManager {
       requestKey,
       projectId,
       state: 'preparing',
+      leaseUntil: this.now() + this.warmLeaseMs,
       cancelled: false,
       task: Promise.resolve(),
     };
@@ -302,6 +333,14 @@ export class NativeRuntimeManager {
     entry.task = this.prepareWarmup(entry, project, config);
     void entry.task.catch(() => undefined);
     return { state: 'preparing', claimId: entry.claimId };
+  }
+
+  /** The page that asked for the warm CLI no longer wants it; one a session has claimed is not affected. */
+  async releasePrewarm(claimId: string): Promise<void> {
+    await this.withWarmLock(async () => {
+      const warm = this.warm;
+      if (warm && warm.claimId === claimId) await this.invalidateWarmLocked(warm, 'released');
+    });
   }
 
   /** Counters and aggregate stage times; no prompt text, credentials, or model arguments are kept. */
@@ -351,28 +390,31 @@ export class NativeRuntimeManager {
   }
 
   private async claimReadyWarmup(resourceKey: string, requestKey: string, sessionId: string, launchModel?: string): Promise<AgentTerminalHandle | undefined> {
+    // A warm CLI still booting is waited for outside the warm lock, which renewals, releases and other launches take.
+    const booting = this.warm;
+    if (booting && !booting.cancelled && booting.state === 'preparing' && (booting.resourceKey === resourceKey || booting.requestKey === requestKey)) {
+      // It has been booting since the page opened; a CLI started now would take longer.
+      let readyTimer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        booting.task,
+        new Promise<void>(resolveWait => { readyTimer = setTimeout(resolveWait, this.warmClaimWaitMs); }),
+      ]);
+      if (readyTimer) clearTimeout(readyTimer);
+    }
     return this.withWarmLock(() => this.claimReadyWarmupLocked(resourceKey, requestKey, sessionId, launchModel));
   }
 
   private async claimReadyWarmupLocked(resourceKey: string, requestKey: string, sessionId: string, launchModel?: string): Promise<AgentTerminalHandle | undefined> {
     const warm = this.warm;
+    // One for other settings or another project stays: it is held for the page that asked for it.
     if (!warm || (warm.resourceKey !== resourceKey && warm.requestKey !== requestKey) || warm.cancelled) {
       this.statsState.warmMisses += 1;
-      if (warm) await this.invalidateWarmLocked(warm, 'resource-mismatch');
       return undefined;
     }
     if (warm.state === 'preparing') {
-      let readyTimer: NodeJS.Timeout | undefined;
-      await Promise.race([
-        warm.task,
-        new Promise<void>(resolveWait => { readyTimer = setTimeout(resolveWait, 300); }),
-      ]);
-      if (readyTimer) clearTimeout(readyTimer);
-      if (warm.state === 'preparing') {
-        this.statsState.warmMisses += 1;
-        await this.invalidateWarmLocked(warm, 'not-ready-at-claim');
-        return undefined;
-      }
+      this.statsState.warmMisses += 1;
+      await this.invalidateWarmLocked(warm, 'not-ready-at-claim');
+      return undefined;
     }
     if (warm.cancelled || warm.state !== 'ready' || warm.resourceKey !== resourceKey || warm.launchModel !== launchModel || !warm.terminalId) {
       this.statsState.warmMisses += 1;
@@ -406,7 +448,7 @@ export class NativeRuntimeManager {
       entry.launchModel = launchModel;
       entry.resourceKey = this.resourceKey(project, { ...config, model: launchModel });
       const chatStarted = this.now();
-      const nativeSessionId = await this.createChatId(project.cwd, this.options.warmCreateChatIdTimeoutMs ?? 10_000);
+      const nativeSessionId = await this.createChatId(project.cwd);
       this.recordStage('createChatId', chatStarted);
       if (!nativeSessionId) {
         this.failWarmup(entry, 'chat-id-unavailable');
@@ -417,7 +459,7 @@ export class NativeRuntimeManager {
       const normalized = { ...config, model: launchModel };
       const args = [...await this.launchPlugin?.() ?? [], ...this.launchArgs(normalized)];
       if (entry.cancelled || this.closed) return;
-      const expiresAt = this.now() + this.readinessTimeoutMs + this.warmTtlMs;
+      const expiresAt = this.now() + this.readinessTimeoutMs + this.warmLeaseMs;
       const createStarted = this.now();
       const appearance = resolveTerminalAppearance(config.appearance);
       entry.createTask = this.port.terminals.reserve({
@@ -440,27 +482,44 @@ export class NativeRuntimeManager {
       const readyStarted = this.now();
       const ready = await this.waitForIdle(entry);
       this.recordStage('prewarmReady', readyStarted);
-      if (!ready || entry.cancelled || this.closed || this.warm !== entry) {
+      // Released or replaced while it booted: that is not a failure, and must not hold back the next request.
+      if (entry.cancelled || this.closed || this.warm !== entry) {
+        await this.stopOwnedWarm(entry);
+        return;
+      }
+      if (!ready) {
         this.failWarmup(entry, entry.reason ?? 'cli-not-ready');
         await this.stopOwnedWarm(entry);
         return;
       }
-      entry.expiresAt = this.now() + this.warmTtlMs;
-      await this.port.terminals.extendReservation(entry.terminalId, {
-        ownerToken: entry.ownerToken,
-        resourceKey: entry.resourceKey,
-        expiresAt: entry.expiresAt,
-      });
       entry.state = 'ready';
       this.statsState.prewarmReady += 1;
-      entry.timer = setTimeout(() => {
-        void this.withWarmLock(() => this.invalidateWarmLocked(entry, 'ttl-expired')).catch(() => undefined);
-      }, this.warmTtlMs);
-      entry.timer.unref?.();
+      await this.withWarmLock(() => this.renewLease(entry, entry.leaseUntil));
     } catch (error) {
       this.failWarmup(entry, error instanceof AppError ? error.code.toLowerCase() : 'warmup-failed');
       await this.stopOwnedWarm(entry);
     }
+  }
+
+  /**
+   * Moves a ready warm CLI's end to `until` (a new lease when absent) and arms its timer; one whose
+   * lease has already run out is stopped by it at once. Called under the warm lock, so renewals land in order.
+   */
+  private async renewLease(entry: WarmEntry, until = this.now() + this.warmLeaseMs): Promise<void> {
+    if (entry.cancelled || this.warm !== entry || !entry.terminalId) return;
+    entry.leaseUntil = until;
+    const remaining = until - this.now();
+    // Armed first, so a failed extension below still leaves the lease able to run out.
+    this.clearWarmTimer(entry);
+    entry.timer = setTimeout(() => {
+      void this.withWarmLock(async () => {
+        if (entry.leaseUntil <= this.now()) await this.invalidateWarmLocked(entry, 'lease-expired');
+      }).catch(() => undefined);
+    }, Math.max(0, remaining));
+    entry.timer.unref?.();
+    if (remaining <= 0) return;
+    entry.expiresAt = until;
+    await this.port.terminals.extendReservation(entry.terminalId, { ownerToken: entry.ownerToken, resourceKey: entry.resourceKey, expiresAt: until });
   }
 
   private async waitForIdle(entry: WarmEntry): Promise<boolean> {
@@ -522,7 +581,8 @@ export class NativeRuntimeManager {
   }
 
   private failWarmup(entry: WarmEntry, reason: string): void {
-    if (entry.state === 'failed') return;
+    // A released or replaced warmup stops without having failed; it must not hold back the next request.
+    if (entry.state === 'failed' || entry.cancelled) return;
     entry.state = 'failed';
     entry.reason = reason;
     this.statsState.prewarmSkipped += 1;
@@ -593,16 +653,15 @@ export class NativeRuntimeManager {
     });
   }
 
-  private async createChatId(cwd: string, timeoutMs = 2_000): Promise<string | undefined> {
+  /**
+   * The id a new chat is created under. The CLI takes an id it has not seen with `--resume` and creates
+   * the chat under it, so it is chosen here: known before the CLI starts (its receipt and live step
+   * are found by it), and without `create-chat`, a CLI start of its own that takes seconds.
+   */
+  private async createChatId(cwd: string): Promise<string | undefined> {
+    if (!this.options.createChatId) return randomUUID();
     try {
-      if (this.options.createChatId) {
-        const id = await this.options.createChatId(cwd);
-        return id && CHAT_ID.test(id) ? id : undefined;
-      }
-      const result = await runCursor(this.options.profile??this.options.cliPath, ['create-chat'], { cwd, timeoutMs, maxOutputBytes: 64 * 1024 });
-      const id = result.code === 0 && result.stdout
-        ? /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.exec(result.stdout)?.[0]
-        : undefined;
+      const id = await this.options.createChatId(cwd);
       return id && CHAT_ID.test(id) ? id : undefined;
     } catch { return undefined; }
   }

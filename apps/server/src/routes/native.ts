@@ -167,7 +167,7 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     if(!Array.isArray(ids)||ids.length>1000||ids.some(id=>typeof id!=='string'||!id||id.length>200)||new Set(ids).size!==ids.length)throw new AppError('INVALID_INPUT','queuedRunIds must identify the reviewed queue');
     return dispatch.continue(request.params.id,request.params.runId,ids as string[]);
   });
-  app.post<{Body:{projectId:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string}}>('/api/native/prewarm',async(request)=>{
+  app.post<{Body:{projectId:string;backendId?:string;backendProfileId?:string;model?:string;mode?:string;approval?:string;claimId?:string}}>('/api/native/prewarm',async(request)=>{
     const body=request.body;
     const project=store.getProject(requireString(body?.projectId,'projectId',100));
     if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);
@@ -176,13 +176,25 @@ export function registerNativeRoutes(app: FastifyInstance, deps: RouteDeps): voi
     const skipped=nativeBackends.catalog.prewarmSkip(backendId,body.backendProfileId);
     if(skipped)return skipped;
     await assertTaskWorkspaceAvailable(project);
-    if(store.listSessions().some(session=>session.projectId===project.id&&['starting','running','waiting','cancelling'].includes(session.state)))return {state:'skipped',reason:'workspace_busy'};
+    const claimId=body.claimId===undefined?undefined:requireString(body.claimId,'claimId',100);
+    const prewarm=(renewOnly:boolean)=>nativeBackends.catalog.prewarm(backendId,{project,...(body.backendProfileId?{backendProfileId:body.backendProfileId}:{}),appearance:readTerminalAppearance(request.headers),model:body.model,mode:body.mode??'agent',...(body.approval!==undefined?{approval:requireString(body.approval,'approval',100)}:{}),...(claimId?{claimId}:{}),...(renewOnly?{renewOnly:true}:{})});
+    // A workspace a restore or merge holds gets no new warm CLI; the page holding one keeps it renewed.
+    // Conversations at work in it do not hold one back: a warm CLI changes no file, and it starts beside them as a new conversation would.
     let release:()=>void;
-    try{release=dispatch.reserveWorkspace([project.id]);}
-    catch(error){if(error instanceof AppError&&error.code==='PROJECT_BUSY')return {state:'skipped',reason:'workspace_busy'};throw error;}
+    try{release=dispatch.holdWorkspaceForPrewarm(project.id);}
+    catch(error){if(error instanceof AppError&&error.code==='PROJECT_BUSY')return claimId?prewarm(true):{state:'skipped',reason:'workspace_busy'};throw error;}
     // The backend answers for itself: `skipped` with why when it keeps no warm CLI or not for this profile.
-    try{return await nativeBackends.catalog.prewarm(backendId,{project,...(body.backendProfileId?{backendProfileId:body.backendProfileId}:{}),appearance:readTerminalAppearance(request.headers),model:body.model,mode:body.mode??'agent',...(body.approval!==undefined?{approval:requireString(body.approval,'approval',100)}:{})});}
+    try{return await prewarm(false);}
     finally{release();}
+  });
+  // The page that asked for a warm CLI closed or chose another Agent; one a new session has claimed is kept.
+  app.post<{Body:{backendId?:string;claimId:string}}>('/api/native/prewarm/release',async(request,reply)=>{
+    const body=request.body;
+    const claimId=requireString(body?.claimId,'claimId',100);
+    if(body.backendId!==undefined)requireBackendVisibleToClient(request.headers,body.backendId);
+    const backendId=body.backendId===undefined?defaultBackendForClient(request.headers,savedDefaultBackendId(settings.getSettings()),nativeBackends.offeredBackendIds()):isNativeBackendId(body.backendId)?body.backendId:(()=>{throw new AppError('INVALID_BACKEND','Choose a supported native backend');})();
+    await nativeBackends.catalog.releasePrewarm(backendId,claimId);
+    reply.code(204);
   });
   const nativeKeys=new Set(['Escape','Enter','Up','Down','Left','Right','Tab','BTab','Space','C-c']);
   app.get<{Params:{id:string}}>('/api/sessions/:id/native/interaction',async(request)=>{

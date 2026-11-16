@@ -565,11 +565,27 @@ export class NativeService {
     return this.modelResources?.get(this.modelResourceKey(project))?.error;
   }
 
+  /**
+   * A list the same launcher and data directory read in another directory. `--list-models` takes
+   * seconds and a projectless task is a new directory every time; a first launch there uses this
+   * one while its own list is read behind it.
+   */
+  private siblingModels(key: string): Array<{ value: string; name: string }> | undefined {
+    // Keys are JSON arrays whose last item is the directory: the same launcher is the same prefix.
+    const launcher = this.modelResourceKey({ cwd: '' }).slice(0, -3);
+    let best: { models: Array<{ value: string; name: string }>; expiresAt: number } | undefined;
+    for (const [other, resource] of this.modelResources ?? []) {
+      if (other === key || !other.startsWith(launcher) || !resource.models?.length) continue;
+      if (!best || resource.expiresAt > best.expiresAt) best = { models: resource.models, expiresAt: resource.expiresAt };
+    }
+    return best?.models;
+  }
+
   async models(project: Pick<AgentProjectView, 'cwd'>): Promise<Array<{ value: string; name: string }>> {
     const key = this.modelResourceKey(project);
     this.modelResources ??= new Map();
     let resource = this.modelResources.get(key);
-    const stale = resource?.models?.length ? resource.models : undefined;
+    const stale = resource?.models?.length ? resource.models : resource ? undefined : this.siblingModels(key);
     if (resource?.request) return stale ?? resource.request;
     if (resource && resource.expiresAt > Date.now()) return resource.models ?? [];
     // `--list-models` takes seconds; an expired list is still served while it refreshes behind.

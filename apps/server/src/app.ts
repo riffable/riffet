@@ -226,7 +226,7 @@ export async function createApp(options: AppOptions = {}) {
   tasks.subscribe((event:{state:Parameters<typeof isOpen>[0]})=>{if(!isOpen(event.state))plugins.tasksChanged();});
   // A Claude CLI that outlived the previous server posts hooks before any client opens its conversation: bring the conversation up for them.
   claudeAdapter.setHookWake(nativeSessionId=>nativeBackends.wakeNativeSession('claude',nativeSessionId));
-  const dispatchRuntime={withSession:<T>(id:string,operation:()=>Promise<T>)=>sessionLock.withSession(id,operation),ensure:(session:import('../../../packages/contracts/src/index.js').Session,options?:{initialPrompt?:string})=>nativeBackends.ensure(session,options)};
+  const dispatchRuntime={withSession:<T>(id:string,operation:()=>Promise<T>)=>sessionLock.withSession(id,operation),ensure:(session:import('../../../packages/contracts/src/index.js').Session,options?:{initialPrompt?:string;beforeSpawn?:()=>void|Promise<void>})=>nativeBackends.ensure(session,options)};
   // Every turn starts from a checkpoint of the project's uncommitted files, so it can be undone.
   // A project outside Git simply has none; checkpoint failure never fails the turn.
   const beforeTurn=async(session:import('../../../packages/contracts/src/index.js').Session,run:import('../../../packages/contracts/src/index.js').Run,late:()=>boolean)=>

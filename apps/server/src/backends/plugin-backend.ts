@@ -226,6 +226,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
   readonly terminal: NativeBackendDriver['terminal'];
   readonly launchEnv: NativeBackendDriver['launchEnv'];
   readonly prewarm: NativeBackendDriver['prewarm'];
+  readonly releasePrewarm: NativeBackendDriver['releasePrewarm'];
   readonly usage: NativeBackendDriver['usage'];
   readonly canReleaseInput: NativeBackendDriver['canReleaseInput'];
   readonly runtimeAction: NativeBackendDriver['runtimeAction'];
@@ -245,7 +246,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
   private readonly attached = new Set<string>();
   private readonly statuses = new Map<string, NativeStatus>();
   /** Per call of `open`, `send` and `interrupt`: the core's own closures the plugin reaches through `AgentHost`. */
-  private readonly spawnGuards = new Map<string, (() => void) | undefined>();
+  private readonly spawnGuards = new Map<string, (() => void | Promise<void>) | undefined>();
   private readonly stopGuards = new Map<string, (allowEnded?: boolean) => void>();
   private readonly fences = new Map<string, (binding?: NativeDispatchBinding) => Run>();
   /** The fence of a steer the plugin deferred to the Agent's next boundary: kept for its one commit. */
@@ -292,6 +293,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
     this.launchEnv = backend.launchEnv;
     // Optional members map one to one: the context is built from the host's records at the call, and an absent member stays absent.
     if (backend.prewarm) this.prewarm = (host, project, profile, request) => backend.prewarm!(this.hostFor(host), projectView(project), profileView(profile), request);
+    if (backend.releasePrewarm) this.releasePrewarm = (host, claimId) => backend.releasePrewarm!(this.hostFor(host), claimId);
     if (backend.usage) this.usage = (host, project, profile, session) => backend.usage!(this.hostFor(host), this.query(project, profile, session));
     if (backend.canReleaseInput) this.canReleaseInput = (host, session, profile, run) => backend.canReleaseInput!(this.hostFor(host), this.context(host, session, profile), runRef(run));
     if (backend.runtimeAction) this.runtimeAction = (host, session, profile, request) => backend.runtimeAction!(this.hostFor(host), this.context(host, session, profile), request);
@@ -661,7 +663,7 @@ export class PluginBackendDriver implements NativeBackendDriver {
           ...(binding?.resolvedConfig ? { resolvedConfig: binding.resolvedConfig } : {}),
         });
       },
-      beforeSpawn: async id => { own(id); this.spawnGuards.get(id)?.(); },
+      beforeSpawn: async id => { own(id); await this.spawnGuards.get(id)?.(); },
       checkStopTarget: async (id, allowEnded) => { own(id); this.stopGuards.get(id)?.(allowEnded); },
       isRunCancelled: async runId => {
         const sessionId = runSession(runId);

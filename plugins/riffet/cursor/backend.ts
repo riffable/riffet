@@ -287,7 +287,12 @@ export class CursorBackend implements AgentBackend {
     // The warm CLI is launched from the default launch profile only.
     if (profile.id !== this.defaultProfile.id) return { state: 'skipped', reason: 'profile_unsupported' };
     if (request.approval !== undefined && !CURSOR_PERMISSIONS.some(item => item.id === request.approval)) throw new AppError('INVALID_APPROVAL_MODE', 'Choose a known approval mode');
-    return this.parts(host, profile).runtime.prewarm(project.id, request);
+    const { claimId, renewOnly, ...config } = request;
+    return this.parts(host, profile).runtime.prewarm(project.id, config, { ...(claimId ? { claimId } : {}), ...(renewOnly ? { renewOnly } : {}) });
+  }
+
+  async releasePrewarm(_host: AgentHost, claimId: string): Promise<void> {
+    await this.built?.runtime.releasePrewarm(claimId);
   }
 
   loginLaunch(host: AgentHost, project: AgentProjectView, profile: AgentProfile): AgentLaunchSpec {
@@ -356,16 +361,38 @@ export class CursorBackend implements AgentBackend {
   }
 
   async open(host: AgentHost, context: AgentContext, options: AgentOpenOptions = {}) {
-    const { native, runtime, port, steering, titles } = this.parts(host, context.profile);
+    const { native, runtime, port, steering, titles, receipts } = this.parts(host, context.profile);
     const { session } = context;
     steering.bind(session.id);
-    const terminal = await runtime.ensure(session, {
-      ...(options.initialPrompt ? { initialPrompt: options.initialPrompt } : {}),
-      beforeSpawn: () => host.beforeSpawn(session.id),
+    const prompt = options.initialPrompt;
+    let fencedAt: number | undefined;
+    const fence = async () => { await host.beforeSpawn(session.id); fencedAt = Date.now(); };
+    const { terminal, promptPending } = await runtime.ensure(session, {
+      ...(prompt ? { initialPrompt: prompt } : {}),
+      beforeSpawn: fence,
     });
+    if (prompt && promptPending) {
+      // A warm CLI took the conversation: the prompt is submitted to it like any later one.
+      try { await native.deliver(port.getSession(session.id), prompt, fence); }
+      catch (error) {
+        // Nothing was written, so the message can go again; it is pasted into the CLI now running.
+        if (fencedAt === undefined) throw new AppError('NATIVE_LAUNCH_ABORTED', error instanceof Error ? error.message : 'The CLI could not take the message yet', 409, { reason: error instanceof AppError ? error.code : undefined });
+        throw error;
+      }
+    }
+    // The store echoes a first prompt only when the CLI has written its step; the live tap sees it go out.
+    if (prompt && fencedAt !== undefined) await this.expectFirstReceipt(host, receipts, port, session.id, prompt, fencedAt);
     const current = port.getSession(session.id);
     if (session.resumePicker && !session.nativeSessionId) titles.watch({ sessionId: session.id, terminalId: terminal.id, projectId: session.projectId });
     return { terminalId: terminal.id, ...(current.nativeSessionId ? { nativeSessionId: current.nativeSessionId } : {}), status: native.status(session.id) };
+  }
+
+  private async expectFirstReceipt(host: AgentHost, receipts: CursorLiveReceipts, port: CursorPort, sessionId: string, text: string, sentAt: number): Promise<void> {
+    const chatId = port.getSession(sessionId).nativeSessionId;
+    if (!chatId) return;
+    const runs = await host.runs.find(sessionId, { unfinished: true }).catch(() => []);
+    const run = runs.find(item => item.delivery === 'dispatching' && item.intent !== 'steer');
+    if (run) receipts.expect({ host, sessionId, chatId, runId: run.id, commandId: run.commandId, text, sentAt });
   }
 
   async send(host: AgentHost, request: AgentSendRequest): Promise<void> {

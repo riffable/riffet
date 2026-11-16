@@ -134,6 +134,48 @@ describe('Cursor as the official plugin', () => {
     expect(existsSync(join(stateDir, 'cursor-hook', 'bridge.json'))).toBe(true);
   }, 60_000);
 
+  it.skipIf(!tmux)('hands a new conversation\'s first message to the prewarmed CLI instead of launching one with it', async () => {
+    const { call, store, projectDir, project } = await boot();
+    const config = { projectId: project.id, model: 'auto', mode: 'agent' };
+    await vi.waitFor(async () => expect((await call('POST', '/api/native/prewarm', config)).json().state).toBe('ready'), { timeout: 15_000, interval: 250 });
+    const created = await call('POST', '/api/sessions', { ...config, kind: 'native', clientSessionId: '33333333-3333-4333-8333-333333333333', initialMessage: { commandId: 'first', text: 'hello warm', attachmentIds: [], context: [] } });
+    expect(created.statusCode).toBe(202);
+    const sessionId = '33333333-3333-4333-8333-333333333333';
+    await vi.waitFor(() => expect(store.findRunByCommand(sessionId, 'first')?.native?.delivery).not.toMatch(/^(queued|preparing)$/), { timeout: 15_000, interval: 100 });
+    expect((await call('GET', '/api/native/runtime/stats')).json()).toMatchObject({ warmHits: 1 });
+    // One CLI, the warm one, and the prompt was not on its command line.
+    const launches = readFileSync(join(projectDir, 'argv.log'), 'utf8').trim().split('\n').map(line => JSON.parse(line) as string[]);
+    expect(launches).toHaveLength(1);
+    expect(launches[0]).not.toContain('hello warm');
+    // Fenced before the paste, on the warm CLI's chat.
+    const chatId = store.getSession(sessionId).nativeSessionId;
+    expect(launches[0]).toEqual(expect.arrayContaining(['--resume', chatId]));
+    expect(store.findRunByCommand(sessionId, 'first')?.native).toMatchObject({ renderedText: 'hello warm', nativeSessionId: chatId });
+  }, 60_000);
+
+  it.skipIf(!tmux)('stops a released warm CLI, and keeps one a conversation has claimed', async () => {
+    const { call, store, terminal, project } = await boot();
+    const config = { projectId: project.id, model: 'auto', mode: 'agent' };
+    const warmTerminal = () => store.listTerminals().find(item => item.state !== 'exited' && !item.sessionId);
+    let first = '';
+    await vi.waitFor(async () => { const result = (await call('POST', '/api/native/prewarm', config)).json(); first = result.claimId; expect(result.state).toBe('ready'); }, { timeout: 15_000, interval: 250 });
+    const released = warmTerminal()!.id;
+    // Another page's renewal, for other settings, does not take the one slot over.
+    expect((await call('POST', '/api/native/prewarm', { ...config, mode: 'plan', claimId: 'another-page' })).json()).toMatchObject({ state: 'skipped', reason: 'held_elsewhere' });
+    expect((await terminal.get(released)).state).toBe('running');
+    expect((await call('POST', '/api/native/prewarm/release', { claimId: first })).statusCode).toBe(204);
+    expect((await terminal.get(released)).state).toBe('exited');
+
+    let second = '';
+    await vi.waitFor(async () => { const result = (await call('POST', '/api/native/prewarm', config)).json(); second = result.claimId; expect(result.state).toBe('ready'); }, { timeout: 15_000, interval: 250 });
+    const created = await call('POST', '/api/sessions', { ...config, kind: 'native', clientSessionId: '44444444-4444-4444-8444-444444444444' });
+    expect((await call('POST', `/api/sessions/${created.json().id}/start`)).statusCode).toBe(200);
+    const claimed = store.getSession(created.json().id).terminalId!;
+    // The page that asked for it closes after the send: the conversation's CLI is not its to stop.
+    expect((await call('POST', '/api/native/prewarm/release', { claimId: second })).statusCode).toBe(204);
+    expect((await terminal.get(claimed)).state).toBe('running');
+  }, 60_000);
+
   it.skipIf(!tmux)('turned off while a conversation runs, refuses new work with the reason and leaves the conversation and its terminal alone', async () => {
     const { call, store, terminal, project } = await boot();
     const created = await call('POST', '/api/sessions', { projectId: project.id, model: 'auto', mode: 'agent', kind: 'native', clientSessionId: '22222222-2222-4222-8222-222222222222' });

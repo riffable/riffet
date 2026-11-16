@@ -46,6 +46,10 @@ const composeChoice = (profileId: string, model: string) => `${profileId}${CHOIC
 /** The picker's own list: online phones only, nothing remembered kept in it. */
 const NO_TOOL_GROUPS: ToolGroupId[] = [];
 const NO_EXTENSIONS_OFF: string[] = [];
+/** Within the server's lease on a warm CLI, also when a hidden tab runs its timers once a minute. */
+const PREWARM_RENEW_MS = 30_000;
+/** A send made before the page's first warm-up answered: the answer is the conversation's to claim. */
+const PENDING_HANDOFF = '\u0000pending';
 
 function splitChoice(id: string): { profileId?: string; model: string } {
   const at = id.indexOf(CHOICE_SEPARATOR);
@@ -180,7 +184,6 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     setApproval(previous?.approval ?? defaultApproval);
     approvalBaseline.current = defaultApproval;
   }
-  const [hasDraft, setHasDraft] = useState(false);
   // With several providers the model list spans all of them and each entry carries the provider
   // it came from; with one there is nothing to group and the plain catalog is the whole story.
   const grouped = profileCatalogs && profileCatalogs.length > 1 ? profileCatalogs : undefined;
@@ -306,19 +309,50 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
     setApproval((current) => previous !== defaultApproval || !capabilities?.permissions.some((option) => option.id === current) ? defaultApproval : current);
   }, [capabilities, defaultApproval]);
 
+  // A CLI takes seconds to start, longer than most first messages take to write. While this page
+  // shows an Agent that keeps one (only Cursor does), a warm CLI is held for it: asked for when the
+  // page opens, renewed while it stays open, and released when the page closes or another Agent or
+  // setting is chosen. A sent message hands it to the new conversation instead.
+  const prewarmClaims = useRef<{ current?: string; handedOff?: string }>({});
   useEffect(() => {
-    if (quickChat || !project || !capabilities?.supportsPrewarm || !(hasDraft || references.length > 0)) return;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      void api.nativePrewarm({
-        projectId: project.id, backendId, backendProfileId: profileId,
-        ...(effectiveSelection ? { model: effectiveSelection } : {}),
-        mode,
-        approval,
-      }, controller.signal).catch(() => undefined);
-    }, 700);
-    return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [approval, effectiveSelection, hasDraft, mode, project?.id, references.length, backendId, profileId, capabilities?.supportsPrewarm, quickChat]);
+    if (quickChat || !project || !capabilities?.supportsPrewarm) return;
+    const claims = prewarmClaims.current;
+    let closed = false, claimId: string | undefined;
+    const release = (id = claimId) => {
+      claimId = undefined;
+      if (id && id !== claims.handedOff) void api.nativePrewarmRelease({ backendId, claimId: id }).catch(() => undefined);
+    };
+    const warm = () => void api.nativePrewarm({
+      projectId: project.id, backendId, backendProfileId: profileId,
+      ...(effectiveSelection ? { model: effectiveSelection } : {}),
+      mode,
+      approval,
+      // A renewal names the page's warm CLI: it never takes the one slot from another page.
+      ...(claimId ? { claimId } : {}),
+    }).then(result => {
+      // A send made before the first answer handed this one over.
+      if (result.claimId && claims.handedOff === PENDING_HANDOFF) claims.handedOff = result.claimId;
+      // An answer that arrives after the page closed is released at once.
+      if (closed) release(result.claimId);
+      else if (result.claimId) claimId = claims.current = result.claimId;
+    }).catch(() => undefined);
+    const start = window.setTimeout(warm, 700);
+    const renew = window.setInterval(warm, PREWARM_RENEW_MS);
+    const leave = () => release();
+    window.addEventListener('pagehide', leave);
+    return () => {
+      closed = true;
+      window.clearTimeout(start);
+      window.clearInterval(renew);
+      window.removeEventListener('pagehide', leave);
+      release();
+    };
+  }, [approval, effectiveSelection, mode, project?.id, backendId, profileId, capabilities?.supportsPrewarm, quickChat]);
+  const submit: typeof onCreate = input => {
+    const claims = prewarmClaims.current;
+    claims.handedOff = claims.current ?? PENDING_HANDOFF;
+    return onCreate(input).then(created => { if (!created) claims.handedOff = undefined; return created; }, (error: unknown) => { claims.handedOff = undefined; throw error; });
+  };
 
   const creationNotices: FeedbackMessage[] = [];
   if (backendIssue) creationNotices.push({ id: `backend:${backendIssue}`, text: backendIssue, tone: 'danger' });
@@ -438,7 +472,6 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           setSelection(next);
           if (!quickChat && !catalogLoading) onRememberModel?.(next);
         }}
-        onDraftChange={setHasDraft}
         references={references}
         onReferencesChange={onReferencesChange}
         feedback={pendingCreations?.length ? <div className="flex flex-col gap-2 text-xs text-fg-3" role="status">{pendingCreations.map(body => <div key={body.clientSessionId} className="rounded-lg bg-subtle px-3 py-2">
@@ -447,7 +480,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         </div>)}</div> : undefined}
         restoreDraft={creationRestore && creationRestore.projectId === project?.id ? creationRestore.draft : undefined}
         onSubmitPersisted={onCreationPersisted}
-        onSubmit={(prompt, attachments, context) => onCreate({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}) })}
+        onSubmit={(prompt, attachments, context) => submit({ ...(project?.id ? { projectId: project.id } : { projectless: true }), prompt, attachments, context, mode: quickChat ? 'agent' : mode, ...(submitSelection ? { model: submitSelection } : {}), ...(quickChat ? { backendId: 'chat', backendProfileId: null } : { approval }), ...(toolsOffered ? { toolGroups: pickedToolGroups } : {}), ...(extensionPick && extensionsOff.length ? { extensionsOff } : {}) })}
         onError={onError}
       />
       <FeedbackNotices scope={`${project?.id ?? 'global'}:${backendId}:${activeProfileId ?? ''}`} messages={creationNotices}

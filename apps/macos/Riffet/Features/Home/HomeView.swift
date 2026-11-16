@@ -46,6 +46,8 @@ struct HomeView: View {
     private var favorites: FolderFavoritesModel { workbench.pageModels.homeFavorites }
     @State private var defaultsApplied = false
     @State private var attempting = false
+    /// The warm CLI held for this page's choice (`PrewarmWatcher`).
+    @State private var prewarm = PrewarmLease()
 
     private var quickChat: Bool { workbench.homeIsQuickChat }
     private var toolsScope: String { "\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")" }
@@ -124,7 +126,7 @@ struct HomeView: View {
         let project = self.project
         let currentCatalogKey = catalogKey(project)
         page(project)
-            .background { PrewarmWatcher(workbench: workbench, composer: composer, request: prewarmRequest(project)) }
+            .background { PrewarmWatcher(lease: prewarm, api: workbench.host.api, request: prewarmRequest(project)) }
             .onAppear {
                 applyDefaults()
                 seedCatalog()
@@ -721,6 +723,7 @@ struct HomeView: View {
     private func create() {
         guard !creating, pendingCreation != nil || (composer.canSend && (project != nil || projectless) && catalogCurrent && currentCatalog?.available != false) else { return }
         creating = true
+        prewarm.sent()
         workbench.homeCreationError = nil
         error = nil
         let intent = workbench.creationNavigationIntent
@@ -772,6 +775,7 @@ struct HomeView: View {
                         pendingCreation = nil
                     } catch { /* Keep the request if clearing its durable record fails. */ }
                 }
+                prewarm.sendFailed()
                 workbench.homeCreationError = error.riffetMessage
             }
             creating = false

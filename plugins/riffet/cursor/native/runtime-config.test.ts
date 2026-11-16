@@ -43,7 +43,7 @@ describe('NativeRuntimeManager.ensure launch flags', () => {
   it('launches with the model and permission the record holds now', async () => {
     const { runtime, created, current } = harness({ model: 'claude-opus-5-5-high', approval: 'unrestricted', configPending: true });
 
-    const info = await runtime.ensure(current());
+    const { terminal: info } = await runtime.ensure(current());
 
     expect(created).toHaveLength(1);
     expect(flagsOf(created[0]!.spec)).toEqual(['--trust', '--force', '--model', 'claude-opus-5-5-high']);

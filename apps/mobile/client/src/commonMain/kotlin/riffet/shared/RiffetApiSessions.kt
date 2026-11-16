@@ -271,6 +271,12 @@ suspend fun RiffetApi.searchMessages(query: String, limit: Int = 50, sessionId: 
 suspend fun RiffetApi.prewarm(body: PrewarmBody): PrewarmResult =
     post("/api/native/prewarm", wireBody(body)).decode()
 
+/** Stops the warm CLI [prewarm] answered with; one a new conversation has claimed is kept. */
+@Throws(Exception::class)
+suspend fun RiffetApi.releasePrewarm(body: PrewarmReleaseBody) {
+    post("/api/native/prewarm/release", wireBody(body)).discard()
+}
+
 /** The `riffet-export-v1` JSON document of one conversation, as text, ready to be saved to a file. */
 @Throws(Exception::class)
 suspend fun RiffetApi.exportSession(sessionId: String): String =

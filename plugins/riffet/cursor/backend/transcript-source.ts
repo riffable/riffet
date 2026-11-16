@@ -644,6 +644,8 @@ class LaneRead {
     if (end) {
       for (const compaction of compactions) if (compaction.boundary === ids.length && ids.length > this.state.from) this.placeCompaction(compaction);
       const pending = snapshot.pending && !sameStep(snapshot.pending, ids.length ? this.view.reader.message(ids.at(-1)!) : undefined) ? snapshot.pending : undefined;
+      // Caught up: a step the CLI is already streaming is drafted by this read, not the next one.
+      this.state.live = true;
       this.draft(ids.length, pending);
       const drafted = new Set(this.drafts.map(draft => draft.finalId));
       for (const id of this.stale) if (!drafted.has(id)) this.retire.push(id);
@@ -653,7 +655,6 @@ class LaneRead {
         this.state.turn.ended = true;
         this.writeEnd({ ...this.state.turn }, 'completed');
       }
-      this.state.live = true;
     }
     return end || (blocked && !this.options.behind);
   }
