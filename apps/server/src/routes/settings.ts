@@ -4,6 +4,8 @@ import { AUXILIARY_MODEL_BACKENDS } from '../auxiliary/gateway.js';
 import { auxiliaryEndpoint, listAuxiliaryModels } from '../auxiliary/models.js';
 import { requestHandoffSummary } from '../orchestration/handoff-summary.js';
 import { createBackup } from '../system.js';
+import { scheduleCompaction } from '../storage/compaction.js';
+import { StorageInspector } from '../storage/inspector.js';
 import { machineReport } from '../doctor.js';
 import { isNativeBackendId } from '../backends/registry.js';
 import { LEGACY_DEFAULT_BACKEND_ID } from '../session-identity.js';
@@ -119,6 +121,17 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
     catch(error){const message=error instanceof Error?error.message:'The title model returned no title';throw new AppError('TITLE_MODEL_FAILED',message,400,undefined,{message});}
   });
   app.post('/api/system/backup',async()=>createBackup(store,stateDir));
+  // The storage page: a breakdown that comes from a background scan, and a compaction that waits for the next start.
+  const storage=new StorageInspector({stateDir,store});
+  app.addHook('onClose',async()=>storage.close());
+  app.get('/api/system/storage',async()=>storage.report());
+  app.post('/api/system/storage/scan',async()=>{storage.scan();return storage.report();});
+  app.put<{Body:{scheduled?:unknown}}>('/api/system/storage/compaction',async(request)=>{
+    const scheduled=request.body?.scheduled;
+    if(typeof scheduled!=='boolean')throw new AppError('INVALID_REQUEST','scheduled must be true or false');
+    scheduleCompaction(stateDir,scheduled);
+    return storage.report();
+  });
   // A pane of a conversation the client cannot decode (a plugin Agent for a client without `plugin-agents`) is listed without it.
   app.get('/api/system/monitor',async(request)=>{
     const snapshot=await monitor.snapshot();

@@ -36,6 +36,7 @@ export * from './settings.js';
 export type * from './stats.js';
 export type * from './folder-favorites.js';
 export type * from './service-monitor.js';
+export type * from './storage.js';
 export type * from './marks.js';
 export * from './work-items.js';
 

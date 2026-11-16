@@ -241,6 +241,10 @@ msgstr "3 minutes ago"
 msgid "3 分钟前 · main"
 msgstr "3 min ago · main"
 
+#: src/app/settings/StorageSection.tsx
+msgid "30 天未用即清理"
+msgstr "Cleared after 30 days unused"
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "3xx 重定向"
 msgstr "3xx redirects"
@@ -267,6 +271,10 @@ msgstr "5xx {0}"
 #: src/app/settings/ServiceCharts.tsx
 msgid "5xx 服务器"
 msgstr "5xx server errors"
+
+#: src/app/settings/StorageSection.tsx
+msgid "7 天未活动的会话清空，打开时重建"
+msgstr "Cleared after 7 days without activity; rebuilt on open"
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "7% 墨色浅底，无描边"
@@ -628,6 +636,20 @@ msgstr "Reported"
 msgid "上方的线"
 msgstr "Line above"
 
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: formatBytes(last.beforeBytes)
+#. placeholder {2}: formatBytes(last.afterBytes)
+#. placeholder {3}: formatDuration(last.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理 {0} · {1} → {2} · 用时 {3}"
+msgstr "Last compacted {0} · {1} → {2} · took {3}"
+
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: last.error
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理未完成（{0}）：{1}"
+msgstr "Last compaction did not finish ({0}): {1}"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "The upstream service is temporarily unavailable, try again later"
@@ -675,6 +697,10 @@ msgstr "Download"
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "不使用"
 msgstr "Off"
+
+#: src/app/settings/StorageSection.tsx
+msgid "不再引用时回收"
+msgstr "Reclaimed once nothing refers to it"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "不可恢复"
@@ -1103,10 +1129,12 @@ msgstr "Numbers that change use tabular figures"
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "会话"
 msgstr "Sessions"
 
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/StorageSection.tsx
 msgctxt "settings-session-label"
 msgid "会话"
 msgstr "Session"
@@ -1184,6 +1212,10 @@ msgstr "Session views"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "会话视图、侧栏"
 msgstr "Conversation view, sidebar"
+
+#: src/app/settings/StorageSection.tsx
+msgid "会话记录"
+msgstr "Transcript"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "会话里：圆点加已用时间"
@@ -1619,6 +1651,10 @@ msgstr "Dismiss notification"
 msgid "关闭面板"
 msgstr "Close panel"
 
+#: src/app/settings/StorageSection.tsx
+msgid "其他"
+msgstr "Other"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "其他以 / 开头的消息原样发给会话"
 msgstr "Other messages starting with / go to the conversation as they are"
@@ -1744,6 +1780,10 @@ msgstr "Last time: {0}"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "最近会话"
 msgstr "Recent sessions"
+
+#: src/app/settings/StorageSection.tsx
+msgid "最近活动"
+msgstr "Recent activity"
 
 #. placeholder {0}: Math.round(ANDROID.sheetHeight * 100)
 #: src/app/design/android/OverlayChapter.tsx
@@ -2111,6 +2151,10 @@ msgstr "A single-line label is truncated at the end; a path is truncated in the 
 msgid "单项禁用"
 msgstr "Per-item disable"
 
+#: src/app/settings/StorageSection.tsx
+msgid "占用最多的会话"
+msgstr "Largest conversations"
+
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/StylesChapter.tsx
@@ -2283,6 +2327,7 @@ msgstr "A control that obtains a value. Fields share the look of fieldClass; on 
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "取消"
 msgstr "Cancel"
 
@@ -2380,6 +2425,10 @@ msgstr "Signs out of this browser only."
 msgid "可以使用的人"
 msgstr "People who can use it"
 
+#: src/app/settings/StorageSection.tsx
+msgid "可回收"
+msgstr "Reclaimable"
+
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr "Reusable parts, each with variants, sizes and states. One implementation per component per platform."
@@ -2399,6 +2448,11 @@ msgstr "Available"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "可用的取值"
 msgstr "Available values"
+
+#. placeholder {0}: formatBytes(compaction.requiredBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "可用空间不足，需要 {0}"
+msgstr "Not enough free space; needs {0}"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
@@ -2467,6 +2521,10 @@ msgstr "Each style's type scale, mapped"
 msgid "各风格的数值、配方与窗口"
 msgstr "Values, recipes and windows of each style"
 
+#: src/app/settings/StorageSection.tsx
+msgid "合计"
+msgstr "Total"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "同一个东西只有一个名字。"
 msgstr "One thing has one name."
@@ -2514,6 +2572,10 @@ msgstr "Name above, directory below"
 #: src/app/design/components/ActionsChapter.tsx
 msgid "名称由 Tip 与 aria-label 给出。"
 msgstr "The name comes from Tip and aria-label."
+
+#: src/app/settings/StorageSection.tsx
+msgid "后台任务"
+msgstr "Background task"
 
 #: src/app/settings/DevicesSection.tsx
 msgid "后台推送"
@@ -2594,6 +2656,10 @@ msgstr "Four widths, Return and Esc"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "四档宽度按内容选择；工作区弹窗带自己的导航。"
 msgstr "Four widths, chosen by content; a workspace dialog carries its own navigation."
+
+#: src/app/settings/StorageSection.tsx
+msgid "回合检查点"
+msgstr "Turn checkpoints"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "回合状态"
@@ -2679,6 +2745,10 @@ msgctxt "settings-image-modality"
 msgid "图片"
 msgstr "Images"
 
+#: src/app/settings/StorageSection.tsx
+msgid "图片与长输出"
+msgstr "Images and long output"
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "图片放大、面板出现"
 msgstr "Images zooming in, panels appearing"
@@ -2744,6 +2814,14 @@ msgstr "Where to find it"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "在手机上扫码配对后出现在这里。"
 msgstr "Appears here after you pair by scanning the QR code on your phone."
+
+#: src/app/settings/StorageSection.tsx
+msgid "在服务下次启动时整理数据库？"
+msgstr "Compact the database at the next service start?"
+
+#: src/app/settings/StorageSection.tsx
+msgid "在服务下次启动时重建文件，期间服务不可用"
+msgstr "Rebuilds the file at the next service start; the service is unavailable meanwhile"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "在服务器所在电脑的终端执行。"
@@ -2907,6 +2985,10 @@ msgstr "Multi-line Chinese paragraphs use at least 1.5; text in a single-line co
 msgid "大"
 msgstr "Large"
 
+#: src/app/settings/StorageSection.tsx
+msgid "大小"
+msgstr "Size"
+
 #: src/app/design/android/TypeChapter.tsx
 msgid "大标题"
 msgstr "Large title"
@@ -3012,9 +3094,17 @@ msgstr "Scale"
 msgid "存储位置、是否需重启、是否跨设备、计费与权限。"
 msgstr "Storage location, whether a restart is needed, whether it syncs across devices, billing and permissions."
 
+#: src/app/settings/settingsSections.ts
+msgid "存储空间"
+msgstr "Storage"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "它所在的会话"
 msgstr "its session"
+
+#: src/app/settings/StorageSection.tsx
+msgid "安排整理"
+msgstr "Schedule"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -3230,6 +3320,10 @@ msgstr "SIGTERM will be sent to this process; terminals or sessions that depend 
 msgid "将向该进程发送 SIGTERM。{session}正在进行的任务会中断。"
 msgstr "SIGTERM will be sent to this process. Tasks running in {session} will be interrupted."
 
+#: src/app/settings/StorageSection.tsx
+msgid "将在服务下次启动时进行"
+msgstr "Runs at the next service start"
+
 #: src/app/design/components/DisplayChapter.tsx
 msgid "将调用"
 msgstr "Will call"
@@ -3381,6 +3475,10 @@ msgstr "Part of the workbench sizing comes from the style recipe and part is the
 msgid "工作台里是应用菜单，设置里是系统弹出菜单"
 msgstr "An app menu in the workbench, a system pop-up menu in settings"
 
+#: src/app/settings/StorageSection.tsx
+msgid "工作树"
+msgstr "Worktrees"
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
@@ -3474,6 +3572,10 @@ msgstr "Disabled"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "已切换到 Codex"
 msgstr "Switched to Codex"
+
+#: src/app/settings/StorageSection.tsx
+msgid "已删除的项目"
+msgstr "Deleted projects"
 
 #. placeholder {0}: process.name
 #. placeholder {1}: process.pid
@@ -4308,6 +4410,10 @@ msgstr "Buttons scale to 0.97 when pressed"
 msgid "按钮的实现"
 msgstr "Button implementation"
 
+#: src/app/settings/StorageSection.tsx
+msgid "按项目"
+msgstr "By project"
+
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "换一批"
 msgstr "Shuffle"
@@ -4427,6 +4533,7 @@ msgstr "Tooltips use the system ones"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SearchChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "插件"
 msgstr "Plugins"
 
@@ -4530,6 +4637,10 @@ msgstr "Search field, filter and no results"
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "搜索框在左侧放搜索图标，有内容时右侧放清除，Escape 先清空再离开。列表页共用 SearchField。"
 msgstr "A search field has the search icon on the left and a clear button on the right once it has text; Escape clears first, then leaves. List pages share SearchField."
+
+#: src/app/settings/StorageSection.tsx
+msgid "搜索索引"
+msgstr "Search index"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "摘要"
@@ -4663,6 +4774,15 @@ msgstr "Higher values sit in front. Components refer to the variable names."
 msgid "数字键 1–9，卡片获得焦点时显示；Esc 拒绝"
 msgstr "Number keys 1–9, shown when the card has focus; Esc rejects"
 
+#: src/app/settings/StorageSection.tsx
+msgid "数据库"
+msgstr "Database"
+
+#. placeholder {0}: formatBytes(database.bytes)
+#: src/app/settings/StorageSection.tsx
+msgid "数据库 · {0}"
+msgstr "Database · {0}"
+
 #: src/app/design/android/ComponentChapter.tsx
 msgid "整个应用一个队列"
 msgstr "One queue for the whole app"
@@ -4681,6 +4801,10 @@ msgstr "The whole color scheme determines the interface colors; the choice appli
 msgid "整理发布说明"
 msgstr "Draft the release notes"
 
+#: src/app/settings/StorageSection.tsx
+msgid "整理数据库"
+msgstr "Compact database"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -4693,6 +4817,7 @@ msgstr "One conversation per group"
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "文件"
 msgstr "Files"
 
@@ -4952,9 +5077,21 @@ msgstr "Couldn't load approval modes. Try again."
 msgid "无法加载模型提供商"
 msgstr "Couldn't load model providers"
 
+#: src/app/settings/StorageSection.tsx
+msgid "无法取消整理"
+msgstr "Could not cancel the compaction"
+
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "无法复制链接"
 msgstr "Couldn't copy the link"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法安排整理"
+msgstr "Could not schedule the compaction"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法开始统计"
+msgstr "Could not start the scan"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "无法检查更新"
@@ -5021,6 +5158,10 @@ msgstr "Could not read task file location"
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
 msgstr "Couldn't read available models"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法读取存储空间"
+msgstr "Could not read storage"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "无法读取所选文件"
@@ -5090,6 +5231,10 @@ msgstr "Accessibility on"
 msgid "无需确认"
 msgstr "No confirmation needed"
 
+#: src/app/settings/StorageSection.tsx
+msgid "日志与诊断"
+msgstr "Logs and diagnostics"
+
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "时长"
@@ -5114,6 +5259,10 @@ msgstr "Time · tok/s"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "时间与数字"
 msgstr "Time and numbers"
+
+#: src/app/settings/StorageSection.tsx
+msgid "时间线"
+msgstr "Timeline"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
@@ -5375,6 +5524,10 @@ msgstr "After the source clears, one exit animation is kept and can show \"Resto
 msgid "极简墨色"
 msgstr "Monochrome"
 
+#: src/app/settings/StorageSection.tsx
+msgid "构成"
+msgstr "Breakdown"
+
 #: src/app/design/catalog.tsx
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "架构"
@@ -5589,6 +5742,10 @@ msgstr "Inspector tab"
 msgid "检查更新"
 msgstr "Check for updates"
 
+#: src/app/settings/StorageSection.tsx
+msgid "检查点"
+msgstr "Checkpoints"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "检查结果"
 msgstr "Check result"
@@ -5683,6 +5840,10 @@ msgstr "What is happening now stands out"
 msgid "正在安装插件"
 msgstr "Installing plugin"
 
+#: src/app/settings/StorageSection.tsx
+msgid "正在统计"
+msgstr "Scanning"
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "正在读取..."
 msgstr "Reading..."
@@ -5690,6 +5851,10 @@ msgstr "Reading..."
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "正在读取…"
 msgstr "Loading…"
+
+#: src/app/settings/StorageSection.tsx
+msgid "正在读取存储空间"
+msgstr "Reading storage"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "正在读取服务器状态"
@@ -5742,6 +5907,10 @@ msgstr "Every generator has a --check mode that exits non-zero when its output i
 #: src/app/design/components/DisplayChapter.tsx
 msgid "每个键一枚。"
 msgstr "One per key."
+
+#: src/app/settings/StorageSection.tsx
+msgid "每个项目保留最近 50 个回合"
+msgstr "Last 50 turns kept per project"
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "每升一层，底色变化一级。层次由底色表达，阴影留给脱离文档流的浮层。"
@@ -6400,6 +6569,12 @@ msgstr "Check whether one more prop on an existing component covers it"
 msgid "确认还是撤销"
 msgstr "Confirm or undo"
 
+#. placeholder {0}: formatBytes(data.disk.freeBytes)
+#. placeholder {1}: formatBytes(data.disk.totalBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "磁盘可用 {0} / {1}"
+msgstr "{0} free of {1}"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
 msgstr "Sample conversation"
@@ -6898,6 +7073,12 @@ msgstr "Stats, extension overview, parallel attempts"
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "统计、设计规范"
 msgstr "Stats, design system"
+
+#. placeholder {0}: timeAgo(data.scan.at)
+#. placeholder {1}: formatDuration(data.scan.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "统计于 {0} · 用时 {1}"
+msgstr "Scanned {0} · took {1}"
 
 #: src/app/design/components/ActionsChapter.tsx
 msgid "继续"
@@ -7777,6 +7958,10 @@ msgstr "运行 Codex，改了文件"
 msgid "运行Codex，改了文件"
 msgstr "运行Codex，改了文件"
 
+#: src/app/settings/StorageSection.tsx
+msgid "运行与用量"
+msgstr "Runs and usage"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "运行中"
 msgstr "Running"
@@ -8225,6 +8410,10 @@ msgstr "Check again"
 msgid "重新生成"
 msgstr "Regenerate"
 
+#: src/app/settings/StorageSection.tsx
+msgid "重新统计"
+msgstr "Rescan"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -8240,6 +8429,7 @@ msgstr "Regenerate"
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/ProviderUsage.tsx
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "重试"
 msgstr "Retry"
 
@@ -8379,6 +8569,10 @@ msgstr "Shadow tiers"
 msgid "阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。"
 msgstr "Shadows switch with light and dark mode and are independent of the palette. The generator converts them to Elevation on the Mac; SwiftUI has no spread, so it is folded into a Gaussian equivalent."
 
+#: src/app/settings/StorageSection.tsx
+msgid "附件"
+msgstr "Attachment"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随主区，与对话、终端互换"
 msgstr "Follows the main area, swaps with conversation and terminal"
@@ -8386,6 +8580,10 @@ msgstr "Follows the main area, swaps with conversation and terminal"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随主题与字号推送"
 msgstr "Pushed with the theme and text size"
+
+#: src/app/settings/StorageSection.tsx
+msgid "随会话删除"
+msgstr "Deleted with its conversation"
 
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "随机头像"
@@ -8602,6 +8800,7 @@ msgstr "Top bar, one scroll area, a body that fades in after the transition"
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/StorageSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "项目"
 msgstr "Project"
@@ -8642,6 +8841,11 @@ msgstr "Predictive back shrinks the page to {0} with rounded corners"
 #: src/app/settings/PreferencesSections.tsx
 msgid "预览"
 msgstr "Preview"
+
+#. placeholder {0}: formatBytes(database.freeBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
+msgstr "About {0} will be reclaimed. No device can reach the service while it rebuilds, which can take a few minutes."
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "预设"

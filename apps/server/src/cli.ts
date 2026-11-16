@@ -18,7 +18,8 @@ import { applyProcessEnvironment, currentEnvironmentReport, terminalEnvironment,
 import { buildLaunchAgentPlist, buildSystemdUnit, xmlEscape, systemdValue } from './service-files.js';
 import { claimStateDirectory } from './compat.js';
 import { SettingsService } from './settings/index.js';
-import { compactDatabase, doctorChecks, formatDoctorChecks, machineReport } from './doctor.js';
+import { doctorChecks, formatDoctorChecks, machineReport } from './doctor.js';
+import { compactDatabase, recordCompaction, runRequestedCompaction } from './storage/compaction.js';
 import { restoreBackup } from './system.js';
 import { startDiscovery, type DiscoveryHandle } from './discovery.js';
 import { SERVER_BUILD, SERVER_VERSION, SOURCE_ROOT } from './version.js';
@@ -101,6 +102,8 @@ export async function serve(options:CliOptions){
   if(cwd&&!statSync(cwd).isDirectory())throw new Error('Workspace must be a directory');
   const releaseState=claimState(options);
   rotateServerLog(join(state(options),'server.log'));
+  // Asked for on the settings page; runs before anything opens the database, and delays the start by its length.
+  runRequestedCompaction(state(options));
   const instanceId=randomUUID();
   const webRoot=options.dev?undefined:join(dirname(entry),'public');
   // Development reads the plugin index `pnpm build:site` wrote, when there is one and nothing else was asked for.
@@ -256,7 +259,7 @@ async function uninstallService(){
 
 /** One report that explains a machine, instead of only failing on it. */
 async function doctor(options:CliOptions&{json?:boolean;compact?:boolean}){
-  if(options.compact){compactDatabase(state(options));return;}
+  if(options.compact){const stateDir=state(options);const result=recordCompaction(stateDir,()=>compactDatabase(stateDir));if(result.error)throw new Error(result.error);return;}
   const environment=currentEnvironmentReport()??await applyProcessEnvironment({stateDir:state(options)});
   const settings=new SettingsService({stateDir:state(options),cliPath:options.cli});
   const machine=await machineReport();

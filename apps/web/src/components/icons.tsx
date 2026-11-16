@@ -1,7 +1,7 @@
 import {
   Clock, Blocks, Activity, Archive, ArchiveRestore, ArrowDown, ArrowLeft, ArrowRightLeft, ArrowUp, AtSign, Bookmark, BookmarkMinus, BookmarkPlus,
   Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
-  CornerUpRight, Cpu, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
+  CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
   KeyRound, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
@@ -73,6 +73,7 @@ export const IconGitPullRequest = icon(GitPullRequest);
 export const IconGlobe = icon(Globe);
 export const IconHand = icon(Hand);
 export const IconHardDriveDownload = icon(HardDriveDownload);
+export const IconDatabase = icon(Database);
 export const IconHome = icon(Home);
 export const IconImage = icon(Image);
 export const IconImageDown = icon(ImageDown);

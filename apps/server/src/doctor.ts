@@ -1,5 +1,4 @@
-import { constants as fsConstants, existsSync, readFileSync, statfsSync, statSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { constants as fsConstants, existsSync, readFileSync } from 'node:fs';
 import { access, stat } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
@@ -17,7 +16,6 @@ import { cliCheck } from './backends/shared/cli-check.js';
 import { parseVersion, versionAtLeast, type CliVersionRange } from './backends/shared/cli-version.js';
 import { runProcess } from './git/exec.js';
 import { TMUX_MIN_VERSION } from './terminal/control.js';
-import { claimStateDirectory } from './compat.js';
 import { PluginRegistry } from './plugins/registry.js';
 import type { SettingsService } from './settings/index.js';
 
@@ -179,46 +177,3 @@ export function formatDoctorChecks(checks: DoctorCheck[]): string {
   lines.push('', failed ? `${failed} problem(s) must be fixed${warned ? `, ${warned} warning(s)` : ''}.` : warned ? `Ready, with ${warned} warning(s).` : 'Everything looks good.');
   return lines.join('\n');
 }
-
-/**
- * Offline compaction of `workbench.db` (docs/guide/performance.md §3.7): rows dropped by retention only
- * return disk space after a VACUUM. Refuses while a server holds the state directory; switches the file to
- * incremental auto-vacuum so later frees can be reclaimed without another rebuild.
- */
-export function compactDatabase(stateDir: string, log: (line: string) => void = console.log): { before: number; after: number } {
-  const path = join(stateDir, 'workbench.db');
-  if (!existsSync(path)) throw new Error(`No database at ${path}`);
-  let release: () => void;
-  try { release = claimStateDirectory(stateDir); } catch (error) {
-    // Only a held lock means "stop the server"; any other failure (permissions, a missing directory) keeps its own message.
-    if (/already in use by a live server|lock has no valid owner/.test((error as Error).message)) throw new Error('Stop the server before compacting: server.lock in the state directory is held by a running process, or has no valid owner.');
-    throw error;
-  }
-  try {
-    const size = () => statSync(path).size + (existsSync(`${path}-wal`) ? statSync(`${path}-wal`).size : 0);
-    const before = size();
-    const free = statfsSync(stateDir);
-    const available = free.bavail * free.bsize;
-    if (available < 2 * before) throw new Error(`Not enough free disk space: VACUUM needs about ${mib(2 * before)} (a rebuilt copy plus journal growth) and ${mib(available)} is available`);
-    // VACUUM builds its copy in SQLite's temp directory, which may be a small tmpfs: keep it beside the database.
-    const previousTmp = process.env.SQLITE_TMPDIR;
-    process.env.SQLITE_TMPDIR = stateDir;
-    const db = new DatabaseSync(path);
-    try {
-      db.exec('PRAGMA temp_store=FILE');
-      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-      db.exec('PRAGMA auto_vacuum=INCREMENTAL');
-      log(`Compacting ${path} (${mib(before)}); this can take several minutes.`);
-      db.exec('VACUUM');
-      db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    } finally {
-      db.close();
-      if (previousTmp === undefined) delete process.env.SQLITE_TMPDIR; else process.env.SQLITE_TMPDIR = previousTmp;
-    }
-    const after = size();
-    log(`Done: ${mib(before)} -> ${mib(after)}`);
-    return { before, after };
-  } finally { release(); }
-}
-
-const mib = (bytes: number): string => `${(bytes / 1048576).toFixed(1)} MiB`;

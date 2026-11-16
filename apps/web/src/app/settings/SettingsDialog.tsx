@@ -31,6 +31,7 @@ const BackendProfilesSection = lazy(() => import('./BackendProfilesSection').the
 const AuxiliaryModelsSection = lazy(() => import('./AuxiliaryModelsSection').then((module) => ({ default: module.AuxiliaryModelsSection })));
 const QuickChatSection = lazy(() => import('./QuickChatSection').then((module) => ({ default: module.QuickChatSection })));
 const ServiceStatusSection = lazy(() => import('./ServiceStatusSection').then((module) => ({ default: module.ServiceStatusSection })));
+const StorageSection = lazy(() => import('./StorageSection').then((module) => ({ default: module.StorageSection })));
 const sectionFallback = <div className="flex justify-center py-10"><Spinner /></div>;
 
 interface Props {
@@ -230,6 +231,7 @@ export function SettingsDialog({ open, onOpenChange, project, settings, onRefres
             {section === 'devices' && <DevicesSection />}
             {section === 'channels' && <ChannelsSection />}
             {section === 'service' && <><ReclaimSection settings={settings} onSaved={onSettingsChanged} onError={onError} /><Suspense fallback={sectionFallback}><ServiceStatusSection /></Suspense></>}
+            {section === 'storage' && <Suspense fallback={sectionFallback}><StorageSection /></Suspense>}
             {section === 'backup' && <BackupSection onError={onError} />}
             {section === 'diagnostics' && <DiagnosticsSection settings={settings} />}
             {section === 'about' && <AboutSection />}

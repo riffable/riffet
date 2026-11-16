@@ -241,6 +241,10 @@ msgstr "3 分钟前"
 msgid "3 分钟前 · main"
 msgstr "3 分钟前 · main"
 
+#: src/app/settings/StorageSection.tsx
+msgid "30 天未用即清理"
+msgstr "30 天未用即清理"
+
 #: src/app/settings/ServiceCharts.tsx
 msgid "3xx 重定向"
 msgstr "3xx 重定向"
@@ -267,6 +271,10 @@ msgstr "5xx {0}"
 #: src/app/settings/ServiceCharts.tsx
 msgid "5xx 服务器"
 msgstr "5xx 服务器"
+
+#: src/app/settings/StorageSection.tsx
+msgid "7 天未活动的会话清空，打开时重建"
+msgstr "7 天未活动的会话清空，打开时重建"
 
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "7% 墨色浅底，无描边"
@@ -628,6 +636,20 @@ msgstr "上报"
 msgid "上方的线"
 msgstr "上方的线"
 
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: formatBytes(last.beforeBytes)
+#. placeholder {2}: formatBytes(last.afterBytes)
+#. placeholder {3}: formatDuration(last.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理 {0} · {1} → {2} · 用时 {3}"
+msgstr "上次整理 {0} · {1} → {2} · 用时 {3}"
+
+#. placeholder {0}: timeAgo(last.at)
+#. placeholder {1}: last.error
+#: src/app/settings/StorageSection.tsx
+msgid "上次整理未完成（{0}）：{1}"
+msgstr "上次整理未完成（{0}）：{1}"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "上游服务暂时不可用，请稍后重试"
@@ -675,6 +697,10 @@ msgstr "下载"
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "不使用"
 msgstr "不使用"
+
+#: src/app/settings/StorageSection.tsx
+msgid "不再引用时回收"
+msgstr "不再引用时回收"
 
 #: src/app/design/patterns/ConfirmChapter.tsx
 msgid "不可恢复"
@@ -1103,10 +1129,12 @@ msgstr "会变化的数字用等宽数字"
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/SessionChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "会话"
 msgstr "会话"
 
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/StorageSection.tsx
 msgctxt "settings-session-label"
 msgid "会话"
 msgstr "会话"
@@ -1184,6 +1212,10 @@ msgstr "会话视图"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "会话视图、侧栏"
 msgstr "会话视图、侧栏"
+
+#: src/app/settings/StorageSection.tsx
+msgid "会话记录"
+msgstr "会话记录"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "会话里：圆点加已用时间"
@@ -1619,6 +1651,10 @@ msgstr "关闭通知"
 msgid "关闭面板"
 msgstr "关闭面板"
 
+#: src/app/settings/StorageSection.tsx
+msgid "其他"
+msgstr "其他"
+
 #: src/app/settings/channels/BotDetail.tsx
 msgid "其他以 / 开头的消息原样发给会话"
 msgstr "其他以 / 开头的消息原样发给会话"
@@ -1744,6 +1780,10 @@ msgstr "最近一次：{0}"
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "最近会话"
 msgstr "最近会话"
+
+#: src/app/settings/StorageSection.tsx
+msgid "最近活动"
+msgstr "最近活动"
 
 #. placeholder {0}: Math.round(ANDROID.sheetHeight * 100)
 #: src/app/design/android/OverlayChapter.tsx
@@ -2111,6 +2151,10 @@ msgstr "单行标签截尾；路径截中间，保留文件名；截断的文字
 msgid "单项禁用"
 msgstr "单项禁用"
 
+#: src/app/settings/StorageSection.tsx
+msgid "占用最多的会话"
+msgstr "占用最多的会话"
+
 #: src/app/design/foundations/RadiusChapter.tsx
 #: src/app/design/mac/notes.ts
 #: src/app/design/mac/StylesChapter.tsx
@@ -2283,6 +2327,7 @@ msgstr "取得一个值的控件。字段共用 fieldClass 的外观，聚焦时
 #: src/app/design/patterns/ConfirmChapter.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/AddBotDialog.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "取消"
 msgstr "取消"
 
@@ -2380,6 +2425,10 @@ msgstr "只退出这个浏览器。"
 msgid "可以使用的人"
 msgstr "可以使用的人"
 
+#: src/app/settings/StorageSection.tsx
+msgid "可回收"
+msgstr "可回收"
+
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
@@ -2399,6 +2448,11 @@ msgstr "可用"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "可用的取值"
 msgstr "可用的取值"
+
+#. placeholder {0}: formatBytes(compaction.requiredBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "可用空间不足，需要 {0}"
+msgstr "可用空间不足，需要 {0}"
 
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
@@ -2467,6 +2521,10 @@ msgstr "各风格的字阶映射"
 msgid "各风格的数值、配方与窗口"
 msgstr "各风格的数值、配方与窗口"
 
+#: src/app/settings/StorageSection.tsx
+msgid "合计"
+msgstr "合计"
+
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "同一个东西只有一个名字。"
 msgstr "同一个东西只有一个名字。"
@@ -2514,6 +2572,10 @@ msgstr "名称在上、目录在下"
 #: src/app/design/components/ActionsChapter.tsx
 msgid "名称由 Tip 与 aria-label 给出。"
 msgstr "名称由 Tip 与 aria-label 给出。"
+
+#: src/app/settings/StorageSection.tsx
+msgid "后台任务"
+msgstr "后台任务"
 
 #: src/app/settings/DevicesSection.tsx
 msgid "后台推送"
@@ -2594,6 +2656,10 @@ msgstr "四档宽度，Return 与 Esc"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "四档宽度按内容选择；工作区弹窗带自己的导航。"
 msgstr "四档宽度按内容选择；工作区弹窗带自己的导航。"
+
+#: src/app/settings/StorageSection.tsx
+msgid "回合检查点"
+msgstr "回合检查点"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "回合状态"
@@ -2679,6 +2745,10 @@ msgctxt "settings-image-modality"
 msgid "图片"
 msgstr "图片"
 
+#: src/app/settings/StorageSection.tsx
+msgid "图片与长输出"
+msgstr "图片与长输出"
+
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "图片放大、面板出现"
 msgstr "图片放大、面板出现"
@@ -2744,6 +2814,14 @@ msgstr "在哪里找"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "在手机上扫码配对后出现在这里。"
 msgstr "在手机上扫码配对后出现在这里。"
+
+#: src/app/settings/StorageSection.tsx
+msgid "在服务下次启动时整理数据库？"
+msgstr "在服务下次启动时整理数据库？"
+
+#: src/app/settings/StorageSection.tsx
+msgid "在服务下次启动时重建文件，期间服务不可用"
+msgstr "在服务下次启动时重建文件，期间服务不可用"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "在服务器所在电脑的终端执行。"
@@ -2907,6 +2985,10 @@ msgstr "多行中文段落不低于 1.5 倍；单行控件的文字在容器里�
 msgid "大"
 msgstr "大"
 
+#: src/app/settings/StorageSection.tsx
+msgid "大小"
+msgstr "大小"
+
 #: src/app/design/android/TypeChapter.tsx
 msgid "大标题"
 msgstr "大标题"
@@ -3012,9 +3094,17 @@ msgstr "字阶"
 msgid "存储位置、是否需重启、是否跨设备、计费与权限。"
 msgstr "存储位置、是否需重启、是否跨设备、计费与权限。"
 
+#: src/app/settings/settingsSections.ts
+msgid "存储空间"
+msgstr "存储空间"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "它所在的会话"
 msgstr "它所在的会话"
+
+#: src/app/settings/StorageSection.tsx
+msgid "安排整理"
+msgstr "安排整理"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -3230,6 +3320,10 @@ msgstr "将向该进程发送 SIGTERM，依赖它的终端或会话可能随之�
 msgid "将向该进程发送 SIGTERM。{session}正在进行的任务会中断。"
 msgstr "将向该进程发送 SIGTERM。{session}正在进行的任务会中断。"
 
+#: src/app/settings/StorageSection.tsx
+msgid "将在服务下次启动时进行"
+msgstr "将在服务下次启动时进行"
+
 #: src/app/design/components/DisplayChapter.tsx
 msgid "将调用"
 msgstr "将调用"
@@ -3381,6 +3475,10 @@ msgstr "工作台的尺寸一部分来自风格配方，一部分各风格相同
 msgid "工作台里是应用菜单，设置里是系统弹出菜单"
 msgstr "工作台里是应用菜单，设置里是系统弹出菜单"
 
+#: src/app/settings/StorageSection.tsx
+msgid "工作树"
+msgstr "工作树"
+
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
@@ -3474,6 +3572,10 @@ msgstr "已停用"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "已切换到 Codex"
 msgstr "已切换到 Codex"
+
+#: src/app/settings/StorageSection.tsx
+msgid "已删除的项目"
+msgstr "已删除的项目"
 
 #. placeholder {0}: process.name
 #. placeholder {1}: process.pid
@@ -4308,6 +4410,10 @@ msgstr "按钮按下时缩到 0.97"
 msgid "按钮的实现"
 msgstr "按钮的实现"
 
+#: src/app/settings/StorageSection.tsx
+msgid "按项目"
+msgstr "按项目"
+
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "换一批"
 msgstr "换一批"
@@ -4427,6 +4533,7 @@ msgstr "提示气泡用系统的"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SearchChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "插件"
 msgstr "插件"
 
@@ -4530,6 +4637,10 @@ msgstr "搜索框、筛选与无结果"
 #: src/app/design/patterns/SearchChapter.tsx
 msgid "搜索框在左侧放搜索图标，有内容时右侧放清除，Escape 先清空再离开。列表页共用 SearchField。"
 msgstr "搜索框在左侧放搜索图标，有内容时右侧放清除，Escape 先清空再离开。列表页共用 SearchField。"
+
+#: src/app/settings/StorageSection.tsx
+msgid "搜索索引"
+msgstr "搜索索引"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "摘要"
@@ -4663,6 +4774,15 @@ msgstr "数值越大越靠前。组件引用变量名。"
 msgid "数字键 1–9，卡片获得焦点时显示；Esc 拒绝"
 msgstr "数字键 1–9，卡片获得焦点时显示；Esc 拒绝"
 
+#: src/app/settings/StorageSection.tsx
+msgid "数据库"
+msgstr "数据库"
+
+#. placeholder {0}: formatBytes(database.bytes)
+#: src/app/settings/StorageSection.tsx
+msgid "数据库 · {0}"
+msgstr "数据库 · {0}"
+
 #: src/app/design/android/ComponentChapter.tsx
 msgid "整个应用一个队列"
 msgstr "整个应用一个队列"
@@ -4681,6 +4801,10 @@ msgstr "整套配色决定界面颜色，选择立即生效并只保存在这台
 msgid "整理发布说明"
 msgstr "整理发布说明"
 
+#: src/app/settings/StorageSection.tsx
+msgid "整理数据库"
+msgstr "整理数据库"
+
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -4693,6 +4817,7 @@ msgstr "整群一个会话"
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "文件"
 msgstr "文件"
 
@@ -4952,9 +5077,21 @@ msgstr "无法加载审批模式，请重试"
 msgid "无法加载模型提供商"
 msgstr "无法加载模型提供商"
 
+#: src/app/settings/StorageSection.tsx
+msgid "无法取消整理"
+msgstr "无法取消整理"
+
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "无法复制链接"
 msgstr "无法复制链接"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法安排整理"
+msgstr "无法安排整理"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法开始统计"
+msgstr "无法开始统计"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "无法检查更新"
@@ -5021,6 +5158,10 @@ msgstr "无法读取任务文件位置"
 #: src/app/settings/QuickChatSection.tsx
 msgid "无法读取可用模型"
 msgstr "无法读取可用模型"
+
+#: src/app/settings/StorageSection.tsx
+msgid "无法读取存储空间"
+msgstr "无法读取存储空间"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "无法读取所选文件"
@@ -5090,6 +5231,10 @@ msgstr "无障碍已开启"
 msgid "无需确认"
 msgstr "无需确认"
 
+#: src/app/settings/StorageSection.tsx
+msgid "日志与诊断"
+msgstr "日志与诊断"
+
 #: src/app/design/foundations/ContentChapter.tsx
 #: src/app/design/foundations/MotionChapter.tsx
 msgid "时长"
@@ -5114,6 +5259,10 @@ msgstr "时间 · tok/s"
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "时间与数字"
 msgstr "时间与数字"
+
+#: src/app/settings/StorageSection.tsx
+msgid "时间线"
+msgstr "时间线"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
@@ -5375,6 +5524,10 @@ msgstr "来源清空后保留一次退场动画，可显示「已恢复」。"
 msgid "极简墨色"
 msgstr "极简墨色"
 
+#: src/app/settings/StorageSection.tsx
+msgid "构成"
+msgstr "构成"
+
 #: src/app/design/catalog.tsx
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "架构"
@@ -5589,6 +5742,10 @@ msgstr "检查器页签"
 msgid "检查更新"
 msgstr "检查更新"
 
+#: src/app/settings/StorageSection.tsx
+msgid "检查点"
+msgstr "检查点"
+
 #: src/app/settings/UpdateSection.tsx
 msgid "检查结果"
 msgstr "检查结果"
@@ -5683,6 +5840,10 @@ msgstr "正在发生的事最醒目"
 msgid "正在安装插件"
 msgstr "正在安装插件"
 
+#: src/app/settings/StorageSection.tsx
+msgid "正在统计"
+msgstr "正在统计"
+
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "正在读取..."
 msgstr "正在读取..."
@@ -5690,6 +5851,10 @@ msgstr "正在读取..."
 #: src/app/design/foundations/TypesetChapter.tsx
 msgid "正在读取…"
 msgstr "正在读取…"
+
+#: src/app/settings/StorageSection.tsx
+msgid "正在读取存储空间"
+msgstr "正在读取存储空间"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "正在读取服务器状态"
@@ -5742,6 +5907,10 @@ msgstr "每个生成命令都有 --check 模式，生成结果过期时以非零
 #: src/app/design/components/DisplayChapter.tsx
 msgid "每个键一枚。"
 msgstr "每个键一枚。"
+
+#: src/app/settings/StorageSection.tsx
+msgid "每个项目保留最近 50 个回合"
+msgstr "每个项目保留最近 50 个回合"
 
 #: src/app/design/foundations/ColorChapter.tsx
 msgid "每升一层，底色变化一级。层次由底色表达，阴影留给脱离文档流的浮层。"
@@ -6400,6 +6569,12 @@ msgstr "确认现有组件加一个参数能否覆盖"
 msgid "确认还是撤销"
 msgstr "确认还是撤销"
 
+#. placeholder {0}: formatBytes(data.disk.freeBytes)
+#. placeholder {1}: formatBytes(data.disk.totalBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "磁盘可用 {0} / {1}"
+msgstr "磁盘可用 {0} / {1}"
+
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
 msgstr "示例会话"
@@ -6898,6 +7073,12 @@ msgstr "统计、扩展概览、并行尝试"
 #: src/app/design/patterns/PagesChapter.tsx
 msgid "统计、设计规范"
 msgstr "统计、设计规范"
+
+#. placeholder {0}: timeAgo(data.scan.at)
+#. placeholder {1}: formatDuration(data.scan.durationMs)
+#: src/app/settings/StorageSection.tsx
+msgid "统计于 {0} · 用时 {1}"
+msgstr "统计于 {0} · 用时 {1}"
 
 #: src/app/design/components/ActionsChapter.tsx
 msgid "继续"
@@ -7777,6 +7958,10 @@ msgstr "运行 Codex，改了文件"
 msgid "运行Codex，改了文件"
 msgstr "运行Codex，改了文件"
 
+#: src/app/settings/StorageSection.tsx
+msgid "运行与用量"
+msgstr "运行与用量"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "运行中"
 msgstr "运行中"
@@ -8225,6 +8410,10 @@ msgstr "重新检测"
 msgid "重新生成"
 msgstr "重新生成"
 
+#: src/app/settings/StorageSection.tsx
+msgid "重新统计"
+msgstr "重新统计"
+
 #: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/foundations/AccessibilityChapter.tsx
@@ -8240,6 +8429,7 @@ msgstr "重新生成"
 #: src/app/settings/PairingDialogs.tsx
 #: src/app/settings/ProviderUsage.tsx
 #: src/app/settings/ServiceStatusSection.tsx
+#: src/app/settings/StorageSection.tsx
 msgid "重试"
 msgstr "重试"
 
@@ -8379,6 +8569,10 @@ msgstr "阴影档位"
 msgid "阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。"
 msgstr "阴影随明暗模式切换，与配色无关。Mac 端由生成器换算为 Elevation；SwiftUI 没有扩散参数，按高斯分布折算。"
 
+#: src/app/settings/StorageSection.tsx
+msgid "附件"
+msgstr "附件"
+
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随主区，与对话、终端互换"
 msgstr "随主区，与对话、终端互换"
@@ -8386,6 +8580,10 @@ msgstr "随主区，与对话、终端互换"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "随主题与字号推送"
 msgstr "随主题与字号推送"
+
+#: src/app/settings/StorageSection.tsx
+msgid "随会话删除"
+msgstr "随会话删除"
 
 #: src/app/settings/AvatarStylePicker.tsx
 msgid "随机头像"
@@ -8602,6 +8800,7 @@ msgstr "顶栏、单一滚动区、转场后淡入的正文"
 #: src/app/design/patterns/SelectionChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
+#: src/app/settings/StorageSection.tsx
 #: src/app/settings/ThemeEditor.tsx
 msgid "项目"
 msgstr "项目"
@@ -8642,6 +8841,11 @@ msgstr "预测式返回时页面缩到 {0} 并带圆角"
 #: src/app/settings/PreferencesSections.tsx
 msgid "预览"
 msgstr "预览"
+
+#. placeholder {0}: formatBytes(database.freeBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
+msgstr "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "预设"

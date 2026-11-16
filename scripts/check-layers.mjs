@@ -53,7 +53,7 @@ const LAYERS = [
   ['drivers', ['backends/*']],
   ['features', ['git', 'workspace', 'task-workspaces', 'orchestration', 'shares', 'stats', 'search', 'tasks', 'extensions',
     'titles', 'turn-summary', 'context-references', 'chat', 'marks.ts', 'work-items', 'assistant', 'owner', 'appearance', 'themes', 'previews', 'push',
-    'plugins', 'plugins-host', 'riffet-mcp', 'monitor.ts', 'system.ts', 'session-deletion.ts', 'update.ts', 'update-npm.ts',
+    'plugins', 'plugins-host', 'riffet-mcp', 'monitor.ts', 'system.ts', 'storage', 'session-deletion.ts', 'update.ts', 'update-npm.ts',
     'visualization.ts', 'static-assets.ts', 'math-assets.ts', 'diagram-assets.ts']],
   ['surfaces', ['routes', 'channels']],
   ['root', ['app.ts', 'index.ts', 'cli.ts', 'cli-drain.ts', 'cli-pairing.ts', 'cli-plugins.ts', 'cli-resume.ts', 'cli-update.ts', 'doctor.ts']],

@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { IconActivity, IconBot, IconCornerDownLeft, IconColumns2, IconCpu, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelRight, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
+import { IconActivity, IconBot, IconCornerDownLeft, IconColumns2, IconCpu, IconDatabase, IconFileCog, IconGauge, IconHardDriveDownload, IconImage, IconInfo, IconLaptop, IconLayers, IconMessagesSquare, IconPanelRight, IconServer, IconSettings2, IconSmartphone, IconSparkles, IconSquareArrowOutUpRight, IconSun, IconSwatchBook, IconTerminal, IconUser, IconWrapText } from '@/components/icons';
 
 /** The settings dialog's box, shared with the frame that stands in while its chunk loads. */
 export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col overflow-hidden p-0';
@@ -12,7 +12,7 @@ export const SETTINGS_DIALOG_CLASS = 'h-[min(820px,calc(100dvh-32px))] flex-col 
  * a plugin contributes is named by its view id (`<pluginId>/<name>`). `design` is not a section: it
  * opens the design system's own page, and the dialog closes.
  */
-export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
+export type SettingsSection = 'profile' | 'general' | 'appearance' | 'typography' | 'tabs' | 'views' | 'terminal' | 'appicon' | 'design' | 'interaction' | 'notifications' | 'files' | 'backends' | 'providers' | 'integrations' | 'auxiliary' | 'quickchat' | 'connection' | 'shares' | 'devices' | 'channels' | 'service' | 'storage' | 'backup' | 'diagnostics' | 'about' | PluginSettingsSection;
 export type PluginSettingsSection = `${string}/${string}`;
 
 /** The navigation's groups. 通用设置 stands alone at the top, untitled; the others are titled. */
@@ -72,6 +72,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'devices', label: msg`设备管理`, group: 'connection', icon: IconSmartphone },
   { id: 'channels', label: msg`机器人`, group: 'connection', icon: IconBot },
   { id: 'service', label: msg`本机服务器`, group: 'connection', icon: IconServer },
+  { id: 'storage', label: msg`存储空间`, group: 'connection', icon: IconDatabase },
   { id: 'backup', label: msg`备份与恢复`, group: 'connection', icon: IconHardDriveDownload },
   { id: 'diagnostics', label: msg`诊断`, group: 'support', icon: IconGauge },
   { id: 'about', label: msg`关于 Riffet`, group: 'support', icon: IconInfo },

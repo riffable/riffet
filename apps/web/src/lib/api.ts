@@ -67,6 +67,7 @@ import type {
   ModelInfo,
   NativeBackendId,
   ServiceMonitorSnapshot,
+  StorageReport,
   StatsDashboard,
   StatsGranularity,
   StatsLatency,
@@ -881,6 +882,9 @@ export const api = {
   previewAuxiliaryModel: (body: AuxiliaryModelRef & { purpose: AuxiliaryModelPurpose; message: string }, signal?: AbortSignal) => request<{ text: string }>('/api/auxiliary-models/preview', { ...json('POST', body), signal }),
   backup: () => request<unknown>('/api/system/backup', json('POST')),
   serviceMonitor: (signal?: AbortSignal) => request<ServiceMonitorSnapshot>('/api/system/monitor', { signal }),
+  storage: (signal?: AbortSignal) => request<StorageReport>('/api/system/storage', { signal }),
+  scanStorage: () => request<StorageReport>('/api/system/storage/scan', json('POST')),
+  scheduleCompaction: (scheduled: boolean) => request<StorageReport>('/api/system/storage/compaction', json('PUT', { scheduled })),
   /** SIGTERM to a process in the service's own tree; the server refuses anything without `canTerminate`. */
   terminateServiceProcess: (pid: number) => request<{ ok: true }>(`/api/system/processes/${pid}/terminate`, json('POST')),
   /** 收藏, newest first. Read conditionally: a list push re-reads it, and an unchanged one costs a 304. */
