@@ -641,22 +641,18 @@ msgstr "Line above"
 #. placeholder {2}: formatBytes(last.afterBytes)
 #. placeholder {3}: formatDuration(last.durationMs)
 #: src/app/settings/StorageSection.tsx
-msgid "上次整理 {0} · {1} → {2} · 用时 {3}"
-msgstr "Last compacted {0} · {1} → {2} · took {3}"
+msgid "上次释放 {0} · {1} → {2} · 用时 {3}"
+msgstr "Last freed up {0} · {1} → {2} · took {3}"
 
 #. placeholder {0}: timeAgo(last.at)
 #. placeholder {1}: last.error
 #: src/app/settings/StorageSection.tsx
-msgid "上次整理未完成（{0}）：{1}"
-msgstr "Last compaction did not finish ({0}): {1}"
+msgid "上次释放未完成（{0}）：{1}"
+msgstr "The last attempt to free up space did not finish ({0}): {1}"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "The upstream service is temporarily unavailable, try again later"
-
-#: src/app/settings/ViewsSection.tsx
-msgid "上移{name}"
-msgstr "Move {name} up"
 
 #: src/app/design/DesignPage.tsx
 msgid "下一章"
@@ -686,9 +682,9 @@ msgstr "Shift of the page below"
 msgid "下方的点"
 msgstr "Dot below"
 
-#: src/app/settings/ViewsSection.tsx
-msgid "下移{name}"
-msgstr "Move {name} down"
+#: src/app/settings/StorageSection.tsx
+msgid "下次启动时释放"
+msgstr "Free up at next start"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "下载"
@@ -2425,10 +2421,6 @@ msgstr "Signs out of this browser only."
 msgid "可以使用的人"
 msgstr "People who can use it"
 
-#: src/app/settings/StorageSection.tsx
-msgid "可回收"
-msgstr "Reclaimable"
-
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr "Reusable parts, each with variants, sizes and states. One implementation per component per platform."
@@ -2449,14 +2441,18 @@ msgstr "Available"
 msgid "可用的取值"
 msgstr "Available values"
 
-#. placeholder {0}: formatBytes(compaction.requiredBytes)
-#: src/app/settings/StorageSection.tsx
-msgid "可用空间不足，需要 {0}"
-msgstr "Not enough free space; needs {0}"
-
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
 msgstr "Overrides the source credentials. Leave the saved key blank to keep it; clear it to use the source credentials."
+
+#: src/app/settings/StorageSection.tsx
+msgid "可释放"
+msgstr "Reclaimable"
+
+#. placeholder {0}: formatBytes(database.freeBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "可释放 {0}，在服务下次启动时进行，期间服务不可用"
+msgstr "{0} can be freed at the next service start; the service is unavailable meanwhile"
 
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
@@ -2602,6 +2598,10 @@ msgstr "Started at"
 msgid "启动以来共 {0} 次"
 msgstr "{0} requests since start"
 
+#: src/app/settings/StorageSection.tsx
+msgid "启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。"
+msgstr "The database file is rebuilt before the service starts. No device can reach the service meanwhile, which can take a few minutes."
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "启动设置"
@@ -2656,10 +2656,6 @@ msgstr "Four widths, Return and Esc"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "四档宽度按内容选择；工作区弹窗带自己的导航。"
 msgstr "Four widths, chosen by content; a workspace dialog carries its own navigation."
-
-#: src/app/settings/StorageSection.tsx
-msgid "回合检查点"
-msgstr "Turn checkpoints"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "回合状态"
@@ -2816,12 +2812,12 @@ msgid "在手机上扫码配对后出现在这里。"
 msgstr "Appears here after you pair by scanning the QR code on your phone."
 
 #: src/app/settings/StorageSection.tsx
-msgid "在服务下次启动时整理数据库？"
-msgstr "Compact the database at the next service start?"
+msgid "在服务下次启动时进行，期间服务不可用"
+msgstr "Runs at the next service start; the service is unavailable meanwhile"
 
 #: src/app/settings/StorageSection.tsx
-msgid "在服务下次启动时重建文件，期间服务不可用"
-msgstr "Rebuilds the file at the next service start; the service is unavailable meanwhile"
+msgid "在服务下次启动时释放数据库空间？"
+msgstr "Free up database space at the next service start?"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "在服务器所在电脑的终端执行。"
@@ -3102,10 +3098,6 @@ msgstr "Storage"
 msgid "它所在的会话"
 msgstr "its session"
 
-#: src/app/settings/StorageSection.tsx
-msgid "安排整理"
-msgstr "Schedule"
-
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "安装"
@@ -3321,7 +3313,7 @@ msgid "将向该进程发送 SIGTERM。{session}正在进行的任务会中断�
 msgstr "SIGTERM will be sent to this process. Tasks running in {session} will be interrupted."
 
 #: src/app/settings/StorageSection.tsx
-msgid "将在服务下次启动时进行"
+msgid "将在服务下次启动时释放"
 msgstr "Runs at the next service start"
 
 #: src/app/design/components/DisplayChapter.tsx
@@ -3474,10 +3466,6 @@ msgstr "Part of the workbench sizing comes from the style recipe and part is the
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "工作台里是应用菜单，设置里是系统弹出菜单"
 msgstr "An app menu in the workbench, a system pop-up menu in settings"
-
-#: src/app/settings/StorageSection.tsx
-msgid "工作树"
-msgstr "Worktrees"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4801,10 +4789,6 @@ msgstr "The whole color scheme determines the interface colors; the choice appli
 msgid "整理发布说明"
 msgstr "Draft the release notes"
 
-#: src/app/settings/StorageSection.tsx
-msgid "整理数据库"
-msgstr "Compact database"
-
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -5078,16 +5062,16 @@ msgid "无法加载模型提供商"
 msgstr "Couldn't load model providers"
 
 #: src/app/settings/StorageSection.tsx
-msgid "无法取消整理"
-msgstr "Could not cancel the compaction"
+msgid "无法取消释放空间"
+msgstr "Could not cancel freeing up space"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "无法复制链接"
 msgstr "Couldn't copy the link"
 
 #: src/app/settings/StorageSection.tsx
-msgid "无法安排整理"
-msgstr "Could not schedule the compaction"
+msgid "无法安排释放空间"
+msgstr "Could not schedule freeing up space"
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法开始统计"
@@ -5425,6 +5409,10 @@ msgstr "Server processes"
 msgid "服务地址"
 msgstr "Service address"
 
+#: src/app/settings/settingsSections.ts
+msgid "服务管理"
+msgstr "Service"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "未命名会话"
 msgstr "Untitled session"
@@ -5741,10 +5729,6 @@ msgstr "Inspector tab"
 #: src/app/settings/UpdateSection.tsx
 msgid "检查更新"
 msgstr "Check for updates"
-
-#: src/app/settings/StorageSection.tsx
-msgid "检查点"
-msgstr "Checkpoints"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查结果"
@@ -6574,6 +6558,11 @@ msgstr "Confirm or undo"
 #: src/app/settings/StorageSection.tsx
 msgid "磁盘可用 {0} / {1}"
 msgstr "{0} free of {1}"
+
+#. placeholder {0}: formatBytes(compaction.requiredBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "磁盘可用空间不足，需要 {0}"
+msgstr "Not enough free disk space; needs {0}"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
@@ -8362,6 +8351,10 @@ msgstr "Palettes from {credits}"
 msgid "配色模式"
 msgstr "Color mode"
 
+#: src/app/settings/StorageSection.tsx
+msgid "释放空间"
+msgstr "Free up space"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "重启会话后生效"
 msgstr "Takes effect after the session restarts"
@@ -8842,11 +8835,6 @@ msgstr "Predictive back shrinks the page to {0} with rounded corners"
 msgid "预览"
 msgstr "Preview"
 
-#. placeholder {0}: formatBytes(database.freeBytes)
-#: src/app/settings/StorageSection.tsx
-msgid "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
-msgstr "About {0} will be reclaimed. No device can reach the service while it rebuilds, which can take a few minutes."
-
 #: src/app/settings/PreferencesSections.tsx
 msgid "预设"
 msgstr "Preset"
@@ -9029,3 +9017,12 @@ msgstr "Default model"
 #: src/app/design/android/notes.ts
 msgid "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
 msgstr "The default style; the others change only the fields that differ from it. Material's control structure, ripple and dialog layout."
+
+
+#: src/app/settings/ViewsSection.tsx
+msgid "上移{name}"
+msgstr "Move {name} up"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "下移{name}"
+msgstr "Move {name} down"

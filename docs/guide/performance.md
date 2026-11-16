@@ -80,7 +80,7 @@
 - 日志（`journal_events`）是历史的来源，随会话删除而删除，不按时间清理。
 - blob 按引用回收（`releaseSessionBlobs`）；冷会话丢弃时不释放，重新折叠会引用同一批内容寻址的 blob。
 - SQLite 文件不会因删除而变小；回收的页由后续写入复用。压缩文件（VACUUM）不和服务的连接同时进行：服务停着时用 `riffet doctor --compact`；在设置的「存储空间」页安排的，在服务下次启动、打开数据库之前进行（`storage/compaction.ts`），期间写 `maintenance.json`，Mac 客户端据此继续等待启动。两种都要求剩余空间不少于库大小的两倍，并把库改为 `auto_vacuum=INCREMENTAL`。
-- 「存储空间」页的分项统计要整读数据库和状态目录（6 GB 的库约 30 秒），只在 worker 线程里做（`storage/inspector.ts`），结果留在内存里到下一次统计。
+- 「存储空间」页的分项统计要整读数据库和状态目录，只在 worker 线程里做（`storage/inspector.ts`），三步各用一个 worker 并行（6 GB 的库共约 24 秒，依次做约 40 秒），每步完成就显示。完成的统计存为 `storage-scan.json`，重启后直接显示；超过一天才在后台重新统计，期间仍显示上一次的结果。
 
 ### 3.8 大文件流式读取，后台任务限量
 

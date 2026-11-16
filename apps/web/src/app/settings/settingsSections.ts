@@ -71,7 +71,7 @@ const definitions: readonly SettingsSectionDefinition[] = [
   { id: 'shares', label: msg`会话分享`, group: 'connection', icon: IconSquareArrowOutUpRight, parent: 'connection' },
   { id: 'devices', label: msg`设备管理`, group: 'connection', icon: IconSmartphone },
   { id: 'channels', label: msg`机器人`, group: 'connection', icon: IconBot },
-  { id: 'service', label: msg`本机服务器`, group: 'connection', icon: IconServer },
+  { id: 'service', label: msg`服务管理`, group: 'connection', icon: IconServer },
   { id: 'storage', label: msg`存储空间`, group: 'connection', icon: IconDatabase },
   { id: 'backup', label: msg`备份与恢复`, group: 'connection', icon: IconHardDriveDownload },
   { id: 'diagnostics', label: msg`诊断`, group: 'support', icon: IconGauge },

@@ -83,7 +83,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .connection: String(localized: "连接与设备")
         case .shares: String(localized: "会话分享")
         case .channels: String(localized: "机器人")
-        case .server: String(localized: "本机服务器")
+        case .server: String(localized: "服务管理")
         case .storage: String(localized: "存储空间")
         case .backup: String(localized: "备份与恢复")
         case .diagnostics: String(localized: "诊断")

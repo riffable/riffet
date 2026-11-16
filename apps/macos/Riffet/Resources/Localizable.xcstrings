@@ -1,6 +1,126 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "服务管理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Service"
+          }
+        }
+      }
+    },
+    "在服务下次启动时释放数据库空间？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up database space at the next service start?"
+          }
+        }
+      }
+    },
+    "下次启动时释放": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up at next start"
+          }
+        }
+      }
+    },
+    "启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The database file is rebuilt before the service starts. No device can reach the service meanwhile, which can take a few minutes."
+          }
+        }
+      }
+    },
+    "可释放": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reclaimable"
+          }
+        }
+      }
+    },
+    "释放空间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up space"
+          }
+        }
+      }
+    },
+    "上次释放未完成（%@）：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The last attempt to free up space did not finish (%1$@): %2$@"
+          }
+        }
+      }
+    },
+    "上次释放 %@ · %@ → %@ · 用时 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last freed up %1$@ · %2$@ → %3$@ · took %4$@"
+          }
+        }
+      }
+    },
+    "将在服务下次启动时释放": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs at the next service start"
+          }
+        }
+      }
+    },
+    "磁盘可用空间不足，需要 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough free disk space; needs %@"
+          }
+        }
+      }
+    },
+    "可释放 %@，在服务下次启动时进行，期间服务不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ can be freed at the next service start; the service is unavailable meanwhile"
+          }
+        }
+      }
+    },
+    "在服务下次启动时进行，期间服务不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Runs at the next service start; the service is unavailable meanwhile"
+          }
+        }
+      }
+    },
     "存储空间": {
       "localizations": {
         "en": {
@@ -58,46 +178,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Could not read storage"
-          }
-        }
-      }
-    },
-    "在服务下次启动时整理数据库？": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compact the database at the next service start?"
-          }
-        }
-      }
-    },
-    "预计收回 %@。重建期间所有设备都连不上服务，可能持续几分钟。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "About %@ will be reclaimed. No device can reach the service while it rebuilds, which can take a few minutes."
-          }
-        }
-      }
-    },
-    "重建期间所有设备都连不上服务，可能持续几分钟。": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No device can reach the service while it rebuilds, which can take a few minutes."
-          }
-        }
-      }
-    },
-    "安排整理": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Schedule"
           }
         }
       }
@@ -162,76 +242,6 @@
         }
       }
     },
-    "可回收": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reclaimable"
-          }
-        }
-      }
-    },
-    "整理数据库": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Compact database"
-          }
-        }
-      }
-    },
-    "上次整理未完成（%@）：%@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Last compaction did not finish (%@): %@"
-          }
-        }
-      }
-    },
-    "上次整理 %@ · %@ → %@ · 用时 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Last compacted %@ · %@ → %@ · took %@"
-          }
-        }
-      }
-    },
-    "将在服务下次启动时进行": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Runs at the next service start"
-          }
-        }
-      }
-    },
-    "可用空间不足，需要 %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Not enough free space; needs %@"
-          }
-        }
-      }
-    },
-    "在服务下次启动时重建文件，期间服务不可用": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Rebuilds the file at the next service start; the service is unavailable meanwhile"
-          }
-        }
-      }
-    },
     "按项目": {
       "localizations": {
         "en": {
@@ -248,16 +258,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Breakdown"
-          }
-        }
-      }
-    },
-    "检查点": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Checkpoints"
           }
         }
       }
@@ -388,26 +388,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reclaimed once nothing refers to it"
-          }
-        }
-      }
-    },
-    "回合检查点": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Turn checkpoints"
-          }
-        }
-      }
-    },
-    "工作树": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Worktrees"
           }
         }
       }

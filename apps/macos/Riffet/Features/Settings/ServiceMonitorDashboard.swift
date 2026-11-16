@@ -5,7 +5,7 @@ import RiffetKit
 
 /// The connected service's load, requests and process tree, read every 5 seconds while it is on
 /// screen and `active`. A failed read keeps the last snapshot and says so in the status line.
-/// Hosted by the workbench's 活动 page; 本机服务器 in settings links there.
+/// Hosted by the workbench's 活动 page; 服务管理 in settings links there.
 struct ServiceMonitorDashboard: View {
     /// A host that keeps the view alive while showing something else turns polling off with this.
     var active = true
@@ -315,7 +315,7 @@ struct ServiceMonitorDashboard: View {
 // MARK: - Reclaim
 
 /// When the server stops the CLIs of conversations nobody uses; the next message resumes them.
-/// A setting of 本机服务器, next to the service it governs.
+/// A setting of 服务管理, next to the service it governs.
 struct ServiceReclaimSection: View {
     let workbench: Workbench
     @State private var busy = false

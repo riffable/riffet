@@ -2,7 +2,7 @@
  * What the service keeps on disk, for the storage page in settings (`GET /api/system/storage`). The
  * cheap figures (file sizes, free pages, free disk) are read on every request; the breakdown needs a
  * full read of the database and the state directory, so it comes from a scan that runs in the
- * background and is kept until the next one (`scan`).
+ * background. The last finished scan is saved and shown until the next one finishes (`scan`).
  */
 export interface StorageReport {
   generatedAt: string;
@@ -10,7 +10,7 @@ export interface StorageReport {
   directory: string;
   disk: { freeBytes: number; totalBytes: number };
   database: StorageDatabase;
-  /** Absent until the first scan finishes. */
+  /** Absent until a first scan has finished a step. */
   scan?: StorageScan;
   scanning: boolean;
   compaction: StorageCompaction;
@@ -32,9 +32,17 @@ export type StorageDatabasePart = 'journal' | 'timeline' | 'blobs' | 'search' | 
 /** Top-level entries of the state directory, grouped by what they hold. The database is not one. */
 export type StorageFolderKind = 'checkpoints' | 'worktrees' | 'attachments' | 'tasks' | 'plugins' | 'logs' | 'other';
 
+/** The steps of a scan, which finish in this order. */
+export type StorageScanStep = 'folders' | 'sessions' | 'parts';
+
 export interface StorageScan {
   at: string;
   durationMs: number;
+  /**
+   * Only while a first scan is still running: the steps it has not finished, whose lists are empty
+   * until then. Once a scan has finished, a later one runs behind it and this is absent.
+   */
+  pending?: StorageScanStep[];
   parts: Array<{ part: StorageDatabasePart; bytes: number }>;
   folders: Array<{ kind: StorageFolderKind; bytes: number; files: number }>;
   /**

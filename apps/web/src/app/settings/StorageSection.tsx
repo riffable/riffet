@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { StorageDatabasePart, StorageFolderKind, StorageProjectUsage, StorageReport } from '@contracts';
+import type { StorageDatabasePart, StorageFolderKind, StorageProjectUsage, StorageReport, StorageScanStep } from '@contracts';
 import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner } from '@/components/ui/controls';
@@ -18,7 +18,10 @@ import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
 /** Only while a scan runs: the figures otherwise change too slowly to be worth polling. */
 const SCAN_POLL_MS = 2_000;
 
-interface Meta { label: MessageDescriptor; note?: MessageDescriptor }
+/** A string label is a term kept in English in every language (Checkpoints, Worktrees, as in the Git panel). */
+interface Meta { label: MessageDescriptor | string; note?: MessageDescriptor }
+
+const labelOf = (label: MessageDescriptor | string) => typeof label === 'string' ? label : i18n._(label);
 
 /**
  * What the database's pages hold; `note` is how each is let go, which nothing on screen shows. They
@@ -34,8 +37,8 @@ const PARTS: Record<StorageDatabasePart, Meta> = {
 };
 
 const FOLDERS: Record<StorageFolderKind, Meta & { color: string }> = {
-  checkpoints: { label: msg`回合检查点`, color: 'var(--chart-2)', note: msg`每个项目保留最近 50 个回合` },
-  worktrees: { label: msg`工作树`, color: 'var(--chart-3)' },
+  checkpoints: { label: 'Checkpoints', color: 'var(--chart-2)', note: msg`每个项目保留最近 50 个回合` },
+  worktrees: { label: 'Worktrees', color: 'var(--chart-3)' },
   attachments: { label: msg`附件`, color: 'var(--chart-4)', note: msg`30 天未用即清理` },
   tasks: { label: msg`后台任务`, color: 'var(--chart-5)' },
   plugins: { label: msg`插件`, color: 'var(--chart-6)' },
@@ -47,6 +50,9 @@ const DATABASE_COLOR = 'var(--chart-1)';
 const FREE_COLOR = 'var(--line-strong)';
 /** Below this, an estimate of what compaction gives back says nothing worth reading. */
 const RECLAIM_WORTH_NAMING = 1024 * 1024;
+
+/** A step a first scan has not finished yet; a finished scan has none. */
+const waiting = (data: StorageReport, step: StorageScanStep) => !data.scan || Boolean(data.scan.pending?.includes(step));
 
 /** Largest first, with 其他 always last: it is what is left, not a thing of its own. */
 const ranked = <T extends { bytes: number }>(items: T[], key: (item: T) => string) =>
@@ -103,11 +109,11 @@ export function StorageSection() {
       <ScanBar data={data} error={error} onRescan={() => void rescan()} />
       <Overview data={data} />
       <DatabaseGroup data={data} onChange={apply} />
-      {data.scan ? <>
+      {data.scan && !waiting(data, 'sessions') ? <>
         {data.scan.projects.length > 0 && <ProjectTable projects={data.scan.projects} />}
         {data.scan.sessions.length > 0 && <SessionTable data={data} />}
-        <FolderGroup data={data} />
       </> : <Group title={t`按项目`} loading><span /></Group>}
+      {data.scan && !waiting(data, 'folders') ? <FolderGroup data={data} /> : <Group title={t`文件`} loading><span /></Group>}
     </div>
   );
 }
@@ -129,7 +135,7 @@ function ScanBar({ data, error, onRescan }: { data: StorageReport; error: string
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span className="inline-flex items-center gap-2 text-xs text-fg-4">
         {data.scanning ? <><Spinner className="size-3.5" /><Trans>正在统计</Trans></>
-          : data.scan && <span className="tabular-nums"><Trans>统计于 {timeAgo(data.scan.at)} · 用时 {formatDuration(data.scan.durationMs)}</Trans></span>}
+          : data.scan && !data.scan.pending && <span className="tabular-nums"><Trans>统计于 {timeAgo(data.scan.at)} · 用时 {formatDuration(data.scan.durationMs)}</Trans></span>}
       </span>
       {error && <span className="inline-flex min-w-0 items-center gap-1 text-xs text-danger"><IconCircleAlert className="size-3.5 shrink-0" /><span className="truncate">{error}</span></span>}
       <Button size="xs" variant="ghost" className="ml-auto" disabled={data.scanning} onClick={onRescan}><IconRefreshCw /><Trans>重新统计</Trans></Button>
@@ -144,7 +150,7 @@ function Overview({ data }: { data: StorageReport }) {
   const total = data.database.bytes + folders.reduce((sum, folder) => sum + folder.bytes, 0);
   const segments = [
     { key: 'database', label: t`数据库`, color: DATABASE_COLOR, bytes: data.database.bytes },
-    ...ranked(folders, (folder) => folder.kind).map((folder) => ({ key: folder.kind, label: i18n._(FOLDERS[folder.kind].label), color: FOLDERS[folder.kind].color, bytes: folder.bytes })),
+    ...ranked(folders, (folder) => folder.kind).map((folder) => ({ key: folder.kind, label: labelOf(FOLDERS[folder.kind].label), color: FOLDERS[folder.kind].color, bytes: folder.bytes })),
   ].filter((segment) => segment.bytes > 0);
   return (
     <Group>
@@ -152,7 +158,7 @@ function Overview({ data }: { data: StorageReport }) {
         <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-1">
           <div className="flex min-w-0 flex-col gap-0.5">
             <p className="text-2xl font-semibold leading-7 tracking-tight text-fg tabular-nums">
-              {data.scan ? formatBytes(total) : <Skeleton className="inline-block h-6 w-24 rounded-md align-middle" />}
+              {!waiting(data, 'folders') ? formatBytes(total) : <Skeleton className="inline-block h-6 w-24 rounded-md align-middle" />}
             </p>
             <p className="truncate font-mono text-2xs text-fg-4" title={data.directory}>{data.directory}</p>
           </div>
@@ -206,9 +212,9 @@ function DatabaseGroup({ data, onChange }: { data: StorageReport; onChange: (nex
         {parts.length === 0 && <li className="flex justify-center py-4"><Spinner /></li>}
         {ranked(parts, (item) => item.part).map((item) => {
           const meta = PARTS[item.part];
-          return <ShareRow key={item.part} label={i18n._(meta.label)} note={meta.note && i18n._(meta.note)} bytes={item.bytes} of={database.bytes} color={DATABASE_COLOR} />;
+          return <ShareRow key={item.part} label={labelOf(meta.label)} note={meta.note && i18n._(meta.note)} bytes={item.bytes} of={database.bytes} color={DATABASE_COLOR} />;
         })}
-        <ShareRow label={t`可回收`} bytes={database.freeBytes} of={database.bytes} color={FREE_COLOR} />
+        <ShareRow label={t`可释放`} bytes={database.freeBytes} of={database.bytes} color={FREE_COLOR} />
       </ol>
       <CompactionRow data={data} onChange={onChange} />
     </Group>
@@ -225,38 +231,38 @@ function CompactionRow({ data, onChange }: { data: StorageReport; onChange: (nex
   const schedule = async (scheduled: boolean) => {
     if (scheduled) {
       const confirmed = await confirmDialog({
-        title: t`在服务下次启动时整理数据库？`,
-        description: database.freeBytes >= RECLAIM_WORTH_NAMING
-          ? t`预计收回 ${formatBytes(database.freeBytes)}。重建期间所有设备都连不上服务，可能持续几分钟。`
-          : t`重建期间所有设备都连不上服务，可能持续几分钟。`,
-        confirmLabel: t`安排整理`,
+        title: t`在服务下次启动时释放数据库空间？`,
+        description: t`启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。`,
+        confirmLabel: t`下次启动时释放`,
       });
       if (!confirmed) return;
     }
     setBusy(true);
     try { onChange(await api.scheduleCompaction(scheduled)); }
-    catch (reason) { toast.error(errorMessage(reason, scheduled ? t`无法安排整理` : t`无法取消整理`)); }
+    catch (reason) { toast.error(errorMessage(reason, scheduled ? t`无法安排释放空间` : t`无法取消释放空间`)); }
     finally { setBusy(false); }
   };
 
   const description = compaction.scheduledAt
-    ? t`将在服务下次启动时进行`
+    ? t`将在服务下次启动时释放`
     : short
-      ? t`可用空间不足，需要 ${formatBytes(compaction.requiredBytes)}`
-      : t`在服务下次启动时重建文件，期间服务不可用`;
+      ? t`磁盘可用空间不足，需要 ${formatBytes(compaction.requiredBytes)}`
+      : database.freeBytes >= RECLAIM_WORTH_NAMING
+        ? t`可释放 ${formatBytes(database.freeBytes)}，在服务下次启动时进行，期间服务不可用`
+        : t`在服务下次启动时进行，期间服务不可用`;
 
   return (
     <>
-      <Row title={<Trans>整理数据库</Trans>} description={description}>
+      <Row title={<Trans>释放空间</Trans>} description={description}>
         {compaction.scheduledAt
           ? <Button size="sm" variant="secondary" disabled={busy} onClick={() => void schedule(false)}><Trans>取消</Trans></Button>
-          : <Button size="sm" variant="secondary" disabled={busy || short} onClick={() => void schedule(true)}><Trans>安排整理</Trans></Button>}
+          : <Button size="sm" variant="secondary" disabled={busy || short} onClick={() => void schedule(true)}><Trans>下次启动时释放</Trans></Button>}
       </Row>
       {last && (
         <p className="py-2.5 text-2xs tabular-nums text-fg-4">
           {last.error
-            ? <span className="text-danger"><Trans>上次整理未完成（{timeAgo(last.at)}）：{last.error}</Trans></span>
-            : <Trans>上次整理 {timeAgo(last.at)} · {formatBytes(last.beforeBytes)} → {formatBytes(last.afterBytes)} · 用时 {formatDuration(last.durationMs)}</Trans>}
+            ? <span className="text-danger"><Trans>上次释放未完成（{timeAgo(last.at)}）：{last.error}</Trans></span>
+            : <Trans>上次释放 {timeAgo(last.at)} · {formatBytes(last.beforeBytes)} → {formatBytes(last.afterBytes)} · 用时 {formatDuration(last.durationMs)}</Trans>}
         </p>
       )}
     </>
@@ -267,8 +273,8 @@ const projectTotal = (item: StorageProjectUsage) => item.sessionBytes + item.che
 
 const PROJECT_PARTS = [
   { key: 'sessionBytes', label: msg`会话`, color: DATABASE_COLOR },
-  { key: 'checkpointBytes', label: msg`检查点`, color: FOLDERS.checkpoints.color },
-  { key: 'worktreeBytes', label: msg`工作树`, color: FOLDERS.worktrees.color },
+  { key: 'checkpointBytes', label: 'Checkpoints', color: FOLDERS.checkpoints.color },
+  { key: 'worktreeBytes', label: 'Worktrees', color: FOLDERS.worktrees.color },
 ] as const;
 
 function TableHead({ children }: { children: ReactNode }) {
@@ -288,7 +294,7 @@ function ProjectTable({ projects }: { projects: StorageProjectUsage[] }) {
           <TableHead>
             <th scope="col"><Trans>项目</Trans></th>
             <th scope="col" className="w-48"><span className="sr-only"><Trans>构成</Trans></span></th>
-            {PROJECT_PARTS.map((part) => <th key={part.key} scope="col" className="w-20 text-right">{i18n._(part.label)}</th>)}
+            {PROJECT_PARTS.map((part) => <th key={part.key} scope="col" className="w-20 text-right">{labelOf(part.label)}</th>)}
             <th scope="col" className="w-20 text-right"><Trans>合计</Trans></th>
           </TableHead>
           <tbody>
@@ -355,7 +361,7 @@ function FolderGroup({ data }: { data: StorageReport }) {
       <ol className="flex flex-col gap-3 py-4">
         {ranked(folders, (folder) => folder.kind).map((folder) => {
           const meta = FOLDERS[folder.kind];
-          return <ShareRow key={folder.kind} label={i18n._(meta.label)} note={meta.note && i18n._(meta.note)} bytes={folder.bytes} of={max} color={meta.color} />;
+          return <ShareRow key={folder.kind} label={labelOf(meta.label)} note={meta.note && i18n._(meta.note)} bytes={folder.bytes} of={max} color={meta.color} />;
         })}
       </ol>
     </Group>

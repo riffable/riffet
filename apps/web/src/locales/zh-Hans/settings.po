@@ -641,22 +641,18 @@ msgstr "上方的线"
 #. placeholder {2}: formatBytes(last.afterBytes)
 #. placeholder {3}: formatDuration(last.durationMs)
 #: src/app/settings/StorageSection.tsx
-msgid "上次整理 {0} · {1} → {2} · 用时 {3}"
-msgstr "上次整理 {0} · {1} → {2} · 用时 {3}"
+msgid "上次释放 {0} · {1} → {2} · 用时 {3}"
+msgstr "上次释放 {0} · {1} → {2} · 用时 {3}"
 
 #. placeholder {0}: timeAgo(last.at)
 #. placeholder {1}: last.error
 #: src/app/settings/StorageSection.tsx
-msgid "上次整理未完成（{0}）：{1}"
-msgstr "上次整理未完成（{0}）：{1}"
+msgid "上次释放未完成（{0}）：{1}"
+msgstr "上次释放未完成（{0}）：{1}"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "上游服务暂时不可用，请稍后重试"
 msgstr "上游服务暂时不可用，请稍后重试"
-
-#: src/app/settings/ViewsSection.tsx
-msgid "上移{name}"
-msgstr "上移{name}"
 
 #: src/app/design/DesignPage.tsx
 msgid "下一章"
@@ -686,9 +682,9 @@ msgstr "下层页面的位移"
 msgid "下方的点"
 msgstr "下方的点"
 
-#: src/app/settings/ViewsSection.tsx
-msgid "下移{name}"
-msgstr "下移{name}"
+#: src/app/settings/StorageSection.tsx
+msgid "下次启动时释放"
+msgstr "下次启动时释放"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "下载"
@@ -2425,10 +2421,6 @@ msgstr "只退出这个浏览器。"
 msgid "可以使用的人"
 msgstr "可以使用的人"
 
-#: src/app/settings/StorageSection.tsx
-msgid "可回收"
-msgstr "可回收"
-
 #: src/app/design/catalog.tsx
 msgid "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
 msgstr "可复用的部件，各有变体、尺寸与状态。每种组件每端一个实现。"
@@ -2449,14 +2441,18 @@ msgstr "可用"
 msgid "可用的取值"
 msgstr "可用的取值"
 
-#. placeholder {0}: formatBytes(compaction.requiredBytes)
-#: src/app/settings/StorageSection.tsx
-msgid "可用空间不足，需要 {0}"
-msgstr "可用空间不足，需要 {0}"
-
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
 msgstr "可覆盖来源凭据；已存 Key 留空保留，清除后使用来源凭据"
+
+#: src/app/settings/StorageSection.tsx
+msgid "可释放"
+msgstr "可释放"
+
+#. placeholder {0}: formatBytes(database.freeBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "可释放 {0}，在服务下次启动时进行，期间服务不可用"
+msgstr "可释放 {0}，在服务下次启动时进行，期间服务不可用"
 
 #. placeholder {0}: BASE.drawerWidth
 #: src/app/design/android/PagesChapter.tsx
@@ -2602,6 +2598,10 @@ msgstr "启动于"
 msgid "启动以来共 {0} 次"
 msgstr "启动以来共 {0} 次"
 
+#: src/app/settings/StorageSection.tsx
+msgid "启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。"
+msgstr "启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。"
+
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "启动设置"
@@ -2656,10 +2656,6 @@ msgstr "四档宽度，Return 与 Esc"
 #: src/app/design/patterns/OverlayChapter.tsx
 msgid "四档宽度按内容选择；工作区弹窗带自己的导航。"
 msgstr "四档宽度按内容选择；工作区弹窗带自己的导航。"
-
-#: src/app/settings/StorageSection.tsx
-msgid "回合检查点"
-msgstr "回合检查点"
 
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "回合状态"
@@ -2816,12 +2812,12 @@ msgid "在手机上扫码配对后出现在这里。"
 msgstr "在手机上扫码配对后出现在这里。"
 
 #: src/app/settings/StorageSection.tsx
-msgid "在服务下次启动时整理数据库？"
-msgstr "在服务下次启动时整理数据库？"
+msgid "在服务下次启动时进行，期间服务不可用"
+msgstr "在服务下次启动时进行，期间服务不可用"
 
 #: src/app/settings/StorageSection.tsx
-msgid "在服务下次启动时重建文件，期间服务不可用"
-msgstr "在服务下次启动时重建文件，期间服务不可用"
+msgid "在服务下次启动时释放数据库空间？"
+msgstr "在服务下次启动时释放数据库空间？"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "在服务器所在电脑的终端执行。"
@@ -3102,10 +3098,6 @@ msgstr "存储空间"
 msgid "它所在的会话"
 msgstr "它所在的会话"
 
-#: src/app/settings/StorageSection.tsx
-msgid "安排整理"
-msgstr "安排整理"
-
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "安装"
@@ -3321,8 +3313,8 @@ msgid "将向该进程发送 SIGTERM。{session}正在进行的任务会中断�
 msgstr "将向该进程发送 SIGTERM。{session}正在进行的任务会中断。"
 
 #: src/app/settings/StorageSection.tsx
-msgid "将在服务下次启动时进行"
-msgstr "将在服务下次启动时进行"
+msgid "将在服务下次启动时释放"
+msgstr "将在服务下次启动时释放"
 
 #: src/app/design/components/DisplayChapter.tsx
 msgid "将调用"
@@ -3474,10 +3466,6 @@ msgstr "工作台的尺寸一部分来自风格配方，一部分各风格相同
 #: src/app/design/mac/ComponentChapter.tsx
 msgid "工作台里是应用菜单，设置里是系统弹出菜单"
 msgstr "工作台里是应用菜单，设置里是系统弹出菜单"
-
-#: src/app/settings/StorageSection.tsx
-msgid "工作树"
-msgstr "工作树"
 
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
@@ -4801,10 +4789,6 @@ msgstr "整套配色决定界面颜色，选择立即生效并只保存在这台
 msgid "整理发布说明"
 msgstr "整理发布说明"
 
-#: src/app/settings/StorageSection.tsx
-msgid "整理数据库"
-msgstr "整理数据库"
-
 #: src/app/design/mac/StyleMiniature.tsx
 #: src/app/design/mac/TypeChapter.tsx
 msgid "整理超时常量"
@@ -5078,16 +5062,16 @@ msgid "无法加载模型提供商"
 msgstr "无法加载模型提供商"
 
 #: src/app/settings/StorageSection.tsx
-msgid "无法取消整理"
-msgstr "无法取消整理"
+msgid "无法取消释放空间"
+msgstr "无法取消释放空间"
 
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "无法复制链接"
 msgstr "无法复制链接"
 
 #: src/app/settings/StorageSection.tsx
-msgid "无法安排整理"
-msgstr "无法安排整理"
+msgid "无法安排释放空间"
+msgstr "无法安排释放空间"
 
 #: src/app/settings/StorageSection.tsx
 msgid "无法开始统计"
@@ -5425,6 +5409,10 @@ msgstr "服务器进程"
 msgid "服务地址"
 msgstr "服务地址"
 
+#: src/app/settings/settingsSections.ts
+msgid "服务管理"
+msgstr "服务管理"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "未命名会话"
 msgstr "未命名会话"
@@ -5741,10 +5729,6 @@ msgstr "检查器页签"
 #: src/app/settings/UpdateSection.tsx
 msgid "检查更新"
 msgstr "检查更新"
-
-#: src/app/settings/StorageSection.tsx
-msgid "检查点"
-msgstr "检查点"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "检查结果"
@@ -6574,6 +6558,11 @@ msgstr "确认还是撤销"
 #: src/app/settings/StorageSection.tsx
 msgid "磁盘可用 {0} / {1}"
 msgstr "磁盘可用 {0} / {1}"
+
+#. placeholder {0}: formatBytes(compaction.requiredBytes)
+#: src/app/settings/StorageSection.tsx
+msgid "磁盘可用空间不足，需要 {0}"
+msgstr "磁盘可用空间不足，需要 {0}"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "示例会话"
@@ -8362,6 +8351,10 @@ msgstr "配色来源：{credits}"
 msgid "配色模式"
 msgstr "配色模式"
 
+#: src/app/settings/StorageSection.tsx
+msgid "释放空间"
+msgstr "释放空间"
+
 #: src/app/settings/AgentSettingsSection.tsx
 msgid "重启会话后生效"
 msgstr "重启会话后生效"
@@ -8842,11 +8835,6 @@ msgstr "预测式返回时页面缩到 {0} 并带圆角"
 msgid "预览"
 msgstr "预览"
 
-#. placeholder {0}: formatBytes(database.freeBytes)
-#: src/app/settings/StorageSection.tsx
-msgid "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
-msgstr "预计收回 {0}。重建期间所有设备都连不上服务，可能持续几分钟。"
-
 #: src/app/settings/PreferencesSections.tsx
 msgid "预设"
 msgstr "预设"
@@ -9029,3 +9017,12 @@ msgstr "默认模型"
 #: src/app/design/android/notes.ts
 msgid "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
 msgstr "默认风格，其余风格只改与它不同的字段。Material 的控件结构、ripple 与弹窗排列。"
+
+
+#: src/app/settings/ViewsSection.tsx
+msgid "上移{name}"
+msgstr "上移{name}"
+
+#: src/app/settings/ViewsSection.tsx
+msgid "下移{name}"
+msgstr "下移{name}"

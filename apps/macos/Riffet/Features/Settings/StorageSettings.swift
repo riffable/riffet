@@ -47,15 +47,11 @@ struct StorageSettings: View {
                 await load()
             }
         }
-        .confirmationDialog("在服务下次启动时整理数据库？", isPresented: $confirmCompaction, titleVisibility: .visible) {
-            Button("安排整理") { Task { await schedule(true) } }
+        .confirmationDialog("在服务下次启动时释放数据库空间？", isPresented: $confirmCompaction, titleVisibility: .visible) {
+            Button("下次启动时释放") { Task { await schedule(true) } }
             Button("取消", role: .cancel) {}
         } message: {
-            if let free = report?.database.freeBytes, free >= Self.reclaimWorthNaming {
-                Text("预计收回 \(bytes(free))。重建期间所有设备都连不上服务，可能持续几分钟。")
-            } else {
-                Text("重建期间所有设备都连不上服务，可能持续几分钟。")
-            }
+            Text("启动前先重建数据库文件，期间所有设备都连不上服务，可能持续几分钟。")
         }
     }
 
@@ -68,12 +64,18 @@ struct StorageSettings: View {
                 overview(report)
             }
             databaseBlock(report)
-            if let scan = report.scan {
+            if let scan = report.scan, !waiting(report, "sessions") {
                 if !scan.projects.isEmpty { projectsBlock(scan.projects) }
                 if !scan.sessions.isEmpty { sessionsBlock(scan.sessions) }
-                foldersBlock(scan.folders)
             } else {
                 SettingsBlock("按项目") {
+                    Spinner(size: .small).frame(maxWidth: .infinity)
+                }
+            }
+            if let scan = report.scan, !waiting(report, "folders") {
+                foldersBlock(scan.folders)
+            } else {
+                SettingsBlock("文件") {
                     Spinner(size: .small).frame(maxWidth: .infinity)
                 }
             }
@@ -91,7 +93,7 @@ struct StorageSettings: View {
                     Text("正在统计")
                         .font(.riffet(size: S(RiffetTextSize.xs.size)))
                         .foregroundStyle(palette.fg3)
-                } else if let scan = report.scan {
+                } else if let scan = report.scan, scan.pending.isEmpty {
                     Text("统计于 \(ServerTime.relative(scan.at) ?? statsUnavailable) · 用时 \(formatDuration(Double(scan.durationMs)))")
                         .font(.riffet(size: S(RiffetTextSize.xs.size)))
                         .foregroundStyle(palette.fg4)
@@ -116,7 +118,7 @@ struct StorageSettings: View {
         return VStack(alignment: .leading, spacing: Space.md) {
             HStack(alignment: .lastTextBaseline, spacing: Space.md) {
                 VStack(alignment: .leading, spacing: Space.xxs) {
-                    Text(report.scan == nil ? statsUnavailable : bytes(total))
+                    Text(waiting(report, "folders") ? statsUnavailable : bytes(total))
                         .font(.riffet(size: S(RiffetTextSize.x2xl.size), weight: .medium))
                         .foregroundStyle(palette.fg)
                         .monospacedDigit()
@@ -153,7 +155,7 @@ struct StorageSettings: View {
                 ForEach(ranked(parts, other: { $0.part == "other" }), id: \.part) { item in
                     ShareRow(label: partLabel(item.part), note: partNote(item.part), bytes: item.bytes, of: database.bytes, color: palette.chart1)
                 }
-                ShareRow(label: String(localized: "可回收"), note: nil, bytes: database.freeBytes, of: database.bytes, color: palette.lineStrong)
+                ShareRow(label: String(localized: "可释放"), note: nil, bytes: database.freeBytes, of: database.bytes, color: palette.lineStrong)
             }
             .padding(.vertical, Space.xs)
             compactionRow(report)
@@ -166,7 +168,7 @@ struct StorageSettings: View {
         let short = report.disk.freeBytes < compaction.requiredBytes
         let server = model.server
         let hosted = model.workbench?.local == true && server.state.running != nil
-        SettingsRow("整理数据库", detail: compactionDetail(compaction, short: short)) {
+        SettingsRow("释放空间", detail: compactionDetail(report, short: short)) {
             HStack(spacing: Space.sm) {
                 if busy || server.restartBlockers != nil { Spinner(size: .small) }
                 if compaction.scheduledAt != nil {
@@ -177,7 +179,7 @@ struct StorageSettings: View {
                     SettingsActionButton("取消") { Task { await schedule(false) } }
                         .disabled(busy)
                 } else {
-                    SettingsActionButton("安排整理") { confirmCompaction = true }
+                    SettingsActionButton("下次启动时释放") { confirmCompaction = true }
                         .disabled(busy || short)
                 }
             }
@@ -206,10 +208,10 @@ struct StorageSettings: View {
         if let last = compaction.last {
             Group {
                 if let failure = last.error {
-                    Text("上次整理未完成（\(ServerTime.relative(last.at) ?? statsUnavailable)）：\(failure)")
+                    Text("上次释放未完成（\(ServerTime.relative(last.at) ?? statsUnavailable)）：\(failure)")
                         .foregroundStyle(palette.danger)
                 } else {
-                    Text("上次整理 \(ServerTime.relative(last.at) ?? statsUnavailable) · \(bytes(last.beforeBytes)) → \(last.afterBytes.map { bytes($0.int64Value) } ?? statsUnavailable) · 用时 \(formatDuration(Double(last.durationMs)))")
+                    Text("上次释放 \(ServerTime.relative(last.at) ?? statsUnavailable) · \(bytes(last.beforeBytes)) → \(last.afterBytes.map { bytes($0.int64Value) } ?? statsUnavailable) · 用时 \(formatDuration(Double(last.durationMs)))")
                         .foregroundStyle(palette.fg4)
                 }
             }
@@ -219,10 +221,20 @@ struct StorageSettings: View {
         SettingsErrorText(message: actionError)
     }
 
-    private func compactionDetail(_ compaction: StorageCompaction, short: Bool) -> String {
-        if compaction.scheduledAt != nil { return String(localized: "将在服务下次启动时进行") }
-        if short { return String(localized: "可用空间不足，需要 \(bytes(compaction.requiredBytes))") }
-        return String(localized: "在服务下次启动时重建文件，期间服务不可用")
+    private func compactionDetail(_ report: StorageReport, short: Bool) -> String {
+        let compaction = report.compaction
+        if compaction.scheduledAt != nil { return String(localized: "将在服务下次启动时释放") }
+        if short { return String(localized: "磁盘可用空间不足，需要 \(bytes(compaction.requiredBytes))") }
+        if report.database.freeBytes >= Self.reclaimWorthNaming {
+            return String(localized: "可释放 \(bytes(report.database.freeBytes))，在服务下次启动时进行，期间服务不可用")
+        }
+        return String(localized: "在服务下次启动时进行，期间服务不可用")
+    }
+
+    /// A step a first scan has not finished yet; a finished scan has none.
+    private func waiting(_ report: StorageReport, _ step: String) -> Bool {
+        guard let scan = report.scan else { return true }
+        return scan.pending.contains(step)
     }
 
     // MARK: - Projects, sessions, folders
@@ -235,8 +247,9 @@ struct StorageSettings: View {
                     Text("项目").gridColumnAlignment(.leading)
                     Color.clear.frame(width: Space.xxl * 4, height: 0)
                     Text("会话")
-                    Text("检查点")
-                    Text("工作树")
+                    // Kept in English in every language, as in the Git panel.
+                    Text(verbatim: "Checkpoints")
+                    Text(verbatim: "Worktrees")
                     Text("合计")
                 }
                 .font(.riffet(size: S(RiffetTextSize.x2xs.size)))
@@ -353,8 +366,8 @@ struct StorageSettings: View {
 
     private func folderLabel(_ kind: String) -> String {
         switch kind {
-        case "checkpoints": String(localized: "回合检查点")
-        case "worktrees": String(localized: "工作树")
+        case "checkpoints": "Checkpoints"
+        case "worktrees": "Worktrees"
         case "attachments": String(localized: "附件")
         case "tasks": String(localized: "后台任务")
         case "plugins": String(localized: "插件")

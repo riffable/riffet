@@ -41,6 +41,8 @@ data class StorageFolderUsage(val kind: String, val bytes: Long, val files: Long
 data class StorageScan(
     val at: String,
     val durationMs: Long,
+    /** Only while a first scan runs: the steps (`folders`, `sessions`, `parts`) it has not finished. */
+    val pending: List<String> = emptyList(),
     val parts: List<StoragePartUsage> = emptyList(),
     val folders: List<StorageFolderUsage> = emptyList(),
     val projects: List<StorageProjectUsage> = emptyList(),
