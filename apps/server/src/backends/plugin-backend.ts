@@ -184,9 +184,10 @@ function revocable<T extends object>(target: T, revoked: () => boolean, label: s
  * does not import `shared/`. Its diffs are plain records here, the plugin's own shape.
  */
 export interface WorkspaceObserver {
-  begin(key: string, cwd: string): Promise<void>;
+  begin(key: string, cwd: string, command?: string): Promise<void>;
   end(key: string): Promise<readonly Record<string, unknown>[] | undefined>;
   discard(key: string): void;
+  noteEdit(path: string): void;
   record(scope: string, key: string, diffs: readonly Record<string, unknown>[]): void;
   changes(scope: string, key: string): readonly Record<string, unknown>[] | undefined;
 }
@@ -195,9 +196,10 @@ export interface WorkspaceObserver {
 function workspaceChangesOf(observer: WorkspaceObserver, own: (sessionId: string) => unknown): NonNullable<AgentHost['workspaceChanges']> {
   const scoped = (sessionId: string, key: string) => `${sessionId}\0${key}`;
   return {
-    begin: async (id, key, cwd) => { own(id); await observer.begin(scoped(id, key), cwd); },
+    begin: async (id, key, cwd, command) => { own(id); await observer.begin(scoped(id, key), cwd, command); },
     end: async (id, key) => { own(id); return observer.end(scoped(id, key)); },
     discard: (id, key) => { own(id); observer.discard(scoped(id, key)); },
+    noteEdit: (id, path) => { own(id); observer.noteEdit(path); },
     record: (id, callId, diffs) => { own(id); observer.record(id, callId, diffs); },
     changes: (id, callId) => { own(id); return observer.changes(id, callId); },
   };

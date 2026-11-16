@@ -50,15 +50,28 @@ describe('WorkspaceObserver', () => {
 
   it('splits changes between overlapping commands, ending in either order, without losing or repeating any', async () => {
     const observer = new WorkspaceObserver(state);
-    await observer.begin('outer', project);
+    await observer.begin('outer', project, 'pnpm gen');
     await writeFile(join(project, 'one.txt'), '1\n');
-    await observer.begin('inner', project);
+    await observer.begin('inner', project, 'touch two.txt');
     await writeFile(join(project, 'two.txt'), '2\n');
     const inner = await observer.end('inner');
     await writeFile(join(project, 'three.txt'), '3\n');
     const outer = await observer.end('outer');
     expect(inner?.map(diff => diff.path)).toEqual([join(project, 'two.txt')]);
     expect(outer?.map(diff => diff.path)).toEqual([join(project, 'one.txt'), join(project, 'three.txt')]);
+  });
+
+  it('gives a file changed beside several commands to the one that names it, and to none when none does', async () => {
+    const observer = new WorkspaceObserver(state);
+    await observer.begin('writer', project, "python3 - <<'EOF'\nopen('docs/plan.md','w').write('x')\nEOF");
+    await observer.begin('other', project, 'pnpm build');
+    execFileSync('mkdir', ['-p', join(project, 'docs')]);
+    await writeFile(join(project, 'docs', 'plan.md'), 'plan\n');
+    await writeFile(join(project, 'stray.txt'), 'stray\n');
+    // The command that names nothing ends first: it takes neither file, and the one it does not name waits for its writer.
+    expect(await observer.end('other')).toEqual([]);
+    await writeFile(join(project, 'late.txt'), 'late\n');
+    expect((await observer.end('writer'))?.map(diff => diff.path)).toEqual([join(project, 'docs', 'plan.md'), join(project, 'late.txt')]);
   });
 
   it('observes nothing outside a git working tree', async () => {
@@ -75,11 +88,13 @@ describe('readsOnly', () => {
       'cd apps/web && git -C . --no-pager log --oneline -5 2>/dev/null || true',
       "sed -n '1,40p' src/a.ts", 'rg -n "foo|bar" src 2>&1 | head', 'find . -name "*.ts" | wc -l',
       "GIT_PAGER=cat git show HEAD:README.md | awk '{print $1}'",
+      'ps aux | grep -E "rm -rf|agent" | grep -v grep && ls -la ~/.x 2>/dev/null || echo "gone"', 'launchctl list | grep x', 'top -l 1 | head',
     ];
     const writes = [
       'git diff > out.patch', 'sed -i "" s/a/b/ f', 'sed "s/a/b/w out" f', 'cat a | tee b', 'echo $(touch x)', 'echo `touch x`',
       'git commit -m x', 'git diff --output=x', 'find . -delete', 'sort -o f f', 'uniq in out', 'npm test',
       `awk '{ print > "f" }' a`, 'cat <<EOF > f\nx\nEOF', 'ls &', 'ls; rm -rf x', 'bash -c "ls"', '(ls)', 'echo "x', 'rg --pre ./x foo', 'X=1 Y=2',
+      'top', 'sysctl -w a=1', 'launchctl unload x.plist',
     ];
     expect(reads.filter(command => !readsOnly(command))).toEqual([]);
     expect(writes.filter(command => readsOnly(command))).toEqual([]);

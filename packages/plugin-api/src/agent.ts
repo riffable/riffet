@@ -920,12 +920,17 @@ export interface AgentHost {
    * file edits made by a command. Absent when the host keeps no state directory to snapshot into.
    */
   workspaceChanges?: {
-    /** Snapshots the working tree `cwd` belongs to before command `key` runs; resolves once taken or given up on (about 1.5s at most), so call it before the command is allowed to run. */
-    begin(sessionId: string, key: string, cwd: string): Promise<void>;
+    /**
+     * Snapshots the working tree `cwd` belongs to before command `key` runs; resolves once taken or given up on (about 1.5s at most), so call it before the command is allowed to run.
+     * With the command's text, a command that only reads is not observed, and a file another command changes meanwhile goes to the one that names it.
+     */
+    begin(sessionId: string, key: string, cwd: string, command?: string): Promise<void>;
     /** Compares the working tree with the snapshot of `key` and releases it; `undefined` when the command was not observed. Always call it once after `begin`. */
     end(sessionId: string, key: string): Promise<readonly Record<string, unknown>[] | undefined>;
     /** Releases the snapshot of a command that never ran. */
     discard(sessionId: string, key: string): void;
+    /** An edit tool is changing or changed `path` (absolute): commands running meanwhile, in any conversation, leave the file to it. Call it as the edit starts and as it ends. */
+    noteEdit(sessionId: string, path: string): void;
     /** Keeps `diffs` as what the call `callId` of the session changed; the transcript mapping reads them back with `changes`. */
     record(sessionId: string, callId: string, diffs: readonly Record<string, unknown>[]): void;
     /** What `record` kept; synchronous, so a transcript read can replay it. */

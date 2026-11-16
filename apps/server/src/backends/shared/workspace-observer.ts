@@ -1,8 +1,8 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, closeSync, copyFileSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { exec, ExecError } from '../../exec.js';
-import { splitUnifiedDiff } from './unified-diff.js';
+import { splitUnifiedDiff, type DiffHunk } from './unified-diff.js';
 
 /*
  * What a shell command changed in the working tree, for a tool that reports no edits of its own.
@@ -10,14 +10,17 @@ import { splitUnifiedDiff } from './unified-diff.js';
  * A driver brackets one command between `begin` and `end` (Claude's PreToolUse and PostToolUse hooks);
  * each takes a snapshot of the repository the command runs in, and `end` returns the difference as
  * the `diff` blocks an edit tool's call carries, marked `observed`. The difference is the whole
- * working tree's, so a write another process makes during the command is counted too; keeping the
- * window to one command keeps that rare, and a command that only reads (`readsOnly`) opens none. Files
- * an edit tool is changing or changed meanwhile (`noteEdit`), in any conversation, are left to that tool.
+ * working tree's, so it can hold writes of other processes; a command that only reads (`readsOnly`)
+ * opens no window, and files an edit tool is changing or changed meanwhile (`noteEdit`), in any
+ * conversation, are left to that tool.
  *
- * Windows of one working tree overlap when commands run in parallel. The snapshots, taken in order,
- * cut time into intervals, and each interval is reported once: by the first window that ends after
- * it, among the windows open across it. So nothing is counted twice, and nothing is lost when windows
- * end in a different order than they began.
+ * Windows of one working tree overlap when commands run in parallel, in one conversation or several.
+ * The snapshots, taken in order, cut time into intervals; the first window to end after an interval
+ * settles it for every window open across it, file by file (`attribute`): a file goes to the only
+ * window open across it, or else to the one window whose command names it, and to none when that does
+ * not single one out. A file given to another window is held for that window's own end. So nothing is
+ * counted twice, a short command does not take what a longer one beside it wrote, and a write no
+ * command can be told apart for is reported nowhere rather than somewhere wrong.
  *
  * Snapshots live in a shadow repository per working tree under the server's state directory: its own
  * index and objects, the project's objects borrowed read-only through `objects/info/alternates`, and
@@ -68,8 +71,10 @@ interface Repo {
   seq: number;
   /** Snapshots an open window may still diff from. */
   trees: Map<number, string>;
-  /** Intervals an earlier end already reported. */
-  claimed: Set<number>;
+  /** When each of those snapshots began: an edit noted after it is in the intervals that follow. */
+  takenAt: Map<number, number>;
+  /** Intervals an earlier end already settled. */
+  settled: Set<number>;
   open: Map<string, Window>;
   tail: Promise<unknown>;
   ready?: Promise<boolean>;
@@ -80,14 +85,28 @@ interface Repo {
   reseeded: boolean;
 }
 
-/** `shown` is the working tree as the command's directory spells it; git reports it with links resolved. */
-interface Window { key: string; repo: Repo; seq: number; shown: string; startedAt: number }
+/**
+ * `shown` is the working tree as the command's directory spells it; git reports it with links resolved. `command` is the
+ * command's text, whose relative paths start at `cwd`; without it (a driver that does not pass it) the window can still be
+ * the only one open across a change, but never the one that names a file.
+ */
+interface Window {
+  key: string; repo: Repo; seq: number; shown: string; cwd: string; command?: string; startedAt: number;
+  /** What an earlier end of another window settled as this one's, by interval, for this window's own end. */
+  held: Array<{ interval: number; diffs: ObservedDiff[] }>;
+}
+
+/** A changed file of one interval, as git names it under the working tree. */
+type Changed = { path: string; hunks: DiffHunk[] };
 
 /** Programs that write nothing in the working tree, given none of the arguments `readerArgsWrite` refuses. */
 const READERS = new Set([
   'cat', 'head', 'tail', 'ls', 'pwd', 'wc', 'grep', 'egrep', 'fgrep', 'rg', 'cut', 'tr', 'nl', 'file', 'stat', 'du',
   'which', 'type', 'echo', 'printf', 'true', 'test', 'basename', 'dirname', 'realpath', 'readlink', 'jq', 'diff',
-  'cmp', 'comm', 'cd', 'sort', 'uniq', 'sed', 'awk', 'find', 'git', 'od', 'shasum', 'md5',
+  'cmp', 'comm', 'cd', 'sort', 'uniq', 'sed', 'awk', 'find', 'git', 'od', 'shasum', 'md5', 'sha256sum', 'md5sum',
+  // Looking at the machine rather than the files.
+  'ps', 'pgrep', 'lsof', 'df', 'vm_stat', 'uptime', 'uname', 'sw_vers', 'id', 'whoami', 'groups', 'hostname', 'date',
+  'printenv', 'sleep', 'top', 'sysctl', 'launchctl',
 ]);
 const GIT_READERS = new Set([
   'diff', 'status', 'log', 'show', 'blame', 'grep', 'rev-parse', 'rev-list', 'ls-files', 'ls-tree', 'cat-file',
@@ -103,6 +122,9 @@ function readerArgsWrite(program: string, args: string[]): boolean {
     case 'sort': return args.some(arg => /^(-[a-zA-Z]*o|--output)/.test(arg));
     case 'uniq': return operands.length > 1;
     case 'rg': return args.some(arg => arg.startsWith('--pre'));
+    case 'top': return !args.some(arg => /^-[a-zA-Z]*l/.test(arg));
+    case 'sysctl': return args.some(arg => arg.includes('=') || /^-[a-zA-Z]*w/.test(arg));
+    case 'launchctl': return !['list', 'print', 'print-disabled', 'blame', 'version', 'help'].includes(operands[0] ?? '');
     case 'find': return args.some(arg => /^-(exec|execdir|ok|okdir|delete|fprint0?|fprintf|fls)$/.test(arg));
     case 'git': {
       let index = 0;
@@ -167,6 +189,42 @@ export function readsOnly(command: string): boolean {
   });
 }
 
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** Whether `text` names `name` as a whole path: not as part of a longer word, nor, with `asDir`, of a longer path. */
+function names(text: string, name: string, asDir = false): boolean {
+  if (!name || name === '.' || name.startsWith('..')) return false;
+  return new RegExp(`(?:^|[^\\w.\\-${asDir ? '/' : ''}])${escapeRegExp(name)}(?![\\w.\\-/])`).test(text);
+}
+
+/**
+ * The window an interval's change to `path` (as git names it under the working tree) belongs to, among the windows open
+ * across the interval. The only one, or the one whose command names the file: by its path (from the working tree, from
+ * the command's directory, or absolute), else by its file name, else by a directory it is in. Two windows naming it
+ * alike, or none, leave it to nobody.
+ */
+function attribute(path: string, windows: readonly Window[]): Window | undefined {
+  if (windows.length === 1) return windows[0];
+  const forms = (window: Window, relativePath: string) => {
+    const absolute = join(window.shown, relativePath);
+    return [relativePath, absolute, relative(window.cwd, absolute)];
+  };
+  const parents: string[] = [];
+  for (let dir = dirname(path); dir !== '.' && dir !== '/' && dir !== ''; dir = dirname(dir)) parents.push(dir);
+  const tiers: Array<(window: Window, command: string) => boolean> = [
+    (window, command) => forms(window, path).some(form => names(command, form)),
+    (_window, command) => names(command, basename(path)),
+    (window, command) => parents.some(dir => forms(window, dir).some(form => names(command, form, true))),
+  ];
+  for (const tier of tiers) {
+    const naming = windows.filter(window => window.command !== undefined && tier(window, window.command));
+    if (naming.length) return naming.length === 1 ? naming[0] : undefined;
+  }
+  return undefined;
+}
+
+const sameWindows = (a: readonly Window[], b: readonly Window[]) => a.length === b.length && a.every((window, index) => window === b[index]);
+
 const deadline = <T>(task: Promise<T>, ms: number): Promise<T | undefined> => new Promise(resolve => {
   const timer = setTimeout(() => resolve(undefined), ms);
   timer.unref?.();
@@ -228,7 +286,7 @@ export class WorkspaceObserver {
         if (gaveUp) return undefined;
         const tree = await this.snapshot(repo);
         if (!tree || gaveUp) return undefined;
-        const taken: Window = { key, repo, seq: repo.seq, shown: spelled(cwd, repo.root), startedAt: Date.now() };
+        const taken: Window = { key, repo, seq: repo.seq, shown: spelled(cwd, repo.root), cwd, ...(command !== undefined ? { command } : {}), startedAt: Date.now(), held: [] };
         repo.open.set(key, taken);
         return taken;
       });
@@ -238,7 +296,7 @@ export class WorkspaceObserver {
     await window;
   }
 
-  /** What changed in the working tree since `begin(key)`; undefined when the command was not observed. */
+  /** What changed in the working tree since `begin(key)` that is this command's; undefined when the command was not observed. */
   async end(key: string): Promise<ObservedDiff[] | undefined> {
     const pending = this.windows.get(key);
     if (!pending) return undefined;
@@ -247,27 +305,37 @@ export class WorkspaceObserver {
     if (!window || window.repo.open.get(key) !== window) return undefined;
     const { repo } = window;
     try {
-      const diffs = await deadline(this.queue(repo, async () => {
+      const found = await deadline(this.queue(repo, async () => {
+        const ordered = (entries: Window['held']) => entries.sort((a, b) => a.interval - b.interval).flatMap(entry => entry.diffs);
         const after = await this.snapshot(repo);
-        if (!after) return undefined;
-        // The intervals of this window no earlier end reported, as runs of adjacent ones.
-        const runs: Array<[number, number]> = [];
+        // What other ends settled as this command's stands; the rest is left to the windows still open across it.
+        if (!after) return window.held.length ? ordered([...window.held]) : undefined;
+        // The intervals of this window no earlier end settled, as runs of adjacent ones with the same windows open across them.
+        const runs: Array<{ from: number; to: number; open: Window[] }> = [];
         for (let interval = window.seq; interval < repo.seq; interval += 1) {
-          if (repo.claimed.has(interval)) continue;
-          repo.claimed.add(interval);
+          if (repo.settled.has(interval)) continue;
+          repo.settled.add(interval);
+          const open = [...repo.open.values()].filter(candidate => candidate.seq <= interval);
           const run = runs.at(-1);
-          if (run && run[1] === interval) run[1] = interval + 1;
-          else runs.push([interval, interval + 1]);
+          if (run && run.to === interval && sameWindows(run.open, open)) run.to = interval + 1;
+          else runs.push({ from: interval, to: interval + 1, open });
         }
-        const found: ObservedDiff[] = [];
-        for (const [from, to] of runs) {
+        const own = [...window.held];
+        for (const { from, to, open } of runs) {
           const base = repo.trees.get(from), head = repo.trees.get(to);
           if (!base || !head || base === head) continue;
-          found.push(...await this.diff(repo, base, head, window.shown) ?? []);
+          const since = repo.takenAt.get(from) ?? window.startedAt;
+          for (const { path, hunks } of await this.diff(repo, base, head) ?? []) {
+            if ([repo.root, ...open.map(candidate => candidate.shown)].some(root => (this.edits.get(join(root, path)) ?? 0) >= since)) continue;
+            const owner = attribute(path, open);
+            if (!owner) continue;
+            const diffs = hunks.map(hunk => ({ type: 'diff' as const, path: join(owner.shown, path), ...hunk, observed: true as const }));
+            (owner === window ? own : owner.held).push({ interval: from, diffs });
+          }
         }
-        return found;
+        return ordered(own);
       }), 2 * SNAPSHOT_MS);
-      return diffs?.filter(diff => (this.edits.get(diff.path) ?? 0) < window.startedAt);
+      return found;
     } finally {
       this.close(window);
     }
@@ -335,8 +403,8 @@ export class WorkspaceObserver {
     const { repo } = window;
     if (repo.open.get(window.key) === window) repo.open.delete(window.key);
     const oldest = Math.min(repo.seq, ...[...repo.open.values()].map(open => open.seq));
-    for (const seq of repo.trees.keys()) if (seq < oldest) repo.trees.delete(seq);
-    for (const interval of repo.claimed) if (interval < oldest) repo.claimed.delete(interval);
+    for (const seq of repo.trees.keys()) if (seq < oldest) { repo.trees.delete(seq); repo.takenAt.delete(seq); }
+    for (const interval of repo.settled) if (interval < oldest) repo.settled.delete(interval);
     if (!repo.open.size && repo.sincePrune >= PRUNE_EVERY) void this.queue(repo, () => this.prune(repo));
   }
 
@@ -368,7 +436,7 @@ export class WorkspaceObserver {
     let repo = this.repos.get(found.root);
     if (!repo) {
       repo = {
-        root: found.root, dir: join(this.dir, 'repos', hash(found.root)), seq: 0, trees: new Map(), claimed: new Set(), open: new Map(),
+        root: found.root, dir: join(this.dir, 'repos', hash(found.root)), seq: 0, trees: new Map(), takenAt: new Map(), settled: new Set(), open: new Map(),
         tail: Promise.resolve(), sincePrune: 0, timeouts: 0, pausedUntil: 0, reseeded: false,
       };
       this.repos.set(found.root, repo);
@@ -416,12 +484,14 @@ export class WorkspaceObserver {
     // Only this queue writes the shadow index; a lock is what a killed snapshot left.
     rmSync(join(repo.dir, 'index.lock'), { force: true });
     repo.sincePrune += 1;
+    const startedAt = Date.now();
     try {
       await this.git(repo, ['-C', repo.root, 'add', '-A', '--ignore-errors', '--', '.'], { timeout });
       const tree = (await this.git(repo, ['write-tree'], { timeout })).trim();
       if (!tree) return undefined;
       repo.seq += 1;
       repo.trees.set(repo.seq, tree);
+      repo.takenAt.set(repo.seq, startedAt);
       repo.timeouts = 0;
       return tree;
     } catch (error) {
@@ -438,7 +508,7 @@ export class WorkspaceObserver {
     }
   }
 
-  private async diff(repo: Repo, base: string, after: string, shown: string): Promise<ObservedDiff[] | undefined> {
+  private async diff(repo: Repo, base: string, after: string): Promise<Changed[] | undefined> {
     try {
       const fields = (await this.git(repo, ['diff-tree', '-r', '-z', '--numstat', '--no-renames', base, after])).split('\0');
       // `added\tremoved\tpath`, `-\t-\tpath` for a binary file, which has no lines to show.
@@ -450,19 +520,17 @@ export class WorkspaceObserver {
       const patch = await this.git(repo, ['--literal-pathspecs', 'diff-tree', '-r', '-p', '-U3', '--no-renames', '--no-color', '--no-ext-diff', base, after, '--', ...paths], { maxBuffer: 16 * 1024 * 1024 });
       // A section is named by its header: a file that became a link has two, and one whose name git quotes is skipped.
       const named = new Map(paths.map(path => [`diff --git a/${path} b/${path}`, path]));
-      const diffs: ObservedDiff[] = [];
+      const changed: Changed[] = [];
       let budget = MAX_PATCH;
       for (const section of patch.split(/^(?=diff --git )/m)) {
         const path = named.get(section.slice(0, section.indexOf('\n')));
         if (!path || budget <= 0) continue;
         const text = section.length > Math.min(MAX_FILE_PATCH, budget) ? section.slice(0, section.lastIndexOf('\n', Math.min(MAX_FILE_PATCH, budget))) : section;
         budget -= text.length;
-        for (const hunk of splitUnifiedDiff(text)) {
-          if (!hunk.oldText && !hunk.newText) continue;
-          diffs.push({ type: 'diff', path: join(shown, path), ...hunk, observed: true });
-        }
+        const hunks = splitUnifiedDiff(text).filter(hunk => hunk.oldText || hunk.newText);
+        if (hunks.length) changed.push({ path, hunks });
       }
-      return diffs;
+      return changed;
     } catch {
       return undefined;
     }
@@ -473,7 +541,8 @@ export class WorkspaceObserver {
     try {
       await this.git(repo, ['prune', '--expire=now'], { timeout: PRUNE_MS });
       repo.trees.clear();
-      repo.claimed.clear();
+      repo.takenAt.clear();
+      repo.settled.clear();
       repo.sincePrune = 0;
     } catch { /* tried again after the next batch */ }
   }

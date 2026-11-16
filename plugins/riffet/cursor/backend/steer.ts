@@ -1,3 +1,4 @@
+import { isAbsolute, resolve } from 'node:path';
 import type { NativeStatus, NativeTurnTarget, NativeWorkbenchEvent, Run } from '@contracts';
 import { AppError, DeferredSteerInputs, NativeHookServer, type SteerBinding, type SteerHost } from '@riffet/plugin-api/kit';
 import {
@@ -10,6 +11,9 @@ import { chatStorePath } from '../native/chat-store.js';
 import { resolveShellCall } from './shell-observation.js';
 import { probeCursorHookSteer, writeCursorHookPlugin } from './launch-plugin.js';
 import { CursorTranscriptSource } from './transcript-source.js';
+
+/** The tools whose hooks name a file they change: the CLI reports every edit, a replacement included, as `Write`. */
+const EDIT_TOOLS = new Set(['Write', 'Delete', 'StrReplace', 'Edit', 'MultiEdit']);
 
 interface ActiveGeneration extends NativeTurnTarget { terminalId: string; epoch: number }
 interface Entry {
@@ -195,7 +199,7 @@ export class CursorSteerBridge {
     const entry = this.bind(session.id);
     const target = { nativeSessionId, turnId };
     // Outside the session lock: the snapshot can take a second or two, and the command waits for this hook but nothing else should.
-    await this.observeShell(session, payload);
+    await this.observeWorkspace(session, payload);
     return this.port.withSessionLock(session.id, async () => {
       const current = this.port.getSession(session.id);
       if (signal.aborted || current.archivedAt || current.nativeSessionId !== nativeSessionId) return {};
@@ -250,23 +254,30 @@ export class CursorSteerBridge {
    * What a shell command changes in the working tree is not in the chat store, so it is seen from outside: a snapshot
    * before the command (`preToolUse` holds the command until it returns) and a comparison after it. Kept under the
    * call's store id, which only the store knows (`resolveShellCall`), so that every import of the transcript finds it.
+   * A file an edit tool changes (the hooks name every edit `Write`) is noted as it starts and ends, so a command running
+   * beside it, in this conversation or another, leaves the file to the edit.
    * Never fails the hook; a command that cannot be told from another running the same text is left unobserved.
    */
-  private async observeShell(session: AgentSessionView, payload: Record<string, unknown>): Promise<void> {
+  private async observeWorkspace(session: AgentSessionView, payload: Record<string, unknown>): Promise<void> {
     const changes = this.host.workspaceChanges;
     const event = payload.hook_event_name;
     const hookId = payload.tool_use_id;
-    const input = payload.tool_input as { command?: unknown; block_until_ms?: unknown; cwd?: unknown } | undefined;
-    if (!changes || payload.tool_name !== 'Shell' || typeof hookId !== 'string' || !hookId) return;
-    if (event !== 'preToolUse' && event !== 'postToolUse' && event !== 'postToolUseFailure') return;
+    const input = payload.tool_input as { command?: unknown; block_until_ms?: unknown; cwd?: unknown; file_path?: unknown; path?: unknown } | undefined;
+    if (!changes || (event !== 'preToolUse' && event !== 'postToolUse' && event !== 'postToolUseFailure')) return;
+    const roots = payload.workspace_roots;
+    const cwd = () => [input?.cwd, payload.cwd, Array.isArray(roots) ? roots[0] : undefined].find((value): value is string => typeof value === 'string' && value !== '')
+      ?? this.port.getProject(session.projectId).cwd;
     try {
+      if (typeof payload.tool_name === 'string' && EDIT_TOOLS.has(payload.tool_name)) {
+        const path = [input?.file_path, input?.path].find((value): value is string => typeof value === 'string' && value !== '');
+        if (path) changes.noteEdit(session.id, isAbsolute(path) ? path : resolve(cwd(), path));
+        return;
+      }
+      if (payload.tool_name !== 'Shell' || typeof hookId !== 'string' || !hookId) return;
       if (event === 'preToolUse') {
         // `block_until_ms: 0` backgrounds the command: it outlives its hooks, so there is no end to compare at.
         if (typeof input?.command !== 'string' || input.block_until_ms === 0) return;
-        const roots = payload.workspace_roots;
-        const cwd = [input.cwd, payload.cwd, Array.isArray(roots) ? roots[0] : undefined].find((value): value is string => typeof value === 'string' && value !== '')
-          ?? this.port.getProject(session.projectId).cwd;
-        await changes.begin(session.id, hookId, cwd);
+        await changes.begin(session.id, hookId, cwd(), input.command);
         return;
       }
       const diffs = await changes.end(session.id, hookId);
