@@ -171,6 +171,9 @@ function turnsOf(timeline: readonly TimelineItem[]): Turn[] {
   });
 }
 
+/** First runs of conversations created here whose stream has since synced: opening one again waits for its history like any other. */
+const syncedSeeds = new WeakSet<Run>();
+
 /**
  * One conversation over sync v3 (docs/SYNC-V3.md), filled by `SessionSync`. The rows are the server's, adapted to the transcript's
  * items; status, runs, context and metrics come only from control frames. Sending, steering and
@@ -358,6 +361,7 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
       const current = sync.store.get();
       const connected = current.connection === 'open';
       tracking.transcriptKnown = current.loaded;
+      if (current.synced) { const seed = seedFor(session.id); if (seed) syncedSeeds.add(seed); }
       const load = historyLoad(current);
       store.set((previous) => ({
         connected, loaded: current.loaded, catchingUp: current.catchingUp, loadingHistory: current.loadingBefore,
@@ -599,8 +603,13 @@ export function useSessionSync(session: Session, { onSessionChanged, onError, no
   const extras: SyncExtras = {
     hasMoreLater: synced.hasAfter, loadingLater: synced.loadingAfter, loadLater, readerAtEnd, jumpToLatest, loadTurn, expandRow, findInLane, loadPlace, activities: synced.activities,
   };
+  // A conversation just created here has nothing before its first prompt, which this tab already
+  // holds: it is whole from the first frame rather than loading until the stream's hello, so the
+  // prompt is not joined by a spinner and does not fade in again once the server confirms it.
+  const seed = seedFor(session.id);
+  const loaded = state.loaded || Boolean(seed && keepsInlineReceipt(seed) && !syncedSeeds.has(seed));
   return {
-    ...state, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion,
+    ...state, loaded, timelineVersion, resetVersion: synced.resetVersion, store, timeline, turns, turnsVersion,
     inlineRun, hasUnknownSubmission, hasUncertainSubmission, subagents, jobs, retryConnection,
     loadOlder, ...commands, respondInteraction, syncInteraction, ...extras,
   };

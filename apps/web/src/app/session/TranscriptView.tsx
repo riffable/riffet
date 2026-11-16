@@ -615,11 +615,14 @@ interface Props {
   metricsByRun?: Map<string, RunMetrics>;
   /** A search result asked to see one message: scrolled to, and highlighted briefly. */
   focus?: MessageFocus;
-  /** The working line: in the place a running turn holds for its footer (`heldFooterRow`), else after everything else. */
+  /**
+   * The working line: in the place a running turn holds for its footer (`heldFooterRow`), else after
+   * everything else. Shown once loaded, like `empty`: while the history loads, the spinner is the only sign.
+   */
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, runActionPending, metricsByRun, focus, outlineTarget, progress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, runActionPending, metricsByRun, focus, outlineTarget, progress: suppliedProgress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -780,6 +783,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
   const quiet = !useLingering(!catchingUp, SETTLE_MS);
   const catchUp = useMemo(() => ({ catchingUp, quiet }), [catchingUp, quiet]);
   const seen = useRef<{ session: string; keys: Set<string>; fresh: Map<string, Fresh>; length: number } | null>(null);
+  const progress = loaded ? suppliedProgress : undefined;
   const historyLoad = suppliedHistoryLoad ?? { state: loaded ? 'ready' : 'loading' };
   const loadView = transcriptLoadView(loaded, historyLoad);
   const showLoading = useLingering(loadView === 'loading', WAIT_GRACE_MS);

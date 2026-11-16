@@ -488,7 +488,9 @@ internal class SessionSync(
                 next.copy(
                     timeline = built.timeline,
                     hasNewerHistory = built.hasAfter,
-                    loaded = state.loaded || built.history != null,
+                    // A session just created has nothing before its first prompt, which is held here: it is
+                    // whole from that prompt's row instead of waiting for the server's history.
+                    loaded = state.loaded || built.history != null || (state.createdReceipts.containsKey(state.sessionId ?: "") && built.timeline.isNotEmpty()),
                     subagents = if (built.subagents == state.subagents) state.subagents else built.subagents,
                 )
             }

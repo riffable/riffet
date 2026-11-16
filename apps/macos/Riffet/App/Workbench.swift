@@ -126,6 +126,8 @@ final class Workbench {
     /// Written once per conversation, so views may read it freely.
     private(set) var assembledSession: String?
     @ObservationIgnored private var assemblyDeadline: Task<Void, Never>?
+    /// The conversation this window just created and opened, until it assembles.
+    @ObservationIgnored private var createdSession: String?
     /// How long a switch waits for the conversation to assemble before showing what it has.
     static let assemblyWait: Duration = .milliseconds(400)
 
@@ -415,6 +417,7 @@ final class Workbench {
         assemblyDeadline?.cancel()
         assemblyDeadline = nil
         guard let id = selected?.id else { return }
+        if createdSession != id { createdSession = nil }
         noteAssembly()
         guard assembledSession != id else { return }
         assemblyDeadline = Task { [weak self] in
@@ -425,11 +428,13 @@ final class Workbench {
     }
 
     /// The open conversation has assembled once its loaded rows and its status (which places the
-    /// notices, the interaction card and the working line) have both arrived.
+    /// notices, the interaction card and the working line) have both arrived. One just created here
+    /// has neither notices nor a card yet and works by the list's state, so its first prompt is enough.
     private func noteAssembly() {
-        guard let id = selected?.id, assembledSession != id, status != nil,
+        guard let id = selected?.id, assembledSession != id, status != nil || createdSession == id,
               let presentation, presentation.sessionId == id, presentation.loaded else { return }
         assembledSession = id
+        createdSession = nil
         assemblyDeadline?.cancel()
         assemblyDeadline = nil
     }
@@ -1241,7 +1246,10 @@ final class Workbench {
         let sessions = body.initialMessage?.references ?? []
         clearSubmittedReferences(cited, sessions: sessions, sessionId: nil, projectId: body.projectId)
         SessionTabs.model(for: baseURL).launched(session.id)
-        if navigationIntent == intent { open(session) }
+        if navigationIntent == intent {
+            createdSession = session.id
+            open(session)
+        }
         if rememberSelection, let agent = body.agentId ?? body.backendId.map(backendWire), agent != AgentDirectory.quickChat, defaultsRevision == revision, let accepted = session.model ?? body.model {
             Task {
                 guard defaultsRevision == revision else { return }
