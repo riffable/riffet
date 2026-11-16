@@ -71,7 +71,8 @@ struct TranscriptView: View {
             focusMissed: { [workbench, sessionId = session.id] in
                 workbench.notice = SessionNotice(sessionId: sessionId, text: String(localized: "没有在这段会话的历史里找到这条收藏，原文可能已被改写或删除。"))
             },
-            openSession: { [workbench] id in workbench.open(sessionId: id) }
+            openSession: { [workbench] id in workbench.open(sessionId: id) },
+            openSessionInfo: { [workbench] in workbench.sessionInfoRequests += 1 }
         )
     }
 }
@@ -174,6 +175,12 @@ struct TranscriptHost: NSViewControllerRepresentable {
         return HandedOffSpec(agent: SessionGlance(of: successorId, in: workbench.list)?.agent, successorId: successorId)
     }
 
+    private static func backgroundText(agents: Int, workflows: Int) -> String {
+        if workflows == 0 { return String(localized: "\(agents) 个子 Agent 运行中") }
+        if agents == 0 { return String(localized: "\(workflows) 个工作流运行中") }
+        return String(localized: "\(agents) 个子 Agent、\(workflows) 个工作流运行中")
+    }
+
     @MainActor
     static func feed(_ workbench: Workbench, sessionId: String, projectId: String) -> TranscriptFeed? {
         guard let presentation = loadedPresentation(workbench, sessionId: sessionId) else { return nil }
@@ -192,6 +199,10 @@ struct TranscriptHost: NSViewControllerRepresentable {
         let working: WorkingSpec? = workbench.sendState.interrupting || presentation.showsWorking && !compactionShowsProgress
             ? WorkingSpec(step: workbench.sendState.interrupting ? nil : presentation.step, since: workbench.sendState.interrupting ? nil : workbench.runs.first { $0.state == .running }.flatMap { ServerTime.date($0.updatedAt) }, speed: workbench.sendState.interrupting ? nil : presentation.sessionSpeed, stopping: workbench.sendState.interrupting)
             : nil
+        let agents = Int(presentation.delegatedAgents), workflows = Int(presentation.delegatedWorkflows)
+        let background: WorkingSpec? = working == nil && agents + workflows > 0 && !presentation.grouping.rows.isEmpty
+            ? WorkingSpec(step: nil, since: nil, speed: nil, background: backgroundText(agents: agents, workflows: workflows))
+            : nil
         return TranscriptFeed(
             sessionId: sessionId,
             identity: presentation,
@@ -199,7 +210,7 @@ struct TranscriptHost: NSViewControllerRepresentable {
                 TranscriptRows(rows: presentation.grouping.rows, compact: presentation.compactAbove.map(\.boolValue), speeds: presentation.speeds, turns: presentation.turns, heldFooter: presentation.heldFooter)
             },
             older: older,
-            working: working,
+            working: working ?? background,
             suppressesHeldFooter: compactionShowsProgress && !workbench.sendState.interrupting,
             sessionWorking: workbench.working,
             root: workbench.project(projectId)?.cwd,

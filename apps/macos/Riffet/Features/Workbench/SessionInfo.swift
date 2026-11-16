@@ -25,6 +25,7 @@ struct SessionInfoButton: View {
             SessionInfoView(workbench: workbench, session: workbench.selected ?? session) { open = false }
         }
         .onChange(of: session.id) { open = false }
+        .onChange(of: workbench.sessionInfoRequests) { open = true }
     }
 
     private var working: Bool {

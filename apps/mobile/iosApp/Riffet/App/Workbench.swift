@@ -49,6 +49,9 @@ final class Workbench {
     var goal: SessionGoal? { presentation?.goal }
     /// Subagents still running while the main agent is idle; the stop button and the transcript hint.
     var backgroundSubagents: Int { presentation?.sessionId == selected?.id ? Int(presentation?.backgroundSubagents ?? 0) : 0 }
+    /// Subagents and workflows still running after the main agent's turn ended; zero while it works.
+    var delegatedAgents: Int { presentation?.sessionId == selected?.id ? Int(presentation?.delegatedAgents ?? 0) : 0 }
+    var delegatedWorkflows: Int { presentation?.sessionId == selected?.id ? Int(presentation?.delegatedWorkflows ?? 0) : 0 }
     /// Compaction and background tasks above the composer; empty when the server reports no activity.
     var dock: ActivityDock { presentation?.sessionId == selected?.id ? presentation?.dock ?? ActivityDock(compacting: false, background: 0, tasks: []) : ActivityDock(compacting: false, background: 0, tasks: []) }
     /// The subagents the session spawned, presented by the shared `subagentEntries`.

@@ -151,7 +151,7 @@
 | 状态 | 表现 |
 |---|---|
 | 处理中 | `WorkingIndicator`：16 的格里一个 8 的强调色圆点，1.4 s 呼吸；「正在处理」`text-sm` 500、流光；计时 `text-xs` 等宽数字，预留 3 位宽；`tok/s` 在其后 |
-| 后台运行中 | 主 agent 的回合已结束、它委派的子 Agent 或工作流仍在运行：`BackgroundWorkIndicator`，放在「处理中」的位置；同一格里一个 8 的 `fg-4` 静止圆点，「N 个子 Agent 运行中」（有工作流时分别计数，如「2 个子 Agent、1 个工作流运行中」）`text-sm` 500 `fg-3`，行高与「处理中」相同；不计时、不显示速度；点击打开会话信息。后台命令和监控不计入：它们可能一直运行（开发服务、watch），只在会话信息里列出 |
+| 后台运行中 | 主 agent 的回合已结束、它委派的子 Agent 或工作流仍在运行：`BackgroundWorkIndicator`，放在「处理中」的位置；同一格里一个 8 的 `fg-4` 静止圆点，「N 个子 Agent 运行中」（有工作流时分别计数，如「2 个子 Agent、1 个工作流运行中」）`text-sm` 500 `fg-3`，行高与「处理中」相同；不计时、不显示速度；点击打开会话信息（Mac 为页头的会话信息浮层，手机为会话详情）。Mac 是 `WorkingView` 的后台模式，iPhone 是 `ConversationView` 的 `conversationBackground` 行，Android 是 `DelegatedWorkIndicator`；计数取共享 presenter 的 `delegatedAgents` / `delegatedWorkflows`。后台命令和监控不计入：它们可能一直运行（开发服务、watch），只在会话信息里列出 |
 | 已停止 | 过程组标题改为「已停止」；回答脚注以「已停止」开头并常驻 |
 | 失败 | 一行 `danger` 文字加 16 的警示图标；原因一行，有诊断时右侧箭头展开等宽详情（最高 192），可复制 |
 | 结果未知 | 「暂时无法确认」，给出检查状态与终端；保留恢复动作 |

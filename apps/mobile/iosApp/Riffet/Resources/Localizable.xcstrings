@@ -3103,7 +3103,59 @@
         }
       }
     },
-    "后台 %lld 个任务运行中" : {
+    "%lld 个子 Agent、%lld 个工作流运行中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%#@agents@ and %#@workflows@ running"
+          },
+          "substitutions" : {
+            "agents" : {
+              "argNum" : 1,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg subagent"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg subagents"
+                    }
+                  }
+                }
+              }
+            },
+            "workflows" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg workflow"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg workflows"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 个工作流运行中" : {
       "localizations" : {
         "en" : {
           "variations" : {
@@ -3111,13 +3163,35 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld background task running"
+                  "value" : "%lld workflow running"
                 }
               },
               "other" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld background tasks running"
+                  "value" : "%lld workflows running"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 个子 Agent 运行中" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagent running"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld subagents running"
                 }
               }
             }

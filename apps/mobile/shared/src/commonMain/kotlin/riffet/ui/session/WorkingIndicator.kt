@@ -14,6 +14,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,8 +35,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import org.jetbrains.compose.resources.rememberResourceEnvironment
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.Run
 import riffet.contracts.OutputRate
@@ -46,6 +49,11 @@ import riffet.ui.timeline.formatElapsed
 import riffet.ui.timeline.instantMillis
 import riffet.ui.timeline.rememberTickingNow
 import riffet_mobile.shared.generated.resources.Res
+import riffet_mobile.shared.generated.resources.session_delegated_agents
+import riffet_mobile.shared.generated.resources.session_delegated_both
+import riffet_mobile.shared.generated.resources.session_delegated_workflows
+import riffet_mobile.shared.generated.resources.session_delegated_workflows_part
+import riffet_mobile.shared.generated.resources.session_delegated_agents_part
 import riffet_mobile.shared.generated.resources.session_working
 
 /**
@@ -130,5 +138,40 @@ internal fun WorkingIndicator(
                 Text(text = speed.label, style = typography.caption, color = if (speed.estimated) colors.fg4 else colors.fg3, maxLines = 1)
             }
         }
+    }
+}
+
+/**
+ * The footer once the turn has ended but delegated subagents or workflows are still running. It
+ * keeps [WorkingIndicator]'s height and dot column, with a static fg4 dot and fg3 label: quiet,
+ * not live. Tapping opens the session details, which list them.
+ */
+@Composable
+internal fun DelegatedWorkIndicator(
+    agents: Int,
+    workflows: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = LocalRiffetColors.current
+    val typography = LocalRiffetTypography.current
+    val metrics = LocalInterfaceStyle.current.metrics
+    val agentsPart = if (agents > 0) pluralStringResource(Res.plurals.session_delegated_agents_part, agents, agents) else ""
+    val workflowsPart = if (workflows > 0) pluralStringResource(Res.plurals.session_delegated_workflows_part, workflows, workflows) else ""
+    val label = when {
+        agents > 0 && workflows > 0 -> stringResource(Res.string.session_delegated_both, agentsPart, workflowsPart)
+        agents > 0 -> pluralStringResource(Res.plurals.session_delegated_agents, agents, agents)
+        else -> pluralStringResource(Res.plurals.session_delegated_workflows, workflows, workflows)
+    }
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = metrics.smallIconSize + metrics.controlInset)
+            .clickable(role = Role.Button, onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spacer(Modifier.size(8.dp).clip(CircleShape).background(colors.fg4))
+        Spacer(Modifier.width(metrics.controlInset / 2))
+        Text(text = label, style = typography.label, color = colors.fg3, maxLines = 1)
     }
 }

@@ -435,6 +435,9 @@ fun SessionScreen(
     // reader) as on iOS and macOS: the turn has shown more than thinking.
     // Compaction's timeline activity already carries its own progress indicator and clock.
     val workingVisible = sendState.interrupting || presentation?.showsWorking == true && !presentation.dock.compacting
+    // Delegated work that outlives the turn; the presenter keeps it zero while the main agent works.
+    val delegatedAgents = presentation?.delegatedAgents ?: 0
+    val delegatedWorkflows = presentation?.delegatedWorkflows ?: 0
 
     val catalog = detail?.catalog.orEmpty()
     val providerGroups = remember(detail?.catalog, detail?.profiles, detail?.continuations, current.backendProfileId) {
@@ -902,6 +905,8 @@ fun SessionScreen(
                                 listState = listState,
                                 footer = if (workingVisible) {
                                     { WorkingFooter(statusFeed, run = running, live = connection is RiffetConnectionState.Live, stopping = sendState.interrupting) }
+                                } else if (delegatedAgents + delegatedWorkflows > 0) {
+                                    { DelegatedWorkIndicator(agents = delegatedAgents, workflows = delegatedWorkflows, onClick = onOpenDetails) }
                                 } else {
                                     null
                                 },

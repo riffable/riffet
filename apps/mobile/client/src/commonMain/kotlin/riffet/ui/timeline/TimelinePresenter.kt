@@ -99,6 +99,20 @@ data class TimelinePresentation(
      */
     val backgroundSubagents: Int get() = if (working) 0 else runningSubagents
 
+    /**
+     * Delegated work still running after the main agent's turn ended, for the transcript's tail line
+     * (`BackgroundWorkIndicator` on the web): its results open the next turn. A background agent is
+     * listed both as a subagent and as a task, so the larger count stands. Shells and monitors are
+     * not counted: a dev server or a watch may never end.
+     */
+    val delegatedAgents: Int get() = if (working) 0 else maxOf(runningSubagents, runningTasks("agent"))
+
+    /** Workflows still running after the main agent's turn ended; see [delegatedAgents]. */
+    val delegatedWorkflows: Int get() = if (working) 0 else runningTasks("workflow")
+
+    private fun runningTasks(kind: String): Int =
+        dock.tasks.count { it.status == riffet.contracts.NativeActivityStatus.RUNNING && it.task?.kind == kind }
+
     /** How many of [jobs] have not finished yet. */
     val runningJobs: Int get() = jobs.count { it.status == riffet.contracts.NativeJobStatus.RUNNING }
 }

@@ -149,6 +149,8 @@ final class Workbench {
     private(set) var outputs: [SessionOutput] = []
     /// Subagents still running while the main agent is idle; the stop button and the composer's hint.
     private(set) var backgroundSubagents = 0
+    /// Bumped by the transcript's background line; the toolbar's session info opens on each change.
+    var sessionInfoRequests = 0
     /// Compaction and background tasks above the composer; invisible when the server reports no activity.
     private(set) var dock = ActivityDock(compacting: false, background: 0, tasks: [])
     private(set) var stoppingActivities: Set<String> = []

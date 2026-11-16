@@ -1620,7 +1620,7 @@ final class ChipButtonView: FragmentView, HoverTarget {
 // MARK: Working line
 
 /// "正在处理", how long the turn has run and the recent rolling output speed (`WorkingIndicator`).
-final class WorkingView: FragmentView {
+final class WorkingView: FragmentView, HoverTarget {
     private var spec: WorkingSpec?
     private let dot = BoxView()
     private let label = LabelView()
@@ -1640,8 +1640,21 @@ final class WorkingView: FragmentView {
         guard let spec else { return }
         help = [spec.step, spec.speed?.description_].compactMap { $0 }.joined(separator: "\n")
         guard let style = host?.style else { return }
+        if let background = spec.background {
+            // Delegated work still runs after the turn: a static dot and an unshimmered label.
+            dot.layer?.removeAnimation(forKey: "pulse")
+            dot.configure(BoxSpec(fill: style.color(\.fg4), radius: 3.5))
+            label.text = NSAttributedString(string: background, attributes: [.font: labelFont(style), .foregroundColor: style.color(\.fg3)])
+            setAccessibilityElement(true)
+            setAccessibilityRole(.button)
+            setAccessibilityLabel(background)
+            needsLayout = true
+            needsDisplay = true
+            return
+        }
+        setAccessibilityElement(false)
         dot.configure(BoxSpec(fill: style.color(style.mark), radius: 3.5))
-        label.text = NSAttributedString(string: spec.stopping ? String(localized: "停止中") : String(localized: "正在处理"), attributes: [.font: style.font(13, .medium), .foregroundColor: style.color(\.fg2)])
+        label.text = NSAttributedString(string: spec.stopping ? String(localized: "停止中") : String(localized: "正在处理"), attributes: [.font: labelFont(style), .foregroundColor: style.color(\.fg2)])
         if dot.layer?.animation(forKey: "pulse") == nil, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             let pulse = CABasicAnimation(keyPath: "opacity")
             pulse.fromValue = 1
@@ -1658,17 +1671,39 @@ final class WorkingView: FragmentView {
 
     func tick() { needsDisplay = true }
 
+    private func labelFont(_ style: TranscriptStyle) -> NSFont { style.font(13, .medium) }
+
+    func setHovered(_ on: Bool) {}
+
+    func cursor(at point: NSPoint) -> NSCursor { spec?.background != nil ? .pointingHand : .arrow }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard spec?.background != nil else { return false }
+        host?.perform(.openSessionInfo)
+        return true
+    }
+
+    /// Taken here, or the table would track the click and keep the mouse-up.
+    override func mouseDown(with event: NSEvent) {
+        if spec?.background == nil { super.mouseDown(with: event) }
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard spec?.background != nil, bounds.contains(convert(event.locationInWindow, from: nil)) else { return super.mouseUp(with: event) }
+        host?.perform(.openSessionInfo)
+    }
+
     private var labelWidth: CGFloat { ceil(label.text.lineWidth) }
 
     override func layout() {
         super.layout()
         dot.frame = NSRect(x: 4.5, y: (bounds.height - 7) / 2, width: 7, height: 7)
         label.frame = NSRect(x: 24, y: 0, width: labelWidth, height: bounds.height)
-        applyShimmer(label.layer, on: true)
+        applyShimmer(label.layer, on: spec?.background == nil)
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let spec, let style = host?.style else { return }
+        guard let spec, spec.background == nil, let style = host?.style else { return }
         var x = 24 + labelWidth + 8
         let font = NSFont.riffetDigits(size: style.s(12))
         if let since = spec.since {

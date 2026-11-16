@@ -476,7 +476,8 @@ struct ConversationView: View {
         }
         appendRecords(records.filter { $0.afterRow.map { !rowKeys.contains($0) } ?? false })
         // The compaction activity already shows progress in the timeline.
-        if workbench.selected?.id == sessionID && (workbench.sendState.interrupting || workbench.status?.phase == .busy && !workbench.dock.compacting) {
+        let showsWorking = workbench.selected?.id == sessionID && (workbench.sendState.interrupting || workbench.status?.phase == .busy && !workbench.dock.compacting)
+        if showsWorking {
             // Just that it is working: the current step is already the live row above.
             append("working", revision: workbench.sendState.interrupting, top: 12,
                    content: HStack(spacing: 8) {
@@ -487,10 +488,20 @@ struct ConversationView: View {
                 .accessibilityElement(children: .ignore).accessibilityLabel(workbench.sendState.interrupting ? "停止中" : "正在处理")
                 .accessibilityIdentifier("conversationWorking"))
         }
-        if workbench.selected?.id == sessionID && workbench.status?.phase != .busy && workbench.backgroundSubagents > 0 {
-            let count = workbench.backgroundSubagents
-            append("background", revision: count, top: 12,
-                   content: Label("后台 \(count) 个任务运行中", systemImage: "gearshape.2").riffetFont(.caption).foregroundStyle(palette.fg3)
+        let agents = workbench.delegatedAgents, workflows = workbench.delegatedWorkflows
+        if !showsWorking && workbench.selected?.id == sessionID && agents + workflows > 0 && !entries.isEmpty {
+            let label = agents > 0 && workflows > 0 ? String(localized: "\(agents) 个子 Agent、\(workflows) 个工作流运行中", bundle: .riffet)
+                : agents > 0 ? String(localized: "\(agents) 个子 Agent 运行中", bundle: .riffet)
+                : String(localized: "\(workflows) 个工作流运行中", bundle: .riffet)
+            // Opens the information sheet, where the subagents and background tasks are listed.
+            append("background", revision: rowRevision(agents, workflows), top: 12,
+                   content: Button { information = true } label: {
+                HStack(spacing: 8) {
+                    Circle().fill(palette.fg4).frame(width: 8, height: 8).frame(width: 18)
+                    Text(label).riffetFont(.label, weight: .regular)
+                    Spacer(minLength: 0)
+                }.foregroundStyle(palette.fg3).contentShape(Rectangle())
+            }.buttonStyle(.plain).accessibilityElement(children: .ignore).accessibilityLabel(label)
                 .accessibilityIdentifier("conversationBackground"))
         }
         append("transcriptEnd", revision: 0, content: Color.clear.frame(height: 18).accessibilityHidden(true))

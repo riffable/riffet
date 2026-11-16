@@ -46,7 +46,7 @@ struct TranscriptFeed {
         supportsRecovery == other.supportsRecovery && identity === other.identity && older == other.older && sessionWorking == other.sessionWorking && root == other.root
             && suppressesHeldFooter == other.suppressesHeldFooter
             && emptyText == other.emptyText && startingText == other.startingText && working?.step == other.working?.step && working?.since == other.working?.since
-            && working?.speed?.label == other.working?.speed?.label && working?.stopping == other.working?.stopping && (working == nil) == (other.working == nil) && lineage == other.lineage && handedOff == other.handedOff
+            && working?.speed?.label == other.working?.speed?.label && working?.stopping == other.working?.stopping && working?.background == other.working?.background && (working == nil) == (other.working == nil) && lineage == other.lineage && handedOff == other.handedOff
     }
 }
 
@@ -87,6 +87,8 @@ struct TranscriptActions {
     var focusMissed: () -> Void = {}
     /// Opens another conversation (the lineage row's parent).
     var openSession: (String) -> Void = { _ in }
+    /// Opens the conversation's session info (the background line).
+    var openSessionInfo: () -> Void = {}
 }
 
 /// Where the transcript scrolls next: a search hit's event, or a saved reply's message.
@@ -727,7 +729,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             gap = g; speed = s?.label; past = p
             hidesFooter = suppressesHeldFooter && row.footer == .held
             readsStale = (row as? TimelineRowSingle)?.item is TimelineItemTool
-        case let .working(spec): speed = "\(spec.step ?? "")|\(spec.since?.timeIntervalSince1970 ?? 0)|\(spec.speed?.label ?? "")|\(spec.stopping)"
+        case let .working(spec): speed = "\(spec.step ?? "")|\(spec.since?.timeIntervalSince1970 ?? 0)|\(spec.speed?.label ?? "")|\(spec.stopping)|\(spec.background ?? "")"
         case let .lineage(spec): speed = "lineage|\(spec.forked)|\(spec.agent ?? "")|\(spec.title)|\(spec.parentId)"
         case let .handedOff(spec): speed = "handedOff|\(spec.agent ?? "")|\(spec.successorId)"
         case .olderFailed, .olderLoading, .empty, .bottom: break
@@ -1186,6 +1188,8 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             relayout(index)
         case let .openSubagent(id, title):
             actions.openSubagent?(id, title)
+        case .openSessionInfo:
+            actions.openSessionInfo()
         case .retryHistory:
             actions.retryHistory()
         case let .checkRun(run):

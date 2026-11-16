@@ -54,6 +54,23 @@
     <string name="session_history_sync_failed">History sync failed</string>
     <string name="session_older_failed">Failed to load older messages</string>
     <string name="session_working">Working</string>
+    <plurals name="session_delegated_agents">
+        <item quantity="one">%d subagent running</item>
+        <item quantity="other">%d subagents running</item>
+    </plurals>
+    <plurals name="session_delegated_workflows">
+        <item quantity="one">%d workflow running</item>
+        <item quantity="other">%d workflows running</item>
+    </plurals>
+    <plurals name="session_delegated_agents_part">
+        <item quantity="one">%d subagent</item>
+        <item quantity="other">%d subagents</item>
+    </plurals>
+    <plurals name="session_delegated_workflows_part">
+        <item quantity="one">%d workflow</item>
+        <item quantity="other">%d workflows</item>
+    </plurals>
+    <string name="session_delegated_both">%1$s and %2$s running</string>
 
     <!-- Subagents and background tasks -->
     <string name="session_subagent_running">Running</string>

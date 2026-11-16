@@ -26,6 +26,8 @@ enum TranscriptAction {
     case loadActivityText(blobRef: String)
     case loadSessionReference(String)
     case sessionReferencePage(String, Int)
+    /// Opens the session info, where the subagents and background tasks are listed.
+    case openSessionInfo
 }
 
 /// A link to another conversation, carried in a row's text (the lineage row's parent title).
@@ -237,6 +239,8 @@ struct WorkingSpec {
     let since: Date?
     let speed: SpeedTag?
     var stopping = false
+    /// The turn has ended but delegated work still runs: the quiet line says so, in place of the working line.
+    var background: String?
 }
 
 /// One positioned piece of a row, in the row's flipped coordinates.
