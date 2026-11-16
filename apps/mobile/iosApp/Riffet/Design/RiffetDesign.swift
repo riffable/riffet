@@ -57,7 +57,7 @@ enum RiffetText {
     }
 }
 
-private struct RiffetFont: ViewModifier {
+struct RiffetFont: ViewModifier {
     let role: RiffetText
     let weight: Font.Weight?
     @ScaledMetric private var size: CGFloat
@@ -73,7 +73,10 @@ private struct RiffetFont: ViewModifier {
 
 extension View {
     /// Applies a text role from the shared scale; `weight` overrides the role's own.
-    func riffetFont(_ role: RiffetText, weight: Font.Weight? = nil) -> some View {
+    /// Returns the concrete type, not `some View`, like every modifier the design layer applies widely: each
+    /// opaque layer makes the runtime resolve the type again when SwiftUI instantiates a view's metadata, and
+    /// deep pages overflowed the main thread's stack on iOS 27 (ios.md §2, 2026-11-15).
+    func riffetFont(_ role: RiffetText, weight: Font.Weight? = nil) -> ModifiedContent<Self, RiffetFont> {
         modifier(RiffetFont(role, weight: weight))
     }
 }
@@ -86,6 +89,14 @@ enum RiffetMetrics {
     static let settingsRowHeight: CGFloat = 52
     static let composerRadius: CGFloat = 24
     static let sendButton: CGFloat = 36
+    static let groupInset: CGFloat = 16
+    static let controlRadius: CGFloat = 10
+    static let rowRadius: CGFloat = 8
+    static let selectionRadius: CGFloat = 6
+    static let menuRadius: CGFloat = 10
+    /// A row's symbol tile: its square and corner.
+    static let iconSlot: CGFloat = 30
+    static let iconTileRadius: CGFloat = 8
     /// The floating shadow before Liquid Glass: SwiftUI's radius is half the Compose blur.
     static let floatingShadowRadius: CGFloat = 7
     static let floatingShadowY: CGFloat = 4
@@ -95,9 +106,18 @@ enum RiffetMetrics {
     static let rowMinHeight: CGFloat = 68
     static let avatar: CGFloat = 44
     static let chipHeight: CGFloat = 34
+    /// A chip's label inset from its capsule ends.
+    static let chipInset: CGFloat = 14
+    /// Between something floating (a toast) and the edge or control it clears.
+    static let floatingGap: CGFloat = 8
     static let hitTarget: CGFloat = 44
     /// The conversation column on a wide window (iPad, an unfolded iPhone Duo); narrower windows use their full width.
     static let readingWidth: CGFloat = 760
+    /// A code block's body in a reply, and a tool's command or output: capped, and scrolled inside the
+    /// block both ways (lines do not wrap). Android draws the same caps; a block never takes over 65% of
+    /// the visible height either.
+    static let codeBlockMaxHeight: CGFloat = 448
+    static let codeOutputMaxHeight: CGFloat = 288
 }
 
 /// Motion shared by every page, generated from the ios style's tokens: a spring's response is one
@@ -121,8 +141,13 @@ extension View {
         } else {
             background(.regularMaterial, in: shape)
                 .overlay(shape.stroke(Color.primary.opacity(0.06), lineWidth: 0.5))
-                .shadow(color: .black.opacity(RiffetMetrics.floatingShadowOpacity), radius: RiffetMetrics.floatingShadowRadius, y: RiffetMetrics.floatingShadowY)
+                .riffetFloatingShadow()
         }
+    }
+
+    /// The one drop shadow: under what floats over the page (a toast, the glass before iOS 26).
+    func riffetFloatingShadow() -> some View {
+        shadow(color: .black.opacity(RiffetMetrics.floatingShadowOpacity), radius: RiffetMetrics.floatingShadowRadius, y: RiffetMetrics.floatingShadowY)
     }
 
     /// The soft scroll edge under a bar (iOS 26); earlier systems keep their default edge.
@@ -216,6 +241,7 @@ struct RiffetChipBar<Value: Hashable>: View {
     @Binding var selection: Value
     @Namespace private var indicator
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -223,12 +249,12 @@ struct RiffetChipBar<Value: Hashable>: View {
                 ForEach(items) { item in
                     let selected = item.value == selection
                     Button {
-                        withAnimation(RiffetMotion.spatial) { selection = item.value }
+                        withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { selection = item.value }
                     } label: {
                         Text(item.title)
                             .riffetFont(.label)
                             .foregroundStyle(selected ? palette.fg : palette.fg2)
-                            .padding(.horizontal, 15)
+                            .padding(.horizontal, RiffetMetrics.chipInset)
                             .frame(minHeight: RiffetMetrics.chipHeight)
                             .background {
                                 Capsule().fill(palette.press)
@@ -265,12 +291,43 @@ struct RiffetMenuChip<Leading: View, Items: View>: View {
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg3)
             }
             .riffetFont(.label).foregroundStyle(highlighted ? palette.fg : palette.fg2)
-            .padding(.horizontal, 14).frame(minHeight: RiffetMetrics.chipHeight)
+            .padding(.horizontal, RiffetMetrics.chipInset).frame(minHeight: RiffetMetrics.chipHeight)
             .background(Capsule().fill(highlighted ? palette.selected : palette.press))
             .frame(minHeight: RiffetMetrics.hitTarget)
             .contentShape(Rectangle())
         }
         .buttonStyle(RiffetDimPressStyle())
+    }
+}
+
+/// The same chip opening a picker sheet instead of a menu (a scope with many values: projects).
+struct RiffetChipButton<Leading: View>: View {
+    let title: String
+    var highlighted = false
+    @ViewBuilder var leading: () -> Leading
+    let action: () -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                leading()
+                Text(title).lineLimit(1)
+                Image(systemName: "chevron.down").riffetFont(.caption, weight: .semibold).imageScale(.small).foregroundStyle(palette.fg3)
+            }
+            .riffetFont(.label).foregroundStyle(highlighted ? palette.fg : palette.fg2)
+            .padding(.horizontal, RiffetMetrics.chipInset).frame(minHeight: RiffetMetrics.chipHeight)
+            .background(Capsule().fill(highlighted ? palette.selected : palette.press))
+            .frame(minHeight: RiffetMetrics.hitTarget)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(RiffetDimPressStyle())
+    }
+}
+
+extension RiffetChipButton where Leading == EmptyView {
+    init(title: String, highlighted: Bool = false, action: @escaping () -> Void) {
+        self.init(title: title, highlighted: highlighted, leading: { EmptyView() }, action: action)
     }
 }
 
@@ -344,23 +401,18 @@ private struct RunningArc: View {
 
 // MARK: - Composer parts
 
-/// Approval modes that run without asking: marked by the warning colour, on the trigger only.
-func riffetApprovalIsRisky(_ id: String?) -> Bool {
-    ["unrestricted", "bypassPermissions", "danger-full-access", "never", "high"].contains(id ?? "")
-}
-
-/// The composer's send-settings label: an optional icon or approval name before the model name, plain
+/// The composer's send-settings label: an optional icon or the context ring before the model name, plain
 /// text with no fill or arrow, since the composer has little room. The icon is the agent's mark where
-/// the agent is still being chosen, a plain symbol for a quick chat; inside a conversation the approval
-/// mode's short name leads instead. While the catalog loads the icon turns into a spinner, and into a
-/// warning when the catalog could not be read; without an icon those follow the model name. Either
-/// way the name never shifts.
+/// the agent is still being chosen, a plain symbol for a quick chat; inside a conversation the context
+/// ring leads instead, once the agent has reported how full its window is. While the catalog loads the
+/// icon turns into a spinner, and into a warning when the catalog could not be read; without an icon
+/// those follow the model name. Either way the name never shifts.
 struct RiffetModelLabel: View {
     enum Icon { case none, agent(String), symbol(String) }
     let title: String
     var icon: Icon = .none
-    /// The approval mode's short name and whether it is a risky one, shown before the model name.
-    var approval: (name: String, risky: Bool)? = nil
+    /// How full the context window is (0…1), shown as a ring before the model name; nil draws no ring.
+    var context: Double? = nil
     var loading = false
     var failed = false
     let action: () -> Void
@@ -381,10 +433,7 @@ struct RiffetModelLabel: View {
                         }
                     }
                 }
-                if let approval {
-                    Text(approval.name).riffetFont(.label).lineLimit(1).foregroundStyle(approval.risky ? palette.warning : palette.accent)
-                    Text(verbatim: "·").riffetFont(.label).foregroundStyle(palette.fg4)
-                }
+                if let context { RiffetContextRing(ratio: context) }
                 Text(title).riffetFont(.label).lineLimit(1).truncationMode(.middle)
                 if !leading, failed || loading { status }
             }
@@ -398,6 +447,28 @@ struct RiffetModelLabel: View {
     @ViewBuilder private var status: some View {
         if failed { Image(systemName: "exclamationmark.triangle").foregroundStyle(palette.warning).font(.system(size: 13, weight: .medium)).frame(width: 16, height: 16) }
         else { ProgressView().controlSize(.mini).frame(width: 16, height: 16) }
+    }
+}
+
+/// How full the agent's context window is: a ring that fills clockwise from the top, neutral until 75%,
+/// `warning` from 75%, `danger` from 90% (Android's `ContextRing`). Drawn only from a reported value.
+struct RiffetContextRing: View {
+    let ratio: Double
+    /// The square it sits in; the ring keeps a point clear on each side, like the label's other icons.
+    var size: CGFloat = 16
+    @Environment(\.palette) private var palette
+    private var tone: Color { ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.fg2 }
+    var body: some View {
+        let line = (size - 2) * 2.5 / 16
+        ZStack {
+            Circle().stroke(palette.lineStrong, lineWidth: line)
+            Circle().trim(from: 0, to: min(max(ratio, 0), 1))
+                .stroke(tone, style: StrokeStyle(lineWidth: line, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .padding(1 + line / 2)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 }
 

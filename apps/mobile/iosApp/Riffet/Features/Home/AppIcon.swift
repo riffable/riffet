@@ -412,6 +412,7 @@ struct AppIconPicker: View {
     @Binding var selection: AppIconVariant
     @State private var switching = false
     @State private var error: String?
+    @Environment(\.palette) private var palette
 
     private let tileSize: CGFloat = 64
     private let ringGap: CGFloat = 5
@@ -427,7 +428,7 @@ struct AppIconPicker: View {
                                 .overlay {
                                     if variant == selection {
                                         RoundedRectangle(cornerRadius: tileSize * 0.225 + ringGap, style: .continuous)
-                                            .strokeBorder(Color.accentColor, lineWidth: 2.5)
+                                            .strokeBorder(palette.accent, lineWidth: 2.5)
                                     }
                                 }
                                 .contentShape(Rectangle())
@@ -440,7 +441,7 @@ struct AppIconPicker: View {
                 .padding(.vertical, 12)
                 .disabled(switching)
             }
-            if let error { Section { Text(error).foregroundStyle(.red) } }
+            RiffetNotice.section(.error, error)
         }
         .navigationTitle(String(localized: "应用图标", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }

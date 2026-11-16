@@ -3,15 +3,6 @@ import RiffetKit
 
 let managementBackends: [NativeBackendId] = [.cursor, .codex, .claude, .dsh, .droid, .traex, .pi, .antigravity]
 
-struct ManagementFeedback: View {
-    let error: String?
-    let notice: String?
-    var body: some View {
-        if let error { SettingsMessage(text: error) }
-        if let notice { SettingsMessage(text: notice, error: false) }
-    }
-}
-
 func managementSettingsPatch(defaultBackend: NativeBackendId? = nil, defaults: [NativeBackendId: NativeBackendDefaults]? = nil,
                              cursor: CursorCliSettingsUpdate? = nil, defaultModel: String? = nil,
                              composerRunningBehavior: String? = nil, idleReclaimMinutes: Int32? = nil,

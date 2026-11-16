@@ -10,13 +10,16 @@ struct GitGraphCell: View {
 
     static let lane: CGFloat = 12
     static let maxLanes = 9
-    private static let palette: [Color] = [.blue, .orange, .green, .purple, .pink, .teal]
+    @Environment(\.palette) private var palette
+
+    private var lanePalette: [Color] { [palette.chart1, palette.chart2, palette.chart3, palette.chart4, palette.chart5, palette.chart6] }
 
     var body: some View {
-        Canvas { context, size in
+        let colors = lanePalette
+        return Canvas { context, size in
             let mid = size.height / 2
             func x(_ column: Int32) -> CGFloat { (CGFloat(min(Int(column), Self.maxLanes - 1)) + 0.5) * Self.lane }
-            func color(_ index: Int32) -> Color { Self.palette[Int(index) % Self.palette.count] }
+            func color(_ index: Int32) -> Color { colors[Int(index) % colors.count] }
             func stroke(_ path: Path, _ index: Int32) { context.stroke(path, with: .color(color(index)), lineWidth: 1.5) }
             let own = x(row.column)
             for lane in row.through {
@@ -41,5 +44,6 @@ struct GitGraphCell: View {
             context.fill(Path(ellipseIn: dot), with: .color(color(row.color)))
         }
         .frame(width: CGFloat(max(1, min(lanes, Self.maxLanes))) * Self.lane, height: height)
+        .accessibilityHidden(true)
     }
 }

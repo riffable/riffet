@@ -180,6 +180,8 @@ struct InteractionCardView: View {
     var result: String? = nil
     @Environment(\.palette) private var palette
     var onSubmitted: ((NativeInteractionResult) -> Void)? = nil
+    /// Docked above the composer, the card folds to one line from the end of its title row.
+    var onCollapse: (() -> Void)? = nil
     /// Why this device held an answer back (device verification, a moved session, expiry) or failed on its own.
     @State private var localNotice: String?
     @State private var localError: String?
@@ -226,6 +228,15 @@ struct InteractionCardView: View {
                 if isQuestion, let count = shown.questionCount?.int64Value, count > 0 {
                     Text("\(max(1, shown.questionIndex?.int64Value ?? 1)) / \(count)").riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg3)
                 }
+                if let onCollapse {
+                    Button(action: onCollapse) {
+                        Image(systemName: "chevron.down").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg4)
+                            .frame(minWidth: RiffetMetrics.hitTarget, minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.vertical, -RiffetMetrics.hitTarget / 4)
+                    .accessibilityLabel(String(localized: "收起", bundle: .riffet))
+                }
             }
             if let message = shown.message, !message.isEmpty {
                 Text(message).riffetFont(isQuestion ? .label : .monoSmall, weight: .regular).lineLimit(3)
@@ -237,7 +248,7 @@ struct InteractionCardView: View {
             summaryActions
         }
         .padding(16)
-        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 14))
+        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous))
         .accessibilityElement(children: .contain)
         .sheet(isPresented: $showingDetails) { detailView }
         .task {
@@ -394,21 +405,20 @@ struct InteractionCardView: View {
             ForEach(shown.actions, id: \.id) { action in
                 Button { selectedAction = action.id } label: {
                     HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: chosenAction?.id == action.id ? "largecircle.fill.circle" : "circle")
-                            .riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3)
                         Text(action.shortLabel ?? action.label).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg)
                             .frame(maxWidth: .infinity, alignment: .leading)
+                        if chosenAction?.id == action.id {
+                            Image(systemName: "checkmark").riffetFont(.label, weight: .medium).foregroundStyle(palette.accent)
+                        }
                     }.multilineTextAlignment(.leading).padding(.vertical, 8).contentShape(Rectangle())
                 }.buttonStyle(.plain).disabled(!connected || busy)
                 if readOnly || chosenAction?.id == action.id {
                     if let detail = action.detail {
                         Text(detail).riffetFont(.monoSmall).foregroundStyle(palette.fg3).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 25)
                     } else if action.shortLabel != nil, action.shortLabel != action.label {
                         Text(action.label).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.leading, 25)
                     }
                 }
             }
@@ -478,15 +488,19 @@ struct InteractionCardView: View {
                 let multiple = shown.multiple?.boolValue == true
                 Button { changeOption(option.id) } label: {
                     HStack(spacing: 10) {
-                        Image(systemName: multiple ? (on ? "checkmark.square.fill" : "square") : (on ? "largecircle.fill.circle" : "circle"))
-                            .riffetFont(.label, weight: .regular)
-                            .foregroundStyle(on ? palette.accent : palette.fg3)
+                        if multiple {
+                            Image(systemName: on ? "checkmark.circle.fill" : "circle")
+                                .riffetFont(.label, weight: .regular)
+                                .foregroundStyle(on ? palette.accent : palette.fg3)
+                        }
                         Text(option.label).riffetFont(.label, weight: .regular).foregroundStyle(on ? palette.fg : palette.fg3).multilineTextAlignment(.leading)
                         Spacer(minLength: 0)
+                        if !multiple && on {
+                            Image(systemName: "checkmark").riffetFont(.label, weight: .medium).foregroundStyle(palette.accent)
+                        }
                     }
                     .padding(.horizontal, 8)
                     .frame(minHeight: 44)
-                    .background(on ? palette.accent.opacity(0.1).opacity(0.55) : Color.clear, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -500,18 +514,16 @@ struct InteractionCardView: View {
     @ViewBuilder
     private var notices: some View {
         if let notice = card.notice {
-            Text(notice == .unconfirmed ? String(localized: "暂时无法确认回答是否已提交", bundle: .riffet) : String(localized: "题目已更新，旧草稿未提交。", bundle: .riffet))
-                .riffetFont(.label, weight: .regular).foregroundStyle(palette.warning)
+            RiffetNotice(kind: .warning, message: notice == .unconfirmed ? String(localized: "暂时无法确认回答是否已提交", bundle: .riffet) : String(localized: "题目已更新，旧草稿未提交。", bundle: .riffet))
         }
-        if let localNotice { Text(localNotice).riffetFont(.label, weight: .regular).foregroundStyle(palette.warning) }
+        if let localNotice { RiffetNotice(kind: .warning, message: localNotice) }
         if let submission, let message = submissionMessage(submission) {
-            Text(message).riffetFont(.label, weight: .regular).foregroundStyle(submission.phase == .success ? palette.success : palette.warning)
+            RiffetNotice(kind: submission.phase == .success ? .success : .warning, message: message)
         }
         if let error = card.error {
-            Text(error.message ?? (error.kind == .submit ? String(localized: "发送失败", bundle: .riffet) : String(localized: "失败", bundle: .riffet)))
-                .riffetFont(.label, weight: .regular).foregroundStyle(palette.danger)
+            RiffetNotice(kind: .error, message: error.message ?? (error.kind == .submit ? String(localized: "发送失败", bundle: .riffet) : String(localized: "失败", bundle: .riffet)))
         }
-        if let localError { Text(localError).riffetFont(.label, weight: .regular).foregroundStyle(palette.danger) }
+        if let localError { RiffetNotice(kind: .error, message: localError) }
     }
 
     private func submissionMessage(_ submission: InteractionSubmission) -> String? {

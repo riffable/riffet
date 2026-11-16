@@ -11,14 +11,14 @@ enum NativeConfigurationSummary {
     }
     static func model(catalog: NativeBackendCatalogEntry?, selection: String?) -> String {
         let value = selection ?? catalog?.defaultModel
-        guard let value, !value.isEmpty else { return "Select model" }
+        guard let value, !value.isEmpty else { return String(localized: "选择模型", bundle: .riffet) }
         guard let catalog, !catalog.models.isEmpty else { return value }
         return modelSelectionSummary(catalog: catalog.models, selection: value)
     }
     /// The input's model entry names only the family; parameters remain in its settings sheet.
     static func shortModel(catalog: NativeBackendCatalogEntry?, selection: String?) -> String {
         let label = modelLabel(catalog: catalog?.models ?? [], value: selection ?? catalog?.defaultModel)
-        return label.isEmpty ? "Select model" : label
+        return label.isEmpty ? String(localized: "选择模型", bundle: .riffet) : label
     }
     static func profile(catalog: NativeBackendCatalogEntry?, profileID: String?) -> String? {
         guard let catalog else { return nil }
@@ -76,12 +76,12 @@ struct NewTaskOptions: View {
             if focus == .model || quickChat, let catalog, let projectID = draft.projectID, !loading, error == nil {
                 modelPicker(catalog, projectID: projectID)
             } else if quickChat {
-                Form {
-                    if loading { Section { ProgressView("正在读取模型与配置…") } }
-                    if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red); Button("重新读取", action: { retry?() }) } }
+                RiffetForm {
+                    if loading { Section { ProgressView() } }
+                    RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() })
                 }
             } else { optionsForm }
-        }.navigationTitle(focus == .model || quickChat ? "Select model" : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }.navigationTitle(focus == .model || quickChat ? String(localized: "选择模型", bundle: .riffet) : String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
     /// Whether the MCP and Skill lists have anything to switch; nil while they are unknown or failed to read.
     private func hasSwitches(_ pick: ExtensionsPick) -> Bool? {
@@ -100,10 +100,10 @@ struct NewTaskOptions: View {
         }
     }
     private var optionsForm: some View {
-        Form {
+        RiffetForm {
             Section {
                 NavigationLink {
-                    List {
+                    RiffetList {
                         ForEach(workbench.backends, id: \.backendId) { entry in
                             Button {
                                 guard entry.available else { return }
@@ -111,35 +111,34 @@ struct NewTaskOptions: View {
                                 draft.profileID = nil; draft.model = nil; draft.mode = nil; draft.approval = nil
                             } label: {
                                 ConfigurationChoiceRow(title: entry.label, markBackend: entry.backendId.name, detail: entry.available ? nil : entry.reason ?? String(localized: "此 Mac 上不可用", bundle: .riffet), selected: entry.backendId == backend)
-                            }.disabled(!entry.available).foregroundStyle(.primary).accessibilityIdentifier("agentChoice.\(entry.backendId.name)")
+                            }.disabled(!entry.available).foregroundStyle(palette.fg).accessibilityIdentifier("agentChoice.\(entry.backendId.name)")
                         }
-                        if workbench.backends.isEmpty { Text(workbench.backendError ?? String(localized: "尚未读取到 Agent", bundle: .riffet)).foregroundStyle(.secondary) }
+                        if workbench.backends.isEmpty { Text(workbench.backendError ?? String(localized: "尚未读取到 Agent", bundle: .riffet)).foregroundStyle(palette.fg2) }
                     }.navigationTitle(String(localized: "选择 Agent", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                } label: { LabeledContent("Agent", value: catalog?.label ?? workbench.backends.first { $0.backendId == backend }?.label ?? backend.name.capitalized) }
+                } label: { SettingsRowLabel(title: String(localized: "Agent", bundle: .riffet), value: catalog?.label ?? workbench.backends.first { $0.backendId == backend }?.label ?? backend.name.capitalized) }
             }
 
             if draft.projectID == nil {
-                Section { Label("请先选择项目，再读取该项目可用的模型。", systemImage: "folder").foregroundStyle(.secondary) }
+                Section { Label("请先选择项目，再读取该项目可用的模型。", systemImage: "folder").foregroundStyle(palette.fg2) }
             } else if loading {
-                Section { ProgressView("正在读取模型与配置…") }
+                Section { ProgressView() }
             } else if let error {
-                Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red); Button("重新读取", action: { retry?() }) }
+                RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() })
             } else if let catalog {
-                if !catalog.available { Section { Label(catalog.reason ?? String(localized: "此 Agent 当前不可用", bundle: .riffet), systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning) } }
+                if !catalog.available { RiffetNotice.section(.warning, catalog.reason ?? String(localized: "此 Agent 当前不可用", bundle: .riffet)) }
                 if catalog.capabilities.supportsModelSelection {
                     Section {
                         NavigationLink {
                             if let projectID = draft.projectID { modelPicker(catalog, projectID: projectID) }
                         } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("模型").font(.caption).foregroundStyle(.secondary)
-                                Text(NativeConfigurationSummary.model(catalog: catalog, selection: draft.model)).foregroundStyle(.primary).fixedSize(horizontal: false, vertical: true)
-                                if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: draft.profileID) { Text(profile).font(.caption).foregroundStyle(.secondary) }
-                            }.padding(.vertical, 3)
+                            SettingsRowLabel(title: String(localized: "模型", bundle: .riffet), value: NativeConfigurationSummary.model(catalog: catalog, selection: draft.model))
                         }.disabled(!catalog.available)
+                        if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: draft.profileID) {
+                            SettingsRowLabel(title: String(localized: "服务商配置", bundle: .riffet), value: profile)
+                        }
                     }
                     ModelParameterSection(catalog: catalog.models, selection: draft.model ?? catalog.defaultModel) { draft.model = $0 }
-                } else { Section { Text("此 Agent 使用它自己的默认模型。改变模型需要在 Mac 上的 Agent 中操作。").foregroundStyle(.secondary) } }
+                } else { Section { Text("此 Agent 使用它自己的默认模型。改变模型需要在 Mac 上的 Agent 中操作。").foregroundStyle(palette.fg2) } }
                 let choice = NativeConfigurationSummary.choice(catalog: catalog, draft: draft, settings: workbench.settings)
                 if catalog.capabilities.supportsModeSelection {
                     Section("运行模式") {
@@ -157,8 +156,8 @@ struct NewTaskOptions: View {
                 if phones || phonesUnknown || extensions.map({ hasSwitches($0) ?? true }) == true {
                     Section { ToolsPickerLink(value: toolGroups, devices: phones ? toolDevices : nil, onChange: onPickTools, plugins: phones ? toolPlugins : nil, extensions: extensions) }
                 }
-            } else { Section { Text("尚未读取到此项目的 Agent 配置。").foregroundStyle(.secondary); Button("重新读取", action: { retry?() }) } }
-            if let error = workbench.backendError { Section { Text(error).foregroundStyle(.red); Button("重新读取 Agent") { Task { await workbench.loadBackends() } } } }
+            } else { RiffetNotice.section(.info, String(localized: "尚未读取到此项目的 Agent 配置。", bundle: .riffet), actionTitle: String(localized: "重新读取", bundle: .riffet), action: { retry?() }) }
+            RiffetNotice.section(.error, workbench.backendError, actionTitle: String(localized: "重新读取 Agent", bundle: .riffet), action: { Task { await workbench.loadBackends() } })
         }.navigationTitle(String(localized: "Agent 与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .task(id: extensions?.key) { if let extensions { await reader.load(extensions, force: false) } }
     }
@@ -180,22 +179,23 @@ private struct NewTaskModelPicker: View {
     @State private var loading = true
     @State private var retry = 0
     @State private var usageRead: (scope: ModelUsageScope, values: [String: NativeBackendUsage])?
+    @Environment(\.palette) private var palette
     private var effectiveProfile: String { selectedProfileID ?? profiles.first { $0.isDefault?.boolValue == true }?.id ?? "" }
     private var keys: [String] { profiles.isEmpty ? [""] : profiles.map(\.id) }
     private var usageScope: ModelUsageScope { ModelUsageScope(server: ObjectIdentifier(workbench), backend: backend.name, project: projectID, profiles: keys, retry: retry) }
     private var usages: [String: NativeBackendUsage] { usageRead?.scope == usageScope ? usageRead?.values ?? [:] : [:] }
     var body: some View {
-        List {
-            if loading { Section { ProgressView { Text(verbatim: "Loading…") } } }
+        RiffetList {
+            if loading { Section { ProgressView() } }
             if let selected = catalogs[effectiveProfile] {
                 ModelParameterSection(catalog: selected.models, selection: selection ?? selected.defaultModel) { value in choose(selected, effectiveProfile.isEmpty ? nil : effectiveProfile, value) }
             }
             ForEach(keys, id: \.self) { key in
                 Section {
                     ModelAccountUsageSummary(account: usages[key]?.account)
-                    if let error = failures[key] { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.red); Button { retry += 1 } label: { Text(verbatim: "Retry") } }
+                    if let error = failures[key] { RiffetNotice(kind: .error, message: error, actionTitle: String(localized: "重试", bundle: .riffet), action: { retry += 1 }) }
                     if let catalog = catalogs[key] {
-                        if !catalog.available { Label(catalog.reason ?? "Unavailable", systemImage: "exclamationmark.triangle").foregroundStyle(.secondary) }
+                        if !catalog.available { RiffetNotice(kind: .warning, message: catalog.reason ?? String(localized: "不可用", bundle: .riffet)) }
                         let models = catalog.models.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }
                         ForEach(models, id: \.value) { model in
                             Button {
@@ -203,15 +203,15 @@ private struct NewTaskModelPicker: View {
                                 choose(catalog, key.isEmpty ? nil : key, selectionForModel(catalog: catalog.models, model: model.value)); dismiss()
                             } label: {
                                 ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value, trailing: modelUsageLabel(usages[key]?.models[model.value]))
-                            }.foregroundStyle(.primary).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
+                            }.foregroundStyle(palette.fg).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
                         }
-                        if models.isEmpty { Text(verbatim: query.isEmpty ? "No models available" : "No matching models").foregroundStyle(.secondary) }
+                        if models.isEmpty { Text(query.isEmpty ? String(localized: "没有可用的模型", bundle: .riffet) : String(localized: "没有匹配的模型", bundle: .riffet)).foregroundStyle(palette.fg2) }
                     }
                 } header: { if let profile = profiles.first(where: { $0.id == key }) { Text(profile.name) } }
             }
         }.accessibilityIdentifier("newTaskModelList")
-            .navigationTitle("Models").navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, prompt: "Search models")
+            .navigationTitle("模型").navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $query, prompt: "搜索模型")
             .task(id: usageScope) { await load() }
             .task(id: usageScope) { await loadUsage(usageScope) }
     }
@@ -266,6 +266,7 @@ struct SessionOptionsView: View {
     @State private var writingTools = false
     @State private var toolsError: String?
     @State private var usageRead: (scope: ModelUsageScope, value: NativeBackendUsage)?
+    @Environment(\.palette) private var palette
     private var current: Session {
         let selected = workbench.selected?.id == session.id ? workbench.selected : nil
         let latest = selected ?? workbench.list.sessions.first { $0.id == session.id } ?? session
@@ -303,16 +304,16 @@ struct SessionOptionsView: View {
     private func toolsShown(_ catalog: NativeBackendCatalogEntry) -> Bool { phonesShown(catalog) || extensionsPick(catalog) != nil }
     private var title: String { switch focus { case .all: String(localized: "会话选项", bundle: .riffet); case .model: String(localized: "模型与参数", bundle: .riffet); case .mode: String(localized: "运行模式", bundle: .riffet); case .approval: String(localized: "操作确认", bundle: .riffet) } }
     var body: some View {
-        Form {
+        RiffetForm {
             if focus == .all { Section("会话") {
-                LabeledContent("项目", value: workbench.project(current.projectId)?.name ?? current.projectId)
-                LabeledContent("Agent", value: catalog?.label ?? (current.backendId ?? .cursor).name.capitalized)
-                if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: current.backendProfileId) { LabeledContent("服务商配置", value: profile) }
-                LabeledContent("状态", value: current.state.label)
+                SettingsRowLabel(title: String(localized: "项目", bundle: .riffet), value: workbench.project(current.projectId)?.name ?? current.projectId)
+                SettingsRowLabel(title: String(localized: "Agent", bundle: .riffet), value: catalog?.label ?? (current.backendId ?? .cursor).name.capitalized)
+                if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: current.backendProfileId) { SettingsRowLabel(title: String(localized: "服务商配置", bundle: .riffet), value: profile) }
+                SettingsRowLabel(title: String(localized: "状态", bundle: .riffet), value: current.state.label)
             } }
             if focus == .all || focus == .model { SessionContextUsageSection(context: context) }
-            if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red); Button("重新读取") { Task { await load() } }.disabled(pending) } }
-            if loading { Section { ProgressView("正在读取 Agent 能力…") } }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet), action: { Task { await load() } })
+            if loading { Section { ProgressView() } }
             else if let catalog {
                 if current.archivedAt != nil { Section {
                     Button {
@@ -329,7 +330,7 @@ struct SessionOptionsView: View {
                         ModelOptions(catalog: catalog.models, selection: current.model ?? catalog.defaultModel, inlineList: focus == .model, providers: providers(catalog), usage: usage,
                                      switchTo: { profile, value in change { api in try await api.nativeSwitchProfile(id: session.id, backendProfileId: profile, model: value) } onDone: { Task { await load() } } }) { value in change { api in try await api.nativeSetModel(id: session.id, model: value) } }
                             .disabled(pending || current.archivedAt != nil)
-                    } else { Section { Text("此 Agent 不支持在客户端切换模型。").foregroundStyle(.secondary) } }
+                    } else { Section { Text("此 Agent 不支持在客户端切换模型。").foregroundStyle(palette.fg2) } }
                 }
                 if (focus == .all || focus == .mode) && catalog.capabilities.supportsModeSelection {
                     Section("运行模式") {
@@ -342,7 +343,7 @@ struct SessionOptionsView: View {
                     } header: { Text("操作确认") } footer: { Text("只影响此会话；部分 Agent 会重启 CLI。") }
                     .disabled(pending || current.archivedAt != nil)
                 }
-                if current.state.isActive { Section { Text("当前轮次继续执行。模型和运行模式的修改将在 Agent 下次空闲时应用。").font(.footnote).foregroundStyle(.secondary) } }
+                if current.state.isActive { Section { Text("当前轮次继续执行。模型和运行模式的修改将在 Agent 下次空闲时应用。").riffetFont(.caption).foregroundStyle(palette.fg3) } }
             }
             if pending { Section { ProgressView("正在保存配置…") } }
             if focus == .all { Section {
@@ -376,7 +377,7 @@ struct SessionOptionsView: View {
             Section("发送设置") {
                 if catalog.capabilities.supportsModeSelection {
                     NavigationLink {
-                        Form {
+                        RiffetForm {
                             focusedSaveFeedback
                             Section("运行模式") {
                                 ConfigurationOptionPicker(title: String(localized: "模式", bundle: .riffet), options: catalog.capabilities.modes, selection: current.mode) { value in
@@ -385,12 +386,12 @@ struct SessionOptionsView: View {
                             }.disabled(pending || current.archivedAt != nil)
                         }.navigationTitle(String(localized: "运行模式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     } label: {
-                        LabeledContent("模式", value: catalog.capabilities.modes.first { $0.id == current.mode }?.label ?? (current.mode.isEmpty ? String(localized: "未报告", bundle: .riffet) : current.mode))
+                        SettingsRowLabel(title: String(localized: "模式", bundle: .riffet), value: catalog.capabilities.modes.first { $0.id == current.mode }?.label ?? (current.mode.isEmpty ? String(localized: "未报告", bundle: .riffet) : current.mode))
                     }.accessibilityIdentifier("sessionModeOptions")
                 }
                 if catalog.capabilities.supportsPermissionSelection {
                     NavigationLink {
-                        Form {
+                        RiffetForm {
                             focusedSaveFeedback
                             Section {
                                 ConfigurationOptionPicker(title: String(localized: "权限模式", bundle: .riffet), options: catalog.capabilities.permissions, selection: effectiveApproval) { value in
@@ -400,7 +401,7 @@ struct SessionOptionsView: View {
                             .disabled(pending || current.archivedAt != nil)
                         }.navigationTitle(String(localized: "操作确认", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     } label: {
-                        LabeledContent("操作确认", value: catalog.capabilities.permissions.first { $0.id == effectiveApproval }?.label ?? effectiveApproval ?? String(localized: "未报告", bundle: .riffet))
+                        SettingsRowLabel(title: String(localized: "操作确认", bundle: .riffet), value: catalog.capabilities.permissions.first { $0.id == effectiveApproval }?.label ?? effectiveApproval ?? String(localized: "未报告", bundle: .riffet))
                     }.accessibilityIdentifier("sessionApprovalOptions")
                 }
                 if toolsShown(catalog) {
@@ -411,9 +412,9 @@ struct SessionOptionsView: View {
         }
     }
     @ViewBuilder private var focusedSaveFeedback: some View {
-        if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }
+        RiffetNotice.section(.error, error)
         if pending { Section { ProgressView("正在保存配置…") } }
-        if current.state.isActive { Section { Text("当前轮次继续执行，修改将在 Agent 下次空闲时应用。").font(.footnote).foregroundStyle(.secondary) } }
+        if current.state.isActive { Section { Text("当前轮次继续执行，修改将在 Agent 下次空闲时应用。").riffetFont(.caption).foregroundStyle(palette.fg3) } }
     }
     @MainActor private func load() async {
         guard !pending else { return }
@@ -482,6 +483,7 @@ struct SessionOptionsView: View {
 
 private struct SessionContextUsageSection: View {
     let context: NativeContext?
+    @Environment(\.palette) private var palette
     private var reported: NativeContext? {
         guard let context, context.size > 0, context.used >= 0 else { return nil }
         return context
@@ -503,7 +505,7 @@ private struct SessionContextUsageSection: View {
         Section("上下文用量") {
             if let context = reported {
                 let ratio = Double(context.used) / Double(context.size)
-                let tone: Color = ratio >= 0.9 ? .red : ratio >= 0.75 ? .orange : .accentColor
+                let tone: Color = ratio >= 0.9 ? palette.danger : ratio >= 0.75 ? palette.warning : palette.accent
                 LabeledContent("已使用", value: context.used.formatted() + " tokens")
                     .accessibilityIdentifier("modelContextUsed")
                 LabeledContent(context.limitKind == "compaction" ? String(localized: "自动压缩阈值", bundle: .riffet) : String(localized: "上下文窗口", bundle: .riffet), value: context.size.formatted() + " tokens")
@@ -513,7 +515,7 @@ private struct SessionContextUsageSection: View {
                     ProgressView(value: min(1, ratio)).tint(tone).accessibilityHidden(true)
                 }.accessibilityElement(children: .combine).accessibilityIdentifier("modelContextUsage")
                 let parts = context.breakdown.filter { $0.tokens >= 0 }
-                if parts.isEmpty { Text("当前 Agent 尚未提供用量分解。").font(.subheadline).foregroundStyle(.secondary) }
+                if parts.isEmpty { Text("当前 Agent 尚未提供用量分解。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2) }
                 else {
                     DisclosureGroup("用量分解") {
                         ForEach(parts, id: \.id) { part in
@@ -524,16 +526,16 @@ private struct SessionContextUsageSection: View {
                                     Text(part.tokens.formatted() + " tokens").monospacedDigit()
                                     if context.used > 0 {
                                         Text((Double(part.tokens) / Double(context.used)).formatted(.percent.precision(.fractionLength(0...1))))
-                                            .font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                                            .riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
                                     }
                                 }
-                            }.font(.subheadline).padding(.vertical, 3).accessibilityElement(children: .combine)
+                            }.riffetFont(.label, weight: .regular).padding(.vertical, 3).accessibilityElement(children: .combine)
                                 .accessibilityIdentifier("modelContextPart.\(part.id)")
                         }
                     }
                 }
             } else {
-                Text("当前 Agent 尚未报告上下文用量。").foregroundStyle(.secondary)
+                Text("当前 Agent 尚未报告上下文用量。").foregroundStyle(palette.fg2)
                     .accessibilityIdentifier("modelContextUnavailable")
             }
         }
@@ -547,6 +549,7 @@ struct ConfigurationChoiceRow: View {
     let selected: Bool
     /// A short figure before the check, such as how many tools an MCP server has.
     var trailing: String? = nil
+    @Environment(\.palette) private var palette
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 12) {
             VStack(alignment: .leading, spacing: 4) {
@@ -554,11 +557,11 @@ struct ConfigurationChoiceRow: View {
                     if let markBackend { AgentMarkView(backend: markBackend, size: 15) }
                     Text(title).fixedSize(horizontal: false, vertical: true)
                 }
-                if let detail, !detail.isEmpty { Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+                if let detail, !detail.isEmpty { Text(detail).riffetFont(.caption).foregroundStyle(palette.fg3).fixedSize(horizontal: false, vertical: true) }
             }.frame(maxWidth: .infinity, alignment: .leading)
-            if let trailing { Text(trailing).font(.subheadline).foregroundStyle(.secondary).monospacedDigit() }
-            if selected { Image(systemName: "checkmark").fontWeight(.semibold).foregroundStyle(.tint).accessibilityLabel("已选择") }
-            else if trailing != nil { Image(systemName: "checkmark").fontWeight(.semibold).hidden() }
+            if let trailing { Text(trailing).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).monospacedDigit() }
+            if selected { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent).accessibilityLabel("已选择") }
+            else if trailing != nil { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).hidden() }
         }.padding(.vertical, 4).frame(minHeight: 36).contentShape(Rectangle())
     }
 }
@@ -568,11 +571,13 @@ private struct ConfigurationOptionPicker: View {
     let options: [NativeBackendOption]
     let selection: String?
     let choose: (String) -> Void
+    @Environment(\.palette) private var palette
     var body: some View {
         ForEach(options, id: \.id) { option in
-            Button { choose(option.id) } label: { ConfigurationChoiceRow(title: option.label, detail: option.description_, selected: selection == option.id) }.foregroundStyle(.primary).accessibilityIdentifier("configurationOption.\(option.id)")
+            SettingsCheckRow(title: option.label, subtitle: option.description_, selected: selection == option.id) { choose(option.id) }
+                .accessibilityIdentifier("configurationOption.\(option.id)")
         }
-        if options.isEmpty { Text("暂无可选择的\(title)").foregroundStyle(.secondary) }
+        if options.isEmpty { Text("没有可用选项").foregroundStyle(palette.fg2) }
     }
 }
 
@@ -603,8 +608,8 @@ private struct ModelAccountUsageSummary: View {
                 KotlinLong(longLong: platformUtcOffsetMillis(epochMillis: $0.int64Value))
             })
             if !summary.isEmpty || account.limitReached {
-                Text(verbatim: [account.limitReached ? "Usage limit reached" : nil, summary.isEmpty ? nil : summary].compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(account.limitReached ? palette.danger : palette.fg3)
+                Text(verbatim: [account.limitReached ? String(localized: "已达用量上限", bundle: .riffet) : nil, summary.isEmpty ? nil : summary].compactMap { $0 }.joined(separator: " · "))
+                    .riffetFont(.caption).foregroundStyle(account.limitReached ? palette.danger : palette.fg3)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -635,26 +640,27 @@ private struct ModelOptions: View {
     var switchTo: (String, String) -> Void = { _, _ in }
     let choose: (String) -> Void
     @State private var query = ""
+    @Environment(\.palette) private var palette
     var body: some View {
         if inlineList { ModelParameterSection(catalog: catalog, selection: selection, choose: choose) }
         Section("模型") {
             if providers.isEmpty { ModelAccountUsageSummary(account: usage?.account) }
             if inlineList && providers.isEmpty {
-                TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
+                TextField(String(localized: "搜索模型", bundle: .riffet), text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
                 ForEach(catalog.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
                     Button { choose(selectionForModel(catalog: catalog, model: model.value)) } label: {
                         ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
-                    }.foregroundStyle(.primary).accessibilityIdentifier("sessionModelChoice.\(model.value)")
+                    }.foregroundStyle(palette.fg).accessibilityIdentifier("sessionModelChoice.\(model.value)")
                 }
             } else if inlineList {
-                TextField("Search models" as String, text: $query).textInputAutocapitalization(.never).autocorrectionDisabled().accessibilityLabel("Search models" as String)
+                TextField(String(localized: "搜索模型", bundle: .riffet), text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
             } else { NavigationLink {
                 ModelSelectionList(catalog: catalog, selection: selection, providers: providers, usage: usage, switchTo: switchTo, choose: choose)
-            } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : "Select model").fixedSize(horizontal: false, vertical: true) }
+            } label: { Text(selection?.isEmpty == false ? modelSelectionSummary(catalog: catalog, selection: selection) : String(localized: "选择模型", bundle: .riffet)).fixedSize(horizontal: false, vertical: true) }
             .disabled(catalog.isEmpty) }
-            if catalog.isEmpty { Text(verbatim: "No models available").font(.footnote).foregroundStyle(.secondary) }
+            if catalog.isEmpty { Text(String(localized: "没有可用的模型", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3) }
             if let selection, !selection.isEmpty, !catalog.contains(where: { $0.value == resolveModelSelection(catalog: catalog, selection: selection).model }) {
-                Text(verbatim: "Not in the model list: \(selection)").font(.footnote).foregroundStyle(.secondary)
+                Text(String(localized: "不在模型列表中：\(selection)", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3)
             }
         }
         if inlineList && !providers.isEmpty {
@@ -677,10 +683,11 @@ private struct ModelSelectionList: View {
     var switchTo: (String, String) -> Void = { _, _ in }
     let choose: (String) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     @State private var query = ""
     private var groups: [ModelProvider] { providers.isEmpty ? [ModelProvider(id: "", name: "", models: catalog, isCurrent: true)] : providers }
     var body: some View {
-        List {
+        RiffetList {
             ForEach(groups) { provider in
                 Section {
                     if provider.isCurrent { ModelAccountUsageSummary(account: usage?.account) }
@@ -688,8 +695,8 @@ private struct ModelSelectionList: View {
                 }
                 header: { if !providers.isEmpty { Text(provider.name) } }
             }
-            if groups.allSatisfy({ $0.models.allSatisfy { !(query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query)) } }) { Text(verbatim: "No matching models").foregroundStyle(.secondary) }
-        }.navigationTitle("Models").navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: "Search models")
+            if groups.allSatisfy({ $0.models.allSatisfy { !(query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query)) } }) { Text("没有匹配的模型").foregroundStyle(palette.fg2) }
+        }.navigationTitle("模型").navigationBarTitleDisplayMode(.inline).searchable(text: $query, prompt: "搜索模型")
     }
 }
 
@@ -703,6 +710,7 @@ private struct ProviderModelRows: View {
     let choose: (String) -> Void
     let dismisses: Bool
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
     var body: some View {
         ForEach(provider.models.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
             Button {
@@ -711,7 +719,7 @@ private struct ProviderModelRows: View {
                 if dismisses { dismiss() }
             } label: {
                 ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: provider.isCurrent && resolveModelSelection(catalog: provider.models, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
-            }.foregroundStyle(.primary).accessibilityIdentifier("sessionModelChoice.\(provider.id).\(model.value)")
+            }.foregroundStyle(palette.fg).accessibilityIdentifier("sessionModelChoice.\(provider.id).\(model.value)")
         }
     }
 }
@@ -721,6 +729,7 @@ private struct ModelParameterSection: View {
     let selection: String?
     let choose: (String) -> Void
     @State private var contextFallback: [String: String] = [:]
+    @Environment(\.palette) private var palette
     private var resolved: ParsedSelection { resolveModelSelection(catalog: catalog, selection: selection) }
     private var params: [ModelParam_] { catalogParams(catalog: catalog, model: resolved.model, overrides: resolved.params) }
     var body: some View {
@@ -735,7 +744,7 @@ private struct ModelParameterSection: View {
                         VStack(alignment: .leading, spacing: 3) {
                             Text(verbatim: parameterTitle(param))
                             let hint = paramHint(param: param)
-                            if !hint.isEmpty { Text(verbatim: hint).font(.caption).foregroundStyle(.secondary) }
+                            if !hint.isEmpty { Text(verbatim: hint).riffetFont(.caption).foregroundStyle(palette.fg3) }
                         }
                     }
                     .accessibilityIdentifier("modelParameter.\(param.id)")

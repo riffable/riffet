@@ -64,7 +64,7 @@ struct ConversationActivityRow: View {
             if view.canStop {
                 Button("停止") { if view.stopWarning != nil { confirming = true } else { Task { await workbench.stop(activity: activity.id) } } }
                     .riffetFont(.caption).foregroundStyle(palette.fg3).frame(minHeight: 44).buttonStyle(.plain)
-                    .confirmationDialog("停止后台任务？", isPresented: $confirming, titleVisibility: .visible) {
+                    .confirmationDialog("停止后台任务「\(view.subject ?? view.label)」？", isPresented: $confirming, titleVisibility: .visible) {
                         Button("停止", role: .destructive) { Task { await workbench.stop(activity: activity.id) } }
                     } message: { Text(view.stopWarning ?? "") }
             }
@@ -80,7 +80,7 @@ struct ConversationActivityRow: View {
                 if hasOutput {
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                         .rotationEffect(.degrees(isExpanded ? 90 : 0)).fixedSize()
-                        .animation(RiffetMotion.chevron, value: isExpanded)
+                        .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
                 }
                 Spacer(minLength: 0)
                 if activity.status == .unknown, let state = conversationActivityStatus(activity, view: view) { Text(state).riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize() }
@@ -107,10 +107,10 @@ struct ConversationActivityRow: View {
             if let date = ServerTime.date(activity.endedAt ?? activity.startedAt) { Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).foregroundStyle(palette.fg4) }
         }
         if !shell, let command = activity.task?.command, !command.isEmpty {
-            ConversationCode(text: command, language: "shell", maximumBodyHeight: 300, stateID: "activity." + item.key + ".command")
+            ConversationCode(text: command, language: "shell", output: true, stateID: "activity." + item.key + ".command")
         }
         if let text = fullText ?? activity.detail, !text.isEmpty {
-            ConversationCode(text: shellTail ? text.split(separator: "\n", omittingEmptySubsequences: false).suffix(6).joined(separator: "\n") : text, language: "output", maximumBodyHeight: 300, stateID: "activity." + item.key + ".output")
+            ConversationCode(text: shellTail ? text.split(separator: "\n", omittingEmptySubsequences: false).suffix(6).joined(separator: "\n") : text, language: "output", output: true, stateID: "activity." + item.key + ".output")
                 .padding(.leading, shell ? 24 : 0)
         }
         if let ref = activity.blobRef, fullText == nil, !shellTail {
@@ -154,7 +154,7 @@ struct ConversationActivityStopButton: View {
         if view.canStop {
             Button("停止") { if view.stopWarning != nil { confirming = true } else { Task { await workbench.stop(activity: task.id) } } }
                 .riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).frame(minHeight: 44).buttonStyle(.borderless)
-                .confirmationDialog("停止后台任务？", isPresented: $confirming, titleVisibility: .visible) {
+                .confirmationDialog("停止后台任务「\(view.subject ?? view.label)」？", isPresented: $confirming, titleVisibility: .visible) {
                     Button("停止", role: .destructive) { Task { await workbench.stop(activity: task.id) } }
                 } message: { Text(view.stopWarning ?? "") }
         }

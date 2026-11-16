@@ -3,124 +3,6 @@ import SwiftUI
 import UserNotifications
 import RiffetKit
 
-/// The container of every settings page: the white page, grey group cards, rows at least 52 high.
-struct RiffetForm<Content: View>: View {
-    private let content: Content
-    @Environment(\.palette) private var palette
-    init(@ViewBuilder content: () -> Content) { self.content = content() }
-    var body: some View {
-        Form { Group { content }.listRowBackground(palette.bgSubtle) }
-            .scrollContentBackground(.hidden).background(palette.bg)
-            .environment(\.defaultMinListRowHeight, RiffetMetrics.settingsRowHeight)
-    }
-}
-
-/// `RiffetForm`'s counterpart for pages built as a list.
-struct RiffetList<Content: View>: View {
-    private let content: Content
-    @Environment(\.palette) private var palette
-    init(@ViewBuilder content: () -> Content) { self.content = content() }
-    var body: some View {
-        List { Group { content }.listRowBackground(palette.bgSubtle) }
-            .listStyle(.insetGrouped)
-            .listSectionSpacing(.compact)
-            .contentMargins(.top, 4, for: .scrollContent)
-            .scrollContentBackground(.hidden).background(palette.bg)
-            .environment(\.defaultMinListRowHeight, RiffetMetrics.settingsRowHeight)
-    }
-}
-
-// MARK: - Settings parts
-//
-// Every settings page is built from these: a grouped list, rows with a symbol tile, a trailing
-// value in the third text colour, a check mark for a choice, and a one-line message for errors.
-// Sections carry no headers unless the page has several groups of the same kind; footers only say
-// what a reader could not infer (where it is stored, when it takes effect).
-
-/// A row's symbol on a small tile: the page colour on the row's grey, so glyphs of different
-/// optical sizes sit on the same square.
-struct SettingsIcon: View {
-    let symbol: String
-    @Environment(\.palette) private var palette
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: 15, weight: .medium))
-            .foregroundStyle(palette.fg2)
-            .frame(width: 30, height: 30)
-            .background(palette.bg, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).strokeBorder(palette.lineSoft, lineWidth: 0.5))
-            .accessibilityHidden(true)
-    }
-}
-
-/// A settings row: tile, title, and an optional value on the trailing edge.
-struct SettingsRowLabel: View {
-    let title: String
-    var symbol: String?
-    var value: String?
-    @Environment(\.palette) private var palette
-    var body: some View {
-        HStack(spacing: 12) {
-            if let symbol { SettingsIcon(symbol: symbol) }
-            Text(title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-            Spacer(minLength: 8)
-            if let value { Text(value).riffetFont(.body).foregroundStyle(palette.fg3).lineLimit(1) }
-        }
-    }
-}
-
-/// One choice of several: the title, an optional second line, and the accent check when picked.
-struct SettingsCheckRow: View {
-    let title: String
-    var subtitle: String?
-    let selected: Bool
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title).riffetFont(.body).foregroundStyle(palette.fg)
-                    if let subtitle { Text(subtitle).riffetFont(.caption).foregroundStyle(palette.fg3) }
-                }
-                Spacer(minLength: 8)
-                Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.accent)
-                    .opacity(selected ? 1 : 0)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-    }
-}
-
-/// An error or a server's notice inside a settings list: its own quiet section, selectable.
-struct SettingsMessage: View {
-    let text: String
-    var error = true
-    @Environment(\.palette) private var palette
-    var body: some View {
-        Section {
-            Label { Text(text).textSelection(.enabled) } icon: {
-                Image(systemName: error ? "exclamationmark.circle" : "info.circle")
-            }
-            .riffetFont(.caption).foregroundStyle(error ? palette.danger : palette.fg2)
-        }
-    }
-}
-
-/// A row of scope chips above a settings list, outside any card.
-struct SettingsChipRow<Content: View>: View {
-    @ViewBuilder var content: () -> Content
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) { content() }.padding(.horizontal, RiffetMetrics.pageInset)
-        }
-        .scrollClipDisabled()
-        .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
-    }
-}
-
 private struct SettingsEntry: Identifiable {
     enum Kind {
         case link(() -> AnyView)
@@ -169,17 +51,17 @@ struct SettingsView: View {
                 Section {
                     ForEach(group.entries) { row($0) }
                 } header: {
-                    Text(group.title).riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                    RiffetSectionTitle(group.title)
                 }
             }
-            if let exportError { SettingsMessage(text: exportError) }
+            if let exportError { RiffetNotice.section(.error, exportError) }
         }
         .overlay {
             if groups.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) }
         }
         .riffetSoftEdges()
         .overlay(alignment: .top) { RiffetBarScrim() }
-        .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: String(localized: "搜索设置", bundle: .riffet))
+        .riffetSearchable(text: $query, prompt: String(localized: "搜索设置", bundle: .riffet))
         .navigationTitle(String(localized: "设置", bundle: .riffet)).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .bottomBar)
         .background(TabBarVisibility(hidden: false))
         .sheet(item: $logFile) { NativeShareSheet(items: [$0.url]).presentationDetents([.medium, .large]) }
@@ -340,73 +222,116 @@ private func redactedLog(_ text: String) -> String {
     }
 }
 
+/// An edit page with one text field and no label: the page title names it, the keyboard's done saves.
+/// `save` returns the reason it failed, or nil once saved.
+private struct SettingsTextEditPage: View {
+    let title: String
+    let initial: String
+    var prompt = ""
+    var mono = false
+    var limit: Int?
+    var footer: String?
+    var valid: (String) -> Bool = { _ in true }
+    var invalidMessage: String?
+    let save: (String) async -> String?
+    @Environment(\.dismiss) private var dismiss
+    @State private var value: String
+    @State private var error: String?
+    @State private var submitting = false
+
+    init(title: String, initial: String, prompt: String = "", mono: Bool = false, limit: Int? = nil, footer: String? = nil,
+         valid: @escaping (String) -> Bool = { _ in true }, invalidMessage: String? = nil,
+         save: @escaping (String) async -> String?) {
+        self.title = title; self.initial = initial; self.prompt = prompt; self.mono = mono; self.limit = limit
+        self.footer = footer; self.valid = valid; self.invalidMessage = invalidMessage; self.save = save
+        _value = State(initialValue: initial)
+    }
+
+    private var trimmed: String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var dirty: Bool { trimmed != initial.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isValid: Bool { valid(trimmed) }
+
+    var body: some View {
+        RiffetEditPage(title: title, dirty: dirty, canSave: isValid, save: commit) {
+            Section {
+                RiffetField(prompt: prompt, text: $value, mono: mono)
+                    .textInputAutocapitalization(mono ? .never : nil).autocorrectionDisabled(mono)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        guard dirty, isValid, !submitting else { return }
+                        submitting = true
+                        Task {
+                            if await commit() { dismiss() }
+                            submitting = false
+                        }
+                    }
+            } footer: {
+                if let footer, isValid { Text(footer) }
+            }
+            RiffetNotice.section(.error, isValid ? nil : invalidMessage)
+            RiffetNotice.section(.error, error)
+        }
+        .onChange(of: value) { _, text in
+            guard let limit, text.unicodeScalars.count > limit else { return }
+            value = String(String.UnicodeScalarView(text.unicodeScalars.prefix(limit)))
+        }
+    }
+
+    private func commit() async -> Bool {
+        error = await save(trimmed)
+        return error == nil
+    }
+}
+
 /// The owner's name and avatar, shared by every device paired with this server.
 private struct OwnerProfileView: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
-    @State private var name = ""
-    @State private var submitted: String?
     @State private var picked: PhotosPickerItem?
+    @State private var pickingPhoto = false
     @State private var busy = false
     @State private var error: String?
     @State private var styles: [OwnerAvatarStyle] = []
     @State private var randomizing = false
-    @FocusState private var focused: Bool
+    @State private var editingName = false
+
+    private var name: String { workbench.owner?.name ?? "" }
+
     var body: some View {
         RiffetForm {
-            Section {
-                VStack(spacing: 12) {
-                    OwnerAvatarView(workbench: workbench, owner: workbench.owner, size: 96)
-                    HStack(spacing: 12) {
-                        PhotosPicker(selection: $picked, matching: .images) { Text("更换头像") }
-                        if !styles.isEmpty {
-                            Button { randomizing = true } label: { Label("随机头像", systemImage: "dice") }
-                        }
-                        if workbench.owner?.avatar != nil {
-                            Button("移除", role: .destructive) { Task { await run { try await workbench.removeOwnerAvatar() } } }
-                        }
-                    }.buttonStyle(.bordered).disabled(busy)
-                }.frame(maxWidth: .infinity)
-            }.listRowBackground(Color.clear)
-            Section {
-                LabeledContent("名称") {
-                    TextField("", text: $name).multilineTextAlignment(.trailing).focused($focused).submitLabel(.done)
-                        .onSubmit { saveName() }
-                }
-            } footer: { Text("所有连接这台服务器的设备共用") }
+            Section { header }.listRowBackground(Color.clear).listRowSeparator(.hidden)
             if let history = workbench.owner?.history, !history.isEmpty {
-                Section("历史头像") {
+                Section {
                     ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 10) {
+                        HStack(spacing: RiffetMetrics.floatingGap) {
                             ForEach(history, id: \.sha256) { avatar in
                                 Button { Task { await run { try await workbench.restoreOwnerAvatar(avatar) } } } label: {
-                                    OwnerAvatarView(workbench: workbench, owner: nil, size: 44, url: workbench.ownerAvatarURL(avatar))
+                                    OwnerAvatarView(workbench: workbench, owner: nil, size: RiffetMetrics.avatar, url: workbench.ownerAvatarURL(avatar))
                                 }
                                 .buttonStyle(.plain).disabled(busy)
                                 .contextMenu {
                                     Button("删除", role: .destructive) { Task { await run { try await workbench.deleteOwnerAvatarHistory(avatar) } } }
                                 }
                             }
-                        }.padding(.vertical, 4)
+                        }
                     }
-                }
+                } header: { RiffetSectionTitle(String(localized: "历史头像", bundle: .riffet)) }
             }
-            if let error { SettingsMessage(text: error) }
+            RiffetNotice.section(.error, error)
         }
         .navigationTitle(String(localized: "个人资料", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task { styles = await workbench.ownerAvatarStyles() }
+        .photosPicker(isPresented: $pickingPhoto, selection: $picked, matching: .images)
         .sheet(isPresented: $randomizing) {
             RandomAvatarSheet(workbench: workbench, styles: styles) { style, seed, ink, paper in
                 await run { try await workbench.generateOwnerAvatar(style: style, seed: seed, ink: ink, paper: paper) }
             }
         }
-        .task(id: workbench.owner?.name) { if !focused { name = workbench.owner?.name ?? "" } }
-        .onChange(of: name) { _, value in
-            let limit = 32 // OWNER_NAME_MAX
-            if value.unicodeScalars.count > limit { name = String(String.UnicodeScalarView(value.unicodeScalars.prefix(limit))) }
+        .sheet(isPresented: $editingName) {
+            SettingsTextEditPage(title: String(localized: "名称", bundle: .riffet), initial: name, limit: 32 /* OWNER_NAME_MAX */) { value in
+                do { try await workbench.updateOwnerName(value); return nil } catch { return error.riffetMessage }
+            }
         }
-        .onChange(of: focused) { _, isFocused in if !isFocused { saveName() } }
-        .onDisappear { saveName() }
         .onChange(of: picked) { _, item in
             guard let item else { return }
             picked = nil
@@ -419,17 +344,36 @@ private struct OwnerProfileView: View {
             }
         }
     }
-    private func saveName() {
-        let value = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value != (submitted ?? workbench.owner?.name ?? "") else { return }
-        submitted = value
-        Task {
-            // Only a save in flight is skipped as a repeat; once it settles, the server's name is the reference again.
-            defer { submitted = nil }
-            do { try await workbench.updateOwnerName(value); error = nil }
-            catch is CancellationError {} catch { self.error = error.riffetMessage }
-        }
+
+    private var header: some View {
+        VStack(spacing: 12) {
+            Menu {
+                Button("从相册选择", systemImage: "photo") { pickingPhoto = true }
+                if !styles.isEmpty { Button("随机", systemImage: "dice") { randomizing = true } }
+                if workbench.owner?.avatar != nil {
+                    Button("移除", systemImage: "trash", role: .destructive) { Task { await run { try await workbench.removeOwnerAvatar() } } }
+                }
+            } label: {
+                OwnerAvatarView(workbench: workbench, owner: workbench.owner, size: 96)
+                    .overlay(alignment: .bottomTrailing) {
+                        Image(systemName: "pencil").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg2)
+                            .frame(width: RiffetMetrics.iconSlot, height: RiffetMetrics.iconSlot)
+                            .background(palette.bgSubtle, in: Circle())
+                            .overlay(Circle().strokeBorder(palette.line, lineWidth: 0.5))
+                    }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain).disabled(busy)
+            .accessibilityLabel("更换头像")
+            Button { editingName = true } label: {
+                Text(name.isEmpty ? String(localized: "名称", bundle: .riffet) : name)
+                    .riffetFont(.barTitle).foregroundStyle(name.isEmpty ? palette.fg3 : palette.fg).lineLimit(1)
+                    .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+            Text("所有连接这台服务器的设备共用").riffetFont(.caption).foregroundStyle(palette.fg3)
+        }.frame(maxWidth: .infinity)
     }
+
     private func run(_ action: () async throws -> Void) async {
         busy = true
         defer { busy = false }
@@ -455,7 +399,7 @@ private struct ConnectionSettingsView: View {
                     .disabled(model.connectionBusy)
                 NavigationLink { PairDeviceView(workbench: workbench) } label: { Label("配对新设备", systemImage: "qrcode") }
             }
-            if let error = model.error { SettingsMessage(text: error) }
+            if let error = model.error { RiffetNotice.section(.error, error) }
         }
         .navigationTitle(String(localized: "连接与配对", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task { await model.refreshPairedServers() }
@@ -475,28 +419,29 @@ private struct NotificationSettingsView: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
     @State private var error: String?
+    private var authorization: UNAuthorizationStatus { RiffetNotifications.shared.authorization }
     var body: some View {
         RiffetForm {
             Section {
-                LabeledContent {
-                    Text(settingsNotificationStatus()).riffetFont(.body).foregroundStyle(palette.fg3)
-                } label: {
-                    SettingsRowLabel(title: String(localized: "任务提醒", bundle: .riffet), symbol: "bell")
-                }
-                Button {
-                    if RiffetNotifications.shared.authorization == .notDetermined {
-                        Task { do { _ = try await RiffetNotifications.shared.requestAuthorization() } catch { self.error = error.localizedDescription } }
-                    } else {
-                        Task { await RiffetNotifications.shared.openSettings() }
+                Toggle(isOn: Binding(
+                    get: { [.authorized, .provisional, .ephemeral].contains(authorization) },
+                    set: { on in
+                        if on && authorization == .notDetermined {
+                            Task { do { _ = try await RiffetNotifications.shared.requestAuthorization() } catch { self.error = error.localizedDescription } }
+                        } else {
+                            Task { await RiffetNotifications.shared.openSettings() }
+                        }
                     }
-                } label: {
-                    Text(RiffetNotifications.shared.authorization == .notDetermined ? "启用任务提醒" : "打开系统通知设置")
-                        .riffetFont(.body).foregroundStyle(palette.accent)
-                }
+                )) {
+                    SettingsRowLabel(title: String(localized: "任务提醒", bundle: .riffet), symbol: "bell")
+                }.tint(palette.accent)
             } footer: { Text(pushStatus) }
-            if let message = error ?? workbench.notificationError {
-                SettingsMessage(text: message)
+            if authorization == .denied {
+                RiffetNotice.section(.warning, String(localized: "系统通知已关闭", bundle: .riffet), actionTitle: String(localized: "去系统设置", bundle: .riffet)) {
+                    Task { await RiffetNotifications.shared.openSettings() }
+                }
             }
+            RiffetNotice.section(.error, error ?? workbench.notificationError)
         }
         .navigationTitle(String(localized: "通知", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task {
@@ -529,8 +474,8 @@ extension NotificationSettingsView {
 private struct FilesSettingsView: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
-    @State private var editor = ""
     @State private var saving = false
+    @State private var editingEditor = false
     @State private var error: String?
     private var savedEditor: String { workbench.settings?.editorCommand ?? "" }
     var body: some View {
@@ -538,38 +483,36 @@ private struct FilesSettingsView: View {
             Section {
                 Toggle("允许预览项目外的文件", isOn: Binding(
                     get: { workbench.settings?.allowOutsideRead?.boolValue == true },
-                    set: { value in Task { await save(managementSettingsPatch(allowOutsideRead: value)) } }
+                    set: { value in Task { error = await save(managementSettingsPatch(allowOutsideRead: value)) } }
                 )).tint(palette.accent).disabled(saving)
-            } header: { Text("文件访问") } footer: { Text("只读打开项目外路径；文件树与搜索仍限项目内。") }
+            } header: { RiffetSectionTitle(String(localized: "文件访问", bundle: .riffet)) } footer: { Text("只读打开项目外路径；文件树与搜索仍限项目内。") }
 
             Section {
-                TextField("cursor", text: $editor).riffetFont(.mono)
-                    .textInputAutocapitalization(.never).autocorrectionDisabled().disabled(saving)
-                    .submitLabel(.done).onSubmit { saveEditor() }
-                if editor != savedEditor {
-                    Button { saveEditor() } label: { Text("保存").riffetFont(.body).foregroundStyle(palette.accent) }.disabled(saving)
-                }
-            } header: { Text("编辑器命令") } footer: { Text("在服务器电脑上打开文件时使用。") }
+                Button { editingEditor = true } label: {
+                    SettingsRowLabel(title: String(localized: "编辑器命令", bundle: .riffet), value: savedEditor.isEmpty ? nil : savedEditor)
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            } footer: { Text("在服务器电脑上打开文件时使用。") }
 
-            if let error { SettingsMessage(text: error) }
+            RiffetNotice.section(.error, error)
         }
         .navigationTitle(String(localized: "文件与编辑器", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .onAppear { editor = savedEditor }
+        .sheet(isPresented: $editingEditor) {
+            SettingsTextEditPage(title: String(localized: "编辑器命令", bundle: .riffet), initial: savedEditor, prompt: "cursor", mono: true) { value in
+                await save(managementSettingsPatch(editorCommand: value))
+            }
+        }
     }
-    private func saveEditor() {
-        guard editor != savedEditor else { return }
-        Task { await save(managementSettingsPatch(editorCommand: editor.trimmingCharacters(in: .whitespacesAndNewlines))) }
-    }
-    private func save(_ patch: AppSettingsUpdate) async {
-        guard !saving, let api = workbench.api else { return }
+    /// The reason it failed, or nil once saved.
+    private func save(_ patch: AppSettingsUpdate) async -> String? {
+        guard !saving, let api = workbench.api else { return nil }
         saving = true
         defer { saving = false }
         do {
             let saved = try await api.updateSettings(body: patch)
             workbench.store.applySavedSettings(settings: saved)
-            editor = saved.editorCommand ?? ""
-            error = nil
-        } catch { self.error = error.riffetMessage }
+            return nil
+        } catch { return error.riffetMessage }
     }
 }
 
@@ -583,13 +526,16 @@ private struct InteractionSettingsView: View {
     var body: some View {
         RiffetForm {
             Section {
-                SettingsCheckRow(title: String(localized: "排队", bundle: .riffet), selected: runningBehavior == "queue") { Task { await saveRunningBehavior("queue") } }
-                SettingsCheckRow(title: String(localized: "补充到当前任务", bundle: .riffet), selected: runningBehavior == "steer") { Task { await saveRunningBehavior("steer") } }
-            } header: {
-                Text("运行中发送的消息").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                Picker(String(localized: "运行中发送的消息", bundle: .riffet), selection: Binding(
+                    get: { runningBehavior }, set: { value in Task { await saveRunningBehavior(value) } }
+                )) {
+                    Text("排队").tag("queue")
+                    Text("补充到当前任务").tag("steer")
+                }
+                .pickerStyle(.menu).tint(palette.fg3)
+                .disabled(savingInput)
+                .accessibilityIdentifier("composerRunningBehavior")
             }
-            .disabled(savingInput)
-            .accessibilityIdentifier("composerRunningBehavior")
             Section {
                 Toggle(isOn: Binding(get: { biometric }, set: { enabled in
                     if !enabled { biometric = false; return }
@@ -605,7 +551,7 @@ private struct InteractionSettingsView: View {
                 }
                 .tint(palette.accent)
             } footer: { Text("仅保存在这台设备") }
-            if let error { SettingsMessage(text: error) }
+            RiffetNotice.section(.error, error)
         }
         .navigationTitle(String(localized: "交互与输入", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
     }
@@ -623,9 +569,43 @@ private struct InteractionSettingsView: View {
     }
 }
 
+private extension View {
+    /// Forgetting a paired server: named in the question, confirmed before anything is deleted.
+    func forgetServerDialog(_ model: AppModel, target: Binding<PairedServer?>) -> some View {
+        confirmationDialog(target.wrappedValue.map { String(localized: "忘记「\($0.displayName)」？", bundle: .riffet) } ?? "",
+                           isPresented: Binding(get: { target.wrappedValue != nil }, set: { if !$0 { target.wrappedValue = nil } }),
+                           titleVisibility: .visible) {
+            Button("忘记", role: .destructive) {
+                if let server = target.wrappedValue { Task { await model.forgetServer(server) } }
+                target.wrappedValue = nil
+            }
+        } message: { Text("仅删除本机配对凭据，再次连接需重新配对。") }
+    }
+
+    func renameServerSheet(_ model: AppModel, target: Binding<PairedServer?>) -> some View {
+        sheet(isPresented: Binding(get: { target.wrappedValue != nil }, set: { if !$0 { target.wrappedValue = nil } })) {
+            if let server = target.wrappedValue {
+                SettingsTextEditPage(
+                    title: String(localized: "重命名服务器", bundle: .riffet), initial: server.name ?? "",
+                    prompt: String(localized: "名称", bundle: .riffet),
+                    footer: String(localized: "仅保存在这台设备，留空显示地址", bundle: .riffet),
+                    valid: { model.host.isValidServerName(name: $0) },
+                    invalidMessage: String(localized: "名称需为单行，最多 64 个字符", bundle: .riffet)
+                ) { name in
+                    if await model.renameServer(server, name: name) { return nil }
+                    return model.error ?? String(localized: "操作未完成", bundle: .riffet)
+                }
+            }
+        }
+    }
+}
+
 /// Shared by settings and the signed-out entry so a saved server stays reachable without an active one.
+/// A directory of servers: a row opens the server's page; the same actions sit in its menu and swipe.
+/// On the connection page (`connects`) the reader came to connect, so a row connects at once instead.
 struct PairedServersSection: View {
     let model: AppModel
+    var connects = false
     let onPair: (PairedServer) -> Void
     @Environment(\.palette) private var palette
     @State private var forgetting: PairedServer?
@@ -641,107 +621,98 @@ struct PairedServersSection: View {
     var body: some View {
         Section {
             ForEach(servers, id: \.origin) { server in
-                HStack(spacing: 12) {
-                    Button {
-                        if model.serverFailures[server.origin] == String(localized: "需重新配对", bundle: .riffet) { onPair(server) }
-                        else { Task { await model.switchServer(server) } }
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.accent)
-                                .opacity(model.isCurrent(server) ? 1 : 0).frame(width: 20)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(server.displayName).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-                                Text(server.baseUrl).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
-                            }
-                            Spacer(minLength: 0)
-                            if model.switchingOrigin == server.origin { ProgressView() }
-                            else if let failure = model.serverFailures[server.origin] {
-                                Text(failure).riffetFont(.caption).foregroundStyle(palette.fg3)
-                            }
-                        }.frame(maxWidth: .infinity, minHeight: 64, alignment: .leading).contentShape(Rectangle())
-                    }.buttonStyle(.plain)
-                        .accessibilityValue(model.isCurrent(server) ? String(localized: "当前服务器", bundle: .riffet) : model.serverFailures[server.origin] ?? "")
-                    Menu {
-                        Text(server.baseUrl)
+                Group {
+                    if connects {
+                        // A server whose pairing has expired cannot be switched to; its row pairs it again.
+                        Button {
+                            if model.serverFailures[server.origin] == String(localized: "需重新配对", bundle: .riffet) { onPair(server) }
+                            else { Task { await model.switchServer(server) } }
+                        } label: { row(server).contentShape(Rectangle()) }
+                            .buttonStyle(.plain)
+                    } else {
+                        NavigationLink { ServerDetailView(model: model, origin: server.origin, onPair: onPair) } label: { row(server) }
+                    }
+                }
+                    .disabled(model.connectionBusy)
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        Button("忘记服务器", systemImage: "trash", role: .destructive) { forgetting = server }
+                        Button("重命名", systemImage: "pencil") { renaming = server }.tint(palette.fg3)
+                    }
+                    .swipeActions(edge: .leading) {
+                        if !model.isCurrent(server) {
+                            Button("切换", systemImage: "arrow.left.arrow.right") { Task { await model.switchServer(server) } }.tint(palette.accent)
+                        }
+                    }
+                    .contextMenu {
+                        if !model.isCurrent(server) {
+                            Button("切换到此服务器", systemImage: "arrow.left.arrow.right") { Task { await model.switchServer(server) } }
+                        }
                         Button("重命名", systemImage: "pencil") { renaming = server }
                         Button("重新配对", systemImage: "qrcode.viewfinder") { onPair(server) }
                         Button("忘记服务器", systemImage: "trash", role: .destructive) { forgetting = server }
-                    } label: {
-                        Image(systemName: "ellipsis").foregroundStyle(palette.fg2).frame(width: 44, height: 44).contentShape(Rectangle())
-                    }.accessibilityLabel("服务器选项")
-                }
-                .disabled(model.connectionBusy)
-                .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 0, trailing: 8))
+                    }
             }
-        } header: { Text("已配对服务器") } footer: { Text("仅保存在这台设备") }
-        .confirmationDialog("忘记服务器？", isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }), titleVisibility: .visible) {
-            Button("忘记服务器", role: .destructive) {
-                if let server = forgetting { Task { await model.forgetServer(server) } }
-                forgetting = nil
+        } header: { RiffetSectionTitle(String(localized: "已配对服务器", bundle: .riffet)) } footer: { Text("仅保存在这台设备") }
+        .forgetServerDialog(model, target: $forgetting)
+        .renameServerSheet(model, target: $renaming)
+    }
+
+    private func row(_ server: PairedServer) -> some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(server.displayName).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                Text(server.baseUrl).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
             }
-        } message: { Text("仅删除本机配对凭据，再次连接需重新配对。") }
-        .sheet(isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            if let server = renaming { RenameServerSheet(model: model, server: server) }
+            Spacer(minLength: 0)
+            if model.switchingOrigin == server.origin { ProgressView() }
+            else if model.isCurrent(server) { Text("当前").riffetFont(.body).foregroundStyle(palette.fg3) }
+            else if let failure = model.serverFailures[server.origin] { Text(failure).riffetFont(.caption).foregroundStyle(palette.fg3) }
         }
+        .frame(minHeight: RiffetMetrics.rowMinHeight)
+        .accessibilityElement(children: .combine)
     }
 }
 
-private struct RenameServerSheet: View {
+/// One paired server: its address and every action on it.
+private struct ServerDetailView: View {
     let model: AppModel
-    let server: PairedServer
+    let origin: String
+    let onPair: (PairedServer) -> Void
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.palette) private var palette
-    @State private var value: String
-    @State private var saving = false
-    @State private var error: String?
-    @FocusState private var focused: Bool
+    @State private var forgetting: PairedServer?
+    @State private var renaming: PairedServer?
 
-    init(model: AppModel, server: PairedServer) {
-        self.model = model; self.server = server
-        _value = State(initialValue: server.name ?? "")
-    }
-
-    private var name: String { value.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var valid: Bool { model.host.isValidServerName(name: name) }
+    private var server: PairedServer? { model.pairedServers.first { $0.origin == origin } }
 
     var body: some View {
-        NavigationStack {
-            RiffetForm {
+        RiffetForm {
+            if let server {
+                Section { RiffetValueRow(label: String(localized: "地址", bundle: .riffet), value: server.baseUrl, mono: true) }
                 Section {
-                    TextField("名称", text: $value)
-                        .focused($focused)
-                        .disabled(saving)
-                } footer: {
-                    if valid { Text("仅保存在这台设备，留空显示地址") }
-                    else { Text("名称需为单行，最多 64 个字符").foregroundStyle(palette.danger) }
+                    if !model.isCurrent(server) {
+                        Button { Task { await model.switchServer(server) } } label: { Label("切换到此服务器", systemImage: "arrow.left.arrow.right") }
+                    }
+                    Button { renaming = server } label: { Label("重命名", systemImage: "pencil") }
+                    Button { onPair(server); dismiss() } label: { Label("重新配对", systemImage: "qrcode.viewfinder") }
                 }
-                if let error { Text(error).foregroundStyle(palette.danger) }
-            }
-            .navigationTitle(String(localized: "重命名服务器", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(saving ? "保存中…" : "保存") { Task { await save() } }
-                        .disabled(saving || !valid)
+                Section {
+                    Button(role: .destructive) { forgetting = server } label: { Label("忘记服务器", systemImage: "trash") }
                 }
+                RiffetNotice.section(.error, model.error)
             }
-            .interactiveDismissDisabled(saving)
-            .task { focused = true }
-        }.presentationDetents([.medium, .large])
-    }
-
-    private func save() async {
-        guard !saving, valid else { return }
-        saving = true; error = nil
-        defer { saving = false }
-        if await model.renameServer(server, name: name) { dismiss() }
-        else { error = model.error ?? String(localized: "操作未完成", bundle: .riffet) }
+        }
+        .disabled(model.connectionBusy)
+        .navigationTitle(server?.displayName ?? "").navigationBarTitleDisplayMode(.inline)
+        .onChange(of: server == nil) { _, gone in if gone { dismiss() } }
+        .forgetServerDialog(model, target: $forgetting)
+        .renameServerSheet(model, target: $renaming)
     }
 }
 
 private struct DevicesView: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var devices: [PublicDevice] = []
     @State private var currentID: String?
     @State private var loaded = false
@@ -761,26 +732,21 @@ private struct DevicesView: View {
         // Two records under one name are told apart by when each was paired.
         let names = Dictionary(grouping: devices, by: \.name).filter { $0.value.count > 1 }.keys
         RiffetList {
-            if let error { Section { Text(error).foregroundStyle(palette.danger) } }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet)) { Task { await load() } }
             if !recent.isEmpty {
                 Section { ForEach(recent, id: \.id) { row($0, pairedDate: names.contains($0.name)) } }
             }
             if !older.isEmpty {
                 Section {
+                    Button { withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { showOlder.toggle() } } label: {
+                        HStack {
+                            Text("较早的设备 · \(older.count)").riffetFont(.body).foregroundStyle(palette.fg)
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg3)
+                                .rotationEffect(.degrees(showOlder ? 90 : 0))
+                        }.contentShape(Rectangle())
+                    }.buttonStyle(.plain)
                     if showOlder { ForEach(older, id: \.id) { row($0, pairedDate: names.contains($0.name)) } }
-                } header: {
-                    HStack {
-                        Button { withAnimation(RiffetMotion.spatial) { showOlder.toggle() } } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "chevron.right").font(.system(size: 11, weight: .semibold)).rotationEffect(.degrees(showOlder ? 90 : 0))
-                                Text("较早的设备 · \(older.count)")
-                            }
-                        }
-                        Spacer()
-                        Button("全部移除", role: .destructive) { removingOlder = true }.disabled(busy)
-                    }
-                    .riffetFont(.label).textCase(nil).foregroundStyle(palette.fg3)
-                    .buttonStyle(.borderless)
                 }
             }
         }
@@ -788,9 +754,18 @@ private struct DevicesView: View {
             if loaded && devices.isEmpty && error == nil { ContentUnavailableView("没有已配对的设备", systemImage: "iphone.slash") }
         }
         .navigationTitle(String(localized: "已授权设备", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !older.isEmpty {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("移除较早的设备", systemImage: "trash", role: .destructive) { removingOlder = true }.disabled(busy)
+                    } label: { Image(systemName: "ellipsis") }.accessibilityLabel("更多")
+                }
+            }
+        }
         .task { await load() }
         .refreshable { await load() }
-        .confirmationDialog("撤销这个设备的授权？", isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } }), titleVisibility: .visible) {
+        .confirmationDialog(target.map { String(localized: "撤销「\($0.name)」的授权？", bundle: .riffet) } ?? "", isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } }), titleVisibility: .visible) {
             Button("撤销授权", role: .destructive) {
                 if let target { Task { await revoke([target.id]) } }
                 target = nil
@@ -805,7 +780,7 @@ private struct DevicesView: View {
 
     private func row(_ device: PublicDevice, pairedDate: Bool) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon(device)).font(.system(size: 18)).foregroundStyle(palette.fg2).frame(width: 22)
+            Image(systemName: icon(device)).riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg2).frame(width: 22)
             VStack(alignment: .leading, spacing: 2) {
                 Text(device.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
                 HStack(spacing: 6) {

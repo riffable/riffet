@@ -23,21 +23,17 @@ struct TerminalPage: View {
     var body: some View {
         VStack(spacing: 0) {
             if selectedID != nil {
-                HStack(alignment: .firstTextBaseline) {
-                    // The connection status only shows when something is off; a live terminal says nothing.
-                    if controller.notice == nil, !controller.live, !controller.exited, controller.reconnectable {
-                        Button { reconnect() } label: {
-                            Text(controller.status) + Text(verbatim: " · ") + Text("重试").foregroundStyle(Color.accentColor)
-                        }.buttonStyle(.plain).font(.caption).foregroundStyle(.secondary)
-                    } else if controller.notice != nil || !controller.live {
-                        Text(controller.notice ?? controller.status).font(.caption).foregroundStyle(controller.hasFailure ? palette.danger : .secondary)
-                    }
-                    if controller.pasting { ProgressView().controlSize(.small) }
-                    Spacer()
-                    if controller.live { Text(controller.hasControl ? "由此 iPhone 控制" : "输入会接管终端").font(.caption).foregroundStyle(.secondary) }
-                }.padding(.horizontal).padding(.vertical, 8)
+                statusNotice
+                if controller.pasting || (controller.live && !controller.hasFailure) {
+                    HStack {
+                        if controller.pasting { ProgressView().controlSize(.small) }
+                        Spacer()
+                        if controller.live { Text(controller.hasControl ? "由此 iPhone 控制" : "输入会接管终端").riffetFont(.caption).foregroundStyle(palette.fg3) }
+                    }.padding(.horizontal, RiffetMetrics.pageInset).padding(.vertical, 8)
+                }
+            } else if let error {
+                RiffetNotice(kind: .error, message: error, boxed: true).padding(RiffetMetrics.pageInset)
             }
-            if let error { Text(error).font(.caption).foregroundStyle(.red).padding(.horizontal).textSelection(.enabled) }
             if let id = selectedID {
                 IOSTerminalSurface(controller: controller, terminalID: id).id(id)
             } else if busy { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
@@ -55,6 +51,9 @@ struct TerminalPage: View {
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if selectedID != nil {
+                    if controller.live {
+                        Button(controller.hasControl ? "释放控制权" : "接管终端", systemImage: controller.hasControl ? "hand.raised.slash" : "hand.raised") { controller.control() }
+                    }
                     Button("键盘", systemImage: "keyboard") { controller.toggleKeyboard() }.disabled(!controller.live)
                 }
                 Menu {
@@ -67,9 +66,7 @@ struct TerminalPage: View {
                     Button("刷新终端列表", systemImage: "arrow.clockwise") { Task { await load() } }
                     if selectedID != nil {
                         Divider()
-                        if controller.live {
-                            Button(controller.hasControl ? "释放控制权" : "接管终端", systemImage: controller.hasControl ? "hand.raised.slash" : "hand.raised") { controller.control() }
-                        } else if !controller.exited {
+                        if !controller.live, !controller.exited {
                             Button("重新连接", systemImage: "arrow.triangle.2.circlepath") { reconnect() }
                         }
                         if controller.live { Button("中断当前命令 (Ctrl+C)", systemImage: "stop.circle") { Task { await sendInterrupt() } } }
@@ -97,6 +94,21 @@ struct TerminalPage: View {
         .confirmationDialog("结束这个 Shell？", isPresented: $terminate, titleVisibility: .visible) {
             Button("结束 Shell", role: .destructive) { Task { await close() } }
         } message: { Text("Shell 及其中运行的进程会结束。") }
+    }
+
+    /// One notice for the bar: a failure outranks the connection's own status; a live terminal says nothing.
+    @ViewBuilder private var statusNotice: some View {
+        if let error {
+            RiffetNotice(kind: .error, message: error, boxed: true).padding(RiffetMetrics.pageInset)
+        } else if controller.hasFailure || controller.notice != nil {
+            RiffetNotice(kind: .error, message: controller.notice ?? controller.status, boxed: true).padding(RiffetMetrics.pageInset)
+        } else if !controller.live {
+            let retry = !controller.exited && controller.reconnectable
+            RiffetNotice(kind: .info, message: controller.status,
+                         actionTitle: retry ? String(localized: "重试", bundle: .riffet) : nil,
+                         action: retry ? { reconnect() } : nil, boxed: true)
+                .padding(RiffetMetrics.pageInset)
+        }
     }
 
     private func reconnect() {

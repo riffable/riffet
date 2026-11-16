@@ -10,7 +10,9 @@ struct NativeStatsView: View {
     @State private var split = NativeStatsSplit.backend
     @State private var rank = NativeStatsRank.tokens
     @State private var latencyMetric = NativeStatsLatencyMetric.ttft
-    @State private var filterSheet: NativeStatsFilterKind?
+    @State private var rangeOpen = false
+    @State private var metricOpen = false
+    @State private var filtersOpen = false
     @State private var dashboard: StatsDashboard?
     @State private var latency: StatsLatency?
     @State private var trend: StatsSeries?
@@ -39,79 +41,75 @@ struct NativeStatsView: View {
 
     var body: some View {
         RiffetList {
-            filters
-            ManagementFeedback(error: error, notice: nil)
-            if error != nil { Button { Task { await load() } } label: { Text("重新读取").foregroundStyle(palette.accent) } }
-            if let dashboard {
+            SettingsChipRow {
+                RiffetChipButton(title: selection.range.label) { rangeOpen = true }.accessibilityIdentifier("statsRange")
+                RiffetChipButton(title: metric.label) { metricOpen = true }.accessibilityIdentifier("statsTrendMetric")
+            }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重新读取", bundle: .riffet)) { Task { await load() } }
+            if let dashboard, !isEmpty(dashboard) {
                 overview(dashboard)
                 trendSection
-                Section("每日活跃") { NativeStatsCalendarHeatmap(cells: calendarCells) }
+                statsSection(String(localized: "每日活跃", bundle: .riffet)) { NativeStatsCalendarHeatmap(cells: calendarCells) }
                 ranking(dashboard.models)
                 latencySection
-                Section("活跃时段") { NativeStatsWeekHeatmap(cells: hourCells) }
+                statsSection(String(localized: "活跃时段", bundle: .riffet)) { NativeStatsWeekHeatmap(cells: hourCells) }
                 reliability(dashboard.backends)
                 breakdown(String(localized: "按 Agent", bundle: .riffet), dashboard.backends)
                 breakdown(String(localized: "工具调用", bundle: .riffet), dashboard.tools)
                 runsSection
-                exportSection
                 Section {
                     Text("当前包含的估算输出为 \(dashboard.summary.current.tokens.estimatedOutput.formatted()) Token。时区：\(dashboard.filter.tz)。更新于 \(displayDate(dashboard.generatedAt, time: true))。")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .riffetFont(.caption).foregroundStyle(palette.fg3)
                 }
             }
         }
         // A first read fills the empty page; a later one keeps the last figures and spins in the bar.
-        .overlay { if loading && dashboard == nil { ProgressView() } }
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { if loading && dashboard != nil { ProgressView() } } }
+        .overlay {
+            if loading && dashboard == nil { ProgressView() }
+            else if let dashboard, isEmpty(dashboard), !loading { ContentUnavailableView(String(localized: "没有用量记录", bundle: .riffet), systemImage: "chart.bar") }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if (loading && dashboard != nil) || exporting { ProgressView() }
+                Button { filtersOpen = true } label: {
+                    Image(systemName: selection.activeCount == 0 ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                }
+                .accessibilityLabel(selection.activeCount == 0 ? String(localized: "筛选", bundle: .riffet) : String(localized: "筛选 · \(selection.activeCount) 项", bundle: .riffet))
+                .accessibilityIdentifier("statsFilters")
+                Menu {
+                    Button("导出 CSV", systemImage: "square.and.arrow.up") { Task { await export("csv") } }.accessibilityIdentifier("statsExportCSV")
+                    Button("导出 JSON", systemImage: "square.and.arrow.up") { Task { await export("json") } }.accessibilityIdentifier("statsExportJSON")
+                } label: { Image(systemName: "ellipsis") }
+                .accessibilityLabel(String(localized: "更多", bundle: .riffet))
+                .disabled(exporting || loading || !currentData || appliedItems.isEmpty)
+            }
+        }
         .accessibilityIdentifier("statsList")
         .navigationTitle(String(localized: "使用统计", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task(id: filterKey) { await load() }
         .task(id: trendKey) { await loadTrend() }
         .refreshable { await load() }
-        .sheet(item: $filterSheet) { kind in
-            NativeStatsFilterSheet(title: kind.label, options: options(kind), selected: selected(kind))
+        .onChange(of: selection.range) { _, range in if range == .custom { filtersOpen = true } }
+        .sheet(isPresented: $rangeOpen) {
+            RiffetPickerSheet(title: String(localized: "时间范围", bundle: .riffet), options: NativeStatsRange.allCases.map { .init(id: $0, title: $0.label) }, selection: $selection.range)
+        }
+        .sheet(isPresented: $metricOpen) {
+            RiffetPickerSheet(title: String(localized: "指标", bundle: .riffet), options: NativeStatsMetric.allCases.map { .init(id: $0, title: $0.label) }, selection: $metric)
+        }
+        .sheet(isPresented: $filtersOpen) {
+            NativeStatsFiltersSheet(selection: $selection, projects: dashboard?.options.projects ?? [], backends: dashboard?.options.backends ?? [], models: dashboard?.options.models ?? [])
         }
         .sheet(isPresented: $showShare) { if let exportURL { NativeShareSheet(items: [exportURL]) } }
     }
 
-    private var filters: some View {
-        Section {
-            Picker("时间范围", selection: $selection.range) { ForEach(NativeStatsRange.allCases) { Text($0.label).tag($0) } }
-                .accessibilityIdentifier("statsRange")
-            if selection.range == .custom {
-                DatePicker("开始日期", selection: $selection.from, in: ...selection.to, displayedComponents: .date).accessibilityIdentifier("statsCustomStart")
-                DatePicker("结束日期", selection: $selection.to, in: selection.from...Date(), displayedComponents: .date).accessibilityIdentifier("statsCustomEnd")
-            }
-            DisclosureGroup {
-                filterButton(.projects, values: selection.projects)
-                filterButton(.backends, values: selection.backends)
-                filterButton(.models, values: selection.models)
-                Picker("调用类型", selection: $selection.agentKind) { Text("全部").tag("all"); Text("主 Agent").tag("main"); Text("子 Agent").tag("subagent") }
-                Toggle("包含已归档会话", isOn: $selection.includeArchived)
-                Toggle("包含估算 Token", isOn: $selection.includeEstimated)
-                if selection.activeCount > 0 {
-                    Button("清除筛选") { selection.projects = []; selection.backends = []; selection.models = []; selection.agentKind = "all"; selection.includeArchived = true; selection.includeEstimated = true }
-                }
-            } label: {
-                Text(selection.activeCount == 0 ? "筛选" : "筛选 · \(selection.activeCount) 项")
-                    .accessibilityIdentifier("statsFilters")
-            }
-        }
-    }
-    private func filterButton(_ kind: NativeStatsFilterKind, values: Set<String>) -> some View {
-        Button { filterSheet = kind } label: {
-            LabeledContent(kind.label, value: values.isEmpty ? String(localized: "全部", bundle: .riffet) : values.count == 1 ? options(kind).first(where: { values.contains($0.key) })?.label ?? values.first! : String(localized: "已选 \(values.count) 项", bundle: .riffet))
-        }.foregroundStyle(.primary).accessibilityIdentifier("statsFilter.\(kind.rawValue)")
-    }
-    private func options(_ kind: NativeStatsFilterKind) -> [StatsKeyInfo] {
-        switch kind { case .projects: return dashboard?.options.projects ?? []; case .backends: return dashboard?.options.backends ?? []; case .models: return dashboard?.options.models ?? [] }
-    }
-    private func selected(_ kind: NativeStatsFilterKind) -> Binding<Set<String>> {
-        switch kind { case .projects: return $selection.projects; case .backends: return $selection.backends; case .models: return $selection.models }
+    /// Nothing happened in the range: one empty state instead of a page of zeros.
+    private func isEmpty(_ value: StatsDashboard) -> Bool {
+        let totals = value.summary.current
+        return totals.runs == 0 && totals.sessions == 0 && totals.totalTokens == 0
     }
     private func overview(_ value: StatsDashboard) -> some View {
         let totals = value.summary.current, previous = value.summary.previous
-        return Section("\(displayDate(value.filter.from)) 至 \(inclusiveEnd(value.filter.to))") {
+        return statsSection(String(localized: "\(displayDate(value.filter.from)) 至 \(inclusiveEnd(value.filter.to))", bundle: .riffet)) {
             kpi(String(localized: "Token 总量", bundle: .riffet), value: totals.totalTokens.formatted(), current: Double(totals.totalTokens), previous: Double(previous.totalTokens))
                 .accessibilityIdentifier("statsOverview")
             kpi(String(localized: "轮次", bundle: .riffet), value: totals.runs.formatted(), current: Double(totals.runs), previous: Double(previous.runs))
@@ -133,57 +131,54 @@ struct NativeStatsView: View {
             Text(title); Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 Text(value).monospacedDigit()
-                if selection.range != .all { Text(delta(current, previous)).font(.caption).foregroundStyle(.secondary) }
+                if selection.range != .all { Text(delta(current, previous)).riffetFont(.caption).foregroundStyle(palette.fg3) }
             }
         }.accessibilityElement(children: .combine)
     }
     private var trendSection: some View {
-        Section("用量趋势") {
-            Picker("指标", selection: $metric) { ForEach(NativeStatsMetric.allCases) { Text($0.label).tag($0) } }.accessibilityIdentifier("statsTrendMetric")
+        statsSection(String(localized: "用量趋势", bundle: .riffet)) {
             Picker("分组", selection: $split) { ForEach(NativeStatsSplit.allCases) { Text($0.label).tag($0) } }.accessibilityIdentifier("statsTrendSplit")
             if trendLoading { ProgressView().frame(maxWidth: .infinity) }
             if appliedTrendKey == trendKey, let trend {
-                if trendPoints.isEmpty { Text("此范围没有这项指标的报告。").foregroundStyle(.secondary) }
+                if trendPoints.isEmpty { Text("此范围没有这项指标的报告。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
                 else {
                     NativeStatsTrendChart(points: trendPoints, unit: metric.unit, granularity: trend.granularity.name)
-                    Text("按\(granularityLabel(trend.granularity.name))汇总。")
-                        .font(.caption).foregroundStyle(.secondary)
                     DisclosureGroup("每期数据 · \(trend.points.count) 个区间") {
                         ForEach(Array(trend.points.enumerated()), id: \.offset) { _, point in
                             VStack(alignment: .leading, spacing: 4) {
-                                Text(displayDate(point.start, time: trend.granularity.name == "HOUR")).font(.subheadline.weight(.medium))
+                                Text(displayDate(point.start, time: trend.granularity.name == "HOUR")).riffetFont(.label)
                                 ForEach(trend.keys, id: \.key) { key in
-                                    if let amount = point.values[key.key] { LabeledContent(key.label, value: metric.formatted(amount.doubleValue)).font(.caption) }
+                                    if let amount = point.values[key.key] { LabeledContent(key.label, value: metric.formatted(amount.doubleValue)).riffetFont(.caption) }
                                 }
                             }.padding(.vertical, 4)
                         }
                     }
                 }
             }
-            if let trendError { Text(trendError).font(.caption).foregroundStyle(.red); Button("重试趋势") { Task { await loadTrend() } } }
+            if let trendError { RiffetNotice(kind: .error, message: trendError, actionTitle: String(localized: "重试", bundle: .riffet)) { Task { await loadTrend() } } }
         }
     }
     private func ranking(_ value: StatsBreakdown) -> some View {
         let ordered = value.rows.sorted { (rank.amount($0) ?? -1) > (rank.amount($1) ?? -1) }
         let maximum = ordered.compactMap { rank.amount($0) }.max() ?? 0
-        return Section("模型排行") {
+        return statsSection(String(localized: "模型排行", bundle: .riffet)) {
             Picker("排序指标", selection: $rank) { ForEach(NativeStatsRank.allCases) { Text($0.label).tag($0) } }
-            if ordered.isEmpty { Text("暂无模型记录").foregroundStyle(.secondary) }
+            if ordered.isEmpty { Text("没有模型记录").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
             ForEach(ordered.prefix(8), id: \.key) { row in
                 VStack(alignment: .leading, spacing: 5) {
                     LabeledContent(row.label, value: rank.formatted(row))
-                    if let amount = rank.amount(row), maximum > 0 { ProgressView(value: amount, total: maximum).tint(.accentColor) }
+                    if let amount = rank.amount(row), maximum > 0 { ProgressView(value: amount, total: maximum).tint(palette.accent) }
                 }.padding(.vertical, 3)
             }
-            if ordered.count > 8 { DisclosureGroup("全部 \(ordered.count) 个模型") { ForEach(ordered, id: \.key) { row in LabeledContent(row.label, value: rank.formatted(row)).font(.caption) } } }
+            if ordered.count > 8 { DisclosureGroup("全部 \(ordered.count) 个模型") { ForEach(ordered, id: \.key) { row in LabeledContent(row.label, value: rank.formatted(row)).riffetFont(.caption) } } }
         }
     }
     private var latencySection: some View {
-        Section("延迟与速度 · 按模型") {
+        statsSection(String(localized: "延迟与速度 · 按模型", bundle: .riffet)) {
             Picker("指标", selection: $latencyMetric) { ForEach(NativeStatsLatencyMetric.allCases) { Text($0.label).tag($0) } }
             if let latency {
                 let measured = latency.rows.filter { latencyMetric.sample($0) != nil }
-                if measured.isEmpty { Text("这些模型没有此项测量；未报告不等于 0。").font(.subheadline).foregroundStyle(.secondary) }
+                if measured.isEmpty { Text("这些模型没有此项测量；未报告不等于 0。").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
                 else { NativeStatsLatencyChart(rows: measured, metric: latencyMetric) }
                 DisclosureGroup("查看分位数与样本") {
                     ForEach(measured, id: \.key) { row in
@@ -191,30 +186,31 @@ struct NativeStatsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(row.label)
                                 Text("p50 \(latencyMetric.format(sample.p50)) · p90 \(latencyMetric.format(sample.p90)) · p99 \(latencyMetric.format(sample.p99))")
-                                    .font(.caption).foregroundStyle(.secondary)
-                                Text("\(sample.samples) 个测量样本").font(.caption2).foregroundStyle(.secondary)
+                                    .riffetFont(.caption).foregroundStyle(palette.fg3)
+                                Text("\(sample.samples) 个测量样本").riffetFont(.caption).foregroundStyle(palette.fg3)
                             }
                         }
                     }
                 }
-            } else { Text(loading ? "正在读取测量…" : "暂无可用测量").foregroundStyle(.secondary) }
+            } else if loading { ProgressView().frame(maxWidth: .infinity) }
+            else { Text("没有可用测量").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
         }
     }
     private func reliability(_ value: StatsBreakdown) -> some View {
-        Section("轮次结果") {
+        statsSection(String(localized: "轮次结果", bundle: .riffet)) {
             NativeStatsReliabilityChart(rows: value.rows)
             ForEach(value.rows, id: \.key) { row in
                 VStack(alignment: .leading, spacing: 4) {
                     Text(row.label)
                     Text("完成 \(row.states.completed) · 失败 \(row.states.failed) · 取消 \(row.states.cancelled) · 中断 \(row.states.interrupted)")
-                        .font(.caption).foregroundStyle(.secondary)
+                        .riffetFont(.caption).foregroundStyle(palette.fg3)
                 }
             }
         }
     }
     private func breakdown(_ title: String, _ value: StatsBreakdown) -> some View {
-        Section(title) {
-            if value.rows.isEmpty { Text("暂无数据").foregroundStyle(.secondary) }
+        statsSection(title) {
+            if value.rows.isEmpty { Text("没有数据").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
             ForEach(value.rows.prefix(12), id: \.key) { row in breakdownRow(row, tools: title == String(localized: "工具调用", bundle: .riffet)) }
             if value.rows.count > 12 { DisclosureGroup("全部 \(value.rows.count) 项") { ForEach(value.rows, id: \.key) { row in breakdownRow(row, tools: title == String(localized: "工具调用", bundle: .riffet)) } } }
         }
@@ -222,38 +218,37 @@ struct NativeStatsView: View {
     private func breakdownRow(_ row: StatsBreakdownRow, tools: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(row.label)
-            Text("\(row.count) 次 · \(row.totalTokens.formatted()) Token · \(row.share.formatted(.percent.precision(.fractionLength(1))))").font(.caption).foregroundStyle(.secondary)
-            if tools { Text(String(localized: "失败调用：\(row.failed.map { $0.int64Value.formatted() } ?? String(localized: "未报告", bundle: .riffet))", bundle: .riffet)).font(.caption).foregroundStyle(.secondary) }
+            Text("\(row.count) 次 · \(row.totalTokens.formatted()) Token · \(row.share.formatted(.percent.precision(.fractionLength(1))))").riffetFont(.caption).foregroundStyle(palette.fg3)
+            if tools { Text(String(localized: "失败调用：\(row.failed.map { $0.int64Value.formatted() } ?? String(localized: "未报告", bundle: .riffet))", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3) }
         }
     }
     private var runsSection: some View {
-        Section("最近轮次") {
+        statsSection(String(localized: "最近轮次", bundle: .riffet)) {
             if currentData {
                 ForEach(runs, id: \.runId) { run in
                     NavigationLink { ConversationView(workbench: workbench, sessionID: run.sessionId) } label: {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(run.sessionTitle).foregroundStyle(.primary)
-                            Text("\(run.projectName) · \(run.backendId.name) · \(run.model ?? String(localized: "默认模型", bundle: .riffet))").font(.caption).foregroundStyle(.secondary)
-                            Text("\(run.totalTokens.formatted()) Token · \(displayDate(run.createdAt, time: true))").font(.caption).foregroundStyle(.secondary)
+                            Text(run.sessionTitle).foregroundStyle(palette.fg)
+                            Text("\(run.projectName) · \(run.backendId.name) · \(run.model ?? String(localized: "默认模型", bundle: .riffet))").riffetFont(.caption).foregroundStyle(palette.fg3)
+                            Text("\(run.totalTokens.formatted()) Token · \(displayDate(run.createdAt, time: true))").riffetFont(.caption).foregroundStyle(palette.fg3)
                         }
                     }
                 }
-                if runs.isEmpty && !loading && runsError == nil { Text("此范围没有轮次").foregroundStyle(.secondary) }
+                if runs.isEmpty && !loading && runsError == nil { Text("此范围没有轮次").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
             }
             if (nextCursor != nil || runsError != nil) && currentData {
-                if let runsError { Text(runsError).font(.caption).foregroundStyle(.red).lineLimit(1) }
-                Button { Task { await more() } } label: {
-                    if loadingMore { ProgressView() } else { runsError != nil ? Text("读取失败 · 重试") : Text("载入更多") }
-                }.disabled(loadingMore || loading).accessibilityIdentifier("statsRunsMore")
+                if let runsError {
+                    RiffetNotice(kind: .error, message: runsError, actionTitle: String(localized: "重试", bundle: .riffet)) { Task { await more() } }
+                } else {
+                    // Reaching the end of the list reads the next page.
+                    HStack { Spacer(); ProgressView(); Spacer() }
+                        .listRowBackground(Color.clear)
+                        // Asked again whenever the first page finishes or a page moves the cursor, while the row stays in view.
+                        .task(id: "\(loading)|\(nextCursor ?? "")") { await more() }
+                        .accessibilityIdentifier("statsRunsMore")
+                }
             }
         }
-    }
-    private var exportSection: some View {
-        Section("导出") {
-            Button("导出 CSV") { Task { await export("csv") } }.accessibilityIdentifier("statsExportCSV")
-            Button("导出 JSON") { Task { await export("json") } }.accessibilityIdentifier("statsExportJSON")
-            if exporting { ProgressView() }
-        }.disabled(exporting || loading || !currentData || appliedItems.isEmpty)
     }
 
     private func load() async {
@@ -331,7 +326,11 @@ struct NativeStatsView: View {
         let change = (current - previous) / previous
         return String(localized: "较上期 \((change > 0 ? "+" : "") + change.formatted(.percent.precision(.fractionLength(1))))", bundle: .riffet)
     }
-    private func granularityLabel(_ name: String) -> String { ["HOUR": String(localized: "小时", bundle: .riffet), "DAY": String(localized: "天", bundle: .riffet), "WEEK": String(localized: "周", bundle: .riffet), "MONTH": String(localized: "月", bundle: .riffet)][name] ?? name }
+}
+
+/// A section with the app's title style; the dashboard has a dozen.
+private func statsSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    Section { content() } header: { RiffetSectionTitle(title) }
 }
 
 private enum NativeStatsFilterKind: String, Identifiable {
@@ -339,35 +338,85 @@ private enum NativeStatsFilterKind: String, Identifiable {
     var id: String { rawValue }
     var label: String { self == .projects ? String(localized: "项目", bundle: .riffet) : self == .backends ? "Agent" : String(localized: "模型", bundle: .riffet) }
 }
-private struct NativeStatsFilterSheet: View {
-    let title: String
-    let options: [StatsKeyInfo]
-    @Binding var selected: Set<String>
+
+/// The detailed filters (project, agent, model, call kind, archived, estimated, a custom range). Done
+/// applies them together; Cancel keeps what was set.
+private struct NativeStatsFiltersSheet: View {
+    @Binding var selection: NativeStatsSelection
+    let projects: [StatsKeyInfo]
+    let backends: [StatsKeyInfo]
+    let models: [StatsKeyInfo]
     @Environment(\.dismiss) private var dismiss
-    @State private var pending: Set<String>
-    @State private var search = ""
-    init(title: String, options: [StatsKeyInfo], selected: Binding<Set<String>>) {
-        self.title = title; self.options = options; _selected = selected; _pending = State(initialValue: selected.wrappedValue)
+    @State private var draft: NativeStatsSelection
+
+    init(selection: Binding<NativeStatsSelection>, projects: [StatsKeyInfo], backends: [StatsKeyInfo], models: [StatsKeyInfo]) {
+        _selection = selection; self.projects = projects; self.backends = backends; self.models = models
+        _draft = State(initialValue: selection.wrappedValue)
     }
+
     var body: some View {
         NavigationStack {
             RiffetList {
-                Section { Button("不限\(title)") { pending = [] } } footer: { Text("最多选择 100 项。") }
-                ForEach(options.filter { search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) }, id: \.key) { item in
-                    Button { if !pending.insert(item.key).inserted { pending.remove(item.key) } } label: {
-                        HStack { Text(item.label).foregroundStyle(.primary); Spacer(); if pending.contains(item.key) { Image(systemName: "checkmark") } }.frame(minHeight: 44).contentShape(Rectangle())
-                    }.disabled(!pending.contains(item.key) && pending.count >= NativeStatsSelection.maximumSelections)
-                        .accessibilityValue(pending.contains(item.key) ? "已选择" : "未选择")
-                        .accessibilityIdentifier("statsFilterChoice.\(item.key)")
+                if draft.range == .custom {
+                    Section {
+                        DatePicker("开始日期", selection: $draft.from, in: ...draft.to, displayedComponents: .date).accessibilityIdentifier("statsCustomStart")
+                        DatePicker("结束日期", selection: $draft.to, in: draft.from...Date(), displayedComponents: .date).accessibilityIdentifier("statsCustomEnd")
+                    }
                 }
-                if options.isEmpty { Text("暂无可筛选的记录").foregroundStyle(.secondary) }
+                Section {
+                    filterRow(.projects, options: projects, values: $draft.projects)
+                    filterRow(.backends, options: backends, values: $draft.backends)
+                    filterRow(.models, options: models, values: $draft.models)
+                    Picker("调用类型", selection: $draft.agentKind) { Text("全部").tag("all"); Text("主 Agent").tag("main"); Text("子 Agent").tag("subagent") }
+                    Toggle("包含已归档会话", isOn: $draft.includeArchived)
+                    Toggle("包含估算 Token", isOn: $draft.includeEstimated)
+                }
+                if draft.activeCount > 0 {
+                    Section {
+                        RiffetActionRow("清除筛选") {
+                            draft.projects = []; draft.backends = []; draft.models = []; draft.agentKind = "all"; draft.includeArchived = true; draft.includeEstimated = true
+                        }
+                    }
+                }
             }
-            .navigationTitle(String(localized: "选择\(title)", bundle: .riffet)).navigationBarTitleDisplayMode(.inline).searchable(text: $search, prompt: String(localized: "搜索\(title)", bundle: .riffet))
+            .navigationTitle(String(localized: "筛选", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { selected = pending; dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { selection = draft; dismiss() } }
             }
         }
+        .presentationDetents([.large])
+    }
+
+    private func filterRow(_ kind: NativeStatsFilterKind, options: [StatsKeyInfo], values: Binding<Set<String>>) -> some View {
+        let chosen = values.wrappedValue
+        let value = chosen.isEmpty ? String(localized: "全部", bundle: .riffet) : chosen.count == 1 ? options.first(where: { chosen.contains($0.key) })?.label ?? chosen.first! : String(localized: "已选 \(chosen.count) 项", bundle: .riffet)
+        return NavigationLink { NativeStatsFilterPage(title: kind.label, options: options, selected: values) } label: {
+            SettingsRowLabel(title: kind.label, value: value)
+        }
+        .accessibilityIdentifier("statsFilter.\(kind.rawValue)")
+    }
+}
+
+private struct NativeStatsFilterPage: View {
+    let title: String
+    let options: [StatsKeyInfo]
+    @Binding var selected: Set<String>
+    @State private var search = ""
+    var body: some View {
+        RiffetList {
+            Section { Button("不限\(title)") { selected = [] } } footer: { Text("最多选择 100 项。") }
+            ForEach(options.filter { search.isEmpty || $0.label.localizedCaseInsensitiveContains(search) }, id: \.key) { item in
+                SettingsCheckRow(title: item.label, selected: selected.contains(item.key)) {
+                    if !selected.insert(item.key).inserted { selected.remove(item.key) }
+                }
+                .disabled(!selected.contains(item.key) && selected.count >= NativeStatsSelection.maximumSelections)
+                .accessibilityIdentifier("statsFilterChoice.\(item.key)")
+            }
+        }
+        .overlay { if options.isEmpty { ContentUnavailableView("没有可筛选的记录", systemImage: "line.3.horizontal.decrease") } }
+        .navigationTitle(String(localized: "选择\(title)", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: String(localized: "搜索\(title)", bundle: .riffet))
     }
 }
 private enum NativeStatsRank: String, CaseIterable, Identifiable {
@@ -408,6 +457,7 @@ private struct NativeStatsPlotPoint: Identifiable {
     }
 }
 private struct NativeStatsTrendChart: View {
+    @Environment(\.palette) private var palette
     let points: [NativeStatsPlotPoint]
     let unit: String
     let granularity: String
@@ -438,12 +488,13 @@ private struct NativeStatsTrendChart: View {
                 }
             }
         }
+        .chartForegroundStyleScale(range: [palette.chart1, palette.chart2, palette.chart3, palette.chart4, palette.chart5, palette.chart6, palette.chart7, palette.chart8])
         .chartLegend(position: .bottom).chartXSelection(value: $selected).frame(height: 240).accessibilityIdentifier("statsTrendChart")
         if let selected, let nearest = points.min(by: { abs($0.start.timeIntervalSince(selected)) < abs($1.start.timeIntervalSince(selected)) }) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(nearest.start.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).font(.caption.weight(.medium))
+                Text(nearest.start.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption, weight: .medium)
                 ForEach(points.filter { $0.start == nearest.start }) { point in
-                    LabeledContent(point.series, value: point.amount.formatted(.number.precision(.fractionLength(unit == String(localized: "秒", bundle: .riffet) ? 2 : 0))) + " " + unit).font(.caption)
+                    LabeledContent(point.series, value: point.amount.formatted(.number.precision(.fractionLength(unit == String(localized: "秒", bundle: .riffet) ? 2 : 0))) + " " + unit).riffetFont(.caption)
                 }
             }.accessibilityElement(children: .combine)
         }
@@ -459,22 +510,24 @@ private struct NativeStatsTrendChart: View {
     }
 }
 private struct NativeStatsLatencyChart: View {
+    @Environment(\.palette) private var palette
     let rows: [StatsLatencyRow]
     let metric: NativeStatsLatencyMetric
     var body: some View {
         Chart {
             ForEach(rows.prefix(12), id: \.key) { row in
                 if let sample = metric.sample(row) {
-                    BarMark(x: .value(metric.label, metric.plotted(sample.p50)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).foregroundStyle(Color.accentColor.opacity(0.6))
-                    PointMark(x: .value("p90", metric.plotted(sample.p90)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).foregroundStyle(.primary)
-                    PointMark(x: .value("p99", metric.plotted(sample.p99)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).symbol(.diamond).foregroundStyle(.secondary)
+                    BarMark(x: .value(metric.label, metric.plotted(sample.p50)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).foregroundStyle(palette.accent.opacity(0.6))
+                    PointMark(x: .value("p90", metric.plotted(sample.p90)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).foregroundStyle(palette.fg)
+                    PointMark(x: .value("p99", metric.plotted(sample.p99)), y: .value(String(localized: "模型", bundle: .riffet), row.label)).symbol(.diamond).foregroundStyle(palette.fg2)
                 }
             }
         }.frame(height: CGFloat(max(1, min(rows.count, 12))) * 42 + 32)
-        Text("柱形 p50 · 圆点 p90 · 菱形 p99。").font(.caption).foregroundStyle(.secondary)
+        Text("柱形 p50 · 圆点 p90 · 菱形 p99。").riffetFont(.caption).foregroundStyle(palette.fg3)
     }
 }
 private struct NativeStatsReliabilityChart: View {
+    @Environment(\.palette) private var palette
     let rows: [StatsBreakdownRow]
     var body: some View {
         Chart {
@@ -484,7 +537,11 @@ private struct NativeStatsReliabilityChart: View {
                 BarMark(x: .value(String(localized: "轮次", bundle: .riffet), row.states.cancelled), y: .value("Agent", row.label)).foregroundStyle(by: .value(String(localized: "结果", bundle: .riffet), String(localized: "取消", bundle: .riffet)))
                 BarMark(x: .value(String(localized: "轮次", bundle: .riffet), row.states.interrupted), y: .value("Agent", row.label)).foregroundStyle(by: .value(String(localized: "结果", bundle: .riffet), String(localized: "中断", bundle: .riffet)))
             }
-        }.chartLegend(position: .bottom).frame(height: CGFloat(max(1, rows.count)) * 38 + 48)
+        }.chartForegroundStyleScale([
+            String(localized: "完成", bundle: .riffet): palette.success, String(localized: "失败", bundle: .riffet): palette.danger,
+            String(localized: "取消", bundle: .riffet): palette.fg3, String(localized: "中断", bundle: .riffet): palette.warning,
+        ])
+        .chartLegend(position: .bottom).frame(height: CGFloat(max(1, rows.count)) * 38 + 48)
     }
 }
 private struct NativeStatsCalendarCell: Identifiable {
@@ -493,32 +550,33 @@ private struct NativeStatsCalendarCell: Identifiable {
     var id: String { date }
 }
 private struct NativeStatsCalendarHeatmap: View {
+    @Environment(\.palette) private var palette
     let cells: [NativeStatsCalendarCell]
     @State private var selected: Int?
     private var maximum: Int64 { cells.map(\.runs).max() ?? 0 }
     var body: some View {
         let maximum = self.maximum
-        if cells.isEmpty { Text("此范围没有每日记录").foregroundStyle(.secondary) }
+        if cells.isEmpty { Text("此范围没有每日记录").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
         else {
-            HStack { Text(cells.first?.date ?? ""); Spacer(); Text(cells.last?.date ?? "") }.font(.caption).foregroundStyle(.secondary)
+            HStack { Text(cells.first?.date ?? ""); Spacer(); Text(cells.last?.date ?? "") }.riffetFont(.caption).foregroundStyle(palette.fg3)
             ScrollView(.horizontal) {
                 LazyHStack(spacing: 3) {
                     ForEach(cells.indices, id: \.self) { index in
                         let day = cells[index]
                         Button { selected = index } label: {
                             VStack(spacing: 5) {
-                                RoundedRectangle(cornerRadius: 3).fill(heatColor(day.runs, maximum: maximum)).frame(width: 24, height: 24)
-                                    .overlay { if selected == index { RoundedRectangle(cornerRadius: 3).stroke(Color.primary, lineWidth: 2) } }
-                                Text(String(day.date.suffix(2))).font(.caption2).foregroundStyle(.secondary)
-                            }.frame(minWidth: 32, minHeight: 48).contentShape(Rectangle())
+                                RoundedRectangle(cornerRadius: 3).fill(heatColor(day.runs, maximum: maximum, palette)).frame(width: 24, height: 24)
+                                    .overlay { if selected == index { RoundedRectangle(cornerRadius: 3).stroke(palette.fg, lineWidth: 2) } }
+                                Text(String(day.date.suffix(2))).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            }.frame(minWidth: RiffetMetrics.hitTarget, minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
                         }.buttonStyle(.plain).accessibilityLabel("\(day.date)，\(day.runs) 轮，\(day.tokens) Token")
                     }
                 }.padding(.vertical, 3)
             }.defaultScrollAnchor(.trailing).accessibilityIdentifier("statsCalendarHeatmap")
             if let selected, cells.indices.contains(selected) {
                 let day = cells[selected]
-                Text("\(day.date) · \(day.runs.formatted()) 轮 · \(day.tokens.formatted()) Token").font(.caption).monospacedDigit()
-            } else { Text("颜色越深，轮次越多。").font(.caption).foregroundStyle(.secondary) }
+                Text("\(day.date) · \(day.runs.formatted()) 轮 · \(day.tokens.formatted()) Token").riffetFont(.caption).monospacedDigit()
+            }
         }
     }
 }
@@ -536,30 +594,30 @@ private struct NativeStatsHourCell: Identifiable {
     }
 }
 private struct NativeStatsWeekHeatmap: View {
+    @Environment(\.palette) private var palette
     let cells: [NativeStatsHourCell]
     @State private var day = 0
     @State private var hour: Int? = 12
     private var maximum: Int64 { cells.map(\.runs).max() ?? 0 }
     var body: some View {
         let maximum = self.maximum
-        if cells.isEmpty { Text("没有时段分布").foregroundStyle(.secondary) }
+        if cells.isEmpty { Text("没有时段分布").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }
         else {
             Chart(cells) { cell in
                 RectangleMark(x: .value(String(localized: "小时", bundle: .riffet), cell.hour), y: .value(String(localized: "星期", bundle: .riffet), NativeStatsHourCell.weekdays[cell.weekday]), width: .ratio(0.9), height: .ratio(0.9))
-                    .foregroundStyle(heatColor(cell.runs, maximum: maximum))
+                    .foregroundStyle(heatColor(cell.runs, maximum: maximum, palette))
                     .accessibilityLabel("\(NativeStatsHourCell.weekdayLabel(cell.weekday))，\(cell.hour) 点，\(cell.runs) 轮")
             }.chartXAxis { AxisMarks(values: [0, 6, 12, 18, 23]) }.chartYScale(domain: NativeStatsHourCell.weekdays.reversed())
                 .chartXSelection(value: $hour).frame(height: 190).accessibilityIdentifier("statsWeekHeatmap")
             Picker("查看星期", selection: $day) { ForEach(0..<7, id: \.self) { Text(NativeStatsHourCell.weekdayLabel($0)).tag($0) } }
             Stepper("\(hour ?? 12):00", value: Binding(get: { hour ?? 12 }, set: { hour = $0 }), in: 0...23)
             let selected = cells.first(where: { $0.weekday == day && $0.hour == min(23, max(0, hour ?? 12)) })
-            Text("\(NativeStatsHourCell.weekdayLabel(day)) \(min(23, max(0, hour ?? 12))):00 · \(selected?.runs ?? 0) 轮").font(.caption).monospacedDigit()
-            Text("按筛选时区汇总。").font(.caption).foregroundStyle(.secondary)
+            Text("\(NativeStatsHourCell.weekdayLabel(day)) \(min(23, max(0, hour ?? 12))):00 · \(selected?.runs ?? 0) 轮").riffetFont(.caption).monospacedDigit()
         }
     }
 }
-private func heatColor(_ value: Int64, maximum: Int64) -> Color {
-    guard value > 0, maximum > 0 else { return Color(uiColor: .tertiarySystemFill) }
+private func heatColor(_ value: Int64, maximum: Int64, _ palette: Palette) -> Color {
+    guard value > 0, maximum > 0 else { return palette.press }
     let strength = log1p(Double(value)) / log1p(Double(maximum))
-    return Color.accentColor.opacity(0.2 + strength * 0.8)
+    return palette.accent.opacity(0.2 + strength * 0.8)
 }

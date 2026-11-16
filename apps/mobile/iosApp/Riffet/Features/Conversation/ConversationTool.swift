@@ -41,7 +41,7 @@ struct ConversationTool: View {
                 header(tool)
             }
             // Details sit under the title, past the 16pt icon slot, and fade in as the row opens.
-            if !tool.opensSubagent && isExpanded { details(tool).padding(.leading, 24).padding(.bottom, 6).transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.25)), removal: .identity)) }
+            if !tool.opensSubagent && isExpanded { details(tool).padding(.leading, 24).padding(.bottom, 6).transition(.asymmetric(insertion: .opacity.animation(RiffetMotion.release), removal: .identity)) }
             ForEach(Array(tool.images.enumerated()), id: \.offset) { _, image in imageView(image) }
         }.frame(maxWidth: .infinity, alignment: .leading).multilineTextAlignment(.leading)
     }
@@ -90,13 +90,13 @@ struct ConversationTool: View {
                 .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 10))
                 .accessibilityIdentifier("toolSummary.\(tool.id)")
             }
-            if let command = tool.command { ConversationCode(text: command, language: "shell", maximumBodyHeight: 300, stateID: "tool.\(tool.id).command") }
+            if let command = tool.command { ConversationCode(text: command, language: "shell", output: true, stateID: "tool.\(tool.id).command") }
             ForEach(Array(tool.locations.enumerated()), id: \.offset) { _, location in
                 NavigationLink { ConversationFilePage(workbench: workbench, projectID: projectID, path: location.path, targetLine: location.line.map { Int($0.int64Value) }) } label: { Label(location.path + (location.line.map { ":\($0)" } ?? ""), systemImage: "doc.text").riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(2).multilineTextAlignment(.leading).frame(maxWidth: .infinity, alignment: .leading) }
             }
             ForEach(Array(tool.blocks.enumerated()), id: \.offset) { blockIndex, block in
                 switch onEnum(of: block) {
-                case let .text(text): ConversationCode(text: text.text, language: "output", maximumBodyHeight: 300, stateID: "tool.\(tool.id).block.\(blockIndex).text").accessibilityIdentifier("toolOutput.\(tool.id).\(blockIndex)")
+                case let .text(text): ConversationCode(text: text.text, language: "output", output: true, stateID: "tool.\(tool.id).block.\(blockIndex).text").accessibilityIdentifier("toolOutput.\(tool.id).\(blockIndex)")
                 case let .questionAnswer(answer): VStack(alignment: .leading, spacing: 6) { if let question = answer.question { Text(question).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3) }; Text(answer.answers.isEmpty ? String(localized: "已跳过", bundle: .riffet) : answer.answers.joined(separator: String(localized: "、", bundle: .riffet))).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2) }.frame(maxWidth: .infinity, alignment: .leading)
                 case let .diff(diff): ConversationToolDiff(diff: diff, workbench: workbench, projectID: projectID, stateID: "tool.\(tool.id).block.\(blockIndex).diff").accessibilityIdentifier("toolDiff.\(tool.id).\(blockIndex)")
                 case let .terminal(terminal): NavigationLink { TerminalPage(workbench: workbench, projectID: projectID, terminalID: terminal.terminalId) } label: { Label("打开终端输出", systemImage: "terminal").riffetFont(.caption).foregroundStyle(palette.fg3) }
@@ -144,13 +144,12 @@ private enum ConversationToolPresentations {
 }
 
 /// The symbol is a faint 12pt hint in a 16pt slot even at accessibility text sizes.
-/// Title, detail and the diff counts share one truncating baseline — the counts describe the
-/// edit, so they travel with the title and the chevron follows them; only the row's state
-/// （失败/未完成） sits at the right edge, in the same quiet colours as the rest. Expansion
-/// exposes the complete originals.
+/// Only the title and its detail truncate. The diff counts, the row's state（失败/未完成）and the
+/// chevron are a trailing column that keeps its own size, in the same quiet colours as the rest.
+/// Expansion exposes the complete originals.
 struct ConversationToolHeader: View {
     let tool: ToolPresentation
-    /// Non-nil for a folding row: the chevron right after the counts, rotated while expanded.
+    /// Non-nil for a folding row: the chevron at the trailing edge, rotated while expanded.
     var chevronExpanded: Bool? = nil
     var activityStats: String? = nil
     @Environment(\.palette) private var palette
@@ -166,16 +165,18 @@ struct ConversationToolHeader: View {
                 if tool.running { ProgressView().controlSize(.mini) }
                 else { Image(systemName: tool.failed ? "exclamationmark.circle" : Self.symbol(tool)).font(.system(size: 12)) }
             }.foregroundStyle(tool.failed ? palette.fg3 : palette.fg4).frame(width: 16, height: 16)
+            // Only the title truncates; the figures and the row's state are a trailing column of their own size.
             summary.lineLimit(1).truncationMode(.tail)
+            Spacer(minLength: 0)
+            if let activityStats { Text(activityStats).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4).lineLimit(1).fixedSize().layoutPriority(1) }
+            else if tool.failed { Text("失败").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1) }
+            else if tool.dangling { Text("未完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize().layoutPriority(1) }
+            if let figures { figures.lineLimit(1).fixedSize().layoutPriority(1) }
             if let chevronExpanded {
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                     .rotationEffect(.degrees(chevronExpanded ? 90 : 0)).fixedSize()
-                    .animation(RiffetMotion.chevron, value: chevronExpanded)
+                    .riffetAnimation(RiffetMotion.chevron, value: chevronExpanded)
             }
-            Spacer(minLength: 0)
-            if let activityStats { Text(activityStats).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4).lineLimit(1) }
-            else if tool.failed { Text("失败").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize() }
-            else if tool.dangling { Text("未完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize() }
         }.frame(maxWidth: .infinity, minHeight: 34, alignment: .leading).contentShape(Rectangle())
     }
     /// The same per-kind icons as the web and Android, falling back to the wrench.
@@ -201,14 +202,18 @@ struct ConversationToolHeader: View {
     }
     private var summary: Text {
         // Muted like reasoning: the work is context, the answer is what reads at full strength.
-        var result = Text(tool.title).font(tool.isCommand ? monoFont : labelFont).foregroundColor(palette.fg3)
+        Text(tool.title).font(tool.isCommand ? monoFont : labelFont).foregroundColor(palette.fg3)
         + Text(tool.detail.map { "  " + $0 } ?? "").font(captionFont).foregroundColor(palette.fg4)
-        if tool.showsDiffStats {
-            if tool.files > 1 { result = result + Text("  \(tool.files) 个文件").font(captionFont).foregroundColor(palette.fg4) }
-            if tool.added > 0 { result = result + Text("  +\(tool.added)").font(monoFont).foregroundColor(palette.success) }
-            if tool.removed > 0 { result = result + Text(" −\(tool.removed)").font(monoFont).foregroundColor(palette.danger) }
-        }
-        return result
+    }
+    /// The edit's file count and `+3 −1`; never cut, whatever the title's width.
+    private var figures: Text? {
+        guard tool.showsDiffStats else { return nil }
+        var result = Text("")
+        var any = false
+        if tool.files > 1 { result = result + Text("  \(tool.files) 个文件").font(captionFont).foregroundColor(palette.fg4); any = true }
+        if tool.added > 0 { result = result + Text("  +\(tool.added)").font(monoFont).foregroundColor(palette.success); any = true }
+        if tool.removed > 0 { result = result + Text(" −\(tool.removed)").font(monoFont).foregroundColor(palette.danger); any = true }
+        return any ? result : nil
     }
 }
 
@@ -235,9 +240,9 @@ private struct ConversationToolDiff: View {
                 HStack(spacing: 12) {
                     Text("变更").riffetFont(.caption).foregroundStyle(palette.fg4)
                     Spacer(minLength: 0)
-                    Button { UIPasteboard.general.string = diff.before } label: { Image(systemName: "doc.on.doc").frame(width: 44, height: 44) }.accessibilityLabel("复制修改前源码")
-                    Button { UIPasteboard.general.string = diff.after } label: { Image(systemName: "doc.on.doc.fill").frame(width: 44, height: 44) }.accessibilityLabel("复制修改后源码")
-                }.buttonStyle(.plain).foregroundStyle(palette.fg3)
+                    RiffetCopyButton(text: diff.before, label: String(localized: "复制修改前源码", bundle: .riffet))
+                    RiffetCopyButton(text: diff.after, label: String(localized: "复制修改后源码", bundle: .riffet), symbol: "doc.on.doc.fill")
+                }
                 let count = isExpanded ? lines.count : min(80, lines.count)
                 ConversationCodeViewport(maximumHeight: 300, estimatedHeight: CGFloat(count) * 20 + 16, axes: [.vertical, .horizontal], memoKey: stateID + "|\(isExpanded)") {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -245,11 +250,11 @@ private struct ConversationToolDiff: View {
                             diffLine(lines[index])
                         }
                     }.fixedSize(horizontal: true, vertical: false).padding(8)
-                }.background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 8)).textSelection(.enabled)
+                }.background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.rowRadius)).textSelection(.enabled)
                 if lines.count > 80 { Button(isExpanded ? "收起变更" : "展开全部 \(lines.count) 行变更") { readAction(); isExpanded.toggle() }.riffetFont(.caption).foregroundStyle(palette.fg3).frame(minHeight: 44) }
             } else {
-                ConversationCode(text: diff.before, language: String(localized: "修改前", bundle: .riffet), maximumBodyHeight: 300, stateID: stateID + ".before")
-                ConversationCode(text: diff.after, language: String(localized: "修改后", bundle: .riffet), maximumBodyHeight: 300, stateID: stateID + ".after")
+                ConversationCode(text: diff.before, language: String(localized: "修改前", bundle: .riffet), output: true, stateID: stateID + ".before")
+                ConversationCode(text: diff.after, language: String(localized: "修改后", bundle: .riffet), output: true, stateID: stateID + ".after")
             }
         }.accessibilityElement(children: .contain)
     }
@@ -318,14 +323,13 @@ struct ConversationSubagentPage: View {
             if workbench.interaction != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("待确认", systemImage: "exclamationmark.circle", action: returnToMain ?? { dismiss() })
-                        .font(.caption)
                         .accessibilityLabel("主会话有待处理的确认")
                 }
             }
             ToolbarItem(placement: .principal) {
                 VStack(spacing: 1) {
-                    Text(current?.info?.title ?? title).font(.subheadline.weight(.semibold)).lineLimit(1)
-                    Text(subtitle).font(.caption2).foregroundStyle(running ? palette.accent : Color.secondary).lineLimit(1)
+                    Text(current?.info?.title ?? title).riffetFont(.label, weight: .semibold).lineLimit(1)
+                    Text(subtitle).riffetFont(.caption).foregroundStyle(running ? palette.accent : palette.fg3).lineLimit(1)
                 }
             }
         }
@@ -352,8 +356,8 @@ struct ConversationSubagentPage: View {
         if let error = workbench.subagentError {
             append("meta.history", revision: error, top: 8, Button {
                 workbench.store.clearSubagentError(); workbench.store.loadOlderSubagent(toolCallId: toolCallID)
-            } label: { Label("更早的消息加载失败", systemImage: "arrow.clockwise").font(.caption) }
-                .buttonStyle(.plain).foregroundStyle(.secondary).frame(maxWidth: .infinity))
+            } label: { Label("更早的消息加载失败", systemImage: "arrow.clockwise").riffetFont(.caption) }
+                .buttonStyle(.plain).foregroundStyle(palette.fg3).frame(maxWidth: .infinity))
         }
         let entries = ConversationRenderPlan.entries(rows: current?.grouping.rows ?? [], compactAbove: [], expanded: processExpansion, focusedRow: nil,
                                                      scope: workbench.baseURL.absoluteString + "|subagent:" + toolCallID, readingAbove: false)

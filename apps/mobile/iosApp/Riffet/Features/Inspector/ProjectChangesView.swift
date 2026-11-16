@@ -1,7 +1,8 @@
 import SwiftUI
 import RiffetKit
 
-private enum GitTab: CaseIterable {
+/// The Git page's views; a caller may open the page on one of them.
+enum GitTab: CaseIterable {
     case changes, history, checkpoints, worktrees
     var title: String {
         switch self {
@@ -17,22 +18,21 @@ struct ProjectChangesView: View {
     let workbench: Workbench
     let project: Project
     @State private var model: GitPanelModel
-    @State private var tab = GitTab.changes
+    @State private var tab: GitTab
     @State private var refresh = 0
+    @Environment(\.palette) private var palette
 
-    init(workbench: Workbench, project: Project) {
+    init(workbench: Workbench, project: Project, tab: GitTab = .changes) {
         self.workbench = workbench
         self.project = project
         _model = State(initialValue: GitPanelModel(workbench: workbench, project: project))
+        _tab = State(initialValue: tab)
     }
 
     private var tabs: [GitTab] { GitTab.allCases.filter { $0 != .history || model.status != nil } }
 
     var body: some View {
         VStack(spacing: 0) {
-            Picker(gitText("Git"), selection: $tab) {
-                ForEach(tabs, id: \.self) { Text(verbatim: $0.title).tag($0) }
-            }.pickerStyle(.segmented).padding()
             switch tab {
             case .history: ProjectHistoryView(model: model, refresh: refresh)
             case .checkpoints: ProjectCheckpoints(model: model, refresh: refresh)
@@ -40,14 +40,13 @@ struct ProjectChangesView: View {
             case .changes: ProjectChangesList(model: model, refresh: refresh)
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            RiffetViewTabs(items: tabs.map { .init(value: $0, title: $0.title) }, selection: $tab)
+                .background(palette.bg)
+        }
         .navigationTitle(gitText("Git"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .bottomBar)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button(gitText("Refresh"), systemImage: "arrow.clockwise") { refresh += 1; Task { await model.reload() } }
-            }
-        }
         .task(id: "\(project.id)|\(workbench.api != nil)") { await model.watch() }
         .gitPanelChrome(model, scope: "panel")
     }
@@ -87,6 +86,8 @@ private struct ProjectChangesList: View {
     @State private var listingError: String?
     @State private var shown = 300
     @State private var message = ""
+    @State private var committing = false
+    @Environment(\.palette) private var palette
 
     private var status: GitStatus? { model.status }
     private var staged: [GitEntry] { status?.entries.filter { gitStaged(entry: $0) } ?? [] }
@@ -100,14 +101,10 @@ private struct ProjectChangesList: View {
 
     var body: some View {
         List {
-            if let error = model.error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            RiffetNotice.section(.error, model.error)
             if let status {
                 Section {
-                    HStack {
-                        Label(status.branch, systemImage: "arrow.triangle.branch").font(.body.monospaced())
-                        Spacer()
-                        if let behind = model.branch?.behind, behind > 0 { Button(gitText("Pull")) { Task { await model.pull() } } }
-                    }
+                    RiffetValueRow(label: gitText("Branch"), value: status.branch, mono: true)
                     if scopes.count > 1 {
                         Picker(gitText("Scope"), selection: $scope) {
                             ForEach(scopes, id: \.self) { Text(verbatim: $0.title).tag($0) }
@@ -126,6 +123,32 @@ private struct ProjectChangesList: View {
         .task(id: "\(scope)|\(scopes.count)|\(status?.base ?? "")|\(refresh)|\(model.revision)") { await loadScope() }
         .onChange(of: scopes) { if !scopes.contains(scope) { scope = .uncommitted } }
         .gitPanelChrome(model, scope: "list", notice: false)
+        .toolbar {
+            if scope == .uncommitted, status != nil {
+                if !staged.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(gitText("Commit")) { committing = true }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        if !unstaged.isEmpty { Button(gitText("Stage All"), systemImage: "plus.circle") { Task { await model.stage(unstaged.map(\.path), on: true) } } }
+                        if !staged.isEmpty { Button(gitText("Unstage All"), systemImage: "minus.circle") { Task { await model.stage(staged.map(\.path), on: false) } } }
+                        if let behind = model.branch?.behind, behind > 0 { Button(gitText("Pull"), systemImage: "arrow.down.circle") { Task { await model.pull() } } }
+                    } label: { Label(gitText("More"), systemImage: "ellipsis.circle") }
+                        .disabled(unstaged.isEmpty && staged.isEmpty && (model.branch?.behind ?? 0) == 0)
+                }
+            }
+        }
+        .sheet(isPresented: $committing) {
+            RiffetEditPage(title: gitText("Commit"), saveTitle: gitText("Commit"),
+                           dirty: !message.isEmpty, canSave: !message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                await commit()
+            } content: {
+                RiffetNotice.section(.error, model.error)
+                Section { RiffetField(prompt: gitText("Message"), text: $message, axis: .vertical) }
+            }
+        }
     }
 
     @ViewBuilder
@@ -135,23 +158,16 @@ private struct ProjectChangesList: View {
         let hidden = unstaged.count + staged.count - visibleUnstaged.count - visibleStaged.count
         if !unstaged.isEmpty {
             Section {
-                Button(gitText("Stage All")) { Task { await model.stage(unstaged.map(\.path), on: true) } }
                 ForEach(visibleUnstaged, id: \.path) { entry in entryRow(entry, staged: false) }
-            } header: { Text(verbatim: "\(gitText("Unstaged")) · \(unstaged.count)") }
+            } header: { RiffetSectionTitle("\(gitText("Unstaged")) · \(unstaged.count)") }
         }
         if !staged.isEmpty {
             Section {
-                Button(gitText("Unstage All")) { Task { await model.stage(staged.map(\.path), on: false) } }
                 ForEach(visibleStaged, id: \.path) { entry in entryRow(entry, staged: true) }
-            } header: { Text(verbatim: "\(gitText("Staged")) · \(staged.count)") }
-            Section {
-                TextField(gitText("Message"), text: $message, axis: .vertical).lineLimit(2...6)
-                Button(gitText(staged.count == 1 ? "Commit 1 File" : "Commit \(staged.count) Files")) { Task { await commit() } }
-                    .disabled(message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
+            } header: { RiffetSectionTitle("\(gitText("Staged")) · \(staged.count)") }
         }
         if hidden > 0 {
-            Button(gitText("\(hidden) more files")) { shown += 1000 }.foregroundStyle(.secondary)
+            Button(gitMoreFiles(hidden)) { shown += 1000 }.riffetFont(.label).foregroundStyle(palette.fg2)
         }
         if status.entries.isEmpty { ContentUnavailableView(gitText("Working tree clean"), systemImage: "checkmark.circle") }
     }
@@ -169,16 +185,16 @@ private struct ProjectChangesList: View {
                     }
                 }
                 if listing.files.count > shown {
-                    Button(gitText("\(listing.files.count - shown) more files")) { shown += 1000 }.foregroundStyle(.secondary)
+                    Button(gitMoreFiles(listing.files.count - shown)) { shown += 1000 }.riffetFont(.label).foregroundStyle(palette.fg2)
                 }
                 if let total = listing.total, total > listing.files.count {
-                    Text(verbatim: "Showing the first \(listing.files.count) of \(total) files").foregroundStyle(.secondary)
+                    Text(verbatim: "Showing the first \(listing.files.count) of \(total) files").riffetFont(.caption).foregroundStyle(palette.fg3)
                 }
-            } header: { if let ref = listing.ref { Text(verbatim: ref).textCase(nil) } }
+            } header: { if let ref = listing.ref { RiffetSectionTitle(ref) } }
             if listing.files.isEmpty {
                 ContentUnavailableView(scope == .turn ? gitText("No changes this turn") : gitText("No differences from \(listing.ref ?? status?.base ?? "base")"), systemImage: "checkmark.circle")
             }
-        } else if let listingError { Text(listingError).foregroundStyle(.red) }
+        } else if let listingError { RiffetNotice.section(.error, listingError, actionTitle: gitText("Retry")) { Task { await loadScope() } } }
         else { ProgressView().frame(maxWidth: .infinity) }
     }
 
@@ -187,7 +203,7 @@ private struct ProjectChangesList: View {
         let letter = gitLetter(staged ? entry.index : entry.worktree)
         return Group {
             if folder {
-                Label(entry.path, systemImage: "folder").font(.body.monospaced())
+                Label(entry.path, systemImage: "folder").riffetFont(.mono).foregroundStyle(palette.fg)
             } else {
                 NavigationLink {
                     ProjectDiffPage(model: model, path: entry.path, source: .worktree(staged: staged))
@@ -196,7 +212,7 @@ private struct ProjectChangesList: View {
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if !staged { Button(gitText("Discard"), role: .destructive) { Task { await model.discard([entry.path], scope: "list") } } }
-            Button(staged ? gitText("Unstage") : gitText("Stage")) { Task { await model.stage([entry.path], on: !staged) } }.tint(.blue)
+            Button(staged ? gitText("Unstage") : gitText("Stage")) { Task { await model.stage([entry.path], on: !staged) } }.tint(palette.accent)
         }
         .contextMenu {
             Button(staged ? gitText("Unstage") : gitText("Stage")) { Task { await model.stage([entry.path], on: !staged) } }
@@ -230,10 +246,11 @@ private struct ProjectChangesList: View {
         } catch { listingError = gitMessage(error) }
     }
 
-    private func commit() async {
+    private func commit() async -> Bool {
         let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, !staged.isEmpty else { return }
-        if await model.commit(text) { message = "" }
+        guard !text.isEmpty, !staged.isEmpty else { return false }
+        if await model.commit(text) { message = ""; return true }
+        return false
     }
 }
 
@@ -243,6 +260,7 @@ struct UnifiedDiffView: View {
     let after: String
     @State private var lines: [DiffLine]?
     @State private var fallback = false
+    @Environment(\.palette) private var palette
     var body: some View {
         Group {
             if let lines {
@@ -250,13 +268,13 @@ struct UnifiedDiffView: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(Array(lines.enumerated()), id: \.offset) { _, line in
                             HStack(alignment: .top, spacing: 8) {
-                                Text(line.oldNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(.secondary)
-                                Text(line.newNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(.secondary)
-                                Text(line.type == .add ? "+" : line.type == .del ? "−" : " ").foregroundStyle(line.type == .add ? .green : line.type == .del ? .red : .secondary)
+                                Text(line.oldNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
+                                Text(line.newNo.map { "\($0.int64Value)" } ?? "").frame(minWidth: 32, alignment: .trailing).foregroundStyle(palette.fg3)
+                                Text(line.type == .add ? "+" : line.type == .del ? "−" : " ").foregroundStyle(line.type == .add ? palette.diffAddMarker : line.type == .del ? palette.diffDelMarker : palette.fg3)
                                 Text(line.text.isEmpty ? " " : line.text).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
                             }
-                            .font(.body.monospaced()).padding(.vertical, 2).padding(.horizontal, 6)
-                            .background(line.type == .add ? Color.green.opacity(0.1) : line.type == .del ? Color.red.opacity(0.1) : .clear)
+                            .riffetFont(.mono).padding(.vertical, 2).padding(.horizontal, 6)
+                            .background(line.type == .add ? palette.diffAdd : line.type == .del ? palette.diffDel : .clear)
                         }
                     }.padding(.vertical)
                 }

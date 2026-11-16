@@ -73,6 +73,7 @@ private struct ExtensionGroup: Identifiable {
 struct NativeExtensionsView: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var backend: NativeBackendId = .cursor
     @State private var profiles: [NativeBackendProfileSettings] = []
     @State private var profileID = ""
@@ -130,14 +131,7 @@ struct NativeExtensionsView: View {
                               selection: Binding(get: { kind }, set: { kindFilter = $0 }))
                     .listRowInsets(EdgeInsets()).listRowBackground(Color.clear).listRowSeparator(.hidden)
             }
-            if let error {
-                ManagementFeedback(error: error, notice: nil)
-                Section {
-                    Button { Task { await reload() } } label: {
-                        Text("重试").riffetFont(.body).foregroundStyle(palette.accent)
-                    }.disabled(loading)
-                }
-            }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet)) { Task { await reload() } }
             ForEach(grouped) { group in
                 let shown = capped ? Array(group.items.prefix(Self.preview)) : group.items
                 Section {
@@ -147,31 +141,31 @@ struct NativeExtensionsView: View {
                         } label: { row(item) }
                     }
                     if shown.count < group.items.count {
-                        Button { withAnimation(RiffetMotion.spatial) { kindFilter = group.kind } } label: {
+                        Button { withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { kindFilter = group.kind } } label: {
                             Text("全部 \(group.items.count) 个").riffetFont(.body).foregroundStyle(palette.accent)
                                 .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 } header: {
-                    Text(ExtText.kind(group.kind)).riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                    RiffetSectionTitle(ExtText.kind(group.kind))
                 }
             }
-            if kind.isEmpty, let runtime, !runtime.entries.isEmpty {
+            if kind.isEmpty, (runtime?.entries.isEmpty == false) || !diagnostics.isEmpty {
                 Section {
-                    ForEach(Array(runtime.entries.enumerated()), id: \.offset) { _, entry in runtimeRow(entry) }
-                } header: {
-                    Text("运行状态").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
-                }
-            }
-            if kind.isEmpty, !diagnostics.isEmpty {
-                Section {
-                    NavigationLink { NativeExtensionDiagnostics(values: diagnostics) } label: {
-                        SettingsRowLabel(title: String(localized: "诊断", bundle: .riffet), symbol: "stethoscope", value: "\(diagnostics.count)")
+                    if let runtime, !runtime.entries.isEmpty {
+                        NavigationLink { NativeExtensionRuntime(entries: runtime.entries) } label: {
+                            SettingsRowLabel(title: String(localized: "运行状态", bundle: .riffet), symbol: "waveform.path.ecg", value: "\(runtime.entries.count)")
+                        }
+                    }
+                    if !diagnostics.isEmpty {
+                        NavigationLink { NativeExtensionDiagnostics(values: diagnostics) } label: {
+                            SettingsRowLabel(title: String(localized: "诊断", bundle: .riffet), symbol: "stethoscope", value: "\(diagnostics.count)")
+                        }
                     }
                 }
             }
-            if let reason = capabilities?.reason { SettingsMessage(text: reason, error: false) }
+            if let reason = capabilities?.reason { RiffetNotice.section(.info, reason) }
         }
         .overlay {
             if loading && inventory == nil { ProgressView() }
@@ -181,7 +175,7 @@ struct NativeExtensionsView: View {
             }
         }
         .navigationTitle(String(localized: "Agent 扩展", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $filter, prompt: String(localized: "搜索名称或类型", bundle: .riffet))
+        .riffetSearchable(text: $filter, prompt: String(localized: "搜索名称或类型", bundle: .riffet))
         .toolbar {
             if canCreate || canInstall {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -242,18 +236,6 @@ struct NativeExtensionsView: View {
         }
     }
 
-    private func runtimeRow(_ entry: ExtensionRuntimeEntry) -> some View {
-        let caption = [ExtText.kind(entry.kind), ExtText.runtimeState(entry.state)].compactMap { $0 }.joined(separator: " · ")
-        return VStack(alignment: .leading, spacing: 2) {
-            Text(entry.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
-            Text(caption).riffetFont(.caption).foregroundStyle(palette.fg3)
-            if let message = entry.message, !message.isEmpty { Text(message).riffetFont(.caption).foregroundStyle(palette.fg3) }
-            if let tools = entry.tools, !tools.isEmpty {
-                Text(tools.joined(separator: ", ")).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(2)
-            }
-        }
-    }
-
     private func reload() async {
         if profilesBackend != backend || profileID.isEmpty { await loadProfiles() }
         else { await load() }
@@ -290,6 +272,31 @@ struct NativeExtensionsView: View {
     }
 }
 
+private struct NativeExtensionRuntime: View {
+    let entries: [ExtensionRuntimeEntry]
+    @Environment(\.palette) private var palette
+    var body: some View {
+        RiffetList {
+            Section {
+                ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in runtimeRow(entry) }
+            }
+        }
+        .navigationTitle(String(localized: "运行状态", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func runtimeRow(_ entry: ExtensionRuntimeEntry) -> some View {
+        let caption = [ExtText.kind(entry.kind), ExtText.runtimeState(entry.state)].compactMap { $0 }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(entry.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+            Text(caption).riffetFont(.caption).foregroundStyle(palette.fg3)
+            if let message = entry.message, !message.isEmpty { Text(message).riffetFont(.caption).foregroundStyle(palette.fg3) }
+            if let tools = entry.tools, !tools.isEmpty {
+                Text(tools.joined(separator: ", ")).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(2)
+            }
+        }
+    }
+}
+
 private struct NativeExtensionDiagnostics: View {
     let values: [String]
     @Environment(\.palette) private var palette
@@ -314,7 +321,6 @@ private struct NativeExtensionDetail: View {
     @Environment(\.palette) private var palette
     @State private var detail: ExtensionDetail?
     @State private var error: String?
-    @State private var notice: String?
     @State private var output: String?
     @State private var authorization: URL?
     @State private var busy = false
@@ -338,7 +344,7 @@ private struct NativeExtensionDetail: View {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack(spacing: 14) {
                         Image(systemName: ExtText.symbol(current.kind))
-                            .font(.system(size: 20, weight: .medium)).foregroundStyle(palette.fg2)
+                            .riffetFont(.barTitle, weight: .medium).foregroundStyle(palette.fg2)
                             .frame(width: 44, height: 44)
                             .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(palette.lineSoft, lineWidth: 0.5))
@@ -386,7 +392,7 @@ private struct NativeExtensionDetail: View {
                                         if let reason = file.reason { Text(reason).riffetFont(.caption).foregroundStyle(palette.fg3) }
                                     }
                                     Spacer(minLength: 8)
-                                    Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(palette.fg4)
+                                    Image(systemName: "chevron.right").riffetFont(.caption, weight: .semibold).foregroundStyle(palette.fg4)
                                 }.contentShape(Rectangle())
                             }.buttonStyle(.plain)
                         }
@@ -396,7 +402,7 @@ private struct NativeExtensionDetail: View {
                             }.buttonStyle(.plain)
                         }
                     } header: {
-                        Text("配置文件").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                        RiffetSectionTitle(String(localized: "配置文件", bundle: .riffet))
                     }
                 }
             }
@@ -409,12 +415,12 @@ private struct NativeExtensionDetail: View {
                     }
                 }
             }
-            ManagementFeedback(error: error, notice: notice)
+            RiffetNotice.section(.error, error)
             if let output, !output.isEmpty {
                 Section {
                     Text(output).riffetFont(.monoSmall).foregroundStyle(palette.fg2).textSelection(.enabled)
                 } header: {
-                    Text("服务器输出").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                    RiffetSectionTitle(String(localized: "服务器输出", bundle: .riffet))
                 }
             }
             if let authorization {
@@ -439,7 +445,7 @@ private struct NativeExtensionDetail: View {
         .task { await load() }
         .refreshable { await load() }
         .sheet(isPresented: $showDocument) { if let document { NavigationStack { NativeExtensionDocumentEditor(workbench: workbench, context: context, original: document) { changed() } } } }
-        .confirmationDialog("确认\(ExtText.action(confirmAction ?? ""))？", isPresented: Binding(get: { confirmAction != nil }, set: { if !$0 { confirmAction = nil } }), titleVisibility: .visible) {
+        .confirmationDialog(confirmAction.map { String(localized: "\(ExtText.action($0))「\((detail?.item ?? item).name)」？", bundle: .riffet) } ?? "", isPresented: Binding(get: { confirmAction != nil }, set: { if !$0 { confirmAction = nil } }), titleVisibility: .visible) {
             Button(ExtText.action(confirmAction ?? ""), role: confirmAction == "uninstall" ? .destructive : nil) { let value = confirmAction; confirmAction = nil; if let value { Task { await action(value) } } }
         }
     }
@@ -461,10 +467,16 @@ private struct NativeExtensionDetail: View {
     private func action(_ action: String) async {
         guard let api = workbench.api else { return }; busy = true; defer { busy = false }
         let current = detail?.item ?? item
+        output = nil
         do {
             let result = try await api.extensionAction(context: context, input: ExtensionActionRequest(action: action, itemId: current.id, target: current.nativeId, scope: ["user", "project"].contains(current.scope) ? current.scope : nil, expectedHash: nil))
-            output = result.output; authorization = result.authorizationUrl.flatMap { URL(string: $0) }.flatMap { ["https", "http"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
-            if result.success { notice = result.applyEffect; error = nil; changed(); await load() }
+            // On success the server's text (instructions, a login hint) stays on the page; a failure
+            // without diagnostics already shows it as the error.
+            output = !result.success && result.diagnostics == nil ? nil : result.output; authorization = result.authorizationUrl.flatMap { URL(string: $0) }.flatMap { ["https", "http"].contains($0.scheme?.lowercased() ?? "") ? $0 : nil }
+            if result.success {
+                if !result.applyEffect.isEmpty { RiffetToastCenter.shared.show(result.applyEffect, kind: .success) }
+                error = nil; changed(); await load()
+            }
             else { error = result.diagnostics?.joined(separator: "\n") ?? result.output ?? String(localized: "服务器未完成操作", bundle: .riffet) }
         } catch { self.error = error.riffetMessage }
     }
@@ -495,14 +507,14 @@ private struct NativeExtensionDocumentEditor: View {
                 .padding(.horizontal, RiffetMetrics.pageInset - 5)
             VStack(alignment: .leading, spacing: 4) {
                 if !notes.isEmpty { Text(notes).riffetFont(.caption).foregroundStyle(palette.fg3) }
-                if let error { Text(error).riffetFont(.caption).foregroundStyle(palette.danger).textSelection(.enabled) }
+                if let error { RiffetNotice(kind: .error, message: error) }
             }
             .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 8)
         }
         .background(palette.bg)
         .navigationTitle(current.editable ? String(localized: "编辑配置", bundle: .riffet) : String(localized: "查看配置", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("完成") { if dirty { confirmDiscard = true } else { dismiss() } }.disabled(busy) }
+            ToolbarItem(placement: .cancellationAction) { Button(current.editable ? "取消" : "关闭") { if dirty { confirmDiscard = true } else { dismiss() } }.disabled(busy) }
             ToolbarItem(placement: .topBarTrailing) {
                 if busy { ProgressView() } else {
                     Menu {
@@ -515,9 +527,8 @@ private struct NativeExtensionDocumentEditor: View {
             }
             if current.editable { ToolbarItem(placement: .confirmationAction) { Button("保存") { Task { await save() } }.disabled(!dirty || busy) } }
         }
-        .interactiveDismissDisabled(dirty || busy)
+        .riffetUnsavedGuard(dirty: dirty, locked: busy, confirming: $confirmDiscard) { dismiss() }
         .onAppear { if snapshot == nil { snapshot = original; text = original.content } }
-        .confirmationDialog("放弃未保存的更改？", isPresented: $confirmDiscard, titleVisibility: .visible) { Button("放弃更改", role: .destructive) { dismiss() } }
         .confirmationDialog("用服务器版本替换当前编辑内容？", isPresented: $confirmReload, titleVisibility: .visible) { Button("重新读取", role: .destructive) { Task { await reload() } } }
     }
     private func save() async {
@@ -550,40 +561,45 @@ private struct NativeExtensionCreate: View {
     @State private var pendingTarget: String?
     @State private var initialPath = ""
     @State private var initialContent = ""
+    private var dirty: Bool { path != initialPath || content != initialContent }
     var body: some View {
         RiffetForm {
             Section {
-                Picker(selection: Binding(get: { targetID }, set: { value in
-                    if path != initialPath || content != initialContent { pendingTarget = value }
+                let choice = Binding(get: { targetID }, set: { value in
+                    if dirty { pendingTarget = value }
                     else { targetID = value; applyTemplate() }
-                })) { ForEach(targets, id: \.id) { Text($0.label + " · " + ExtText.scope($0.scope)).tag($0.id) } } label: {
-                    Text("配置类型").riffetFont(.body).foregroundStyle(palette.fg)
-                }.pickerStyle(.menu).tint(palette.fg3)
+                })
+                if targets.count >= 5 {
+                    RiffetPickerRow(title: String(localized: "配置类型", bundle: .riffet), options: targets.map { .init(id: $0.id, title: $0.label, subtitle: ExtText.scope($0.scope)) }, selection: choice)
+                } else {
+                    Picker(selection: choice) { ForEach(targets, id: \.id) { Text($0.label + " · " + ExtText.scope($0.scope)).tag($0.id) } } label: {
+                        Text("配置类型").riffetFont(.body).foregroundStyle(palette.fg)
+                    }.pickerStyle(.menu).tint(palette.fg3)
+                }
             } footer: {
                 if let target = targets.first(where: { $0.id == targetID }) {
                     Text(target.directory).riffetFont(.monoSmall).foregroundStyle(palette.fg3).textSelection(.enabled)
                 }
             }
             Section {
-                TextField("文件路径", text: $path).riffetFont(.mono).textInputAutocapitalization(.never).autocorrectionDisabled()
+                RiffetField(prompt: String(localized: "文件路径", bundle: .riffet), text: $path, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
             }
             Section {
                 TextEditor(text: $content).riffetFont(.mono).foregroundStyle(palette.fg).tint(palette.accent)
                     .scrollContentBackground(.hidden).frame(minHeight: 280)
             } header: {
-                Text("内容").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                RiffetSectionTitle(String(localized: "内容", bundle: .riffet))
             }
-            ManagementFeedback(error: error, notice: nil)
+            RiffetNotice.section(.error, error)
         }.disabled(busy).navigationTitle(String(localized: "新建配置", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("取消") { discard = true } }
+            ToolbarItem(placement: .cancellationAction) { Button("取消") { if dirty { discard = true } else { dismiss() } }.disabled(busy) }
             ToolbarItem(placement: .confirmationAction) {
                 if busy { ProgressView() }
                 else { Button("创建") { Task { await create() } }.disabled(targetID.isEmpty || path.trimmingCharacters(in: .whitespaces).isEmpty) }
             }
         }
-        .interactiveDismissDisabled(true)
-        .confirmationDialog("放弃新建配置？", isPresented: $discard, titleVisibility: .visible) { Button("放弃", role: .destructive) { dismiss() } }
+        .riffetUnsavedGuard(dirty: dirty, locked: busy, confirming: $discard) { dismiss() }
         .confirmationDialog("切换类型并放弃当前内容？", isPresented: Binding(get: { pendingTarget != nil }, set: { if !$0 { pendingTarget = nil } }), titleVisibility: .visible) {
             Button("切换类型", role: .destructive) { if let value = pendingTarget { targetID = value; applyTemplate() }; pendingTarget = nil }
         }
@@ -615,12 +631,15 @@ private struct NativeExtensionInstall: View {
     @State private var scope = "user"
     @State private var busy = false
     @State private var error: String?
-    @State private var output: String?
+    @State private var discard = false
+    /// What the server said after installing, kept on the page until the reader closes it.
+    @State private var installed: (effect: String, output: String)?
+    private var dirty: Bool { installed == nil && !target.trimmingCharacters(in: .whitespaces).isEmpty }
     private var availableScopes: [String] { scopes.filter { $0 != "project" || context.projectId != nil } }
     var body: some View {
         RiffetForm {
             Section {
-                TextField("插件 ID 或服务器支持的来源", text: $target).riffetFont(.body).textInputAutocapitalization(.never).autocorrectionDisabled()
+                RiffetField(prompt: String(localized: "插件 ID 或服务器支持的来源", bundle: .riffet), text: $target).textInputAutocapitalization(.never).autocorrectionDisabled()
             }
             if availableScopes.count > 1 {
                 Section {
@@ -628,15 +647,27 @@ private struct NativeExtensionInstall: View {
                         Text("安装范围")
                     }.pickerStyle(.segmented).labelsHidden()
                 } header: {
-                    Text("安装范围").riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                    RiffetSectionTitle(String(localized: "安装范围", bundle: .riffet))
                 }
             }
-            ManagementFeedback(error: error, notice: output)
-        }.navigationTitle(String(localized: "安装插件", bundle: .riffet)).navigationBarTitleDisplayMode(.inline).interactiveDismissDisabled(busy)
+            RiffetNotice.section(.error, error)
+            if let installed {
+                RiffetNotice.section(.success, installed.effect)
+                Section {
+                    Text(installed.output).riffetFont(.monoSmall).foregroundStyle(palette.fg2).textSelection(.enabled)
+                } header: {
+                    RiffetSectionTitle(String(localized: "服务器输出", bundle: .riffet))
+                }
+            }
+        }.navigationTitle(String(localized: "安装插件", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .riffetUnsavedGuard(dirty: dirty, locked: busy, confirming: $discard) { dismiss() }
         .toolbar {
-            ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() }.disabled(busy) }
+            if installed == nil {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { if dirty { discard = true } else { dismiss() } }.disabled(busy) }
+            }
             ToolbarItem(placement: .confirmationAction) {
                 if busy { ProgressView() }
+                else if installed != nil { Button("完成") { dismiss() } }
                 else { Button("安装") { Task { await install() } }.disabled(target.trimmingCharacters(in: .whitespaces).isEmpty) }
             }
         }
@@ -646,7 +677,13 @@ private struct NativeExtensionInstall: View {
         guard let api = workbench.api else { return }; busy = true; defer { busy = false }
         do {
             let result = try await api.extensionAction(context: context, input: ExtensionActionRequest(action: "install", itemId: nil, target: target.trimmingCharacters(in: .whitespaces), scope: scope, expectedHash: nil))
-            if result.success { output = [result.applyEffect, result.output].compactMap { $0 }.joined(separator: "\n"); error = nil; changed() }
+            if result.success {
+                let effect = result.applyEffect.isEmpty ? String(localized: "已安装", bundle: .riffet) : result.applyEffect
+                error = nil; changed()
+                // Text from the server is read here before leaving; without any, a toast says it and the page closes.
+                if let output = result.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { installed = (effect, output) }
+                else { RiffetToastCenter.shared.show(effect, kind: .success); dismiss() }
+            }
             else { error = result.diagnostics?.joined(separator: "\n") ?? result.output ?? String(localized: "安装失败", bundle: .riffet) }
         } catch { self.error = error.riffetMessage }
     }

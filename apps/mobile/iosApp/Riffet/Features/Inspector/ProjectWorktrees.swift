@@ -1,6 +1,10 @@
 import SwiftUI
 import RiffetKit
 
+private func sameDirectory(_ a: String, _ b: String) -> Bool {
+    a.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == b.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+}
+
 struct ProjectWorktrees: View {
     let workbench: Workbench
     let project: Project
@@ -9,57 +13,49 @@ struct ProjectWorktrees: View {
     @State private var branch = ""
     @State private var base = ""
     @State private var error: String?
-    @State private var busy = false
-    @State private var pendingRemove: WorktreeInfo?
-    @State private var opened: Project?
+    @State private var createError: String?
+    @State private var creating = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
         List {
-            Section {
-                TextField(gitText("New branch name"), text: $branch).textInputAutocapitalization(.never).autocorrectionDisabled()
-                TextField(gitText("Based on (optional)"), text: $base).textInputAutocapitalization(.never).autocorrectionDisabled()
-                Button(gitText("Create")) { Task { await create() } }.disabled(busy || branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            }
-            if let error { Text(error).foregroundStyle(.red) }
-            if let opened {
-                Section {
-                    NavigationLink(gitText(opened.name)) { ProjectFilesView(workbench: workbench, project: opened) }
-                }
-            }
+            RiffetNotice.section(.error, error, actionTitle: gitText("Retry")) { Task { await load() } }
             if let worktrees {
                 ForEach(worktrees, id: \.path) { tree in
-                    Section {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Label(tree.branch ?? "Detached HEAD", systemImage: "arrow.triangle.branch").font(.body.monospaced())
-                            Text(tree.path).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
-                            Text(String(tree.head.prefix(8))).font(.caption).foregroundStyle(.secondary)
-                        }
-                        if tree.bare?.boolValue != true {
-                            if !current(tree) {
-                                Button(gitText("Open as Project")) { Task { await open(tree) } }.disabled(busy)
-                                Button(gitText("Remove Worktree"), role: .destructive) { pendingRemove = tree }.disabled(busy)
-                            }
+                    NavigationLink {
+                        WorktreeDetail(workbench: workbench, project: project, tree: tree) { await load() }
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(tree.branch ?? "Detached HEAD").riffetFont(.mono).foregroundStyle(palette.fg).lineLimit(1)
+                            Text(tree.path).riffetFont(.monoSmall).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head)
                         }
                     }
                 }
                 if worktrees.isEmpty { ContentUnavailableView(gitText("No worktrees"), systemImage: "arrow.triangle.branch") }
-            } else if error == nil { ProgressView() }
+            } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
         }
         .task(id: "\(project.id)|\(refresh)") { await load() }
         .refreshable { await load() }
-        .confirmationDialog(gitText("Remove Worktree?"), isPresented: Binding(get: { pendingRemove != nil }, set: { if !$0 { pendingRemove = nil } }), titleVisibility: .visible) {
-            Button(gitText("Remove"), role: .destructive) {
-                guard let target = pendingRemove else { return }
-                pendingRemove = nil
-                Task { await remove(target) }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(gitText("New Worktree"), systemImage: "plus") { creating = true }
             }
-        } message: {
-            Text(verbatim: "\(pendingRemove?.path ?? "")\n\nGit refuses to remove a worktree with uncommitted changes.")
+        }
+        .sheet(isPresented: $creating) {
+            RiffetEditPage(title: gitText("New Worktree"), saveTitle: gitText("Create"),
+                           dirty: !branch.isEmpty || !base.isEmpty,
+                           canSave: !branch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                await create()
+            } content: {
+                RiffetNotice.section(.error, createError)
+                Section {
+                    RiffetField(label: gitText("Branch"), prompt: gitText("New branch name"), text: $branch, mono: true)
+                    RiffetField(label: gitText("Based on"), prompt: gitText("Optional"), text: $base, mono: true)
+                }
+            }
         }
     }
-    private func current(_ tree: WorktreeInfo) -> Bool {
-        tree.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) == project.cwd.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-    }
+
     private func load() async {
         do {
             guard let api = workbench.api else { throw InspectorFailure.disconnected }
@@ -67,34 +63,83 @@ struct ProjectWorktrees: View {
             error = nil
         } catch { self.error = gitMessage(error) }
     }
-    private func create() async {
-        guard !busy else { return }
-        busy = true
-        defer { busy = false }
+
+    private func create() async -> Bool {
         do {
             guard let api = workbench.api else { throw InspectorFailure.disconnected }
             let name = branch.trimmingCharacters(in: .whitespacesAndNewlines)
             let from = base.trimmingCharacters(in: .whitespacesAndNewlines)
             _ = try await api.createWorktree(projectId: project.id, body: CreateWorktreeRequest(branch: name, path: nil, base: from.isEmpty ? nil : from))
             branch = ""; base = ""
+            createError = nil
             await load()
-        } catch { self.error = gitMessage(error) }
+            return true
+        } catch { createError = gitMessage(error); return false }
     }
-    private func remove(_ tree: WorktreeInfo) async {
+}
+
+private struct WorktreeDetail: View {
+    let workbench: Workbench
+    let project: Project
+    let tree: WorktreeInfo
+    let changed: () async -> Void
+    @State private var busy = false
+    @State private var error: String?
+    @State private var confirmRemove = false
+    @State private var opened: Project?
+    @State private var showOpened = false
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.palette) private var palette
+
+    private var current: Bool { sameDirectory(tree.path, project.cwd) }
+    private var actionable: Bool { tree.bare?.boolValue != true && !current }
+
+    var body: some View {
+        RiffetList {
+            RiffetNotice.section(.error, error)
+            Section {
+                RiffetValueRow(label: gitText("Branch"), value: tree.branch ?? "Detached HEAD", mono: true)
+                RiffetValueRow(label: gitText("Path"), value: tree.path, mono: true)
+                RiffetValueRow(label: gitText("HEAD"), value: String(tree.head.prefix(8)), mono: true)
+            }
+            if actionable {
+                Section {
+                    RiffetActionRow(verbatim: gitText("Open as Project"), symbol: "folder", enabled: !busy) { Task { await open() } }
+                }
+                Section {
+                    RiffetActionRow(verbatim: gitText("Remove Worktree"), symbol: "trash", destructive: true, enabled: !busy) { confirmRemove = true }
+                }
+            }
+        }
+        .navigationTitle(gitText("Worktree"))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showOpened) {
+            if let opened { ProjectFilesView(workbench: workbench, project: opened) }
+        }
+        .confirmationDialog(gitText("Remove \"\(tree.branch ?? (tree.path as NSString).lastPathComponent)\"?"), isPresented: $confirmRemove, titleVisibility: .visible) {
+            Button(gitText("Remove Worktree"), role: .destructive) { Task { await remove() } }
+        } message: {
+            Text(gitText("Git refuses to remove a worktree with uncommitted changes."))
+        }
+    }
+
+    private func remove() async {
         guard !busy else { return }
         busy = true
         defer { busy = false }
         do {
             guard let api = workbench.api else { throw InspectorFailure.disconnected }
             try await api.removeWorktree(projectId: project.id, path: tree.path)
-            await load()
+            await changed()
+            dismiss()
         } catch { self.error = gitMessage(error) }
     }
-    private func open(_ tree: WorktreeInfo) async {
+
+    private func open() async {
         guard !busy else { return }
         busy = true
         defer { busy = false }
-        do { opened = try await workbench.store.openDirectory(path: tree.path); error = nil }
+        do { opened = try await workbench.store.openDirectory(path: tree.path); error = nil; showOpened = true }
         catch { self.error = gitMessage(error) }
     }
 }

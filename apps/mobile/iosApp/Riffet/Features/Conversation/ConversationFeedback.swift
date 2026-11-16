@@ -117,7 +117,7 @@ final class ConversationCopyFeedback {
     }
 }
 
-private struct ConversationCopyVisibility: ViewModifier {
+struct ConversationCopyVisibility: ViewModifier {
     let feedback: ConversationCopyFeedback
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.conversationFeedbackActive) private var active
@@ -138,7 +138,7 @@ extension EnvironmentValues {
 }
 
 extension View {
-    func conversationCopyFeedback(_ feedback: ConversationCopyFeedback) -> some View {
+    func conversationCopyFeedback(_ feedback: ConversationCopyFeedback) -> ModifiedContent<Self, ConversationCopyVisibility> {
         modifier(ConversationCopyVisibility(feedback: feedback))
     }
 }
@@ -227,17 +227,17 @@ struct ConversationFeedbackText: View {
     @State private var fullHeight: CGFloat = 0
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(text).font(.caption).lineLimit(preview ? 3 : nil).textSelection(.enabled)
+            Text(text).riffetFont(.caption).lineLimit(preview ? 3 : nil).textSelection(.enabled)
                 .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { previewHeight = $0 }
                 .background(alignment: .top) {
                     if preview {
-                        Text(text).font(.caption).fixedSize(horizontal: false, vertical: true)
+                        Text(text).riffetFont(.caption).fixedSize(horizontal: false, vertical: true)
                             .hidden().accessibilityHidden(true)
                             .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { fullHeight = $0 }
                     }
                 }
             if preview && (hasDetail || fullHeight > previewHeight + 1) {
-                Button("详情", action: onDetails).font(.caption)
+                Button("详情", action: onDetails).riffetFont(.caption).contentShape(Rectangle().inset(by: -12))
             }
         }
     }

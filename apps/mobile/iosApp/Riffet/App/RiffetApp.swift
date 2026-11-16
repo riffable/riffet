@@ -31,7 +31,7 @@ struct RiffetApp: App {
             Group {
                 if model.starting { LaunchSplash() }
                 else if let workbench = model.workbench { RiffetRootView(workbench: workbench).id(ObjectIdentifier(workbench)) }
-                else { NavigationStack { PairingView(model: model) } }
+                else { NavigationStack { ConnectionView(model: model) } }
             }
             .environment(model)
             .environment(themeStore)

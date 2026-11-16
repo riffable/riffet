@@ -12,7 +12,6 @@ struct ExternalSessionPicker: View {
     @State private var scope: ExternalScope
     @State private var filter = ExternalFilter()
     @State private var importing: String?
-    @State private var error: String?
 
     init(workbench: Workbench, projectID: String?, open: @escaping (String) -> Void) {
         self.workbench = workbench
@@ -31,26 +30,28 @@ struct ExternalSessionPicker: View {
                 }
             }
             .safeAreaInset(edge: .top, spacing: 0) {
-                Picker("", selection: $scope) {
-                    if projectID != nil { Text("当前项目").tag(ExternalScope.project) }
-                    Text("按目录").tag(ExternalScope.directory)
-                    Text("全部").tag(ExternalScope.all)
-                }.pickerStyle(.segmented).padding(.horizontal, RiffetMetrics.pageInset).padding(.vertical, 8)
+                VStack(spacing: 0) {
+                    Picker("", selection: $scope) {
+                        if projectID != nil { Text("当前项目").tag(ExternalScope.project) }
+                        Text("按目录").tag(ExternalScope.directory)
+                        Text("全部").tag(ExternalScope.all)
+                    }.pickerStyle(.segmented).padding(.horizontal, RiffetMetrics.pageInset).padding(.vertical, 8)
+                    ExternalAgentChips(filter: $filter)
+                }
             }
             .navigationTitle(String(localized: "从终端导入", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: String.self) { cwd in
                 ExternalSessionList(workbench: workbench, scope: .directory, projectID: nil, cwd: cwd, filter: $filter, importing: importing, pick: pick)
+                    .safeAreaInset(edge: .top, spacing: 0) { ExternalAgentChips(filter: $filter) }
                     .navigationTitle(cwd.split(separator: "/").last.map(String.init) ?? cwd).navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .topBarTrailing) { ExternalFilterMenu(filter: $filter) } }
             }
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                 ToolbarItem(placement: .topBarTrailing) { ExternalFilterMenu(filter: $filter) }
             }
-            .alert("未能完成操作", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) {
-                Button("好") { error = nil }
-            } message: { Text(error ?? "") }
         }
+        .riffetToastHost()
     }
 
     private func pick(_ item: ExternalSession) {
@@ -61,7 +62,7 @@ struct ExternalSessionPicker: View {
             do {
                 let result = try await workbench.store.importExternalSession(backendId: item.backendId, backendProfileId: item.backendProfileId, nativeSessionId: item.nativeSessionId)
                 dismiss(); open(result.session.id)
-            } catch is CancellationError {} catch { self.error = error.riffetMessage }
+            } catch is CancellationError {} catch { RiffetToastCenter.shared.error(error.riffetMessage) }
         }
     }
 }
@@ -83,18 +84,23 @@ struct ExternalFilter: Equatable {
     var nonInteractive = false
 }
 
+/// 全部 and the agents whose sessions can be imported, above the list.
+private struct ExternalAgentChips: View {
+    @Binding var filter: ExternalFilter
+    var body: some View {
+        RiffetChipBar(items: [.init(value: nil, title: String(localized: "全部", bundle: .riffet)),
+                              .init(value: "claude", title: "Claude"), .init(value: "codex", title: "Codex")],
+                      selection: $filter.backend)
+    }
+}
+
 private struct ExternalFilterMenu: View {
     @Binding var filter: ExternalFilter
     var body: some View {
         Menu {
-            Picker("Agent", selection: $filter.backend) {
-                Text("全部").tag(String?.none)
-                Text(verbatim: "Claude").tag(String?.some("claude"))
-                Text(verbatim: "Codex").tag(String?.some("codex"))
-            }
             Toggle("含非交互", isOn: $filter.nonInteractive)
         } label: {
-            Image(systemName: filter == ExternalFilter() ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+            Image(systemName: filter.nonInteractive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }.accessibilityLabel("筛选")
     }
 }
@@ -115,13 +121,14 @@ private struct ExternalSessionList: View {
     @State private var loadingMore = false
     @State private var error: String?
     @State private var retry = 0
+    @Environment(\.palette) private var palette
     private var key: String { "\(scope.wire)|\(projectID ?? "")|\(cwd ?? "")|\(filter.backend ?? "")|\(filter.nonInteractive)|\(query)|\(retry)" }
 
     var body: some View {
         List {
-            if let error { Section { Text(error).foregroundStyle(.red); Button("重试") { retry += 1 } } }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet), action: { retry += 1 })
             if !failures.isEmpty {
-                Section { ForEach(failures, id: \.backendId) { Text(verbatim: "\($0.backendId): \($0.message)").riffetFont(.caption).foregroundStyle(.secondary) } }
+                Section { ForEach(failures, id: \.backendId) { Text(verbatim: "\($0.backendId): \($0.message)").riffetFont(.caption).foregroundStyle(palette.fg3) } }
             }
             ForEach(items, id: \.nativeSessionId) { item in
                 ExternalSessionRow(workbench: workbench, item: item, showsDirectory: scope != .project && cwd == nil, busy: importing == item.nativeSessionId) { pick(item) }
@@ -133,7 +140,7 @@ private struct ExternalSessionList: View {
                 ContentUnavailableView("没有可导入的会话", systemImage: "terminal")
             }
         }
-        .searchable(text: $query, prompt: String(localized: "搜索标题与目录", bundle: .riffet))
+        .riffetSearchable(text: $query, prompt: String(localized: "搜索标题与目录", bundle: .riffet))
         .task(id: key) { await reload() }
         .refreshable { await reload(refresh: true) }
     }
@@ -193,7 +200,7 @@ private struct ExternalSessionRow: View {
             HStack(spacing: 12) {
                 AgentAvatar(backend: item.backendId, size: 36)
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(item.title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(2)
+                    Text(item.title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
                     Text(detail).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
                 }
                 Spacer(minLength: 8)
@@ -219,7 +226,7 @@ private struct ExternalDirectoryList: View {
 
     var body: some View {
         List {
-            if let error { Section { Text(error).foregroundStyle(.red); Button("重试") { retry += 1 } } }
+            RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet), action: { retry += 1 })
             ForEach(shown, id: \.cwd) { directory in
                 NavigationLink(value: directory.cwd) { row(directory) }
                     .disabled(!directory.exists)
@@ -227,7 +234,7 @@ private struct ExternalDirectoryList: View {
             if loading { HStack { Spacer(); ProgressView(); Spacer() }.listRowSeparator(.hidden) }
             if !loading && error == nil && shown.isEmpty { ContentUnavailableView("没有可导入的会话", systemImage: "terminal") }
         }
-        .searchable(text: $query, prompt: String(localized: "搜索标题与目录", bundle: .riffet))
+        .riffetSearchable(text: $query, prompt: String(localized: "搜索标题与目录", bundle: .riffet))
         .task(id: "\(filter.backend ?? "")|\(filter.nonInteractive)|\(retry)") {
             loading = true; error = nil
             do {
@@ -242,7 +249,7 @@ private struct ExternalDirectoryList: View {
 
     private func row(_ directory: ExternalSessionDirectory) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder").font(.system(size: 17)).foregroundStyle(palette.fg2).frame(width: 36)
+            Image(systemName: "folder").riffetFont(.barTitle).foregroundStyle(palette.fg2).frame(width: 36)
             VStack(alignment: .leading, spacing: 3) {
                 Text(workbench.project(directory.projectId)?.name ?? directory.cwd.split(separator: "/").last.map(String.init) ?? directory.cwd)
                     .riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)

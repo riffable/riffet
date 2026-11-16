@@ -138,6 +138,7 @@ struct ToolsPickerPage: View {
     var error: String? = nil
     var enabled = true
     @State private var reader = ExtensionsReader()
+    @Environment(\.palette) private var palette
     var body: some View {
         let kit = ToolGroups.shared
         let known = devices ?? []
@@ -148,13 +149,13 @@ struct ToolsPickerPage: View {
         let groups = ToolsPick.pluginGroups(plugins, value: value)
         let language = Locale.current.language.languageCode?.identifier ?? "zh"
         Form {
-            if let error { Section { Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.red) } }
+            RiffetNotice.section(.error, error)
             if let groups, !groups.isEmpty { Section {
                 ForEach(groups, id: \.id) { group in
                     let on = value.contains(group.id)
                     Button { onChange(kit.toggled(value: value, devices: known, plugins: groups, group: group.id, on: !on)) } label: {
                         ConfigurationChoiceRow(title: group.label(language: language), detail: group.enabled ? nil : String(localized: "已停用", bundle: .riffet), selected: on)
-                    }.foregroundStyle(.primary)
+                    }.foregroundStyle(palette.fg)
                 }
             } }
             if !controllable.isEmpty || !stale.isEmpty { Section {
@@ -179,7 +180,7 @@ struct ToolsPickerPage: View {
         let on = value.contains(group)
         return Button { onChange(ToolGroups.shared.toggled(value: value, devices: known, plugins: ToolsPick.pluginGroups(plugins, value: value), group: group, on: !on)) } label: {
             ConfigurationChoiceRow(title: title, detail: detail, selected: on)
-        }.foregroundStyle(.primary)
+        }.foregroundStyle(palette.fg)
     }
     @ViewBuilder private func extensionSections(_ pick: ExtensionsPick, loaded: LoadedExtensions?) -> some View {
         let kit = ExtensionsOff.shared
@@ -195,8 +196,8 @@ struct ToolsPickerPage: View {
             }
         } else if reader.failed {
             Section {
-                Label("无法读取技能与工具", systemImage: "exclamationmark.triangle").foregroundStyle(.red)
-                Button("重试") { Task { await reader.load(pick, force: true) } }
+                RiffetNotice(kind: .error, message: String(localized: "无法读取技能与工具", bundle: .riffet),
+                             actionTitle: String(localized: "重试", bundle: .riffet)) { Task { await reader.load(pick, force: true) } }
             }
         } else {
             Section { ProgressView().frame(maxWidth: .infinity) }
@@ -210,7 +211,7 @@ struct ToolsPickerPage: View {
                     let on = !pick.off.contains(item)
                     Button { pick.onChange(ExtensionsOff.shared.toggled(value: pick.off, item: item, on: !on)) } label: {
                         ConfigurationChoiceRow(title: name, detail: nil, selected: on, trailing: counts[name].map { String($0) })
-                    }.foregroundStyle(.primary)
+                    }.foregroundStyle(palette.fg)
                 }
             } header: { Text(title) }
         }

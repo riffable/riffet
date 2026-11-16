@@ -13,12 +13,13 @@ struct ConversationComposer: View {
     var onOptionsClosed: () -> Void = {}
     /// Incremented by the page to put the cursor in the input (after quoting a message).
     var focusRequest = 0
+    /// The `/` or `@` token being typed; the page docks its menu above this composer.
+    @Binding var menu: ComposerMenuToken?
     let onSent: () -> Void
     @State private var files = false
     @State private var photos = false
-    @State private var commands = false
-    @State private var references = false
-    @State private var sessionReferences = false
+    /// The token Escape closed; it stays closed as that token is typed on.
+    @State private var dismissedMenu: ComposerMenuToken.Key?
     @State private var configuration: SessionOptionFocus?
     @State private var expandedEditor = false
     @FocusState private var focused: Bool
@@ -29,13 +30,10 @@ struct ConversationComposer: View {
     private var defaultSendSteers: Bool { workbench.store.prefersSteerWhileRunning() }
     private var sendLabel: String { defaultSendSteers ? String(localized: "补充到当前任务", bundle: .riffet) : workbench.working ? String(localized: "加入发送队列", bundle: .riffet) : String(localized: "发送消息", bundle: .riffet) }
     private var modelName: String { NativeConfigurationSummary.shortModel(catalog: catalog, selection: session.model) }
-    private var approval: String? {
-        NativeConfigurationSummary.approval(status: workbench.selected?.id == session.id ? workbench.status : nil, backend: session.backendId ?? .cursor, sessionApproval: session.approval)
-    }
-    /// The approval mode's short name, where the catalog lists modes to choose from.
-    private var approvalName: (name: String, risky: Bool)? {
-        guard let approval, let option = catalog?.capabilities.permissions.first(where: { $0.id == approval }) else { return nil }
-        return (option.shortLabel ?? option.label, riffetApprovalIsRisky(approval))
+    /// How full the context window is, once the agent has reported it for this session.
+    private var contextRatio: Double? {
+        guard workbench.selected?.id == session.id, let context = workbench.context, context.size > 0, context.used >= 0 else { return nil }
+        return Double(context.used) / Double(context.size)
     }
     private var acceptsMessages: Bool {
         catalog?.capabilities.requiresLiveTerminal?.boolValue != true ||
@@ -63,7 +61,7 @@ struct ConversationComposer: View {
                 card
             }
         }.padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 6)
-        .animation(RiffetMotion.spatial, value: expanded)
+        .riffetAnimation(RiffetMotion.spatial, value: expanded)
         // No 完成 bar over the keyboard: dragging the transcript down puts it away (`keyboardDismissMode`).
         .sheet(isPresented: $files) { DocumentAttachmentPicker { picked($0); files = false } }
         .sheet(isPresented: $photos) { PhotoAttachmentPicker { picked($0); photos = false } }
@@ -74,36 +72,9 @@ struct ConversationComposer: View {
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { configuration = nil } } }
             }.presentationDragIndicator(.visible)
         }
-        .sheet(isPresented: $commands) { ConversationSlashPicker(workbench: workbench, session: session) { item in
-            if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || draft.text == "/" { draft.text = "/" + item.name + " " }
-            else if item.isSkill { draft.text += " /" + item.name + " " }
-            else { draft.text = "/" + item.name + " " + draft.text }
-            commands = false; focused = true
-        } }
-        .sheet(isPresented: $references) { ConversationReferencePicker(workbench: workbench, projectID: session.projectId) { file in
-            if draft.text == "@" { draft.text = "" }
-            if !draft.references.contains(where: { $0.path == file.path && $0.line == nil }) { draft.references.append(PromptContextReference(path: file.path, line: nil, kind: nil, sessionId: nil, fromRunId: nil, title: nil)) }
-            references = false; focused = true
-        } }
-        .sheet(isPresented: $sessionReferences) {
-            ConversationSessionReferencePicker(workbench: workbench, currentSessionID: session.id, projectID: session.projectId) { selected in
-                guard draft.references.filter({ $0.kind == "session" }).count < 5 else {
-                    draft.error = String(localized: "最多引用 5 个会话", bundle: .riffet); return
-                }
-                if !draft.references.contains(where: { $0.sessionId == selected.id }) {
-                    draft.references.append(sessionReference(session: selected))
-                }
-                if let range = draft.text.range(of: #"(?:^|\s)@[^\s@]*$"#, options: .regularExpression) {
-                    let token = draft.text[range]
-                    let leading = token.prefix { $0 != "@" }
-                    draft.text.replaceSubrange(range, with: String(leading))
-                }
-                sessionReferences = false; focused = true
-            }
-        }
         .sheet(isPresented: $expandedEditor) {
             NavigationStack {
-                TextEditor(text: $draft.text).font(.body).padding(12).scrollContentBackground(.hidden)
+                TextEditor(text: $draft.text).riffetFont(.body).padding(12).scrollContentBackground(.hidden)
                     .accessibilityIdentifier("expandedMessageComposer")
                     .navigationTitle(String(localized: "编辑消息", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     .toolbar {
@@ -112,12 +83,24 @@ struct ConversationComposer: View {
                     }
             }.presentationDetents([.large])
         }
-        .onChange(of: draft.text) { old, value in
-            if old.isEmpty && value == "/" && !quickChat { commands = true }
-            if catalog?.capabilities.supportsSessionReferences == true,
-               value.range(of: #"(?:^|\s)@[^\s@]*$"#, options: .regularExpression) != nil { sessionReferences = true }
-            else if old.isEmpty && value == "@" && !quickChat { references = true }
+        .onChange(of: draft.text) { _, value in updateMenu(value) }
+    }
+    private var supportsSessionReferences: Bool { catalog?.capabilities.supportsSessionReferences == true }
+    /// A quick chat has no project files to cite and no commands or skills; it can still cite sessions.
+    private func updateMenu(_ value: String) {
+        guard let token = ComposerMenuToken.detect(in: value), token.kind == .slash ? !quickChat : (!quickChat || supportsSessionReferences) else {
+            dismissedMenu = nil
+            if menu != nil { menu = nil }
+            return
         }
+        if dismissedMenu == token.key { if menu != nil { menu = nil }; return }
+        if menu != token { menu = token }
+    }
+    /// The plus menu's entries put the sigil in the draft, which opens the docked menu.
+    private func insertTrigger(_ sigil: String) {
+        if let last = draft.text.last, !last.isWhitespace { draft.text += " " }
+        draft.text += sigil
+        focused = true
     }
     /// One floating card. The input keeps a single call site; focus and content only add the footer.
     private var card: some View {
@@ -130,9 +113,14 @@ struct ConversationComposer: View {
                     .padding(.leading, expanded ? 16 : 0).padding(.vertical, expanded ? 14 : 0)
                     .frame(minHeight: RiffetMetrics.hitTarget)
                     .accessibilityIdentifier("messageComposer")
+                    .onKeyPress(.escape) {
+                        guard let token = menu else { return .ignored }
+                        dismissedMenu = token.key; menu = nil
+                        return .handled
+                    }
                 if focused {
                     Button { expandedEditor = true } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right").font(.system(size: 13)).foregroundStyle(palette.fg4)
+                        Image(systemName: "arrow.up.left.and.arrow.down.right").riffetFont(.caption).foregroundStyle(palette.fg4)
                             .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
                     }.buttonStyle(RiffetDimPressStyle()).accessibilityLabel("展开编辑器").accessibilityIdentifier("expandComposer")
                 } else if !expanded && showsStop {
@@ -147,9 +135,9 @@ struct ConversationComposer: View {
         HStack(spacing: 0) {
             plusMenu
             Spacer(minLength: 8)
-            RiffetModelLabel(title: modelName, approval: approvalName, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
+            RiffetModelLabel(title: modelName, context: contextRatio, loading: catalogLoading, failed: catalogError != nil) { configuration = .model }
                 .accessibilityLabel(String(localized: "模型：\(modelName)", bundle: .riffet))
-                .accessibilityValue(catalogLoading ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? "")
+                .accessibilityValue(catalogLoading ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? contextRatio.map { String(localized: "上下文已用 \($0.formatted(.percent.precision(.fractionLength(0))))", bundle: .riffet) } ?? "")
                 .accessibilityHint("查看模型、参数、模式与权限").accessibilityIdentifier("modelPicker")
                 .layoutPriority(1)
             if draft.uploading { ProgressView().frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget) }
@@ -182,26 +170,26 @@ struct ConversationComposer: View {
             Button("选择照片", systemImage: "photo") { photos = true }
             Button("选择文件", systemImage: "doc") { files = true }
             // A quick chat has no project files to cite and no commands or skills.
-            if !quickChat { Button("引用项目文件", systemImage: "at") { references = true } }
+            if !quickChat { Button("引用项目文件", systemImage: "at") { insertTrigger("@") } }
             if catalog?.capabilities.supportsSessionReferences == true {
-                Button("引用会话", systemImage: "text.bubble") { sessionReferences = true }
+                Button("引用会话", systemImage: "text.bubble") { insertTrigger("@") }
             }
-            if !quickChat { Button("命令与技能", systemImage: "slash.circle") { commands = true } }
+            if !quickChat { Button("命令与技能", systemImage: "slash.circle") { insertTrigger("/") } }
         } label: {
             Image(systemName: "plus").font(.system(size: 20)).foregroundStyle(palette.fg)
                 .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
         }.disabled(draft.uploading).accessibilityLabel("添加附件、引用或命令")
     }
     @ViewBuilder private var feedback: some View {
-        if let error = draft.error ?? workbench.sendState.error { Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.red).textSelection(.enabled) }
-        // Uncertain delivery is owned by ConversationRunDocks and clears with the receipt.
+        if let error = draft.error ?? workbench.sendState.error { RiffetNotice(kind: .error, message: error, boxed: true) }
+        // Uncertain delivery clears with the receipt.
     }
     @ViewBuilder private var attachmentChips: some View {
         if !draft.pendingFiles.isEmpty || !draft.references.isEmpty || !draft.attachments.isEmpty {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
                     ForEach(draft.pendingFiles) { file in
-                        Menu { Button("重试上传") { Task { await draft.retry(workbench: workbench, projectID: session.projectId) } }; Button("移除", role: .destructive) { draft.removePending(file.id) } } label: { Label(file.name, systemImage: draft.uploading ? "arrow.up.doc" : "exclamationmark.circle").lineLimit(1).font(.caption).padding(8).background(.quaternary, in: Capsule()) }
+                        Menu { Button("重试上传") { Task { await draft.retry(workbench: workbench, projectID: session.projectId) } }; Button("移除", role: .destructive) { draft.removePending(file.id) } } label: { Label(file.name, systemImage: draft.uploading ? "arrow.up.doc" : "exclamationmark.circle").lineLimit(1).riffetFont(.caption).padding(8).background(palette.press, in: Capsule()) }
                     }
                     ForEach(Array(draft.references.enumerated()), id: \.offset) { _, reference in
                         HStack(spacing: 4) {
@@ -211,14 +199,14 @@ struct ConversationComposer: View {
                                 }.buttonStyle(.plain)
                             } else { Label((reference.path as NSString).lastPathComponent, systemImage: "at").lineLimit(1) }
                             Button("移除引用", systemImage: "xmark.circle.fill") { draft.references.removeAll { $0 == reference } }
-                                .labelStyle(.iconOnly).frame(width: 30, height: 32)
-                        }.font(.caption).padding(.leading, 10).background(.quaternary, in: Capsule())
+                                .labelStyle(.iconOnly).frame(width: 30, height: 32).contentShape(Rectangle().inset(by: -7))
+                        }.riffetFont(.caption).padding(.leading, 10).background(palette.press, in: Capsule())
                     }
                     ForEach(draft.attachments, id: \.id) { attachment in
                         if attachment.mimeType.hasPrefix("image/") && attachment.mimeType != "image/svg+xml" {
                             ComposerThumbnail(workbench: workbench, attachmentID: attachment.id, name: attachment.name) { draft.attachments.removeAll { $0.id == attachment.id } }
                         } else {
-                            HStack(spacing: 4) { Label(attachment.name, systemImage: "doc").lineLimit(1); Button("移除附件", systemImage: "xmark.circle.fill") { draft.attachments.removeAll { $0.id == attachment.id } }.labelStyle(.iconOnly).frame(width: 30, height: 32) }.font(.caption).padding(.leading, 10).background(.quaternary, in: Capsule())
+                            HStack(spacing: 4) { Label(attachment.name, systemImage: "doc").lineLimit(1); Button("移除附件", systemImage: "xmark.circle.fill") { draft.attachments.removeAll { $0.id == attachment.id } }.labelStyle(.iconOnly).frame(width: 30, height: 32).contentShape(Rectangle().inset(by: -7)) }.riffetFont(.caption).padding(.leading, 10).background(palette.press, in: Capsule())
                         }
                     }
                 }
@@ -247,62 +235,6 @@ struct ConversationComposer: View {
     }
 }
 
-struct ConversationRunDocks: View {
-    let workbench: Workbench
-    let draft: MessageDraft
-    var supportsSteer = false
-    var supportsTargetedStop = false
-    @Environment(\.palette) private var palette
-    private var canSteer: Bool { workbench.isConnected && workbench.status?.phase == .busy && workbench.interaction == nil && workbench.uncertain.isEmpty && !workbench.sendState.sending && !workbench.sendState.interrupting }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if let goal = workbench.goal {
-                DisclosureGroup { VStack(alignment: .leading, spacing: 6) { Text(goal.objective); if goal.status == "blocked", let reason = goal.reason { Text(reason).foregroundStyle(palette.warning) } }.font(.subheadline).padding(.top, 8) } label: { Label("目标 · \(goalStatusLabel(goal: goal))", systemImage: "target").font(.subheadline) }
-            }
-            if !workbench.todos.isEmpty {
-                DisclosureGroup { ConversationTodoList(entries: workbench.todos).padding(.top, 8) } label: { Label(todoProgress(entries: workbench.todos), systemImage: "checklist").font(.subheadline) }
-            }
-            ForEach(workbench.queued, id: \.id) { run in
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("等待发送", systemImage: "clock").font(.caption).foregroundStyle(.secondary)
-                    Text(run.prompt).font(.subheadline).lineLimit(3)
-                    HStack(spacing: 0) {
-                        let showsSteer = supportsSteer && workbench.status?.activeTurn != nil
-                        let usesSteer = showsSteer && canSteer
-                        if usesSteer {
-                            Button { guard let target = workbench.status?.activeTurn?.target() else { return }; Task { await workbench.perform { _ = try await workbench.store.steerQueued(run: run, target: target) } } } label: { Image(systemName: "arrow.turn.up.right").frame(width: 44, height: 44) }
-                                .disabled(!canSteer).help("补充到当前任务").accessibilityLabel("补充到当前任务")
-                        } else if supportsTargetedStop {
-                            Button { Task { await workbench.perform { _ = try await workbench.store.sendQueuedNow(run: run) } } } label: { Image(systemName: "arrow.up").frame(width: 44, height: 44) }
-                                .accessibilityLabel("停止并发送")
-                        }
-                        Menu {
-                            if usesSteer && supportsTargetedStop {
-                                Button("停止并发送", systemImage: "arrow.up") { Task { await workbench.perform { _ = try await workbench.store.sendQueuedNow(run: run) } } }
-                            } else if showsSteer {
-                                Button("补充到当前任务", systemImage: "arrow.turn.up.right") { guard let target = workbench.status?.activeTurn?.target() else { return }; Task { await workbench.perform { _ = try await workbench.store.steerQueued(run: run, target: target) } } }
-                                    .disabled(!canSteer)
-                            }
-                            Button("移回输入框", systemImage: "square.and.pencil") { Task { await workbench.perform {
-                                if let taken = try await workbench.store.takeBackQueued(run: run) {
-                                    if draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { draft.text = taken.text } else { draft.text += "\n\n" + taken.text }
-                                    let ids = Set(draft.attachments.map(\.id)); draft.attachments.append(contentsOf: taken.attachments.filter { !ids.contains($0.id) })
-                                    draft.references = mergeRestoredReferences(current: draft.references, restored: taken.context)
-                                }
-                            } } }
-                            Button("取消", systemImage: "trash", role: .destructive) { Task { await workbench.perform { _ = try await workbench.store.cancelRun(run: run) } } }
-                        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }
-                            .accessibilityLabel("更多操作")
-                    }.font(.caption).disabled(workbench.sendState.pendingRunIds.contains(run.id) || !SendPhaseKt.inQueue(run: run))
-                }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 10))
-            }
-            if !workbench.queued.isEmpty && workbench.status?.queue?.held?.reason == .unconfirmed {
-                Text("等待上一条消息确认").riffetFont(.caption).foregroundStyle(palette.fg3).padding(.leading, 6)
-            }
-        }
-    }
-}
-
 /// The model control's trailing glyph, in a fixed slot: progress while its catalog loads, a warning
 /// once reading it failed (the sheet it opens says why and retries), the picker chevron otherwise.
 struct CatalogStatusSlot: View {
@@ -312,7 +244,7 @@ struct CatalogStatusSlot: View {
     var body: some View {
         Group {
             if loading { ProgressView().controlSize(.mini) }
-            else if failed { Image(systemName: "exclamationmark.triangle.fill").font(.caption2).foregroundStyle(palette.warning) }
+            else if failed { Image(systemName: "exclamationmark.triangle.fill").riffetFont(.caption).foregroundStyle(palette.warning) }
             else { Image(systemName: "chevron.down") }
         }.frame(width: 12, height: 12)
     }
@@ -325,20 +257,21 @@ private struct ComposerThumbnail: View {
     let name: String
     let remove: () -> Void
     @State private var image: UIImage?
+    @Environment(\.palette) private var palette
     private var key: String { "thumbnail:" + attachmentID }
     var body: some View {
         let shown = image ?? ConversationLayoutMemo.shared.image(key)
         ZStack {
             if let shown { Image(uiImage: shown).resizable().scaledToFill() }
-            else { Image(systemName: "photo").foregroundStyle(.secondary) }
+            else { Image(systemName: "photo").foregroundStyle(palette.fg3) }
         }
         .frame(width: 44, height: 44)
-        .background(.quaternary)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(palette.press)
+        .clipShape(RoundedRectangle(cornerRadius: RiffetMetrics.rowRadius))
         .overlay(alignment: .topTrailing) {
             Button("移除附件", systemImage: "xmark.circle.fill", action: remove)
-                .labelStyle(.iconOnly).font(.system(size: 16)).symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.55))
-                .frame(width: 30, height: 30, alignment: .topTrailing).offset(x: 6, y: -6)
+                .labelStyle(.iconOnly).riffetFont(.body).symbolRenderingMode(.palette).foregroundStyle(.white, .black.opacity(0.55))
+                .frame(width: 30, height: 30, alignment: .topTrailing).contentShape(Rectangle().inset(by: -7)).offset(x: 6, y: -6)
         }
         .padding(.top, 6).padding(.trailing, 6)
         .accessibilityElement(children: .contain).accessibilityLabel(name)
@@ -363,7 +296,7 @@ private struct TerminalHoldBar: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            Image(systemName: "apple.terminal").font(.system(size: 15)).foregroundStyle(palette.fg3)
+            Image(systemName: "apple.terminal").riffetFont(.label).foregroundStyle(palette.fg3)
             Text(error ?? String(localized: "在终端中", bundle: .riffet)).foregroundStyle(error == nil ? palette.fg2 : palette.danger).lineLimit(2)
             Spacer(minLength: 8)
             Button("收回") { release(force: false) }.tint(palette.accent).disabled(releasing)

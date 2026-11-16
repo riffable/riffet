@@ -6,6 +6,8 @@ func gitText(_ text: String) -> String { text }
 
 func gitFiles(_ count: Int) -> String { count == 1 ? "1 file" : "\(count) files" }
 
+func gitMoreFiles(_ count: Int) -> String { count == 1 ? "1 more file" : "\(count) more files" }
+
 /// The server's refusals the panel words itself; anything else keeps the server's own message.
 func gitMessage(_ error: Error) -> String {
     if let failure = error as? InspectorFailure, case .disconnected = failure { return "Not connected" }
@@ -24,12 +26,12 @@ func gitLetter(_ code: String) -> String {
     }
 }
 
-func gitLetterColor(_ letter: String) -> Color {
+func gitLetterColor(_ letter: String, _ palette: Palette) -> Color {
     switch letter {
-    case "A", "U": .green
-    case "D": .red
-    case "R": .blue
-    default: .orange
+    case "A", "U": palette.diffAddMarker
+    case "D": palette.diffDelMarker
+    case "R": palette.accent
+    default: palette.warning
     }
 }
 
@@ -42,6 +44,7 @@ struct GitNotice {
     let id = UUID()
     let text: String
     var backup: Checkpoint?
+    var kind: RiffetToastCenter.Kind = .success
 }
 
 struct PendingDiscard {
@@ -175,7 +178,7 @@ final class GitPanelModel {
             if action == "discard" { discarded(result) } else { status = result.status; error = nil }
             return true
         } catch {
-            if error.riffetCode == "GIT_DIFF_STALE" { notice = GitNotice(text: "File changed, reloaded") }
+            if error.riffetCode == "GIT_DIFF_STALE" { notice = GitNotice(text: "File changed, reloaded", kind: .info) }
             else { self.error = gitMessage(error) }
             return false
         }
@@ -202,19 +205,14 @@ private struct GitPanelChrome: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .safeAreaInset(edge: .bottom) {
-                if showNotice, let notice = model.notice {
-                    HStack {
-                        Text(notice.text)
-                        Spacer()
-                        if let backup = notice.backup { Button(gitText("Undo")) { Task { await model.undo(backup) } } }
-                    }
-                    .font(.callout).padding().frame(maxWidth: .infinity).background(.bar)
-                    .task(id: notice.id) {
-                        try? await Task.sleep(for: .seconds(6))
-                        if !Task.isCancelled, model.notice?.id == notice.id { model.notice = nil }
-                    }
-                }
+            .onChange(of: model.notice?.id) {
+                guard showNotice, let notice = model.notice else { return }
+                model.notice = nil
+                RiffetToastCenter.shared.show(
+                    notice.text, kind: notice.kind,
+                    actionTitle: notice.backup == nil ? nil : gitText("Undo"),
+                    action: notice.backup.map { backup in { Task { await model.undo(backup) } } }
+                )
             }
             .confirmationDialog(
                 title,

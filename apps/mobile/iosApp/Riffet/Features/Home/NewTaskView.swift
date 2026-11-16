@@ -36,6 +36,7 @@ struct NewTaskView: View {
     @FocusState private var writing: Bool
     @Environment(\.palette) private var palette
     @Environment(\.dynamicTypeSize) private var textSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.verticalSizeClass) private var verticalSize
     private var compact: Bool { verticalSize == .compact }
     private var markHidden: Bool { writing || compact }
@@ -105,18 +106,18 @@ struct NewTaskView: View {
                             .allowsHitTesting(!markHidden)
                         // The line and the card are what stays put across 新建任务 and 快速对话; what differs hangs below.
                         VStack(alignment: .leading, spacing: 0) {
-                            slot
-                            card
+                            slot.riffetTypeBoundary()
+                            card.riffetTypeBoundary()
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.top, compact ? 4 : 8)
                         VStack(alignment: .leading, spacing: 0) {
-                            if chat { presetPrompt }
-                            notes
-                            if !chat { toolCards.padding(.top, 12) }
+                            if chat { presetPrompt.riffetTypeBoundary() }
+                            notes.riffetTypeBoundary()
+                            if !chat { toolCards.padding(.top, 12).riffetTypeBoundary() }
                         }
                         .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 24)
                     }
-                    .animation(.easeInOut(duration: 0.2), value: markHidden)
+                    .riffetAnimation(RiffetMotion.spatial, value: markHidden)
                     .frame(maxWidth: .infinity)
                     .background { Color.clear.contentShape(Rectangle()).onTapGesture { writing = false } }
                 }
@@ -127,6 +128,14 @@ struct NewTaskView: View {
         .toolbar {
             // The switch is the page's heading, as Android keeps its tabs in the top bar: one header, not two.
             if chatProject != nil { ToolbarItem(placement: .principal) { tabSwitch } }
+            if !chat, let project {
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    NavigationLink { ProjectFilesView(workbench: workbench, project: project) } label: { Image(systemName: "doc") }
+                        .accessibilityLabel(String(localized: "文件", bundle: .riffet))
+                    NavigationLink { ProjectChangesView(workbench: workbench, project: project) } label: { Image(systemName: "arrow.triangle.branch") }
+                        .accessibilityLabel(String(localized: "变更", bundle: .riffet))
+                }
+            }
         }
         .sheet(isPresented: $projects, onDismiss: { if browsing { browsing = false; directories = true } }) {
             ProjectSheet(workbench: workbench, selection: draft.projectID, onBrowse: { browsing = true }) { if let picked = $0 { draft.projectID = picked.id } }
@@ -245,7 +254,7 @@ struct NewTaskView: View {
     /// 新建任务 / 快速对话 in the navigation bar, where the page title would be.
     private var tabSwitch: some View {
         Picker("", selection: Binding(get: { chat ? NewSessionTab.chat : .task },
-                                      set: { value in withAnimation(RiffetMotion.spatial) { tabRaw = value.rawValue } })) {
+                                      set: { value in withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { tabRaw = value.rawValue } })) {
             Text("新建任务").tag(NewSessionTab.task)
             Text("快速对话").tag(NewSessionTab.chat)
         }
@@ -266,13 +275,13 @@ struct NewTaskView: View {
             }
         }
         .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading)
-        .animation(RiffetMotion.spatial, value: chat)
+        .riffetAnimation(RiffetMotion.spatial, value: chat)
     }
     private var projectLine: some View {
         HStack(spacing: 0) {
             Button { writing = false; projects = true } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "folder").font(.system(size: 15, weight: .regular)).foregroundStyle(palette.fg2)
+                    Image(systemName: "folder").riffetFont(.label, weight: .regular).foregroundStyle(palette.fg2)
                     Text(project?.name ?? String(localized: "选择项目", bundle: .riffet)).riffetFont(.headline).foregroundStyle(palette.fg).lineLimit(1).layoutPriority(1)
                 }
                 .padding(.horizontal, 4).frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
@@ -280,24 +289,14 @@ struct NewTaskView: View {
             .buttonStyle(RiffetDimPressStyle())
             .disabled(hasAttachments || locked).accessibilityLabel("项目").accessibilityIdentifier("newTaskProject")
             Spacer(minLength: 8)
-            if let project {
-                NavigationLink { ProjectFilesView(workbench: workbench, project: project) } label: { projectIcon("doc") }
-                    .accessibilityLabel("文件")
-                NavigationLink { ProjectChangesView(workbench: workbench, project: project) } label: { projectIcon("arrow.triangle.branch") }
-                    .accessibilityLabel("变更")
-            }
         }.buttonStyle(RiffetDimPressStyle())
-    }
-    private func projectIcon(_ symbol: String) -> some View {
-        Image(systemName: symbol).font(.system(size: 16, weight: .regular)).foregroundStyle(palette.fg2)
-            .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
     }
     /// The selected preset's prompt, quiet under the card; a tap shows all of it.
     @ViewBuilder private var presetPrompt: some View {
         if let prompt = chatModes.first(where: { $0.id == chatMode && $0.id != "agent" })?.prompt, !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             Text(prompt).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(promptExpanded ? nil : 2)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4).padding(.top, 8)
-                .contentShape(Rectangle()).onTapGesture { withAnimation(RiffetMotion.spatial) { promptExpanded.toggle() } }
+                .contentShape(Rectangle()).onTapGesture { withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { promptExpanded.toggle() } }
         }
     }
     private var plusMenu: some View {
@@ -312,7 +311,7 @@ struct NewTaskView: View {
                 Button("命令与技能", systemImage: "slash.circle") { commands = true }
             }
         } label: {
-            Image(systemName: "plus").font(.system(size: 20, weight: .regular)).foregroundStyle(palette.fg)
+            Image(systemName: "plus").riffetFont(.barTitle, weight: .regular).foregroundStyle(palette.fg)
                 .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
         }
         .disabled(project == nil || sending || draft.uploading || draft.pendingCreationID != nil).accessibilityLabel("添加")
@@ -328,13 +327,18 @@ struct NewTaskView: View {
                     Menu {
                         Button("重试上传") { if let project { Task { await draft.retry(workbench: workbench, projectID: project.id) } } }
                         Button("移除", role: .destructive) { draft.removePending(file.id) }
-                    } label: { Text(file.name).lineLimit(1).riffetFont(.caption).foregroundStyle(palette.danger).padding(.horizontal, 10).frame(minHeight: 30).background(palette.press, in: Capsule()) }
+                    } label: {
+                        Text(file.name).lineLimit(1).riffetFont(.caption).foregroundStyle(palette.danger).padding(.horizontal, 10)
+                            .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                            .background { Capsule().fill(palette.press).frame(height: RiffetMetrics.chipHeight - 4) }
+                    }
                 }
                 ForEach(Array(draft.references.enumerated()), id: \.offset) { _, reference in
                     chip {
                         if reference.kind == "session", let id = reference.sessionId {
                             Button { draft.save(); onOpenSession(id) } label: {
                                 Label(reference.title ?? id, systemImage: "text.bubble").lineLimit(1)
+                                    .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
                             }.buttonStyle(.plain)
                         } else { Text("@\(reference.path)").lineLimit(1) }
                     } remove: { draft.references.removeAll { $0 == reference } }
@@ -343,22 +347,29 @@ struct NewTaskView: View {
         }.disabled(locked)
     }
     private func chip<Content: View>(@ViewBuilder _ content: () -> Content, remove: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
-            content()
-            Button("移除", systemImage: "xmark.circle.fill", action: remove).labelStyle(.iconOnly).foregroundStyle(palette.fg3)
-        }.riffetFont(.caption).foregroundStyle(palette.fg2).padding(.leading, 10).padding(.trailing, 6).frame(minHeight: 30).background(palette.press, in: Capsule())
+        HStack(spacing: 0) {
+            content().padding(.leading, 10)
+            Button(action: remove) {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(palette.fg3)
+                    .frame(minWidth: RiffetMetrics.hitTarget, minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
+            }
+            .accessibilityLabel("移除")
+        }
+        .riffetFont(.caption).foregroundStyle(palette.fg2)
+        .frame(minHeight: RiffetMetrics.hitTarget)
+        .background { Capsule().fill(palette.press).frame(height: RiffetMetrics.chipHeight - 4) }
     }
     /// Catalog, draft and recovery notes sit under the card.
     @ViewBuilder private var notes: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let reason = catalog?.reason, catalog?.available == false { Text(reason).foregroundStyle(palette.warning) }
-            if let error = draft.error { Text(error).foregroundStyle(palette.danger) }
+            if let reason = catalog?.reason, catalog?.available == false { RiffetNotice(kind: .warning, message: reason, boxed: true) }
+            if let error = draft.error { RiffetNotice(kind: .error, message: error, boxed: true) }
             if draft.pendingCreationID != nil {
-                Text("上次提交尚未取得确认。重试会使用同一个请求，不会重新创建任务。").foregroundStyle(palette.fg3)
-                Button("停止跟踪这次提交") { discardPending = true }.disabled(sending)
+                RiffetNotice(kind: .info, message: String(localized: "上次提交尚未取得确认。重试会使用同一个请求，不会重新创建任务。", bundle: .riffet),
+                             actionTitle: String(localized: "停止跟踪这次提交", bundle: .riffet), action: { if !sending { discardPending = true } }, boxed: true)
             }
         }
-        .riffetFont(.caption).padding(.horizontal, 4).padding(.top, 8)
+        .padding(.top, 8)
     }
     /// Terminal tools under the card, as on web: two equal cards, or the import alone without a project.
     private var toolCards: some View {
@@ -370,15 +381,14 @@ struct NewTaskView: View {
         }.buttonStyle(RiffetDimPressStyle())
     }
     private func toolCard(_ title: LocalizedStringKey, symbol: String) -> some View {
-        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
-        return HStack(spacing: 10) {
-            Image(systemName: symbol).font(.system(size: 15, weight: .regular)).foregroundStyle(palette.fg2)
-                .frame(width: 32, height: 32).background(palette.bgMuted, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            Text(title).riffetFont(.label).foregroundStyle(palette.fg).lineLimit(1)
+        let shape = RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous)
+        return HStack(spacing: 12) {
+            SettingsIcon(symbol: symbol)
+            Text(title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
             Spacer(minLength: 0)
         }
-        .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.bgElevated, in: shape).overlay(shape.strokeBorder(palette.line, lineWidth: 0.5))
+        .padding(.horizontal, RiffetMetrics.groupInset).frame(maxWidth: .infinity, minHeight: RiffetMetrics.settingsRowHeight, alignment: .leading)
+        .background(palette.bgSubtle, in: shape)
         .contentShape(shape)
     }
     private var catalogStatus: String { loadingCatalog ? String(localized: "正在加载", bundle: .riffet) : catalogError ?? "" }
@@ -478,12 +488,13 @@ private struct NewTaskSlashPicker: View {
     @State private var items: [NativeSlashItem] = []
     @State private var error: String?
     @State private var loading = true
+    @Environment(\.palette) private var palette
     var body: some View {
         NavigationStack {
             List {
                 if loading { ProgressView() }
-                if let error { Text(error).foregroundStyle(.red) }
-                ForEach(items, id: \.name) { item in Button { choose(item) } label: { VStack(alignment: .leading) { Text("/\(item.name)"); if let text = item.description_ { Text(text).font(.caption).foregroundStyle(.secondary) } } } }
+                RiffetNotice.section(.error, error)
+                ForEach(items, id: \.name) { item in Button { choose(item) } label: { VStack(alignment: .leading) { Text("/\(item.name)").riffetFont(.body).foregroundStyle(palette.fg); if let text = item.description_ { Text(text).riffetFont(.caption).foregroundStyle(palette.fg3) } } } }
             }.navigationTitle(String(localized: "命令与技能", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .task {
                 defer { loading = false }

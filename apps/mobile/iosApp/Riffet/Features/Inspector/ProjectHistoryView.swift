@@ -18,6 +18,7 @@ struct ProjectHistoryView: View {
     @State private var error: String?
     @State private var prompt: Prompt?
     @State private var name = ""
+    @Environment(\.palette) private var palette
 
     private enum Prompt: Identifiable {
         case newBranch, remote
@@ -29,19 +30,11 @@ struct ProjectHistoryView: View {
 
     var body: some View {
         List {
-            Section {
-                HStack {
-                    branchMenu
-                    Spacer()
-                    Button(gitText("Fetch"), systemImage: "arrow.triangle.2.circlepath") { Task { await fetch() } }
-                        .labelStyle(.iconOnly).disabled(loading)
-                }
-                Picker(gitText("History"), selection: $all) {
-                    Text(verbatim: "Current").tag(false)
-                    Text(verbatim: "All").tag(true)
-                }.pickerStyle(.segmented)
+            SettingsChipRow {
+                branchMenu
+                RiffetToggleChip(title: gitText("All"), isOn: $all, symbol: "arrow.triangle.branch")
             }
-            if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+            RiffetNotice.section(.error, error)
             if loaded && commits.isEmpty && error == nil {
                 ContentUnavailableView(gitText("No commits yet"), systemImage: "clock.arrow.circlepath")
             }
@@ -52,11 +45,11 @@ struct ProjectHistoryView: View {
                     HStack(spacing: 8) {
                         if index < rows.count { GitGraphCell(row: rows[index], lanes: lanes, height: rowHeight) }
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(commit.subject).lineLimit(1)
+                            Text(commit.subject).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
                             HStack(spacing: 4) {
                                 ForEach(Array(commit.refs.prefix(3).enumerated()), id: \.offset) { _, ref in refChip(ref) }
                                 Text(verbatim: "\(commit.author) · \(gitRelative(commit.date))").lineLimit(1)
-                            }.font(.caption).foregroundStyle(.secondary)
+                            }.riffetFont(.caption).foregroundStyle(palette.fg3)
                         }
                     }
                 }
@@ -70,6 +63,11 @@ struct ProjectHistoryView: View {
         .overlay { if !loaded && error == nil { ProgressView() } }
         .task(id: "\(model.project.id)|\(all)|\(refresh)|\(model.revision)") { await reload() }
         .refreshable { await reload() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(gitText("Fetch"), systemImage: "arrow.triangle.2.circlepath") { Task { await fetch() } }.disabled(loading)
+            }
+        }
         .alert(prompt == .remote ? gitText("Check Out Remote Branch…") : gitText("New Branch…"), isPresented: Binding(get: { prompt != nil }, set: { if !$0 { prompt = nil } })) {
             TextField(gitText("Branch name"), text: $name).textInputAutocapitalization(.never).autocorrectionDisabled()
             Button(prompt == .remote ? gitText("Check Out") : gitText("Create and Switch")) {
@@ -84,7 +82,7 @@ struct ProjectHistoryView: View {
     }
 
     private var branchMenu: some View {
-        Menu {
+        RiffetMenuChip(title: head, highlighted: true, leading: { Image(systemName: "arrow.triangle.branch") }) {
             if let refs {
                 Section {
                     ForEach(refs.branches, id: \.name) { branch in
@@ -105,17 +103,15 @@ struct ProjectHistoryView: View {
                 if (refs?.remoteCount ?? 0) > 30 { Button(gitText("Check Out Remote Branch…")) { prompt = .remote } }
                 Button(gitText("New Branch…")) { prompt = .newBranch }
             }
-        } label: {
-            Label(head, systemImage: "arrow.triangle.branch").font(.body.monospaced()).lineLimit(1)
         }
     }
 
     private func refChip(_ ref: GitRefLabel) -> some View {
         let strong = ref.current?.boolValue == true || ref.kind == .head
-        return Text(ref.name).font(.caption2.monospaced()).lineLimit(1)
+        return Text(ref.name).riffetFont(.monoSmall).lineLimit(1)
             .padding(.horizontal, 5).padding(.vertical, 1)
-            .foregroundStyle(strong ? Color.white : Color.secondary)
-            .background(strong ? Color.accentColor : Color.secondary.opacity(0.15), in: Capsule())
+            .foregroundStyle(strong ? palette.bg : palette.fg2)
+            .background(strong ? palette.accent : palette.bgSubtle, in: Capsule())
     }
 
     private func reload() async {
@@ -185,22 +181,27 @@ private struct CommitDetailPage: View {
     @State private var error: String?
     @State private var branching = false
     @State private var name = ""
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        List {
-            if let error { Text(error).foregroundStyle(.red).textSelection(.enabled) }
+        RiffetList {
+            RiffetNotice.section(.error, error)
             if let detail {
                 Section {
-                    Text(detail.subject).font(.headline)
-                    if !detail.body.isEmpty { Text(detail.body).textSelection(.enabled) }
-                    Text(verbatim: "\(detail.author) · \(ServerTime.date(detail.date)?.formatted(.dateTime.locale(Locale(identifier: "en"))) ?? detail.date)")
-                        .font(.caption).foregroundStyle(.secondary)
-                    HStack {
-                        Text(String(detail.hash_.prefix(8))).font(.body.monospaced())
-                        Spacer()
-                        Button(gitText("Copy Hash"), systemImage: "doc.on.doc") { UIPasteboard.general.string = detail.hash_ }.labelStyle(.iconOnly)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(detail.subject).riffetFont(.headline).foregroundStyle(palette.fg)
+                        if !detail.body.isEmpty { Text(detail.body).riffetFont(.body).foregroundStyle(palette.fg2).textSelection(.enabled) }
+                        Text(verbatim: "\(detail.author) · \(ServerTime.date(detail.date)?.formatted(.dateTime.locale(Locale(identifier: "en"))) ?? detail.date)")
+                            .riffetFont(.caption).foregroundStyle(palette.fg3)
                     }
-                    Button(gitText("New Branch from Here"), systemImage: "arrow.triangle.branch") { branching = true }
+                    RiffetValueRow(label: gitText("Commit"), value: String(detail.hash_.prefix(8)), mono: true)
+                }
+                Section {
+                    RiffetActionRow(verbatim: gitText("New Branch from Here"), symbol: "arrow.triangle.branch") { branching = true }
+                    RiffetActionRow(verbatim: gitText("Copy Hash"), symbol: "doc.on.doc") {
+                        UIPasteboard.general.string = detail.hash_
+                        RiffetToastCenter.shared.show(gitText("Copied"), kind: .success)
+                    }
                 }
                 Section {
                     ForEach(detail.files, id: \.path) { file in
@@ -212,11 +213,12 @@ private struct CommitDetailPage: View {
                         .contextMenu { Button(gitText("Copy Path")) { UIPasteboard.general.string = file.path } }
                     }
                     if let total = detail.filesTotal?.intValue, total > detail.files.count {
-                        Text(verbatim: "Showing the first \(detail.files.count) of \(total) files").foregroundStyle(.secondary)
+                        Text(verbatim: "Showing the first \(detail.files.count) of \(total) files").riffetFont(.caption).foregroundStyle(palette.fg3)
                     }
-                }
-            } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
+                } header: { RiffetSectionTitle(gitText("Files"), figure: "\(detail.files.count)") }
+            } else if error == nil { Section { ProgressView().frame(maxWidth: .infinity) } }
         }
+        .navigationTitle(gitText("Commit"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: hash) { await load() }
         .alert(gitText("New Branch from Here"), isPresented: $branching) {
@@ -250,17 +252,18 @@ struct GitFileLabel: View {
     let path: String
     var added: KotlinLong?
     var removed: KotlinLong?
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
-            Text(letter).font(.caption.monospaced().bold()).foregroundStyle(gitLetterColor(letter)).frame(width: 14)
+            Text(letter).riffetFont(.monoSmall, weight: .bold).foregroundStyle(gitLetterColor(letter, palette)).frame(width: 14)
             VStack(alignment: .leading, spacing: 2) {
-                Text(path).font(.body.monospaced()).lineLimit(3)
+                Text(path).riffetFont(.mono).foregroundStyle(palette.fg).lineLimit(1).truncationMode(.head)
                 if added != nil || removed != nil {
                     HStack {
-                        if let added { Text("+\(added.int64Value)").foregroundStyle(.green) }
-                        if let removed { Text("−\(removed.int64Value)").foregroundStyle(.red) }
-                    }.font(.caption.monospaced())
+                        if let added { Text("+\(added.int64Value)").foregroundStyle(palette.diffAddMarker) }
+                        if let removed { Text("−\(removed.int64Value)").foregroundStyle(palette.diffDelMarker) }
+                    }.riffetFont(.monoSmall)
                 }
             }
         }

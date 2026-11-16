@@ -274,6 +274,7 @@ struct ConversationToolRunHeader: View {
     let run: ConversationRenderPlan.ToolRun
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var title: String {
         let names = run.kinds.prefix(2).map(Self.label).joined(separator: String(localized: "、", bundle: .riffet))
         return run.kinds.count > 2 ? String(localized: "\(names)等", bundle: .riffet) : names
@@ -281,7 +282,7 @@ struct ConversationToolRunHeader: View {
     var body: some View {
         Button {
             readAction()
-            withAnimation(RiffetMotion.spatial) { ConversationToolRunChoices.shared[run.choiceKey] = !run.open }
+            withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { ConversationToolRunChoices.shared[run.choiceKey] = !run.open }
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: ConversationToolHeader.symbol(kind: run.kinds.first ?? "other"))
@@ -289,7 +290,7 @@ struct ConversationToolRunHeader: View {
                 Text(title).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1)
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                     .rotationEffect(.degrees(run.open ? 90 : 0))
-                    .animation(RiffetMotion.chevron, value: run.open)
+                    .riffetAnimation(RiffetMotion.chevron, value: run.open)
                 Spacer(minLength: 0)
             }
             .frame(minHeight: 36)

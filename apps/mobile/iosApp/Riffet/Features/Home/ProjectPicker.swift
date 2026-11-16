@@ -56,7 +56,7 @@ struct ProjectSheet: View {
                 ForEach(rows, id: \.project.id) { row in
                     let project = row.project
                     plainRow {
-                        if row.nested { Image(systemName: "arrow.triangle.branch").font(.system(size: 13)).foregroundStyle(palette.fg3).padding(.leading, 16) }
+                        if row.nested { Image(systemName: "arrow.triangle.branch").riffetFont(.caption).foregroundStyle(palette.fg3).padding(.leading, 16) }
                         VStack(alignment: .leading, spacing: 2) {
                             Text(row.nested ? (project.worktree?.branch ?? project.name) : project.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
                             if project.worktree == nil { Text(directoryHint(project)).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head) }
@@ -75,7 +75,7 @@ struct ProjectSheet: View {
     }
     private func choose(_ project: Project?) { onSelect(project); dismiss() }
     @ViewBuilder private func check(_ shown: Bool) -> some View {
-        if shown { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.accent) }
+        if shown { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent) }
     }
     private func plainRow<Content: View>(@ViewBuilder _ content: () -> Content, action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -106,6 +106,7 @@ struct ProjectPicker: View {
     /// The Mac's favorite folders: one tap makes one the project.
     @State private var favorites = FolderFavoritesModel()
     @State private var renamingFavorite: FolderFavorite?
+    @Environment(\.palette) private var palette
 
     private var projects: [Project] {
         workbench.list.projects.filter {
@@ -116,23 +117,20 @@ struct ProjectPicker: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if let error { Label(error, systemImage: "exclamationmark.triangle").font(.subheadline).foregroundStyle(.red) }
+            RiffetList {
+                RiffetNotice.section(.error, error)
                 ForEach(projects, id: \.id) { project in
                     Button { Task { await choose(project) } } label: {
                         HStack(spacing: 12) {
-                            Image(systemName: project.archivedAt == nil ? "folder" : "archivebox").foregroundStyle(.secondary)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(project.name).foregroundStyle(.primary)
-                                Text(project.cwd).font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
-                                if let tags = project.tags, !tags.isEmpty {
-                                    Text(tags.joined(separator: " · ")).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                                }
-                                if project.archivedAt != nil { Text("已归档 · 选择后恢复").font(.caption).foregroundStyle(.secondary) }
+                            Image(systemName: project.archivedAt == nil ? "folder" : "archivebox").foregroundStyle(palette.fg2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(project.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                                Text(project.archivedAt == nil ? directoryHint(project) : "\(String(localized: "已归档", bundle: .riffet)) · \(directoryHint(project))")
+                                    .riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head)
                             }
                             Spacer(minLength: 4)
                             if mutating == project.id { ProgressView() }
-                            else if selection == project.id { Image(systemName: "checkmark").foregroundStyle(Color.accentColor) }
+                            else if selection == project.id { Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent) }
                         }.frame(minHeight: 44).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
@@ -150,11 +148,17 @@ struct ProjectPicker: View {
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button { Task { await archive(project, archived: project.archivedAt == nil) } } label: {
                             Label(project.archivedAt == nil ? "归档" : "恢复", systemImage: project.archivedAt == nil ? "archivebox" : "arrow.uturn.backward")
-                        }.tint(.orange)
-                        Button { editing = ProjectEditTarget(project: project, kind: .name) } label: { Label("重命名", systemImage: "pencil") }.tint(.blue)
+                        }.tint(palette.warning)
+                        Button { editing = ProjectEditTarget(project: project, kind: .name) } label: { Label("重命名", systemImage: "pencil") }.tint(palette.accent)
                     }
                 }
-                if projects.isEmpty { Text(search.isEmpty ? "暂无项目" : "没有匹配的项目").foregroundStyle(.secondary) }
+                if projects.isEmpty {
+                    Group {
+                        if search.isEmpty { ContentUnavailableView("没有项目", systemImage: "folder") }
+                        else { ContentUnavailableView.search(text: search) }
+                    }
+                    .frame(maxWidth: .infinity).listRowSeparator(.hidden).listRowBackground(Color.clear)
+                }
                 if search.isEmpty, !favorites.favorites.isEmpty {
                     Section {
                         ForEach(favorites.favorites, id: \.id) { favorite in
@@ -168,7 +172,8 @@ struct ProjectPicker: View {
                             .disabled(mutating != nil || !favorite.exists)
                             .contextMenu { FolderFavoriteMenu(model: favorites, favorite: favorite) { renamingFavorite = favorite } }
                         }
-                        if let error = favorites.error { Text(error).font(.caption).foregroundStyle(.red) }
+                        .onMove { source, destination in Task { await favorites.reorder(fromOffsets: source, toOffset: destination) } }
+                        if let error = favorites.error { RiffetNotice(kind: .error, message: error) }
                     } header: { Text("收藏的目录") }
                 }
                 Section {
@@ -182,7 +187,10 @@ struct ProjectPicker: View {
             .navigationTitle(String(localized: "项目范围", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search, prompt: String(localized: "搜索名称、路径或标签", bundle: .riffet))
             .scrollDismissesKeyboard(.interactively)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.disabled(mutating != nil) } }
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() }.disabled(mutating != nil) }
+                if favorites.favorites.count > 1 && search.isEmpty { ToolbarItem(placement: .cancellationAction) { EditButton() } }
+            }
             .sheet(item: $editing) { target in ProjectEditSheet(workbench: workbench, target: target) }
             .modifier(FolderFavoriteRenameAlert(model: favorites, target: $renamingFavorite))
             .task { await favorites.load(workbench.api) }
@@ -234,11 +242,15 @@ private struct ProjectEditSheet: View {
     @State private var value: String
     @State private var saving = false
     @State private var error: String?
+    @State private var confirming = false
     @FocusState private var focused: Bool
+    private let original: String
+    private var dirty: Bool { value != original }
 
     init(workbench: Workbench, target: ProjectEditTarget) {
         self.workbench = workbench; self.target = target
-        _value = State(initialValue: target.kind == .name ? target.project.name : (target.project.tags ?? []).joined(separator: ", "))
+        original = target.kind == .name ? target.project.name : (target.project.tags ?? []).joined(separator: ", ")
+        _value = State(initialValue: original)
     }
 
     var body: some View {
@@ -251,17 +263,17 @@ private struct ProjectEditSheet: View {
                     if target.kind == .tags { Text("多个标签用逗号分隔；清空后保存可移除全部标签。") }
                     else { Text("只更改显示名称，不会移动 Mac 上的目录。") }
                 }
-                if let error { Text(error).foregroundStyle(.red) }
+                RiffetNotice.section(.error, error)
             }
             .navigationTitle(target.kind == .name ? String(localized: "重命名项目", bundle: .riffet) : String(localized: "项目标签", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { if dirty { confirming = true } else { dismiss() } }.disabled(saving) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(saving ? "保存中…" : "保存") { Task { await save() } }
                         .disabled(saving || (target.kind == .name && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty))
                 }
             }
-            .interactiveDismissDisabled(saving)
+            .riffetUnsavedGuard(dirty: dirty, locked: saving, confirming: $confirming) { dismiss() }
             .task { focused = true }
         }.presentationDetents([.medium, .large])
     }
@@ -294,8 +306,9 @@ struct RemoteDirectoryPicker: View {
     @State private var error: String?
     @State private var favorites = FolderFavoritesModel()
     @State private var renamingFavorite: FolderFavorite?
+    @Environment(\.palette) private var palette
     var body: some View {
-        List {
+        RiffetList {
             if !favorites.favorites.isEmpty {
                 Section("收藏") {
                     ForEach(favorites.favorites, id: \.id) { favorite in
@@ -304,13 +317,15 @@ struct RemoteDirectoryPicker: View {
                             .disabled(!favorite.exists || loading)
                             .contextMenu { FolderFavoriteMenu(model: favorites, favorite: favorite) { renamingFavorite = favorite } }
                     }
+                    .onMove { source, destination in Task { await favorites.reorder(fromOffsets: source, toOffset: destination) } }
                 }
             }
             Section {
-                TextField("Mac 上的目录", text: $path).textInputAutocapitalization(.never).autocorrectionDisabled().onSubmit { Task { await load(path) } }
-                Button("前往") { Task { await load(path) } }.disabled(loading)
+                RiffetField(prompt: String(localized: "Mac 上的目录", bundle: .riffet), text: $path, mono: true)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled().submitLabel(.go)
+                    .onSubmit { Task { await load(path) } }
             }
-            if let error = error ?? favorites.error { Text(error).foregroundStyle(.red) }
+            RiffetNotice.section(.error, error ?? favorites.error)
             if loading { ProgressView() }
             if let directory {
                 if let parent = directory.parent { Button("上一级", systemImage: "arrow.up") { Task { await load(parent) } } }
@@ -320,12 +335,12 @@ struct RemoteDirectoryPicker: View {
                     Button { Task { await load(child) } } label: {
                         HStack {
                             Label(entry.name, systemImage: "folder")
-                            if starred { Spacer(); Image(systemName: "star.fill").foregroundStyle(.orange).font(.caption) }
+                            if starred { Spacer(); Image(systemName: "star.fill").foregroundStyle(palette.warning).riffetFont(.caption) }
                         }
                     }
                     .contextMenu { Button(starred ? "取消收藏" : "收藏", systemImage: starred ? "star.slash" : "star") { Task { await favorites.toggle(child) } } }
                     .swipeActions(edge: .trailing) {
-                        Button { Task { await favorites.toggle(child) } } label: { Label(starred ? "取消收藏" : "收藏", systemImage: starred ? "star.slash" : "star") }.tint(.orange)
+                        Button { Task { await favorites.toggle(child) } } label: { Label(starred ? "取消收藏" : "收藏", systemImage: starred ? "star.slash" : "star") }.tint(palette.warning)
                     }
                 }
                 Section {
@@ -342,11 +357,12 @@ struct RemoteDirectoryPicker: View {
         }
         .navigationTitle(String(localized: "Mac 上的目录", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            if favorites.favorites.count > 1 { ToolbarItem(placement: .topBarTrailing) { EditButton() } }
             if let current = directory?.path {
                 let starred = favorites.favorite(at: current) != nil
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(starred ? "取消收藏此目录" : "收藏此目录", systemImage: starred ? "star.fill" : "star") { Task { await favorites.toggle(current) } }
-                        .tint(starred ? .orange : nil)
+                        .tint(starred ? palette.warning : nil)
                 }
             }
         }
@@ -371,21 +387,22 @@ struct CachedSearchView: View {
     @State private var hits: [IndexHit] = []
     @State private var loading = true
     @State private var error: String?
+    @Environment(\.palette) private var palette
     var body: some View {
-        List {
-            if loading { ProgressView() }
-            if let error { Text(error).foregroundStyle(.red) }
+        RiffetList {
+            if loading { ProgressView().frame(maxWidth: .infinity) }
+            RiffetNotice.section(.error, error)
             ForEach(Array(hits.enumerated()), id: \.offset) { _, hit in
                 NavigationLink {
                     ConversationView(workbench: workbench, sessionID: hit.sessionId, focusSequence: hit.sequence)
                 } label: {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(workbench.list.sessions.first { $0.id == hit.sessionId }?.title ?? String(localized: "会话", bundle: .riffet)).font(.headline)
-                        Text(hit.snippet).lineLimit(4).font(.subheadline).foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(workbench.list.sessions.first { $0.id == hit.sessionId }?.title ?? String(localized: "会话", bundle: .riffet)).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                        Text(hit.snippet).lineLimit(1).riffetFont(.caption).foregroundStyle(palette.fg3)
                     }
                 }
             }
-            if !loading && hits.isEmpty && error == nil { Text("没有缓存消息匹配“\(query)”").foregroundStyle(.secondary) }
+            if !loading && hits.isEmpty && error == nil { ContentUnavailableView.search(text: query).listRowBackground(Color.clear) }
         }
         .navigationTitle(String(localized: "消息搜索", bundle: .riffet)).navigationBarTitleDisplayMode(.inline).toolbar(.hidden, for: .bottomBar)
         .task(id: query) {

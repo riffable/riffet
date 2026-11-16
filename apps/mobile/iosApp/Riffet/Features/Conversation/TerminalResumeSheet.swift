@@ -16,14 +16,24 @@ struct TerminalResumeSheet: View {
     @State private var copyTick = 0
 
     private enum Field { case id, command }
+    @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         NavigationStack {
             RiffetForm {
                 if let resume {
                     Section {
-                        row("会话 ID", value: resume.nativeSessionId, field: .id) { copy(resume.nativeSessionId, .id) }
-                        row("命令", value: resume.command, field: .command) { Task { await copyCommand(resume.command) } }
+                        row("会话 ID", value: resume.nativeSessionId) { RiffetCopyButton(text: resume.nativeSessionId, label: String(localized: "复制会话 ID", bundle: .riffet)) }
+                        // The command releases Riffet's process first, so it keeps its own copy step.
+                        row("命令", value: resume.command) {
+                            Button { Task { await copyCommand(resume.command) } } label: {
+                                Image(systemName: copied == .command ? "checkmark" : "doc.on.doc").riffetFont(.caption)
+                                    .contentTransition(.symbolEffect(.replace))
+                                    .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle())
+                            }.buttonStyle(RiffetDimPressStyle()).foregroundStyle(palette.fg3).disabled(releasing)
+                                .accessibilityLabel(String(localized: "复制命令", bundle: .riffet))
+                        }
                     } footer: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。")
@@ -33,7 +43,7 @@ struct TerminalResumeSheet: View {
                 } else if loading {
                     Section { HStack { Spacer(); ProgressView(); Spacer() } }
                 }
-                if let error { Section { Text(error).foregroundStyle(.red) } }
+                RiffetNotice.section(.error, error)
             }
             .navigationTitle(String(localized: "在终端恢复", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
@@ -42,16 +52,14 @@ struct TerminalResumeSheet: View {
         }
     }
 
-    private func row(_ title: LocalizedStringKey, value: String, field: Field, copy: @escaping () -> Void) -> some View {
+    private func row<Copy: View>(_ title: LocalizedStringKey, value: String, @ViewBuilder copy: () -> Copy) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(title).riffetFont(.caption).foregroundStyle(.secondary)
+                Text(title).riffetFont(.caption).foregroundStyle(palette.fg3)
                 Spacer()
-                Button(action: copy) {
-                    Image(systemName: copied == field ? "checkmark" : "doc.on.doc").contentTransition(.symbolEffect(.replace))
-                }.buttonStyle(.borderless).disabled(releasing).accessibilityLabel(title)
+                copy()
             }
-            Text(value).font(.system(.footnote, design: .monospaced)).textSelection(.enabled)
+            Text(value).riffetFont(.monoSmall).textSelection(.enabled)
         }.padding(.vertical, 2)
     }
 
@@ -77,10 +85,10 @@ struct TerminalResumeSheet: View {
     private func copy(_ text: String, _ field: Field) {
         UIPasteboard.general.string = text
         copyTick += 1
-        withAnimation { copied = field }
+        withAnimation(RiffetMotion.unlessReduced(RiffetMotion.effects, reduceMotion)) { copied = field }
         Task {
             try? await Task.sleep(for: .seconds(1.5))
-            withAnimation { if copied == field { copied = nil } }
+            withAnimation(RiffetMotion.unlessReduced(RiffetMotion.effects, reduceMotion)) { if copied == field { copied = nil } }
         }
     }
 }

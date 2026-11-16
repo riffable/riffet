@@ -9,96 +9,11 @@ private let nativeApiProtocols: [(id: String, label: String)] = [
     ("google-generative-ai", "Google Gemini"),
 ]
 
-private struct ProviderHeader: View {
-    let title: LocalizedStringKey
-    @Environment(\.palette) private var palette
-    init(_ title: LocalizedStringKey) { self.title = title }
-    var body: some View { Text(title).riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil) }
-}
-
-/// A form row: the title on the leading edge, the value typed on the trailing edge.
-private struct FieldRow: View {
-    let title: LocalizedStringKey
-    @Binding var text: String
-    var prompt: LocalizedStringKey = ""
-    var secure = false
-    var mono = false
-    var url = false
-    var body: some View {
-        LabeledContent(title) {
-            Group {
-                if secure { SecureField("", text: $text, prompt: Text(prompt)) }
-                else { TextField("", text: $text, prompt: Text(prompt)) }
-            }
-            .multilineTextAlignment(.trailing)
-            .textInputAutocapitalization(.never).autocorrectionDisabled()
-            .keyboardType(url ? .URL : .default)
-            .riffetFont(mono ? .mono : .body)
-        }
-    }
-}
-
-/// A full-width accent text row; `symbol` leads, a spinner trails while `busy`.
-private struct AccentActionRow: View {
-    let title: LocalizedStringKey
-    var symbol: String?
-    var busy = false
-    let action: () -> Void
-    @Environment(\.palette) private var palette
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                if let symbol { Image(systemName: symbol) }
-                Text(title)
-                Spacer(minLength: 8)
-                if busy { ProgressView() }
-            }
-            .riffetFont(.body).foregroundStyle(palette.accent)
-            .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
-        }
-    }
-}
-
-private struct CenteredProgressRow: View {
-    var body: some View {
-        HStack { Spacer(); ProgressView(); Spacer() }.listRowBackground(Color.clear)
-    }
-}
-
-/// One chip per agent: its mark, its name, and a sliding capsule behind the chosen one.
-private struct AgentChips: View {
-    let workbench: Workbench
-    @Binding var selection: NativeBackendId
-    @Namespace private var indicator
-    @Environment(\.palette) private var palette
-    var body: some View {
-        SettingsChipRow {
-            ForEach(managementBackends, id: \.self) { item in
-                let selected = item == selection
-                Button {
-                    withAnimation(RiffetMotion.spatial) { selection = item }
-                } label: {
-                    HStack(spacing: 6) {
-                        AgentMarkView(backend: item.name, size: 14, color: agentMarkColor(item.name, palette))
-                        Text(managementBackendName(item, workbench))
-                    }
-                    .riffetFont(.label)
-                    .foregroundStyle(selected ? palette.fg : palette.fg2)
-                    .padding(.horizontal, 14)
-                    .frame(minHeight: RiffetMetrics.chipHeight)
-                    .background {
-                        Capsule().fill(palette.press)
-                        if selected {
-                            Capsule().fill(palette.selected).matchedGeometryEffect(id: "chip", in: indicator)
-                        }
-                    }
-                    .frame(minHeight: RiffetMetrics.hitTarget)
-                }
-                .buttonStyle(RiffetDimPressStyle())
-                .accessibilityAddTraits(selected ? .isSelected : [])
-            }
-        }
-    }
+private enum ProfileEditTarget: Identifiable {
+    case new
+    case edit(NativeBackendProfileSettings)
+    var id: String { if case .edit(let profile) = self { profile.id } else { "new" } }
+    var profile: NativeBackendProfileSettings? { if case .edit(let profile) = self { profile } else { nil } }
 }
 
 struct NativeProvidersView: View {
@@ -109,7 +24,8 @@ struct NativeProvidersView: View {
     @State private var loading = false
     @State private var error: String?
     @State private var actionError: String?
-    @State private var adding = false
+    @State private var editing: ProfileEditTarget?
+    @State private var gateway = false
     init(workbench: Workbench) {
         self.workbench = workbench
         // Opens on the agent new tasks use: the one the reader most likely came to adjust.
@@ -120,12 +36,22 @@ struct NativeProvidersView: View {
     private var isDefaultAgent: Bool { workbench.settings?.defaultBackendId == backend }
     var body: some View {
         RiffetList {
-            AgentChips(workbench: workbench, selection: $backend)
+            SettingsChipRow {
+                RiffetMenuChip(title: managementBackendName(backend, workbench), leading: {
+                    AgentMarkView(backend: backend.name, size: 14, color: agentMarkColor(backend.name, palette))
+                }, items: {
+                    ForEach(managementBackends, id: \.self) { item in
+                        Button { backend = item } label: {
+                            if item == backend { Label(managementBackendName(item, workbench), systemImage: "checkmark") } else { Text(managementBackendName(item, workbench)) }
+                        }
+                    }
+                })
+            }
             Section {
                 if isDefaultAgent {
                     HStack(spacing: 8) {
                         SettingsRowLabel(title: String(localized: "新任务默认使用", bundle: .riffet), symbol: "star", value: nil)
-                        Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.accent)
+                        Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent)
                     }
                     .accessibilityAddTraits(.isSelected)
                 } else {
@@ -136,37 +62,51 @@ struct NativeProvidersView: View {
                 }
             }
             if backend == .cursor {
-                NativeCursorSettings(workbench: workbench)
+                Section {
+                    Button { gateway = true } label: {
+                        SettingsRowLabel(title: String(localized: "网关", bundle: .riffet), symbol: "network",
+                                         value: workbench.settings?.cursorCli?.apiEndpoint.flatMap { $0.isEmpty ? nil : (URL(string: $0)?.host ?? $0) })
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
             } else if error == nil {
-                Section { providerRows } header: { ProviderHeader("提供商") }
+                Section { providerRows } header: { RiffetSectionTitle(String(localized: "提供商", bundle: .riffet)) }
             }
-            ManagementFeedback(error: error ?? actionError, notice: nil)
-            if error != nil { Section { AccentActionRow(title: "重试") { Task { await load() } } } }
+            if let error { RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet)) { Task { await load() } } }
+            else { RiffetNotice.section(.error, actionError) }
+        }
+        .overlay {
+            if backend != .cursor && error == nil {
+                if loading { ProgressView() }
+                else if profiles.isEmpty {
+                    ContentUnavailableView {
+                        Label("还没有提供商", systemImage: "key")
+                    } actions: {
+                        Button("添加提供商") { editing = .new }
+                    }
+                }
+            }
         }
         .navigationTitle(String(localized: "提供商与模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if backend != .cursor {
-                    Button { adding = true } label: { Image(systemName: "plus") }.accessibilityLabel("添加提供商")
+                    Button { editing = .new } label: { Image(systemName: "plus") }.accessibilityLabel("添加提供商")
                 }
             }
         }
         .task(id: backend) { actionError = nil; await load() }
-        .sheet(isPresented: $adding) {
-            NavigationStack { NativeProfileEditor(workbench: workbench, backend: backend, profile: nil) { adding = false; Task { await load() } } }
+        .refreshable { if backend == .cursor { workbench.refresh() } else { await load() } }
+        .sheet(item: $editing) { target in
+            NativeProfileEditor(workbench: workbench, backend: backend, profile: target.profile) { Task { await load() } }
         }
+        .sheet(isPresented: $gateway) { NativeCursorGateway(workbench: workbench) }
     }
     @ViewBuilder private var providerRows: some View {
-        if loading {
-            CenteredProgressRow()
-        } else if profiles.isEmpty {
-            Text("还没有提供商").riffetFont(.body).foregroundStyle(palette.fg3)
-        } else {
-            ForEach(profiles, id: \.id) { profile in
-                NavigationLink {
-                    NativeProfileEditor(workbench: workbench, backend: backend, profile: profile) { Task { await load() } }
-                } label: { providerLabel(profile) }
-            }
+        ForEach(profiles, id: \.id) { profile in
+            Button { editing = .edit(profile) } label: { providerLabel(profile).contentShape(Rectangle()) }
+                .buttonStyle(.plain)
         }
     }
     private func providerLabel(_ profile: NativeBackendProfileSettings) -> some View {
@@ -213,7 +153,7 @@ private struct NativeProfileEditor: View {
     @State private var endpoint = ""
     @State private var apiProtocol = "openai-completions"
     @State private var key = ""
-    @State private var clearKey = false
+    @State private var keyCleared = false
     @State private var executable = ""
     @State private var configDir = ""
     @State private var sourceDir = ""
@@ -229,114 +169,129 @@ private struct NativeProfileEditor: View {
     @State private var probing: Bool?
     @State private var error: String?
     @State private var confirmDelete = false
-    @State private var discard = false
+    @State private var confirmClearKey = false
     @State private var initialized = false
     private var allowsEndpoint: Bool { backend != .droid && backend != .traex }
     private var dirty: Bool {
-        name != (profile?.name ?? "") || endpoint != (profile?.apiEndpoint ?? "") || !key.isEmpty || clearKey
+        name != (profile?.name ?? "") || endpoint != (profile?.apiEndpoint ?? "") || !key.isEmpty
         || executable != (profile?.executable ?? "") || configDir != (profile?.configDir ?? "") || sourceDir != (profile?.sourceDir ?? "")
         || defaultModel != (profile?.defaultModel ?? "") || autoUpdateOff != (profile?.disableAutoUpdate?.boolValue == true)
         || allModels != (profile?.enabledModels == nil) || (!allModels && enabled != Set(profile?.enabledModels ?? []))
         || (backend == .pi && apiProtocol != (profile?.apiProtocol ?? "openai-completions"))
     }
-    private var hasSavedKey: Bool { profile?.hasApiKey?.boolValue == true }
+    private var hasSavedKey: Bool { profile?.hasApiKey?.boolValue == true && !keyCleared }
     private var isDefaultProfile: Bool { workbench.settings?.nativeBackendDefaults?[backend]?.profileId == profile?.id }
     private var manualIds: [String] { enabled.sorted().filter { id in !models.contains { $0.value == id } } }
+    private var projectOptions: [RiffetPickerOption<String>] {
+        [.init(id: "", title: String(localized: "选择项目", bundle: .riffet))] + workbench.projects.map { .init(id: $0.id, title: $0.name) }
+    }
     var body: some View {
-        RiffetForm {
-            Section { FieldRow(title: "名称", text: $name) }
-            if allowsEndpoint {
-                Section {
-                    FieldRow(title: "地址", text: $endpoint, prompt: "CLI 登录", url: true)
-                    FieldRow(title: "API Key", text: $key, prompt: hasSavedKey ? "已保存" : "未设置", secure: true)
-                    if hasSavedKey { Toggle("清除已保存的 Key", isOn: $clearKey).tint(palette.danger) }
-                    if backend == .pi, !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Picker("接口", selection: $apiProtocol) {
-                            ForEach(nativeApiProtocols, id: \.id) { item in Text(item.label).tag(item.id) }
-                        }
-                        .pickerStyle(.menu)
+        RiffetEditPage(title: profile == nil ? String(localized: "添加提供商", bundle: .riffet) : String(localized: "编辑提供商", bundle: .riffet),
+                       dirty: dirty, canSave: !name.trimmingCharacters(in: .whitespaces).isEmpty, save: { await save() }) {
+            Group {
+                fields
+                if profile != nil || (allowsEndpoint && !endpoint.isEmpty) || !workbench.projects.isEmpty { actions }
+                if profile != nil {
+                    Section {
+                        RiffetActionRow("删除提供商", destructive: true) { confirmDelete = true }
                     }
-                } header: { ProviderHeader("连接") } footer: { Text("Key 只发送到当前服务器，不会回显") }
+                }
+                RiffetNotice.section(.error, error)
             }
-            Section {
-                FieldRow(title: "默认模型", text: $defaultModel, prompt: "自动")
-                Toggle("提供全部模型", isOn: $allModels)
-                ForEach(models, id: \.value) { model in
-                    if allModels { Text(model.name).riffetFont(.body).foregroundStyle(palette.fg2) }
-                    else { Toggle(model.name, isOn: Binding(get: { enabled.contains(model.value) }, set: { on in if on { enabled.insert(model.value) } else { enabled.remove(model.value) } })) }
-                }
-                if !allModels {
-                    HStack {
-                        TextField("添加模型 ID", text: $manualModel).textInputAutocapitalization(.never).autocorrectionDisabled()
-                        Button("添加") { addManualModel() }
-                            .buttonStyle(.borderless).foregroundStyle(palette.accent)
-                            .disabled(manualModel.trimmingCharacters(in: .whitespaces).isEmpty)
-                    }
-                    ForEach(manualIds, id: \.self) { id in
-                        Text(id).riffetFont(.body).foregroundStyle(palette.fg)
-                            .swipeActions { Button("移除", role: .destructive) { enabled.remove(id) } }
-                    }
-                }
-                if !workbench.projects.isEmpty {
-                    Picker("项目", selection: $projectID) {
-                        Text("选择项目").tag("")
-                        ForEach(workbench.projects, id: \.id) { Text($0.name).tag($0.id) }
-                    }
-                    .pickerStyle(.menu)
-                    AccentActionRow(title: "从服务器读取", symbol: "arrow.down.circle", busy: probing == false) { Task { await catalog(probe: false) } }
-                        .disabled(projectID.isEmpty)
-                }
-                if allowsEndpoint && !endpoint.isEmpty {
-                    AccentActionRow(title: "用地址与 Key 检测", symbol: "antenna.radiowaves.left.and.right", busy: probing == true) { Task { await catalog(probe: true) } }
-                }
-            } header: { ProviderHeader("模型") }
-            Section {
-                DisclosureGroup("CLI 启动参数") {
-                    FieldRow(title: "CLI 路径", text: $executable, mono: true)
-                    if backend != .droid && backend != .antigravity { FieldRow(title: "配置目录", text: $configDir, mono: true) }
-                    if backend == .dsh { FieldRow(title: "DSH 源码目录", text: $sourceDir, mono: true) }
-                    if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff) }
-                }
-            } header: { ProviderHeader("高级") }
-            if profile != nil {
-                Section {
-                    if isDefaultProfile {
-                        HStack {
-                            Text("默认提供商").riffetFont(.body).foregroundStyle(palette.fg)
-                            Spacer(minLength: 8)
-                            Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundStyle(palette.accent)
-                        }
-                        .accessibilityAddTraits(.isSelected)
-                    } else {
-                        AccentActionRow(title: "设为默认提供商") { Task { await makeDefault() } }
-                    }
-                }
-                Section { Button("删除提供商", role: .destructive) { confirmDelete = true } }
-            }
-            ManagementFeedback(error: error, notice: nil)
+            .disabled(busy)
         }
-        .disabled(busy).navigationTitle(profile == nil ? String(localized: "添加提供商", bundle: .riffet) : String(localized: "编辑提供商", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-        .navigationBarBackButtonHidden(dirty)
-        .toolbar {
-            if dirty || profile == nil { ToolbarItem(placement: .cancellationAction) { Button("取消") { if dirty { discard = true } else { dismiss() } } } }
-            ToolbarItem(placement: .confirmationAction) {
-                if busy && probing == nil { ProgressView() }
-                else { Button("保存") { Task { await save() } }.disabled(busy || name.trimmingCharacters(in: .whitespaces).isEmpty || !dirty) }
-            }
+        .onChange(of: endpoint) { _, _ in models = [] }
+        .onChange(of: apiProtocol) { _, _ in models = [] }
+        .onChange(of: key) { _, _ in models = [] }
+        .confirmationDialog(String(localized: "删除「\(profile?.name ?? "")」？", bundle: .riffet), isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("删除", role: .destructive) { Task { await remove() } }
+        } message: { Text("保存的 Key 会一并删除") }
+        .confirmationDialog(String(localized: "清除已保存的 Key？", bundle: .riffet), isPresented: $confirmClearKey, titleVisibility: .visible) {
+            Button("清除", role: .destructive) { Task { await clearKey() } }
         }
-        .interactiveDismissDisabled(dirty || busy)
-        .confirmationDialog("放弃未保存的更改？", isPresented: $discard, titleVisibility: .visible) { Button("放弃更改", role: .destructive) { key = ""; dismiss() } }
-        .confirmationDialog("删除提供商及其保存的 Key？", isPresented: $confirmDelete, titleVisibility: .visible) { Button("删除", role: .destructive) { Task { await remove() } } }
         .task {
             guard !initialized else { return }; initialized = true
             name = profile?.name ?? ""; endpoint = profile?.apiEndpoint ?? ""; executable = profile?.executable ?? ""; configDir = profile?.configDir ?? ""; sourceDir = profile?.sourceDir ?? ""
             autoUpdateOff = profile?.disableAutoUpdate?.boolValue == true; defaultModel = profile?.defaultModel ?? ""; allModels = profile?.enabledModels == nil; enabled = Set(profile?.enabledModels ?? [])
             apiProtocol = profile?.apiProtocol ?? "openai-completions"
         }
-        .onChange(of: endpoint) { _, _ in models = [] }
-        .onChange(of: apiProtocol) { _, _ in models = [] }
-        .onChange(of: key) { _, _ in models = [] }
-        .onChange(of: clearKey) { _, _ in models = [] }
+    }
+
+    @ViewBuilder private var fields: some View {
+        Section { RiffetField(label: String(localized: "名称", bundle: .riffet), prompt: "", text: $name).textInputAutocapitalization(.never).autocorrectionDisabled() }
+        if allowsEndpoint {
+            Section {
+                RiffetField(label: String(localized: "地址", bundle: .riffet), prompt: String(localized: "CLI 登录", bundle: .riffet), text: $endpoint).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                RiffetField(label: String(localized: "API Key", bundle: .riffet), prompt: hasSavedKey ? String(localized: "已保存", bundle: .riffet) : String(localized: "未设置", bundle: .riffet), text: $key, secure: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+                if backend == .pi, !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Picker("接口", selection: $apiProtocol) {
+                        ForEach(nativeApiProtocols, id: \.id) { item in Text(item.label).tag(item.id) }
+                    }
+                    .pickerStyle(.menu)
+                }
+            } header: { RiffetSectionTitle(String(localized: "连接", bundle: .riffet)) } footer: { Text("Key 只发送到当前服务器，不会回显") }
+        }
+        Section {
+            RiffetField(label: String(localized: "默认模型", bundle: .riffet), prompt: String(localized: "自动", bundle: .riffet), text: $defaultModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+            Toggle("提供全部模型", isOn: $allModels)
+            ForEach(models, id: \.value) { model in
+                if allModels { Text(model.name).riffetFont(.body).foregroundStyle(palette.fg2) }
+                else { Toggle(model.name, isOn: Binding(get: { enabled.contains(model.value) }, set: { on in if on { enabled.insert(model.value) } else { enabled.remove(model.value) } })) }
+            }
+            if !allModels {
+                RiffetField(prompt: String(localized: "添加模型 ID", bundle: .riffet), text: $manualModel).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .submitLabel(.done).onSubmit { addManualModel() }
+                ForEach(manualIds, id: \.self) { id in
+                    Text(id).riffetFont(.body).foregroundStyle(palette.fg)
+                        .swipeActions { Button("移除", role: .destructive) { enabled.remove(id) } }
+                }
+            }
+        } header: { RiffetSectionTitle(String(localized: "模型", bundle: .riffet)) }
+        Section {
+            DisclosureGroup("CLI 启动参数") {
+                RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: "", text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+                if backend != .droid && backend != .antigravity { RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
+                if backend == .dsh { RiffetField(label: String(localized: "DSH 源码目录", bundle: .riffet), prompt: "", text: $sourceDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled() }
+                if backend == .claude { Toggle("关闭自动更新", isOn: $autoUpdateOff) }
+            }
+        } header: { RiffetSectionTitle(String(localized: "高级", bundle: .riffet)) }
+    }
+
+    /// The long operations and the one-shot actions, after the fields; their progress shows in the row.
+    @ViewBuilder private var actions: some View {
+        if !workbench.projects.isEmpty || (allowsEndpoint && !endpoint.isEmpty) {
+            Section {
+                if !workbench.projects.isEmpty {
+                    if projectOptions.count >= 5 {
+                        RiffetPickerRow(title: String(localized: "项目", bundle: .riffet), options: projectOptions, selection: $projectID)
+                    } else {
+                        Picker("项目", selection: $projectID) { ForEach(projectOptions) { Text($0.title).tag($0.id) } }.pickerStyle(.menu)
+                    }
+                    RiffetActionRow("从服务器读取", busy: probing == false) { Task { await catalog(probe: false) } }
+                        .disabled(projectID.isEmpty)
+                }
+                if allowsEndpoint && !endpoint.isEmpty {
+                    RiffetActionRow("用地址与 Key 检测", busy: probing == true) { Task { await catalog(probe: true) } }
+                }
+            }
+        }
+        if profile != nil {
+            Section {
+                if isDefaultProfile {
+                    HStack {
+                        Text("默认提供商").riffetFont(.body).foregroundStyle(palette.fg)
+                        Spacer(minLength: 8)
+                        Image(systemName: "checkmark").riffetFont(.label, weight: .semibold).foregroundStyle(palette.accent)
+                    }
+                    .accessibilityAddTraits(.isSelected)
+                } else {
+                    RiffetActionRow("设为默认提供商") { Task { await makeDefault() } }
+                }
+                if allowsEndpoint && hasSavedKey {
+                    RiffetActionRow("清除已保存的 Key", destructive: true) { confirmClearKey = true }
+                }
+            }
+        }
     }
     private func addManualModel() {
         let value = manualModel.trimmingCharacters(in: .whitespaces)
@@ -345,7 +300,7 @@ private struct NativeProfileEditor: View {
     }
     /// The values a catalog or probe reply was requested for; a reply for another identity is stale.
     private var catalogToken: String {
-        "\(backend.name)#\(profile?.id ?? "")#\(endpoint)#\(apiProtocol)#\(projectID)#\(key)#\(clearKey)"
+        "\(backend.name)#\(profile?.id ?? "")#\(endpoint)#\(apiProtocol)#\(projectID)#\(key)#\(keyCleared)"
     }
     private func catalog(probe: Bool) async {
         guard let api = workbench.api else { return }
@@ -353,24 +308,35 @@ private struct NativeProfileEditor: View {
         busy = true; probing = probe; error = nil; defer { busy = false; probing = nil }
         do {
             let found: [ModelInfo]
-            if probe { found = try await api.probeBackendModels(backendId: backend, body: ProbeBackendModelsBody(apiEndpoint: endpoint.isEmpty ? nil : endpoint, apiKey: key.isEmpty ? (clearKey ? "" : nil) : key, profileId: profile?.id, modelSource: profile?.modelSource, apiProtocol: backend == .antigravity && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "google-generative-ai" : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? apiProtocol : nil)) }
+            if probe { found = try await api.probeBackendModels(backendId: backend, body: ProbeBackendModelsBody(apiEndpoint: endpoint.isEmpty ? nil : endpoint, apiKey: key.isEmpty ? (keyCleared ? "" : nil) : key, profileId: profile?.id, modelSource: profile?.modelSource, apiProtocol: backend == .antigravity && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "google-generative-ai" : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? apiProtocol : nil)) }
             else { guard !projectID.isEmpty else { return }; found = try await api.backendCatalog(backendId: backend, profileId: profile?.id, projectId: projectID, allModels: true, global: false).models }
             guard token == catalogToken else { return }
             models = found
         } catch { if token == catalogToken { self.error = error.riffetMessage } }
     }
-    private func save() async {
-        guard let api = workbench.api else { return }; busy = true; error = nil; defer { busy = false }
+    private func save() async -> Bool {
+        guard let api = workbench.api else { return false }; error = nil
         let body = NativeBackendProfileSettingsUpdate(name: name.trimmingCharacters(in: .whitespaces), description: nil, executable: executable, configDir: backend == .droid || backend == .antigravity ? nil : configDir,
             sourceDir: backend == .dsh ? sourceDir : nil, apiEndpoint: allowsEndpoint ? endpoint.trimmingCharacters(in: .whitespaces) : nil, agentEndpoint: nil,
             disableAutoUpdate: backend == .claude ? KotlinBoolean(bool: autoUpdateOff) : nil, defaultModel: defaultModel,
             enabledModels: PatchValue.shared.list(value: allModels ? nil : enabled.sorted()), modelInputModalities: nil, modelContextWindows: nil,
-            apiKey: key.isEmpty ? (clearKey ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: key), modelSource: nil,
+            apiKey: key.isEmpty ? nil : PatchValue.shared.key(value: key), modelSource: nil,
             apiProtocol: backend == .antigravity ? PatchValue.shared.key(value: endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "google-generative-ai") : backend == .pi && !endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? PatchValue.shared.key(value: apiProtocol) : nil)
         do {
             if let profile { _ = try await api.updateBackendProfile(backendId: backend, profileId: profile.id, body: body) }
             else { _ = try await api.createBackendProfile(backendId: backend, id: UUID().uuidString.lowercased(), body: body) }
-            key = ""; workbench.store.invalidateBackendCatalog(); await workbench.loadBackends(); saved(); dismiss()
+            key = ""; workbench.store.invalidateBackendCatalog(); await workbench.loadBackends(); saved()
+            return true
+        } catch { self.error = error.riffetMessage; return false }
+    }
+    /// Clears the saved Key on the server at once; the other fields stay as they are.
+    private func clearKey() async {
+        guard let profile, let api = workbench.api else { return }; busy = true; defer { busy = false }
+        do {
+            _ = try await api.updateBackendProfile(backendId: backend, profileId: profile.id, body: NativeBackendProfileSettingsUpdate(
+                name: nil, description: nil, executable: nil, configDir: nil, sourceDir: nil, apiEndpoint: nil, agentEndpoint: nil, disableAutoUpdate: nil,
+                defaultModel: nil, enabledModels: nil, modelInputModalities: nil, modelContextWindows: nil, apiKey: PatchValue.shared.key(value: nil), modelSource: nil, apiProtocol: nil))
+            keyCleared = true; error = nil; workbench.store.invalidateBackendCatalog(); saved()
         } catch { self.error = error.riffetMessage }
     }
     private func makeDefault() async {
@@ -396,7 +362,7 @@ private struct NativeProfileEditor: View {
     }
 }
 
-private struct NativeCursorSettings: View {
+private struct NativeCursorGateway: View {
     let workbench: Workbench
     @Environment(\.palette) private var palette
     @State private var saved: CursorCliSettings?
@@ -404,61 +370,57 @@ private struct NativeCursorSettings: View {
     @State private var endpoint = ""
     @State private var agentEndpoint = ""
     @State private var key = ""
-    @State private var clearKey = false
+    @State private var keyCleared = false
     @State private var executable = ""
     @State private var configDir = ""
     @State private var autoUpdateOff = false
     @State private var busy = false
+    @State private var confirmClearKey = false
     @State private var error: String?
     private var settingsReady: Bool {
         workbench.list.loaded && !workbench.list.loading && workbench.list.cachedAt == nil
             && workbench.list.error == nil && workbench.settings != nil
     }
     private var dirty: Bool {
-        endpoint != (saved?.apiEndpoint ?? "") || agentEndpoint != (saved?.agentEndpoint ?? "")
+        initialized && (endpoint != (saved?.apiEndpoint ?? "") || agentEndpoint != (saved?.agentEndpoint ?? "")
             || executable != (saved?.executable ?? "") || configDir != (saved?.configDir ?? "")
-            || autoUpdateOff != (saved?.disableAutoUpdate?.boolValue == true) || !key.isEmpty || clearKey
+            || autoUpdateOff != (saved?.disableAutoUpdate?.boolValue == true) || !key.isEmpty)
     }
-    private var hasSavedKey: Bool { workbench.settings?.cursorCli?.hasApiKey?.boolValue == true }
+    private var hasSavedKey: Bool { workbench.settings?.cursorCli?.hasApiKey?.boolValue == true && !keyCleared }
     var body: some View {
-        Section {
+        RiffetEditPage(title: String(localized: "网关", bundle: .riffet), dirty: dirty, save: { await save() }) {
             if initialized {
-                FieldRow(title: "API 地址", text: $endpoint, prompt: "默认", url: true)
-                FieldRow(title: "Agent 地址", text: $agentEndpoint, prompt: "默认", url: true)
-                FieldRow(title: "API Key", text: $key, prompt: hasSavedKey ? "已保存" : "未设置", secure: true)
-                if hasSavedKey { Toggle("清除已保存的 Key", isOn: $clearKey).tint(palette.danger) }
-            } else if workbench.list.error == nil {
-                CenteredProgressRow()
+                Group {
+                    Section {
+                        RiffetField(label: String(localized: "API 地址", bundle: .riffet), prompt: String(localized: "默认", bundle: .riffet), text: $endpoint).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        RiffetField(label: String(localized: "Agent 地址", bundle: .riffet), prompt: String(localized: "默认", bundle: .riffet), text: $agentEndpoint).textInputAutocapitalization(.never).autocorrectionDisabled().keyboardType(.URL)
+                        RiffetField(label: String(localized: "API Key", bundle: .riffet), prompt: hasSavedKey ? String(localized: "已保存", bundle: .riffet) : String(localized: "未设置", bundle: .riffet), text: $key, secure: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    } footer: { Text("重启服务器上的 Riffet 后生效") }
+                    Section {
+                        DisclosureGroup("CLI 启动参数") {
+                            RiffetField(label: String(localized: "CLI 路径", bundle: .riffet), prompt: "", text: $executable, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            RiffetField(label: String(localized: "配置目录", bundle: .riffet), prompt: "", text: $configDir, mono: true).textInputAutocapitalization(.never).autocorrectionDisabled()
+                            Toggle("关闭自动更新", isOn: $autoUpdateOff)
+                        }
+                    } header: { RiffetSectionTitle(String(localized: "高级", bundle: .riffet)) }
+                    if hasSavedKey {
+                        Section { RiffetActionRow("清除已保存的 Key", destructive: true) { confirmClearKey = true } }
+                    }
+                    RiffetNotice.section(.error, error)
+                }
+                .disabled(busy)
+            } else if let message = workbench.list.error {
+                RiffetNotice.section(.error, message, actionTitle: String(localized: "重新读取", bundle: .riffet)) { workbench.refresh() }
+            } else {
+                Section { HStack { Spacer(); ProgressView(); Spacer() } }.listRowBackground(Color.clear)
             }
-        } header: { ProviderHeader("网关") } footer: { if initialized { Text("重启服务器上的 Riffet 后生效") } }
-        .disabled(busy)
+        }
         .onChange(of: settingsReady, initial: true) { _, ready in
             if ready && !initialized { apply(workbench.settings?.cursorCli) }
         }
-        if initialized {
-            Section {
-                DisclosureGroup("CLI 启动参数") {
-                    FieldRow(title: "CLI 路径", text: $executable, mono: true)
-                    FieldRow(title: "配置目录", text: $configDir, mono: true)
-                    Toggle("关闭自动更新", isOn: $autoUpdateOff)
-                }
-            } header: { ProviderHeader("高级") }
-            .disabled(busy)
-            if dirty || busy {
-                Section {
-                    Button { Task { await save() } } label: {
-                        Group { if busy { ProgressView() } else { Text("保存更改") } }
-                            .riffetFont(.body).foregroundStyle(palette.accent)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .disabled(busy)
-                }
-            }
-        } else if let message = workbench.list.error {
-            SettingsMessage(text: message)
-            Section { AccentActionRow(title: "重新读取") { workbench.refresh() }.disabled(workbench.list.loading) }
+        .confirmationDialog(String(localized: "清除已保存的 Key？", bundle: .riffet), isPresented: $confirmClearKey, titleVisibility: .visible) {
+            Button("清除", role: .destructive) { Task { await clearKey() } }
         }
-        ManagementFeedback(error: error, notice: nil)
     }
     private func apply(_ value: CursorCliSettings?) {
         saved = value; initialized = true
@@ -466,9 +428,16 @@ private struct NativeCursorSettings: View {
         executable = value?.executable ?? ""; configDir = value?.configDir ?? ""
         autoUpdateOff = value?.disableAutoUpdate?.boolValue == true
     }
-    private func save() async {
-        guard initialized, dirty, !busy, let api = workbench.api else { return }
-        busy = true; defer { busy = false }
+    private func clearKey() async {
+        guard let api = workbench.api else { return }; busy = true; defer { busy = false }
+        do {
+            let result = try await api.updateSettings(body: managementSettingsPatch(cursor: CursorCliSettingsUpdate(
+                executable: nil, configDir: nil, apiEndpoint: nil, agentEndpoint: nil, disableAutoUpdate: nil, apiKey: PatchValue.shared.key(value: nil))))
+            workbench.store.applySavedSettings(settings: result); keyCleared = true; error = nil
+        } catch { self.error = error.riffetMessage }
+    }
+    private func save() async -> Bool {
+        guard initialized, let api = workbench.api else { return false }
         do {
             let patch = CursorCliSettingsUpdate(
                 executable: executable == (saved?.executable ?? "") ? nil : executable,
@@ -476,10 +445,10 @@ private struct NativeCursorSettings: View {
                 apiEndpoint: endpoint == (saved?.apiEndpoint ?? "") ? nil : endpoint,
                 agentEndpoint: agentEndpoint == (saved?.agentEndpoint ?? "") ? nil : agentEndpoint,
                 disableAutoUpdate: autoUpdateOff == (saved?.disableAutoUpdate?.boolValue == true) ? nil : KotlinBoolean(bool: autoUpdateOff),
-                apiKey: key.isEmpty ? (clearKey ? PatchValue.shared.key(value: nil) : nil) : PatchValue.shared.key(value: key))
+                apiKey: key.isEmpty ? nil : PatchValue.shared.key(value: key))
             let result = try await api.updateSettings(body: managementSettingsPatch(cursor: patch)); workbench.store.applySavedSettings(settings: result)
-            apply(result.cursorCli)
-            key = ""; clearKey = false; error = nil
-        } catch { self.error = error.riffetMessage }
+            key = ""; error = nil
+            return true
+        } catch { self.error = error.riffetMessage; return false }
     }
 }

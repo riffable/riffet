@@ -19,6 +19,8 @@ struct RiffetRootView: View {
     @State private var taskPath: [MobileRoute] = []
     /// Bumped when the current Tasks tab is tapped again; the list scrolls to its top.
     @State private var tasksScrollTop = 0
+    @State private var deletionShown = false
+    @State private var deletionConfirmed = false
     private var currentTab: RootTab { RootTab(rawValue: tabRaw) ?? .tasks }
     private var tabSelection: Binding<RootTab> {
         Binding(get: { currentTab }, set: { value in
@@ -45,6 +47,7 @@ struct RiffetRootView: View {
                     .background(TabBarVisibility(hidden: false))
                     .navigationDestination(for: MobileRoute.self) { destination($0) }
             }
+            .riffetToastHost()
             .tabItem { Image(systemName: "plus.bubble").environment(\.symbolVariants, .none).accessibilityLabel("新会话") }
             .tag(RootTab.newTask)
             // One stack in both widths: on a wide window the list moves out beside it and the stack's
@@ -62,17 +65,32 @@ struct RiffetRootView: View {
                         .navigationDestination(for: MobileRoute.self) { destination($0, splitRoot: wide && $0 == taskPath.first) }
                 }
             }
+            .riffetToastHost()
             .tabItem { Image(systemName: "checklist").environment(\.symbolVariants, .none).accessibilityLabel("任务") }
             .tag(RootTab.tasks)
             .badge(waitingCount)
             NavigationStack {
                 SettingsView(workbench: workbench)
             }
+            .riffetToastHost()
             .tabItem { Image(systemName: "gearshape").environment(\.symbolVariants, .none).accessibilityLabel("设置") }
             .tag(RootTab.settings)
         }
         .task { consumeNavigation() }
-        .sheet(item: Binding(get: { workbench.deletion }, set: { workbench.deletion = $0 })) { SessionDeletionSheet(workbench: workbench, request: $0) }
+        .confirmationDialog(deletionTitle, isPresented: $deletionShown, titleVisibility: .visible, presenting: workbench.deletion) { request in
+            Button(String(localized: "删除", bundle: .riffet), role: .destructive) {
+                deletionConfirmed = true
+                Task {
+                    await workbench.confirmDeletion(request)
+                    if let failure = request.error { RiffetToastCenter.shared.error(failure); workbench.deletion = nil }
+                    else if workbench.deletion === request { deletionConfirmed = false; deletionShown = true }
+                }
+            }
+        } message: { request in
+            Text(deletionSummary(request))
+        }
+        .onChange(of: workbench.deletion?.id) { _, id in deletionConfirmed = false; deletionShown = id != nil }
+        .onChange(of: deletionShown) { _, shown in if !shown && !deletionConfirmed { workbench.deletion = nil } }
         .onChange(of: workbench.removal) { _, removal in
             guard let ids = removal?.ids else { return }
             let gone: (MobileRoute) -> Bool = { if case let .session(id, _) = $0 { ids.contains(id) } else { false } }
@@ -82,9 +100,26 @@ struct RiffetRootView: View {
         .onChange(of: model.pendingSessionID) { _, _ in consumeNavigation() }
         .onChange(of: model.pendingPrompt) { _, _ in consumeNavigation() }
         .onChange(of: model.pendingHome) { _, _ in consumeNavigation() }
-        .alert("未能完成操作", isPresented: Binding(get: { presentsOperationError }, set: { if !$0 { workbench.error = nil } })) {
-            Button("好") { workbench.error = nil }
-        } message: { Text(workbench.error ?? "") }
+        // An operation's failure is a toast; a conversation that could not open says so on its own page
+        // (`presentsOperationError` leaves that one to it).
+        .onChange(of: workbench.error) { _, error in
+            guard let error, presentsOperationError else { return }
+            RiffetToastCenter.shared.error(error)
+            workbench.error = nil
+        }
+    }
+    private var deletionTitle: String {
+        guard let session = workbench.deletion?.session else { return "" }
+        let name = session.title.isEmpty ? String(localized: "未命名会话", bundle: .riffet) : session.title
+        return String(localized: "删除会话「\(name)」？", bundle: .riffet)
+    }
+    /// What the server says the deletion removes, in one sentence.
+    private func deletionSummary(_ request: SessionDeletion) -> String {
+        let effects = request.preview.effects
+        var parts = [String(localized: "所有设备都会移除，无法恢复。项目文件和 CLI 历史保留。", bundle: .riffet)]
+        if effects.discussions > 0 { parts.append(String(localized: "同时删除 \(Int(effects.discussions)) 个侧边聊天。", bundle: .riffet)) }
+        if effects.schedules > 0 { parts.append(String(localized: "\(Int(effects.schedules)) 个定时计划继续运行。", bundle: .riffet)) }
+        return parts.joined(separator: " ")
     }
     private var taskList: some View {
         SessionHomeView(workbench: workbench, scrollToTop: tasksScrollTop, openSessionID: openTaskID) { openTask($0) }
@@ -107,18 +142,19 @@ struct RiffetRootView: View {
                 .background(TabBarVisibility(hidden: !wide))
         }
     }
+    private var stackTop: MobileRoute? {
+        switch currentTab {
+        case .newTask: newPath.last
+        case .tasks: taskPath.last
+        case .settings: nil
+        }
+    }
     private var presentsOperationError: Bool {
         guard workbench.error != nil else { return false }
-        // Only the current tab's stack top can suppress the alert (its
+        // Only the current tab's stack top can suppress the toast (its
         // conversation is being replaced anyway); another tab's leftover
         // destination must not hide an error from the page in front.
-        let top: MobileRoute?
-        switch currentTab {
-        case .newTask: top = newPath.last
-        case .tasks: top = taskPath.last
-        case .settings: top = nil
-        }
-        if case let .session(id, _) = top,
+        if case let .session(id, _) = stackTop,
            workbench.selected?.id != id,
            !workbench.list.sessions.contains(where: { $0.id == id }) { return false }
         return true
@@ -177,6 +213,7 @@ struct SessionHomeView: View {
     @State private var tagging: Session?
     @State private var tags = ""
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private static let topID = "tasks.top"
     private var preferenceKey: String { "riffet.ios.\(workbench.baseURL.absoluteString).home." }
 
@@ -261,10 +298,12 @@ struct SessionHomeView: View {
                 if visible.isEmpty {
                     Group {
                         if workbench.list.loading && !workbench.list.loaded {
-                            ProgressView { Text("正在读取会话…").riffetFont(.body).foregroundStyle(palette.fg2) }
+                            ProgressView()
+                        } else if !query.isEmpty {
+                            ContentUnavailableView.search(text: query)
                         } else {
-                            Text(query.isEmpty ? (filter == .waiting ? "没有待处理的请求" : "没有会话") : "没有匹配的会话")
-                                .riffetFont(.body).foregroundStyle(palette.fg2).multilineTextAlignment(.center)
+                            if filter == .waiting { ContentUnavailableView("没有待处理的请求", systemImage: "checkmark.circle") }
+                            else { ContentUnavailableView("没有会话", systemImage: "bubble.left") }
                         }
                     }
                     .frame(maxWidth: .infinity).padding(.top, 48)
@@ -277,26 +316,26 @@ struct SessionHomeView: View {
                     .listRowSeparator(.hidden).listRowBackground(Color.clear)
                 }
             }
-            .onChange(of: scrollToTop) { _, _ in withAnimation(RiffetMotion.spatial) { proxy.scrollTo(Self.topID, anchor: .top) } }
+            .onChange(of: scrollToTop) { _, _ in withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) { proxy.scrollTo(Self.topID, anchor: .top) } }
         }
     }
     /// 项目 ▾ opens the project sheet; with a project picked it shows its name, highlighted.
     private var projectChip: some View {
         let picked = workbench.project(scope)
-        return Button { showingProjects = true } label: {
-            HStack(spacing: 4) {
-                Text(picked?.name ?? String(localized: "项目", bundle: .riffet)).lineLimit(1).frame(maxWidth: 140)
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
-            }
-            .riffetFont(.label).foregroundStyle(picked == nil ? palette.fg2 : palette.fg)
-            .padding(.horizontal, 15).frame(minHeight: RiffetMetrics.chipHeight).fixedSize()
-            .background {
-                Capsule().fill(palette.bg)
-                Capsule().fill(picked == nil ? palette.press : palette.selected)
-            }
-            .frame(minHeight: RiffetMetrics.hitTarget)
+        return RiffetChipButton(title: picked?.name ?? String(localized: "项目", bundle: .riffet), highlighted: picked != nil) { showingProjects = true }
+            .frame(maxWidth: 180).fixedSize()
+            .accessibilityLabel(String(localized: "项目", bundle: .riffet)).accessibilityIdentifier("sessionProjectFilter")
+    }
+    /// A filter's title with how many sessions need the reader or are working, when that is a count to act on.
+    private func filterTitle(_ filter: HomeFilter) -> String {
+        let live = workbench.list.sessions.filter { $0.archivedAt == nil }
+        let count: Int
+        switch filter {
+        case .waiting: count = live.count { $0.state == .waiting }
+        case .running: count = live.count { $0.state.isActive }
+        default: count = 0
         }
-        .buttonStyle(RiffetDimPressStyle()).accessibilityLabel("项目").accessibilityIdentifier("sessionProjectFilter")
+        return count > 0 ? "\(filter.title) \(count)" : filter.title
     }
     /// The status chips lead the list and scroll with it; a tag filter and a sync failure follow as quiet lines.
     @ViewBuilder private var controlsHeader: some View {
@@ -304,7 +343,7 @@ struct SessionHomeView: View {
             HStack(spacing: 0) {
                 projectChip.padding(.leading, RiffetMetrics.pageInset).zIndex(1)
                 // The bar insets its chips by the page margin; pull it back so they follow the project chip closely.
-                RiffetChipBar(items: filters.map { .init(value: $0, title: $0.title) }, selection: $filter)
+                RiffetChipBar(items: filters.map { .init(value: $0, title: filterTitle($0)) }, selection: $filter)
                     .padding(.leading, 6 - RiffetMetrics.pageInset).clipped()
                     .accessibilityIdentifier("sessionFilter")
             }
@@ -319,23 +358,9 @@ struct SessionHomeView: View {
         .padding(.top, 12).padding(.bottom, 6)
     }
     private func syncFailure(_ error: String) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "wifi.exclamationmark").font(.system(size: 16, weight: .medium)).foregroundStyle(palette.warning).frame(width: 24)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("无法同步会话").riffetFont(.label).foregroundStyle(palette.fg)
-                Text(AppModel.connectionMessage(error)).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityElement(children: .combine)
-            Button("重试") { workbench.refresh() }
-                .riffetFont(.label).foregroundStyle(palette.accent)
-                .padding(.horizontal, 14).frame(minHeight: 32).background(palette.press, in: Capsule())
-                .frame(minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle())
-                .buttonStyle(RiffetDimPressStyle())
-        }
-        .padding(.leading, 14).padding(.trailing, 10).padding(.vertical, 6)
-        .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous))
-        .padding(.horizontal, RiffetMetrics.pageInset)
+        RiffetNotice(kind: .warning, title: String(localized: "无法同步会话", bundle: .riffet), message: AppModel.connectionMessage(error),
+                     actionTitle: String(localized: "重试", bundle: .riffet), action: { workbench.refresh() }, boxed: true)
+            .padding(.horizontal, RiffetMetrics.pageInset)
     }
     var body: some View {
         renameAlertHome.alert("编辑标签", isPresented: taggingPresented) { tagActions }
@@ -351,14 +376,14 @@ struct SessionHomeView: View {
             .scrollDismissesKeyboard(.interactively)
             .navigationTitle(String(localized: "任务", bundle: .riffet))
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .automatic), prompt: String(localized: "搜索会话、项目与消息", bundle: .riffet))
+            .riffetSearchable(text: $query, prompt: String(localized: "搜索会话、项目与消息", bundle: .riffet))
             .refreshable { await workbench.refreshAndWait() }
             .toolbar { homeToolbar }
             // Connection status only shows while the list is not live.
             .safeAreaInset(edge: .bottom, spacing: 0) {
-                if !isConnected {
+                if !isConnected && workbench.list.error == nil {
                     HStack(spacing: 6) {
-                        Circle().fill(palette.warning).frame(width: 6, height: 6)
+                        RiffetStatusDot(state: .waiting, size: 6)
                         Text(connectionStatus).lineLimit(1)
                     }.riffetFont(.caption).foregroundStyle(palette.fg2)
                         .padding(.horizontal, 12).frame(minHeight: 28)
@@ -400,7 +425,7 @@ struct SessionHomeView: View {
         Button("取消", role: .cancel) { renaming = nil }
     }
     @ViewBuilder private var tagActions: some View {
-        TextField("用逗号分隔", text: $tags)
+        TextField("工作, 紧急", text: $tags)
         Button("保存", action: saveTags)
         Button("取消", role: .cancel) { tagging = nil }
     }
@@ -458,7 +483,7 @@ struct SessionHomeView: View {
     private func projectHeader(_ project: Project, count: Int) -> some View {
         let collapsed = collapsedProjects.contains(project.id)
         return HStack(spacing: 6) {
-            Image(systemName: collapsed ? "chevron.right" : "chevron.down").font(.system(size: 11, weight: .semibold)).frame(width: 12)
+            Image(systemName: collapsed ? "chevron.right" : "chevron.down").riffetFont(.caption, weight: .semibold).frame(width: 12)
             Text(project.name).lineLimit(1)
             Text("\(count)")
             Spacer(minLength: 0)
@@ -476,15 +501,16 @@ struct SessionHomeView: View {
         .accessibilityValue(collapsed ? "已折叠" : "已展开")
     }
     private func toggleProject(_ id: String) {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(RiffetMotion.unlessReduced(RiffetMotion.spatial, reduceMotion)) {
             if collapsedProjects.contains(id) { collapsedProjects.remove(id) } else { collapsedProjects.insert(id) }
         }
         UserDefaults.standard.set(Array(collapsedProjects), forKey: preferenceKey + "collapsedProjects")
     }
     /// What the new-session page does not offer: files, changes and the terminal live there.
     @ViewBuilder private func projectLinks(_ project: Project) -> some View {
-        NavigationLink { ProjectCheckpoints(workbench: workbench, project: project, refresh: 0) } label: { Label(gitText("Checkpoints"), systemImage: "clock.arrow.circlepath") }
-        NavigationLink { ProjectWorktrees(workbench: workbench, project: project, refresh: 0) } label: { Label(gitText("Worktrees"), systemImage: "arrow.triangle.branch") }
+        // Both open the Git page on their view, so its tabs, bar and refresh are the same from here.
+        NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .checkpoints) } label: { Label(gitText("Checkpoints"), systemImage: "clock.arrow.circlepath") }
+        NavigationLink { ProjectChangesView(workbench: workbench, project: project, tab: .worktrees) } label: { Label(gitText("Worktrees"), systemImage: "arrow.triangle.branch") }
     }
     /// Project, tags and draft on one quiet line; whatever does not fit is truncated.
     private func rowMeta(_ session: Session) -> String {
@@ -537,8 +563,7 @@ struct SessionHomeView: View {
                         Text(name).riffetFont(.headline).foregroundStyle(session.archivedAt == nil ? palette.fg : palette.fg2).lineLimit(1)
                         Spacer(minLength: 0)
                         if openSessionID != session.id, SidebarModelKt.isDoneUnseen(session: session) {
-                            Circle().fill(palette.fg).frame(width: 6, height: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
-                                .accessibilityLabel(String(localized: "未读", bundle: .riffet))
+                            RiffetStatusDot(state: .unread, size: 6).alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 6 }
                         }
                         Text(time).riffetFont(.caption).foregroundStyle(palette.fg3).monospacedDigit()
                     }
@@ -580,6 +605,11 @@ struct SessionHomeView: View {
 /// so the bar leaves with a push and returns with the pop. SwiftUI's `.toolbar(.hidden, for: .tabBar)`
 /// drops it at once and brings it back only after the pop has finished. During a back swipe the bar
 /// waits for the swipe to commit; a cancelled swipe leaves it as it was.
+///
+/// The bar never changes inside `viewWillAppear` or a SwiftUI update: `setTabBarHidden` lays the tab
+/// controller out on the spot, and on iOS 27 that renders the page being pushed before SwiftUI has given
+/// it its environment, so an `@Environment(AppModel.self)` read on it traps. The change rides the
+/// transition's animation instead, or the next turn of the run loop when there is none.
 struct TabBarVisibility: UIViewControllerRepresentable {
     let hidden: Bool
     func makeUIViewController(context: Context) -> Controller { Controller(hidden: hidden) }
@@ -592,8 +622,8 @@ struct TabBarVisibility: UIViewControllerRepresentable {
         func update(hidden: Bool) {
             guard hidden != self.hidden else { return }
             self.hidden = hidden
-            guard viewIfLoaded?.window != nil, let tabs = tabBarController, tabs.isTabBarHidden != hidden else { return }
-            tabs.setTabBarHidden(hidden, animated: false)
+            guard viewIfLoaded?.window != nil else { return }
+            apply(animated: false)
         }
         required init?(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
         override func loadView() { view = UIView(); view.isUserInteractionEnabled = false }
@@ -601,12 +631,20 @@ struct TabBarVisibility: UIViewControllerRepresentable {
             super.viewWillAppear(animated)
             guard let tabs = tabBarController, tabs.isTabBarHidden != hidden else { return }
             let hidden = hidden
-            if let coordinator = transitionCoordinator, coordinator.isInteractive {
+            guard let coordinator = transitionCoordinator else { apply(animated: animated); return }
+            if coordinator.isInteractive {
                 coordinator.notifyWhenInteractionChanges { context in
                     if !context.isCancelled { tabs.setTabBarHidden(hidden, animated: true) }
                 }
-            } else {
-                tabs.setTabBarHidden(hidden, animated: animated)
+            } else if !coordinator.animate(alongsideTransition: { _ in tabs.setTabBarHidden(hidden, animated: false) }) {
+                apply(animated: false)
+            }
+        }
+        /// After the current layout pass, so the page being shown has its environment by then.
+        private func apply(animated: Bool) {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let tabs = self.tabBarController, tabs.isTabBarHidden != self.hidden else { return }
+                tabs.setTabBarHidden(self.hidden, animated: animated)
             }
         }
     }

@@ -24,6 +24,12 @@ struct ConversationView: View {
     @State private var followsTail = true
     @State private var unread = false
     @State private var approvalVisible = false
+    /// The `/` or `@` token being typed; its menu docks above the composer.
+    @State private var menu: ComposerMenuToken?
+    /// Since when the phone has had no connection to the server; the title says how long.
+    @State private var offlineSince: Date?
+    /// The pinned notice's height; the transcript starts below it.
+    @State private var noticeHeight: CGFloat = 0
     /// The floating composer zone's height; the transcript ends above it.
     @State private var composerHeight: CGFloat = 0
     /// The last read, with the key it was read for; it redraws the page when the read lands.
@@ -48,6 +54,8 @@ struct ConversationView: View {
     @State private var turnQuery = ""
     @State private var jumpTarget: String?
     @State private var information = false
+    /// What the details panel asked for, run once the panel has been dismissed.
+    @State private var afterDetails: (() -> Void)?
     @State private var processExpansion: [String: Bool] = [:]
     @State private var runningProcesses: Set<String> = []
     @State private var disclosureState = ConversationDisclosureState()
@@ -173,8 +181,93 @@ struct ConversationView: View {
     private var feedbackVisible: Bool {
         scenePhase == .active && ready && workbench.visibleSessionID == sessionID && !terminal && !information && !outline && selection == nil && feedbackDetail == nil && !renaming && restartBinding == nil
     }
-    private var persistentFeedback: [ConversationFeedback.Entry] { feedback.presented(in: ledgerKey).filter { !$0.value.key.hasPrefix("notice:") } }
-    private var floatingFeedback: [ConversationFeedback.Entry] { feedback.presented(in: ledgerKey).filter { $0.value.key.hasPrefix("notice:") } }
+    /// Everything the page could say about the session; it shows the most severe one (mobile.md §9.1). The
+    /// question the agent waits on is not here: it is the card docked above the composer.
+    private var sessionNotices: [SessionNotice] {
+        guard workbench.selected?.id == sessionID else { return [] }
+        var result: [SessionNotice] = []
+        let retryTitle = String(localized: "重试", bundle: .riffet)
+        if workbench.connection is RiffetConnectionStateFailed {
+            result.append(.init(id: "phone", severity: 90, kind: .error, message: String(localized: "与服务器的连接已断开", bundle: .riffet),
+                                actionTitle: retryTitle, action: { workbench.store.retry() }))
+        }
+        let source = feedbackSource
+        // The agent's connection failed and the server sent no words for it: the feedback below has nothing to show.
+        if connectionStatus?.connectionNotice == .failed, !source.contains(where: { $0.key == "connection" }) {
+            result.append(.init(id: "agentConnection", severity: 80, kind: .error,
+                                message: connectionStatus?.badge?.text ?? String(localized: "Agent 连接失败", bundle: .riffet),
+                                actionTitle: retryTitle, action: { workbench.store.retry() }))
+        }
+        for entry in feedback.presented(in: ledgerKey) {
+            let value = entry.value
+            if entry.current && source.contains(where: { $0.key == value.key && $0.text == value.text }) {
+                let severity = value.key == "connection" ? 80 : value.key == "history" ? 70 : value.error ? 75 : 40
+                result.append(.init(id: "feedback." + value.key, severity: severity, kind: value.error ? .error : .warning, message: value.text,
+                                    actionTitle: value.retry ? retryTitle : nil,
+                                    action: value.retry ? { if feedbackSource.contains(where: { $0.key == value.key && $0.text == value.text }) { workbench.store.retry() } } : nil,
+                                    entry: entry, details: { feedbackDetail = entry }))
+            } else if entry.recovered {
+                result.append(.init(id: "recovered." + value.key, severity: 5, kind: .success, message: String(localized: "已恢复", bundle: .riffet), entry: entry))
+            } else {
+                result.append(.init(id: "past." + value.key, severity: 4, kind: .info, message: value.text, entry: entry))
+            }
+        }
+        if workbench.interaction == nil && workbench.status?.phase == .attention {
+            result.append(.init(id: "attention", severity: 60, kind: .warning, title: String(localized: "Agent 正在等待操作", bundle: .riffet),
+                                message: supportsTerminal ? String(localized: "这个交互需要在原生终端里继续。", bundle: .riffet) : String(localized: "正在同步可处理的交互。若持续等待，可重试同步或到电脑查看。", bundle: .riffet),
+                                actionTitle: supportsTerminal ? String(localized: "打开终端", bundle: .riffet) : String(localized: "重新同步", bundle: .riffet),
+                                action: supportsTerminal ? { terminal = true } : { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }))
+        }
+        if let notice = workbench.runtimeControl?.notice, !workbench.runtimeActionPending {
+            let label = localizedText(notice.label, fallback: "")
+            if !label.isEmpty {
+                let action = notice.action
+                result.append(.init(id: "runtime", severity: notice.tone == "danger" ? 65 : 45, kind: notice.tone == "danger" ? .error : .info, message: label,
+                                    actionTitle: action.map { localizedText($0.label, fallback: "") }.flatMap { $0.isEmpty || action?.disabled?.boolValue == true ? nil : $0 },
+                                    action: action.map { action in { Task { await workbench.runRuntimeAction(action, sessionID: sessionID) } } }))
+            }
+        }
+        if workbench.historyError != nil {
+            result.append(.init(id: "olderHistory", severity: 30, kind: .warning, message: String(localized: "更早的消息加载失败", bundle: .riffet),
+                                actionTitle: retryTitle, action: { workbench.store.retryHistory() }))
+        }
+        if focusSequence != nil && !didFocusMessage, let focusError {
+            result.append(.init(id: "focus", severity: 20, kind: .info, message: focusError))
+        }
+        if let cached = workbench.cachedAt {
+            let when = Date(timeIntervalSince1970: Double(cached) / 1000).formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))
+            result.append(.init(id: "cache", severity: 10, kind: .info, message: String(localized: "显示设备缓存 · \(when)", bundle: .riffet)))
+        }
+        return result
+    }
+    private var pinnedNotice: SessionNotice? { sessionNotices.mostSevere }
+    /// The notice rests below the find bar when that is open.
+    private var noticeTop: CGFloat { findState?.open == true ? findReach : RiffetMetrics.floatingGap }
+    /// How far the transcript starts below the bar: the find bar and the notice, each with its gap.
+    private var topInset: CGFloat {
+        let find = findState?.open == true ? findReach : 0
+        return pinnedNotice == nil ? find : noticeTop + noticeHeight + RiffetMetrics.floatingGap
+    }
+    /// What the title says beside the name: nothing while the connection is healthy.
+    private func connectionCaption(at now: Date) -> String? {
+        if workbench.connection is RiffetConnectionStateFailed { return String(localized: "已断开", bundle: .riffet) }
+        if workbench.connection is RiffetConnectionStateReconnecting {
+            let minutes = Int(now.timeIntervalSince(offlineSince ?? now) / 60)
+            return minutes < 1 ? String(localized: "离线", bundle: .riffet) : String(localized: "离线 \(minutes) 分钟", bundle: .riffet)
+        }
+        if connectionStatus?.badge?.loading == true { return connectionStatus?.badge?.text }
+        if focusSequence != nil && !didFocusMessage && focusError == nil { return String(localized: "正在定位搜索结果…", bundle: .riffet) }
+        return nil
+    }
+    /// The waiting question, to be docked: the live one, or the one whose answer is still being confirmed.
+    private var dockedInteraction: NativeInteraction? {
+        let records = ledger.records(for: ledgerKey)
+        if let live = workbench.interaction {
+            guard let record = records.first(where: { $0.id == live.id }) else { return live }
+            return record.waiting ? record.interaction : nil
+        }
+        return records.first { $0.waiting && InteractionDrafts.shared.hasPendingSubmission(for: "\(workbench.baseURL.absoluteString):\(sessionID):\($0.id)") }?.interaction
+    }
     private func updateFeedback() {
         var recovered = Set<String>()
         if workbench.status?.connection?.state == "connected" { recovered.insert("connection") }
@@ -187,12 +280,14 @@ struct ConversationView: View {
             if let session { conversation(session) }
             else if let error = workbench.error {
                 ContentUnavailableView { Label("无法打开会话", systemImage: "exclamationmark.bubble") } description: { Text(AppModel.connectionMessage(error)) } actions: { Button("重试") { Task { await workbench.open(sessionID: sessionID) } } }
-            } else { ProgressView("正在读取会话…") }
+            } else { ProgressView() }
         }
+        .riffetToastClearance(composerHeight)
         .onAppear { workbench.visibleSessionID = sessionID }
         .onDisappear { feedback.pause(); if workbench.visibleSessionID == sessionID { workbench.visibleSessionID = nil } }
         .onChange(of: feedbackSource, initial: true) { _, _ in updateFeedback() }
         .onChange(of: feedbackVisible) { _, _ in updateFeedback() }
+        .onChange(of: workbench.offline, initial: true) { _, offline in offlineSince = offline ? (offlineSince ?? .now) : nil }
         .onChange(of: seenActivity, initial: true) { _, activity in if activity != nil { workbench.markSeen(sessionID) } }
         .onChange(of: ledgerKey, initial: true) { _, _ in
             feedbackDetail = nil
@@ -211,9 +306,9 @@ struct ConversationView: View {
                 ConversationTranscriptList(
                     rows: transcriptRows(session, draft: draft), request: scrollRequest,
                     followsTail: followsTail, accessibilityValue: scrollAccessibilityValue,
-                    currentApprovalID: workbench.interaction != nil || workbench.status?.phase == .attention ? approvalID : nil,
+                    currentApprovalID: nil,
                     bottomInset: composerHeight,
-                    topInset: findState?.open == true ? findReach : 0,
+                    topInset: topInset,
                     onPosition: { near, at, approval, top in
                         nearBottom = near; atBottom = at; approvalVisible = approval; nearTop = top
                         if near { unread = false }
@@ -232,25 +327,12 @@ struct ConversationView: View {
                 .environment(\.conversationQuote, { quote($0, into: draft) })
                 .environment(\.conversationFeedbackActive, feedbackVisible)
                 .environment(\.conversationFindProbe, probe)
-            } else { ProgressView("正在读取会话…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+            } else { ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
         .background(palette.bg)
         // Rows passing under the bar are blurred, fading out just below it, so the title never sits on bare prose.
         .overlay(alignment: .top) { RiffetBarScrim() }
-        .overlay(alignment: .top) {
-            if !floatingFeedback.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(floatingFeedback) { entry in feedbackNotice(entry) }
-                }
-                .padding(12).frame(maxWidth: .infinity, alignment: .leading)
-                .background(palette.bgElevated, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(palette.line, lineWidth: 0.5))
-                .padding(.horizontal, 18).padding(.top, findState?.open == true ? findReach : 8) // below the find bar
-                .frame(maxWidth: RiffetMetrics.readingWidth)
-                .transition(.opacity)
-            }
-        }
-        .animation(.easeOut(duration: 0.18), value: floatingFeedback.map(\.id))
+        .modifier(SessionNoticeLayer(notice: pinnedNotice, feedback: feedback, top: noticeTop, height: $noticeHeight))
         .modifier(ConversationFindLayer(find: workbench.store.find, state: $findState, land: landFind, topRowKey: { probe.topRowKey() }, window: findWindow, retry: resolveFind, reach: $findReach))
         .onChange(of: lastVersion) { _, _ in
             guard restored else { return }
@@ -259,8 +341,9 @@ struct ConversationView: View {
         }
         .onChange(of: interactionVersion) { _, _ in
             observeInteraction()
+            // The question is docked against the input; the transcript just stays at its end.
             if workbench.interaction != nil && focusApproval && !didFocusApproval && !userScrolled {
-                followsTail = false; scrollRequest = .init(target: approvalID, anchor: .center); didFocusApproval = true
+                followsTail = true; scrollRequest = .init(target: nil, anchor: .bottom); didFocusApproval = true
             }
         }
         .onChange(of: ready) { _, loaded in if loaded { observeInteraction() } }
@@ -286,7 +369,11 @@ struct ConversationView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) { composer(session, draft: draft) }
         .navigationTitle("").navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $terminal) { TerminalPage(workbench: workbench, projectID: session.projectId, terminalID: session.terminalId) }
-        .sheet(isPresented: $information) { ConversationInformation(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus) }
+        .sheet(isPresented: $information, onDismiss: { afterDetails?(); afterDetails = nil }) {
+            ConversationDetails(workbench: workbench, session: session, catalog: catalog, connectionStatus: connectionStatus, supportsTerminal: supportsTerminal,
+                                find: { workbench.store.find.open(readingPos: nil) }, openTerminal: { terminal = true }, rename: { renameTitle = session.title; renaming = true },
+                                afterClose: { afterDetails = $0 })
+        }
         .sheet(isPresented: $outline) { turnOutline }
         .sheet(isPresented: $terminalResume) { TerminalResumeSheet(workbench: workbench, sessionID: sessionID) }
         .sheet(item: $selection) { ConversationSelectionSheet(selection: $0) }
@@ -295,7 +382,7 @@ struct ConversationView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
                         Text(entry.value.text)
-                        if let detail = entry.value.detail { Text(detail).font(.footnote.monospaced()).foregroundStyle(.secondary) }
+                        if let detail = entry.value.detail { Text(detail).riffetFont(.monoSmall).foregroundStyle(palette.fg3) }
                     }
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading).padding()
@@ -352,26 +439,14 @@ struct ConversationView: View {
                 .environment(\.conversationReadingHistory, !nearBottom).environment(\.conversationFocusedRow, focusedRow)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.top, top))))
         }
+        let docked = dockedInteraction?.id
         func appendRecords(_ values: [ConversationInteractionLedger.Record]) {
-            for record in values {
+            // The question the agent waits on is docked above the composer; it joins the transcript once answered.
+            for record in values where !(record.waiting && record.id == docked) {
                 append("approval." + record.id,
                        revision: rowRevision(record.interaction.revision, record.waiting, record.confirmed, record.result ?? ""),
                        top: 12, content: interactionRecord(record, session: session))
             }
-        }
-        if !persistentFeedback.isEmpty {
-            let revision = persistentFeedback.map { "\($0.id)|\($0.value.text)|\($0.current)|\($0.recovered)" }.joined(separator: "|")
-            append("meta.connection", revision: revision, top: 8, content: connectionNotice(session))
-        }
-        if let cached = workbench.cachedAt {
-            append("meta.cache", revision: cached, top: 8, content: Label("显示设备缓存 · \(Date(timeIntervalSince1970: Double(cached) / 1000).formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale)))", systemImage: "clock.arrow.circlepath").font(.caption).foregroundStyle(.secondary))
-        }
-        if let error = workbench.historyError {
-            append("meta.history", revision: error, top: 8, content: historyRetry(error))
-        }
-        if focusSequence != nil && !didFocusMessage {
-            if let focusError { append("meta.focus", revision: focusError, top: 8, content: Text(focusError).font(.caption).foregroundStyle(.secondary)) }
-            else { append("meta.focus", revision: "loading", top: 8, content: Label("正在定位搜索结果…", systemImage: "magnifyingglass").font(.caption).foregroundStyle(.secondary)) }
         }
         if rows.isEmpty && !workbench.working {
             append("meta.empty", revision: 0, top: 20, content: ContentUnavailableView("还没有消息", systemImage: "bubble.left.and.text.bubble.right"))
@@ -399,28 +474,22 @@ struct ConversationView: View {
             if entry.isLastInRow { appendRecords(byRow[entry.rowKey] ?? []) }
         }
         appendRecords(records.filter { $0.afterRow.map { !rowKeys.contains($0) } ?? false })
-        if workbench.interaction == nil && workbench.status?.phase == .attention {
-            append("unknownApproval", revision: supportsTerminal, top: 12, content: unknownInteraction(session))
-        }
-        if workbench.goal != nil || !workbench.todos.isEmpty || !workbench.queued.isEmpty {
-            append("docks", revision: rowRevision(catalog?.capabilities.supportsSteer ?? false, workbench.status?.activeTurn?.turnId ?? ""), top: 12, content: ConversationRunDocks(workbench: workbench, draft: draft, supportsSteer: catalog?.capabilities.supportsSteer == true, supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true))
-        }
         // The compaction activity already shows progress in the timeline.
         if workbench.selected?.id == sessionID && (workbench.sendState.interrupting || workbench.status?.phase == .busy && !workbench.dock.compacting) {
             // Just that it is working: the current step is already the live row above.
             append("working", revision: workbench.sendState.interrupting, top: 12,
                    content: HStack(spacing: 8) {
-                ProgressView().controlSize(.small).tint(.secondary).frame(width: 18)
-                Text(workbench.sendState.interrupting ? "停止中" : "正在处理").font(.subheadline)
+                ProgressView().controlSize(.small).tint(palette.fg3).frame(width: 18)
+                Text(workbench.sendState.interrupting ? "停止中" : "正在处理").riffetFont(.label, weight: .regular)
                 Spacer(minLength: 0)
-            }.foregroundStyle(.secondary)
+            }.foregroundStyle(palette.fg3)
                 .accessibilityElement(children: .ignore).accessibilityLabel(workbench.sendState.interrupting ? "停止中" : "正在处理")
                 .accessibilityIdentifier("conversationWorking"))
         }
         if workbench.selected?.id == sessionID && workbench.status?.phase != .busy && workbench.backgroundSubagents > 0 {
             let count = workbench.backgroundSubagents
             append("background", revision: count, top: 12,
-                   content: Label("后台 \(count) 个任务运行中", systemImage: "gearshape.2").font(.caption).foregroundStyle(.secondary)
+                   content: Label("后台 \(count) 个任务运行中", systemImage: "gearshape.2").riffetFont(.caption).foregroundStyle(palette.fg3)
                 .accessibilityIdentifier("conversationBackground"))
         }
         append("transcriptEnd", revision: 0, content: Color.clear.frame(height: 18).accessibilityHidden(true))
@@ -475,11 +544,6 @@ struct ConversationView: View {
         runningProcesses = running
     }
 
-    /// Shown only after the store has retried a page several times; paging otherwise happens unseen.
-    private func historyRetry(_ error: String) -> some View {
-        Button { workbench.store.retryHistory() } label: { Label("更早的消息加载失败", systemImage: "arrow.clockwise").font(.caption) }
-            .buttonStyle(.plain).foregroundStyle(.secondary).frame(maxWidth: .infinity).accessibilityHint(error)
-    }
     private var hapticPhase: String {
         guard workbench.selected?.id == sessionID, let phase = workbench.status?.phase else { return "" }
         return phase.wire
@@ -494,7 +558,6 @@ struct ConversationView: View {
     }
     /// `nearTop` is false for a long transcript read at its bottom; a short one keeps paging until it fills the screen.
     private var wantsOlder: Bool { ready && nearTop && workbench.history?.hasMore == true && !workbench.loadingHistory && workbench.historyError == nil }
-    private var approvalID: String { workbench.interaction.map { "approval." + $0.id } ?? "unknownApproval" }
     @ViewBuilder private func interactionRecord(_ record: ConversationInteractionLedger.Record, session: Session) -> some View {
         if record.waiting, workbench.interaction?.id == record.id || InteractionDrafts.shared.hasPendingSubmission(for: "\(workbench.baseURL.absoluteString):\(sessionID):\(record.id)") {
             InteractionCardView(workbench: workbench, interaction: record.interaction, sessionID: sessionID,
@@ -511,54 +574,33 @@ struct ConversationView: View {
         guard ready else { return }
         ledger.observe(workbench.interaction, for: ledgerKey, after: rows.last?.key, authoritative: workbench.connection is RiffetConnectionStateLive)
     }
-    private func unknownInteraction(_ session: Session) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Agent 正在等待操作", systemImage: "exclamationmark.bubble").font(.headline)
-            Text(supportsTerminal ? "这个交互需要在原生终端里继续。" : "正在同步可处理的交互。若持续等待，可重试同步或到电脑查看。").font(.subheadline).foregroundStyle(.secondary)
-            if supportsTerminal { Button("打开终端") { terminal = true } }
-            Button("重新同步") { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }
-        }.padding(12).background(palette.warningSoft, in: RoundedRectangle(cornerRadius: 12))
-    }
     private func composer(_ session: Session, draft: MessageDraft) -> some View {
         VStack(spacing: 0) {
-            if let notice = workbench.runtimeControl?.notice {
-                let pending = workbench.runtimeActionPending
-                let label = localizedText(notice.label, fallback: "")
-                HStack(spacing: 8) {
-                    if pending || notice.tone == "progress" { ProgressView().controlSize(.small) }
-                    if !label.isEmpty && !pending {
-                        Text(label).font(.caption).foregroundStyle(notice.tone == "danger" ? Color.red : Color.secondary)
-                            .accessibilityHint(notice.detail ?? "")
-                    }
-                    Spacer(minLength: 8)
-                    if let action = notice.action, !pending {
-                        Button(localizedText(action.label, fallback: "")) { Task { await workbench.runRuntimeAction(action, sessionID: sessionID) } }
-                            .disabled(action.disabled?.boolValue == true)
-                    }
-                }.padding(.horizontal, 16).padding(.vertical, 8)
-                .riffetGlass(in: Capsule()).padding(.horizontal, 12).padding(.bottom, 4)
-            }
-            if workbench.interaction != nil && !approvalVisible {
-                Button { followsTail = false; scrollRequest = .init(target: approvalID, anchor: .center) } label: { Label("等待你处理 · 查看", systemImage: "hand.raised").font(.subheadline).frame(maxWidth: .infinity).frame(minHeight: 42) }.riffetGlass(in: Capsule(), interactive: true).padding(.horizontal, 12).padding(.bottom, 4).accessibilityIdentifier("pendingApprovalLink")
-            }
+            ConversationDock(workbench: workbench, session: session, draft: draft, interaction: dockedInteraction,
+                             openTerminal: supportsTerminal ? { terminal = true } : nil,
+                             onSubmitted: { result, interaction in ledger.submitted(result, interaction: interaction, for: ledgerKey) },
+                             supportsSteer: catalog?.capabilities.supportsSteer == true,
+                             supportsTargetedStop: catalog?.capabilities.supportsTargetedStop?.boolValue == true,
+                             supportsSessionReferences: catalog?.capabilities.supportsSessionReferences == true,
+                             menu: $menu, onMenuPicked: { composerFocus += 1 })
             ConversationComposer(workbench: workbench, session: session, draft: draft, supportsInterrupt: catalog?.capabilities.supportsInterrupt == true && catalog?.capabilities.supportsTargetedStop?.boolValue == true, catalog: catalog,
                                  catalogLoading: catalogLoading, catalogError: catalogError,
                                  onOptionsClosed: { if catalogError != nil, !catalogLoading { Task { await loadCatalog(session) } } },
-                                 focusRequest: composerFocus) { sendingScroll += 1 }
+                                 focusRequest: composerFocus, menu: $menu) { sendingScroll += 1 }
         }
         // The transcript's column (see `TranscriptLayout.columnWidth`).
         .frame(maxWidth: RiffetMetrics.readingWidth)
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { composerHeight = $0 }
         .overlay(alignment: .topTrailing) {
             Group {
-                if workbench.interaction == nil && (hasNewer || !followsTail && !nearBottom) {
+                if hasNewer || !followsTail && !nearBottom {
                     Button { jumpToLatest() } label: {
-                        Image(systemName: "arrow.down").font(.system(size: 16, weight: .semibold))
+                        Image(systemName: "arrow.down").riffetFont(.body, weight: .semibold)
                             .foregroundStyle(palette.fg).frame(width: 40, height: 40)
                             .riffetGlass(in: Circle(), interactive: true)
                             .frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Circle())
                     }.buttonStyle(.plain)
-                        .overlay(alignment: .topTrailing) { if unread || hasNewer { Circle().fill(palette.accent).frame(width: 8, height: 8).padding(4).allowsHitTesting(false) } }
+                        .overlay(alignment: .topTrailing) { if unread || hasNewer { RiffetStatusDot(state: .unread).padding(4).allowsHitTesting(false) } }
                         .accessibilityLabel(unread || hasNewer ? "有新内容，回到最新" : "回到最新")
                         .accessibilityIdentifier("latestContent").padding(.bottom, 8).padding(.trailing, 14)
                         .transition(.opacity)
@@ -577,7 +619,6 @@ struct ConversationView: View {
     }
     @ToolbarContentBuilder private func conversationToolbar(_ session: Session) -> some ToolbarContent {
         // A remedy is the bar's own glass button; a connection that is fine shows nothing.
-        let reconnects = connectionStatus?.connectionNotice == .failed
         // A resume reads as "starting" at once, which ends needsResume; the button stays and spins
         // until the request returns. A restart has its own entry and shows the title's badge instead.
         let resumingHere = resuming && !restarting
@@ -586,39 +627,37 @@ struct ConversationView: View {
         // would only get its content's width and cut the title to a character or two.
         ToolbarItem(placement: .principal) {
             Button { information = true } label: {
-                HStack(spacing: 4) {
-                    // A generated sentence, not a page name: list-title size, so it reads as content and truncates later.
-                    Text(session.title).riffetFont(.headline).lineLimit(1).truncationMode(.tail)
-                    // Only states that need attention; whether it runs is in the information sheet.
-                    if let badge = connectionStatus?.badge, !reconnects, !resumingHere {
-                        if badge.loading { ProgressView().controlSize(.mini).accessibilityLabel(badge.text) }
-                        else { Image(systemName: "exclamationmark.circle").foregroundStyle(badge.warning ? palette.warning : palette.fg3).accessibilityLabel(badge.text) }
-                    }
-                }.foregroundStyle(palette.fg).frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
+                // A generated sentence, not a page name: list-title size, so it reads as content and truncates later.
+                // The line under it is the phone's connection to the server; a healthy one says nothing.
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    RiffetBarTitle(title: session.title, status: resumingHere ? nil : connectionCaption(at: context.date))
+                        .frame(maxWidth: .infinity, minHeight: RiffetMetrics.hitTarget, alignment: .leading).contentShape(Rectangle())
+                }
             }.buttonStyle(.plain).accessibilityLabel(String(localized: "会话信息：\(session.title)", bundle: .riffet))
                 .accessibilityValue(connectionStatus?.badge?.text ?? (needsResume ? String(localized: "此会话当前未运行", bundle: .riffet) : ""))
                 .accessibilityIdentifier("conversationInformation")
         }
         .sharedBackgroundHidden()
-        if reconnects || resumes {
+        if resumes {
             ToolbarItem(placement: .topBarTrailing) {
-                if reconnects {
-                    Button("重连") { workbench.store.retry() }
-                        .tint(palette.warning).accessibilityIdentifier("conversationReconnect")
-                } else {
-                    Button { Task { await resume() } } label: {
-                        ZStack { Text("恢复").opacity(resumingHere ? 0 : 1); if resumingHere { ProgressView().controlSize(.mini) } }
-                    }.tint(palette.accent).disabled(resuming).accessibilityIdentifier("conversationResume")
-                }
+                Button { Task { await resume() } } label: {
+                    ZStack { Text("恢复").opacity(resumingHere ? 0 : 1); if resumingHere { ProgressView().controlSize(.mini) } }
+                }.tint(palette.accent).disabled(resuming).accessibilityIdentifier("conversationResume")
             }
         }
         ToolbarItem(placement: .topBarTrailing) {
             Menu {
+                // Fifteen items: behind a type boundary so the page type stays shallow (riffetTypeBoundary).
+                Group {
                 Button(String(localized: "查找", bundle: .riffet), systemImage: "magnifyingglass") { workbench.store.find.open(readingPos: nil) }.accessibilityIdentifier("conversationFind")
                 Button("会话目录", systemImage: "list.bullet") { outline = true }.disabled(workbench.presentation?.turns.isEmpty != false).accessibilityIdentifier("conversationOutline")
                 Divider()
                 if connectionStatus?.connectionNotice == .failed || connectionStatus?.connectionNotice == .conflict {
                     Button("重试连接", systemImage: "arrow.clockwise") { workbench.store.retry() }
+                }
+                // The notice's one action is 打开终端 then; syncing again stays one tap away here.
+                if supportsTerminal, workbench.interaction == nil, workbench.status?.phase == .attention {
+                    Button(String(localized: "重新同步", bundle: .riffet), systemImage: "arrow.triangle.2.circlepath") { Task { await workbench.perform { _ = try await workbench.store.syncInteraction() } } }
                 }
                 if needsResume, catalog?.capabilities.supportsResume == true {
                     Button("恢复会话", systemImage: "arrow.clockwise") { Task { await resume() } }
@@ -653,20 +692,35 @@ struct ConversationView: View {
                 if workbench.list.canDeleteSessions {
                     Button("删除…", systemImage: "trash", role: .destructive) { Task { await workbench.requestDeletion(session) } }.disabled(workbench.deletionLoading != nil)
                 }
+            }.riffetTypeBoundary()
             } label: { Image(systemName: "ellipsis") }.accessibilityLabel("会话菜单")
         }
     }
+    /// A picker sheet of the conversation's prompts (mobile.md §2.5): one line each with its time; a choice
+    /// jumps there and closes the sheet.
     private var turnOutline: some View {
-        NavigationStack {
-            List {
-                ForEach((workbench.presentation?.turns ?? []).filter { turnQuery.isEmpty || $0.preview.localizedCaseInsensitiveContains(turnQuery) }, id: \.rowKey) { turn in
+        let turns = (workbench.presentation?.turns ?? []).filter { turnQuery.isEmpty || $0.preview.localizedCaseInsensitiveContains(turnQuery) }
+        return NavigationStack {
+            RiffetList {
+                ForEach(turns, id: \.rowKey) { turn in
                     Button { jumpTarget = turn.rowKey; outline = false } label: {
-                        VStack(alignment: .leading, spacing: 5) { Text(turn.preview).foregroundStyle(.primary).lineLimit(3); if let time = turn.time, let date = ServerTime.date(time) { Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).font(.caption).foregroundStyle(.secondary) } }.padding(.vertical, 4)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(turn.preview).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                            if let time = turn.time, let date = ServerTime.date(time) {
+                                Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
                 }
-            }.searchable(text: $turnQuery, prompt: String(localized: "搜索本次会话的提问", bundle: .riffet)).navigationTitle(String(localized: "会话目录", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-                .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { outline = false } } }
-        }.presentationDragIndicator(.visible)
+            }
+            .overlay { if turns.isEmpty && !turnQuery.isEmpty { ContentUnavailableView.search(text: turnQuery) } }
+            .searchable(text: $turnQuery, placement: .navigationBarDrawer(displayMode: .always), prompt: String(localized: "搜索本次会话的提问", bundle: .riffet))
+            .navigationTitle(String(localized: "会话目录", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
     }
     private func restore() {
         guard ready, !restored, workbench.visibleSessionID == sessionID else { return }
@@ -674,7 +728,7 @@ struct ConversationView: View {
         guard !userScrolled else { return }
         if focusSequence != nil { followsTail = false; focusMessage() }
         else if focusApproval, workbench.interaction != nil || workbench.status?.phase == .attention {
-            followsTail = false; scrollRequest = .init(target: approvalID, anchor: .center); didFocusApproval = true
+            followsTail = true; scrollRequest = .init(target: nil, anchor: .bottom); didFocusApproval = true
         } else { followsTail = true; scrollRequest = .init(target: nil, anchor: .bottom) }
     }
     private func focusMessage() {
@@ -699,27 +753,6 @@ struct ConversationView: View {
         scrollRequest = .init(target: key, anchor: .top)
         didFocusMessage = true
         focusError = nil
-    }
-    @ViewBuilder private func connectionNotice(_ session: Session) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(persistentFeedback) { entry in feedbackNotice(entry) }
-        }
-    }
-    private func feedbackNotice(_ entry: ConversationFeedback.Entry) -> some View {
-        let live = entry.current && feedbackSource.contains { $0.key == entry.value.key && $0.text == entry.value.text }
-        return VStack(alignment: .leading, spacing: 8) {
-            if !live && entry.recovered {
-                Text("已恢复").font(.caption2).foregroundStyle(.secondary)
-            }
-            ConversationFeedbackText(text: entry.value.text, preview: true, hasDetail: entry.value.detail != nil) { feedbackDetail = entry }
-                .foregroundStyle(live ? (entry.value.error ? palette.danger : entry.value.warning ? palette.warning : .secondary) : .secondary)
-            if live && entry.value.retry {
-                Button("重试") {
-                    if feedbackSource.contains(where: { $0.key == entry.value.key && $0.text == entry.value.text }) { workbench.store.retry() }
-                }
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading)
-            .conversationFeedbackVisibility(feedback, id: entry.id, visible: entry.value.key.hasPrefix("notice:") || feedbackRowVisible)
     }
     private func resume(restartBinding: SessionNativeRuntime? = nil) async {
         guard !resuming else { return }
@@ -762,112 +795,5 @@ private extension ToolbarContent {
     /// The title is text on the page, not a control: no glass capsule behind it.
     @ToolbarContentBuilder func sharedBackgroundHidden() -> some ToolbarContent {
         if #available(iOS 26.0, *) { sharedBackgroundVisibility(.hidden) } else { self }
-    }
-}
-
-private struct ConversationInformation: View {
-    let workbench: Workbench
-    let session: Session
-    let catalog: NativeBackendCatalogEntry?
-    let connectionStatus: ConversationStatus?
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    private var current: Session { workbench.selected?.id == session.id ? workbench.selected! : session }
-    private var project: Project? { workbench.project(current.projectId) }
-    private var subagents: [SubagentEntry] { workbench.subagentEntries }
-    /// Live background tasks; a background subagent also reports as one, and is listed once, as the subagent.
-    private var tasks: [NativeActivity] {
-        let owned = Set(subagents.map(\.toolCallId))
-        return workbench.dock.tasks.filter { $0.toolCallId.map { !owned.contains($0) } ?? true }
-    }
-
-    var body: some View {
-        let current = current
-        NavigationStack {
-            List {
-                Section {
-                    Text(current.title).font(.headline).textSelection(.enabled)
-                    LabeledContent("状态", value: current.state.label)
-                    if let badge = connectionStatus?.badge { Text(badge.text).font(.caption).foregroundStyle(.secondary) }
-                    if workbench.status?.profilePending?.boolValue == true { Text("新配置将在后端重启后生效").font(.caption).foregroundStyle(.secondary) }
-                    if let notice = workbench.status?.notice, workbench.status?.noticeLevel == "info" { Text(notice).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
-                }
-                Section("运行配置") {
-                    LabeledContent("Agent", value: catalog?.label ?? workbench.backends.first { $0.backendId == (current.backendId ?? .cursor) }?.label ?? (current.backendId ?? .cursor).name.capitalized)
-                        .accessibilityIdentifier("sessionInformationAgent")
-                    if let profile = NativeConfigurationSummary.profile(catalog: catalog, profileID: current.backendProfileId) {
-                        information("服务商", profile)
-                    }
-                    information("模型与参数", NativeConfigurationSummary.model(catalog: catalog, selection: current.model))
-                    LabeledContent("运行模式", value: catalog?.capabilities.modes.first { $0.id == current.mode }?.label ?? current.mode)
-                    if let approval = NativeConfigurationSummary.approval(status: workbench.status, backend: current.backendId ?? .cursor, sessionApproval: current.approval) {
-                        LabeledContent("操作确认", value: catalog?.capabilities.permissions.first { $0.id == approval }?.label ?? approval)
-                    }
-                    NavigationLink("会话选项") { SessionOptionsView(workbench: workbench, session: current) }
-                }
-                if !subagents.isEmpty {
-                    Section("子 Agent") {
-                        ForEach(subagents, id: \.toolCallId) { entry in
-                            HStack(spacing: 8) {
-                                NavigationLink {
-                                    ConversationSubagentPage(workbench: workbench, projectID: current.projectId, toolCallID: entry.toolCallId, title: entry.name, parentItems: nil)
-                                        .environment(\.conversationReturnToMain, { dismiss() })
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(entry.name).font(.subheadline).lineLimit(1)
-                                        Text([state(entry), entry.detail].compactMap { $0 }.joined(separator: " · ")).font(.caption).foregroundStyle(entry.state == .failed ? .red : .secondary).lineLimit(1)
-                                    }
-                                }
-                                if let task = workbench.dock.tasks.first(where: { $0.toolCallId == entry.toolCallId }) {
-                                    ConversationActivityStopButton(workbench: workbench, task: task)
-                                }
-                            }
-                        }
-                    }.accessibilityIdentifier("conversationSubagents")
-                }
-                if !tasks.isEmpty {
-                    Section("后台任务") {
-                        ForEach(tasks, id: \.id) { ConversationBackgroundTaskRow(workbench: workbench, task: $0) }
-                    }.accessibilityIdentifier("conversationBackgroundTasks")
-                }
-                Section("工作区") {
-                    if let project {
-                        information("项目", project.name)
-                        information("工作目录", project.cwd, monospaced: true)
-                            .accessibilityIdentifier("sessionInformationDirectory")
-                        if let branch = project.worktree?.branch { information("Worktree 分支", branch) }
-                    } else { Text("正在同步工作目录…").foregroundStyle(.secondary) }
-                }
-                Section("会话") {
-                    information("会话 ID", current.id, monospaced: true)
-                    if let nativeID = current.nativeSessionId ?? current.cursorSessionId {
-                        information("Agent 会话 ID", nativeID, monospaced: true)
-                    }
-                    if !current.tags.isEmpty { information("标签", current.tags.map { "#" + $0 }.joined(separator: " ")) }
-                    information("创建时间", date(current.createdAt))
-                    information("最近活动", date(current.lastActivityAt ?? current.updatedAt))
-                    information("服务器", workbench.baseURL.absoluteString)
-                }
-            }
-            .accessibilityIdentifier("conversationInformationList")
-            .navigationTitle(String(localized: "会话信息", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } } }
-        }
-        .presentationDetents(dynamicTypeSize.isAccessibilitySize ? [.large] : [.medium, .large]).presentationDragIndicator(.visible)
-    }
-    private func information(_ title: LocalizedStringKey, _ value: String, monospaced: Bool = false) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(monospaced ? .subheadline.monospaced() : .subheadline)
-                .textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(.vertical, 3).accessibilityElement(children: .combine)
-    }
-    private func state(_ entry: SubagentEntry) -> String? {
-        if let task = workbench.dock.tasks.first(where: { $0.toolCallId == entry.toolCallId }),
-           activityView(activity: task, stopping: workbench.isStopping(activity: task.id), nowMillis: 0).stopping { return String(localized: "停止中", bundle: .riffet) }
-        switch entry.state { case .running: return String(localized: "运行中", bundle: .riffet); case .failed: return String(localized: "失败", bundle: .riffet); default: return nil }
-    }
-    private func date(_ value: String) -> String {
-        ServerTime.date(value)?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale)) ?? value
     }
 }

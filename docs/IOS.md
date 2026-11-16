@@ -119,7 +119,7 @@ NavigationStack
 - 蓝色主要标记可操作内容；橙色用于需要注意的状态；红色用于错误或确有破坏性的操作。正常完成不铺满绿色，圆角与背景用于区分真实的操作单元。
 - 字体使用系统 `.largeTitle / .headline / .body / .caption` 等语义样式和 Dynamic Type，不复刻桌面 11–13px 密集工具栏。
 - 图标使用 SF Symbols；主要触控区域按至少 44 × 44pt 设计；标签足够长时允许换行。
-- 除系统导航/工具栏外，内容优先使用 systemBackground、secondarySystemBackground 与 separator。
+- 颜色取主题角色（`palette`），不用系统语义色；现行的组件、取值与页面规则见 [iOS 设计规范](design/system/ios.md)。
 - 支持浅/深色、增大文字、VoiceOver、Reduce Motion 与 Reduce Transparency；没有颜色也能识别状态。
 - 原生导航提供返回与边缘返回手势；页面遵循安全区，避免键盘和底部栏遮挡输入或最后一条消息。
 

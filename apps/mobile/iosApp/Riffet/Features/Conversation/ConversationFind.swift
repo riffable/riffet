@@ -86,6 +86,7 @@ extension AttributedString {
 struct ConversationFindFlash: ViewModifier {
     let highlight: ConversationFindHighlight?
     @Environment(\.palette) private var palette
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var strength = 0.0
 
     func body(content: Content) -> some View {
@@ -96,7 +97,7 @@ struct ConversationFindFlash: ViewModifier {
                 strength = 1
                 guard !highlight.needle.isEmpty else { return }
                 try? await Task.sleep(for: .milliseconds(500))
-                withAnimation(.easeOut(duration: 0.9)) { strength = 0 }
+                withAnimation(RiffetMotion.unlessReduced(RiffetMotion.release, reduceMotion)) { strength = 0 }
             }
     }
 }
@@ -121,11 +122,11 @@ struct ConversationFindBar: View {
             if !text.isEmpty {
                 Text("\(max(0, Int(state.current) + 1))/\(state.total)").riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg3)
             }
-            Button { find.previous() } label: { Image(systemName: "chevron.up").frame(width: 28, height: 28) }
+            Button { find.previous() } label: { Image(systemName: "chevron.up").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle()) }
                 .accessibilityLabel(Text("上一个", bundle: .riffet))
-            Button { find.next() } label: { Image(systemName: "chevron.down").frame(width: 28, height: 28) }
+            Button { find.next() } label: { Image(systemName: "chevron.down").frame(width: RiffetMetrics.hitTarget, height: RiffetMetrics.hitTarget).contentShape(Rectangle()) }
                 .accessibilityLabel(Text("下一个", bundle: .riffet))
-            Button { find.close() } label: { Text("完成", bundle: .riffet) }
+            Button { find.close() } label: { Text("完成", bundle: .riffet).frame(minWidth: RiffetMetrics.hitTarget, minHeight: RiffetMetrics.hitTarget).contentShape(Rectangle()) }
         }
         .buttonStyle(.plain).foregroundStyle(palette.fg)
         .padding(.leading, 14).padding(.trailing, 12).frame(minHeight: 44)
@@ -158,7 +159,7 @@ struct ConversationFindLayer: ViewModifier {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeOut(duration: 0.18), value: state?.open == true)
+            .riffetAnimation(RiffetMotion.release, value: state?.open == true)
             .background {
                 Button("") { find.open(readingPos: nil) }.keyboardShortcut("f").opacity(0).allowsHitTesting(false).accessibilityHidden(true)
             }

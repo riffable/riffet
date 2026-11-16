@@ -147,12 +147,12 @@ struct ConversationProcessHeader: View {
             HStack(spacing: 8) {
                 Group {
                     if live { ProgressView().controlSize(.mini).tint(palette.accent) }
-                    else { Circle().fill(palette.fg4).frame(width: 6, height: 6) }
+                    else { RiffetStatusDot(state: .idle, size: 6) }
                 }.frame(width: 16, height: 16)
                 status.riffetFont(.label).monospacedDigit().foregroundStyle(palette.fg3).lineLimit(1)
                 Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4)
                     .rotationEffect(.degrees(open ? 90 : 0))
-                    .animation(RiffetMotion.chevron, value: open)
+                    .riffetAnimation(RiffetMotion.chevron, value: open)
                 Spacer(minLength: 0)
             }.frame(minHeight: 36).contentShape(Rectangle())
         }.buttonStyle(RiffetDimPressStyle())
@@ -324,7 +324,7 @@ struct ConversationTimelineItem: View {
                             else { statusExpanded = expanded }
                         }
                     )) {
-                        ConversationCode(text: detail, language: "output", maximumBodyHeight: 320, stateID: "status." + status.key)
+                        ConversationCode(text: detail, language: "output", output: true, stateID: "status." + status.key)
                     } label: {
                         Label(status.text, systemImage: status.tone == .danger ? "exclamationmark.circle" : "info.circle")
                     }
@@ -371,10 +371,10 @@ private struct ConversationThought: View {
                         Image(systemName: "brain").font(.system(size: 12)).foregroundStyle(palette.fg4).frame(width: 16)
                         Text(preview.isEmpty ? String(localized: "思考", bundle: .riffet) : preview).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
-                            .animation(RiffetMotion.chevron, value: isExpanded)
+                            .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
                     }.frame(maxWidth: .infinity, minHeight: 34, alignment: .leading).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityValue(isExpanded ? "已展开" : "已折叠").accessibilityHint("轻点查看或收起完整思考").accessibilityIdentifier("reasoning.\(thought.key)")
-                if isExpanded { ConversationMarkdown(source: thought.text, workbench: workbench, projectID: projectID, compact: true, stateID: "item." + thought.key).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 26).padding(.bottom, 6).transition(.asymmetric(insertion: .opacity.animation(.easeOut(duration: 0.25)), removal: .identity)) }
+                if isExpanded { ConversationMarkdown(source: thought.text, workbench: workbench, projectID: projectID, compact: true, stateID: "item." + thought.key).frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 26).padding(.bottom, 6).transition(.asymmetric(insertion: .opacity.animation(RiffetMotion.release), removal: .identity)) }
             }.frame(maxWidth: .infinity, alignment: .leading)
                 .task(id: PreviewKey(text: candidate, active: active)) {
                     if active { streamingCandidate = candidate }
@@ -462,8 +462,8 @@ struct ConversationCopyActions: View {
                         if let selectText { Button("选择文字", systemImage: "selection.pin.in.out") { selectText(text) } }
                         if let quote { Button("引用", systemImage: "text.quote") { quote(text) } }
                     } label: {
-                        Image(systemName: copyFeedback.copied ? "checkmark" : "ellipsis").font(.system(size: 15, weight: .medium)).foregroundStyle(palette.fg4)
-                            .frame(width: 32, height: 32, alignment: .leading).contentShape(Rectangle())
+                        Image(systemName: copyFeedback.copied ? "checkmark" : "ellipsis").riffetFont(.label, weight: .medium).foregroundStyle(palette.fg4)
+                            .frame(width: 32, height: 32, alignment: .leading).contentShape(Rectangle().inset(by: -6))
                     }.menuIndicator(.hidden).accessibilityLabel(copyFeedback.copied ? "已复制消息" : "更多").accessibilityIdentifier("messageCopy")
                 }
                 let parts = [endedAt?.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale)), speed?.label].compactMap { $0 }
@@ -522,13 +522,13 @@ private struct ConversationTaskNotice: View {
                     Text(notice.title).riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(isExpanded ? nil : 1).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                     Text(status).riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize()
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .animation(RiffetMotion.chevron, value: isExpanded)
+                        .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
                 }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(RiffetDimPressStyle()).accessibilityValue(isExpanded ? "已展开" : "已折叠")
             if isExpanded {
                 if let date = ServerTime.date(notice.event.createdAt) { Text(date.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).foregroundStyle(palette.fg4) }
                 if let detail = notice.detail { Text(detail).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                if let command = notice.command { ConversationCode(text: command, language: "shell", maximumBodyHeight: 300, stateID: "notice." + notice.key + ".command") }
+                if let command = notice.command { ConversationCode(text: command, language: "shell", output: true, stateID: "notice." + notice.key + ".command") }
                 if let result = notice.jobResult {
                     if let exit = result.exitCode { Text("exit \(exit)").riffetFont(.caption).foregroundStyle(palette.fg4) }
                     if let duration = result.runningMs { Text(formatDurationMs(millis: duration.int64Value)).riffetFont(.caption).foregroundStyle(palette.fg4) }
@@ -568,12 +568,12 @@ private struct ConversationJob: View {
                     Label(job.title, systemImage: "terminal").riffetFont(.label).foregroundStyle(palette.fg3).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
                     Text(job.status == .running ? "运行中" : job.status == .failed ? "失败" : job.status == .unknown ? "状态未知" : "完成").riffetFont(.caption).foregroundStyle(palette.fg4).fixedSize()
                     Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold)).foregroundStyle(palette.fg4).rotationEffect(.degrees(isExpanded ? 90 : 0))
-                        .animation(RiffetMotion.chevron, value: isExpanded)
+                        .riffetAnimation(RiffetMotion.chevron, value: isExpanded)
                 }.frame(maxWidth: .infinity, minHeight: 36, alignment: .leading).contentShape(Rectangle())
             }.buttonStyle(RiffetDimPressStyle()).accessibilityValue(isExpanded ? "已展开" : "已折叠")
             if isExpanded {
                 if job.title.trimmingCharacters(in: .whitespacesAndNewlines) != job.command.trimmingCharacters(in: .whitespacesAndNewlines) { Text(job.title).riffetFont(.label, weight: .regular).foregroundStyle(palette.fg3).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
-                if !job.command.isEmpty { ConversationCode(text: job.command, language: "shell", maximumBodyHeight: 300, stateID: "job." + job.toolCallId + ".command") }
+                if !job.command.isEmpty { ConversationCode(text: job.command, language: "shell", output: true, stateID: "job." + job.toolCallId + ".command") }
                 TimelineView(.periodic(from: .now, by: job.status == .running ? 1 : 3600)) { context in
                     let start = ServerTime.date(job.startedAt)
                     let elapsed = max(job.runningMs?.int64Value ?? 0, job.status == .running ? Int64(start.map { max(0, context.date.timeIntervalSince($0) * 1000) } ?? 0) : 0)
@@ -582,7 +582,7 @@ private struct ConversationJob: View {
                         if elapsed > 0 { Text(formatDurationMs(millis: elapsed)) }
                     }.riffetFont(.caption).foregroundStyle(palette.fg4)
                 }
-                ConversationCode(text: job.output ?? (job.status == .running ? String(localized: "还没有输出…", bundle: .riffet) : String(localized: "没有输出", bundle: .riffet)), language: "output", maximumBodyHeight: 300, stateID: "job." + job.toolCallId + ".output")
+                ConversationCode(text: job.output ?? (job.status == .running ? String(localized: "还没有输出…", bundle: .riffet) : String(localized: "没有输出", bundle: .riffet)), language: "output", output: true, stateID: "job." + job.toolCallId + ".output")
                 if let exit = job.exitCode { Text("exit \(exit)").riffetFont(.caption).foregroundStyle(palette.fg4) }
                 if job.truncated?.boolValue == true { Text("输出较长，此处仅显示末尾。").riffetFont(.caption).foregroundStyle(palette.fg4) }
             }
@@ -634,7 +634,6 @@ private struct ConversationAttachmentLink: View {
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(palette.press, in: Capsule())
             }.buttonStyle(.plain).foregroundStyle(palette.fg3).frame(maxWidth: 240, alignment: .trailing)
-            if let error { Text(error).riffetFont(.caption).foregroundStyle(palette.danger) }
         }.sheet(isPresented: $showPreview) {
             NavigationStack {
                 Group {
@@ -649,8 +648,13 @@ private struct ConversationAttachmentLink: View {
                         }
                     }
                     .sheet(isPresented: Binding(get: { file != nil }, set: { if !$0 { file = nil } })) { if let file { FilePreview(url: file) } }
-                    .alert("操作未完成", isPresented: Binding(get: { error != nil }, set: { if !$0 { error = nil } })) { Button("好", role: .cancel) {} } message: { Text(error ?? "") }
+                    .onChange(of: error) { _, message in
+                        guard let message else { return }
+                        RiffetToastCenter.shared.error(message); error = nil
+                    }
             }
+            // A sheet covers the page's toasts; it shows its own.
+            .riffetToastHost()
         }
     }
     private func systemPreview() async {
@@ -716,18 +720,19 @@ private struct ConversationSessionReferenceChip: View {
     @State private var page = 0
     @State private var loading = false
     @State private var error: String?
+    @Environment(\.palette) private var palette
     var body: some View {
-        Button { opened = true } label: { Label(reference.title, systemImage: "text.bubble").font(.caption) }
+        Button { opened = true } label: { Label(reference.title, systemImage: "text.bubble").riffetFont(.caption) }
         .sheet(isPresented: $opened) {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("引用于 \(ServerTime.date(reference.capturedAt)?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale)) ?? reference.capturedAt)").font(.caption).foregroundStyle(.secondary)
-                        if reference.coverage.completeness == "partial" { Text("仅含部分历史").font(.caption).foregroundStyle(.secondary) }
-                        if reference.coverage.activeTurnIncomplete?.boolValue == true { Text("引用时本轮尚未结束").font(.caption).foregroundStyle(.secondary) }
+                        Text("引用于 \(ServerTime.date(reference.capturedAt)?.formatted(Date.FormatStyle(date: .abbreviated, time: .shortened).locale(AppLocalization.shared.locale)) ?? reference.capturedAt)").riffetFont(.caption).foregroundStyle(palette.fg3)
+                        if reference.coverage.completeness == "partial" { Text("仅含部分历史").riffetFont(.caption).foregroundStyle(palette.fg3) }
+                        if reference.coverage.activeTurnIncomplete?.boolValue == true { Text("引用时本轮尚未结束").riffetFont(.caption).foregroundStyle(palette.fg3) }
                         Text(sessionReferenceExcerpt(excerpt: reference.excerpt)).textSelection(.enabled)
-                        Text("原文副本随本会话保存").font(.caption).foregroundStyle(.secondary)
-                        Text("仅保存提问和回答文字，不含工具记录和附件内容").font(.caption).foregroundStyle(.secondary)
+                        Text("原文副本随本会话保存").riffetFont(.caption).foregroundStyle(palette.fg3)
+                        Text("仅保存提问和回答文字，不含工具记录和附件内容").riffetFont(.caption).foregroundStyle(palette.fg3)
                         Button("打开原会话") { opened = false; Task { await workbench.open(sessionID: reference.sessionId) } }
                         Button("查看引用时的记录") { Task {
                             loading = true
@@ -739,14 +744,14 @@ private struct ConversationSessionReferenceChip: View {
                             } catch { self.error = error.riffetMessage }
                         } }.disabled(loading)
                         if let original, original.indices.contains(page) {
-                            Text(original[page]).font(.callout).textSelection(.enabled)
+                            Text(original[page]).riffetFont(.body).textSelection(.enabled)
                             if original.count > 1 { HStack {
                                 Button("上一页") { page -= 1 }.disabled(page == 0)
-                                Text("\(page + 1) / \(original.count)").font(.caption).foregroundStyle(.secondary)
+                                Text("\(page + 1) / \(original.count)").riffetFont(.caption).foregroundStyle(palette.fg3)
                                 Button("下一页") { page += 1 }.disabled(page == original.count - 1)
                             } }
                         }
-                        if let error { Text(error).foregroundStyle(.red) }
+                        if let error { RiffetNotice(kind: .error, message: error, boxed: true) }
                     }.padding().frame(maxWidth: .infinity, alignment: .leading)
                 }.navigationTitle(reference.title).navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { opened = false } } }

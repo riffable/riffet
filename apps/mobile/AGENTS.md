@@ -1,13 +1,17 @@
 # 移动客户端
 
-补充根目录 [AGENTS.md](../../AGENTS.md)，那里的「改界面」同样适用。Android 的设计规范在 [Android](../../docs/design/system/android.md)：组件对照、页面与浮层、各风格的取值和迁移顺序；架构说明在 [docs/MOBILE.md](../../docs/MOBILE.md)。
+补充根目录 [AGENTS.md](../../AGENTS.md)，那里的「改界面」同样适用。Android 的设计规范在 [Android](../../docs/design/system/android.md)：组件对照、页面与浮层、各风格的取值和迁移顺序；iPhone 的在 [iOS](../../docs/design/system/ios.md)；架构说明在 [docs/MOBILE.md](../../docs/MOBILE.md)。
 
 ## 界面
 
 - 新的二级页面、浮层和面板先按 [移动端页面](../../docs/design/system/mobile.md) 定页面类型（目录、详情、编辑、设置分类、选择面板、弹窗、面板），再写代码。行里不放和标题同名的按钮；搜索、添加和低频工具进顶栏。
 - Android 的组件集中在 `shared/src/commonMain/kotlin/riffet/ui/design/`。业务代码用这里的组件，不直接用 Material 控件；缺的先在这里补。
 - 颜色、字号、圆角由 `pnpm gen:theme` 和 `pnpm gen:tokens` 生成，不手工誊抄，也不改生成的文件。
-- iPhone 用 iOS 的语义色、系统字体和原生控件，品牌与信息语义跟 Riffet 一致，不照搬 Material 的尺寸。取值在 `iosApp/Riffet/Design/` 和 `iosApp/Riffet/Theme/`。
+- iPhone 系统控件优先，系统没有的部件只在 `iosApp/Riffet/Design/` 画一份；颜色用主题角色（`palette`），不用 `.red`、`.secondary` 这类系统色；文字用 `riffetFont`，不写 `.font(.caption)` 或 `.font(.system(size:))`；不照搬 Material 的尺寸。取值在 `iosApp/Riffet/Design/` 和 `iosApp/Riffet/Theme/`，规则见 [iOS](../../docs/design/system/ios.md)。
+
+## SwiftUI 约定
+
+- 主线程的栈要省着用：SwiftUI 在主线程上解析整棵视图类型、计算 body，iOS 27 上用完就闪退。设计层的修饰符返回具体类型，不返回 `some View`；页面里的大块内容放在 `riffetTypeBoundary()` 后面（`RiffetList`、`RiffetForm` 已自带）；视图里不存几 KB 的值类型；`viewWillAppear` 和 SwiftUI 更新里不调会当场布局的 UIKit 方法。改完跑 `scripts/stack-report.py`，做法见 [iOS](../../docs/design/system/ios.md) §2.0。
 
 ## Compose 约定
 

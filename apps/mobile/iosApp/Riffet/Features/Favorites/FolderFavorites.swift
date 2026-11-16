@@ -56,11 +56,11 @@ final class FolderFavoritesModel {
         }
     }
 
-    /// One step up (-1) or down (1); shown at once, put back if the server refuses.
-    func move(_ favorite: FolderFavorite, by delta: Int) async {
-        guard let from = favorites.firstIndex(where: { $0.id == favorite.id }), favorites.indices.contains(from + delta) else { return }
+    /// A drag in edit mode (`.onMove`); shown at once, put back if the server refuses.
+    func reorder(fromOffsets source: IndexSet, toOffset destination: Int) async {
         let before = favorites
-        favorites.swapAt(from, from + delta)
+        favorites.move(fromOffsets: source, toOffset: destination)
+        guard favorites.map(\.id) != before.map(\.id) else { return }
         await change(String(localized: "无法调整收藏顺序", bundle: .riffet), undo: { self.favorites = before }) { api in
             self.favorites = try await api.reorderFolderFavorites(ids: self.favorites.map(\.id), projectId: self.projectId)
         }
@@ -85,18 +85,15 @@ func favoriteName(_ favorite: FolderFavorite) -> String {
     favorite.label ?? folderName(favorite.path)
 }
 
-/// 重命名 / 上移 / 下移 / 取消收藏 for a favorite's context menu; [rename] asks for the name.
+/// 重命名 / 取消收藏 for a favorite's context menu (order changes in edit mode: `.onMove` + `reorder`); [rename] asks for the name.
 struct FolderFavoriteMenu: View {
     let model: FolderFavoritesModel
     let favorite: FolderFavorite
     let rename: () -> Void
 
     var body: some View {
-        let index = model.favorites.firstIndex { $0.id == favorite.id }
         if favorite.exists {
             Button("重命名", systemImage: "pencil", action: rename)
-            Button("上移", systemImage: "arrow.up") { Task { await model.move(favorite, by: -1) } }.disabled(index == nil || index == 0)
-            Button("下移", systemImage: "arrow.down") { Task { await model.move(favorite, by: 1) } }.disabled(index == nil || index == model.favorites.count - 1)
         }
         Button("取消收藏", systemImage: "star.slash", role: .destructive) { Task { await model.remove(favorite) } }
     }
@@ -106,14 +103,15 @@ struct FolderFavoriteMenu: View {
 struct FolderFavoriteLabel: View {
     let favorite: FolderFavorite
     var showsPath = true
+    @Environment(\.palette) private var palette
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "star.fill").foregroundStyle(favorite.exists ? Color.orange : Color.secondary)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(favoriteName(favorite)).foregroundStyle(favorite.exists ? .primary : .secondary)
+            Image(systemName: "star.fill").foregroundStyle(favorite.exists ? palette.warning : palette.fg3)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(favoriteName(favorite)).riffetFont(.body).foregroundStyle(favorite.exists ? palette.fg : palette.fg3).lineLimit(1)
                 if showsPath || !favorite.exists {
-                    Text(favorite.exists ? favorite.path : String(localized: "\(favorite.path) · 不存在", bundle: .riffet)).font(.caption).foregroundStyle(.secondary).lineLimit(2).truncationMode(.middle)
+                    Text(favorite.exists ? favorite.path : String(localized: "\(favorite.path) · 不存在", bundle: .riffet)).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head)
                 }
             }
             Spacer(minLength: 0)

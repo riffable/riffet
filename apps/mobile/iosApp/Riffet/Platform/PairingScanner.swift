@@ -153,3 +153,26 @@ private final class DelegateReference: @unchecked Sendable {
     weak var value: AVCaptureMetadataOutputObjectsDelegate?
     init(_ value: AVCaptureMetadataOutputObjectsDelegate) { self.value = value }
 }
+
+/// The viewfinder drawn over the camera: four corners round a square, the rest of the picture dimmed.
+struct ScannerFrame: View {
+    var body: some View {
+        GeometryReader { proxy in
+            let side = min(proxy.size.width, proxy.size.height) * 0.65
+            let box = CGRect(x: (proxy.size.width - side) / 2, y: (proxy.size.height - side) / 2, width: side, height: side)
+            ZStack {
+                Path { path in
+                    path.addRect(CGRect(origin: .zero, size: proxy.size))
+                    path.addRoundedRect(in: box, cornerSize: CGSize(width: RiffetMetrics.groupRadius, height: RiffetMetrics.groupRadius))
+                }
+                .fill(Color.black.opacity(0.4), style: FillStyle(eoFill: true))
+                RoundedRectangle(cornerRadius: RiffetMetrics.groupRadius, style: .continuous)
+                    .stroke(Color.white.opacity(0.9), lineWidth: 2)
+                    .frame(width: side, height: side)
+                    .position(x: box.midX, y: box.midY)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}

@@ -21,10 +21,10 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 
 另有两条轴，与分层正交：
 
-- **平台**：同一条规则在各端的写法。行为跟平台，数值跟同一份定义（§3）。设计规范页切到 macOS 或 Android 时目录的分组不变，只换内容；各端的差异写在平台文档，现有 [macOS](macos.md) 和 [Android](android.md)。
+- **平台**：同一条规则在各端的写法。行为跟平台，数值跟同一份定义（§3）。设计规范页切到 macOS 或 Android 时目录的分组不变，只换内容；各端的差异写在平台文档：[macOS](macos.md)、[Android](android.md)、[iOS](ios.md)。
 - **风格**：每个语义取什么值、组件画成什么形态。语义层不写数值，风格层不改交互。同一个组件在桌面 Riffet 风格下是 28pt 的透明图标按钮，在 iOS 上是系统按钮加 44pt 点击区，但两者的状态、键盘操作、无障碍名称和文案规则相同。
   - **桌面**（Mac、Web）：配方 `packages/contracts/src/interface-styles.ts`，`pnpm gen:styles` 生成 Mac 的 `StyleSpec`。Riffet 是主风格，规则见 [Riffet 风格](../riffet-style.md)；原生风格见 [macOS 原生](../macos-native.md)；线条风格见 `interface-styles/`。
-  - **移动**（Android、iOS）：Android 有 material3、ios、expressive、miuix、fluent 五种风格，规则见 [主题契约](../../THEMES.md) §8–9。iOS 原生端用系统控件，结构与 Android 的 `IosPreset` 对齐，见 [iPhone 原生方案](../../IOS.md)。
+  - **移动**（Android、iOS）：Android 有 material3、ios、expressive、miuix、fluent 五种风格，规则见 [主题契约](../../THEMES.md) §8–9。iOS 原生端用系统控件，结构与 Android 的 `IosPreset` 对齐，规则见 [iOS](ios.md)，架构见 [iPhone 原生方案](../../IOS.md)。
 
 颜色不属于风格：53 个颜色角色由主题提供，规则见 [主题契约](../../THEMES.md)。代码里的分层（源、生成文件、组件、模式、页面，依赖只向下）见 [架构](architecture.md)。
 
@@ -45,7 +45,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 | Web | 全部自绘，行为由 Radix 提供，组件在 `apps/web/src/components/ui/` | [WAI-ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/) |
 | macOS | 原生风格用系统控件；Riffet、线条风格自绘，组件在 `apps/macos/Riffet/Theme/`；各项语义在 Mac 上的写法见 [macOS](macos.md) | [HIG](https://developer.apple.com/design/human-interface-guidelines/)：菜单键盘导航、按首字母跳转、Esc 关闭、⌘ 快捷键 |
 | Android | 只经 `apps/mobile/shared/src/commonMain/kotlin/riffet/ui/design/` 的组件；material3 风格下它们包装 Material 组件，其他风格自绘 | [Material 3](https://m3.material.io/) |
-| iOS | 系统 SwiftUI 控件优先，导航和控制层用 Liquid Glass；系统没有的才在 `apps/mobile/iosApp/Riffet/Design/` 自建 | [HIG](https://developer.apple.com/design/human-interface-guidelines/) |
+| iOS | 系统 SwiftUI 控件优先，导航和控制层用 Liquid Glass；系统没有的才在 `apps/mobile/iosApp/Riffet/Design/` 自建；各项语义在 iOS 上的写法见 [iOS](ios.md) | [HIG](https://developer.apple.com/design/human-interface-guidelines/) |
 
 - 平台约定的行为不重新发明：返回手势、系统菜单的键盘操作、Dynamic Type、VoiceOver、TalkBack、减少动态效果。
 - 点击区与视觉尺寸分开：桌面指针目标至少 24，iOS 44pt，Android 48dp；图形可以更小，点击区不缩。
@@ -130,7 +130,7 @@ Web、macOS、Android、iOS 四端共用的设计规范和组件库。改界面�
 | 0 | 本文、[组件模板](components/TEMPLATE.md) | 完成 |
 | 1 | [基础](foundations.md)：颜色、文字与排版、间距与尺寸、圆角、阴影、动效、图标、状态、无障碍；数值生成到四端 | 完成：规范已写，数值生成到四端，`check:design` 拦截手写值 |
 | 2 | [组件](components/)：六组组件的规范、四端实现、调用点迁移；各端的设计规范页 | Web：规范与设计规范页已写全，多选框、单选、滑块、骨架屏、搜索框、列表行、复制按钮已实现并迁移调用点；`Progress` 等出现第二处确定进度再抽，原生 `title=` 待换成 `Tip`，余下记在各组的「现状」。Mac、Android、iOS 待迁移 |
-| 3 | [模式](patterns.md)、[界面](surfaces.md)、[插件界面](plugins.md)、[架构](architecture.md) | Web 的规范已写全，页面骨架、弹窗四档宽度与页脚、手机上的菜单弹层、列表行与悬停操作、按钮的进行中状态、确认按钮的文案已迁移，其余按「现状」迁移。Mac 的映射与落地顺序在 [macOS](macos.md)，Android 的在 [Android](android.md)，都待迁移；iOS 待对齐 |
+| 3 | [模式](patterns.md)、[界面](surfaces.md)、[插件界面](plugins.md)、[架构](architecture.md) | Web 的规范已写全，页面骨架、弹窗四档宽度与页脚、手机上的菜单弹层、列表行与悬停操作、按钮的进行中状态、确认按钮的文案已迁移，其余按「现状」迁移。Mac 的映射与落地顺序在 [macOS](macos.md)，Android 的在 [Android](android.md)，iOS 的在 [iOS](ios.md)（2026-11-15 盘点，页面级的现状在 [移动端页面](mobile.md) §7.4），都待迁移 |
 | 4 | [文案](content.md) | 规则与术语表已写；现有文案按「现状」修改 |
 
 [Riffet 风格](../riffet-style.md)、[macOS 原生](../macos-native.md)、[主题契约](../../THEMES.md) §8–9 里属于语义层的内容（原则、状态、组件交互），随阶段 1–2 移进本目录；原文件只留各自风格的取值。

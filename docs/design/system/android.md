@@ -185,7 +185,7 @@
 | `Button` `primary` / `secondary` / `danger` | `RiffetButton` | 次要按钮按 `variants.secondaryButtons` 画成浅底或透明 |
 | `Button` `ghost` / `quiet` / `link` | `RiffetTextButton`、`RiffetInlineAction` | |
 | 图标按钮 | `RiffetIconButton` | |
-| 胶囊 | `ChipRow`（筛选）、`ChipButton`（菜单）、`ToggleChip`（开关），同一尺寸（[移动端页面](mobile.md) §1.1） | 输入框里的模型、权限胶囊按 [界面](surfaces.md) 另画，高 28 |
+| 胶囊 | `ChipRow`（筛选）、`ChipButton`（菜单）、`ToggleChip`（开关），同一尺寸（[移动端页面](mobile.md) §1.1） | 输入框里的模型胶囊按 [界面](surfaces.md) §1.8 另画，高 28 |
 | `Input` / `Textarea` / `Field` | `RiffetTextField`（`Inputs.kt`）；分组卡片里的字段用 `GroupField`（无边框，卡片即容器）；占位符一律 `fg3` | 输入框、终端输入、会话内查找、问答卡片里还有 5 处 `BasicTextField`，有的是有意为之，未逐个核对 |
 | `SearchField` | `RiffetSearchField`；根页下拉露出的放在 `SearchReveal` 里 | — |
 | `Switch` · `Checkbox` · `Slider` · `Segmented` | 见 §5 | |

@@ -92,6 +92,12 @@ targets:
           - -framework
           - RiffetKit
           - -lsqlite3
+          # The main thread gets 8 MB, as on macOS and in the simulator, instead of iOS's 1 MB: SwiftUI
+          # resolves a page's whole view type and builds its body on this thread, and iOS 27 overflows
+          # 1 MB on long pages. ios.md §2.0 has the rules that keep pages within it regardless.
+          - -Wl,-stack_size,0x800000
+        # -stack_size only links into a main executable; the debug dylib would carry the app's code instead.
+        ENABLE_DEBUG_DYLIB: NO
       configs:
         Release:
           CODE_SIGN_ENTITLEMENTS: Riffet/Resources/Riffet-Release.entitlements

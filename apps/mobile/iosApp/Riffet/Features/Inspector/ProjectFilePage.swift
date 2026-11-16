@@ -5,6 +5,7 @@ import RiffetKit
 struct ProjectFilePage: View {
     let workbench: Workbench
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.palette) private var palette
     let project: Project
     let path: String
     var targetLine: Int?
@@ -17,7 +18,7 @@ struct ProjectFilePage: View {
     @State private var renderHTML = false
     @State private var html: Data?
     @State private var pages: [ProjectFileChunk] = []
-    @State private var page = 0
+    @State private var shown = 1
     @State private var readingMarkdown = true
     @State private var actionError: String?
     private var isMarkdown: Bool { ["md", "markdown", "mdown", "mdx"].contains((path as NSString).pathExtension.lowercased()) }
@@ -31,17 +32,16 @@ struct ProjectFilePage: View {
     var body: some View {
         Group {
             if let error {
-                ContentUnavailableView {
-                    Label("无法预览", systemImage: "exclamationmark.triangle")
-                } description: { Text(error) } actions: {
-                    Button("重试") { Task { await load() } }
-                }
+                RiffetNotice(kind: .error, title: String(localized: "无法预览", bundle: .riffet), message: error,
+                             actionTitle: String(localized: "重试", bundle: .riffet), action: { Task { await load() } }, boxed: true)
+                    .padding(RiffetMetrics.pageInset)
+                    .frame(maxHeight: .infinity, alignment: .top)
             } else if let preview {
                 if !isMarkdown, preview.render != nil, renderHTML, let url = previewURL {
                     ConversationWebPage(workbench: workbench, url: url)
                 } else if preview.image != nil {
                     if let image { ProjectImagePreview(image: image).accessibilityLabel((path as NSString).lastPathComponent) }
-                    else { ProgressView("正在载入图片…") }
+                    else { ProgressView() }
                 } else if preview.binary {
                     ContentUnavailableView {
                         Label("二进制文件", systemImage: "doc")
@@ -55,30 +55,17 @@ struct ProjectFilePage: View {
                     InspectorHTMLPreview(data: html)
                 } else {
                     textContent
-                        .safeAreaInset(edge: .bottom) {
-                            if preview.truncated {
-                                Text("文件较大，当前显示部分内容。下载可获取完整文件。")
-                                    .font(.caption).padding().frame(maxWidth: .infinity).background(.bar)
-                            }
-                        }
                 }
             } else { ProgressView() }
         }
         .navigationTitle((path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
+        .safeAreaInset(edge: .top, spacing: 0) { underBar }
         .toolbar(.hidden, for: .bottomBar)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if exporting { ProgressView() }
                 Menu {
-                    if isMarkdown, preview?.binary == false {
-                        Button(readingMarkdown ? "查看源码" : "阅读 Markdown", systemImage: readingMarkdown ? "chevron.left.forwardslash.chevron.right" : "doc.richtext") { readingMarkdown.toggle() }
-                    }
-                    if !isMarkdown && (preview?.render != nil || (["html", "htm"].contains((path as NSString).pathExtension.lowercased()) && preview?.binary == false)) {
-                        Button(renderHTML ? "查看源码" : "预览", systemImage: renderHTML ? "chevron.left.forwardslash.chevron.right" : "doc.richtext") {
-                            Task { await toggleHTML() }
-                        }
-                    }
                     Button("下载并分享", systemImage: "square.and.arrow.up") { Task { await download() } }
                     Button("系统预览", systemImage: "eye") { Task { await download(preview: true) } }
                     Button("复制路径", systemImage: "doc.on.doc") { UIPasteboard.general.string = path }
@@ -90,56 +77,92 @@ struct ProjectFilePage: View {
             }
         }
         .task(id: "\(project.id)|\(path)") { await load() }
-        .alert("操作未完成", isPresented: Binding(get: { actionError != nil }, set: { if !$0 { actionError = nil } })) {
-            Button("好", role: .cancel) { actionError = nil }
-        } message: { Text(actionError ?? "") }
+        .onChange(of: actionError) {
+            guard let message = actionError else { return }
+            actionError = nil
+            RiffetToastCenter.shared.error(message)
+        }
         .sheet(item: $exported) { NativeShareSheet(items: [$0.url]) }
         .sheet(item: $quickLook) { item in FilePreview(url: item.url, title: (path as NSString).lastPathComponent) }
     }
 
-    @ViewBuilder private var textContent: some View {
-        if pages.indices.contains(page) {
-            let chunk = pages[page]
+    /// What can be shown as a rendered page: Markdown and HTML, never an image or a binary.
+    private var previewable: Bool {
+        guard let preview, !preview.binary, preview.image == nil, error == nil else { return false }
+        if isMarkdown { return true }
+        return preview.render != nil || ["html", "htm"].contains((path as NSString).pathExtension.lowercased())
+    }
+
+    private var showsPreview: Binding<Bool> {
+        Binding(
+            get: { isMarkdown ? readingMarkdown : renderHTML },
+            set: { value in
+                if isMarkdown { readingMarkdown = value }
+                else if value != renderHTML { Task { await toggleHTML() } }
+            }
+        )
+    }
+
+    /// The preview or source switch and the one notice, together under the bar.
+    @ViewBuilder private var underBar: some View {
+        let truncated = preview?.truncated == true && preview?.binary == false && preview?.image == nil && !renderHTML
+        if previewable || truncated {
             VStack(spacing: 0) {
-                if isMarkdown {
-                    Picker("显示方式", selection: $readingMarkdown) {
-                        Text("阅读").tag(true)
-                        Text("源码").tag(false)
-                    }.pickerStyle(.segmented).padding(.horizontal).padding(.vertical, 8)
-                }
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Color.clear.frame(height: 0).id("top")
-                            if isMarkdown && readingMarkdown {
-                                ConversationMarkdown(source: chunk.markdownText, workbench: workbench, projectID: project.id).id(page)
-                            } else {
-                                if let targetLine, let focus = chunk.line(targetLine) {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        Label("第 \(targetLine) 行", systemImage: "arrow.turn.down.right").font(.caption).foregroundStyle(.secondary)
-                                        Text(focus).font(.footnote.monospaced()).textSelection(.enabled)
-                                    }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
-                                        .background(Color.accentColor.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
-                                }
-                                Text("第 \(chunk.startLine) 行起").font(.caption).foregroundStyle(.secondary)
-                                ConversationCode(text: chunk.text, language: language, workbench: workbench, projectID: project.id).id(page)
-                            }
-                        }.padding(.horizontal).padding(.bottom)
+                if previewable {
+                    Picker("显示方式", selection: showsPreview) {
+                        Text(String(localized: "预览", bundle: .riffet)).tag(true)
+                        Text(String(localized: "源码", bundle: .riffet)).tag(false)
                     }
-                    .onChange(of: page) { _, _ in proxy.scrollTo("top", anchor: .top) }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, RiffetMetrics.pageInset).padding(.vertical, 8)
                 }
-                if pages.count > 1 {
-                    Divider()
-                    HStack {
-                        Button { page -= 1 } label: { Label("上一页", systemImage: "chevron.left") }.disabled(page == 0)
-                        Spacer()
-                        Text("\(page + 1) / \(pages.count)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
-                        Spacer()
-                        Button { page += 1 } label: { Label("下一页", systemImage: "chevron.right") }.disabled(page + 1 == pages.count)
-                    }.font(.subheadline).padding(.horizontal).frame(minHeight: 48).background(.bar)
+                if truncated {
+                    RiffetNotice(kind: .info, message: String(localized: "文件较大，当前显示部分内容。下载可获取完整文件。", bundle: .riffet), boxed: true)
+                        .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, 8)
                 }
             }
-        } else { ProgressView("正在准备内容…") }
+            .background(palette.bg)
+        }
+    }
+
+    /// The text in bounded chunks that appear one after another as the reader scrolls, so a long file
+    /// never builds all its rows at once.
+    @ViewBuilder private var textContent: some View {
+        if pages.isEmpty { ProgressView() } else {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 12) {
+                        ForEach(Array(pages.prefix(shown).enumerated()), id: \.offset) { index, chunk in
+                            chunkView(chunk).id(index)
+                                .onAppear { if index == shown - 1, shown < pages.count { shown += 1 } }
+                        }
+                    }
+                    .padding(.horizontal, RiffetMetrics.pageInset).padding(.bottom, RiffetMetrics.pageInset)
+                }
+                .task(id: pages.count) {
+                    guard let targetLine, let index = pages.firstIndex(where: { $0.startLine <= targetLine && targetLine <= $0.endLine }) else { return }
+                    proxy.scrollTo(index, anchor: .top)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func chunkView(_ chunk: ProjectFileChunk) -> some View {
+        if isMarkdown && readingMarkdown {
+            ConversationMarkdown(source: chunk.markdownText, workbench: workbench, projectID: project.id)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                if let targetLine, let focus = chunk.line(targetLine) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("第 \(targetLine) 行", systemImage: "arrow.turn.down.right").riffetFont(.caption).foregroundStyle(palette.fg3)
+                        Text(focus).riffetFont(.monoSmall).foregroundStyle(palette.fg).textSelection(.enabled)
+                    }
+                    .padding(RiffetMetrics.pageInset).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(palette.selected, in: RoundedRectangle(cornerRadius: RiffetMetrics.rowRadius, style: .continuous))
+                }
+                ConversationCode(text: chunk.text, language: language, workbench: workbench, projectID: project.id, capped: false)
+            }
+        }
     }
 
     private func load() async {
@@ -148,7 +171,7 @@ struct ProjectFilePage: View {
         preview = nil
         html = nil
         renderHTML = false
-        pages = []; page = 0
+        pages = []; shown = 1
         readingMarkdown = targetLine == nil
         do {
             guard let api = workbench.api else { throw InspectorFailure.disconnected }
@@ -168,7 +191,7 @@ struct ProjectFilePage: View {
                 let chunks = await Task.detached(priority: .userInitiated) { ProjectFileChunk.split(content) }.value
                 try Task.checkCancellation()
                 pages = chunks
-                if let targetLine { page = chunks.firstIndex(where: { $0.startLine <= targetLine && targetLine <= $0.endLine }) ?? max(0, chunks.count - 1) }
+                if let targetLine { shown = (chunks.firstIndex(where: { $0.startLine <= targetLine && targetLine <= $0.endLine }) ?? max(0, chunks.count - 1)) + 1 }
             }
         } catch {
             guard !Task.isCancelled else { return }

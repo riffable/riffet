@@ -43,7 +43,7 @@ struct AuxiliaryModelsView: View {
                 AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "handoff", title: String(localized: "交接摘要", bundle: .riffet),
                                   off: String(localized: "不使用", bundle: .riffet), current: models?.handoff)
             }
-            if let error = catalog.error { SettingsMessage(text: error) }
+            if let error = catalog.error { RiffetNotice.section(.error, error) }
         }
         .navigationTitle(String(localized: "辅助模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task { await catalog.load(workbench) }
@@ -52,7 +52,6 @@ struct AuxiliaryModelsView: View {
 
 struct QuickChatSettingsView: View {
     let workbench: Workbench
-    @Environment(\.palette) private var palette
     @State private var catalog = AuxiliaryModelOptions()
     @State private var saving = false
     @State private var error: String?
@@ -63,14 +62,12 @@ struct QuickChatSettingsView: View {
             Section {
                 AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "chat", title: String(localized: "默认模型", bundle: .riffet),
                                   off: String(localized: "不设置", bundle: .riffet), current: workbench.settings?.auxiliaryModels?.chat)
-                Picker("自动归档", selection: Binding(get: { days }, set: { next in Task { await saveRetention(next, current: days) } })) {
-                    ForEach(Self.retention.contains(days) ? Self.retention : Self.retention + [days], id: \.self) { value in
-                        Text(value == 0 ? String(localized: "永不", bundle: .riffet) : String(localized: "\(Int(value)) 天", bundle: .riffet)).tag(value)
-                    }
-                }
-                .pickerStyle(.menu).tint(palette.fg3).disabled(saving)
+                RiffetPickerRow(title: String(localized: "自动归档", bundle: .riffet), options: (Self.retention.contains(days) ? Self.retention : Self.retention + [days]).map {
+                    .init(id: $0, title: $0 == 0 ? String(localized: "永不", bundle: .riffet) : String(localized: "\(Int($0)) 天", bundle: .riffet))
+                }, selection: Binding(get: { days }, set: { next in Task { await saveRetention(next, current: days) } }))
+                .disabled(saving)
             } footer: { Text("置顶或有收藏的对话不会归档") }
-            if let message = error ?? catalog.error { SettingsMessage(text: message) }
+            if let message = error ?? catalog.error { RiffetNotice.section(.error, message) }
         }
         .navigationTitle(String(localized: "快速对话", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task { await catalog.load(workbench) }
@@ -140,10 +137,10 @@ private struct AuxiliaryModelChoice: View {
                         }
                     }
                 } header: {
-                    Text(group.name).riffetFont(.label).foregroundStyle(palette.fg3).textCase(nil)
+                    RiffetSectionTitle(group.name)
                 }
             }
-            if let error { SettingsMessage(text: error) }
+            if let error { RiffetNotice.section(.error, error) }
         }
         .disabled(saving)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { if saving { ProgressView() } } }

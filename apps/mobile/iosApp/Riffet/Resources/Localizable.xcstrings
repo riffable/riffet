@@ -71,6 +71,26 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Couldn't load available models" } }
       }
     },
+    "正在进行" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "In progress" } }
+      }
+    },
+    "目录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Directory" } }
+      }
+    },
+    "分支" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Branch" } }
+      }
+    },
+    "停止「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Stop “%@”?" } }
+      }
+    },
     "全部 %lld 个" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "All %lld" } }
@@ -266,6 +286,26 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Details" } }
       }
     },
+    "待办" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "To-dos" } }
+      }
+    },
+    "已断开" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Disconnected" } }
+      }
+    },
+    "离线 %lld 分钟" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Offline for %lld min" } }
+      }
+    },
+    "与服务器的连接已断开" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Connection to the server lost" } }
+      }
+    },
     "已恢复" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Recovered" } }
@@ -307,6 +347,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "Get model list"
+          }
+        }
+      }
+    },
+    "去系统设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Settings"
+          }
+        }
+      }
+    },
+    "从相册选择": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose from Photos"
+          }
+        }
+      }
+    },
+    "随机": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Random"
+          }
+        }
+      }
+    },
+    "当前": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        }
+      }
+    },
+    "切换到此服务器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to this server"
+          }
+        }
+      }
+    },
+    "切换": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch"
+          }
+        }
+      }
+    },
+    "移除较早的设备": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove older devices"
+          }
+        }
+      }
+    },
+    "系统通知已关闭": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notifications are turned off in Settings"
           }
         }
       }
@@ -1230,6 +1350,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Previous question"
+          }
+        }
+      }
+    },
+    "Agent 连接失败" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The agent's connection failed"
+          }
+        }
+      }
+    },
+    "上下文已用 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Context %@ used"
           }
         }
       }
@@ -3180,6 +3320,36 @@
         }
       }
     },
+    "复制会话 ID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy session ID"
+          }
+        }
+      }
+    },
+    "没有命令或技能" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No commands or skills"
+          }
+        }
+      }
+    },
+    "停止后台任务「%@」？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop background task “%@”?"
+          }
+        }
+      }
+    },
     "复制代码" : {
       "localizations" : {
         "en" : {
@@ -4718,6 +4888,66 @@
         }
       }
     },
+    "清除已保存的 Key？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear the saved Key?"
+          }
+        }
+      }
+    },
+    "没有用量记录" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usage"
+          }
+        }
+      }
+    },
+    "上级进程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Parent process"
+          }
+        }
+      }
+    },
+    "结束进程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "End process"
+          }
+        }
+      }
+    },
+    "清除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear"
+          }
+        }
+      }
+    },
+    "进程" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Processes"
+          }
+        }
+      }
+    },
     "指标" : {
       "localizations" : {
         "en" : {
@@ -5288,6 +5518,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Discard changes"
+          }
+        }
+      }
+    },
+    "放弃未保存的修改？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Discard unsaved changes?"
+          }
+        }
+      }
+    },
+    "继续编辑" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Editing"
           }
         }
       }
@@ -9464,6 +9714,71 @@
         }
       }
     },
+    "忘记「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Forget “%@”?" } }
+      }
+    },
+    "忘记" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Forget" } }
+      }
+    },
+    "撤销「%@」的授权？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Revoke access for “%@”?" } }
+      }
+    },
+    "结束进程 %d？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "End process %d?" } }
+      }
+    },
+    "%@「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%@ “%@”?" } }
+      }
+    },
+    "删除「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete “%@”?" } }
+      }
+    },
+    "保存的 Key 会一并删除" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The saved key is deleted too" } }
+      }
+    },
+    "没有数据" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No data" } }
+      }
+    },
+    "没有模型记录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No model records" } }
+      }
+    },
+    "没有可用测量" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No measurements" } }
+      }
+    },
+    "没有可筛选的记录" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Nothing to filter by" } }
+      }
+    },
+    "已安装" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Installed" } }
+      }
+    },
+    "地址" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Address" } }
+      }
+    },
     "重试" : {
       "localizations" : {
         "en" : {
@@ -10614,6 +10929,76 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Tasks in progress" } },
         "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "有任务在进行" } }
+      }
+    },
+    "搜索模型" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search models" } }
+      }
+    },
+    "没有可用的模型" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No models available" } }
+      }
+    },
+    "没有匹配的模型" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No matching models" } }
+      }
+    },
+    "已达用量上限" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Usage limit reached" } }
+      }
+    },
+    "不可用" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Unavailable" } }
+      }
+    },
+    "不在模型列表中：%@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not in the model list: %@" } }
+      }
+    },
+    "没有可用选项" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No options available" } }
+      }
+    },
+    "工作, 紧急" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "work, urgent" } }
+      }
+    },
+    "没有项目" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "No projects" } }
+      }
+    },
+    "删除会话「%@」？" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Delete session “%@”?" } }
+      }
+    },
+    "配对" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Pair" } }
+      }
+    },
+    "粘贴" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Paste" } }
+      }
+    },
+    "Riffet 运行在你的服务器上" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Riffet runs on your server" } }
+      }
+    },
+    "局域网 HTTP 不加密；跨网络连接请使用你配置的 HTTPS 地址。" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "HTTP on a local network is not encrypted. Use your HTTPS address across networks." } }
       }
     }
   },

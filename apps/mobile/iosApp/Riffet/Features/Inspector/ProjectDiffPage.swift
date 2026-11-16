@@ -15,6 +15,7 @@ struct ProjectDiffPage: View {
     @State private var staged: Bool
     @State private var diff: GitDiff?
     @State private var error: String?
+    @Environment(\.palette) private var palette
 
     init(model: GitPanelModel, path: String, source: GitDiffSource) {
         self.model = model
@@ -45,7 +46,7 @@ struct ProjectDiffPage: View {
                 } else {
                     UnifiedDiffView(before: diff.before, after: diff.after)
                         .safeAreaInset(edge: .bottom) {
-                            if diff.truncated?.boolValue == true { Text(gitText("Too large to preview")).font(.caption).padding().frame(maxWidth: .infinity).background(.bar) }
+                            if diff.truncated?.boolValue == true { Text(gitText("Too large to preview")).riffetFont(.caption).foregroundStyle(palette.fg3).padding().frame(maxWidth: .infinity).background(.bar) }
                         }
                 }
             } else { ProgressView() }
@@ -102,6 +103,7 @@ private struct PatchDiffView: View {
     }
 
     private let rows: [Row]
+    @Environment(\.palette) private var palette
     let staged: Bool
     let busy: Bool
     let act: (GitPatchChunk, String) -> Void
@@ -120,6 +122,15 @@ private struct PatchDiffView: View {
         self.act = act
     }
 
+    private func hunkButton(_ title: String, _ tone: Color, _ action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).riffetFont(.label).foregroundStyle(tone)
+                .frame(minWidth: RiffetMetrics.hitTarget, minHeight: RiffetMetrics.hitTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(RiffetDimPressStyle())
+    }
+
     var body: some View {
         ScrollView([.horizontal, .vertical]) {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -127,20 +138,30 @@ private struct PatchDiffView: View {
                     if let chunk = row.chunk {
                         HStack(spacing: 8) {
                             if staged {
-                                Button(gitText("Unstage")) { act(chunk, "unstage") }
+                                hunkButton(gitText("Unstage"), palette.accent) { act(chunk, "unstage") }
                             } else {
-                                Button(gitText("Stage")) { act(chunk, "stage") }
-                                Button(gitText("Discard"), role: .destructive) { act(chunk, "discard") }
+                                hunkButton(gitText("Stage"), palette.accent) { act(chunk, "stage") }
+                                hunkButton(gitText("Discard"), palette.danger) { act(chunk, "discard") }
                             }
                         }
-                        .buttonStyle(.bordered).controlSize(.mini).disabled(busy).padding(.horizontal, 6).padding(.top, 6)
+                        .disabled(busy).padding(.horizontal, 6)
                     }
                     Text(row.text.isEmpty ? " " : row.text)
-                        .font(.body.monospaced()).textSelection(.enabled)
-                        .foregroundStyle(row.text.hasPrefix("@@") ? Color.secondary : Color.primary)
+                        .riffetFont(.mono).textSelection(.enabled)
+                        .foregroundStyle(row.text.hasPrefix("@@") ? palette.fg3 : palette.fg)
                         .padding(.vertical, 2).padding(.horizontal, 6)
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(row.text.hasPrefix("+") ? Color.green.opacity(0.1) : row.text.hasPrefix("-") ? Color.red.opacity(0.1) : .clear)
+                        .background(row.text.hasPrefix("+") ? palette.diffAdd : row.text.hasPrefix("-") ? palette.diffDel : .clear)
+                        .contextMenu {
+                            if let chunk = row.chunk {
+                                if staged {
+                                    Button(gitText("Unstage"), systemImage: "minus.circle") { act(chunk, "unstage") }
+                                } else {
+                                    Button(gitText("Stage"), systemImage: "plus.circle") { act(chunk, "stage") }
+                                    Button(gitText("Discard"), systemImage: "trash", role: .destructive) { act(chunk, "discard") }
+                                }
+                            }
+                        }
                 }
             }.padding(.vertical)
         }

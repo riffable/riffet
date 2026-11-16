@@ -9,7 +9,6 @@ struct PairDeviceView: View {
     @State private var issued: Issued?
     @State private var error: String?
     @State private var attempt = 0
-    @State private var copied = false
     @State private var expired = false
 
     /// The server's own TTL; a phone clock ahead of the server's must not stretch it.
@@ -25,42 +24,37 @@ struct PairDeviceView: View {
     }
 
     var body: some View {
-        Form {
+        RiffetForm {
             Section {
-                qrView.frame(maxWidth: .infinity).padding(.vertical, 8)
+                qrView.frame(maxWidth: .infinity)
             }.listRowBackground(Color.clear)
             if let error {
                 Section {
-                    Label(error, systemImage: "exclamationmark.circle").foregroundStyle(.red)
-                    Button("重试") { attempt += 1 }
-                }.listRowBackground(palette.groupedRow)
+                    RiffetNotice(kind: .error, message: error, actionTitle: String(localized: "重试", bundle: .riffet), action: { attempt += 1 })
+                }
             }
             if let issued {
                 Section {
-                    HStack {
-                        if expired { Text("已过期").foregroundStyle(.red) }
-                        else { Text("有效至 \(issued.deadline.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(AppLocalization.shared.locale)))").foregroundStyle(.secondary) }
-                        Spacer()
-                        Button("重新生成") { attempt += 1 }
-                    }
-                    LabeledContent("服务器地址") { Text(issued.address).textSelection(.enabled) }
-                    LabeledContent("配对码") {
+                    LabeledContent(String(localized: "服务器地址", bundle: .riffet)) { Text(issued.address).textSelection(.enabled) }
+                    LabeledContent(String(localized: "配对码", bundle: .riffet)) {
                         HStack {
-                            Text(issued.code).font(.body.monospaced()).textSelection(.enabled)
-                            Button(copied ? "已复制" : "复制配对码", systemImage: copied ? "checkmark" : "doc.on.doc") { copy(issued.code) }
-                                .labelStyle(.iconOnly)
+                            Text(issued.code).riffetFont(.mono).textSelection(.enabled)
+                            RiffetCopyButton(text: issued.code, label: String(localized: "复制配对码", bundle: .riffet))
                         }
                     }
+                } footer: {
+                    if expired { Text("已过期").foregroundStyle(palette.danger) }
+                    else { Text("有效至 \(issued.deadline.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(AppLocalization.shared.locale)))") }
                 }
-                    .listRowBackground(palette.groupedRow)
+                Section {
+                    Button { attempt += 1 } label: { SettingsRowLabel(title: String(localized: "重新生成", bundle: .riffet), symbol: "arrow.clockwise") }
+                        .foregroundStyle(palette.accent)
+                }
                 if issued.localOnly {
-                    Section {
-                        Label("服务器只监听本机，其他设备无法连接。", systemImage: "exclamationmark.triangle").foregroundStyle(palette.warning)
-                    }.listRowBackground(palette.groupedRow)
+                    RiffetNotice.section(.warning, String(localized: "服务器只监听本机，其他设备无法连接。", bundle: .riffet))
                 }
             }
         }
-        .scrollContentBackground(.hidden).background(palette.bgSidebar)
         .navigationTitle(String(localized: "配对新设备", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task(id: attempt) { await generate() }
     }
@@ -103,12 +97,6 @@ struct PairDeviceView: View {
             expired = true
         } catch is CancellationError {
         } catch { self.error = error.riffetMessage }
-    }
-
-    private func copy(_ code: String) {
-        UIPasteboard.general.string = code
-        copied = true
-        Task { try? await Task.sleep(for: .seconds(1.5)); copied = false }
     }
 
     private static let qrContext = CIContext()

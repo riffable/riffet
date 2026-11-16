@@ -410,7 +410,7 @@ struct ConversationTranscriptList: UIViewControllerRepresentable {
         }
 
         private static func fingerprint(_ environment: EnvironmentValues) -> String {
-            "\(environment.colorScheme)|\(environment.dynamicTypeSize)|\(environment.locale.identifier)|\(environment.palette.values.id)|\(environment.layoutDirection)|\(String(describing: environment.legibilityWeight))|\(environment.displayScale)|\(environment.conversationFeedbackActive)"
+            "\(environment.colorScheme)|\(environment.dynamicTypeSize)|\(environment.locale.identifier)|\(environment.palette.id)|\(environment.layoutDirection)|\(String(describing: environment.legibilityWeight))|\(environment.displayScale)|\(environment.conversationFeedbackActive)"
         }
 
         private var isInteracting: Bool { collection != nil && (collection.isTracking || collection.isDragging || collection.isDecelerating || waitingForDeceleration) }

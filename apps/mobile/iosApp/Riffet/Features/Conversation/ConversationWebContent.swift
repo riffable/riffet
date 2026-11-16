@@ -26,7 +26,7 @@ struct ConversationMath: View {
                 .frame(height: height ?? reservedHeight).accessibilityLabel("公式：\(tex)")
                 .onChange(of: tex) { _, _ in error = nil }
         } else {
-            Text(tex).font(.system(.body, design: .monospaced)).textSelection(.enabled)
+            Text(tex).riffetFont(.mono).textSelection(.enabled)
                 .onChange(of: tex) { _, _ in error = nil }
         }
     }
@@ -82,7 +82,7 @@ struct ConversationWebPage: View {
             if let error { ContentUnavailableView { Label("预览加载失败", systemImage: "exclamationmark.triangle") } description: { Text(error) } actions: { Button("重试") { self.error = nil; html = nil; retry += 1 } } }
             else if url.path == "/math" { ConversationPublicMathPage(url: url) { error = $0 }.id(retry) }
             else if let html { RestrictedResourcePage(html: html, baseURL: url) { error = $0 }.id(retry) }
-            else { ProgressView("正在读取预览…") }
+            else { ProgressView() }
         }.task(id: "\(url.absoluteString)|\(retry)") { guard url.path != "/math" else { return }; error = nil; html = nil; do { let data = try await workbench.resources.data(for: url); guard let text = String(data: data, encoding: .utf8) else { throw ClientFailure(String(localized: "预览内容不是有效的 HTML", bundle: .riffet)) }; html = text } catch { self.error = error.riffetMessage } }
     }
 }

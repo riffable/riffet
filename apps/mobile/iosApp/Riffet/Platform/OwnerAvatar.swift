@@ -90,7 +90,7 @@ struct OwnerAvatarView: View {
             guard let data = try? await workbench.resources.data(for: url),
                   let decoded = await Task.detached(priority: .userInitiated, operation: { UIImage(data: data) }).value else { return }
             OwnerAvatarCache.shared.setObject(decoded, forKey: url.absoluteString as NSString)
-            withAnimation(.easeOut(duration: 0.2)) { image = decoded }
+            withAnimation(RiffetMotion.release) { image = decoded }
         }
     }
 }
@@ -140,16 +140,18 @@ struct RandomAvatarSheet: View {
                             VStack(spacing: 6) {
                                 OwnerAvatarView(workbench: workbench, owner: nil, size: 56,
                                                 url: workbench.ownerAvatarPreviewURL(style: style, seed: seed, ink: colors.ink, paper: colors.paper))
-                                Text(Self.title(style)).font(.caption).foregroundStyle(palette.fg2).lineLimit(1)
+                                Text(Self.title(style)).riffetFont(.caption).foregroundStyle(palette.fg2).lineLimit(1)
                             }.frame(maxWidth: .infinity).contentShape(Rectangle())
                         }.buttonStyle(.plain)
                     }
                 }.padding()
-                Button("换一批") { seeds = Self.rolled(styles) }.buttonStyle(.bordered).padding(.bottom)
             }
             .background(palette.bgSidebar)
             .navigationTitle(String(localized: "随机头像", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("换一批") { seeds = Self.rolled(styles) } }
+            }
         }.presentationDetents([.medium, .large])
     }
 

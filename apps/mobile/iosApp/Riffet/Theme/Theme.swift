@@ -95,37 +95,63 @@ final class ThemeStore {
     }
 
     var entry: ThemeEntry { Self.builtins.first { $0.id == themeId } ?? Self.builtins[0] }
-    var palette: Palette { Palette(values: entry.values) }
+    var palette: Palette { Palette.builtin(themeId) }
 }
 
 /// A resolved palette: each role is a dynamic colour that reads the light or
 /// dark half from the current trait, so a mode change needs no re-resolution.
+///
+/// One pointer wide. The theme's values (both halves, about 7 KB) stay in a shared box: every view that
+/// reads `@Environment(\.palette)` stores a palette, and a palette holding the values inline made each
+/// such view kilobytes large, which a long page multiplied into a main-thread stack overflow.
 @dynamicMemberLookup
-struct Palette: Sendable {
-    let values: RiffetThemeValues
+struct Palette: Sendable, Equatable {
+    private final class Storage: Sendable {
+        let id: String
+        let values: RiffetThemeValues
+        init(_ values: RiffetThemeValues) { id = values.id; self.values = values }
+    }
+    private let storage: Storage
+
+    init(values: RiffetThemeValues) { storage = Storage(values) }
+
+    /// The built-in theme's palette, the same box every time, so the environment compares unchanged.
+    static func builtin(_ id: String) -> Palette { builtins[id] ?? builtins[RiffetThemeCatalog.all[0].id]! }
+    private static let builtins: [String: Palette] = Dictionary(
+        RiffetThemeCatalog.all.map { ($0.id, Palette(values: $0)) }, uniquingKeysWith: { first, _ in first })
+
+    var id: String { storage.id }
+    var values: RiffetThemeValues { storage.values }
+
+    static func == (lhs: Palette, rhs: Palette) -> Bool { lhs.storage === rhs.storage || lhs.storage.id == rhs.storage.id }
 
     /// One colour per theme and role: a theme switch hands SwiftUI a different
     /// colour, so every view that reads it redraws at once. (A single colour
     /// re-pointed at the new theme compares equal and leaves views stale.)
     subscript(dynamicMember role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable) -> Color {
-        ThemeColors.shared.color(values, key: role) { $0[keyPath: role] }
+        let storage = storage
+        return ThemeColors.shared.color(storage.id, key: role) { (storage.values.light[keyPath: role], storage.values.dark[keyPath: role]) }
     }
 
     /// Rows of a grouped list: the theme's own base surface in light, raised in dark —
     /// never a pure white card on a tinted page.
     var groupedRow: Color {
-        ThemeColors.shared.color(values, light: \.bg, dark: \.bgElevated)
+        let storage = storage
+        return ThemeColors.shared.color(storage.id, key: "groupedRow") { (storage.values.light.bg, storage.values.dark.bgElevated) }
     }
 
     /// A selected row, chip or bubble: the card with a little accent mixed in (Android's `selected`).
     var selected: Color {
-        ThemeColors.shared.derived(values, key: "selected") { palette, dark in
-            (dark ? palette.bgElevated : palette.bg).mixed(with: palette.accent, dark ? 0.22 : 0.09)
+        let storage = storage
+        return ThemeColors.shared.color(storage.id, key: "selected") {
+            (storage.values.light.bg.mixed(with: storage.values.light.accent, 0.09),
+             storage.values.dark.bgElevated.mixed(with: storage.values.dark.accent, 0.22))
         }
     }
     /// The pressed and resting-control fill: the text colour at 5.5%.
     var press: Color {
-        ThemeColors.shared.derived(values, key: "press") { palette, _ in palette.fg.withAlpha(0.055) }
+        let storage = storage
+        return ThemeColors.shared.color(storage.id, key: "press") { (storage.values.light.fg.withAlpha(0.055), storage.values.dark.fg.withAlpha(0.055)) }
     }
 
     /// The same role as a dynamic UIKit colour, for the app-wide bar appearances.
@@ -138,18 +164,14 @@ struct Palette: Sendable {
 private final class ThemeColors: @unchecked Sendable {
     static let shared = ThemeColors()
     private let lock = NSLock()
-    private var colors: [String: Color] = [:]
+    private var colors: [Key: Color] = [:]
 
-    func color(_ values: RiffetThemeValues, key: AnyKeyPath, _ pick: (RiffetPaletteValues) -> RiffetRGBA) -> Color {
-        cached("\(values.id)|\(key.hashValue)") { Self.dynamic(light: pick(values.light), dark: pick(values.dark)) }
+    /// The colour for a theme and role; `make` gives its light and dark values and runs once.
+    func color(_ theme: String, key: AnyHashable, _ make: () -> (light: RiffetRGBA, dark: RiffetRGBA)) -> Color {
+        cached(Key(theme: theme, role: key)) { let pair = make(); return Self.dynamic(light: pair.light, dark: pair.dark) }
     }
-    func color(_ values: RiffetThemeValues, light: KeyPath<RiffetPaletteValues, RiffetRGBA>, dark: KeyPath<RiffetPaletteValues, RiffetRGBA>) -> Color {
-        cached("\(values.id)|\(light.hashValue)|\(dark.hashValue)") { Self.dynamic(light: values.light[keyPath: light], dark: values.dark[keyPath: dark]) }
-    }
-    func derived(_ values: RiffetThemeValues, key: String, _ make: (RiffetPaletteValues, Bool) -> RiffetRGBA) -> Color {
-        cached("\(values.id)|derived.\(key)") { Self.dynamic(light: make(values.light, false), dark: make(values.dark, true)) }
-    }
-    private func cached(_ key: String, _ make: () -> Color) -> Color {
+    private struct Key: Hashable { let theme: String; let role: AnyHashable }
+    private func cached(_ key: Key, _ make: () -> Color) -> Color {
         lock.lock(); defer { lock.unlock() }
         if let hit = colors[key] { return hit }
         let color = make()
@@ -203,7 +225,7 @@ private final class PaletteColorCache: @unchecked Sendable {
 }
 
 private struct PaletteKey: EnvironmentKey {
-    static let defaultValue = Palette(values: RiffetThemeCatalog.all[0])
+    static let defaultValue = Palette.builtin(RiffetThemeCatalog.all[0].id)
 }
 
 extension EnvironmentValues {

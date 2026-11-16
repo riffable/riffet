@@ -87,7 +87,7 @@ struct ConversationMarkdown: View {
         })
         .sheet(item: $mathTarget) { target in
             NavigationStack {
-                VStack(spacing: 20) { ConversationMath(tex: target.tex, workbench: workbench); Text(target.tex).font(.body.monospaced()).textSelection(.enabled) }.padding().navigationTitle(String(localized: "公式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+                VStack(spacing: 20) { ConversationMath(tex: target.tex, workbench: workbench); Text(target.tex).riffetFont(.mono).textSelection(.enabled) }.padding().navigationTitle(String(localized: "公式", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
                     .toolbar { ToolbarItem(placement: .confirmationAction) { Button("完成") { mathTarget = nil } } }
             }.presentationDetents([.medium, .large])
         }
@@ -234,18 +234,20 @@ struct ConversationCode: View {
     var language: String?
     var workbench: Workbench? = nil
     var projectID: String? = nil
-    /// Tool output can scroll locally without giving the conversation an enormous row.
-    var maximumBodyHeight: CGFloat? = nil
+    /// Tool commands and output read a notch smaller than code a reply shows, and stop lower.
+    var output = false
+    /// False on a page that scrolls the code itself (a file): the body is not capped, only scrolled sideways.
+    var capped = true
     /// Stable transcript identity; standalone file/preview pages keep their local state by default.
     var stateID: String? = nil
-    @ScaledMetric(relativeTo: .footnote) private var estimatedLineHeight = 18.0
+    @ScaledMetric(relativeTo: .footnote) private var outputLineHeight = 19.0
+    @ScaledMetric(relativeTo: .body) private var codeLineHeight = 20.0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.palette) private var palette
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.conversationDisclosureState) private var disclosureState
     @State private var expanded = false
     @State private var preview: Bool? = nil
-    @State private var copyFeedback = ConversationCopyFeedback()
     @State private var highlighting: ConversationSyntax.Result?
     @State private var presentationCache = ConversationCodePresentation.Cache()
     private var isDiagram: Bool { ConversationCodePreview.isDiagram(language) }
@@ -275,10 +277,9 @@ struct ConversationCode: View {
                 Text((language?.isEmpty == false ? language! : "text").uppercased()).riffetFont(.monoSmall).tracking(0.8).foregroundStyle(palette.fg3).lineLimit(1)
                 Spacer(minLength: 8)
                 if canPreview {
-                    Button { readAction(); isPreviewing.toggle() } label: { Image(systemName: isPreviewing ? "chevron.left.forwardslash.chevron.right" : "eye").font(.system(size: 13)).frame(width: 44, height: Self.headerHeight) }.accessibilityLabel(isPreviewing ? "显示源码" : "预览")
+                    Button { readAction(); isPreviewing.toggle() } label: { Image(systemName: isPreviewing ? "chevron.left.forwardslash.chevron.right" : "eye").riffetFont(.caption).frame(width: 44, height: Self.headerHeight) }.accessibilityLabel(isPreviewing ? "显示源码" : "预览")
                 }
-                Button { UIPasteboard.general.string = text; copyFeedback.copy() } label: { Image(systemName: copyFeedback.copied ? "checkmark" : "doc.on.doc").font(.system(size: 13)).frame(width: 44, height: Self.headerHeight) }.accessibilityLabel(copyFeedback.copied ? "已复制代码" : "复制代码")
-                    .conversationCopyFeedback(copyFeedback)
+                RiffetCopyButton(text: text, label: String(localized: "复制代码", bundle: .riffet), height: Self.headerHeight)
             }.padding(.leading, 12).foregroundStyle(palette.fg3).frame(height: Self.headerHeight).background(palette.press)
             if isPreviewing, let workbench, let projectID {
                 if isDiagram || ["html", "htm", "svg"].contains(language?.lowercased() ?? "") {
@@ -287,15 +288,22 @@ struct ConversationCode: View {
                     ConversationMarkdown(source: text, workbench: workbench, projectID: projectID, stateID: stateID.map { $0 + ".preview" }).padding(12)
                 }
             } else {
-                // Long lines wrap: a phone column has no room for a sideways scroller inside the transcript.
-                if let maximumBodyHeight {
-                    ConversationCodeViewport(maximumHeight: maximumBodyHeight, estimatedHeight: CGFloat(min(presentation.totalLines, 60)) * estimatedLineHeight + 24, axes: .vertical,
+                // Lines never wrap: the block keeps a fixed cap and scrolls inside, up and down and sideways,
+                // so a long line or a long output never widens or lengthens the page.
+                if capped {
+                    let lineHeight = output ? outputLineHeight : codeLineHeight
+                    ConversationCodeViewport(maximumHeight: output ? RiffetMetrics.codeOutputMaxHeight : RiffetMetrics.codeBlockMaxHeight,
+                                             estimatedHeight: CGFloat(min(presentation.totalLines, 60)) * lineHeight + 24, axes: [.vertical, .horizontal],
                                              memoKey: stateID.map { "\($0)|\(isExpanded)" }) {
-                        code(displayed).fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                        code(displayed).fixedSize(horizontal: true, vertical: true).padding(12)
                     }
                 } else {
-                    code(displayed).fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                    ScrollView(.horizontal) {
+                        code(displayed).fixedSize(horizontal: true, vertical: true).padding(12)
+                    }
+                    .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+                    .defaultScrollAnchor(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 if presentation.isTruncated {
                     Divider()
@@ -325,7 +333,7 @@ struct ConversationCode: View {
     private func code(_ displayed: AttributedString) -> some View {
         // Tool output stays a notch smaller than code the reply itself shows.
         Text(displayed)
-            .riffetFont(maximumBodyHeight == nil ? .mono : .monoSmall).lineSpacing(3).foregroundStyle(palette.fg).textSelection(.enabled)
+            .riffetFont(output ? .monoSmall : .mono).lineSpacing(3).foregroundStyle(palette.fg).textSelection(.enabled)
     }
 }
 
@@ -341,7 +349,7 @@ extension EnvironmentValues {
     }
 }
 
-/// Only tool details opt into a local vertical scroller. Measure content, not its scroll offset,
+/// A code block's local scroller (both axes in the transcript). Measure content, not its scroll offset,
 /// and cap the measurement before publishing so scrolling cannot drive parent layout updates.
 /// No SwiftUI ScrollView ancestor is required, including inside UIHostingConfiguration cells.
 struct ConversationCodeViewport<Content: View>: View {
@@ -495,7 +503,7 @@ struct ConversationImage: View {
             guard let decoded else { throw AttachmentImportError.unreadableImage }
             ConversationLayoutMemo.shared.store(decoded, for: key)
             // The frame was reserved up front, so only the picture fades in; nothing moves.
-            withAnimation(.easeOut(duration: 0.25)) { image = decoded }
+            withAnimation(RiffetMotion.release) { image = decoded }
         } catch is CancellationError { } catch { self.error = error.riffetMessage }
     }
 }

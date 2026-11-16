@@ -15,13 +15,13 @@ struct ServiceStatusView: View {
     @State private var refresh = 0
     @State private var savingReclaim = false
     @State private var reclaimError: String?
+    private static let inlineProcesses = 5
 
     var body: some View {
         RiffetList {
             if let snapshot { content(snapshot) }
             else if let error {
-                SettingsMessage(text: error)
-                Section { Button { refresh += 1 } label: { Text("重试").foregroundStyle(palette.accent) } }
+                RiffetNotice.section(.error, error, actionTitle: String(localized: "重试", bundle: .riffet)) { refresh += 1 }
             }
             if let settings = workbench.settings { reclaim(settings) }
         }
@@ -35,14 +35,7 @@ struct ServiceStatusView: View {
                 try? await Task.sleep(for: .seconds(5))
             }
         }
-        .confirmationDialog("结束进程？", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible, presenting: confirming) { process in
-            Button("结束 \(process.name)（PID \(process.pid)）", role: .destructive) {
-                Task {
-                    do { try await workbench.api?.terminateServiceProcess(pid: process.pid); await read() }
-                    catch { self.error = error.riffetMessage }
-                }
-            }
-        } message: { process in Text(process.command) }
+        .modifier(EndProcessDialog(workbench: workbench, target: $confirming) { await read() })
     }
 
     /// 资源回收: when the server stops the CLIs of conversations nobody uses; the next message resumes them.
@@ -51,26 +44,32 @@ struct ServiceStatusView: View {
         let idle = settings.idleReclaimMinutes?.int32Value ?? 360
         let maxLive = settings.maxLiveAgents?.int32Value ?? 24
         Section {
-            Picker("空闲后停止 CLI", selection: Binding(get: { idle }, set: { next in
-                guard next != idle else { return }
+            reclaimPicker(String(localized: "空闲后停止 CLI", bundle: .riffet), values: withCurrent([0, 60, 360, 1440], idle), current: idle, label: idleLabel) { next in
                 Task { await saveReclaim(managementSettingsPatch(idleReclaimMinutes: next)) }
-            })) {
-                ForEach(withCurrent([0, 60, 360, 1440], idle), id: \.self) { Text(idleLabel($0)).tag($0) }
             }
-            Picker("最多同时运行", selection: Binding(get: { maxLive }, set: { next in
-                guard next != maxLive else { return }
+            reclaimPicker(String(localized: "最多同时运行", bundle: .riffet), values: withCurrent([0, 12, 24, 48], maxLive), current: maxLive,
+                          label: { $0 == 0 ? String(localized: "不限", bundle: .riffet) : String(localized: "\($0) 个", bundle: .riffet) }) { next in
                 Task { await saveReclaim(managementSettingsPatch(maxLiveAgents: next)) }
-            })) {
-                ForEach(withCurrent([0, 12, 24, 48], maxLive), id: \.self) { Text($0 == 0 ? "不限" : "\($0) 个").tag($0) }
             }
         } header: {
-            Text("资源回收")
+            RiffetSectionTitle(String(localized: "资源回收", bundle: .riffet))
         } footer: {
-            if let reclaimError { Text(reclaimError).foregroundStyle(palette.danger) }
-            else { Text("停止的会话在下一条消息时恢复") }
+            Text("停止的会话在下一条消息时恢复")
         }
         .tint(palette.fg3)
         .disabled(savingReclaim)
+        RiffetNotice.section(.error, reclaimError)
+    }
+
+    /// Four or fewer values are a menu on the row; five or more open a picker sheet.
+    @ViewBuilder
+    private func reclaimPicker(_ title: String, values: [Int32], current: Int32, label: @escaping (Int32) -> String, save: @escaping (Int32) -> Void) -> some View {
+        let choice = Binding(get: { current }, set: { next in if next != current { save(next) } })
+        if values.count >= 5 {
+            RiffetPickerRow(title: title, options: values.map { .init(id: $0, title: label($0)) }, selection: choice)
+        } else {
+            Picker(selection: choice) { ForEach(values, id: \.self) { Text(label($0)).tag($0) } } label: { Text(title) }
+        }
     }
 
     private func saveReclaim(_ patch: AppSettingsUpdate) async {
@@ -92,18 +91,36 @@ struct ServiceStatusView: View {
 
     @ViewBuilder
     private func content(_ data: ServiceMonitorSnapshot) -> some View {
+        if let error {
+            RiffetNotice.section(.warning, title: String(localized: "连接中断，显示上次数据", bundle: .riffet), error)
+        }
+        let used = data.host.totalMemBytes - data.host.freeMemBytes
         Section {
-            if let error {
-                Label("连接中断，显示上次数据", systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(palette.warning)
-                Text(error).font(.caption).foregroundStyle(palette.danger)
-            }
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                ForEach(tiles(data), id: \.title) { KpiTile(tile: $0) }
-            }
-            .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+            RiffetValueRow(label: String(localized: "已运行", bundle: .riffet), value: duration(data.process.uptimeSec))
+            RiffetValueRow(label: "CPU", value: "\(fixed(data.process.cpuPercent))%")
+            RiffetValueRow(label: String(localized: "内存", bundle: .riffet), value: bytes(data.process.rssBytes))
+            RiffetValueRow(label: String(localized: "请求速率", bundle: .riffet), value: String(localized: "\(fixed(data.requests.perMinute))/分", bundle: .riffet))
+            RiffetValueRow(label: String(localized: "延迟", bundle: .riffet), value: "\(fixed(data.requests.avgMs)) ms")
+            RiffetValueRow(label: String(localized: "事件循环", bundle: .riffet), value: "\(fixed(data.eventLoop.recentLagMs)) ms")
+            RiffetValueRow(label: String(localized: "系统负载", bundle: .riffet), value: fixed(data.host.loadAvg.first?.doubleValue ?? 0))
+        } footer: {
+            Text(String(localized: "\(data.host.cpuCount) 核 · 内存 \(bytes(used)) / \(bytes(data.host.totalMemBytes))", bundle: .riffet))
         }
 
-        Section("请求与延迟 · 30 分钟") {
+        if !data.processes.isEmpty {
+            monitorSection(String(localized: "进程 · \(data.processes.count)", bundle: .riffet)) {
+                ForEach(data.processes.prefix(Self.inlineProcesses), id: \.pid) { process in
+                    ServiceProcessRow(workbench: workbench, snapshot: $snapshot, process: process, end: { confirming = $0 }) { await read() }
+                }
+                if data.processes.count > Self.inlineProcesses {
+                    NavigationLink { ServiceProcessesPage(workbench: workbench, snapshot: $snapshot) { await read() } } label: {
+                        Text("全部 \(data.processes.count) 个").riffetFont(.body).foregroundStyle(palette.accent)
+                    }
+                }
+            }
+        }
+
+        monitorSection(String(localized: "请求与延迟 · 30 分钟", bundle: .riffet)) {
             let samples = data.series
             let slowest = max(samples.map(\.avgMs).max() ?? 0, 1e-9)
             let busiest = Double(max(samples.map(\.requests).max() ?? 0, 1))
@@ -122,7 +139,7 @@ struct ServiceStatusView: View {
             legend([(String(localized: "请求", bundle: .riffet), palette.accent), ("5xx", palette.danger), (String(localized: "平均延迟 · 峰值 \(fixed(slowest)) ms", bundle: .riffet), palette.warning)])
         }
 
-        Section("CPU 与内存 · 30 分钟") {
+        monitorSection(String(localized: "CPU 与内存 · 30 分钟", bundle: .riffet)) {
             let samples = data.series
             let topCpu = max(samples.map(\.cpuPercent).max() ?? 0, 1e-9)
             let topRss = Double(max(samples.map(\.rssBytes).max() ?? 0, 1))
@@ -138,168 +155,150 @@ struct ServiceStatusView: View {
             legend([(String(localized: "CPU · 峰值 \(fixed(topCpu))%", bundle: .riffet), palette.accent), (String(localized: "内存 · 峰值 \(bytes(Int64(topRss)))", bundle: .riffet), palette.success)])
         }
 
-        Section("状态码") {
+        monitorSection(String(localized: "状态码", bundle: .riffet)) {
             let status = data.requests.byStatus
-            let parts: [(String, Int64, Color)] = [("2xx", status.status2xx, palette.success), ("3xx", status.status3xx, palette.fg3), ("4xx", status.status4xx, palette.warning), ("5xx", status.status5xx, palette.danger)]
+            let parts: [(String, Int64)] = [("2xx", status.status2xx), ("3xx", status.status3xx), ("4xx", status.status4xx), ("5xx", status.status5xx)]
             let total = max(parts.reduce(0) { $0 + $1.1 }, 1)
-            HStack(spacing: 20) {
-                Chart(parts, id: \.0) { part in
-                    SectorMark(angle: .value(String(localized: "数量", bundle: .riffet), part.1), innerRadius: .ratio(0.62), angularInset: 1).foregroundStyle(part.2)
-                }
-                .frame(width: 96, height: 96)
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(parts, id: \.0) { part in
-                        HStack(spacing: 6) {
-                            Circle().fill(part.2).frame(width: 8, height: 8)
-                            Text("\(part.0)  \(part.1)").font(.caption.monospacedDigit())
-                            Text("\(Int((Double(part.1) * 100 / Double(total)).rounded()))%").font(.caption).foregroundStyle(palette.fg3)
-                        }
-                    }
-                }
+            ForEach(parts, id: \.0) { part in
+                RiffetValueRow(label: part.0, value: "\(part.1) · \(Int((Double(part.1) * 100 / Double(total)).rounded()))%")
             }
-            .padding(.vertical, 4)
         }
 
         if !data.requests.topRoutes.isEmpty {
-            Section("热门接口") {
-                let top = Double(max(data.requests.topRoutes.map(\.count).max() ?? 1, 1))
+            monitorSection(String(localized: "热门接口", bundle: .riffet)) {
                 ForEach(data.requests.topRoutes, id: \.route) { route in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text("\(route.method) \(route.route)").font(.caption.monospaced()).lineLimit(1).truncationMode(.middle)
-                            Spacer()
-                            Text("\(route.count) 次").font(.caption.monospacedDigit()).foregroundStyle(palette.fg3)
-                        }
-                        ProgressView(value: Double(route.count) / top).tint(route.errors > 0 ? palette.danger : palette.accent)
-                        Text("平均 \(fixed(route.avgMs)) ms · P95 \(fixed(route.p95Ms)) ms\(route.errors > 0 ? " · 5xx \(route.errors)" : "")").font(.caption2).foregroundStyle(palette.fg3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(route.method) \(route.route)").riffetFont(.monoSmall).foregroundStyle(route.errors > 0 ? palette.danger : palette.fg).lineLimit(1).truncationMode(.middle)
+                        Text("\(route.count) 次 · 平均 \(fixed(route.avgMs)) ms · P95 \(fixed(route.p95Ms)) ms\(route.errors > 0 ? " · 5xx \(route.errors)" : "")")
+                            .riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
                     }
                 }
             }
         }
 
-        Section("服务器") {
-            LabeledContent("版本", value: "\(data.process.version) · PID \(data.process.pid)")
-            LabeledContent("已运行", value: duration(data.process.uptimeSec))
-            LabeledContent("运行环境", value: "Node \(data.process.nodeVersion) · \(data.process.platform)/\(data.process.arch)")
-            LabeledContent("主机", value: data.host.hostname)
-            LabeledContent("连接", value: String(localized: "事件流 \(data.connections.eventStreams) · 终端 \(data.connections.terminalSockets)", bundle: .riffet))
-            LabeledContent("终端", value: String(localized: "运行中 \(data.terminals.live) / 共 \(data.terminals.total)", bundle: .riffet))
-            LabeledContent("会话", value: String(localized: "运行中 \(data.sessions.running) · 等待 \(data.sessions.waiting)", bundle: .riffet))
+        monitorSection(String(localized: "服务器", bundle: .riffet)) {
+            RiffetValueRow(label: String(localized: "版本", bundle: .riffet), value: "\(data.process.version) · PID \(data.process.pid)")
+            RiffetValueRow(label: String(localized: "运行环境", bundle: .riffet), value: "Node \(data.process.nodeVersion) · \(data.process.platform)/\(data.process.arch)")
+            RiffetValueRow(label: String(localized: "主机", bundle: .riffet), value: data.host.hostname)
+            RiffetValueRow(label: String(localized: "连接", bundle: .riffet), value: String(localized: "事件流 \(data.connections.eventStreams) · 终端 \(data.connections.terminalSockets)", bundle: .riffet))
+            RiffetValueRow(label: String(localized: "终端", bundle: .riffet), value: String(localized: "运行中 \(data.terminals.live) / 共 \(data.terminals.total)", bundle: .riffet))
+            RiffetValueRow(label: String(localized: "会话", bundle: .riffet), value: String(localized: "运行中 \(data.sessions.running) · 等待 \(data.sessions.waiting)", bundle: .riffet))
         }
-
-        if !data.processes.isEmpty {
-            Section("进程 · \(data.processes.count)") {
-                let maxCpu = max(data.processes.map(\.cpuPercent).max() ?? 1, 1)
-                let byPid = Dictionary(data.processes.map { ($0.pid, $0) }, uniquingKeysWith: { a, _ in a })
-                ForEach(data.processes, id: \.pid) { process in
-                    ProcessRow(process: process, maxCpu: maxCpu, depth: depth(process, byPid)) { confirming = process }
-                }
-            }
-        }
-    }
-
-    private func tiles(_ data: ServiceMonitorSnapshot) -> [Tile] {
-        let series = Array(data.series.suffix(60))
-        let load = data.host.loadAvg.map(\.doubleValue)
-        let used = data.host.totalMemBytes - data.host.freeMemBytes
-        let errors = data.requests.byStatus.status5xx
-        return [
-            Tile(title: "CPU", value: "\(fixed(data.process.cpuPercent))%", detail: String(localized: "服务器进程", bundle: .riffet), values: series.map(\.cpuPercent), tint: palette.accent, meter: data.process.cpuPercent / 100),
-            Tile(title: String(localized: "内存", bundle: .riffet), value: bytes(data.process.rssBytes), detail: String(localized: "堆 \(bytes(data.process.heapUsedBytes)) / \(bytes(data.process.heapTotalBytes))", bundle: .riffet), values: series.map { Double($0.rssBytes) }, tint: palette.success,
-                 meter: Double(data.process.heapUsedBytes) / Double(max(data.process.heapTotalBytes, 1))),
-            Tile(title: String(localized: "请求速率", bundle: .riffet), value: String(localized: "\(fixed(data.requests.perMinute))/分", bundle: .riffet), detail: String(localized: "进行中 \(data.requests.inFlight) · 共 \(data.requests.total)", bundle: .riffet), values: series.map { Double($0.requests) }, tint: palette.accent),
-            Tile(title: String(localized: "延迟", bundle: .riffet), value: "\(fixed(data.requests.avgMs)) ms", detail: String(localized: "P95 \(fixed(data.requests.p95Ms)) ms · \(errors > 0 ? "5xx \(errors)" : String(localized: "无错误", bundle: .riffet))", bundle: .riffet), values: series.map(\.avgMs), tint: errors > 0 ? palette.danger : palette.warning),
-            Tile(title: String(localized: "事件循环", bundle: .riffet), value: "\(fixed(data.eventLoop.recentLagMs)) ms", detail: String(localized: "P99 \(fixed(data.eventLoop.p99Ms)) ms · 卡顿 \(data.eventLoop.stalls)", bundle: .riffet), values: series.map(\.loopLagMs), tint: palette.warning, meter: data.eventLoop.utilization),
-            Tile(title: String(localized: "系统负载", bundle: .riffet), value: fixed(load.first ?? 0), detail: String(localized: "\(data.host.cpuCount) 核 · 内存 \(bytes(used)) / \(bytes(data.host.totalMemBytes))", bundle: .riffet), values: series.map(\.load1), tint: palette.fg2,
-                 meter: Double(used) / Double(max(data.host.totalMemBytes, 1))),
-        ]
     }
 
     private func legend(_ items: [(String, Color)]) -> some View {
         HStack(spacing: 14) {
             ForEach(items, id: \.0) { item in
-                HStack(spacing: 6) { Circle().fill(item.1).frame(width: 8, height: 8); Text(item.0).font(.caption).foregroundStyle(palette.fg3) }
+                HStack(spacing: 6) { Circle().fill(item.1).frame(width: 8, height: 8); Text(item.0).riffetFont(.caption).foregroundStyle(palette.fg3) }
             }
         }
-    }
-
-    private func depth(_ process: ServiceProcess, _ byPid: [Int32: ServiceProcess]) -> Int {
-        var depth = 0
-        var parent = byPid[process.ppid]
-        while let next = parent, depth < 4 { depth += 1; parent = byPid[next.ppid] }
-        return depth
     }
 
     private func date(_ millis: Int64) -> Date { Date(timeIntervalSince1970: Double(millis) / 1000) }
 }
 
-private struct Tile {
-    let title: String
-    let value: String
-    let detail: String
-    let values: [Double]
-    let tint: Color
-    var meter: Double?
+/// A section with the app's title style.
+private func monitorSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+    Section { content() } header: { RiffetSectionTitle(title) }
 }
 
-private struct KpiTile: View {
-    let tile: Tile
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(tile.title).font(.caption).foregroundStyle(palette.fg3)
-            Text(tile.value).font(.title3.weight(.semibold).monospacedDigit()).foregroundStyle(palette.fg).lineLimit(1).minimumScaleFactor(0.7)
-            Chart(Array(tile.values.enumerated()), id: \.offset) { point in
-                AreaMark(x: .value("i", point.offset), y: .value("v", point.element)).foregroundStyle(tile.tint.opacity(0.15))
-                LineMark(x: .value("i", point.offset), y: .value("v", point.element)).foregroundStyle(tile.tint)
-            }
-            .chartXAxis(.hidden).chartYAxis(.hidden)
-            .frame(height: 28)
-            if let meter = tile.meter { ProgressView(value: min(max(meter, 0), 1)).tint(tile.tint) }
-            Text(tile.detail).font(.caption2).foregroundStyle(palette.fg3).lineLimit(2)
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(palette.bg, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-    }
+private func processKind(_ process: ServiceProcess) -> String {
+    switch process.kind { case "server": String(localized: "服务器", bundle: .riffet); case "tmux": "tmux"; case "agent": "Agent"; default: String(localized: "子进程", bundle: .riffet) }
 }
 
-private struct ProcessRow: View {
-    let process: ServiceProcess
-    let maxCpu: Double
-    let depth: Int
-    let stop: () -> Void
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
-                    Text(kind).font(.caption2.weight(.medium)).foregroundStyle(tint)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 5))
-                    Text(process.name).lineLimit(1)
-                    Text("\(process.pid)").font(.caption.monospacedDigit()).foregroundStyle(palette.fg4)
+/// Confirms ending a process, then ends it and reads again.
+private struct EndProcessDialog: ViewModifier {
+    let workbench: Workbench
+    @Binding var target: ServiceProcess?
+    let done: () async -> Void
+    func body(content: Content) -> some View {
+        content.confirmationDialog(target.map { String(localized: "结束进程 \($0.pid)？", bundle: .riffet) } ?? "", isPresented: Binding(get: { target != nil }, set: { if !$0 { target = nil } }), titleVisibility: .visible, presenting: target) { process in
+            Button("结束", role: .destructive) {
+                Task {
+                    do { try await workbench.api?.terminateServiceProcess(pid: process.pid); await done() }
+                    catch { RiffetToastCenter.shared.error(error.riffetMessage) }
                 }
-                if let title = process.sessionTitle { Text(title).font(.caption).foregroundStyle(palette.fg3).lineLimit(1) }
-                ProgressView(value: min(process.cpuPercent / maxCpu, 1)).tint(tint)
-                Text("CPU \(fixed(process.cpuPercent))% · \(bytes(process.rssBytes)) · \(duration(process.elapsedSec))").font(.caption2).foregroundStyle(palette.fg3)
             }
-            if process.canTerminate {
-                Button("结束", role: .destructive, action: stop).buttonStyle(.bordered).controlSize(.small)
+        } message: { process in Text(process.command) }
+    }
+}
+
+/// A process on one line: its name over `pid · memory`. A press opens it; the context menu and a swipe end it.
+private struct ServiceProcessRow: View {
+    let workbench: Workbench
+    @Binding var snapshot: ServiceMonitorSnapshot?
+    let process: ServiceProcess
+    let end: (ServiceProcess) -> Void
+    let refresh: () async -> Void
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        NavigationLink { ServiceProcessDetail(workbench: workbench, pid: process.pid, snapshot: $snapshot, refresh: refresh) } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(process.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                Text("\(process.pid) · \(bytes(process.rssBytes))").riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).monospacedDigit()
             }
         }
-        .padding(.leading, CGFloat(depth) * 12)
-        .contextMenu { Button("复制命令", systemImage: "doc.on.doc") { UIPasteboard.general.string = process.command } }
+        .swipeActions {
+            if process.canTerminate { Button("结束", role: .destructive) { end(process) } }
+        }
+        .contextMenu {
+            Button("复制命令", systemImage: "doc.on.doc") { UIPasteboard.general.string = process.command }
+            if process.canTerminate { Button("结束", systemImage: "xmark.circle", role: .destructive) { end(process) } }
+        }
     }
+}
 
-    private var kind: String {
-        switch process.kind { case "server": String(localized: "服务器", bundle: .riffet); case "tmux": "tmux"; case "agent": "Agent"; default: String(localized: "子进程", bundle: .riffet) }
+private struct ServiceProcessesPage: View {
+    let workbench: Workbench
+    @Binding var snapshot: ServiceMonitorSnapshot?
+    let refresh: () async -> Void
+    @State private var confirming: ServiceProcess?
+
+    var body: some View {
+        RiffetList {
+            Section {
+                ForEach(snapshot?.processes ?? [], id: \.pid) { process in
+                    ServiceProcessRow(workbench: workbench, snapshot: $snapshot, process: process, end: { confirming = $0 }, refresh: refresh)
+                }
+            }
+        }
+        .navigationTitle(String(localized: "进程", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .refreshable { await refresh() }
+        .modifier(EndProcessDialog(workbench: workbench, target: $confirming, done: refresh))
     }
+}
 
-    private var tint: Color {
-        switch process.kind { case "server": palette.accent; case "tmux": palette.success; case "agent": palette.warning; default: palette.fg3 }
+private struct ServiceProcessDetail: View {
+    let workbench: Workbench
+    let pid: Int32
+    @Binding var snapshot: ServiceMonitorSnapshot?
+    let refresh: () async -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var confirming: ServiceProcess?
+    private var process: ServiceProcess? { snapshot?.processes.first { $0.pid == pid } }
+
+    var body: some View {
+        RiffetList {
+            if let process {
+                Section {
+                    RiffetValueRow(label: String(localized: "类型", bundle: .riffet), value: processKind(process))
+                    RiffetValueRow(label: "PID", value: "\(process.pid)")
+                    RiffetValueRow(label: String(localized: "上级进程", bundle: .riffet), value: "\(process.ppid)")
+                    RiffetValueRow(label: "CPU", value: "\(fixed(process.cpuPercent))%")
+                    RiffetValueRow(label: String(localized: "内存", bundle: .riffet), value: bytes(process.rssBytes))
+                    RiffetValueRow(label: String(localized: "已运行", bundle: .riffet), value: duration(process.elapsedSec))
+                    if let title = process.sessionTitle { RiffetValueRow(label: String(localized: "会话", bundle: .riffet), value: title) }
+                    RiffetValueRow(label: String(localized: "命令", bundle: .riffet), value: process.command, mono: true)
+                }
+                if process.canTerminate {
+                    Section { RiffetActionRow("结束进程", destructive: true) { confirming = process } }
+                }
+            }
+        }
+        .navigationTitle(process?.name ?? "").navigationBarTitleDisplayMode(.inline)
+        .onChange(of: process == nil) { _, gone in if gone { dismiss() } }
+        .modifier(EndProcessDialog(workbench: workbench, target: $confirming, done: refresh))
     }
 }
 

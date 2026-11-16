@@ -35,6 +35,7 @@ struct ProjectFilesView: View {
     /// The project's favorite folders; listed at the root, starred on folders everywhere.
     @State private var favorites: FolderFavoritesModel
     @State private var renamingFavorite: FolderFavorite?
+    @Environment(\.palette) private var palette
 
     init(workbench: Workbench, project: Project, path: String = "") {
         self.workbench = workbench
@@ -54,12 +55,7 @@ struct ProjectFilesView: View {
                     Text("内容").tag(true)
                 }.pickerStyle(.segmented)
             }
-            if let error {
-                Section {
-                    Text(error).foregroundStyle(.red)
-                    Button("重试") { Task { await load() } }
-                }
-            }
+            RiffetNotice.section(.error, error ?? favorites.error, actionTitle: error == nil ? nil : String(localized: "重试", bundle: .riffet)) { Task { await load() } }
             if path.isEmpty, !searching, !favorites.favorites.isEmpty {
                 Section("收藏") {
                     ForEach(favorites.favorites, id: \.id) { favorite in
@@ -69,18 +65,18 @@ struct ProjectFilesView: View {
                         .disabled(!favorite.exists)
                         .contextMenu { FolderFavoriteMenu(model: favorites, favorite: favorite) { renamingFavorite = favorite } }
                     }
+                    .onMove { source, destination in Task { await favorites.reorder(fromOffsets: source, toOffset: destination) } }
                 }
             }
-            if let message = favorites.error { Text(message).font(.caption).foregroundStyle(.red) }
             if isSearching || loading && entries.isEmpty { ProgressView().frame(maxWidth: .infinity) }
             if searching, contentSearch {
                 ForEach(Array(hits.enumerated()), id: \.offset) { _, hit in
                     NavigationLink {
                         ProjectFilePage(workbench: workbench, project: project, path: hit.path, targetLine: Int(hit.line))
                     } label: {
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("\(hit.path):\(hit.line)").font(.subheadline.monospaced()).foregroundStyle(.secondary)
-                            Text(hit.text.trimmingCharacters(in: .whitespaces)).font(.body.monospaced()).lineLimit(3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(hit.text.trimmingCharacters(in: .whitespaces)).riffetFont(.mono).foregroundStyle(palette.fg).lineLimit(1)
+                            Text("\(hit.path):\(hit.line)").riffetFont(.monoSmall).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head)
                         }
                     }
                 }
@@ -96,16 +92,16 @@ struct ProjectFilesView: View {
                     } label: {
                         HStack {
                             Image(systemName: entry.kind == .directory ? "folder" : "doc")
-                                .foregroundStyle(entry.kind == .directory ? Color.accentColor : .secondary)
-                            VStack(alignment: .leading) {
+                                .foregroundStyle(entry.kind == .directory ? palette.accent : palette.fg3)
+                            VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
-                                    Text(entry.name)
-                                    if entry.kind == .directory, favorites.favorite(at: fullPath) != nil { Image(systemName: "star.fill").font(.caption2).foregroundStyle(.orange) }
+                                    Text(entry.name).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                                    if entry.kind == .directory, favorites.favorite(at: fullPath) != nil { Image(systemName: "star.fill").riffetFont(.caption).foregroundStyle(palette.warning) }
                                 }
-                                if searching { Text(fullPath).font(.caption).foregroundStyle(.secondary).lineLimit(2) }
+                                if searching { Text(fullPath).riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1).truncationMode(.head) }
                             }
                             Spacer()
-                            if let bytes = entry.size { Text(ByteCountFormatter.string(fromByteCount: bytes.int64Value, countStyle: .file)).font(.caption).foregroundStyle(.secondary) }
+                            if let bytes = entry.size { Text(ByteCountFormatter.string(fromByteCount: bytes.int64Value, countStyle: .file)).riffetFont(.caption).foregroundStyle(palette.fg3) }
                         }
                     }
                     .contextMenu {
@@ -120,12 +116,14 @@ struct ProjectFilesView: View {
                     }
                 }
                 if hasMore && !searching {
-                    Button("加载更多") { Task { await load(more: true) } }.disabled(loading)
+                    ProgressView().frame(maxWidth: .infinity)
+                        .id(entries.count).onAppear { Task { await load(more: true) } }
                 }
             }
             if !loading && !isSearching && error == nil && entries.isEmpty && (!contentSearch || hits.isEmpty) {
                 if searching {
-                    ContentUnavailableView(hasSearched ? "没有搜索结果" : "搜索项目文件", systemImage: "magnifyingglass", description: hasSearched ? Text("试试其他关键词。") : nil)
+                    if hasSearched { ContentUnavailableView.search(text: query) }
+                    else { ContentUnavailableView("搜索项目文件", systemImage: "magnifyingglass") }
                 } else {
                     ContentUnavailableView("空目录", systemImage: "folder")
                 }
@@ -133,7 +131,7 @@ struct ProjectFilesView: View {
         }
         .navigationTitle(path.isEmpty ? String(localized: "项目文件", bundle: .riffet) : (path as NSString).lastPathComponent)
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $query, prompt: String(localized: "搜索 Mac 上的项目文件", bundle: .riffet))
+        .riffetSearchable(text: $query, prompt: String(localized: "搜索 Mac 上的项目文件", bundle: .riffet))
         .onSubmit(of: .search) { Task { await load() } }
         .task(id: "\(project.id)|\(path)|\(query)|\(contentSearch)") {
             if searching {
@@ -149,7 +147,7 @@ struct ProjectFilesView: View {
                 let starred = favorites.favorite(at: path) != nil
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(starred ? "取消收藏此文件夹" : "收藏此文件夹", systemImage: starred ? "star.fill" : "star") { Task { await favorites.toggle(path) } }
-                        .tint(starred ? .orange : nil)
+                        .tint(starred ? palette.warning : nil)
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {

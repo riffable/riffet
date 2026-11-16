@@ -7,7 +7,9 @@ struct ProjectCheckpoints: View {
     @State private var checkpoints: [Checkpoint]?
     @State private var title = ""
     @State private var error: String?
-    @State private var busy = false
+    @State private var creating = false
+    @State private var createError: String?
+    @Environment(\.palette) private var palette
 
     private var project: Project { model.project }
 
@@ -22,11 +24,7 @@ struct ProjectCheckpoints: View {
 
     var body: some View {
         List {
-            Section {
-                TextField(gitText("Checkpoint name (optional)"), text: $title)
-                Button(gitText("Save")) { Task { await create() } }.disabled(busy)
-            }
-            if let error { Text(error).foregroundStyle(.red) }
+            RiffetNotice.section(.error, error, actionTitle: gitText("Retry")) { Task { await load() } }
             if let checkpoints {
                 let saved = checkpoints.filter { $0.partial?.boolValue != true }
                 if saved.isEmpty { ContentUnavailableView(gitText("No checkpoints yet"), systemImage: "clock.arrow.circlepath") }
@@ -34,17 +32,29 @@ struct ProjectCheckpoints: View {
                     NavigationLink {
                         CheckpointDetail(model: model, checkpoint: checkpoint)
                     } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(checkpoint.title)
-                            Text(verbatim: "\(gitFiles(Int(checkpoint.files))) · \(gitRelative(checkpoint.createdAt))").font(.caption).foregroundStyle(.secondary)
-                            if !checkpoint.excluded.isEmpty { Text(verbatim: "\(checkpoint.excluded.count) excluded").font(.caption).foregroundStyle(.secondary) }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(checkpoint.title).riffetFont(.body).foregroundStyle(palette.fg).lineLimit(1)
+                            Text(verbatim: "\(gitFiles(Int(checkpoint.files))) · \(gitRelative(checkpoint.createdAt))").riffetFont(.caption).foregroundStyle(palette.fg3).lineLimit(1)
                         }
                     }
                 }
-            } else if error == nil { ProgressView() }
+            } else if error == nil { ProgressView().frame(maxWidth: .infinity) }
         }
         .task(id: "\(project.id)|\(refresh)") { await load() }
         .refreshable { await load() }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button(gitText("New Checkpoint"), systemImage: "plus") { creating = true }
+            }
+        }
+        .sheet(isPresented: $creating) {
+            RiffetEditPage(title: gitText("New Checkpoint"), saveTitle: gitText("Save"), dirty: !title.isEmpty, alwaysSavable: true) {
+                await create()
+            } content: {
+                RiffetNotice.section(.error, createError)
+                Section { RiffetField(prompt: gitText("Name (optional)"), text: $title) }
+            }
+        }
     }
     private func load() async {
         do {
@@ -52,16 +62,15 @@ struct ProjectCheckpoints: View {
             error = nil
         } catch { self.error = gitMessage(error) }
     }
-    private func create() async {
-        guard !busy else { return }
-        busy = true
-        defer { busy = false }
+    private func create() async -> Bool {
         do {
             let name = title.trimmingCharacters(in: .whitespacesAndNewlines)
             _ = try await model.api().createCheckpoint(projectId: project.id, body: CreateCheckpointRequest(sessionId: model.sessionID, title: name.isEmpty ? nil : name))
             title = ""
+            createError = nil
             await load()
-        } catch { self.error = gitMessage(error) }
+            return true
+        } catch { createError = gitMessage(error); return false }
     }
 }
 
@@ -73,23 +82,39 @@ private struct CheckpointDetail: View {
     @State private var confirm = false
     @State private var busy = false
     @State private var restored = false
+    @Environment(\.palette) private var palette
 
     var body: some View {
-        List {
-            if let error { Text(error).foregroundStyle(.red) }
-            if restored { Label(gitText("Restored"), systemImage: "checkmark.circle").foregroundStyle(.secondary) }
+        RiffetList {
+            if let error {
+                RiffetNotice.section(.error, error)
+            } else if restored {
+                RiffetNotice.section(.success, gitText("Restored"))
+            }
+            Section {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(checkpoint.title).riffetFont(.headline).foregroundStyle(palette.fg)
+                    Text(gitRelative(checkpoint.createdAt)).riffetFont(.caption).foregroundStyle(palette.fg3)
+                }
+                RiffetValueRow(label: gitText("Files"), value: gitFiles(Int(checkpoint.files)))
+                if !checkpoint.excluded.isEmpty { RiffetValueRow(label: gitText("Excluded"), value: "\(checkpoint.excluded.count)") }
+            }
             if let changes {
-                Section {
-                    Button(gitText("Restore"), role: .destructive) { confirm = true }.disabled(busy || restored || changes.isEmpty)
+                if changes.isEmpty {
+                    Section { Text(gitText("Same as the working tree")).riffetFont(.body).foregroundStyle(palette.fg3) }
+                } else {
+                    Section {
+                        ForEach(changes, id: \.path) { change in
+                            GitFileLabel(letter: change.kind == .added ? "A" : change.kind == .deleted ? "D" : "M", path: change.path)
+                        }
+                    }
+                    Section {
+                        RiffetActionRow(verbatim: gitText("Restore"), symbol: "arrow.uturn.backward", destructive: true, enabled: !busy && !restored) { confirm = true }
+                    }
                 }
-                if changes.isEmpty { ContentUnavailableView(gitText("Same as the working tree"), systemImage: "checkmark.circle") }
-                ForEach(changes, id: \.path) { change in
-                    GitFileLabel(letter: change.kind == .added ? "A" : change.kind == .deleted ? "D" : "M", path: change.path)
-                        .textSelection(.enabled)
-                }
-            } else if error == nil { ProgressView() }
+            } else if error == nil { Section { ProgressView().frame(maxWidth: .infinity) } }
         }
-        .navigationTitle(checkpoint.title)
+        .navigationTitle(gitText("Checkpoint"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: checkpoint.id) { await load() }
         .confirmationDialog(gitText("Restore \"\(checkpoint.title)\"?"), isPresented: $confirm, titleVisibility: .visible) {

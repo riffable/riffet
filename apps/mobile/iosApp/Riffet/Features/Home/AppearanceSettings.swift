@@ -15,7 +15,7 @@ struct ThemeSettingsView: View {
                         PreviewChoice(title: Text(verbatim: theme.name), selected: themeStore.themeId == theme.id) {
                             themeStore.themeId = theme.id
                         } preview: {
-                            ThemePreview(values: theme.values)
+                            ThemePreview(theme: Palette.builtin(theme.id))
                         }
                     }
                 }
@@ -42,7 +42,7 @@ struct DisplayModeSettingsView: View {
                         PreviewChoice(title: Text(mode.title), selected: appearance == mode.id) {
                             withAnimation(RiffetMotion.effects) { appearance = mode.id }
                         } preview: {
-                            ModePreview(values: themeStore.entry.values, mode: mode.id)
+                            ModePreview(theme: themeStore.palette, mode: mode.id)
                         }
                     }
                 }
@@ -85,24 +85,30 @@ private struct PreviewChoice<Preview: View>: View {
 }
 
 /// A sketch of a conversation page in one half of a theme: page, a reply's lines, the reader's bubble.
+/// Takes only the six colours it draws: a whole half of a theme is kilobytes, and the theme grid holds dozens.
 private struct PageSketch: View {
-    let colors: RiffetPaletteValues
+    let page, text, muted, bubble, field, accent: Color
+    init(theme: Palette, dark: Bool) {
+        let colors = dark ? theme.values.dark : theme.values.light
+        page = Color(rgba: colors.bg); text = Color(rgba: colors.fg); muted = Color(rgba: colors.fg3)
+        bubble = Color(rgba: colors.bgBubble); field = Color(rgba: colors.bgSubtle); accent = Color(rgba: colors.accent)
+    }
     var body: some View {
         ZStack(alignment: .topLeading) {
-            Color(rgba: colors.bg)
+            page
             VStack(alignment: .leading, spacing: 5) {
-                Capsule().fill(Color(rgba: colors.fg)).frame(width: 30, height: 4)
-                Capsule().fill(Color(rgba: colors.fg3)).frame(width: 40, height: 3)
-                Capsule().fill(Color(rgba: colors.fg3)).frame(width: 26, height: 3)
+                Capsule().fill(text).frame(width: 30, height: 4)
+                Capsule().fill(muted).frame(width: 40, height: 3)
+                Capsule().fill(muted).frame(width: 26, height: 3)
                 Spacer(minLength: 0)
                 HStack {
                     Spacer(minLength: 0)
-                    RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color(rgba: colors.bgBubble))
+                    RoundedRectangle(cornerRadius: 5, style: .continuous).fill(bubble)
                         .frame(width: 30, height: 12)
                 }
                 HStack(spacing: 4) {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous).fill(Color(rgba: colors.bgSubtle)).frame(height: 12)
-                    Circle().fill(Color(rgba: colors.accent)).frame(width: 12, height: 12)
+                    RoundedRectangle(cornerRadius: 5, style: .continuous).fill(field).frame(height: 12)
+                    Circle().fill(accent).frame(width: 12, height: 12)
                 }
             }
             .padding(9)
@@ -112,17 +118,17 @@ private struct PageSketch: View {
 
 /// 跟随系统 shows both halves side by side, split down the middle.
 private struct ModePreview: View {
-    let values: RiffetThemeValues
+    let theme: Palette
     let mode: String
     var body: some View {
         Group {
             switch mode {
-            case "light": PageSketch(colors: values.light)
-            case "dark": PageSketch(colors: values.dark)
+            case "light": PageSketch(theme: theme, dark: false)
+            case "dark": PageSketch(theme: theme, dark: true)
             default:
-                PageSketch(colors: values.light)
+                PageSketch(theme: theme, dark: false)
                     .overlay {
-                        PageSketch(colors: values.dark)
+                        PageSketch(theme: theme, dark: true)
                             .mask(HStack(spacing: 0) { Color.clear; Color.black })
                     }
             }
@@ -133,10 +139,10 @@ private struct ModePreview: View {
 
 /// A theme in the half the app is showing now.
 private struct ThemePreview: View {
-    let values: RiffetThemeValues
+    let theme: Palette
     @Environment(\.colorScheme) private var scheme
     var body: some View {
-        PageSketch(colors: scheme == .dark ? values.dark : values.light).frame(height: 96)
+        PageSketch(theme: theme, dark: scheme == .dark).frame(height: 96)
     }
 }
 
