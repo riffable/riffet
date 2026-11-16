@@ -296,13 +296,15 @@ export const TabBar = memo(function TabBar({ variant, activeId, sidebarCollapsed
   const [leaving, setLeaving] = useState<(Place & { key: string })[]>([]);
   const visible = new Set([...zones.pinned, ...zones.normal].map((entry) => entry.sessionId));
   // A temporary tab handed to another conversation changes in place, rather than collapsing beside
-  // a new one growing in. Holds both conversations.
+  // a new one growing in, also when the conversation it now shows sits in the other zone (a pinned
+  // one handed to an unpinned one would otherwise empty the pinned zone, ghost and all, for a frame
+  // before the new tab grows in). Holds both conversations.
   const swapped = new Set<string>();
   if (shown.current) {
+    const next = zones.pinned.find((entry) => entry.preview) ?? zones.normal.find((entry) => entry.preview);
     for (const [id, place] of shown.current.places) {
       if (!place.preview || visible.has(id)) continue;
-      const next = (place.zone === 'pins' ? zones.pinned : zones.normal)[place.index];
-      if (next?.preview && !shown.current.ids.has(next.sessionId)) { swapped.add(id); swapped.add(next.sessionId); }
+      if (next && !shown.current.ids.has(next.sessionId)) { swapped.add(id); swapped.add(next.sessionId); }
     }
   }
   useLayoutEffect(() => {
