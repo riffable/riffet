@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { NativeInteractionResponse, NativeSlashItem, NativeTurnTarget } from '@contracts';
-import { AppError, materializeNativeInput, queryDirectory, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
+import { AppError, estimatedTokens, materializeNativeInput, queryDirectory, scanCommandRoots, scanSkillRoots, slashTokens } from '@riffet/plugin-api/kit';
 import {
   AGENT_PROTOCOL_VERSION, type AgentAvailability, type AgentBackend, type AgentCapabilities, type AgentCommandRequest, type AgentConfigurePatch, type AgentContext,
   type AgentControlMessage, type AgentHistoryOptions, type AgentHost, type AgentLaunchSpec, type AgentModelQuery, type AgentOpenOptions, type AgentPrewarmRequest,
@@ -79,6 +79,17 @@ export interface CursorBackendOptions {
   stateDir: string;
 }
 
+/** Metadata-only output-token estimate for one in-flight Cursor step. */
+export interface CursorLiveUsageProgress {
+  nativeSessionId: string;
+  nativeTurnId: string;
+  stepId: string;
+  at: number;
+  model?: string;
+  outputTokens: number;
+  sealed: boolean;
+}
+
 /** The pieces built from the first resolved launch profile; one set for the activation. */
 interface CursorParts {
   profile: CursorLaunchProfile;
@@ -146,10 +157,13 @@ export class CursorBackend implements AgentBackend {
   private shutdown?: Promise<void>;
   private usageHost?: AgentHost;
   private stopUsageChanges?: () => void;
+  private stopLiveUsageWatch?: () => void;
   private readonly usageListeners = new Set<() => void>();
-  /** Metadata-only settled counters; no transcript, launch configuration or credentials. */
+  private readonly liveUsageListeners = new Set<(progress: CursorLiveUsageProgress) => void>();
+  private readonly liveUsageEmitted = new Map<string, { outputTokens: number; sealed: boolean }>();
+  /** Metadata-only settled counters, plus live step progress; no transcript, launch configuration or credentials. */
   readonly usageService = {
-    version: '1.0.0',
+    version: '1.1.0',
     read: async () => {
       const host = this.usageHost;
       if (this.shutdown || !host?.stats.readObservations) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
@@ -161,6 +175,19 @@ export class CursorBackend implements AgentBackend {
       if (this.shutdown) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
       this.usageListeners.add(listener);
       return () => { this.usageListeners.delete(listener); };
+    },
+    subscribeLive: (listener: (progress: CursorLiveUsageProgress) => void) => {
+      if (this.shutdown) throw new AppError('USAGE_UNAVAILABLE', 'Cursor usage is unavailable', 503);
+      this.liveUsageListeners.add(listener);
+      this.ensureLiveUsageWatch();
+      return () => {
+        this.liveUsageListeners.delete(listener);
+        if (!this.liveUsageListeners.size) {
+          this.stopLiveUsageWatch?.();
+          this.stopLiveUsageWatch = undefined;
+          this.liveUsageEmitted.clear();
+        }
+      };
     },
   };
   private readonly defaultProfile: AgentProfile = { id: 'default', name: 'Cursor CLI', isDefault: true, config: {} };
@@ -200,7 +227,44 @@ export class CursorBackend implements AgentBackend {
       for (const listener of this.transcriptSignals.get(sessionId) ?? []) listener.changed();
     };
     runtime.useLaunchPlugin(session => steering.launchArgs(session));
-    return this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage };
+    this.built = { profile: launch, port, native, runtime, steering, configs: new CursorProjectConfigs(this.options.stateDir, launch.configDir), titles: new ResumeTitleWatcher({ port }), live, receipts: new CursorLiveReceipts(live), usage };
+    this.ensureLiveUsageWatch();
+    return this.built;
+  }
+
+  private ensureLiveUsageWatch(): void {
+    if (this.shutdown || !this.built || !this.liveUsageListeners.size || this.stopLiveUsageWatch) return;
+    this.stopLiveUsageWatch = this.built.live.watch(chatId => this.emitLiveUsage(chatId));
+  }
+
+  private emitLiveUsage(chatId: string): void {
+    if (this.shutdown || !this.liveUsageListeners.size) return;
+    const step = this.built?.live.read(chatId);
+    if (!step?.parts.length) return;
+    const outputTokens = estimatedTokens(step.parts.map(part => part.text).join(''));
+    if (outputTokens <= 0) return;
+    const key = `${chatId}\0${step.step}`;
+    const previous = this.liveUsageEmitted.get(key);
+    if (previous && previous.outputTokens === outputTokens && previous.sealed === step.sealed) return;
+    this.liveUsageEmitted.delete(key);
+    this.liveUsageEmitted.set(key, { outputTokens, sealed: step.sealed });
+    while (this.liveUsageEmitted.size > 256) this.liveUsageEmitted.delete(this.liveUsageEmitted.keys().next().value!);
+    const sessions = this.usageHost?.view.sessions() ?? [];
+    const model = step.requestedModel
+      ?? sessions.find(item => item.nativeSessionId === chatId && !item.archivedAt)?.model
+      ?? sessions.find(item => item.nativeSessionId === chatId)?.model;
+    const progress: CursorLiveUsageProgress = {
+      nativeSessionId: chatId,
+      nativeTurnId: step.run ?? step.turn,
+      stepId: step.step,
+      at: Date.now(),
+      ...(model ? { model } : {}),
+      outputTokens,
+      sealed: step.sealed,
+    };
+    for (const listener of [...this.liveUsageListeners]) {
+      try { listener(progress); } catch { /* consumers are independent */ }
+    }
   }
 
   profiles(): AgentProfile[] { return [this.defaultProfile]; }
@@ -479,7 +543,11 @@ export class CursorBackend implements AgentBackend {
   close(): Promise<void> {
     return this.shutdown ??= (async () => {
       this.stopUsageChanges?.();
+      this.stopLiveUsageWatch?.();
+      this.stopLiveUsageWatch = undefined;
       this.usageListeners.clear();
+      this.liveUsageListeners.clear();
+      this.liveUsageEmitted.clear();
       this.usageHost = undefined;
       const built = this.built;
       if (!built) return;

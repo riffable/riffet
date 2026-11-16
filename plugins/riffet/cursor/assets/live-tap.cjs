@@ -269,6 +269,8 @@ class Live {
     owners.set(conversation, this);
     const snapshot = {
       v: 1, pid: process.pid, turn: this.turn ?? this.request, at: this.at, ...(this.info.prompt ? { prompt: this.info.prompt } : {}),
+      ...(this.info.run ? { run: this.info.run } : {}),
+      ...(this.info.requestedModel ? { requestedModel: this.info.requestedModel } : {}),
       step: `${this.request}:${this.step}`, sealed: this.sealed, parts: this.parts,
     };
     const temporary = path.join(this.dir, `.${conversation}.${process.pid}.tmp`);

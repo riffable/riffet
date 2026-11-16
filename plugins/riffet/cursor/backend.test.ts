@@ -157,3 +157,42 @@ describe('Cursor durable usage ingestion', () => {
     }
   });
 });
+
+describe('Cursor usageService.subscribeLive', () => {
+  it('streams estimated step output tokens with requested or session model and cleans up on unsubscribe', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'riffet-cursor-live-usage-'));
+    const host = new FakeHost({ sessions: [{ ...session, nativeSessionId: 'chat-live', model: 'fallback-model' }], projects: [project] });
+    const backend = new CursorBackend({ stateDir: dir });
+    try {
+      backend.start(host, context.profile);
+      const events: Array<{ nativeSessionId: string; nativeTurnId: string; stepId: string; model?: string; outputTokens: number; sealed: boolean }> = [];
+      const unsubscribe = backend.usageService.subscribeLive(event => events.push(event));
+      const liveDir = join(dir, 'cursor-live');
+      mkdirSync(liveDir, { recursive: true });
+      const writeStep = (text: string, sealed: boolean, requestedModel?: string, run?: string) => {
+        writeFileSync(join(liveDir, 'chat-live.json'), JSON.stringify({
+          v: 1, pid: process.pid, turn: 'turn-1', at: new Date().toISOString(),
+          ...(run ? { run } : {}),
+          ...(requestedModel ? { requestedModel } : {}),
+          step: 'req-1:1', sealed, parts: [{ type: 'text', text }],
+        }));
+      };
+      writeStep('a'.repeat(40), false, 'gemini-4-hydrogen', 'run-1');
+      await vi.waitFor(() => expect(events).toHaveLength(1));
+      expect(events[0]).toMatchObject({ nativeSessionId: 'chat-live', nativeTurnId: 'run-1', stepId: 'req-1:1', model: 'gemini-4-hydrogen', sealed: false });
+      expect(events[0]!.outputTokens).toBeGreaterThan(0);
+
+      writeStep('a'.repeat(40), true);
+      await vi.waitFor(() => expect(events).toHaveLength(2));
+      expect(events[1]).toMatchObject({ nativeTurnId: 'turn-1', model: 'fallback-model', sealed: true, outputTokens: events[0]!.outputTokens });
+
+      unsubscribe();
+      writeStep('a'.repeat(120), true, 'gemini-4-hydrogen');
+      await new Promise(resolve => setTimeout(resolve, 60));
+      expect(events).toHaveLength(2);
+    } finally {
+      await backend.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

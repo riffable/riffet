@@ -16,6 +16,10 @@ export interface CursorLiveStep {
   at: string;
   /** The prompt that began the run; the store records it at the first checkpoint too. */
   prompt?: string;
+  /** The native run id from `AgentRunRequest`, matching `CursorUsageCapture.nativeTurnId`. */
+  run?: string;
+  /** The model requested for this run, when known from the stream request. */
+  requestedModel?: string;
   step: string;
   /** The step's checkpoint arrived, or the run ended: the store has, or is about to have, all of it. */
   sealed: boolean;
@@ -44,13 +48,17 @@ function alive(pid: number): boolean {
 function parse(value: unknown): (CursorLiveStep & { pid: number }) | undefined {
   if (!isRecord(value) || value.v !== 1 || !Number.isSafeInteger(value.pid) || typeof value.turn !== 'string' || !value.turn
     || typeof value.at !== 'string' || typeof value.step !== 'string' || typeof value.sealed !== 'boolean' || !Array.isArray(value.parts)
-    || (value.prompt !== undefined && typeof value.prompt !== 'string')) return undefined;
+    || (value.prompt !== undefined && typeof value.prompt !== 'string')
+    || (value.run !== undefined && typeof value.run !== 'string')
+    || (value.requestedModel !== undefined && typeof value.requestedModel !== 'string')) return undefined;
   const parts = value.parts.filter((part): part is CursorLiveStep['parts'][number] =>
     isRecord(part) && (part.type === 'reasoning' || part.type === 'text') && typeof part.text === 'string' && part.text.length > 0);
   if (!parts.length && !(typeof value.prompt === 'string' && value.prompt)) return undefined;
   return {
     pid: value.pid as number, turn: value.turn, at: value.at, step: value.step, sealed: value.sealed, parts,
     ...(typeof value.prompt === 'string' && value.prompt ? { prompt: value.prompt } : {}),
+    ...(typeof value.run === 'string' && value.run ? { run: value.run } : {}),
+    ...(typeof value.requestedModel === 'string' && value.requestedModel ? { requestedModel: value.requestedModel } : {}),
   };
 }
 

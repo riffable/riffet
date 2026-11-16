@@ -155,7 +155,7 @@ describe('Cursor live tap', () => {
       const live = await until(() => { const value = read(); return value?.parts?.at(-1)?.text === 'Hello wor' ? value : undefined; });
       expect(CURSOR_LIVE_TAP).toBeDefined();
       expect(live).toMatchObject({
-        v: 1, pid: child.pid, turn: mode === 'h1' ? 'turn-1' : 'run-2', prompt: 'say hello', sealed: false,
+        v: 1, pid: child.pid, turn: mode === 'h1' ? 'turn-1' : 'run-2', run: 'run-2', prompt: 'say hello', requestedModel: 'example-model', sealed: false,
         parts: [{ type: 'reasoning', text: 'Let me think.' }, { type: 'text', text: 'Hello wor' }],
       });
       resume();
