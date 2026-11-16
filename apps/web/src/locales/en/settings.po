@@ -979,10 +979,6 @@ msgstr "Icon only"
 msgid "仅导航条"
 msgstr "Rail only"
 
-#: src/app/settings/TabsSection.tsx
-msgid "仅手动加入"
-msgstr "Only when added"
-
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "仅手机"
 msgstr "Mobile only"

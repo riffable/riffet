@@ -535,16 +535,6 @@
         }
       }
     },
-    "仅手动加入": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Add manually only"
-          }
-        }
-      }
-    },
     "仍有会话在运行，未重启：%@": {
       "localizations": {
         "en": {

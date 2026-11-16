@@ -979,10 +979,6 @@ msgstr ""
 msgid "仅导航条"
 msgstr ""
 
-#: src/app/settings/TabsSection.tsx
-msgid "仅手动加入"
-msgstr ""
-
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "仅手机"
 msgstr ""

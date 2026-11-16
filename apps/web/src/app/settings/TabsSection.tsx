@@ -22,7 +22,7 @@ export function TabsSection() {
     </Group>
     <Group>
       <Row title={t`打开会话时`}>
-        <Segmented<TabOpenMode> size="xs" value={openMode} onChange={(mode) => tabs.setOpenMode(mode)} ariaLabel={t`打开会话时`} options={[{ value: 'preview', label: t`临时标签`, disabled: off }, { value: 'keep', label: t`直接加入`, disabled: off }, { value: 'manual', label: t`仅手动加入`, disabled: off }]} />
+        <Segmented<TabOpenMode> size="xs" value={openMode} onChange={(mode) => tabs.setOpenMode(mode)} ariaLabel={t`打开会话时`} options={[{ value: 'preview', label: t`临时标签`, disabled: off }, { value: 'keep', label: t`直接加入`, disabled: off }]} />
       </Row>
       <Row title={t`新建会话时`}>
         <Segmented<TabNewMode> size="xs" value={openMode === 'keep' ? 'keep' : newMode} onChange={(mode) => tabs.setNewMode(mode)} ariaLabel={t`新建会话时`} options={[{ value: 'preview', label: t`临时标签`, disabled: off || openMode === 'keep' }, { value: 'keep', label: t`直接加入`, disabled: off || openMode === 'keep' }]} />

@@ -998,7 +998,6 @@ final class Workbench {
             } }
             let sent = try await (enqueue ? store.enqueue(text: text, attachments: attachments, context: cited, onStored: transfer) : store.send(text: text, attachments: attachments, context: cited, interrupt: interrupt, onStored: transfer)).boolValue
             if sent, onStored == nil { clearSubmittedReferences(cited, sessionId: sessionId, projectId: projectId) }
-            if sent, let sessionId { SessionTabs.model(for: baseURL).sent(sessionId) }
             return sent
         } catch {
             return false

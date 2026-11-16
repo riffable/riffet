@@ -56,7 +56,7 @@ import { useSlashCatalog } from '../session/useSlashCatalog';
 import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
 import { ShareSessionContext, type ShareSession } from '../marks/ShareImage';
-import { useLists, useStores } from '../state/stores';
+import { useLists } from '../state/stores';
 import { ViewDots, useViewShortcuts, viewShortcut } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
 import type { SessionView } from '../state/navStore';
@@ -755,9 +755,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
    * subtrees sit the frames out; the transcript and the side column's output list are what move.
    */
   const paneAnswers = backendCapabilities?.interactionTransport === 'both';
-  const { tabs } = useStores();
-  const latest = useRef({ native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView, sessionId: session.id });
-  latest.current = { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView, sessionId: session.id };
+  const latest = useRef({ native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView });
+  latest.current = { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, switchNativeView, changeView };
   const queuedRun = (runId: string) => latest.current.native.runs.find((item) => item.id === runId);
   const stop = useCallback(() => { void latest.current.native.cancel(); }, []);
   const sendQueuedNowById = useCallback((runId: string) => {
@@ -787,12 +786,11 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     if (run) void latest.current.native.cancelNativeRun(run);
   }, []);
   const submit = useCallback(async (text: string, attachments: Attachment[], context: PromptContextReference[], onStored?: () => boolean) => {
-    const { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers, sessionId } = latest.current;
+    const { native, submitIntent, steerUnavailable, slashCommands, backendId, paneAnswers } = latest.current;
     if (steerUnavailable) { onError(t`当前任务暂不接受补充，输入已保留`); return false; }
     // Before the message lands: once it does, the latest turn is the one being sent.
     transcriptScrollRef.current?.followSent();
     const ok = await (submitIntent === 'steer' ? native.steer : native.send)(text, attachments, context, onStored);
-    if (ok) tabs.sent(sessionId);
     const command = /^\/(\S+)/.exec(text.trim())?.[1];
     // A skill runs as an ordinary turn whose answer lands in the transcript, not the CLI's pane.
     const skill = slashCommands.some((item) => item.name === command && item.kind === 'skill');

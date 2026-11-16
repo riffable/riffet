@@ -979,10 +979,6 @@ msgstr "仅图标"
 msgid "仅导航条"
 msgstr "仅导航条"
 
-#: src/app/settings/TabsSection.tsx
-msgid "仅手动加入"
-msgstr "仅手动加入"
-
 #: src/app/design/surfaces/NewSessionChapter.tsx
 msgid "仅手机"
 msgstr "仅手机"

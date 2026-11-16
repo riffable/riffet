@@ -18,7 +18,6 @@ struct TabsSettings: View {
                     FormSegmented("打开会话时", selection: $prefs.openMode) {
                         Text("临时标签").tag(SessionTabOpenMode.preview)
                         Text("直接加入").tag(SessionTabOpenMode.keep)
-                        Text("仅手动加入").tag(SessionTabOpenMode.manual)
                     }
                     .labelsHidden()
                     .disabled(prefs.style == .off)
