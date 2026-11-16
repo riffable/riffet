@@ -559,6 +559,7 @@ data class AppSettingsUpdate(
     /** Carry a plugin Agent where [defaultBackendId] and [nativeBackendDefaults] cannot; the client folds them into those keys. */
     val defaultAgentId: String? = null,
     val agentDefaults: Map<String, NativeBackendDefaults>? = null,
+    val sidebarPinned: List<String>? = null,
 )
 
 /**

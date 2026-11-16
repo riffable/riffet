@@ -11,7 +11,7 @@ func managementSettingsPatch(defaultBackend: NativeBackendId? = nil, defaults: [
                       allowOutsideRead: allowOutsideRead.map { KotlinBoolean(bool: $0) }, defaultBackendId: defaultBackend, nativeBackendDefaults: defaults,
                       cursorCli: cursor, composerEnterBehavior: nil, composerRunningBehavior: composerRunningBehavior, composerSendLater: nil,
                       idleReclaimMinutes: idleReclaimMinutes.map { KotlinInt(int: $0) }, maxLiveAgents: maxLiveAgents.map { KotlinInt(int: $0) },
-                      quickChat: nil, defaultAgentId: nil, agentDefaults: nil)
+                      quickChat: nil, defaultAgentId: nil, agentDefaults: nil, sidebarPinned: nil)
 }
 
 /// An agent's display name: the server's label when it sent one.

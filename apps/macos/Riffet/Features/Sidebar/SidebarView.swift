@@ -15,6 +15,8 @@ struct SidebarView: View {
     @State private var addError: String?
     /// The host's favorite folders, for the project headers' 收藏 item.
     @State private var favorites = FolderFavoritesModel()
+    @State private var moreAnchor = MenuAnchor()
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         // The footer sits below the list rather than over it: rows never scroll under its text.
@@ -66,13 +68,19 @@ struct SidebarView: View {
                 Text("⌘K").font(.riffet(size: S(11))).foregroundStyle(palette.fg4)
             }
             .help("搜索内容 (⌘K)")
-            ForEach(pages, id: \.self) { page in
+            ForEach(destinations.pinned, id: \.self) { page in
                 SidebarFixedRow(selected: shows(page), action: { selection.wrappedValue = Self.pageTag(page) }) {
                     navigationLabel(page.title, symbol: page.symbol, selected: shows(page))
                     Spacer(minLength: 0)
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
             }
+            let moreOpen = destinations.more.contains(where: shows)
+            SidebarFixedRow(selected: moreOpen, action: { workbench.popUpSidebarMore(moreAnchor, openSettings: openSettings) }) {
+                navigationLabel(String(localized: "更多"), symbol: "ellipsis", selected: moreOpen)
+                Spacer(minLength: 0)
+            }
+            .background { MenuAnchorView(anchor: moreAnchor) }
         }
         .padding(.horizontal, Space.sm + Space.xxs)
         .padding(.bottom, Space.sm)
@@ -215,10 +223,7 @@ struct SidebarView: View {
 
     private static func pageTag(_ page: WorkbenchPage) -> String { "page:" + page.rawValue }
 
-    /// The first rows, less the pages behind the footer's menu.
-    private var pages: [WorkbenchPage] {
-        WorkbenchPage.sidebarOrder.filter { !WorkbenchPage.footerMenu.contains($0) }
-    }
+    private var destinations: (pinned: [WorkbenchPage], more: [WorkbenchPage]) { workbench.sidebarDestinations }
 
     /// [page]'s row is drawn selected: the page is open, or a click picked it and it opens next frame.
     private func shows(_ page: WorkbenchPage) -> Bool {

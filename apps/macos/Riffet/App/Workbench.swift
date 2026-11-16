@@ -7,12 +7,6 @@ import RiffetKit
 enum WorkbenchPage: String, Equatable {
     case stats, tasks, extensions, plugins, marks, activity
 
-    /// The order of the sidebar's first rows, as on the web.
-    static let sidebarOrder: [WorkbenchPage] = [.tasks, .extensions, .marks, .plugins, .stats]
-
-    /// The pages behind the sidebar footer's menu instead of a row.
-    static let footerMenu: [WorkbenchPage] = [.extensions, .stats, .activity]
-
     var title: String {
         switch self {
         case .tasks: String(localized: "自动化")

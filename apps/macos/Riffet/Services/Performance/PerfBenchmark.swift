@@ -321,7 +321,7 @@ final class PerfBenchmark {
         guard let id = sessionId ?? workbench.selected?.id, await show(id) else { return }
         monitor.page = "bench.pages"
         monitor.activityOverride = .interact
-        let pages = WorkbenchPage.sidebarOrder
+        let pages = WorkbenchPage.destinations
         for pass in 0..<2 {
             for page in pages {
                 let name = pass == 0 ? "page" : "pageAgain"

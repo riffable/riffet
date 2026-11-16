@@ -121,6 +121,7 @@ struct SettingsView: View {
         case .general: GeneralSettings()
         case .appearance: ThemeSettings()
         case .window: WindowSettings()
+        case .sidebar: SidebarSettings()
         case .tabs: TabsSettings()
         case .typography: TypographySettings()
         case .terminal: TerminalSettings()

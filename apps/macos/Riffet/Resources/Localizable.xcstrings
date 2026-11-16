@@ -11,6 +11,116 @@
         }
       }
     },
+    "侧栏 导航 页面 固定 更多 sidebar pin navigation": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sidebar navigation pages pinned more"
+          }
+        }
+      }
+    },
+    "固定的页面与顺序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinned pages and their order"
+          }
+        }
+      }
+    },
+    "自定义侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Customize sidebar"
+          }
+        }
+      }
+    },
+    "侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sidebar"
+          }
+        }
+      }
+    },
+    "%@：第 %lld 项，共 %lld 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@: item %lld of %lld"
+          }
+        }
+      }
+    },
+    "固定显示": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinned"
+          }
+        }
+      }
+    },
+    "调整%@的顺序": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reorder %@"
+          }
+        }
+      }
+    },
+    "从侧栏移到更多": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move to More"
+          }
+        }
+      }
+    },
+    "固定到侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin to sidebar"
+          }
+        }
+      }
+    },
+    "把%@移到更多": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move %@ to More"
+          }
+        }
+      }
+    },
+    "把%@固定到侧栏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pin %@ to sidebar"
+          }
+        }
+      }
+    },
     "服务管理": {
       "localizations": {
         "en": {

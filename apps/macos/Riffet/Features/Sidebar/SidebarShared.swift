@@ -310,7 +310,7 @@ enum SidebarFooterSupport {
         open()
     }
 
-    /// Identity, page destinations, then appearance and settings. Chosen actions run after dismissal.
+    /// Identity, then appearance and settings. Chosen actions run after dismissal.
     static func popUp(_ anchor: MenuAnchor, scheme: ColorScheme, workbench: Workbench, openSettings: OpenSettingsAction) {
         let menu = NSMenu()
         menu.autoenablesItems = false
@@ -331,8 +331,6 @@ enum SidebarFooterSupport {
         renderer.scale = anchor.view?.window?.backingScaleFactor ?? 2
         if let image = renderer.cgImage { profile.image = NSImage(cgImage: image, size: NSSize(width: Space.xxl + Space.xs, height: Space.xxl + Space.xs)) }
         menu.addItem(profile)
-        menu.addItem(.separator())
-        for page in WorkbenchPage.footerMenu { menu.addItem(item(page.title, page.symbol) { workbench.page = page }) }
         menu.addItem(.separator())
         let prefs = DisplayPreferences.shared
         let theme = ThemeStore.shared

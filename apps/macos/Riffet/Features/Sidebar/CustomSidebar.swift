@@ -20,6 +20,7 @@ struct CustomSidebar: View {
     @State private var favorites = FolderFavoritesModel()
     @State private var customAnchor = MenuAnchor()
     @State private var moreAnchor = MenuAnchor()
+    @Environment(\.openSettings) private var openSettings
 
     init(workbench: Workbench) { self.workbench = workbench }
 
@@ -97,9 +98,7 @@ struct CustomSidebar: View {
 
     // MARK: Actions
 
-    private var pages: [WorkbenchPage] {
-        WorkbenchPage.sidebarOrder.filter { !WorkbenchPage.footerMenu.contains($0) }
-    }
+    private var destinations: (pinned: [WorkbenchPage], more: [WorkbenchPage]) { workbench.sidebarDestinations }
 
     /// [page]'s row is drawn selected: the page is open, or a click picked it and it opens next frame.
     private func shows(_ page: WorkbenchPage) -> Bool {
@@ -114,11 +113,14 @@ struct CustomSidebar: View {
                 workbench.sidebar.searchRequested = .titles
             }
             .help("搜索内容 (⌘K)")
-            ForEach(pages, id: \.self) { page in
+            ForEach(destinations.pinned, id: \.self) { page in
                 CustomNavRow(symbol: page.symbol, title: page.title, selected: shows(page), style: style) {
                     workbench.sidebar.pick("page:" + page.rawValue, clicked: true)
                 }
                 .help(page.shortcutLabel.map { "\(page.title) (\($0))" } ?? page.title)
+            }
+            CustomNavRow(symbol: "ellipsis", title: String(localized: "更多"), selected: destinations.more.contains(where: shows), anchor: moreAnchor, style: style) {
+                workbench.popUpSidebarMore(moreAnchor, openSettings: openSettings)
             }
         }
         .padding(.horizontal, Space.sm)

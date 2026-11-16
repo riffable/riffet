@@ -213,6 +213,8 @@ data class AppSettings(
     /** [defaultBackendId] and the plugin entries of [nativeBackendDefaults], for ids the enum cannot hold; see [AgentIds]. */
     val defaultAgentId: String? = null,
     val agentDefaults: Map<String, NativeBackendDefaults>? = null,
+    /** Ordered ids of the pages the sidebar pins; null is the default set. Account-wide. */
+    val sidebarPinned: List<String>? = null,
 ) {
     /** The Agent new sessions start on, built-in or a plugin's; null when none was chosen. */
     val defaultAgent: String? get() = defaultAgentId ?: defaultBackendId?.let(AgentIds::wire)

@@ -45,7 +45,7 @@ enum PreferenceKey {
 /// pane's case stays so stored selections and links open the pane that took it over (`pane`).
 /// `appearance` is the theme pane: the appearance pane it named was split into its group's pages.
 enum SettingsSection: String, CaseIterable, Identifiable {
-    case profile, general, appearance, window, tabs, typography, terminal, appIcon
+    case profile, general, appearance, window, sidebar, tabs, typography, terminal, appIcon
     case input, shortcuts, notifications, files
     case agents, modelProviders, auxiliaryModels, quickChat
     case connection, shares, channels, server, storage, backup
@@ -68,6 +68,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "个人资料")
         case .appearance: String(localized: "主题")
         case .window: String(localized: "界面")
+        case .sidebar: String(localized: "侧栏")
         case .tabs: String(localized: "标签页")
         case .typography: String(localized: "排版")
         case .terminal: String(localized: "终端")
@@ -97,6 +98,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: "person.crop.circle"
         case .appearance: "paintpalette"
         case .window: "macwindow"
+        case .sidebar: "sidebar.left"
         case .tabs: "rectangle.split.3x1"
         case .typography: "textformat.size"
         case .terminal: "terminal"
@@ -123,7 +125,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     var group: SettingsGroup {
         switch pane {
-        case .appearance, .window, .tabs, .typography, .terminal, .appIcon: .appearance
+        case .appearance, .window, .sidebar, .tabs, .typography, .terminal, .appIcon: .appearance
         case .input, .shortcuts, .notifications, .files: .behavior
         case .agents, .modelProviders, .auxiliaryModels, .quickChat: .models
         case .connection, .shares, .channels, .server, .storage, .backup: .connection
@@ -138,6 +140,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "名称与头像")
         case .appearance: String(localized: "明暗、配色主题与自定义主题")
         case .window: String(localized: "材质与透明度")
+        case .sidebar: String(localized: "固定的页面与顺序")
         case .tabs: String(localized: "标签栏与打开方式")
         case .typography: String(localized: "文字大小、间距与阅读宽度")
         case .terminal: String(localized: "终端字号与边距")
@@ -168,6 +171,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .profile: String(localized: "个人 资料 名称 昵称 头像 profile name avatar", comment: "Search terms, space-separated")
         case .appearance: String(localized: "外观 主题 颜色 配色 暗色 浅色 明暗 appearance theme", comment: "Search terms, space-separated")
         case .window: String(localized: "外观 窗口 材质 透明 玻璃 磨砂 侧栏 window material", comment: "Search terms, space-separated")
+        case .sidebar: String(localized: "侧栏 导航 页面 固定 更多 sidebar pin navigation", comment: "Search terms, space-separated")
         case .tabs: String(localized: "标签 标签栏 会话 快捷键 tab tabs shortcut", comment: "Search terms, space-separated")
         case .typography: String(localized: "外观 文字 字号 字体 间距 宽度 预览 font", comment: "Search terms, space-separated")
         case .terminal: String(localized: "外观 终端 字号 边距 terminal", comment: "Search terms, space-separated")
@@ -198,7 +202,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var scope: SettingsScope? {
         switch pane {
         case .general, .appearance, .window, .tabs, .typography, .terminal, .appIcon, .shortcuts, .notifications, .connection: .mac
-        case .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .shares, .channels: .server
+        case .sidebar, .input, .files, .agents, .modelProviders, .auxiliaryModels, .quickChat, .shares, .channels: .server
         default: nil
         }
     }
@@ -211,7 +215,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 
     private static let all: [SettingsSection] = [
         .profile, .general,
-        .appearance, .window, .tabs, .typography, .terminal, .appIcon,
+        .appearance, .window, .sidebar, .tabs, .typography, .terminal, .appIcon,
         .input, .shortcuts, .notifications, .files,
         .agents, .modelProviders, .auxiliaryModels, .quickChat,
         .connection, .shares, .channels, .server, .storage, .backup,

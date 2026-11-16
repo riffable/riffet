@@ -10,17 +10,12 @@ struct InspectorViewsSettings: View {
             let prefs = workbench.sidebarViewPrefs
             let views = workbench.configurableInspectorViews
             SettingsBlock("检查器") {
-                ForEach(Array(views.enumerated()), id: \.element.id) { index, view in
-                    SettingsRow(view.title) {
-                        HStack(spacing: Space.xs) {
-                            Button { move(views, index, -1, prefs) } label: { Image(icon: "chevron.up") }
-                                .buttonStyle(IconButtonStyle())
-                                .disabled(index == 0)
-                                .help("上移")
-                            Button { move(views, index, 1, prefs) } label: { Image(icon: "chevron.down") }
-                                .buttonStyle(IconButtonStyle())
-                                .disabled(index == views.count - 1)
-                                .help("下移")
+                SortableList(items: views, id: \.id, title: \.title) { ids in
+                    prefs.setOrder(ids)
+                } row: { view, handle in
+                    HStack(spacing: Space.sm) {
+                        handle
+                        SettingsRow(view.title) {
                             Toggle(view.title, isOn: Binding(get: { !prefs.isHidden(view.id) }, set: { prefs.setVisible(view.id, $0) }))
                                 .labelsHidden()
                                 .toggleStyle(.switch)
@@ -29,11 +24,5 @@ struct InspectorViewsSettings: View {
                 }
             }
         }
-    }
-
-    private func move(_ views: [InspectorViewEntry], _ index: Int, _ delta: Int, _ prefs: SidebarViewPrefs) {
-        var ids = views.map(\.id)
-        ids.swapAt(index, index + delta)
-        prefs.setOrder(ids)
     }
 }

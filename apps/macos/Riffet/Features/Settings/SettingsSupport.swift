@@ -26,7 +26,8 @@ enum SettingsPatch {
         composerSendLater: Bool? = nil,
         idleReclaimMinutes: Int? = nil,
         maxLiveAgents: Int? = nil,
-        quickChat: QuickChatSettings? = nil
+        quickChat: QuickChatSettings? = nil,
+        sidebarPinned: [String]? = nil
     ) -> AppSettingsUpdate {
         AppSettingsUpdate(
             taskWorkspaceRoot: taskWorkspaceRoot,
@@ -45,7 +46,8 @@ enum SettingsPatch {
             maxLiveAgents: maxLiveAgents.map { KotlinInt(int: Int32($0)) },
             quickChat: quickChat,
             defaultAgentId: defaultAgentId,
-            agentDefaults: agentDefaults
+            agentDefaults: agentDefaults,
+            sidebarPinned: sidebarPinned
         )
     }
 }

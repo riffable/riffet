@@ -188,7 +188,7 @@ struct CursorConnectionSheet: View {
                 taskWorkspaceRoot: nil, editorCommand: nil, defaultModel: nil, defaultMode: nil, notifications: nil,
                 allowOutsideRead: nil, defaultBackendId: nil, nativeBackendDefaults: nil, cursorCli: patch,
                 composerEnterBehavior: nil, composerRunningBehavior: nil, composerSendLater: nil, idleReclaimMinutes: nil, maxLiveAgents: nil,
-                quickChat: nil, defaultAgentId: nil, agentDefaults: nil
+                quickChat: nil, defaultAgentId: nil, agentDefaults: nil, sidebarPinned: nil
             ))
             dismiss()
         } catch {
