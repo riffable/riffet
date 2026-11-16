@@ -28,7 +28,7 @@ interface WorkerScope {
 declare const self: WorkerScope;
 
 /**
- * Both literals are replaced by the precache plugin in vite.config.ts once Rollup knows every
+ * Both literals are replaced by `serviceWorkerPrecache` in vite.config.ts once Rollup knows every
  * emitted file name. `CACHE_NAME` is derived from that same list, so a build whose output changed
  * gets a new cache and one whose output did not keeps the cache it already filled.
  */

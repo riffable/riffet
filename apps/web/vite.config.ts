@@ -4,9 +4,11 @@ import tailwindcss from '@tailwindcss/vite';
 import { lingui } from '@lingui/vite-plugin';
 import { fileURLToPath } from 'node:url';
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
-import { join, sep } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import { Script } from 'node:vm';
+import { build as esbuild } from 'esbuild';
 import type { BuildInfo } from '../../packages/contracts/src/update';
 
 /** The public directory, read directly so the precache list does not depend on Vite's copy step. */
@@ -23,14 +25,15 @@ function webBuildInfo(command: string): BuildInfo {
 }
 
 /**
- * Puts the precache list into the built service worker.
+ * Bundles `src/sw.ts` as a self-contained classic script and injects the precache list.
  *
  * The worker needs the hashed asset names to serve a shell offline, but those names only exist once
- * Rollup has settled on the bundle. So the worker source carries two placeholders — the URL list and
- * its cache name — and this plugin replaces them here, in `generateBundle`, when every emitted file
- * name is known. The cache name is derived from those names and the public files' bytes, which makes
- * it a content version: a build whose output changed installs a new worker and a new cache; a build
- * whose output did not keeps the cache it already filled.
+ * Rollup has settled on the bundle. Bundling `sw.ts` in its own esbuild IIFE pass (rather than as a
+ * second Rollup entry) guarantees shared modules like `service-worker-strategy.ts` are inlined
+ * instead of split into an ESM chunk `import` that classic `serviceWorker.register('/sw.js')` rejects.
+ * The cache name is derived from those emitted names and the public files' bytes, which makes it a
+ * content version: a build whose output changed installs a new worker and a new cache; a build whose
+ * output did not keeps the cache it already filled.
  */
 /**
  * Kept out of the install-time download, not out of the cache: the worker still stores them
@@ -49,15 +52,11 @@ function excludedFromPrecache(url: string): boolean {
 }
 
 function serviceWorkerPrecache(): Plugin {
+  const swEntry = fileURLToPath(new URL('./src/sw.ts', import.meta.url));
   return {
     name: 'riffet-sw-precache',
     apply: 'build',
-    generateBundle(_options, bundle) {
-      const worker = bundle['sw.js'];
-      if (!worker || worker.type !== 'chunk') {
-        // `this.error` throws, so the worker is a chunk past this point.
-        this.error('The service worker entry did not produce sw.js; check rollupOptions.input');
-      }
+    async generateBundle(_options, bundle) {
       const emitted = Object.values(bundle)
         .map((file) => `/${file.fileName}`)
         // The worker is fetched by the browser's own update check, never by itself, and index.html
@@ -76,11 +75,51 @@ function serviceWorkerPrecache(): Plugin {
       const digest = createHash('sha256').update(urls.join('\n'));
       for (const entry of publicEntries) digest.update(entry).update(readFileSync(join(publicDir, entry)));
       const version = digest.digest('hex').slice(0, 8);
-      worker.code = worker.code
-        .replace(/["']__RIFFET_PRECACHE__["']/g, JSON.stringify(urls))
-        .replace(/["']__RIFFET_CACHE__["']/g, JSON.stringify(`riffet-shell-${version}`));
+      const built = await esbuild({
+        entryPoints: [swEntry],
+        absWorkingDir: repoRoot,
+        bundle: true,
+        write: false,
+        format: 'iife',
+        platform: 'browser',
+        target: 'es2023',
+        minify: true,
+        legalComments: 'none',
+        metafile: true,
+        tsconfig: join(repoRoot, 'tsconfig.json'),
+      });
+      const [output] = built.outputFiles;
+      if (!output || built.outputFiles.length !== 1) {
+        this.error('The service worker build must emit a single classic script');
+      }
+      const code = output.text
+        .replace(/["']__RIFFET_PRECACHE__["']/g, () => JSON.stringify(urls))
+        .replace(/["']__RIFFET_CACHE__["']/g, () => JSON.stringify(`riffet-shell-${version}`));
       // A placeholder left in the shipped worker would silently cache nothing, so fail the build.
-      if (worker.code.includes('__RIFFET_')) this.error('The service worker placeholders were not replaced');
+      if (code.includes('__RIFFET_')) this.error('The service worker placeholders were not replaced');
+      // Classic service workers reject ESM `import`/`export` statements and top-level `await`;
+      // `vm.Script` compiles the bundle as a top-level classic script without executing it.
+      try {
+        new Script(code);
+      } catch (error) {
+        this.error(`The service worker output is not a valid classic script: ${(error as Error).message}`);
+      }
+      const directory = process.env.RIFFET_BUNDLED_PACKAGES_DIR;
+      if (directory && built.metafile) {
+        const deps = Object.keys(built.metafile.inputs)
+          .filter((id) => !/^[^/]+:/.test(id))
+          .map((id) => resolve(repoRoot, id))
+          .filter((id) => /[\\/]node_modules[\\/]/.test(id));
+        if (deps.length) {
+          const target = join(directory, 'public.json');
+          let existing: string[] = [];
+          try { existing = JSON.parse(readFileSync(target, 'utf8')) as string[]; } catch { /* written below */ }
+          writeFileSync(target, JSON.stringify([...new Set([...existing, ...deps])].sort()));
+        }
+      }
+      // `sw.js` is a fixed, unhashed name on purpose: its URL is the service worker's identity and
+      // the server revalidates it with an ETag, so a new build is always seen.
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source: code });
     },
   };
 }
@@ -156,12 +195,7 @@ export default defineConfig(({ command, mode }): UserConfig => {
     outDir: share ? '../../../dist/share' : '../../dist/public',
     emptyOutDir: true,
     rollupOptions: {
-      // The worker is a second entry so it goes through the same bundler as the app, which is what
-      // lets it import the shared, unit-tested routing decision instead of duplicating it.
-      input: share ? { index: fileURLToPath(new URL('./share/index.html', import.meta.url)) } : {
-        index: fileURLToPath(new URL('./index.html', import.meta.url)),
-        sw: fileURLToPath(new URL('./src/sw.ts', import.meta.url)),
-      },
+      input: fileURLToPath(new URL(share ? './share/index.html' : './index.html', import.meta.url)),
       treeshake: {
         // micromark-extension-math's HTML compiler, which remark-math never calls, imports KaTeX at
         // the top level. KaTeX does not declare itself side-effect free, so without this that unused
@@ -169,9 +203,7 @@ export default defineConfig(({ command, mode }): UserConfig => {
         moduleSideEffects: (id) => !/\/node_modules\/katex\/.*\.m?js$/.test(id),
       },
       output: {
-        // `sw.js` is a fixed, unhashed name on purpose: its URL is the service worker's identity and
-        // the server revalidates it with an ETag, so a new build is always seen.
-        entryFileNames: (chunk) => (chunk.name === 'sw' ? 'sw.js' : 'assets/[name]-[hash].js'),
+        entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
         manualChunks(id) {
