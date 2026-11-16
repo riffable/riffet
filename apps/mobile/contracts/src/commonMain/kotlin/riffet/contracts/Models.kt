@@ -147,6 +147,8 @@ data class Project(
     val worktree: ProjectWorktree? = null,
     /** A built-in project this client must not list as an ordinary one, e.g. `quick-chat`. */
     val system: String? = null,
+    /** The 助理 project's one long conversation; it may name a session since archived or deleted. */
+    val mainSessionId: String? = null,
 )
 
 @Serializable

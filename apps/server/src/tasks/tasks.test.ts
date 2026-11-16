@@ -344,7 +344,9 @@ describe('task routes', () => {
     expect((await call('GET', `/api/projects/${p.id}/task-actions`)).json()).toMatchObject({ projectTypes: ['demo'], actions: [{ providerId: 'acme.demo/run', pluginId: 'acme.demo', id: 'go' }] });
     const body = request(p, 'req-route');
     const created = (await call('POST', '/api/tasks', body)).json() as Task;
-    expect(created).toMatchObject({ state: 'running', projectId: p.id });
+    // A runner fast enough finishes the one printf before the response is written.
+    expect(created).toMatchObject({ projectId: p.id });
+    expect(['running', 'succeeded']).toContain(created.state);
     expect(((await call('POST', '/api/tasks', body)).json() as Task).id).toBe(created.id);
     const conflict = await call('POST', '/api/tasks', { ...body, actionId: 'other' });
     expect(conflict.statusCode).toBe(409);

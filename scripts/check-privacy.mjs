@@ -29,6 +29,8 @@ const EMAIL_ALLOW = [
   // Co-author trailers and bots: a no-reply address belongs to no one.
   /^(?:[a-z0-9._+-]*[.+-])?no-?reply@/i,
   /^git@github\.com$/i,
+  // Cursor's own co-author address.
+  /^cursoragent@cursor\.com$/i,
   /@(?:mac\.local|domain\.tld|b\.co)$/i,
 ];
 // Kotlin labels (`this@Foo.bar`) and image suffixes (`icon@2x.png`) look like addresses.
