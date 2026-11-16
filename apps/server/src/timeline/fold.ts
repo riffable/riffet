@@ -32,7 +32,8 @@ const TERMINAL_RUN = new Set<Run['state']>(['completed', 'failed', 'cancelled', 
 const TOOL_TYPES = new Set(['tool_call', 'tool_call_update']);
 
 const sha1 = (text: string) => createHash('sha1').update(text).digest('hex');
-export const generationOf = (journalGeneration: string | undefined): string => sha1(`${journalGeneration ?? ''}\n${FOLD_VERSION}`);
+/** `epoch` counts the times a lane's rows were dropped for being cold: it changes the generation, so a client holding the old rows is sent a snapshot. */
+export const generationOf = (journalGeneration: string | undefined, epoch = 0): string => sha1(`${journalGeneration ?? ''}\n${FOLD_VERSION}${epoch ? `\n${epoch}` : ''}`);
 
 export type ResetReason = 'rebuilt' | 'promoted' | 'fold';
 
@@ -126,6 +127,7 @@ export class LaneFold {
   private key = '';
   private scratch = false;
   private journalGeneration: string | undefined;
+  private epoch = 0;
   private entities = new Map<string, Entity>();
   private drafts = new WeakSet<WorkbenchEvent>();
   private events: WorkbenchEvent[] = [];
@@ -279,14 +281,25 @@ export class LaneFold {
     this.key = serving.key;
     this.scratch = serving.scratch;
     this.journalGeneration = journal.peek(serving.key)?.generation;
-    this.generation = generationOf(this.journalGeneration);
     const stored = tables.head(this.sessionId, this.lane);
+    this.epoch = stored?.epoch ?? 0;
+    this.generation = generationOf(this.journalGeneration, this.epoch);
     if (stored && stored.generation === this.generation) {
+      // A lane dropped as cold whose rows were not all deleted yet (`TimelineService.sweepCold`): nothing is folded under this head, so what is left is stale.
+      if (stored.headSeq === 0 && stored.journalSeq === 0 && tables.hasRows(this.sessionId, this.lane)) {
+        journal.tx(() => {
+          const cut = tables.truncatedBlobs(this.sessionId, this.lane);
+          tables.clearLane(this.sessionId, this.lane);
+          if (cut.length) this.ctx.release(this.sessionId, cut);
+        });
+      }
       this.headSeq = stored.headSeq;
       this.journalSeq = stored.journalSeq;
       this.windowStart = stored.foldedThrough + 1;
       return undefined;
     }
+    // A rebuilt lane starts over under a new epoch, so a generation string is never issued twice (a downgrade then upgrade would reuse its seqs).
+    if (stored) { this.epoch = stored.epoch + 1; this.generation = generationOf(this.journalGeneration, this.epoch); }
     this.headSeq = 0;
     this.journalSeq = 0;
     this.windowStart = 1;
@@ -302,7 +315,7 @@ export class LaneFold {
 
   private putHead(): void {
     this.ctx.tables.putHead({
-      sessionId: this.sessionId, lane: this.lane, generation: this.generation, journalGeneration: this.journalGeneration ?? null, scratch: this.scratch,
+      sessionId: this.sessionId, lane: this.lane, generation: this.generation, journalGeneration: this.journalGeneration ?? null, scratch: this.scratch, epoch: this.epoch,
       headSeq: this.headSeq, foldVersion: FOLD_VERSION, foldedThrough: this.windowStart - 1, journalSeq: this.journalSeq,
     });
   }

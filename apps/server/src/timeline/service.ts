@@ -1,7 +1,8 @@
 import type { DatabaseSync } from 'node:sqlite';
-import type { NativeActivity, NativeJob, Run } from '../../../../packages/contracts/src/index.js';
+import { SERVER_BUDGET, type NativeActivity, type NativeJob, type Run } from '../../../../packages/contracts/src/index.js';
 import { SYNC_BUDGET, type FileChange, type LaneFind, type SyncLane, type TimelineChanges, type TimelinePage, type TimelineRow, type TurnOutlineV3 } from '../../../../packages/contracts/src/sync.js';
 import { isLiveActivity } from '../journal/activity.js';
+import { eventLoopBusy } from '../loop-health.js';
 import { laneKey, type Journal, type JournalAppend } from '../journal/journal.js';
 import { hasTurnEnded, servingKey, turnMetaId } from '../journal/ingest.js';
 import type { BlobWriter } from './budget.js';
@@ -48,6 +49,15 @@ export interface TimelineDeps {
   debounceMs?: number;
   /** Told of a lane that failed to fold; the default logs it. */
   onError?(error: unknown, sessionId: string, lane: SyncLane): void;
+  /**
+   * When a session was last active, and whether it is running now; undefined when unknown (its rows are kept).
+   * The default reads the store's `sessions` table in `db`.
+   */
+  activity?(sessionId: string): { at?: string; running: boolean } | undefined;
+  /** Whether the event loop is lagging, which defers the cold sweep; `eventLoopBusy` by default. */
+  busy?(): boolean;
+  /** When the cold sweep first runs and how often after; `false` turns it off. */
+  coldSweep?: false | { firstMs: number; everyMs: number };
 }
 
 export interface TimelineHead { generation: string; headSeq: number }
@@ -70,9 +80,18 @@ interface Work { journal: boolean; runs: boolean; jobs: NativeJob[]; subagents: 
 const MAX_SUBAGENT_CHANGES = 200;
 const laneId = (sessionId: string, lane: SyncLane) => `${sessionId}\n${lane}`;
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, Math.floor(value)));
+const TERMINAL_RUNS = new Set<Run['state']>(['completed', 'failed', 'cancelled', 'interrupted']);
 const MAX_POS = Number.MAX_SAFE_INTEGER;
 /** Log rows a fold takes per turn of the event loop: a few tens of milliseconds of folding at most. */
 const STEP_ROWS = 1_000;
+/** Rows a cold drop deletes per transaction; the event loop is yielded between chunks. */
+const COLD_CHUNK_ROWS = 2_000;
+/** Rows of the job check read per turn of the event loop. */
+const COLD_SCAN_ROWS = 500;
+const COLD_FIRST_MS = 5 * 60_000;
+const COLD_EVERY_MS = 6 * 60 * 60_000;
+const COLD_RETRY_MS = 30_000;
+const RUNNING_STATES = new Set(['starting', 'running', 'waiting', 'cancelling']);
 
 export class TimelineService {
   private readonly tables: TimelineTables;
@@ -90,6 +109,11 @@ export class TimelineService {
   private immediate: ReturnType<typeof setImmediate> | undefined;
   private readonly offs: Array<() => void> = [];
   private closed = false;
+  private coldTimers: Array<ReturnType<typeof setTimeout>> = [];
+  private sweeping: Promise<number> | undefined;
+  private readonly coldWaits = new Map<ReturnType<typeof setTimeout>, () => void>();
+  /** Lanes of a cold drop whose rows are still being deleted. */
+  private readonly dropping = new Set<string>();
 
   constructor(private readonly deps: TimelineDeps) {
     this.tables = new TimelineTables(deps.db);
@@ -101,6 +125,13 @@ export class TimelineService {
     // A lane not folded now takes up its runs and jobs when it is next opened (`LaneFold.open`).
     if (deps.onRunChanged) this.offs.push(deps.onRunChanged(run => { if (this.wanted(run.sessionId, 'main')) this.later(run.sessionId, 'main', work => { work.runs = true; }); }));
     if (deps.onJobChanged) this.offs.push(deps.onJobChanged((sessionId, job) => { if (this.wanted(sessionId, 'main')) this.later(sessionId, 'main', work => { work.jobs.push(job); }); }));
+    if (deps.coldSweep !== false) {
+      const { firstMs, everyMs } = deps.coldSweep ?? { firstMs: COLD_FIRST_MS, everyMs: COLD_EVERY_MS };
+      const run = () => { void this.sweepCold(); };
+      const first = setTimeout(run, firstMs), every = setInterval(run, everyMs);
+      first.unref(); every.unref();
+      this.coldTimers.push(first, every);
+    }
   }
 
   // ---- reads -------------------------------------------------------------------------------
@@ -268,13 +299,7 @@ export class TimelineService {
 
   /** Forgets a session's rows (a deleted conversation), and the blobs they held. */
   drop(sessionId: string): void {
-    const owned = (id: string) => id.startsWith(`${sessionId}\n`);
-    for (const id of [...this.hot.keys()]) if (owned(id)) this.hot.delete(id);
-    for (const [id, timer] of [...this.timers]) if (owned(id)) { clearTimeout(timer); this.timers.delete(id); }
-    for (const [id, work] of [...this.work]) if (owned(id)) { this.work.delete(id); for (const waiter of work.waiters) waiter(); }
-    for (const id of [...this.listeners.keys()]) if (owned(id)) this.listeners.delete(id);
-    for (const id of [...this.summaries.keys()]) if (id.startsWith(`${sessionId}\n`)) { this.summaries.delete(id); this.staleSummaries.delete(id); }
-    for (const id of [...this.laneFileChanges.keys()]) if (owned(id)) this.laneFileChanges.delete(id);
+    this.forget(sessionId);
     this.deps.journal.tx(() => {
       const cut = this.tables.truncatedBlobs(sessionId);
       this.tables.dropSession(sessionId);
@@ -282,8 +307,146 @@ export class TimelineService {
     });
   }
 
+  /**
+   * Drops the rows of sessions idle longer than `SERVER_BUDGET.coldTimelineDays` that nobody holds open
+   * (docs/guide/performance.md §3.7). Each lane keeps its head under a new epoch, so its generation differs
+   * and a client holding the old rows is sent a snapshot; the rows refold from the journal when next read.
+   * Only the main lane is dropped: subagent lanes keep their rows and heads, which the main lane's tool rows
+   * read their summaries from when it refolds.
+   * One session per turn of the event loop, its rows deleted in chunks with the loop yielded between them;
+   * returns how many sessions were dropped.
+   *
+   * Limitation: a background job (`NativeJob`) is held in memory only and decorates stored tool rows, so a
+   * session whose rows carry one is not dropped; a refold could not bring it back.
+   */
+  sweepCold(now = Date.now()): Promise<number> {
+    if (this.sweeping) return this.sweeping;
+    const sweep = (async () => {
+      await Promise.resolve();
+      let dropped = 0, after = '';
+      try {
+        while (!this.closed) {
+          const [sessionId] = this.tables.foldedSessions(after, 1);
+          if (!sessionId) break;
+          after = sessionId;
+          while (!this.closed && (this.deps.busy ?? eventLoopBusy)()) await this.pause(COLD_RETRY_MS);
+          if (this.closed) break;
+          if (await this.dropIfCold(sessionId, now)) dropped++;
+          await new Promise<void>(resolve => setImmediate(resolve));
+        }
+      } catch (error) {
+        console.error('[timeline] cold sweep failed:', error);
+      }
+      return dropped;
+    })();
+    this.sweeping = sweep;
+    void sweep.finally(() => { if (this.sweeping === sweep) this.sweeping = undefined; });
+    return sweep;
+  }
+
+  private pause(ms: number): Promise<void> {
+    return new Promise(resolve => {
+      const timer = setTimeout(() => { this.coldWaits.delete(timer); resolve(); }, ms);
+      timer.unref();
+      this.coldWaits.set(timer, resolve);
+    });
+  }
+
+  private held(sessionId: string): boolean {
+    const prefix = `${sessionId}\n`;
+    for (const map of [this.hot, this.listeners, this.work, this.timers]) for (const id of map.keys()) if (id.startsWith(prefix)) return true;
+    return false;
+  }
+
+  private async dropIfCold(sessionId: string, now: number): Promise<boolean> {
+    if (this.held(sessionId) || this.deps.deleted?.(sessionId)) return false;
+    const head = this.tables.head(sessionId, 'main');
+    // A lane still being imported is served from its scratch window; leave the session alone.
+    if (!head || head.scratch) return false;
+    // What a drop left behind (rows under a head already at a new generation) is finished whatever the session's idleness.
+    const resume = head.headSeq === 0 && head.journalSeq === 0 && head.epoch > 0 && this.tables.hasRows(sessionId, 'main');
+    if (!resume) {
+      const activity = (this.deps.activity ?? ((id: string) => this.storedActivity(id)))(sessionId);
+      if (!activity || activity.running) return false;
+      // The newest sign of use: the session's activity, its log, and the lane's last fold (a session a reader keeps opening is not dropped again each sweep).
+      const at = Math.max(Date.parse(activity.at ?? '') || 0, Date.parse(this.deps.journal.peek(sessionId)?.updatedAt ?? '') || 0, Date.parse(head.updatedAt ?? '') || 0);
+      if (!at || now - at < SERVER_BUDGET.coldTimelineDays * 86_400_000) return false;
+      if (this.deps.listRuns(sessionId).some(run => !TERMINAL_RUNS.has(run.state))) return false;
+      if (await this.hasJob(sessionId)) return false;
+      if (this.closed || this.held(sessionId)) return false;
+    }
+    // The first chunk goes in the transaction that moves the head to its new generation: from then on a reader
+    // refolds from the journal. A fold of the lane (`flushLane`) takes it off `dropping` and clears what is left (`LaneFold.attach`).
+    const id = laneId(sessionId, 'main');
+    this.dropping.add(id);
+    let left = true;
+    this.deps.journal.tx(() => {
+      this.tables.clearTurns(sessionId, 'main');
+      if (!resume) {
+        const epoch = head.epoch + 1;
+        this.tables.putHead({ ...head, epoch, generation: generationOf(head.journalGeneration ?? undefined, epoch), headSeq: 0, foldedThrough: 0, journalSeq: 0 });
+      }
+      left = this.deleteChunk(sessionId);
+    });
+    this.forget(sessionId, false);
+    while (left) {
+      await new Promise<void>(resolve => setImmediate(resolve));
+      if (this.closed || !this.dropping.has(id)) break;
+      this.deps.journal.tx(() => { left = this.deleteChunk(sessionId); });
+    }
+    this.dropping.delete(id);
+    return true;
+  }
+
+  /** Whether a tool row of the main lane carries a background job, read a bounded step at a time. */
+  private async hasJob(sessionId: string): Promise<boolean> {
+    let after = 'tool:';
+    for (;;) {
+      const step = this.tables.jobRowsAfter(sessionId, after, COLD_SCAN_ROWS);
+      if (step.found) return true;
+      if (step.last === undefined || this.closed) return false;
+      after = step.last;
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+  }
+
+  /**
+   * Deletes a chunk of the main lane's rows; whether rows may be left. The blobs their cut outputs name stay
+   * claimed: the refold from the journal cuts the same outputs and names the same content-addressed blobs again.
+   */
+  private deleteChunk(sessionId: string): boolean {
+    return this.tables.deleteRowsChunk(sessionId, 'main', COLD_CHUNK_ROWS) === COLD_CHUNK_ROWS;
+  }
+
+  /** The default `activity`: the store's session record, which shares this database. */
+  private storedActivity(sessionId: string): { at?: string; running: boolean } | undefined {
+    try {
+      const row = this.deps.db.prepare("SELECT json_extract(json,'$.lastActivityAt') AS last, json_extract(json,'$.updatedAt') AS updated, json_extract(json,'$.state') AS state FROM sessions WHERE id=?").get(sessionId) as { last: string | null; updated: string | null; state: string | null } | undefined;
+      if (!row) return undefined;
+      const times = [row.last, row.updated].filter((value): value is string => typeof value === 'string').sort();
+      return { ...(times.length ? { at: times.at(-1)! } : {}), running: row.state !== null && RUNNING_STATES.has(row.state) };
+    } catch { return undefined; }
+  }
+
+  /** Lets go of everything held in memory for the session; `queued` also drops pending work. */
+  private forget(sessionId: string, queued = true): void {
+    const owned = (id: string) => id.startsWith(`${sessionId}\n`);
+    for (const id of [...this.hot.keys()]) if (owned(id)) this.hot.delete(id);
+    if (queued) {
+      for (const [id, timer] of [...this.timers]) if (owned(id)) { clearTimeout(timer); this.timers.delete(id); }
+      for (const [id, work] of [...this.work]) if (owned(id)) { this.work.delete(id); for (const waiter of work.waiters) waiter(); }
+      for (const id of [...this.listeners.keys()]) if (owned(id)) this.listeners.delete(id);
+    }
+    for (const id of [...this.summaries.keys()]) if (id.startsWith(`${sessionId}\n`)) { this.summaries.delete(id); this.staleSummaries.delete(id); }
+    for (const id of [...this.laneFileChanges.keys()]) if (owned(id)) this.laneFileChanges.delete(id);
+    if (queued) for (const id of [...this.dropping]) if (owned(id)) this.dropping.delete(id);
+  }
+
   close(): void {
     this.closed = true;
+    for (const timer of this.coldTimers.splice(0)) { clearTimeout(timer); clearInterval(timer); }
+    for (const [timer, resolve] of [...this.coldWaits]) { clearTimeout(timer); resolve(); }
+    this.coldWaits.clear();
     for (const off of this.offs.splice(0)) off();
     for (const timer of this.timers.values()) clearTimeout(timer);
     this.timers.clear();
@@ -367,6 +530,8 @@ export class TimelineService {
   /** Folds a step of what the lane's log gained; false when more is left for the next. */
   private flushLane(sessionId: string, lane: SyncLane, work: Work): boolean {
     const id = laneId(sessionId, lane);
+    // A fold of the lane ends what is left of a cold drop of it: `LaneFold.attach` clears the leftover rows.
+    this.dropping.delete(id);
     let hot = this.hot.get(id);
     let reset: TimelineChange | undefined;
     let caughtUp: boolean;

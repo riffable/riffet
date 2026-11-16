@@ -18,7 +18,7 @@ import { applyProcessEnvironment, currentEnvironmentReport, terminalEnvironment,
 import { buildLaunchAgentPlist, buildSystemdUnit, xmlEscape, systemdValue } from './service-files.js';
 import { claimStateDirectory } from './compat.js';
 import { SettingsService } from './settings/index.js';
-import { doctorChecks, formatDoctorChecks, machineReport } from './doctor.js';
+import { compactDatabase, doctorChecks, formatDoctorChecks, machineReport } from './doctor.js';
 import { restoreBackup } from './system.js';
 import { startDiscovery, type DiscoveryHandle } from './discovery.js';
 import { SERVER_BUILD, SERVER_VERSION, SOURCE_ROOT } from './version.js';
@@ -255,7 +255,8 @@ async function uninstallService(){
 }
 
 /** One report that explains a machine, instead of only failing on it. */
-async function doctor(options:CliOptions&{json?:boolean}){
+async function doctor(options:CliOptions&{json?:boolean;compact?:boolean}){
+  if(options.compact){compactDatabase(state(options));return;}
   const environment=currentEnvironmentReport()??await applyProcessEnvironment({stateDir:state(options)});
   const settings=new SettingsService({stateDir:state(options),cliPath:options.cli});
   const machine=await machineReport();
@@ -471,7 +472,7 @@ export async function main(){
   configure(program.command('status').description('Show daemon status and login URL')).option('--no-token','Hide login token').action(async(options:CliOptions&{token:boolean})=>{const record=await active(options);if(record){show(record,options,options.token);const manager=await managedBy(record);if(manager)console.log(`Managed by: ${manager==='app'?'Riffet.app':manager==='launchd'?'login service (local.riffet)':'riffet start'}`);}else console.log(`Riffet is stopped · state: ${state(options)}`);});
   program.command('pair').description('Show LAN addresses, a one-use pairing code and a QR code').option('--state-dir <path>','Persistent workbench state',defaultState).option('--json','Print JSON containing a sensitive temporary pairing code').option('--url <url>','Address clients reach this server by (VPN name, SSH tunnel, HTTPS front door); a hostname must also be allowed with --allow-host').action(async(options:{stateDir:string;json?:boolean;url?:string})=>{const cliOptions=options as CliOptions;const url=options.url?publicOrigin(options.url):undefined;const record=await active(cliOptions);if(!record)throw new Error('Riffet is stopped. Run `riffet start --host 0.0.0.0 --auth`, then `riffet pair`.');const pairing=await requestCliPairing(record,token(cliOptions),fetch,{url});console.log(options.json?JSON.stringify(pairing,null,2):await formatCliPairing(pairing));});
   program.command('resume [conversation]').description('Continue a Riffet conversation in this terminal; Riffet follows it until the CLI exits').option('--state-dir <path>','Persistent workbench state',defaultState).option('--all','Choose among the conversations of every project').action(async(target:string|undefined,options:{stateDir:string;all?:boolean})=>{const cliOptions=options as CliOptions;const record=await active(cliOptions);if(!record)throw new Error('Riffet is stopped. Run `riffet start` first.');process.exitCode=await resumeInTerminal(record,token(cliOptions),{target,all:options.all});});
-  configure(program.command('doctor').description('Check Node, tmux, every agent CLI, the port and the state directory')).option('--json','Print the full environment and capability report as JSON').action(doctor);
+  configure(program.command('doctor').description('Check Node, tmux, every agent CLI, the port and the state directory')).option('--json','Print the full environment and capability report as JSON').option('--compact','Shrink workbench.db with VACUUM; the server must be stopped').action(doctor);
   configure(program.command('update').description('Check release versions, or update this source installation (an npm install reports the npm command)'))
     .option('--check','Only check published Git tags; do not change source or stop the server')
     .option('--json','Print the check result as JSON (requires --check)')

@@ -75,10 +75,11 @@
 
 ### 3.7 持久化数据有保留策略
 
-- 派生数据可以丢弃、按需重建：冷会话（空闲超过 `SERVER_BUDGET.coldTimelineDays` 且无人打开）的 `timeline_rows` 被丢弃，下次打开时从日志重新折叠，代际随之更换，客户端收到 reset 后重新取快照。
+- 派生数据可以丢弃、按需重建：冷会话（会话活动、日志与时间线最后一次折叠都早于 `SERVER_BUDGET.coldTimelineDays`，且无人打开、无未结束的运行）的主车道 `timeline_rows` 被丢弃，下次打开时从日志重新折叠；车道头换新的 epoch，代际随之更换，客户端收到快照。服务启动 5 分钟后第一次清理，之后每 6 小时一次，每轮只处理一个会话、分块删除。
+- 子 Agent 车道的行保留：主车道重新折叠时，工具行里的子 Agent 摘要从这些行读出。带后台任务（`NativeJob`）的会话不丢弃，任务只在内存里，重新折叠找不回。
 - 日志（`journal_events`）是历史的来源，随会话删除而删除，不按时间清理。
-- blob 按引用回收（`releaseSessionBlobs`）。
-- SQLite 文件不会因删除而变小（`auto_vacuum` 只对新建的库生效）；回收的页由后续写入复用。压缩文件用离线的 `riffet doctor --compact`。
+- blob 按引用回收（`releaseSessionBlobs`）；冷会话丢弃时不释放，重新折叠会引用同一批内容寻址的 blob。
+- SQLite 文件不会因删除而变小；回收的页由后续写入复用。压缩文件用离线的 `riffet doctor --compact`：要求服务已停、剩余空间不少于库大小的两倍，并把库改为 `auto_vacuum=INCREMENTAL`。
 
 ### 3.8 大文件流式读取，后台任务限量
 
@@ -119,10 +120,8 @@
 
 ### 服务端
 
-- §3.7：冷会话的 `timeline_rows` 不丢弃。2026-11-16 本机 748 个会话，`timeline_rows` 1.7 GB，其中空闲 7 天以上的 505 个会话占 968 MB。
-- §3.8：用量补算整读转录文件（`stats/backfill.ts` → `backends/claude/history.ts` 的 `readFile`），没有大小上限。
-- §3.3：`store.allSessions()` 每次整表 `JSON.parse`，会话列表请求与调度器多处调用。
-- §3.1：`sync/ingest.ts` 的 `writers` 按会话常驻到进程结束。
+- §3.7：冷会话只丢弃主车道；子 Agent 车道的行（2026-11-16 本机约占时间线一半）要等子 Agent 摘要落进主车道的行之后才能丢弃。
+- §3.8：Claude 用量补算整读转录文件并做完整投影（`backends/claude/index.ts` 的 `usageTranscript` → `ClaudeTranscript.setFile`）。本机 46 个转录超过 32 MB，最大 242 MB；改法是像 Codex 的 `RolloutUsageReader` 一样单独按行读取用量。
 
 ### Kotlin 共享客户端（Mac、iOS、Android）
 

@@ -49,6 +49,7 @@ export interface DeletedSession {
   /** On the root only: every id deleted with it. */
   sessionIds?: string[];
 }
+function deepFreeze(value: object): void { Object.freeze(value); for (const inner of Object.values(value)) if (inner && typeof inner === 'object' && !Object.isFrozen(inner)) deepFreeze(inner); }
 const ACTIVE_SESSION_STATES: ReadonlySet<Session['state']> = new Set(['starting', 'running', 'waiting', 'cancelling']);
 
 /**
@@ -351,7 +352,7 @@ export class Store {
     });
     // Freed pages are reused by later writes either way; a database created with incremental
     // auto-vacuum can also give them back to the file system without a blocking full VACUUM.
-    if (removed && (this.sql('PRAGMA auto_vacuum').get() as { auto_vacuum: number }).auto_vacuum === 2) this.db.exec('PRAGMA incremental_vacuum');
+    if (removed && (this.sql('PRAGMA auto_vacuum').get() as { auto_vacuum: number }).auto_vacuum === 2) this.db.exec('PRAGMA incremental_vacuum(5000)'); // bounded so a start never stalls on a large freed range; `riffet doctor --compact` reclaims the rest
   }
   private get<T>(table: string, id: string): T | undefined {
     const row = this.sql(`SELECT json FROM ${table} WHERE id=?`).get(id) as {json: string} | undefined;
@@ -366,7 +367,20 @@ export class Store {
   private run(json: string): IdentifiedRun { return this.identified(JSON.parse(json) as Run); }
   /** Also what every run write passes through, so a stored Cursor run keeps its `cursorSessionId` mirror. */
   private identified(run: Run): IdentifiedRun { return normalizeRunIdentity(run, () => this.ownerBackendId(run.sessionId)); }
-  private allSessions(): IdentifiedSession[] { return (this.sql('SELECT json FROM sessions ORDER BY rowid').all() as {json: string}[]).map(row => this.session(row.json)); }
+  /**
+   * Every session, parsed once and kept until a session write (`sessionsChanged`) or a rollback; docs/guide/performance.md §3.3.
+   * The cache is never handed out: callers get top-level copies whose nested values are frozen, so a caller
+   * that edits what it was given cannot corrupt the next caller's list.
+   */
+  private sessionCache: IdentifiedSession[] | undefined;
+  private allSessions(): IdentifiedSession[] {
+    this.sessionCache ??= (this.sql('SELECT json FROM sessions ORDER BY rowid').all() as {json: string}[]).map(row => {
+      const session = this.session(row.json);
+      for (const value of Object.values(session)) if (value && typeof value === 'object') deepFreeze(value);
+      return session;
+    });
+    return this.sessionCache.map(session => ({...session}));
+  }
   private ownerBackendId(sessionId: string): NativeBackendId | undefined {
     const row = this.sql("SELECT json_extract(json,'$.backendId') AS backendId FROM sessions WHERE id=?").get(sessionId) as { backendId: NativeBackendId | null } | undefined;
     return row?.backendId ?? undefined;
@@ -458,6 +472,7 @@ export class Store {
       return result;
     }
     catch (error) {
+      this.sessionCache = undefined;
       this.db.exec('ROLLBACK'); this.depth--; this.pending.length = 0; this.pendingRuns.clear(); this.listsDirty = false;
       for (const hook of this.settleHooks.splice(0)) hook(false);
       throw error;
@@ -510,6 +525,7 @@ export class Store {
     return item && normalizeSessionIdentity(item);
   }
   private sessionsChanged(ids: readonly string[]) {
+    this.sessionCache = undefined;
     this.listRevisionValue += 1;
     for (const id of ids) this.sessionRevisions.set(id, this.listRevisionValue);
     this.notifyLists();

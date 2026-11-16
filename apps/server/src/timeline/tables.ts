@@ -23,10 +23,14 @@ export interface TimelineHead {
   /** The journal log's generation, and whether that log is the lane's scratch window. */
   journalGeneration: string | null;
   scratch: boolean;
+  /** Times the lane's rows were dropped as cold; part of its generation. */
+  epoch: number;
   headSeq: number;
   foldVersion: number;
   foldedThrough: number;
   journalSeq: number;
+  /** When the head was last written (a fold); absent on a head not read from the table. */
+  updatedAt?: string;
 }
 
 /** A stored row without its payload. */
@@ -34,7 +38,7 @@ export interface RowState { key: string; pos: number; turn: string; seq: number;
 
 export interface StoredTurn { turn: string; startPos: number; cut: number | null; outline: TurnOutlineV3 }
 
-interface HeadRecord { session_id: string; lane: string; generation: string; journal_generation: string | null; scratch: number; head_seq: number; fold_version: number; folded_through: number; journal_seq: number }
+interface HeadRecord { updated_at: string; session_id: string; lane: string; generation: string; journal_generation: string | null; scratch: number; epoch: number; head_seq: number; fold_version: number; folded_through: number; journal_seq: number }
 interface RowRecord { key: string; pos: number; turn: string; seq: number; rev: number; run_id: string | null; deleted: number; kind: string; digest: string; bytes: number }
 
 const rowStateOf = (row: RowRecord): RowState => ({
@@ -72,6 +76,9 @@ export class TimelineTables {
         session_id TEXT NOT NULL, lane TEXT NOT NULL, turn TEXT NOT NULL, start_pos INTEGER NOT NULL, cut INTEGER, payload TEXT NOT NULL,
         PRIMARY KEY (session_id, lane, turn));
       CREATE INDEX IF NOT EXISTS timeline_turns_pos ON timeline_turns(session_id, lane, start_pos);`);
+    if (!(this.db.prepare('PRAGMA table_info(timeline_heads)').all() as Array<{ name: string }>).some(column => column.name === 'epoch')) {
+      this.db.exec('ALTER TABLE timeline_heads ADD COLUMN epoch INTEGER NOT NULL DEFAULT 0');
+    }
   }
 
   private sql(text: string): StatementSync {
@@ -85,8 +92,8 @@ export class TimelineTables {
   head(sessionId: string, lane: SyncLane): TimelineHead | undefined {
     const row = this.sql('SELECT * FROM timeline_heads WHERE session_id=? AND lane=?').get(sessionId, lane) as HeadRecord | undefined;
     return row ? {
-      sessionId: row.session_id, lane: row.lane as SyncLane, generation: row.generation, journalGeneration: row.journal_generation, scratch: row.scratch === 1,
-      headSeq: row.head_seq, foldVersion: row.fold_version, foldedThrough: row.folded_through, journalSeq: row.journal_seq,
+      sessionId: row.session_id, lane: row.lane as SyncLane, generation: row.generation, journalGeneration: row.journal_generation, scratch: row.scratch === 1, epoch: row.epoch,
+      headSeq: row.head_seq, foldVersion: row.fold_version, foldedThrough: row.folded_through, journalSeq: row.journal_seq, updatedAt: row.updated_at,
     } : undefined;
   }
 
@@ -97,11 +104,11 @@ export class TimelineTables {
   }
 
   putHead(head: TimelineHead): void {
-    this.sql(`INSERT INTO timeline_heads(session_id,lane,generation,journal_generation,scratch,head_seq,fold_version,folded_through,journal_seq,updated_at)
-      VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,lane) DO UPDATE SET generation=excluded.generation, journal_generation=excluded.journal_generation,
-      scratch=excluded.scratch, head_seq=excluded.head_seq, fold_version=excluded.fold_version, folded_through=excluded.folded_through,
+    this.sql(`INSERT INTO timeline_heads(session_id,lane,generation,journal_generation,scratch,epoch,head_seq,fold_version,folded_through,journal_seq,updated_at)
+      VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,lane) DO UPDATE SET generation=excluded.generation, journal_generation=excluded.journal_generation,
+      scratch=excluded.scratch, epoch=excluded.epoch, head_seq=excluded.head_seq, fold_version=excluded.fold_version, folded_through=excluded.folded_through,
       journal_seq=excluded.journal_seq, updated_at=excluded.updated_at`)
-      .run(head.sessionId, head.lane, head.generation, head.journalGeneration, head.scratch ? 1 : 0, head.headSeq, head.foldVersion, head.foldedThrough, head.journalSeq, new Date().toISOString());
+      .run(head.sessionId, head.lane, head.generation, head.journalGeneration, head.scratch ? 1 : 0, head.epoch, head.headSeq, head.foldVersion, head.foldedThrough, head.journalSeq, new Date().toISOString());
   }
 
   /** The blobs holding the whole of the lane's cut rows (`truncated.blobRef`); of the session's every lane without one. */
@@ -121,6 +128,34 @@ export class TimelineTables {
   /** Every row and turn of a lane goes; its head is the caller's to rewrite. */
   clearLane(sessionId: string, lane: SyncLane): void {
     this.sql('DELETE FROM timeline_rows WHERE session_id=? AND lane=?').run(sessionId, lane);
+    this.sql('DELETE FROM timeline_turns WHERE session_id=? AND lane=?').run(sessionId, lane);
+  }
+
+  /** Sessions after `after` with a lane that holds rows (or the rest of rows a drop did not finish deleting), up to `limit`: the candidates of a cold sweep. */
+  foldedSessions(after: string, limit: number): string[] {
+    return (this.sql(`SELECT DISTINCT h.session_id FROM timeline_heads h WHERE h.session_id>? AND h.lane='main' AND (h.head_seq>0 OR h.folded_through>0
+      OR (h.epoch>0 AND EXISTS (SELECT 1 FROM timeline_rows r WHERE r.session_id=h.session_id AND r.lane=h.lane))) ORDER BY h.session_id LIMIT ?`).all(after, limit) as Array<{ session_id: string }>).map(row => row.session_id);
+  }
+
+  hasRows(sessionId: string, lane: SyncLane): boolean {
+    return Boolean(this.sql('SELECT 1 AS one FROM timeline_rows WHERE session_id=? AND lane=? LIMIT 1').get(sessionId, lane));
+  }
+
+  /**
+   * A step of looking for a background job on the main lane's tool rows (`job`): the rows after key `after`, `limit` at a time.
+   * A job lives in memory only, so rows refolded without it lose its status. A payload that merely quotes `"job":{` also matches.
+   */
+  jobRowsAfter(sessionId: string, after: string, limit: number): { found: boolean; last?: string } {
+    const rows = this.sql(`SELECT key, instr(payload,'"job":{')>0 AS hit FROM timeline_rows WHERE session_id=? AND lane='main' AND key>? AND key<'tool;' AND deleted=0 ORDER BY key LIMIT ?`).all(sessionId, after, limit) as Array<{ key: string; hit: number }>;
+    return { found: rows.some(row => row.hit === 1), ...(rows.length === limit ? { last: rows.at(-1)!.key } : {}) };
+  }
+
+  /** Deletes up to `limit` rows of the lane; the count deleted. */
+  deleteRowsChunk(sessionId: string, lane: SyncLane, limit: number): number {
+    return Number(this.sql('DELETE FROM timeline_rows WHERE rowid IN (SELECT rowid FROM timeline_rows WHERE session_id=? AND lane=? LIMIT ?)').run(sessionId, lane, limit).changes);
+  }
+
+  clearTurns(sessionId: string, lane: SyncLane): void {
     this.sql('DELETE FROM timeline_turns WHERE session_id=? AND lane=?').run(sessionId, lane);
   }
 

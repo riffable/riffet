@@ -24,7 +24,7 @@ beforeEach(async () => { dir = await realpath(await mkdtemp(join(tmpdir(), 'riff
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
 
 /** One database, journal, writer and timeline service; `reopen` is a restart. */
-function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs?: NativeJob[]; stepRows?: number } = {}) {
+function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs?: NativeJob[]; stepRows?: number; idleSince?: string } = {}) {
   const db = new DatabaseSync(path);
   const journal = new Journal(db);
   const writer = JournalLaneWriter.open(journal, S);
@@ -38,6 +38,7 @@ function open(path = join(dir, 'state.db'), options: { debounceMs?: number; jobs
     db, journal, listRuns: () => runs, onRunChanged: listener => { runListeners.add(listener); return () => runListeners.delete(listener); },
     nativeChatId: () => 'chat-1', listJobs: () => options.jobs ?? [],
     onJobChanged: listener => { jobListeners.add(listener); return () => jobListeners.delete(listener); },
+    coldSweep: false, busy: () => false, activity: () => ({ at: options.idleSince ?? new Date().toISOString(), running: false }),
     debounceMs: options.debounceMs ?? 5, ...(options.stepRows ? { stepRows: options.stepRows } : {}),
   });
   const frames: TimelineChange[] = [];
@@ -457,6 +458,62 @@ describe('timeline service', () => {
     env.close();
   });
 
+  it('drops the rows of a cold session, and refolds them from the journal under another generation', async () => {
+    let env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    for (let index = 1; index <= 3; index += 1) turn(env, index);
+    const before = await env.ready();
+    const rows = withoutSeq(env.all());
+    const now = Date.now() + 8 * 86_400_000;
+    // A lane held in memory is kept; after a restart nothing holds it and it is dropped.
+    expect(await env.service.sweepCold(now)).toBe(0);
+    env.close();
+    env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    expect(await env.service.sweepCold(now)).toBe(1);
+    expect(env.db.prepare('SELECT COUNT(*) AS n FROM timeline_rows').get()).toEqual({ n: 0 });
+    env.close();
+
+    env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    const after = await env.ready();
+    expect(after.generation).not.toBe(before.generation);
+    expect(withoutSeq(env.all())).toEqual(rows);
+    expect(env.service.changes(S, 'main', { generation: before.generation, after: before.headSeq }).mode).toBe('snapshot');
+    expect(env.service.changes(S, 'main', { generation: after.generation, after: after.headSeq }).mode).toBe('delta');
+    env.close();
+  });
+
+  it('drops only the main lane, and refolds it with its subagent summaries intact, and a second sweep still runs after an empty one', async () => {
+    let env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    const now = Date.now() + 8 * 86_400_000;
+    expect(await env.service.sweepCold(now)).toBe(0); // nothing folded yet
+    env.writer.turnStarted('t1', stamp(++tick));
+    commit(env, user('u1', 't1', 'review'), tool('k1', 't1', 'task-1', 'in_progress'));
+    const child = env.writer.child('task-1', 'agent-7');
+    child.turnStarted('c1', stamp(++tick));
+    child.commit({ events: [answer('c-a1', 'c1', 'looking'), tool('c-t1', 'c1', 'sh-1', 'failed', { content: [{ type: 'diff', path: '/repo/a.ts', oldText: 'one', newText: 'two', observed: true }] })], cursor: '1' });
+    child.turnEnded('c1', 'completed', stamp(++tick));
+    env.writer.commit({ events: [tool('k1', 't1', 'task-1', 'completed')], cursor: '2' });
+    env.writer.turnEnded('t1', 'completed', stamp(++tick));
+    await env.ready('sub:task-1');
+    const before = await env.ready();
+    const parent = () => withoutSeq(env.all()).find(row => row.kind === 'tool' && row.event.data.toolCallId === 'task-1');
+    const summary = parent();
+    expect(summary).toMatchObject({ subagent: { rows: 2, changes: [{ path: '/repo/a.ts' }] } });
+    env.close();
+
+    env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    expect(await env.service.sweepCold(now)).toBe(1);
+    // Only the main lane goes; the subagent lane keeps its rows.
+    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE lane='main'").get()).toEqual({ n: 0 });
+    expect(env.db.prepare("SELECT COUNT(*) AS n FROM timeline_rows WHERE lane='sub:task-1'").get()).not.toEqual({ n: 0 });
+    env.close();
+
+    env = open(join(dir, 'state.db'), { idleSince: stamp(0) });
+    const after = await env.ready();
+    expect(after.generation).not.toBe(before.generation);
+    expect(parent()).toEqual(summary);
+    env.close();
+  });
+
   it('changes generation only when the log is rebuilt, a scratch window is promoted, or the fold rules change', async () => {
     let env = open();
     turn(env, 1);
@@ -477,7 +534,7 @@ describe('timeline service', () => {
     env.db.prepare("UPDATE timeline_heads SET generation='old', fold_version=0 WHERE session_id=?").run(S);
     env.listen();
     const refolded = await env.ready();
-    expect(refolded.generation).toBe(rebuilt.generation);
+    expect(refolded.generation).not.toBe(rebuilt.generation); // every rebuild moves the epoch: a generation is never issued twice
     expect(env.frames).toEqual([{ type: 'reset', generation: refolded.generation, reason: 'fold' }]);
     env.close();
 
