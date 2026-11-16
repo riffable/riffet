@@ -48,6 +48,13 @@ export const STREAM_QUEUE_BYTES = 8 * MIB;
 export const LIST_POLL_MS = { pushed: 30_000, fallback: 5_000, background: 30_000 } as const;
 
 /**
+ * The storage page's scan, milliseconds: how often the page reads while a scan runs, how old a finished
+ * scan gets before opening the page starts another, and how long a failed scan waits before the page
+ * starts one on its own again (rescanning by hand always starts one).
+ */
+export const STORAGE_SCAN_MS = { poll: 2_000, stale: 24 * 60 * 60_000, retry: 60 * 60_000 } as const;
+
+/**
  * Footprint after a day of ordinary use, in bytes: Activity Monitor's figure on a Mac, the JS heap in a
  * tab, phys_footprint on iOS, total PSS on Android, RSS for the server. Peak stays under 1.5×.
  */

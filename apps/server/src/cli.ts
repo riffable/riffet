@@ -19,7 +19,7 @@ import { buildLaunchAgentPlist, buildSystemdUnit, xmlEscape, systemdValue } from
 import { claimStateDirectory } from './compat.js';
 import { SettingsService } from './settings/index.js';
 import { doctorChecks, formatDoctorChecks, machineReport } from './doctor.js';
-import { compactDatabase, recordCompaction, runRequestedCompaction } from './storage/compaction.js';
+import { COMPACTION_WAIT_MS, compactDatabase, compactionRunning, recordCompaction, runRequestedCompaction } from './storage/compaction.js';
 import { restoreBackup } from './system.js';
 import { startDiscovery, type DiscoveryHandle } from './discovery.js';
 import { SERVER_BUILD, SERVER_VERSION, SOURCE_ROOT } from './version.js';
@@ -139,7 +139,12 @@ async function start(options:CliOptions){
   const fd=openSync(join(state(options),'server.log'),'a',0o600);
   const child=spawn(process.execPath,[...process.execArgv,entry,...argsFor({...options,token:false})],{cwd:process.cwd(),env:{...process.env,RIFFET_MANAGED_BY:'cli'},detached:true,stdio:['ignore',fd,fd]});child.unref();
   closeSync(fd);
-  for(let i=0;i<80;i++){await sleep(100);const record=await active(options);if(record){show(record,options,options.token);return;}if(child.exitCode!==null)break;}
+  // A compaction the settings page asked for runs before the service listens: wait for it, up to its own limit.
+  const began=Date.now();let deadline=began+8000;let told=false;
+  while(Date.now()<deadline){
+    await sleep(100);const record=await active(options);if(record){show(record,options,options.token);return;}if(child.exitCode!==null)break;
+    if(compactionRunning(state(options))){if(!told){console.log('Compacting the database before the service starts; this can take several minutes.');told=true;}deadline=Math.min(Math.max(deadline,Date.now()+8000),began+COMPACTION_WAIT_MS);}
+  }
   const log=join(state(options),'server.log');
   let tail='';
   try{tail=readFileSync(log,'utf8').split('\n').slice(-15).join('\n').trim();}catch{/* the log itself may be missing */}
@@ -435,10 +440,14 @@ async function update(options: UpdateOptions): Promise<void> {
         if (manager === 'launchd') {
           await controller(process.platform === 'darwin' ? ['bootstrap', domain, LAUNCH_AGENT_PATH] : ['--user', 'start', SYSTEMD_UNIT]);
         } else {
-          const result = await runProcess(process.execPath, [join(root, 'dist/cli.js'), 'start', '--state-dir', state(options), '--no-token'], { cwd: root, timeoutMs: 30_000 });
+          // `start` bounds its own wait, which a compaction asked for on the settings page lengthens.
+          const result = await runProcess(process.execPath, [join(root, 'dist/cli.js'), 'start', '--state-dir', state(options), '--no-token'], { cwd: root, timeoutMs: COMPACTION_WAIT_MS + 30_000 });
           if (result.code !== 0 || result.timedOut || result.truncated) throw new Error('新版本启动失败，请按更新日志中的命令恢复。');
         }
+        const compactionLimit = Date.now() + COMPACTION_WAIT_MS;
         for (let attempt = 0; attempt < 100; attempt++) {
+          // A compaction before the start does not use up the attempts, up to its own limit.
+          if (attempt > 0 && Date.now() < compactionLimit && compactionRunning(state(options))) { attempt -= 1; await sleep(1000); continue; }
           const next = readDaemon(options);
           if (next && next.instanceId !== record.instanceId) {
             try {

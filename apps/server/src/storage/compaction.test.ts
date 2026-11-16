@@ -1,9 +1,9 @@
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { compactionState, runRequestedCompaction, scheduleCompaction } from './compaction.js';
+import { compactionRunning, compactionState, runRequestedCompaction, scheduleCompaction } from './compaction.js';
 
 const dirs: string[] = [];
 afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -38,5 +38,17 @@ describe('a compaction asked for on the settings page', () => {
     const before = state.last!.at;
     runRequestedCompaction(dir, () => undefined);
     expect(compactionState(dir).last!.at).toBe(before);
+  });
+
+  it('a run killed mid-rebuild is recorded as interrupted at the next start, and stops holding the start', () => {
+    const dir = stateWithFreedPages();
+    // A pid that cannot be alive: the run that wrote this was killed before its cleanup.
+    writeFileSync(join(dir, 'maintenance.json'), JSON.stringify({ task: 'compact', pid: 2 ** 22 + 1, startedAt: new Date(Date.now() - 5000).toISOString(), bytes: 123 }));
+    expect(compactionRunning(dir)).toBe(false);
+    runRequestedCompaction(dir, () => undefined);
+    expect(existsSync(join(dir, 'maintenance.json'))).toBe(false);
+    const last = compactionState(dir).last!;
+    expect(last.error).toBeTruthy();
+    expect(last.beforeBytes).toBe(123);
   });
 });

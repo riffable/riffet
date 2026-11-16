@@ -1,6 +1,16 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "统计未完成：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The scan did not finish: %@"
+          }
+        }
+      }
+    },
     "服务管理": {
       "localizations": {
         "en": {
@@ -248,16 +258,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "By project"
-          }
-        }
-      }
-    },
-    "构成": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Breakdown"
           }
         }
       }

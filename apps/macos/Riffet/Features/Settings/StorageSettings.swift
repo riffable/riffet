@@ -15,7 +15,7 @@ struct StorageSettings: View {
     @State private var busy = false
     @State private var confirmCompaction = false
 
-    private static let pollInterval: Duration = .seconds(2)
+    private static let pollInterval: Duration = .milliseconds(Int(BudgetsKt.STORAGE_SCAN_MS_POLL))
     /// Below this, an estimate of what compaction gives back says nothing worth reading.
     private static let reclaimWorthNaming: Int64 = 1_048_576
 
@@ -38,7 +38,12 @@ struct StorageSettings: View {
                 Spinner(size: .regular).frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .task(id: model.workbench != nil) { await load() }
+        // A different server is a different report: reload when the connection changes, not only when it appears.
+        .task(id: model.workbench.map(ObjectIdentifier.init)) {
+            report = nil
+            error = nil
+            await load()
+        }
         .task(id: report?.scanning ?? false) {
             guard report?.scanning == true else { return }
             while !Task.isCancelled {
@@ -67,14 +72,14 @@ struct StorageSettings: View {
             if let scan = report.scan, !waiting(report, "sessions") {
                 if !scan.projects.isEmpty { projectsBlock(scan.projects) }
                 if !scan.sessions.isEmpty { sessionsBlock(scan.sessions) }
-            } else {
+            } else if report.scanError == nil {
                 SettingsBlock("按项目") {
                     Spinner(size: .small).frame(maxWidth: .infinity)
                 }
             }
             if let scan = report.scan, !waiting(report, "folders") {
                 foldersBlock(scan.folders)
-            } else {
+            } else if report.scanError == nil {
                 SettingsBlock("文件") {
                     Spinner(size: .small).frame(maxWidth: .infinity)
                 }
@@ -104,7 +109,7 @@ struct StorageSettings: View {
                     .controlSize(.small)
                     .disabled(report.scanning)
             }
-            SettingsErrorText(message: error)
+            SettingsErrorText(message: error ?? report.scanError.map { String(localized: "统计未完成：\($0)") })
         }
         .padding(.vertical, Space.xs)
     }
@@ -149,7 +154,7 @@ struct StorageSettings: View {
         let parts = report.scan?.parts ?? []
         return SettingsBlock("数据库 · \(bytes(database.bytes))") {
             VStack(alignment: .leading, spacing: Space.md) {
-                if parts.isEmpty {
+                if parts.isEmpty && report.scanError == nil {
                     Spinner(size: .small).frame(maxWidth: .infinity)
                 }
                 ForEach(ranked(parts, other: { $0.part == "other" }), id: \.part) { item in
@@ -443,6 +448,8 @@ struct StorageSettings: View {
     private func restart() async {
         actionError = nil
         do { try await model.server.restartWhenIdle() } catch { actionError = error.riffetMessage }
+        // The same connection may carry on across the restart: read the outcome rather than the schedule.
+        await load()
     }
 }
 

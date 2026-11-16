@@ -17,6 +17,8 @@ data class StorageReport(
     val database: StorageDatabase,
     val scan: StorageScan? = null,
     val scanning: Boolean,
+    /** Why the last scan did not finish; the page does not start another on its own for a while. */
+    val scanError: String? = null,
     val compaction: StorageCompaction,
 )
 

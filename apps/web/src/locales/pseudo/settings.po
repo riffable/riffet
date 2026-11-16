@@ -7069,6 +7069,11 @@ msgstr ""
 msgid "统计于 {0} · 用时 {1}"
 msgstr ""
 
+#. placeholder {0}: data.scanError
+#: src/app/settings/StorageSection.tsx
+msgid "统计未完成：{0}"
+msgstr ""
+
 #: src/app/design/components/ActionsChapter.tsx
 msgid "继续"
 msgstr ""

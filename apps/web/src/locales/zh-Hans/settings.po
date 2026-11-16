@@ -7069,6 +7069,11 @@ msgstr "统计、设计规范"
 msgid "统计于 {0} · 用时 {1}"
 msgstr "统计于 {0} · 用时 {1}"
 
+#. placeholder {0}: data.scanError
+#: src/app/settings/StorageSection.tsx
+msgid "统计未完成：{0}"
+msgstr "统计未完成：{0}"
+
 #: src/app/design/components/ActionsChapter.tsx
 msgid "继续"
 msgstr "继续"

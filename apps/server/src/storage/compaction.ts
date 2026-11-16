@@ -24,6 +24,21 @@ const MAINTENANCE = 'maintenance.json';
 
 const databasePath = (stateDir: string) => join(stateDir, 'workbench.db');
 
+/** How long anything waiting for a start gives a compaction before calling the start failed. */
+export const COMPACTION_WAIT_MS = 30 * 60_000;
+
+interface Maintenance { task?: string; pid?: number; startedAt?: string; bytes?: number }
+
+const alive = (pid: number) => {
+  try { process.kill(pid, 0); return true; } catch (error) { return (error as NodeJS.ErrnoException).code === 'EPERM'; }
+};
+
+/** A compaction is holding the service's start: what `riffet start` keeps waiting for. */
+export function compactionRunning(stateDir: string): boolean {
+  const record = readJson<Maintenance>(join(stateDir, MAINTENANCE));
+  return Number.isSafeInteger(record?.pid) && record!.pid! > 0 && alive(record!.pid!);
+}
+
 /** The database file plus its write-ahead log. */
 export function databaseBytes(stateDir: string): number {
   const path = databasePath(stateDir);
@@ -79,9 +94,10 @@ export function compactDatabase(stateDir: string, log: (line: string) => void = 
     const free = statfsSync(stateDir);
     const available = free.bavail * free.bsize;
     if (available < requiredBytes(before)) throw new Error(`Not enough free disk space: VACUUM needs about ${mib(requiredBytes(before))} (a rebuilt copy plus journal growth) and ${mib(available)} is available`);
-    // VACUUM builds its copy in SQLite's temp directory, which may be a small tmpfs: keep it beside the database.
-    const previousTmp = process.env.SQLITE_TMPDIR;
-    process.env.SQLITE_TMPDIR = stateDir;
+    // VACUUM builds its copy in SQLite's temp directory, which may be a small tmpfs: keep it beside the
+    // database. SQLite reads the variable once, when it first initializes, and keeps the pointer it got,
+    // so it is set before the first connection of the process and never put back.
+    process.env.SQLITE_TMPDIR ??= stateDir;
     const db = new DatabaseSync(path);
     try {
       db.exec('PRAGMA temp_store=FILE');
@@ -90,10 +106,7 @@ export function compactDatabase(stateDir: string, log: (line: string) => void = 
       log(`Compacting ${path} (${mib(before)}); this can take several minutes.`);
       db.exec('VACUUM');
       db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    } finally {
-      db.close();
-      if (previousTmp === undefined) delete process.env.SQLITE_TMPDIR; else process.env.SQLITE_TMPDIR = previousTmp;
-    }
+    } finally { db.close(); }
     const after = databaseBytes(stateDir);
     log(`Done: ${mib(before)} -> ${mib(after)}`);
     return { before, after };
@@ -120,10 +133,20 @@ export function recordCompaction(stateDir: string, run: () => { before: number; 
  * throws: a compaction that cannot run leaves its reason for the settings page, and the service starts.
  */
 export function runRequestedCompaction(stateDir: string, log: (line: string) => void = console.log): void {
+  const maintenance = join(stateDir, MAINTENANCE);
+  // The caller holds the state directory, so a record left here is from a run that was killed (a stop
+  // or a kickstart during the rebuild, which SQLite rolls back). Say so on the page, and let the Mac
+  // app stop waiting for it.
+  const left = readJson<Maintenance>(maintenance);
+  if (left) {
+    const startedAt = typeof left.startedAt === 'string' ? Date.parse(left.startedAt) : NaN;
+    const interrupted: StorageCompactionResult = { at: new Date().toISOString(), beforeBytes: typeof left.bytes === 'number' ? left.bytes : databaseBytes(stateDir), durationMs: Number.isFinite(startedAt) ? Math.max(0, Date.now() - startedAt) : 0, error: 'The service stopped before the rebuild finished; the database was left as it was.' };
+    try { writeJson(join(stateDir, RESULT), interrupted); } catch { /* The page simply shows no last run. */ }
+  }
+  rmSync(maintenance, { force: true });
   const request = join(stateDir, REQUEST);
   if (!existsSync(request)) return;
   rmSync(request, { force: true });
-  const maintenance = join(stateDir, MAINTENANCE);
   try { writeJson(maintenance, { task: 'compact', pid: process.pid, startedAt: new Date().toISOString(), bytes: databaseBytes(stateDir) }); } catch { /* Only the Mac app's patience depends on it. */ }
   try {
     const result = recordCompaction(stateDir, () => compactDatabase(stateDir, log));

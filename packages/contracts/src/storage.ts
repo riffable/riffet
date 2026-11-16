@@ -13,6 +13,11 @@ export interface StorageReport {
   /** Absent until a first scan has finished a step. */
   scan?: StorageScan;
   scanning: boolean;
+  /**
+   * Why the last scan did not finish. Opening the page does not start another for a while
+   * (`STORAGE_SCAN_MS.retry`); a rescan by hand does.
+   */
+  scanError?: string;
   compaction: StorageCompaction;
 }
 

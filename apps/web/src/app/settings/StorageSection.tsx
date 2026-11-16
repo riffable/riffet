@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { StorageDatabasePart, StorageFolderKind, StorageProjectUsage, StorageReport, StorageScanStep } from '@contracts';
+import { STORAGE_SCAN_MS, type StorageDatabasePart, type StorageFolderKind, type StorageProjectUsage, type StorageReport, type StorageScanStep } from '@contracts';
 import { IconCircleAlert, IconRefreshCw } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { EmptyState, Spinner } from '@/components/ui/controls';
@@ -14,9 +14,6 @@ import { toast } from '@/lib/toast';
 import { errorMessage, formatBytes, timeAgo } from '@/lib/utils';
 import { LegendItem } from '../stats/chart-shared';
 import { SettingsGroup as Group, SettingsRow as Row } from './SettingsLayout';
-
-/** Only while a scan runs: the figures otherwise change too slowly to be worth polling. */
-const SCAN_POLL_MS = 2_000;
 
 /** A string label is a term kept in English in every language (Checkpoints, Worktrees, as in the Git panel). */
 interface Meta { label: MessageDescriptor | string; note?: MessageDescriptor }
@@ -79,7 +76,8 @@ function useStorage() {
   const scanning = data?.scanning ?? false;
   useEffect(() => {
     if (!scanning) return;
-    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, SCAN_POLL_MS);
+    // Only while a scan runs: the figures otherwise change too slowly to be worth polling.
+    const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void refresh(); }, STORAGE_SCAN_MS.poll);
     return () => window.clearInterval(timer);
   }, [scanning, refresh]);
 
@@ -112,8 +110,8 @@ export function StorageSection() {
       {data.scan && !waiting(data, 'sessions') ? <>
         {data.scan.projects.length > 0 && <ProjectTable projects={data.scan.projects} />}
         {data.scan.sessions.length > 0 && <SessionTable data={data} />}
-      </> : <Group title={t`按项目`} loading><span /></Group>}
-      {data.scan && !waiting(data, 'folders') ? <FolderGroup data={data} /> : <Group title={t`文件`} loading><span /></Group>}
+      </> : !data.scanError && <Group title={t`按项目`} loading><span /></Group>}
+      {data.scan && !waiting(data, 'folders') ? <FolderGroup data={data} /> : !data.scanError && <Group title={t`文件`} loading><span /></Group>}
     </div>
   );
 }
@@ -131,13 +129,14 @@ function StorageSkeleton() {
 }
 
 function ScanBar({ data, error, onRescan }: { data: StorageReport; error: string; onRescan: () => void }) {
+  const { t } = useLingui();
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
       <span className="inline-flex items-center gap-2 text-xs text-fg-4">
         {data.scanning ? <><Spinner className="size-3.5" /><Trans>正在统计</Trans></>
           : data.scan && !data.scan.pending && <span className="tabular-nums"><Trans>统计于 {timeAgo(data.scan.at)} · 用时 {formatDuration(data.scan.durationMs)}</Trans></span>}
       </span>
-      {error && <span className="inline-flex min-w-0 items-center gap-1 text-xs text-danger"><IconCircleAlert className="size-3.5 shrink-0" /><span className="truncate">{error}</span></span>}
+      {(error || data.scanError) && <span className="inline-flex min-w-0 items-center gap-1 text-xs text-danger" title={error || data.scanError}><IconCircleAlert className="size-3.5 shrink-0" /><span className="truncate">{error || t`统计未完成：${data.scanError}`}</span></span>}
       <Button size="xs" variant="ghost" className="ml-auto" disabled={data.scanning} onClick={onRescan}><IconRefreshCw /><Trans>重新统计</Trans></Button>
     </div>
   );
@@ -209,7 +208,7 @@ function DatabaseGroup({ data, onChange }: { data: StorageReport; onChange: (nex
   return (
     <Group title={t`数据库 · ${formatBytes(database.bytes)}`}>
       <ol className="flex flex-col gap-3 py-4">
-        {parts.length === 0 && <li className="flex justify-center py-4"><Spinner /></li>}
+        {parts.length === 0 && !data.scanError && <li className="flex justify-center py-4"><Spinner /></li>}
         {ranked(parts, (item) => item.part).map((item) => {
           const meta = PARTS[item.part];
           return <ShareRow key={item.part} label={labelOf(meta.label)} note={meta.note && i18n._(meta.note)} bytes={item.bytes} of={database.bytes} color={DATABASE_COLOR} />;

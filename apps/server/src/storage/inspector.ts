@@ -3,15 +3,11 @@ import { readFileSync, renameSync, statfsSync, statSync, writeFileSync } from 'n
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { Worker } from 'node:worker_threads';
+import { STORAGE_SCAN_MS } from '../../../../packages/contracts/src/budgets.js';
 import type { StorageDatabasePart, StorageFolderKind, StorageProjectUsage, StorageReport, StorageScan, StorageScanStep } from '../../../../packages/contracts/src/index.js';
 import type { Store } from '../store.js';
 import { compactionState, databaseBytes } from './compaction.js';
 
-/**
- * A page that opens with an older breakdown than this starts a new scan on its own, and keeps showing
- * the old one until the new one is done.
- */
-const SCAN_STALE_MS = 24 * 60 * 60_000;
 /** The last finished scan, as the worker measured it: names and titles are looked up when it is read. */
 const SAVED = 'storage-scan.json';
 const TOP_SESSIONS = 12;
@@ -134,16 +130,21 @@ export class StorageInspector {
   private current?: Measured;
   private workers = new Set<Worker>();
   private closed = false;
+  /** The last scan that did not finish, and why; it holds off the next automatic one (`STORAGE_SCAN_MS.retry`). */
+  private failed?: { at: number; message: string; measured: Measured };
 
   constructor(private readonly options: { stateDir: string; store: Pick<Store, 'listSessions' | 'listProjects'> }) {
     this.finished = readSaved(join(options.stateDir, SAVED));
   }
 
   report(): StorageReport {
-    if (!this.current && (!this.finished || Date.now() - Date.parse(this.finished.at) > SCAN_STALE_MS)) this.scan();
+    const stale = !this.finished || Date.now() - Date.parse(this.finished.at) > STORAGE_SCAN_MS.stale;
+    const backingOff = this.failed && Date.now() - this.failed.at < STORAGE_SCAN_MS.retry;
+    if (!this.current && stale && !backingOff) this.scan();
     const { stateDir } = this.options;
     const disk = statfsSync(stateDir);
-    const shown = this.finished ?? this.current;
+    // A failed first scan still shows the steps it finished.
+    const shown = this.finished ?? this.current ?? this.failed?.measured;
     return {
       generatedAt: new Date().toISOString(),
       directory: stateDir,
@@ -151,6 +152,7 @@ export class StorageInspector {
       database: this.database(),
       ...(shown ? { scan: this.summarize(shown) } : {}),
       scanning: Boolean(this.current),
+      ...(this.failed && !this.current ? { scanError: this.failed.message } : {}),
       compaction: compactionState(stateDir),
     };
   }
@@ -161,9 +163,26 @@ export class StorageInspector {
     const started = Date.now();
     const current: Measured = { at: new Date(started).toISOString(), durationMs: 0, result: {} };
     this.current = current;
+    let error: string | undefined;
     const steps: StorageScanStep[] = ['folders', 'sessions', 'parts'];
+    const settle = () => {
+      if (this.workers.size > 0 || this.current !== current) return;
+      this.current = undefined;
+      const { entries, sessions, pages } = current.result;
+      if (entries && sessions && pages) this.failed = undefined;
+      else this.failed = { at: Date.now(), message: error ?? 'The scan stopped before it finished', measured: current };
+    };
     for (const step of steps) {
-      const worker = new Worker(WORKER, { eval: true, name: `riffet-storage-${step}`, workerData: { stateDir: this.options.stateDir, database: 'workbench.db', split: Object.keys(PROJECT_FOLDERS), step } });
+      let worker: Worker;
+      try {
+        worker = new Worker(WORKER, { eval: true, name: `riffet-storage-${step}`, workerData: { stateDir: this.options.stateDir, database: 'workbench.db', split: Object.keys(PROJECT_FOLDERS), step } });
+      } catch (reason) {
+        // The steps already started are stopped; their exits settle the scan as failed.
+        error = (reason as Error).message;
+        for (const started of this.workers) void started.terminate();
+        settle();
+        return;
+      }
       this.workers.add(worker);
       worker.unref();
       worker.on('message', (result: WorkerResult) => {
@@ -174,10 +193,13 @@ export class StorageInspector {
         this.finished = { ...current, at: new Date().toISOString() };
         try { writeJson(join(this.options.stateDir, SAVED), this.finished); } catch { /* Kept in memory; the next start scans again. */ }
       });
-      worker.once('error', (error) => console.warn(`[riffet] storage scan (${step}) failed:`, error.message));
+      worker.once('error', (reason) => {
+        error ??= reason.message;
+        console.warn(`[riffet] storage scan (${step}) failed:`, reason.message);
+      });
       worker.once('exit', () => {
         this.workers.delete(worker);
-        if (this.workers.size === 0 && this.current === current) this.current = undefined;
+        settle();
       });
     }
   }
