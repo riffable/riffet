@@ -6,6 +6,7 @@ import { newId } from '@/lib/utils';
 import { fitWidth, ImageViewer, type PixelSize } from './ImageViewer';
 import { useTranscriptResources } from './transcriptResources';
 import { PrintImage, PrintRenderingContext } from './printRendering';
+import { registerBounded } from '@/lib/cache-registry';
 
 interface Request { key: string; id: string; url: string }
 interface Result { key: string; image?: string; size?: PixelSize }
@@ -24,6 +25,7 @@ const imageCache = boundedCache<string, { image: string; size: number; pixels?: 
   weigh: (_, entry) => entry.size,
   onEvict: (_, { image }) => { if (imageUsers.has(image)) evictedInUse.add(image); else URL.revokeObjectURL(image); },
 });
+registerBounded('mermaid-images', { get size() { return imageCache.size; }, get weight() { return imageCache.weight; }, clear: () => imageCache.clear() }, 32, 16_000_000);
 
 function useImage(image: string | undefined) {
   useEffect(() => {
@@ -43,6 +45,7 @@ function useImage(image: string | undefined) {
  * change is re-rendering) holds its box while it renders again instead of showing the source.
  */
 const graphSizes = boundedCache<string, PixelSize>({ limit: 500, maxWeight: 4_000_000, weigh: (key) => key.length });
+registerBounded('mermaid-graph-sizes', graphSizes, 500, 4_000_000);
 
 /** The pixel size the render page writes on the root `<svg>`, which is the image's own size. */
 function svgSize(svg: string): PixelSize | undefined {

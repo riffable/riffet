@@ -88,6 +88,11 @@ export class SyncCache {
     await this.drop(sessionId);
   }
 
+  /** Frees this tab's copies; the stored ones stay and a later `load` reads them again. */
+  trimMemory(): void { this.memory.clear(); }
+
+  get memorySize(): number { return this.memory.size; }
+
   async clear(): Promise<void> {
     this.epoch += 1;
     this.memory.clear();

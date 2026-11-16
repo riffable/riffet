@@ -15,6 +15,8 @@ export interface Visibility {
 export const HIDDEN_CLOSE_MS = 60_000;
 /** A burst of rows settles before the copy is written; leaving or hiding writes it at once. */
 const SAVE_DELAY_MS = 2_000;
+/** Rows in the saved copy per extra SAVE_DELAY_MS between writes. */
+const SAVE_SLOW_ROWS = 400;
 /**
  * An upper bound, not a delay: the local read normally settles in a millisecond and the stream dials
  * as soon as it does. The budget covers a read that never settles, which a browser can leave pending.
@@ -106,6 +108,9 @@ export class SessionSync {
   private lanes = new Map<SyncLane, { lane: LaneSync; listeners: Set<(replaced: boolean) => void> }>();
   private hiddenTimer: ReturnType<typeof setTimeout> | undefined;
   private saveTimer: ReturnType<typeof setTimeout> | undefined;
+  /** What the cache was last given (generation, seq, row count) and how many rows that was: an unchanged lane is not written again, a long one is written less often. */
+  private savedMark = '';
+  private savedRows = 0;
   private stopVisibility: (() => void) | undefined;
   private readonly cacheEpoch: number;
   private disposed = false;
@@ -308,14 +313,21 @@ export class SessionSync {
 
   private scheduleSave(): void {
     if (this.saveTimer !== undefined || !this.options.cache) return;
-    this.saveTimer = setTimeout(() => { this.saveTimer = undefined; this.save(); }, SAVE_DELAY_MS);
+    // Each write clones the whole copy (up to the 8 MB budget), so the longer the copy the longer the pause between writes.
+    const delay = SAVE_DELAY_MS * Math.min(5, 1 + Math.floor(this.savedRows / SAVE_SLOW_ROWS));
+    this.saveTimer = setTimeout(() => { this.saveTimer = undefined; this.save(); }, delay);
   }
 
   private save(): void {
     clearTimeout(this.saveTimer);
     this.saveTimer = undefined;
     const held = this.disposed ? undefined : this.main.saved();
-    if (held) void this.options.cache?.save(this.options.sessionId, held, this.cacheEpoch);
+    if (!held) return;
+    const mark = `${held.generation}:${held.seq}:${held.rows.length}`;
+    if (mark === this.savedMark) return;
+    this.savedMark = mark;
+    this.savedRows = held.rows.length;
+    void this.options.cache?.save(this.options.sessionId, held, this.cacheEpoch);
   }
 
   /** Hidden: the copy is written (a phone may discard the tab next) and, after a while, the streams close. Shown: they resume. */

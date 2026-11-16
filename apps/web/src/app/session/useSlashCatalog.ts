@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NativeBackendId, NativeSlashCatalog } from '@contracts';
 import { api } from '@/lib/api';
+import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 
 /** Matches the server's own reuse window. */
 const FRESH_MS = 60_000;
 
 interface CatalogEntry { at: number; value?: NativeSlashCatalog; request?: Promise<NativeSlashCatalog> }
-const catalogs = new Map<string, CatalogEntry>();
+const catalogs = boundedCache<string, CatalogEntry>({ limit: 32 });
+registerBounded('slash-catalogs', catalogs, 32);
 
 /** Extension edits can affect shared roots used by several profiles. */
 export function invalidateSlashCatalogs(): void { catalogs.clear(); }

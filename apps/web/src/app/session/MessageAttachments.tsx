@@ -16,6 +16,7 @@ import { useImageSource } from './imageSource';
 import type { UserAttachment } from './model';
 import { useTranscriptResources, type TranscriptResources } from './transcriptResources';
 import { PrintImage, PrintRenderingContext } from './printRendering';
+import { registerBounded } from '@/lib/cache-registry';
 
 /** Uniform square tile used whenever a message carries more than one image. */
 const TILE = 72;
@@ -44,6 +45,7 @@ function declaredSize(value: { width?: unknown; height?: unknown }): { width: nu
  * pass through the unknown-size box a second time.
  */
 const metadataCache = boundedCache<string, UserAttachment>({ limit: 500 });
+registerBounded('attachment-metadata', metadataCache, 500);
 
 const attachmentChip = 'inline-flex min-h-6 min-w-0 max-w-[min(14rem,100%)] items-center gap-1 rounded-md bg-muted px-2 text-xs text-fg-2 no-hover:min-h-11';
 

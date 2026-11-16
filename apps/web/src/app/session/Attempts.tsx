@@ -20,6 +20,8 @@ import { Composer } from './Composer';
 import { catalogKey, LaunchTargetBar, launchTargetOf, useBackendCatalogs } from './LaunchTargetBar';
 import { ASSEMBLY_MS, useHeld, useLingering } from './sessionLayout';
 import type { SlashCommand } from './model';
+import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 
 const MAX_ATTEMPTS = 4;
 const activeStates = new Set<Session['state']>(['starting', 'running', 'waiting', 'cancelling']);
@@ -28,9 +30,11 @@ const terminalStates = new Set<Session['state']>(['idle', 'failed', 'interrupted
 interface TargetRow { backendId: NativeBackendId; profileId?: string; model?: string; mode?: string; approval?: string }
 
 const rowKey = (row: TargetRow) => `${row.backendId}|${row.profileId ?? ''}|${row.model ?? ''}|${row.mode ?? ''}|${row.approval ?? ''}`;
-const attemptStripCache = new Map<string, { group: AttemptGroup; attempts: AttemptComparison[] }>();
+const attemptStripCache = boundedCache<string, { group: AttemptGroup; attempts: AttemptComparison[] }>({ limit: 64 });
+registerBounded('attempt-strips', attemptStripCache, 64);
 /** Each project's attempt groups as last read, so a home opened again starts with its list in place. */
-const attemptHistoryCache = new Map<string, AttemptGroup[]>();
+const attemptHistoryCache = boundedCache<string, AttemptGroup[]>({ limit: 32 });
+registerBounded('attempt-history', attemptHistoryCache, 32);
 
 function useAttemptLabel() {
   const label = useBackendLabel();

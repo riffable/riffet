@@ -15,6 +15,7 @@ import { toast } from '@/lib/toast';
 import { clearTranscripts } from '@/lib/transcript-store';
 import { clearNativeOutbox } from '@/lib/native-outbox-storage';
 import { clearCachedPlugins } from '@/lib/plugins';
+import { clearCaches } from '@/lib/cache-registry';
 import { clearCachedLists, loadCachedLists } from '@/lib/list-cache';
 import { errorMessage } from '@/lib/utils';
 import { startOverlayNavigation } from '@/lib/overlay-navigation';
@@ -51,6 +52,7 @@ function forgetLocalData() {
   void clearTranscripts();
   clearCachedLists();
   clearCachedPlugins();
+  clearCaches();
 }
 
 /** How this browser is listed in 设备管理, e.g. "Chrome · macOS". */

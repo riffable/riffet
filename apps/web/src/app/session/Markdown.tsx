@@ -27,6 +27,7 @@ import { mayContainMath, useMath, type MathModules } from './mathRenderer';
 import { useRemembered } from './rememberedState';
 import { VisualizationPreview } from './VisualizationPreview';
 import { rewriteVisualizationReferences, visualizationReferenceFromHref } from './visualizationReferences';
+import { registerBounded } from '@/lib/cache-registry';
 
 const MermaidDiagram = lazy(() => import('./MermaidDiagram'));
 type ResourceComponents = Pick<Components, 'a' | 'img'>;
@@ -433,6 +434,7 @@ const noPlugins: [] = [];
  */
 interface ParsedBlock { element: ReactElement; headings: readonly BlockHeading[] }
 const blockCache = boundedCache<string, ParsedBlock>({ limit: 500, maxWeight: 500_000, weigh: (key) => key.length });
+registerBounded('markdown-blocks', blockCache, 500, 500_000);
 
 function renderBlock(text: string, math: MathModules | undefined, renderComponents: Components, remember: boolean): ParsedBlock {
   const key = `${math ? 'tex' : ''}\u0000${text}`;

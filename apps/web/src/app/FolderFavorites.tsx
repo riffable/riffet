@@ -10,9 +10,12 @@ import { toast } from '@/lib/toast';
 import { compareText } from '@/lib/i18n/format';
 import { cn, errorMessage } from '@/lib/utils';
 import { useStores } from './state/stores';
+import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 
 /** The last list read per scope ('' is the host), so a menu or dialog reopening paints at once. */
-const cache = new Map<string, FolderFavorite[]>();
+const cache = boundedCache<string, FolderFavorite[]>({ limit: 32 });
+registerBounded('folder-favorites', cache, 32);
 /** A burst of pushes naming a new favorites revision costs one read. */
 const PUSH_DEBOUNCE_MS = 250;
 /** An older server names no favorites revision, so any push may be one; it is read at most this often. */

@@ -2,6 +2,8 @@ import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type { GitStatus } from '@contracts';
 import { api, gitStatusStreamUrl, HttpError } from '@/lib/api';
+import { boundedCache } from '@/lib/bounded-cache';
+import { registerCache, registerBounded } from '@/lib/cache-registry';
 import { createStore, useStore } from '@/lib/store';
 import { errorMessage, reconnectDelay, singleFlight } from '@/lib/utils';
 
@@ -12,11 +14,27 @@ export interface GitStatusEntry { status?: GitStatus; error?: string; code?: str
  * `git status` per project, shared by the header's change count and the changes panel: both show
  * the same answer, and one read serves both.
  */
-const store = createStore<Record<string, GitStatusEntry>>({});
+const store = createStore<Record<string, GitStatusEntry | undefined>>({});
+/** Statuses kept at once; one that is being watched always stays. */
+const KEPT_STATUSES = 32;
+const held = () => Object.keys(store.get()).filter((id) => store.get()[id]);
+/** Sets a project's entry and lets go of the least recently written ones nothing watches, past [KEPT_STATUSES]. */
+function put(projectId: string, entry: GitStatusEntry): void {
+  store.set((current) => {
+    const ids = Object.keys(current).filter((id) => current[id] && id !== projectId);
+    const drop = Object.fromEntries(ids.filter((id) => !streams.has(id)).slice(0, Math.max(0, ids.length + 1 - KEPT_STATUSES)).map((id) => [id, undefined]));
+    return { ...drop, [projectId]: entry };
+  });
+}
+registerCache('git-status', {
+  size: () => held().length, limit: KEPT_STATUSES,
+  clear: () => store.set(Object.fromEntries(held().filter((id) => !streams.has(id)).map((id) => [id, undefined]))),
+});
 /** One shared read per project (see `singleFlight`). */
-const reads = new Map<string, (fresh?: boolean) => Promise<void>>();
+const reads = boundedCache<string, (fresh?: boolean) => Promise<void>>({ limit: 64 });
+registerBounded('git-status-reads', reads, 64);
 /** How many statuses each project's stream has delivered: a read that started before the latest one is older news. */
-const pushes = new Map<string, number>();
+const pushes = boundedCache<string, number>({ limit: 64 });
 
 /** One shared read per project and kind: an ordinary one, and one that makes the server look again. */
 function reader(projectId: string, fresh: boolean): (later?: boolean) => Promise<void> {
@@ -26,8 +44,8 @@ function reader(projectId: string, fresh: boolean): (later?: boolean) => Promise
     read = singleFlight(() => {
       const before = pushes.get(projectId) ?? 0;
       return api.gitStatus(projectId, fresh).then(
-        (status) => { if ((pushes.get(projectId) ?? 0) === before) store.set({ [projectId]: { status } }); },
-        (error) => store.set({ [projectId]: { error: errorMessage(error, i18n._(msg`Couldn't read Git status`)), ...(error instanceof HttpError && error.code ? { code: error.code } : {}) } }),
+        (status) => { if ((pushes.get(projectId) ?? 0) === before) put(projectId, { status }); },
+        (error) => put(projectId, { error: errorMessage(error, i18n._(msg`Couldn't read Git status`)), ...(error instanceof HttpError && error.code ? { code: error.code } : {}) }),
       );
     });
     reads.set(key, read);
@@ -64,7 +82,7 @@ function openStream(projectId: string): () => void {
     source = current;
     current.addEventListener('status', (event) => {
       live = true; retries = 0;
-      try { store.set({ [projectId]: { status: JSON.parse((event as MessageEvent<string>).data) as GitStatus } }); pushes.set(projectId, (pushes.get(projectId) ?? 0) + 1); } catch { /* A frame cut short; the next one replaces it. */ }
+      try { put(projectId, { status: JSON.parse((event as MessageEvent<string>).data) as GitStatus }); pushes.set(projectId, (pushes.get(projectId) ?? 0) + 1); } catch { /* A frame cut short; the next one replaces it. */ }
     });
     // Not a repository, say: the ordinary read carries the reason, and nothing more will come from here.
     current.addEventListener('unavailable', () => { live = false; current.close(); void refreshGitStatus(projectId); });

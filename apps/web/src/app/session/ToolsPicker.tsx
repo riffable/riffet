@@ -10,6 +10,8 @@ import { localizedText, usePlugins } from '@/lib/plugins';
 import { useStores } from '../state/stores';
 import { whenIdle } from './useEarlierHistory';
 import { cn, errorMessage } from '@/lib/utils';
+import { boundedCache } from '@/lib/bounded-cache';
+import { registerBounded } from '@/lib/cache-registry';
 
 const LAST_PICK_KEY = 'riffet.tool-groups.last';
 const DEVICE_PREFIX = 'device:';
@@ -122,7 +124,8 @@ const SKILL_PREFIX = 'skill:';
  * seconds, and caches for five minutes). A short copy here makes reopening instant.
  */
 const LOADED_FRESH_MS = 60_000;
-const loadedCache = new Map<string, { at: number; data: LoadedExtensions }>();
+const loadedCache = boundedCache<string, { at: number; data: LoadedExtensions }>({ limit: 32 });
+registerBounded('loaded-extensions', loadedCache, 32);
 const loadedInflight = new Map<string, Promise<LoadedExtensions>>();
 const loadedListeners = new Set<() => void>();
 const subscribeLoaded = (listener: () => void) => { loadedListeners.add(listener); return () => { loadedListeners.delete(listener); }; };

@@ -1,6 +1,7 @@
 import { withClientFeatures, request } from '@/lib/api';
+import { registerCache } from '@/lib/cache-registry';
 import { onTranscriptsCleared } from '@/lib/transcript-store';
-import { idbBackend, SyncCache } from './cache';
+import { CACHE_SESSIONS, idbBackend, SyncCache } from './cache';
 import { FRAME_TYPES, type SyncTransport } from './protocol';
 import type { Visibility } from './session';
 
@@ -44,6 +45,7 @@ export function browserCache(): SyncCache {
   if (!cache) {
     const created = new SyncCache(typeof indexedDB === 'undefined' ? undefined : idbBackend());
     onTranscriptsCleared(() => { void created.clear(); });
+    registerCache('sync-lanes', { size: () => created.memorySize, limit: CACHE_SESSIONS, clear: () => created.trimMemory() });
     cache = created;
   }
   return cache;

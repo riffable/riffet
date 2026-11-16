@@ -1,13 +1,18 @@
 /**
  * A map that forgets its least recently used entries past [limit] of them or, weighed by [weigh],
  * past [maxWeight] in total; an entry that alone outweighs that is let go at once. A hit counts as
- * a use. [onEvict] sees each entry the bounds push out, not one `set` replaces. Values are never
+ * a use. [onEvict] sees each entry the bounds push out or `clear` drops, not one `set` replaces. Values are never
  * `undefined`, so a miss is told from a hit with one lookup.
  */
 export interface BoundedCache<K, V> {
   get: (key: K) => V | undefined;
   has: (key: K) => boolean;
   set: (key: K, value: V) => void;
+  delete: (key: K) => void;
+  clear: () => void;
+  readonly size: number;
+  /** Total weight of the entries, 0 when nothing is weighed. */
+  readonly weight: number;
 }
 
 export function boundedCache<K, V extends {} | null>({ limit, maxWeight = Infinity, weigh, onEvict }: {
@@ -29,6 +34,20 @@ export function boundedCache<K, V extends {} | null>({ limit, maxWeight = Infini
       return value;
     },
     has: (key) => entries.has(key),
+    delete: (key) => {
+      const previous = entries.get(key);
+      if (previous === undefined) return;
+      entries.delete(key);
+      weight -= weightOf(key, previous);
+    },
+    clear: () => {
+      const all = [...entries];
+      entries.clear();
+      weight = 0;
+      for (const [key, value] of all) onEvict?.(key, value);
+    },
+    get size() { return entries.size; },
+    get weight() { return weight; },
     set: (key, value) => {
       const previous = entries.get(key);
       if (previous !== undefined) {

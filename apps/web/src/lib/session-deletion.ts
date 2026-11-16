@@ -1,11 +1,15 @@
 import { api, HttpError, onSessionDeletedResponse } from './api';
 import { browserCache } from '@/sync/browser';
+import { registerCache } from './cache-registry';
 
 /**
  * Conversations the server has deleted, as far as this page knows. A deleted id is never rebuilt:
  * anything still holding it (a stream, a draft save, a cache write) finds it here and lets go.
  */
 const deleted = new Set<string>();
+/** Past this many the oldest ids are forgotten: the server still answers 410 for them, and each id costs every storage-key scan. */
+const KEPT_DELETED = 2_000;
+registerCache('deleted-sessions', { size: () => deleted.size, limit: KEPT_DELETED, clear: () => undefined });
 const listeners = new Set<(ids: string[]) => void>();
 
 /** Whether a storage key or id still refers to a conversation known deleted. */
@@ -26,10 +30,14 @@ function purgeStorage(ids: readonly string[]): void {
       const storage = globalThis[kind];
       const keys = Array.from({ length: storage.length }, (_, index) => storage.key(index)).filter((key): key is string => Boolean(key?.startsWith('riffet.') || key?.startsWith('riffet:')));
       for (const key of keys) {
-        const selected = key.startsWith('riffet.discussion-selected.') && ids.includes(storage.getItem(key) ?? '');
+        if (ids.some((id) => key.includes(id))) { storage.removeItem(key); continue; }
+        // The value is read only for the few keys that can name a session inside it.
+        const selected = key.startsWith('riffet.discussion-selected.');
         // A pending create (outbox, discussion) names its new id only inside the record.
-        const pending = /outbox|discussion-create|native-create/.test(key) && ids.some((id) => (storage.getItem(key) ?? '').includes(id));
-        if (selected || pending || ids.some((id) => key.includes(id))) storage.removeItem(key);
+        const pending = /outbox|discussion-create|native-create/.test(key);
+        if (!selected && !pending) continue;
+        const value = storage.getItem(key) ?? '';
+        if (selected ? ids.includes(value) : ids.some((id) => value.includes(id))) storage.removeItem(key);
       }
     } catch { /* Storage may be unavailable; what it held cannot be reached from here either. */ }
   }
@@ -40,6 +48,7 @@ export function forgetSessions(ids: readonly string[]): void {
   const fresh = ids.filter((id) => !deleted.has(id));
   if (!fresh.length) return;
   for (const id of fresh) deleted.add(id);
+  for (const id of deleted) { if (deleted.size <= KEPT_DELETED) break; deleted.delete(id); }
   for (const id of fresh) void browserCache().forget(id);
   purgeStorage(fresh);
   for (const listener of [...listeners]) listener(fresh);
