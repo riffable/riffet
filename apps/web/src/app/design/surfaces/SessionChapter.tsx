@@ -301,7 +301,7 @@ function Code() {
 function ApprovalCard({ long = false }: { long?: boolean }) {
   const { t } = useLingui();
   const command = long
-    ? `rm -rf ${Array.from({ length: 14 }, (_, index) => `/Users/dev/workspace/riffet/apps/web/dist/assets/chunk-${index}.js`).join(' \\\n  ')}`
+    ? `rm -rf ${Array.from({ length: 14 }, (_, index) => `/Users/dev/workspace/riffet/apps/web/dist/assets/chunk-${index}.js`).join(' \\\n  ')}` // privacy: allow placeholder path in a specimen command
     : 'pnpm vitest run settings';
   return (
     <article className="rounded-xl bg-subtle/45 px-3 py-2.5">

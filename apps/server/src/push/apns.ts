@@ -146,7 +146,7 @@ function parseKey(input: unknown): StoredKey {
     return value.trim();
   };
   const keyId = id(body.keyId, 'keyId'), teamId = id(body.teamId, 'teamId');
-  if (typeof body.key !== 'string' || body.key.length > 8 * 1024 || !body.key.includes('-----BEGIN PRIVATE KEY-----')) throw new AppError('INVALID_PUSH_KEY', 'key must be the text of the .p8 file');
+  if (typeof body.key !== 'string' || body.key.length > 8 * 1024 || !body.key.includes('-----BEGIN PRIVATE KEY-----')) throw new AppError('INVALID_PUSH_KEY', 'key must be the text of the .p8 file'); // privacy: allow PEM header the key is checked against
   return { keyId, teamId, key: body.key.trim() };
 }
 

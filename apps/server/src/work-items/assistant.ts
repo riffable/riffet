@@ -25,7 +25,7 @@ const INSTRUCTIONS = 'AGENTS.md';
 const CLAUDE_FILE = 'CLAUDE.md';
 /** What an earlier server wrote here; a file still holding it follows to the current import. */
 const CLAUDE_IMPORT_BEFORE = `@${INSTRUCTIONS}\n`;
-const CLAUDE_IMPORT = `@${INSTRUCTIONS}\n@USER.md\n`;
+const CLAUDE_IMPORT = `@${INSTRUCTIONS}\n@USER.md\n`; // privacy: allow Claude Code file imports, not an address
 /** The hash of the text Riffet last wrote: a file still holding it was never edited, so it follows Riffet's updates. */
 const WRITTEN_KEY = 'assistant-instructions-written';
 /** Done tasks older than this are left out of `task_list`. */

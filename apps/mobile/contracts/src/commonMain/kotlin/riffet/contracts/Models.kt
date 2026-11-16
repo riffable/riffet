@@ -264,6 +264,8 @@ data class Session(
     val terminalHold: SessionTerminalHold? = null,
     /** The conversation's current goal (Claude Code `/goal`, Codex thread goal, DSH goal); missing when there is none. */
     val goal: SessionGoal? = null,
+    /** The 任务 this conversation works on (docs/TASK-BOARD.md §4); quick chats never have one. */
+    val workItemId: String? = null,
     val createdAt: String,
     val updatedAt: String,
     /** The raw id of a plugin Agent, which [backendId] cannot hold; see [AgentIds]. */

@@ -9,7 +9,9 @@
 // - a client file (`plugins/<vendor>/<name>/web/**`) imports only `@riffet/plugin-web`,
 //   `@contracts`, npm dependencies and files of its own package, and nothing of Node or the server;
 // - the web core reaches the client entries (`plugins/web.ts`) only through
-//   apps/web/src/plugins/registry.ts, as the server core does through registry.ts.
+//   apps/web/src/plugins/registry.ts, as the server core does through registry.ts;
+// - the Mac app's canvas bundle (apps/macos/scripts/canvas-layout/) builds the canvas package's own
+//   client layout into the app, so it may import that package's web files and nothing else of plugins/.
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
@@ -21,6 +23,8 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const GATE = 'apps/server/src/plugins/registry.ts';
 const WEB_GATE = 'apps/web/src/plugins/registry.ts';
 const WEB_ENTRIES = /^plugins\/web(?:\.[jt]sx?)?$/;
+const MAC_CANVAS = 'apps/macos/scripts/canvas-layout/';
+const CANVAS_CLIENT = 'plugins/riffet/canvas/web/';
 // Client code of a package; `plugins/web.ts` lists them all, as `index.ts` does the server side.
 const CLIENT_FILE = /^plugins\/[^/]+\/[^/]+\/web\//;
 const API = 'packages/plugin-api/';
@@ -59,7 +63,8 @@ for (const file of files) {
     } else if (file.startsWith(API)) {
       if (relativeTarget !== undefined ? !relativeTarget.startsWith(API)
         : specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) fail('the plugin API may import only @contracts, Node built-ins and package.json dependencies');
-    } else if ((relativeTarget === 'plugins' || relativeTarget?.startsWith('plugins/')) && file !== GATE && !(file === WEB_GATE && WEB_ENTRIES.test(relativeTarget))) {
+    } else if ((relativeTarget === 'plugins' || relativeTarget?.startsWith('plugins/')) && file !== GATE && !(file === WEB_GATE && WEB_ENTRIES.test(relativeTarget))
+      && !(file.startsWith(MAC_CANVAS) && relativeTarget.startsWith(CANVAS_CLIENT))) {
       fail(`only ${GATE} may import plugins/, and ${WEB_GATE} only plugins/web`);
     }
   }

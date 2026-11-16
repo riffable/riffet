@@ -209,7 +209,7 @@ describe('work items', () => {
     const read = async () => (await call('GET', '/api/assistant/instructions')).json() as { text: string; custom: boolean };
     const builtIn = await read();
     expect(builtIn.custom).toBe(false);
-    expect(readFileSync(join(stateDir, 'assistant', 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n@USER.md\n');
+    expect(readFileSync(join(stateDir, 'assistant', 'CLAUDE.md'), 'utf8')).toBe('@AGENTS.md\n@USER.md\n'); // privacy: allow Claude Code file imports
     expect((await call('PUT', '/api/assistant/instructions', { text: 'Answer in one line.' })).json()).toEqual({ text: 'Answer in one line.\n', custom: true });
     assistantProject(store, stateDir);
     expect(readFileSync(join(stateDir, 'assistant', 'AGENTS.md'), 'utf8')).toBe('Answer in one line.\n');

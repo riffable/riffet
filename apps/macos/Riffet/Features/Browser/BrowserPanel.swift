@@ -168,7 +168,7 @@ private struct BrowserTabChip: View {
                 .opacity(tab.active || hovering ? 1 : 0)
                 .help(Text("关闭标签页"))
                 .accessibilityLabel(Text("关闭标签页"))
-                .padding(.horizontal, 3)
+                .padding(.horizontal, Space.xxs)
         }
         .background(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).fill(tab.active || hovering ? palette.bgHover : .clear))
         .onHover { hovering = $0 }
