@@ -10,7 +10,7 @@ Riffet 插件可以提供模型源、分享目标、Agent 后端、视图、命�
 
 - HTTP 路由 `/api/integrations` 及其子路由，列表响应字段 `integrations`。
 - 协议特性 `integrations-v1`、SSE 事件 `integrations` 和已有 `INTEGRATION_*` / `INTEGRATIONS_*` 错误码。
-- doctor 诊断 ID `integration:<id>`、Web 缓存键 `riffet.integrations.v1:`、设置页身份 `integrations`，以及已有插件和贡献 ID。
+- doctor 诊断 ID `integration:<id>`、Web 缓存键 `riffet.integrations.v1:`、设置页身份 `integrations`，以及已有插件和声明 ID。
 
 本次命名调整不改变 manifest、消息桥或子进程协议，`apiVersion` 仍为 1。引用旧 SDK 源码的开发包需将导入改为 `@riffet/plugin-api`，更新 `Plugin`、`PluginManifest`、`PluginHost` 与 `PLUGIN_API_VERSION` 等符号后重新构建；已经打包并自带依赖的安装包无需因重命名重新安装。安装包与版本记录保持原位；本地设置与插件业务数据按下面的规则迁移。
 
@@ -28,7 +28,7 @@ Riffet 插件可以提供模型源、分享目标、Agent 后端、视图、命�
 
 ```
 packages/plugin-api/src/index.ts   插件可用的全部接口（@riffet/plugin-api）
-packages/contracts/src/plugins.ts       静态声明（视图、命令）、贡献 ID 规则
+packages/contracts/src/plugins.ts       静态声明（视图、命令）、声明 ID 规则
 plugins/index.ts                   内置插件清单，按优先级排列
 plugins/riffet/<name>/             随应用构建的插件（cursor、antigravity、canvas、browser、avatars）
 <外部插件仓库>/<name>/           独立分发的插件，每个目录一个 manifest
@@ -46,6 +46,8 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 ## 接口与版本
 
 一个插件导出 `Plugin`：`manifest`（`id` 为 `<vendor>.<name>`、`vendor`、`name`、`apiVersion`、`defaultEnabled`、可选 `settings`）、可选 `detect(host)`，以及 `activate(host, scope)` 返回的 `Contributions`（可以是 Promise）：
+
+用词：`Contributions` 的每个字段是一个**扩展点**，`activate` 返回的是插件对这些扩展点的**实现**；manifest 的 `contributes`（类型 `PluginDeclarations`）是**静态声明**，其中每一项的 ID（`<插件 id>/<名称>`）叫**声明 ID**。
 
 | 扩展点 | 作用 |
 | --- | --- |
@@ -73,7 +75,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 | 入口 | 内容 | 稳定性 |
 | --- | --- | --- |
-| `@riffet/plugin-api` | 插件接口：manifest 类型、`Plugin`、`PluginHost`、`Contributions` 及各类贡献 | 同一 API 版本内只做可加性变更 |
+| `@riffet/plugin-api` | 插件接口：manifest 类型、`Plugin`、`PluginHost`、`Contributions` 及各扩展点的接口 | 同一 API 版本内只做可加性变更 |
 | `@riffet/plugin-api/kit` | 与核心共用的工具包 | 供官方包使用，不承诺兼容 |
 | `@riffet/plugin-api/experimental/agent` | Agent 协议 | 实验性 |
 | `@riffet/plugin-api/manifest`、`/tooling`、`/package-files`、`/schema` | manifest 校验、构建与打包、包文件、JSON Schema | 工具 |
@@ -113,6 +115,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - **介绍**：包目录里的 `README.<语言>.md`（如 `README.zh-Hans.md`），没有则用 `README.md`，经 `GET /api/integrations/:id/readme?locale=` 读取，不执行插件代码。首个标题只是重复插件名时省略。内置包放在 `plugins/<vendor>/<name>/`，构建时与 `assets/` 一起复制到 `dist/plugins/`。没有 README 时显示 `description`。下方列出插件提供的 Agent、模型源、任务、视图、命令和操作入口。
 - **插件自己的页**：页签名取 `contributes.page.title`，缺省为「设置」。声明了 `page` 时显示插件构建的页面；否则显示 `settings` 表单和 `locations` 含 `settings` 的自定义视图。都没有时不显示这个页签。
+  页面分三层：宿主画的状态（`status()`、缺的依赖、登录动作）；宿主按扩展点画的区块（模型源对应提供商与额度，Agent 对应配置，任务对应最近运行，分享发布对应已发布的分享），读数与宿主设置共用缓存；最后是插件构建的区块，不重复前两层的信息。布局、条目和怎样增加条目种类，见 [插件界面](design/system/plugins.md) §6。
 - **管理**：启停策略、版本、来源、权限、卸载；下方是诊断（状态说明、运行诊断、日志、重载、兼容性）。
 
 插件页（`packages/contracts/src/plugin-page.ts`）由插件在运行时构建，各端用自己的原生控件绘制，插件不写界面代码。分组有可选标题和一行脚注。条目包括：
@@ -122,18 +125,20 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 宿主在服务端校验每次读取：格式不对时整页报错；引用未声明的键时拒绝；密钥条目的值一律去掉，只保留 `set`。`refreshMs` 让客户端在显示期间定时重读，用于下载这类自己会变化的状态。
 
+规范已经确定、尚未实现的扩展（[插件界面](design/system/plugins.md) §6.4、§6.5）：条目 `meter`、`link`（`page`、`view` 或 `url`）；`row` 的 `tone`、`badges`、`time`、`copy`、`ref`（引用项目、会话、任务、提供商或分享，宿主解析名称、检查能否访问）；区块的 `refresh`、`pending`、`error`、`empty`；按钮的 `flow`；读取时带 `path` 打开子页，`PluginPage.title` 是子页的标题。客户端读取页面时带上自己能画的条目种类，服务端把不支持的条目降级成 `row`、去掉不支持的附加项再返回，插件始终按最新的规范构建页面。
+
 接口：`GET /api/integrations/:id/page?locale=` 读取；`POST /api/integrations/:id/page` 带 `{ locale, set: { key, value } }` 或 `{ locale, run: { action, item? } }` 修改，返回重读后的页面和可选的 `message`。插件关闭时返回 409。按需激活的插件（`view`、`command`）在读取页面时激活。
 
 ## Manifest 与静态声明
 
 `PluginManifest` 的可选成员，不执行插件代码即可读取，所以关闭的插件仍显示它们：
 
-- `version`：包版本（semver），不参与贡献 ID。
+- `version`：包版本（semver），不参与声明 ID。
 - `title`、`description`：`LocalizedText`（BCP-47 标签到文本）。客户端依次取完全匹配、语言前缀、`zh-Hans`、`en`、第一项，都没有则用 `name`。
-- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。贡献 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
+- `contributes`：`PluginDeclarations`，目前有 `views`、`commands`、`tasks`、`agentBackends`、`avatarStyles`、`agentTools`、`channels`、`page`、`modelSources`、`sharePublisher` 和 `appearance`（类型在 `packages/contracts/src/plugins.ts`；外观见 [THEMES.md](THEMES.md) §7）。声明 ID 是 `<插件 id>/<名称>`；视图声明 `locations`（`session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`）、`clients`（`web`、`macos`）、`instances`；`when` 是结构化条件（`hasProject`、`hasSession`、`projectType`、`capability`），不是表达式。不认识的键被忽略。
 - `requires`：`[{ id, optional? }]`。
 
-校验分两侧，使用同一个函数 `checkManifest`，以模式区分。加载时（`load`），宿主不认识的值只跳过那一项并写一条说明：视图 `locations`、`clients` 中的未知值被去掉，去空的视图被跳过；`renderer.kind` 未知的视图被跳过；视图或命令的 `when` 含未知条件键时该视图或命令被跳过（宿主无法判断何时可见，所以保持隐藏）；`activation` 中的未知事件被去掉，都未知时插件不按启动激活，也不退回 `startup`。被跳过的项不出现在 `declared`，不占用贡献 ID，不能被命令路由执行，也不触发按需激活；说明在插件的诊断和 `riffet doctor` 中以警告显示。打包与检查（`check`、`pack`）使用严格模式，未知值一律报错，因为作者时工具与 SDK 同版本，未知值只会是笔误。`capabilities` 中的未知名称在两侧都拒绝整个包：宿主无法约束的权限不能授予。已知成员的格式错误（类型、ID 格式、命名空间、重复、semver 等）也仍然拒绝。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
+校验分两侧，使用同一个函数 `checkManifest`，以模式区分。加载时（`load`），宿主不认识的值只跳过那一项并写一条说明：视图 `locations`、`clients` 中的未知值被去掉，去空的视图被跳过；`renderer.kind` 未知的视图被跳过；视图或命令的 `when` 含未知条件键时该视图或命令被跳过（宿主无法判断何时可见，所以保持隐藏）；`activation` 中的未知事件被去掉，都未知时插件不按启动激活，也不退回 `startup`。被跳过的项不出现在 `declared`，不占用声明 ID，不能被命令路由执行，也不触发按需激活；说明在插件的诊断和 `riffet doctor` 中以警告显示。打包与检查（`check`、`pack`）使用严格模式，未知值一律报错，因为作者时工具与 SDK 同版本，未知值只会是笔误。`capabilities` 中的未知名称在两侧都拒绝整个包：宿主无法约束的权限不能授予。已知成员的格式错误（类型、ID 格式、命名空间、重复、semver 等）也仍然拒绝。不合格的插件进入 `rejected`，在插件管理页和 doctor 中显示原因，不会激活。`PluginDescriptor` 相应增加 `version`、`title`、`description`、`source`（`builtin`、`development` 或 `installed`）、`declared`（静态声明，只含本版本认识的种类和成员）、`requires`、`rejected`（未加载的条目，没有启用控件）、`compatibility`、`installed`（独立包的版本、授权与数据）。
 
 视图位置与客户端的承载情况（`locations` 的六个值，截至当前实现）：
 
@@ -150,7 +155,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 | 对象 | 规则 | 后注册者 |
 | --- | --- | --- |
-| 贡献 ID、模型源 ID、Agent 工具前缀（`toolPrefix`） | 加载时判定，先注册者持有 | 被拒绝，原因显示在插件管理页和 doctor |
+| 声明 ID、模型源 ID、Agent 工具前缀（`toolPrefix`） | 加载时判定，先注册者持有 | 被拒绝，原因显示在插件管理页和 doctor |
 | 分享发布者 | 单选，用户选择默认项 | 不涉及 |
 | 运行时钩子（`runtimeHooks`） | 有序链：按注册顺序尝试，第一个 `prepare` 返回附件的钩子服务该进程 | 保留，diagnostics 注明排在谁之后 |
 
@@ -160,21 +165,21 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 每次开启是一次激活，有自己的代次、`ActivationScope`（`generation`、`signal`、`onDispose(fn)`）和 disposer。
 
-- 暂存：`activate` 返回（或 Promise 完成）后，只有这次激活仍是被需要的才提交；抛错、停用或被新的选择取代时，已登记的 disposer 和 `Contributions.dispose` 照常运行，贡献丢弃。晚到的结果不会提交。
-- 停用的顺序：查询不再返回其贡献；未完成的登录被丢弃；`signal` 中止；disposer 后登记者先运行，`Contributions.dispose` 最先，各自最多等约 5 秒。失败记为该插件的 `problem`，在状态和 doctor 中可查，不显示成「未安装」。
+- 暂存：`activate` 返回（或 Promise 完成）后，只有这次激活仍是被需要的才提交；抛错、停用或被新的选择取代时，已登记的 disposer 和 `Contributions.dispose` 照常运行，这次的实现丢弃。晚到的结果不会提交。
+- 停用的顺序：查询不再返回它提供的功能；未完成的登录被丢弃；`signal` 中止；disposer 后登记者先运行，`Contributions.dispose` 最先，各自最多等约 5 秒。失败记为该插件的 `problem`，在状态和 doctor 中可查，不显示成「未安装」。
 - 同一插件的生命周期变更串行：`update()` 与 `refresh()` 不会交叠。查询（`modelSources()`、`runtimeHooks()` 等）仍是同步的，只读已提交状态。
 - 长存活资源：`runtimeHooks` 交出的附属进程由会话的运行时持有，不由插件持有。插件停用只停止观察（`detach()`），不终止原生进程和它的附属进程；`stop()` 只在会话自己结束时调用。插件在 `scope.onDispose` 里 `detach()` 它交出的全部附件，停用后拒绝会话控件的操作。
 - 依赖：按 `requires` 的顺序激活；必需的插件缺失或未启用时本插件保持关闭，原因为 `requires <id>`；依赖停用时依赖它的插件随之停用，并且先于它停用（离被依赖者最远的先走）；依赖环在加载时整体拒绝。可选依赖只影响激活顺序。
 - 服务关闭时 `registry.close()` 结束所有激活，同样依赖它的先于被依赖的。
 - 激活期限：`activate` 约 30 秒仍没有结果，这次激活以问题结束（`activation failed: did not finish within 30s`），已登记的 disposer 运行，之后才到的结果照常释放，同一插件的队列不会被它占住。取代、失败和迟到的激活清理不掉的东西被等待并记为该插件的诊断（doctor 可查）。
-- 调用期限：贡献被提交时由注册表包一层，消费方无需改动。进程内插件的这些调用有等待上限，超时以「插件 id、操作、上限」的错误结束（代码本身无法取消）：模型源 `prepare` 30 秒、`catalog` 60 秒、`usage` 30 秒；运行时钩子 `prepare` / `recover` 各 30 秒，附件 `bindNative` / `stop` 各 10 秒、`act` 30 秒；分享发布器 `capability` 30 秒、`find` / `remove` / `verify` 各 60 秒、`deploy` 10 分钟。`resolve`、`publicUrl` 同步，不设上限；智能体工具 `call` 可能在等用户，也不设上限。隔离进程的调用由 `remote.ts` 的 `TIMEOUTS` 限时，这里只记录失败。所有这些调用的失败都写入该插件自己的日志（低于 500 的 `AppError` 是业务答复，记为 debug），错误原样交给调用方。
+- 调用期限：实现被提交时由注册表包一层，消费方无需改动。进程内插件的这些调用有等待上限，超时以「插件 id、操作、上限」的错误结束（代码本身无法取消）：模型源 `prepare` 30 秒、`catalog` 60 秒、`usage` 30 秒；运行时钩子 `prepare` / `recover` 各 30 秒，附件 `bindNative` / `stop` 各 10 秒、`act` 30 秒；分享发布器 `capability` 30 秒、`find` / `remove` / `verify` 各 60 秒、`deploy` 10 分钟。`resolve`、`publicUrl` 同步，不设上限；智能体工具 `call` 可能在等用户，也不设上限。隔离进程的调用由 `remote.ts` 的 `TIMEOUTS` 限时，这里只记录失败。所有这些调用的失败都写入该插件自己的日志（低于 500 的 `AppError` 是业务答复，记为 debug），错误原样交给调用方。
 - 快速失败：同一次激活连续三次调用超时（普通错误不计，成功或抛错都清零）后，60 秒内其调用立即以 503 `PLUGIN_NOT_RESPONDING` 拒绝；之后放行第一次调用，成功则恢复，再超时则再关 60 秒。状态写在该次激活上，重载或重新启用从头计。期间插件的 `note` 显示「not responding … until <时间>」，进入状态与 doctor，调用恢复后清除。
-- 进程重启：隔离进程在激活提交后退出或违反协议时，撤回贡献（同上），随后在 2 秒、10 秒、60 秒后各自动重试一次，走与刷新相同的评估，依赖它的插件随之重新评估。重启后的进程稳定运行 10 分钟，次数清零。三次都失败后保持关闭，`problem` 附「automatic restarts stopped」，直到手动刷新、启用或重载。注册表关闭、插件被关闭或卸载、替换、恢复模式开启时不重启；激活阶段的失败仍按原处理（含版本回退），不自动重启。
+- 进程重启：隔离进程在激活提交后退出或违反协议时，撤下它提供的功能（同上），随后在 2 秒、10 秒、60 秒后各自动重试一次，走与刷新相同的评估，依赖它的插件随之重新评估。重启后的进程稳定运行 10 分钟，次数清零。三次都失败后保持关闭，`problem` 附「automatic restarts stopped」，直到手动刷新、启用或重载。注册表关闭、插件被关闭或卸载、替换、恢复模式开启时不重启；激活阶段的失败仍按原处理（含版本回退），不自动重启。
 - 登录：`runAction` 返回时插件已被关闭，则不登记设备码流程（409 `INTEGRATION_DISABLED`）；`pollFlow` 也核对插件仍在开启。
 
 ## Web 视图
 
-插件在 manifest 的 `contributes.views` 声明视图；Web 入口 `plugins/<vendor>/<name>/web/index.ts` 默认导出 `defineWebPlugin({ views: { '<贡献 ID>': 组件 }, icons? })`（`@riffet/plugin-web`），在 `plugins/web.ts` 登记为懒加载。入口要小，视图本身再用 `lazy()` 分块：插件开启后入口即被读取，视图在首次显示时才加载（画布即如此）。
+插件在 manifest 的 `contributes.views` 声明视图；Web 入口 `plugins/<vendor>/<name>/web/index.ts` 默认导出 `defineWebPlugin({ views: { '<声明 ID>': 组件 }, icons? })`（`@riffet/plugin-web`），在 `plugins/web.ts` 登记为懒加载。入口要小，视图本身再用 `lazy()` 分块：插件开启后入口即被读取，视图在首次显示时才加载（画布即如此）。
 
 - 目录：`apps/web/src/plugins/registry.ts` 把宿主自己的视图（会话视图 `chat`、`terminal`，侧栏视图 `files`、`changes`）与插件视图合成目录。插件视图须同时满足：插件已启用、声明了 `web` 客户端、有渲染器（已加载的入口登记了它，或其 `renderer: { kind }` 有宿主注册的渲染器，见 `registerDeclarativeRenderer`）。布局、切换器和设置页只读目录，增加视图不改布局分支。
 - 实例：视图收到 `ViewContext`（`serviceId`、`projectId?`、`sessionId?`、`instanceId`、`visible`、`signal`），宿主服务经 `usePluginHost()` 取得：会话与订阅、导航、通知、UI 套件、`locale`。宿主按上下文给实例定 key，换会话或项目是新实例，旧实例的 `signal` 先中止；读请求都应带上它。
@@ -227,13 +232,13 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 检测不在每次读取列表时运行。启动时（`refreshWithin`）、`update()` 之后和 `POST /api/integrations/refresh` 才重新判定，`GET /api/integrations` 返回上一次的结果。Web 与 Mac 打开插件管理页只读取列表；用户选择「重新检测」才调用 refresh。Mac 页面显示期间每十秒读取一次列表。
 
-关闭插件会丢弃其贡献和未完成的登录。模型源启用状态变化后刷新模型目录；档案里保存的模型源若无插件提供，原样保留，解析为不可用。
+关闭插件会撤下它提供的功能，并丢弃未完成的登录。模型源启用状态变化后刷新模型目录；档案里保存的模型源若无插件提供，原样保留，解析为不可用。
 
 ## 本地开发包
 
 常用入口是 `riffet plugin dev <源码目录>`：共享工具完成构建与校验，然后经 `POST /api/integrations/development` 注册包目录并在源码修改后重载。关联保存在已有 `plugins.json` 的 `development: { [id]: 绝对包目录 }`；服务停止时 CLI 取得状态目录锁后登记，下次启动生效。`riffet plugin unlink <id>` 经 DELETE 同一路径解除关联、停止作用域并保留设置和数据。持久关联核对原 ID，manifest 身份变化会拒绝加载；显式 registry developmentPackages 选项仍覆写默认发现。
 
-注册与解除接口只允许本机回环、无代理头的请求，沿用全局认证和 CSRF；注册前检查 manifest、身份和贡献冲突，不能接管内置或已安装的 ID。同路径重复注册按重载处理；其他目录的同 ID 先 unlink。运行任务阻止重载或解除关联。退出 watcher 不删除持久关联，服务也不会由开发命令自动启动。
+注册与解除接口只允许本机回环、无代理头的请求，沿用全局认证和 CSRF；注册前检查 manifest、身份和声明冲突，不能接管内置或已安装的 ID。同路径重复注册按重载处理；其他目录的同 ID 先 unlink。运行任务阻止重载或解除关联。退出 watcher 不删除持久关联，服务也不会由开发命令自动启动。
 
 环境变量 `RIFFET_DEV_PLUGINS` 仍兼容：它是冒号分隔的目录列表，每个目录含 `riffet-plugin.json`：与 manifest 相同的字段，再加 `entries: { server?, web? }`（相对路径）。这是可信的本地开发入口：服务端在探测或激活时把入口当应用代码 `import()`，所以列出一个目录等于信任它。
 
@@ -258,7 +263,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 - 授权：请求的 `grant` 必须等于包要求的 `capabilities`，否则 409 `PLUGIN_GRANT_REQUIRED`，`details` 带 `{ id, version, capabilities }`，客户端据此显示确认。授权按版本记录，新版本增加能力就需要新的授权。
 - 已安装的插件装入新版本后自动选中它：先关闭、换版本、再激活；新版本没有启动，就回到之前的版本，失败原因保留在该行（状态 `attention`，也在 doctor 中），请求得 409 `PLUGIN_ACTIVATION_FAILED`，新版本仍是已安装、可再选。依赖它的插件先关闭、换好后重新判定。
 - 卸载一个版本只删包文件：选中的版本在还有别的版本时不能卸载；最后一个版本带走整个插件。仍被使用的文件（有未结束的任务是用该版本启动的）等到不再被使用时才清理，启动 5 秒后会扫一遍，仍有文件在等待时每分钟再扫一遍（与安装、卸载互斥）；不在记录里的目录也在这时清掉。设置、密钥和数据都不动。
-- 外观资产：声明了 `appearance` 的版本，其配色、字体、背景要通过与 `GET /api/appearance` 相同的检查（路径、类型与文件头、大小、配色是合法主题），否则整个版本以 422 被拒绝，而不是让目录悄悄少一个贡献，也就不会用一个坏掉的新版本顶掉可用的旧版本。共享打包工具用同一套资源校验，打包时就报出。
+- 外观资产：声明了 `appearance` 的版本，其配色、字体、背景要通过与 `GET /api/appearance` 相同的检查（路径、类型与文件头、大小、配色是合法主题），否则整个版本以 422 被拒绝，而不是让目录悄悄少一项，也就不会用一个坏掉的新版本顶掉可用的旧版本。共享打包工具用同一套资源校验，打包时就报出。
 - 旧版本的资产地址：目录里的资产地址带内容哈希。升级后，只要旧版本的文件还在，`/api/appearance/assets/:pluginId/:sha256` 仍然服务它的地址（持有旧目录的客户端不会 404），卸载那个版本后才失效；插件停用后所有地址都 404。
 - 数据在 `<stateDir>/plugin-data/<id>/`，与版本分开。`DELETE /api/integrations/:id/data` 是唯一删除它（连同备份）的操作，插件在删除期间关闭、之后按启用状态重新启动；插件已卸载而数据还在时同样可删。
 
@@ -317,7 +322,7 @@ node --permission --no-experimental-sqlite
 
 **权限由宿主按调用检查**，不信包自己说了什么。协议是逐行 JSON 的 RPC，走子进程的 stdin/stdout，不用 Node 的 IPC 通道（它的解析器把一行坏数据抛到服务的顶层）；一条消息至多 8 MB，坏行或超长都只让该插件失败（`packages/plugin-api/src/runtime/protocol.ts`，子进程一侧是 `child.mjs`，构建时复制为 `dist/plugin-runtime.mjs`）：子进程里的入口得到一个代理 `PluginHost`，调用回到服务端，每次按该版本被授予的能力检查：
 
-- 贡献按种类检查：模型源需要 `models.provide`，任务提供方需要 `tasks.run`，缺少则激活失败并写明。
+- 扩展点按种类检查：模型源需要 `models.provide`，任务提供方需要 `tasks.run`，缺少则激活失败并写明。
 - `gateway.fetchModels` 需要 `network`（请求字段逐项校验，`select` 与 `signal` 不能跨进程）；`invalidateModelCatalogs` 需要 `models.provide`；`secrets.set` 只写自己的密钥。`agentProfiles` 不提供。
 - `host.exec`（`host.runProcess` 的跨进程形式）需要 `process.exec`：`command` 须与包声明的某个 `executables` 逐字相等，宿主用进程内插件同一个 `resolveCli` 解析为绝对路径（未安装 404；落在包目录或包状态目录之内的文件 403），`args` 至多 64 项、每项至多 8192 字符、不含 NUL，工作目录恒为包的状态目录（子进程传来的 `cwd` 不用），环境是服务的环境加上 `env` 里通过任务计划同一判定（`backends/shared/installed-env.ts`）的变量，超时默认 30 秒、至多 120 秒，输出默认 256 KB、至多 1 MB，每包同时至多 4 个（429），没有标准输入；底层是进程内宿主用的同一个 `runProcess`。这是同意的边界，不是隔离：命令在沙箱外以运行 Riffet 的用户的身份运行，参数由包决定，声明解释器的包可执行任意代码。日志只记命令名、参数个数、耗时和退出码。
 - `host.tasks.start` 需要 `tasks.run`，由进程内包得到的同一个实现服务：只能启动包自己的任务提供方，任务服务仍对每条新计划确认，`confirm` 原样传入；包没有声明任务提供方时宿主没有 `tasks`，答 501 `PLUGIN_HOST_UNSUPPORTED`。
@@ -327,9 +332,9 @@ node --permission --no-experimental-sqlite
 - 任务计划（`TaskPlan`）只由宿主的任务服务在用户发起任务后执行，并照常校验。
 - 子进程发来的请求同时不超过 64 个，未知方法得 404 `PLUGIN_UNKNOWN_HOST_CALL`。
 
-**进程生命周期**：激活时启动，停用时先对子进程发 `dispose`（执行包登记的清理，至多约 5 秒），再结束进程。每个调用都有期限（激活 30 秒，模型目录 60 秒，状态 8 秒等），进程退出、协议错误或调用超时都使该插件失败：撤回它的贡献，状态显示原因，依赖它的插件先关闭，管理功能不受影响，服务不受影响。已提交的激活失败后自动重启（2 / 10 / 60 秒，见「生命周期」），三次都失败则保持关闭，直到下一次显式开启或刷新。
+**进程生命周期**：激活时启动，停用时先对子进程发 `dispose`（执行包登记的清理，至多约 5 秒），再结束进程。每个调用都有期限（激活 30 秒，模型目录 60 秒，状态 8 秒等），进程退出、协议错误或调用超时都使该插件失败：撤下它提供的功能，状态显示原因，依赖它的插件先关闭，管理功能不受影响，服务不受影响。已提交的激活失败后自动重启（2 / 10 / 60 秒，见「生命周期」），三次都失败则保持关闭，直到下一次显式开启或刷新。
 
-**本阶段支持的贡献**：模型源、任务提供方、操作（含设备码登录）、命令（`Contributions.commands`）、头像风格（`Contributions.avatarStyles`）、状态、doctor 检查，以及静态声明（视图、外观、任务声明）。不支持的有：Agent 后端（声明了 `contributes.agentBackends` 的包在安装时被拒绝：「agent backends need a trusted package in this version」）、分享发布目标、运行时钩子。
+**本阶段支持的扩展点**：模型源、任务提供方、操作（含设备码登录）、命令（`Contributions.commands`）、头像风格（`Contributions.avatarStyles`）、状态、doctor 检查，以及静态声明（视图、外观、任务声明）。不支持的有：Agent 后端（声明了 `contributes.agentBackends` 的包在安装时被拒绝：「agent backends need a trusted package in this version」）、分享发布目标、运行时钩子。
 
 - 模型源的 `resolve()` 是同步的，跨进程做不到，所以代理保存「每组 overrides 最近一次的结果」：`ModelSourceProvider` 增加可选的异步 `prepare(overrides)`，激活后对默认值预取，目录读取（`sourceCatalog`）前核心先 `await prepare`，缓存超过 60 秒的 `resolve` 在后台刷新。没有预取过的 overrides 先返回 `reason`「尚未准备好」，并触发一次预取。子进程返回的结果逐字段校验：地址只能是 http(s)，凭据只能是静态密钥，或持有 `process.exec` 时指向声明的可执行文件的 `command` 凭据（它会在沙箱外执行：Claude Code 的 `apiKeyHelper`、Codex 的 `auth.command`）；其他 `command` 凭据使该源返回 `reason`。声明了 `contributes.modelSources[].hosts` 的源另受地址限制：`endpoints[*].baseUrl`、`claudeBaseUrl`、`codexBaseUrl` 和描述里的 `defaultEndpoint` 的主机必须匹配声明，或是用户输入的地址（该次调用的档案 `apiEndpoint`、本包 `text` 设置中的 http(s) 地址），否则 `resolve` 返回 `reason`，地址不交给驱动；`defaultEndpoint` 不符时激活失败。未声明 `hosts` 的源保持原行为。`host.gateway.fetchModels` 由服务进程发起，不在沙箱内，所以宿主在请求前按字面主机名检查（不做 DNS 解析）：目标是回环或未指定地址上的服务自己的端口时一律拒绝；链路本地地址（169.254.0.0/16、fe80::/10）除非是用户输入的地址也拒绝；包声明了 `hosts` 时目标须匹配声明或为用户输入的地址。该请求只在原 origin 内跟随重定向，重定向不改变主机。
 - 模型源的可选 `usage(overrides)` 通过 `modelSource.usage` RPC 返回 `NativeBackendUsage`。激活描述只在提供该方法时声明能力，宿主校验并投影账号窗口、余额和模型状态，不透传包的其他字段。额度使用 profile 自己的地址和凭据，与 CLI 登录账号分开；旧包省略此方法仍可正常提供模型。
@@ -379,7 +384,7 @@ node --permission --no-experimental-sqlite
 
 ## 插件管理产品（2026-11-07）
 
-Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也可打开；无项目时同样可用。Agent 的 skills、MCP 等原有管理入口标为「扩展管理」。插件入口位于「收藏夹」下方，页面按静态贡献分为「Agent 与模型」「工作台」「服务与分享」，停用不改变分组。每行直接启停，功能与配置就地展开；低频的权限与诊断操作折叠。搜索、状态筛选、安装授权、版本、卸载与数据删除、重载和恢复模式均保留。模型、外观等业务选择器保留在各自页面；插件视图的宿主标题栏提供返回所属插件的入口。内置包、开发包和安装包都在同一列表，版本操作只适用于安装包。
+Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也可打开；无项目时同样可用。Agent 的 skills、MCP 等原有管理入口标为「扩展管理」。插件入口位于「收藏夹」下方，页面按静态声明分为「Agent 与模型」「工作台」「服务与分享」，停用不改变分组。每行直接启停，功能与配置就地展开；低频的权限与诊断操作折叠。搜索、状态筛选、安装授权、版本、卸载与数据删除、重载和恢复模式均保留。模型、外观等业务选择器保留在各自页面；插件视图的宿主标题栏提供返回所属插件的入口。内置包、开发包和安装包都在同一列表，版本操作只适用于安装包。
 
 配置草稿捕获描述符的 configRevision，保存时带回；服务端在写入前比较，不一致返回 409 PLUGIN_CONFIG_CONFLICT。revision 为随机标识，与密钥内容无关；密钥从不回传，空白未编辑不覆盖已有密钥。Web 离开页面或换插件时确认未保存修改；Mac 的工作台模型保留草稿，换插件和重新读取前确认。连接不同服务时清除 Mac 草稿，旧连接迟到的结果不会更新当前页面。
 
@@ -398,7 +403,7 @@ Web 和 macOS 在工作台侧栏提供独立「插件」入口，命令面板也
 | --- | --- | --- | --- |
 | P0 | SDK 固定版本与 manifest JSON Schema | 已交付独立 JS/类型 SDK 归档、固定版本依赖、统一 manifest 校验与 JSON Schema；每个插件可以脱离相邻 checkout 构建 | [VS Code manifest](https://code.visualstudio.com/api/references/extension-manifest)、[Raycast publishing](https://developers.raycast.com/basics/publish-an-extension) |
 | P0 | 分开表示来源、完整性和执行信任 | 每个版本分别记录来源、内容摘要和可信选择；客户端展示实际执行位置。发布方签名仍属 P2 | [Raycast security](https://developers.raycast.com/information/security)、[Obsidian security](https://obsidian.md/help/plugin-security) |
-| P1 | 按贡献使用激活 | 已实现模型源、命令/登录、任务、视图的按需激活，静态目录不执行代码，缺省旧包仍启动激活，懒升级失败也恢复最近成功版本 | [VS Code activation events](https://code.visualstudio.com/api/references/activation-events) |
+| P1 | 按需激活 | 已实现模型源、命令/登录、任务、视图的按需激活，静态目录不执行代码，缺省旧包仍启动激活，懒升级失败也恢复最近成功版本 | [VS Code activation events](https://code.visualstudio.com/api/references/activation-events) |
 | P1 | 声明式跨端界面与能力协商 | Web/Mac 共同承接 tasks/list/form/detail，客户端独立验证版本与所需能力；桥扩展当前项目分页、请求取消和数据失效订阅 | [Raycast manifest](https://developers.raycast.com/information/manifest)、[VS Code extension host](https://code.visualstudio.com/api/advanced-topics/extension-host) |
 | P1 | 可归因的运行日志与开发重载 | 已实现按 ID/版本/代次归属的有限持久日志、阶段耗时、脱敏、CLI/Web/Mac 查看和内容快照开发重载 | [Raycast debugging](https://developers.raycast.com/basics/debug-an-extension)、[Obsidian lifecycle](https://docs.obsidian.md/plugins/guides/lifecycle-management) |
 | P2 | 更新源和发布认证 | 复用已有固定版本、授权差异、备份和失败回退，先做显式检查与更新；公共市场排后 | [Raycast publishing](https://developers.raycast.com/basics/publish-an-extension) |

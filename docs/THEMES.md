@@ -179,23 +179,23 @@ interface ThemeLibraryUpdate { expectedRevision: string; themes: CustomTheme[]; 
 
 ## 7. 插件外观
 
-插件（见 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)）可以贡献配色、字体、背景，以及把它们组合起来的预设。它独立于 §4 的主题库：不写入 `themes.json`，`GET/PUT /api/themes` 的语义不变，内置主题仍由 `gen:theme` 生成，没有服务端时默认外观照常显示。插件配色不占用 `custom-…` id，也不会被用户编辑覆盖；卸载插件不会删除用户创建的主题。
+插件（见 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md)）可以提供配色、字体、背景，以及把它们组合起来的预设。它独立于 §4 的主题库：不写入 `themes.json`，`GET/PUT /api/themes` 的语义不变，内置主题仍由 `gen:theme` 生成，没有服务端时默认外观照常显示。插件配色不占用 `custom-…` id，也不会被用户编辑覆盖；卸载插件不会删除用户创建的主题。
 
 ### 7.1 声明与目录
 
-manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appearance.ts`），贡献 ID 为 `<插件 id>/<名称>`，所有路径都在包内的 `assets/` 下：
+manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appearance.ts`），声明 ID 为 `<插件 id>/<名称>`，所有路径都在包内的 `assets/` 下：
 
 | 种类 | 内容 |
 |---|---|
-| `palettes` | `asset` 是一份 JSON，结构与一套 `CustomTheme` 完全相同（53 个角色 × 明暗 + 各 16 个 ANSI）；服务端用 `validateCustomThemes` 校验，其中的 `id` 与 `name` 被忽略，配色以贡献 ID 标识 |
+| `palettes` | `asset` 是一份 JSON，结构与一套 `CustomTheme` 完全相同（53 个角色 × 明暗 + 各 16 个 ANSI）；服务端用 `validateCustomThemes` 校验，其中的 `id` 与 `name` 被忽略，配色以声明 ID 标识 |
 | `fonts` | `role` 为 `ui` 或 `mono`；`family` 是字体文件自带的族名；`files[]` 为 woff2（可带 `weight`、`style`、`unicodeRange`）；`fallback` 是回退族名；`license` 见下 |
 | `backgrounds` | 图片资产、`areas`（目前只有 `workbench`）、`opacity`、`fit`（`cover` 或 `tile`）、`license` |
-| `presets` | 引用配色、字体、背景的贡献 ID，可以来自别的插件 |
+| `presets` | 引用配色、字体、背景的声明 ID，可以来自别的插件 |
 | `iconPacks` | `id`、`title`、`asset`；资产为单色矢量 JSON，Android 在设置 → 外观 → 界面图标中选择，见 §7.5 |
 
-`GET /api/appearance` 只列已启用插件的贡献，每个资产解析为 `{ url, sha256, size, type }`；`revision` 是目录内容的哈希。资产在 `GET /api/appearance/assets/:pluginId/:sha256`，地址里带内容哈希，所以响应是 `private, max-age=31536000, immutable`：鉴权与其他 `/api` 一致，共享代理不缓存。
+`GET /api/appearance` 只列已启用插件提供的资源，每个资产解析为 `{ url, sha256, size, type }`；`revision` 是目录内容的哈希。资产在 `GET /api/appearance/assets/:pluginId/:sha256`，地址里带内容哈希，所以响应是 `private, max-age=31536000, immutable`：鉴权与其他 `/api` 一致，共享代理不缓存。
 
-服务端逐个校验资产，不合格的贡献从目录里省去：realpath 必须留在包目录内；类型在白名单内（woff2、png、jpeg、webp、json）且文件头与类型相符；字体 ≤ 2 MB、图片 ≤ 4 MB、配色 ≤ 256 KB；配色必须是合法主题。包停用后目录不再列出它，资产路径也随之 404。
+服务端逐个校验资产，不合格的资源从目录里省去：realpath 必须留在包目录内；类型在白名单内（woff2、png、jpeg、webp、json）且文件头与类型相符；字体 ≤ 2 MB、图片 ≤ 4 MB、配色 ≤ 256 KB；配色必须是合法主题。包停用后目录不再列出它，资产路径也随之 404。
 
 字体和背景可声明 `license: { redistributable: boolean }`，表示冻结的分享能否带上这份文件；形状不对按其他声明错误处理，包被拒绝。不声明等于不可再分发。官方「纸墨」包的 Inter（SIL OFL）声明为可再分发，纸纹不声明。
 
@@ -210,7 +210,7 @@ manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appear
 | Web | `localStorage["riffet.appearance.selection"]` | 目录与配色 `riffet.appearance.cache.v1`；首帧配色 `riffet.appearance.palette.v1`；资产由 Service Worker 存入 `riffet-appearance-v1`；每次拿到目录后页面把仍列出的资产地址发给 Service Worker，其余的缓存项被删除（没有 Service Worker 或发送失败则不影响） |
 | macOS | `UserDefaults["riffet.appearance-selection\|<服务端>"]` | `~/Library/Application Support/Riffet/appearance/<服务端哈希>/`，资产按 sha256 命名，使用前复核；缓存的配色与字体在启动后片刻应用，不在首帧 |
 
-存储的是 `{ preset?, palette?, uiFont?, monoFont?, background? }`。每一项的优先级是：宿主默认值，选中的预设，单项选择；与插件加载顺序无关。单项值 `default` 表示宿主默认，即使预设指定了别的。引用的贡献缺失或插件被停用时，该项显示为宿主默认，但选择仍保留，重新启用后恢复；只有用户自己的操作才改写它。选中预设时会清掉之前的单项选择，让预设生效。
+存储的是 `{ preset?, palette?, uiFont?, monoFont?, background? }`。每一项的优先级是：宿主默认值，选中的预设，单项选择；与插件加载顺序无关。单项值 `default` 表示宿主默认，即使预设指定了别的。引用的资源缺失或插件被停用时，该项显示为宿主默认，但选择仍保留，重新启用后恢复；只有用户自己的操作才改写它。选中预设时会清掉之前的单项选择，让预设生效。
 
 插件配色与 §4 的选择并存：它以 `[data-theme="plugin-<哈希>"]` 注入，走自定义主题的同一条 CSS 变量路径，不写入 `riffet.theme.id` / `riffet.theme-id`。生效时它盖在所选主题之上；用户在配色里选内置或自定义主题，就把单项配色设为 `default`，所选主题重新显示。
 
@@ -221,7 +221,7 @@ manifest 的 `contributes.appearance`（类型在 `packages/contracts/src/appear
 - 字体加载失败时回到宿主字体栈，不保留上一个插件字体；同一目录修订内不重试，修订变了才再试。
 - 想改插件配色：主题编辑器的「新建自」可选插件配色，保存时是带新 `custom-…` id 的独立副本。
 - 分享：当前绘制的是插件配色时，分享请求的 `themeId` 为 `plugin-<哈希前 16 位>`，服务端从仍启用的插件读出这份配色，冻结为 `custom-plugin-<哈希>` 的自包含主题；之后卸载插件不影响已冻结的分享。插件已停用则返回 `SHARE_THEME_CHANGED`。
-- 分享的字体与背景：请求的 `appearance` 可带 `uiFont`、`monoFont`、`background`（设备当前生效的贡献 ID）。服务端只对仍启用、声明了 `license.redistributable: true` 且文件通过校验的项，把文件复制到分享包的 `appearance/<sha256>.<ext>`，并在冻结的外观里以 `fonts` / `background` 引用；其余项（含未声明许可的）不进包，分享页用自己的字体与背景。复制的文件计入分享包 50 MB 上限与内容哈希；草稿返回的 `appearance` 不含这三个字段。分享页用与工作台相同的 `FontFace` 路径加载字体，背景是同一种满铺图层。Mac 端暂不发送这三个字段，分享仍用默认字体与背景。
+- 分享的字体与背景：请求的 `appearance` 可带 `uiFont`、`monoFont`、`background`（设备当前生效的声明 ID）。服务端只对仍启用、声明了 `license.redistributable: true` 且文件通过校验的项，把文件复制到分享包的 `appearance/<sha256>.<ext>`，并在冻结的外观里以 `fonts` / `background` 引用；其余项（含未声明许可的）不进包，分享页用自己的字体与背景。复制的文件计入分享包 50 MB 上限与内容哈希；草稿返回的 `appearance` 不含这三个字段。分享页用与工作台相同的 `FontFace` 路径加载字体，背景是同一种满铺图层。Mac 端暂不发送这三个字段，分享仍用默认字体与背景。
 - Android 消费图标、配色、界面／等宽字体、背景及预设。预设与单项选择保存在本机，按服务端与鉴权身份隔离；配色沿用 `plugin-<hash前16>` 标识，资源按内容哈希复核。实现和平台边界见 §15。
 
 ### 7.4 官方包
@@ -946,7 +946,7 @@ BringIntoView 并高亮 2.2 秒。选择不改设置、不调用控件动作；�
 
 沿用 AppearanceCatalog、AppearanceAsset 与既有预设格式，不新增皮肤包或服务器协议。
 本机保存 preset／palette／uiFont／monoFont／background，顺序为宿主默认、预设、单项选择；
-单项 default 显式恢复默认。选择预设清除先前单项覆盖；插件停用或贡献缺失只影响当前有效值，
+单项 default 显式恢复默认。选择预设清除先前单项覆盖；插件停用或资源缺失只影响当前有效值，
 不删除选择。选择内置主题时只将插件配色设为 default，字体和背景继续生效。
 
 主界面、快捷聊天及设备确认入口读取同一鉴权范围的偏好。范围由服务端 origin 与当前鉴权身份的

@@ -29,7 +29,7 @@ Agent CLI ─stdio─▶ riffet MCP shim ─HTTP─▶ 服务端 riffet-mcp：�
 
 ```
 plugins/riffet/browser/
-  index.ts        manifest、activate：贡献 agentTools、channels、actions、status、doctorChecks
+  index.ts        manifest、activate：提供 agentTools、channels、actions、status、doctorChecks
   engine.ts       浏览器进程、按项目的资料、按会话的标签页、空闲回收
   tools.ts        工具定义（稳定）与参数白名单
   act.ts          批量步骤、风险判定、确认与交接
@@ -40,18 +40,18 @@ apps/macos/Riffet/Features/Browser/   Mac 原生面板（按插件启用与否�
 
 ### 需要新增的插件扩展点
 
-现在的插件不能贡献 MCP 工具（工具表写死在 `apps/server/src/riffet-mcp/service.ts`），也没有长连接。浏览器需要两个可加性扩展点，`PLUGIN_API_VERSION` 不变：
+现在的插件不能提供 MCP 工具（工具表写死在 `apps/server/src/riffet-mcp/service.ts`），也没有长连接。浏览器需要两个可加性扩展点，`PLUGIN_API_VERSION` 不变：
 
 | 扩展点 | 声明 | 作用 |
 | --- | --- | --- |
-| `agentTools` | `contributes.agentTools: [{ id: 'riffet.browser/browser', title, description }]` | 一个工具组：稳定的工具定义加 `call(ctx, name, args, signal)`。`ctx` 带会话、项目、`callId`、截止时间。结果是文本或图片内容块，可以标 `untrusted`。组 ID 就是贡献 ID，作为 `ToolGroupId` 写进会话的 `toolGroups` |
+| `agentTools` | `contributes.agentTools: [{ id: 'riffet.browser/browser', title, description }]` | 一个工具组：稳定的工具定义加 `call(ctx, name, args, signal)`。`ctx` 带会话、项目、`callId`、截止时间。结果是文本或图片内容块，可以标 `untrusted`。组 ID 就是声明 ID，作为 `ToolGroupId` 写进会话的 `toolGroups` |
 | `channels` | `contributes.channels: [{ id: 'riffet.browser/live', scope: 'session' }]` | 挂在 `/api/integrations/:id/channels/:name` 的 WebSocket。只认用户登录（Web cookie 或设备令牌），不认 MCP 凭据。宿主核对会话归属后才交给插件 |
 
 `PluginHost.sessions`（只给声明了 `agentTools` 或 `channels` 的进程内插件）：`get`（会话、项目目录，只读）、`wake`（往会话发一轮，同一次性唤醒）、`notify`（同 `notify_user`）。截图直接作为图片内容块返回，不经文件通道；需要本人回答的确认在插件自己的面板里完成（§5），核心不新增交互类型。
 
 核心侧的改动：
 
-- `packages/contracts`：`ToolGroupId` 增加插件贡献 ID（带 `/`，与 `device:` 不冲突）；`PluginDeclarations.agentTools`、`channels`；跑 `pnpm gen:contracts`。
+- `packages/contracts`：`ToolGroupId` 增加插件的声明 ID（带 `/`，与 `device:` 不冲突）；`PluginDeclarations.agentTools`、`channels`；跑 `pnpm gen:contracts`。
 - `riffet-mcp/service.ts`：`tools()` 合并会话选中、且此刻已注册的插件组；`handle()` 每次复核，规则同设备组。各组的工具名不能重复，插件工具名必须以它声明的前缀开头（`browser_`），加载时校验；Riffet 自己的前缀（`device_`、`read_`、`schedule_`…）不能声明。插件组来自 `app.ts` 传入的 `PluginToolSource`（riffet-mcp 与 plugins 同层，不互相导入）。核心测试：`riffet-mcp/plugin-tools.test.ts`（只有选了组的会话看得到、调得到，插件关闭后立即 `TOOL_NOT_AVAILABLE`）。
 - `PATCH /api/sessions/:id`：接受格式合法的插件组 ID。插件关闭时原样保留、只是不注入，插件回来后恢复，做法同会话视图偏好。
 - 「技能与工具」（Web、Mac、iOS、Android）：列出已启用插件声明的工具组，放在设备之前。

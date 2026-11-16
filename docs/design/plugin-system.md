@@ -4,35 +4,35 @@
 
 状态：基础机制已在 main 实现（2026-11-06）；独立插件管理产品于 2026-11-07 实施，见第 13 节。阶段 A—F 均已合入，第 2—10 节仍是行为契约；各阶段的验收核对与缺口见第 11 节的「实施状态」，已决定和新增的待定项见第 12 节。已验证：类型检查、`check:plugins`、契约兼容、i18n 与主题生成检查、全量 vitest（只有已知的环境性失败），以及不含 Cursor 的服务端打包后能启动；macOS 只做了编译。待验证：Web 与 macOS 的界面验收、用真实 Cursor CLI 运行 `probe-cursor-e2e`；Mac 端的插件功能没有自动化测试。
 
-Riffet 将可选产品功能组织为插件：插件可以贡献外观资源、工作台视图、Agent 后端、模型源、分享目标、项目操作和后台任务。官方功能与第三方功能使用相同的公共接口。核心维持项目与会话事实、身份和连接、执行管理以及插件运行所需的基础服务。
+Riffet 将可选产品功能组织为插件：插件可以提供外观资源、工作台视图、Agent 后端、模型源、分享目标、项目操作和后台任务。官方功能与第三方功能使用相同的公共接口。核心维持项目与会话事实、身份和连接、执行管理以及插件运行所需的基础服务。
 
 第一版用 Agent 后端、模型源、主题资源包、官方画布和 Android 构建五类样本验证架构。先确定身份、执行位置、生命周期、数据归属和界面组合规则，再逐项增加产品能力。公共 SDK 在这些样本通过前保持实验状态。Agent 后端的样本是把 Cursor 从核心迁出为官方插件；本轮不接入新的 Agent。
 
-当前实施与验收只覆盖 Web 和 macOS。两者采用相同的工作台贡献协议，macOS 验证原生控件、导航和生命周期的映射，为未来 Android/iOS 客户端提供参考。本阶段不设计手机布局、不实现移动端插件加载、不修改移动端客户端来承接插件。同一服务端仍服务移动端，新增的开放身份与贡献数据必须通过现有契约兼容检查，移动端不会收到无法解码的值。Android 项目构建指电脑上的工程执行能力，与 Android 客户端插件系统无关。
+当前实施与验收只覆盖 Web 和 macOS。两者采用相同的工作台扩展协议，macOS 验证原生控件、导航和生命周期的映射，为未来 Android/iOS 客户端提供参考。本阶段不设计手机布局、不实现移动端插件加载、不修改移动端客户端来承接插件。同一服务端仍服务移动端，新增的开放身份与声明数据必须通过现有契约兼容检查，移动端不会收到无法解码的值。Android 项目构建指电脑上的工程执行能力，与 Android 客户端插件系统无关。
 
 已确定的要点：
 
-- 一套插件内核承载所有贡献类型，不为主题、视图、模型源各建框架。原 Integration 体系演化为服务端贡献接口；源码现统一使用 Plugin，本地存储通过一次性迁移改名，HTTP 路径保持兼容，见 [命名与兼容](../PLUGIN_ARCHITECTURE.md#命名与兼容)。
+- 一套插件内核承载所有扩展点，不为主题、视图、模型源各建框架。原 Integration 体系演化为服务端扩展点接口；源码现统一使用 Plugin，本地存储通过一次性迁移改名，HTTP 路径保持兼容，见 [命名与兼容](../PLUGIN_ARCHITECTURE.md#命名与兼容)。
 - 官方插件与第三方使用同一公共接口，由目录边界和 `check:plugins` 强制执行。
-- 视图与位置分开：插件贡献视图并声明允许的位置，用户决定顺序、显隐和位置，宿主负责外壳。
+- 视图与位置分开：插件提供视图并声明允许的位置，用户决定顺序、显隐和位置，宿主负责外壳。
 - 插件启停属于服务实例，Web 与 Mac 一致；视图隐藏与外观选择属于设备。
-- Agent 后端与模型源是两类贡献；核心维护会话事实，插件只做协议适配。Cursor 迁出后，核心不再依赖任何具体 Agent。
+- Agent 后端与模型源是两个扩展点；核心维护会话事实，插件只做协议适配。Cursor 迁出后，核心不再依赖任何具体 Agent。
 - 首轮交付只运行随应用发布的官方插件与可信本地开发包；第三方开放以执行边界完成为前提。
 
 ## 1. 现有基础与迁移起点
 
-下表记录实施前（2026-11-05）的代码，作为迁移起点保留，表中的源码路径与符号已按当前命名更新。迁移后的位置见 [内置插件](../PLUGIN_ARCHITECTURE.md) 与第 11 节：`NATIVE_BACKEND_IDS` 已扩展为开放的 `PluginAgentId`，Web 的 `PanelTab` 与 Mac 的 `InspectorTab` 已改为视图贡献 ID，画布在 `plugins/riffet/canvas/`，Cursor 的运行时在 `plugins/riffet/cursor/`。
+下表记录实施前（2026-11-05）的代码，作为迁移起点保留，表中的源码路径与符号已按当前命名更新。迁移后的位置见 [内置插件](../PLUGIN_ARCHITECTURE.md) 与第 11 节：`NATIVE_BACKEND_IDS` 已扩展为开放的 `PluginAgentId`，Web 的 `PanelTab` 与 Mac 的 `InspectorTab` 已改为视图的声明 ID，画布在 `plugins/riffet/canvas/`，Cursor 的运行时在 `plugins/riffet/cursor/`。
 
 | 现有实现 | 可复用部分 | 需要改变的边界 |
 | --- | --- | --- |
-| `packages/plugin-api/src/index.ts` | manifest、模型源、分享发布器、运行时钩子、Host 能力 | `activate()` 同步返回贡献，需补充异步生命周期；资源、客户端与任务拥有各自的接口 |
+| `packages/plugin-api/src/index.ts` | manifest、模型源、分享发布器、运行时钩子、Host 能力 | `activate()` 同步返回实现，需补充异步生命周期；资源、客户端与任务拥有各自的接口 |
 | `plugins/index.ts`、`scripts/check-plugin-boundaries.mjs` | 官方集成的目录约定与导入边界检查 | 静态数组扩展为多来源加载；边界检查覆盖客户端入口 |
 | `apps/server/src/plugins/registry.ts` | 集中注册、状态、登录、启停 | 读取列表时不再触发 `detect()`；补充取消与资源释放；分享发布方由“首个启用”改为按提供方身份选择 |
 | `apps/server/src/backends/registry.ts`、`backends/types.ts` | 后端注册表、驱动与能力描述 | 从内部驱动提取公共 Agent 协议，隔离直接更新宿主状态的内部接口 |
 | `apps/server/src/native/`、`cli-driver.ts`、`backends/cursor/` | Cursor 运行时：`NativeService`、store.db 读取、屏幕观察、进程级启动配置 | 被其他后端共用的部分拆为宿主服务，其余随 Cursor 插件迁出（第 5.2 节） |
 | `packages/contracts/src/index.ts`、`schema/native.ts`、`schema/compat.ts` | 后端目录、配置与会话契约；枚举的 `open` 与 `negotiated` 兼容机制 | `NATIVE_BACKEND_IDS` 固定枚举演进为经校验的开放身份；调用时查注册表 |
 | `packages/contracts/src/theme.ts`、`apps/server/src/themes/`、`scripts/gen-mobile-theme.ts` | 跨端颜色与 ANSI 契约、主题库修订保护、内置主题生成到各端 | 新增包资源引用、字体与背景；插件资源与用户主题库分开 |
-| `apps/web/src/app/panels/ContextPanel.tsx` | 右侧面板、文件与 Git 内容 | `PanelTab` 固定枚举改为视图贡献标识；布局外壳与内容分离 |
+| `apps/web/src/app/panels/ContextPanel.tsx` | 右侧面板、文件与 Git 内容 | `PanelTab` 固定枚举改为视图的声明 ID；布局外壳与内容分离 |
 | `apps/web/src/app/session/viewPrefs.ts`、`terminal/NativeSession.tsx` | 会话视图（对话、终端、画布）的顺序、显隐与切换 | 视图来源改为注册目录；读取偏好时保留未知视图引用，当前实现会丢弃 |
 | `apps/web/src/app/state/uiStore.ts`、`WorkbenchPanels.tsx` | 响应式布局、面板开关和状态 | 布局只保存视图身份与实例状态，避免引用具体插件组件 |
 | `apps/macos/Riffet/App/InspectorPanels.swift`、`Features/Inspector/InspectorView.swift` | 原生面板状态、尺寸与导航 | `InspectorTab` 固定枚举映射到共享视图身份，解码未知值时保留引用；macOS 目前没有画布 |
@@ -41,7 +41,7 @@ Riffet 将可选产品功能组织为插件：插件可以贡献外观资源、�
 
 会话标签页（`docs/SESSION_TABS.md`）刚为会话视图加入排序与显隐偏好。阶段 B 在这套偏好上改为注册目录，不另建第二套。
 
-`runtimeHooks` 是现有的跨贡献扩展：路由类插件在原生进程启动前挂接路由附件，并区分 `detach()`（停止观察，进程继续服务）与 `stop()`。它保留为 Agent 后端的运行时扩展点，也是阶段 A 生命周期设计中长存活资源的现有样本。
+`runtimeHooks` 是现有的跨扩展点机制：路由类插件在原生进程启动前挂接路由附件，并区分 `detach()`（停止观察，进程继续服务）与 `stop()`。它保留为 Agent 后端的运行时扩展点，也是阶段 A 生命周期设计中长存活资源的现有样本。
 
 保留现有集成 ID、档案中的模型源 ID、分享的发布方身份和配置文件。插件机制建设期间通过适配层接入新宿主；后续重命名不改变这些持久身份和配置格式；本地配置与数据路径在启动时迁移。扩展管理继续管理各 Agent 自身的 Skills、MCP 和插件，与 Riffet 产品插件分开。
 
@@ -51,13 +51,13 @@ Riffet 将可选产品功能组织为插件：插件可以贡献外观资源、�
 
 插件负责具体产品行为。画布拥有布局算法、相机和回放；Android 插件拥有 Gradle 识别、参数构造和错误解析；分享插件拥有目标平台发布；主题包拥有外观资源。会话原始数据、任务运行记录与公共授权规则继续由宿主管理。
 
-官方插件不得导入服务端 Store、Web 全局状态或其他插件的私有实现。官方插件代码放在 `plugins/<vendor>/<name>/`，服务端入口是包根的 `index.ts`，客户端入口在 `web/`；macOS 原生渲染器随 Mac 工程编译，按贡献 ID 注册。`check:plugins` 扩展到 Web 入口，只允许公共客户端 SDK、`@contracts` 和包内文件。已有模块可先通过内部适配器迁移，适配器留在宿主一侧，不进入插件目录。
+官方插件不得导入服务端 Store、Web 全局状态或其他插件的私有实现。官方插件代码放在 `plugins/<vendor>/<name>/`，服务端入口是包根的 `index.ts`，客户端入口在 `web/`；macOS 原生渲染器随 Mac 工程编译，按声明 ID 注册。`check:plugins` 扩展到 Web 入口，只允许公共客户端 SDK、`@contracts` 和包内文件。已有模块可先通过内部适配器迁移，适配器留在宿主一侧，不进入插件目录。
 
 不同时抽离全部现有功能。先将画布等可选功能迁入插件；文件、Git 等现有面板可先注册为内置视图，保持原行为，再根据依赖情况决定是否成为独立可卸载包。
 
-## 3. 一个包，多种贡献和执行位置
+## 3. 一个包，多个扩展点和执行位置
 
-一个插件包有稳定 ID、包版本、manifest 格式版本和宿主 API 兼容要求。它可以只包含资源，也可以包含服务端入口、客户端入口以及多项贡献。官方与第三方是来源属性；随应用发布与独立安装是分发属性。
+一个插件包有稳定 ID、包版本、manifest 格式版本和宿主 API 兼容要求。它可以只包含资源，也可以包含服务端入口、客户端入口以及多个扩展点的实现。官方与第三方是来源属性；随应用发布与独立安装是分发属性。
 
 | 部分 | 内容 | 执行或消费位置 |
 | --- | --- | --- |
@@ -65,23 +65,23 @@ Riffet 将可选产品功能组织为插件：插件可以贡献外观资源、�
 | 服务端入口 | Agent 后端、模型源、分享目标、项目能力、任务提供方 | 项目所在的 Riffet 服务 |
 | 客户端入口 | 自定义视图、交互与呈现 | 当前 Web 或原生客户端 |
 
-服务端汇总贡献目录：已安装插件、启用状态、各项贡献、支持的客户端和不可用原因。Web 与 macOS 按同一目录组装工作台、设置和选择器，客户端自带的渲染器按贡献 ID 匹配。两端现在都读取 `PluginDescriptor`，贡献目录在它的基础上扩展。
+服务端汇总插件目录：已安装插件、启用状态、各项声明、支持的客户端和不可用原因。Web 与 macOS 按同一目录组装工作台、设置和选择器，客户端自带的渲染器按声明 ID 匹配。两端现在都读取 `PluginDescriptor`，插件目录在它的基础上扩展。
 
-安装列表读取 manifest，不执行插件代码。停用插件仍显示名称、版本、贡献和配置入口。慢探测、网络查询与项目脚本不能在每次读取插件列表时执行。
+安装列表读取 manifest，不执行插件代码。停用插件仍显示名称、版本、声明和配置入口。慢探测、网络查询与项目脚本不能在每次读取插件列表时执行。
 
-manifest 声明贡献身份、支持的宿主、兼容版本、入口、激活条件、所需能力以及资源清单。运行代码只注册其声明范围内的实现；动态项目任务可以使用声明的任务提供方作为归属。静态主题无需运行入口。名称、视图标题和命令标签等显示文本在 manifest 中按语言提供并带回退语言，宿主按当前界面语言选择；插件文案不进入宿主的 `.po` 目录。
+manifest 声明身份、支持的宿主、兼容版本、入口、激活条件、所需能力以及资源清单。运行代码只注册其声明范围内的实现；动态项目任务可以使用声明的任务提供方作为归属。静态主题无需运行入口。名称、视图标题和命令标签等显示文本在 manifest 中按语言提供并带回退语言，宿主按当前界面语言选择；插件文案不进入宿主的 `.po` 目录。
 
 ```ts
 // 草案：字段名与存放形式在阶段 A 确定，这里只表达结构。
 const manifest = {
   id: 'riffet.canvas',                       // 插件 ID
-  version: '1.0.0',                          // 包版本，不参与贡献身份
+  version: '1.0.0',                          // 包版本，不参与声明身份
   manifestVersion: 1,
   hostApi: { web: '>=1' },                   // 按入口分别检查
   entries: { web: './web/index.js' },        // 纯资源包没有入口
   contributes: {
     views: [{
-      id: 'riffet.canvas/flow',              // 贡献 ID，带插件命名空间
+      id: 'riffet.canvas/flow',              // 声明 ID，带插件命名空间
       title: { 'zh-Hans': '画布', en: 'Canvas' },
       icon: { svg: 'assets/canvas.svg', sfSymbol: 'point.3.connected.trianglepath.dotted' },
       locations: ['session-view'],
@@ -93,9 +93,9 @@ const manifest = {
 };
 ```
 
-阶段 A 的落地形式：内置包在 TS 中导出 `PluginManifest`，本地开发包与独立包在包根放 `riffet-plugin.json`，字段相同，另有 `entries`；草案的 `manifestVersion` 由 `apiVersion` 和 `hostApi`（`server`、`web`、`agent`）承担，贡献 ID 的形式是 `<插件 ID>/<名称>`。字段见 [内置插件](../PLUGIN_ARCHITECTURE.md)「Manifest 与静态声明」。
+阶段 A 的落地形式：内置包在 TS 中导出 `PluginManifest`，本地开发包与独立包在包根放 `riffet-plugin.json`，字段相同，另有 `entries`；草案的 `manifestVersion` 由 `apiVersion` 和 `hostApi`（`server`、`web`、`agent`）承担，声明 ID 的形式是 `<插件 ID>/<名称>`。字段见 [内置插件](../PLUGIN_ARCHITECTURE.md)「Manifest 与静态声明」。
 
-插件 ID、贡献 ID、视图实例 ID 和任务实例 ID 分开。贡献 ID 使用插件命名空间，持久引用不依赖显示名称或数组顺序。包版本改变不改变贡献身份。删除或替换身份需要显式迁移。现有模型源 ID 不带命名空间，作为兼容身份保留。
+插件 ID、声明 ID、视图实例 ID 和任务实例 ID 分开。声明 ID 使用插件命名空间，持久引用不依赖显示名称或数组顺序。包版本改变不改变声明身份。删除或替换身份需要显式迁移。现有模型源 ID 不带命名空间，作为兼容身份保留。
 
 ## 4. 工作台界面扩展
 
@@ -103,7 +103,7 @@ const manifest = {
 
 右侧栏允许插件添加视图。视图声明自己的身份、适用上下文、支持的平台、默认位置和允许的位置；工作台负责尺寸、分屏、焦点、导航、关闭与状态恢复。插件只拥有分配给它的视图内容。
 
-首批位置使用少量语义名称：主内容区、会话视图、辅助侧栏、底部面板和主导航入口。会话视图是同一会话的替代呈现，例如对话、终端和画布，由会话内的视图切换选择，上下文固定为该会话；主内容区承载统计、任务等工作台级页面。菜单、工具栏、设置页是动作或设置贡献的位置，不能与任意视图插槽混用。内部标识不写死像素位置；本阶段只实现 Web 桌面与 macOS 工作台的映射。
+首批位置使用少量语义名称：主内容区、会话视图、辅助侧栏、底部面板和主导航入口。会话视图是同一会话的替代呈现，例如对话、终端和画布，由会话内的视图切换选择，上下文固定为该会话；主内容区承载统计、任务等工作台级页面。菜单、工具栏、设置页是动作或设置的位置，不能与任意视图插槽混用。内部标识不写死像素位置；本阶段只实现 Web 桌面与 macOS 工作台的映射。
 
 ```text
 工作台外壳
@@ -140,11 +140,11 @@ const manifest = {
 
 可信内置 Web 模块（画布、Cursor 设置页）通过客户端 SDK 在应用内注册组件。所有非内置包的 Web 视图，本地开发包与独立安装包一样，都在隔离 iframe（`sandbox="allow-scripts"`，不含 `allow-same-origin`，源不透明）或 Mac 的 WKWebView 中运行，只经消息桥访问宿主，不以同源模块加载，不能直接获得主应用 DOM 或认证凭据。开发包因受信任而无需授权即持有它请求的能力，但同样走消息桥。消息桥的身份绑定在宿主创建的 MessageChannel 端口上，不信任载荷自报身份；每个请求校验方法、参数 schema 与包持有的能力，会话读取和导航限定在视图所属项目，消息有大小与频率限制，卸载或上下文变化时关闭通道并中止未完成的请求。网络默认由页面 CSP 关闭，持有 `network` 能力才放开 https；主题资源通过宿主推送的颜色变量访问。
 
-原生编译模块可以使用相同贡献身份，随客户端发布并可启停。独立下载的 Web 资源具有不同的更新路径。没有对应渲染器的平台可以显示通用动作或明确不可用，不承诺动态加载任意 SwiftUI/Compose 代码。
+原生编译模块可以使用相同声明身份，随客户端发布并可启停。独立下载的 Web 资源具有不同的更新路径。没有对应渲染器的平台可以显示通用动作或明确不可用，不承诺动态加载任意 SwiftUI/Compose 代码。
 
 本阶段的原生实现是 macOS SwiftUI 渲染器。官方复杂功能可同时提供 Web 和 Mac 原生实现；只有 Web 实现的功能在 Mac 上显示为不可用，画布首轮即属此类。Mac 用 WKWebView 通过同一消息桥承接非内置包的 Web 视图；内置的仅 Web 视图（画布）使用应用内 SDK，在 Mac 上仍显示为不可用。Mac 原生渲染器仍调用公共数据与命令接口，不能直接获取整个 Workbench 对象。是否投入原生重写由功能体验决定，不要求每个插件同时维护两套自定义界面。
 
-旧客户端忽略未知可选贡献；插件的必需能力若超出客户端版本，则该部分不可用。服务端入口与客户端入口分别检查兼容性，不能以服务端版本代替全部客户端版本。
+旧客户端忽略未知的可选声明；插件的必需能力若超出客户端版本，则该部分不可用。服务端入口与客户端入口分别检查兼容性，不能以服务端版本代替全部客户端版本。
 
 ## 5. 公共服务与插件间扩展
 
@@ -166,7 +166,7 @@ const manifest = {
 
 服务自身带协议版本，并通过能力握手协商可选成员。文件、项目等句柄绑定发放时的实例与作用域，失效后撤销。流式日志使用序列、读取窗口和背压；产物通过资源接口传输，不塞进普通 RPC 响应。退出订阅必须释放服务端资源。
 
-插件可以通过命名空间注册带版本和 schema 的服务，以及在自有视图内声明扩展位置。消费插件声明必需或可选依赖。必需依赖缺失时不激活；依赖循环拒绝并显示诊断；可选依赖消失时撤销相关贡献。
+插件可以通过命名空间注册带版本和 schema 的服务，以及在自有视图内声明扩展位置。消费插件声明必需或可选依赖。必需依赖缺失时不激活；依赖循环拒绝并显示诊断；可选依赖消失时撤下相关实现。
 
 服务方法和事件的读取范围由提供方与宿主共同校验。插件间调用保留原发起方和项目上下文，依赖声明不传递额外权限。事件用于通知变化，写入使用有返回值的命令；重要状态从持久查询恢复，不依赖事件恰好送达。
 
@@ -174,7 +174,7 @@ const manifest = {
 
 ### 5.1 Agent 后端插件
 
-Agent 后端是正式贡献类型。它接入一个 Agent 的会话与执行协议；模型源提供模型目录、网关地址与凭证，两者可以由同一包贡献，但身份和职责分别定义。例如接入 Cursor Agent 与为 Claude Code 配置第三方模型源是不同能力，不预设模型源能驱动完整 Agent。
+Agent 后端是正式扩展点。它接入一个 Agent 的会话与执行协议；模型源提供模型目录、网关地址与凭证，两者可以由同一个包提供，但身份和职责分别定义。例如接入 Cursor Agent 与为 Claude Code 配置第三方模型源是不同能力，不预设模型源能驱动完整 Agent。
 
 现有 `ModelSourceBackend` 只有 `claude`、`codex`，`ResolvedSource` 也按这两个后端给出地址和请求头。开放 Agent 身份后，模型源改为声明所提供的网关协议，例如 Anthropic Messages 或 OpenAI Responses；Agent 后端声明能消费的协议，两者按协议匹配，不依赖 Agent ID。现有字段保留为兼容映射。
 
@@ -212,19 +212,19 @@ Cursor 是 Riffet 最早的后端，实现不止 `backends/cursor/`（约 1.6k �
 | --- | --- | --- |
 | Cursor 专有逻辑 | `native/service.ts` 等运行时、`chat-store.ts`、`cursor-metrics.ts`、`cli-driver.ts`、`cli-adapter.ts`、`readCursorShare`、`ResumeTitleWatcher`、设置服务中的 Cursor 段 | 迁入插件 |
 | 持久与线上兼容 | 缺省 `backendId` 即 Cursor、`cursorSessionId`、`cursor-cli.json`、`AppSettings.cursorCli`、`/api/cursor/*`、`cursor`/`login` 终端类型、主题角色 `agent-cursor` | 保留原值，由核心兼容层映射或转发到插件 |
-| 带 Cursor 分支的通用代码 | 派发中的 argv 提示路径、延迟 steer 与恢复的后端表、扩展发现路径、`doctor`、统计标签、Web/Mac 的审批映射、终端存活判断和登录提示 | 改为由后端能力或插件贡献驱动 |
+| 带 Cursor 分支的通用代码 | 派发中的 argv 提示路径、延迟 steer 与恢复的后端表、扩展发现路径、`doctor`、统计标签、Web/Mac 的审批映射、终端存活判断和登录提示 | 改为由后端能力或插件驱动 |
 
 `native/` 中的 transcript、交互选择和屏幕读取也被 Codex、Claude 等后端使用，迁出前先拆成宿主服务。公共 Agent 协议以 Cursor 为首个实现，同时对照 Claude、Codex 现有驱动审查，避免协议只适合 Cursor 的终端驱动方式。移动端合约同样包含 Cursor 枚举、`cursorSessionId` 与 `cursorCli`，并直接调用 `/api/cursor/*`，所以上述线上兼容项本轮都不退役。
 
 ## 6. 外观资源协议
 
-主题颜色复用现有语义角色和终端 ANSI。插件贡献的主题不占用用户自定义主题 ID，也不因用户编辑被覆盖。用户修改插件主题时保存独立副本或明确的覆盖记录。
+主题颜色复用现有语义角色和终端 ANSI。插件提供的主题不占用用户自定义主题 ID，也不因用户编辑被覆盖。用户修改插件主题时保存独立副本或明确的覆盖记录。
 
 字体声明资源、角色、字重和回退；背景声明资源、适用区域与显示参数；外观预设引用配色、字体和背景。用户可以分别选用。优先级固定为宿主默认值、选中预设、用户单项覆盖，不能由插件加载顺序决定。
 
 资源以插件身份、版本和内容哈希定位，服务端校验包内路径与资源类型，各端通过宿主提供的资产入口取得。字体文件等资产不嵌入受限大小的主题 JSON。离线客户端可以使用已经校验的缓存；资源缺失回退到默认值。
 
-插件外观不写入 `themes.json`，由贡献目录和资产入口单独提供；`GET/PUT /api/themes` 的语义不变，只读该接口的客户端看到的内容不变。内置主题继续由 `gen:theme` 生成到各端，默认外观不依赖服务端即可显示。
+插件外观不写入 `themes.json`，由插件目录和资产入口单独提供；`GET/PUT /api/themes` 的语义不变，只读该接口的客户端看到的内容不变。内置主题继续由 `gen:theme` 生成到各端，默认外观不依赖服务端即可显示。
 
 主题库可由服务共享，选用与字号偏好默认设备本地。卸载不删除用户创建的主题副本。已冻结分享需要复制所需外观资源，避免后来卸载主题插件导致历史分享损坏；是否可以再分发字体或背景取决于资源许可。
 
@@ -273,7 +273,7 @@ Android 插件解析 Gradle 错误和产物，宿主展示通用任务、诊断�
 
 配置和数据保存在插件命名空间，带 schema 版本和并发修订。插件升级的数据迁移需要明确方向与备份；恢复旧代码不等于数据一定可回滚，不兼容时保留备份并报告恢复步骤。卸载包、清除缓存、删除插件数据分开执行。
 
-分享目标选择按稳定提供方身份保存。默认目标只影响新分享，已有分享按原提供方管理。主题、布局、模型档案与任务都保留缺失贡献的引用，以便重新安装后恢复。
+分享目标选择按稳定提供方身份保存。默认目标只影响新分享，已有分享按原提供方管理。主题、布局、模型档案与任务都保留对缺失声明的引用，以便重新安装后恢复。
 
 不要求热更新所有模块。首轮交付可以在完成运行中任务后重启插件宿主或客户端加载新版本；执行前显示生效范围，避免把安装成功表述成所有端都已升级。
 
@@ -281,7 +281,7 @@ Android 插件解析 Gradle 错误和产物，宿主展示通用任务、诊断�
 
 | 首轮确定并验证 | 可后续实现 |
 | --- | --- |
-| 包、贡献、实例身份与版本约定 | 公共插件市场、搜索、评分 |
+| 包、声明、实例身份与版本约定 | 公共插件市场、搜索、评分 |
 | 资源、服务端、客户端边界与能力协商 | 更多运行语言和执行宿主 |
 | 视图与位置分离，菜单通过命令执行 | 跨位置拖拽、任意分屏、窗口布局和跨设备布局同步 |
 | 上下文、作用域、授权和数据归属 | 精细权限管理界面的全部形态 |
@@ -297,11 +297,11 @@ Android 插件解析 Gradle 错误和产物，宿主展示通用任务、诊断�
 
 ### 阶段 A：插件内核与现有集成迁移
 
-演进 `plugin-api`，增加静态 manifest、异步生命周期、资源归属与贡献目录；将路由、分享发布和模型源三类现有集成作为兼容贡献接入，分享发布方改为按提供方身份选择。确定服务端与客户端的序列化协议、贡献 ID、作用域、显示文本和版本协商。生命周期以 `runtimeHooks` 的 `detach()`/`stop()` 为样本覆盖长存活资源：停用插件不终止可独立存活的原生进程。生命周期实现的选型见第 12 节。
+演进 `plugin-api`，增加静态 manifest、异步生命周期、资源归属与插件目录；将路由、分享发布和模型源三类现有集成作为兼容的扩展点接入，分享发布方改为按提供方身份选择。确定服务端与客户端的序列化协议、声明 ID、作用域、显示文本和版本协商。生命周期以 `runtimeHooks` 的 `detach()`/`stop()` 为样本覆盖长存活资源：停用插件不终止可独立存活的原生进程。生命周期实现的选型见第 12 节。
 
 验收：停用后没有新增调用或遗留注册；激活失败可恢复并保留诊断；读取插件列表不触发探测；旧模型档案与分享记录仍可读，已有分享按原发布方管理；Web 与 Mac 现有集成设置继续可用。选型结果不改变公共协议。
 
-实施状态：完成，有缺口。生命周期（代次、暂存提交、30 秒期限、按插件串行）、必需依赖与依赖环、读取列表不调用 `detect()`、分享按发布方身份管理都有测试（`plugins/registry.test.ts`、`shares/service.test.ts`）；Mac 经 RiffetKit 解码，新增字段可缺省。2026-11-06 补上：可选依赖上线或下线时，依赖它的插件先关再开，凭它构建的贡献随之撤销或重建；开发包的服务端入口在首次探测或激活时才导入，关闭或只是列出时不执行；路由、分享发布与模型源集成有 `version`、本地化的 `title` 和 `description`；读取列表时对每个插件的 `status()` 最多等 2 秒，之后用它上一次的答案（没有则为「status timed out」），并且不会因读列表而叠起多个未返回的调用；插件之间有有限的服务注册（第 5 节，只限同进程的内置与开发包）。缺口：模型源、分享目标和运行时钩子没有静态声明，关闭时只显示名称；`check:plugins` 的服务端规则按厂商目录放行，插件之间的导入目前没有，但不受检查。
+实施状态：完成，有缺口。生命周期（代次、暂存提交、30 秒期限、按插件串行）、必需依赖与依赖环、读取列表不调用 `detect()`、分享按发布方身份管理都有测试（`plugins/registry.test.ts`、`shares/service.test.ts`）；Mac 经 RiffetKit 解码，新增字段可缺省。2026-11-06 补上：可选依赖上线或下线时，依赖它的插件先关再开，凭它构建的实现随之撤下或重建；开发包的服务端入口在首次探测或激活时才导入，关闭或只是列出时不执行；路由、分享发布与模型源集成有 `version`、本地化的 `title` 和 `description`；读取列表时对每个插件的 `status()` 最多等 2 秒，之后用它上一次的答案（没有则为「status timed out」），并且不会因读列表而叠起多个未返回的调用；插件之间有有限的服务注册（第 5 节，只限同进程的内置与开发包）。缺口：模型源、分享目标和运行时钩子没有静态声明，关闭时只显示名称；`check:plugins` 的服务端规则按厂商目录放行，插件之间的导入目前没有，但不受检查。
 
 ### 阶段 B：工作台视图注册与画布插件
 
@@ -325,11 +325,11 @@ Web 和 macOS 将文件、变更面板接入视图目录，保留现有布局与
 
 验收：面板关闭不终止构建；重复提交不重复执行；不同项目隔离；取消以真实退出为准；重连可查看日志与产物；重启未知状态不自动重跑。
 
-实施状态：完成，与第 8 节有一处差异。六项验收都有服务端测试（`apps/server/src/tasks/`）；Android 插件只读标志文件识别项目，提供一个 `assembleDebug` 构建操作，Web 与 Mac 都有侧栏视图。2026-11-06 补上第 8 节的等待状态：停用或切换版本时插件有运行中的任务，注册表进入 `stopping`，激活保持，新任务与命令得 409，任务全部结束后才关闭或切换；`PATCH` 带 `force: true` 立即进行（任务不会被取消）。任务结束后的诊断只用开始它的那个版本的提供方，该版本已不在运行就跳过并在任务上记 `diagnosticsNote`。来自已安装包的任务计划受限：环境变量有名单，每条新计划先经用户确认再运行（见 [TASKS.md](../TASKS.md)）。Android 插件另贡献命令 `riffet.android/assemble-debug`（第 4.3 节）。缺口：重启后接管的进程只按 pid 判断存活；等待中的切换只在内存里，服务重启后丢失，旧版本继续运行；Android 插件只有诊断解析的测试。
+实施状态：完成，与第 8 节有一处差异。六项验收都有服务端测试（`apps/server/src/tasks/`）；Android 插件只读标志文件识别项目，提供一个 `assembleDebug` 构建操作，Web 与 Mac 都有侧栏视图。2026-11-06 补上第 8 节的等待状态：停用或切换版本时插件有运行中的任务，注册表进入 `stopping`，激活保持，新任务与命令得 409，任务全部结束后才关闭或切换；`PATCH` 带 `force: true` 立即进行（任务不会被取消）。任务结束后的诊断只用开始它的那个版本的提供方，该版本已不在运行就跳过并在任务上记 `diagnosticsNote`。来自已安装包的任务计划受限：环境变量有名单，每条新计划先经用户确认再运行（见 [TASKS.md](../TASKS.md)）。Android 插件另提供命令 `riffet.android/assemble-debug`（第 4.3 节）。缺口：重启后接管的进程只按 pid 判断存活；等待中的切换只在内存里，服务重启后丢失，旧版本继续运行；Android 插件只有诊断解析的测试。
 
 ### 阶段 E：Cursor 迁出为 Agent 插件
 
-增加 Agent 后端贡献类型与公共 Agent 协议，把 Cursor 迁入 `plugins/riffet/cursor/`，模型源改按网关协议匹配。按第 5.2 节分三步，每步可独立合入。
+增加 Agent 后端扩展点与公共 Agent 协议，把 Cursor 迁入 `plugins/riffet/cursor/`，模型源改按网关协议匹配。按第 5.2 节分三步，每步可独立合入。
 
 E1 身份收敛：把“缺省后端即 Cursor”与 `cursorSessionId` 镜像收敛到存储与 API 边界的兼容层，存储内容和线上字段不变。这一步是核心整理，不依赖 A。
 
@@ -342,13 +342,13 @@ E2 运行时迁出：先把 `native/` 中共用的部分拆成宿主服务，再
 验收：启用时 Cursor 行为不变，以现有测试和 `probe-cursor-e2e` 为准；去掉 Cursor 插件后服务端可构建运行，其他后端不受影响；停用时 Cursor 历史可读并显示不可用原因，新会话与投递被拒绝；重复投递与迟到事件不串会话；`check:plugins` 通过。
 
 实施状态：完成。`plugins/riffet/cursor/` 承载 `NativeService`、chat-store、cli-driver、CLI 适配、hook 与 steer、转录源和进程级启动配置；核心经 `AgentHost`（同步 `view`、状态补丁、终端类型与预留池、对话框、车道写入器、kit，见 [内置插件](../PLUGIN_ARCHITECTURE.md) 的 Agent 协议）和 `PluginBackendDriver` 驱动它。去掉 Cursor 后的启动由 `backends/no-cursor.test.ts` 覆盖（以不含 Cursor 的内置清单启动），运行时停用由 `native/cursor-plugin.test.ts` 覆盖：历史可读，新会话与投递得 503 并带原因，终端与原生进程保持运行（这一项需要 tmux）。2026-11-06 另用不含 Cursor 的清单打包服务端并启动：`/api/backends` 与 `/api/integrations` 中没有 Cursor，`/api/cursor/capabilities` 得 503 `NATIVE_BACKEND_UNAVAILABLE`。正式构建只能按厂商排除（`RIFFET_EXCLUDED_VENDORS`），没有只去掉 Cursor 的选项。`probe-cursor-e2e` 需要已登录的 Cursor CLI，本轮未运行。
-E2 合入时留给 E3：设置页、CLI 管理与项目配置的插件贡献化；新会话默认后端设置项；Web 与 Mac 里的 Cursor 分支和审批映射；`/api/cursor/*`、`cursorCli`、`cursorSessionId` 兼容入口的退役。
+E2 合入时留给 E3：设置页、CLI 管理与项目配置改由插件提供；新会话默认后端设置项；Web 与 Mac 里的 Cursor 分支和审批映射；`/api/cursor/*`、`cursorCli`、`cursorSessionId` 兼容入口的退役。
 
-E3 设置与客户端：Cursor 设置、CLI 管理、项目配置描述改为插件的配置与设置贡献，`doctor` 的后端表改用插件的 `doctorChecks`；`/api/cursor/*`、`AppSettings.cursorCli` 与 `cursor-cli.json` 保留为转发到插件的兼容入口。新会话的默认后端成为设置项，Cursor 停用时回退到其他可用后端。Web 与 Mac 的审批映射、终端存活判断、登录提示与模型选择改由后端目录的能力驱动；声明式描述表达不了的 Cursor 专属界面放在插件的 Web 入口和 Mac 按贡献 ID 注册的原生渲染器中。
+E3 设置与客户端：Cursor 设置、CLI 管理、项目配置描述改为插件提供的配置与设置，`doctor` 的后端表改用插件的 `doctorChecks`；`/api/cursor/*`、`AppSettings.cursorCli` 与 `cursor-cli.json` 保留为转发到插件的兼容入口。新会话的默认后端成为设置项，Cursor 停用时回退到其他可用后端。Web 与 Mac 的审批映射、终端存活判断、登录提示与模型选择改由后端目录的能力驱动；声明式描述表达不了的 Cursor 专属界面放在插件的 Web 入口和 Mac 按声明 ID 注册的原生渲染器中。
 
 验收：Web 与 Mac 的宿主代码不再有 Cursor 分支，去掉 Cursor 渲染器后可构建，Cursor 不出现在选择器和设置中；启用时界面与现在一致；契约兼容检查通过，移动端照常解码会话与设置，停用时 `/api/cursor/*` 返回明确的不可用错误。
 
-实施状态：完成，Mac 只做了编译验证。Agent 身份开放（`PluginAgentId`，特性 `plugin-agents`，见 [内置插件](../PLUGIN_ARCHITECTURE.md) 的 Agent 身份）；新会话默认后端为生效值，Cursor 关闭时回退；登录提示由条目的 `needsLogin` 驱动；tmux 与 Tailscale 经 `GET /api/system/machine` 提供；视图位置增加 `settings`，Cursor 的提供商与 CLI 管理页在 `plugins/riffet/cursor/web/`，Web 宿主里没有 Cursor 分支（遗留身份只在 `lib/legacy-identity.ts`）。Mac 的 Cursor 设置页是按贡献 ID 注册的原生渲染器（`PluginAgentRegistry.swift`），只在插件开启时出现，选择器读后端目录；Mac 与移动端共用的 Kotlin `SessionStore.kt` 仍把缺省后端读作 Cursor。`/api/cursor/*`、`cursorCli`、`cursorSessionId` 仍保留给移动端。`GET /api/system/monitor` 原先把插件 Agent ID 发给未声明 `plugin-agents` 的客户端，移动端按枚举解码会整页失败，2026-11-06 改为对这类客户端去掉该进程的会话与后端字段，并加入 `client-features.test.ts`。模型源改按网关协议匹配：源声明 `protocols` 并在 `ResolvedSource.endpoints` 给出各协议的地址与请求头，Agent 在 traits 里声明 `consumesProtocols`（`claude` 为 `anthropic-messages`，`codex` 为 `openai-responses`，`traex` 不接模型源），两者取交集提供，不看 Agent ID；`backends`、`claudeBaseUrl`、`codexBaseUrl`、`headers` 保留为兼容输入，映射集中在 `kit/gateway.ts`，描述符的 `backends` 由 `protocols` 计算，旧客户端不变；Codex 把源请求头放进 `RIFFET_SOURCE_HEADER_<名称>` 环境变量，不再占用 `RIFFET_` 前缀。已安装包的模型源经子进程协议传 `protocols`（或 `backends`）与 `endpoints`（逐字段检查，仍只许静态密钥）；插件 Agent 用 `host.modelSources.resolve(profileId, protocol)` 取自己档案所选模型源的地址、请求头与静态密钥（命令凭据不交出，别家的档案 403）。缺口：后端停用时，要到服务端拒绝操作，客户端才显示原因；Mac 没有自动化测试。
+实施状态：完成，Mac 只做了编译验证。Agent 身份开放（`PluginAgentId`，特性 `plugin-agents`，见 [内置插件](../PLUGIN_ARCHITECTURE.md) 的 Agent 身份）；新会话默认后端为生效值，Cursor 关闭时回退；登录提示由条目的 `needsLogin` 驱动；tmux 与 Tailscale 经 `GET /api/system/machine` 提供；视图位置增加 `settings`，Cursor 的提供商与 CLI 管理页在 `plugins/riffet/cursor/web/`，Web 宿主里没有 Cursor 分支（遗留身份只在 `lib/legacy-identity.ts`）。Mac 的 Cursor 设置页是按声明 ID 注册的原生渲染器（`PluginAgentRegistry.swift`），只在插件开启时出现，选择器读后端目录；Mac 与移动端共用的 Kotlin `SessionStore.kt` 仍把缺省后端读作 Cursor。`/api/cursor/*`、`cursorCli`、`cursorSessionId` 仍保留给移动端。`GET /api/system/monitor` 原先把插件 Agent ID 发给未声明 `plugin-agents` 的客户端，移动端按枚举解码会整页失败，2026-11-06 改为对这类客户端去掉该进程的会话与后端字段，并加入 `client-features.test.ts`。模型源改按网关协议匹配：源声明 `protocols` 并在 `ResolvedSource.endpoints` 给出各协议的地址与请求头，Agent 在 traits 里声明 `consumesProtocols`（`claude` 为 `anthropic-messages`，`codex` 为 `openai-responses`，`traex` 不接模型源），两者取交集提供，不看 Agent ID；`backends`、`claudeBaseUrl`、`codexBaseUrl`、`headers` 保留为兼容输入，映射集中在 `kit/gateway.ts`，描述符的 `backends` 由 `protocols` 计算，旧客户端不变；Codex 把源请求头放进 `RIFFET_SOURCE_HEADER_<名称>` 环境变量，不再占用 `RIFFET_` 前缀。已安装包的模型源经子进程协议传 `protocols`（或 `backends`）与 `endpoints`（逐字段检查，仍只许静态密钥）；插件 Agent 用 `host.modelSources.resolve(profileId, protocol)` 取自己档案所选模型源的地址、请求头与静态密钥（命令凭据不交出，别家的档案 403）。缺口：后端停用时，要到服务端拒绝操作，客户端才显示原因；Mac 没有自动化测试。
 
 ### 阶段 F：独立包与第三方边界
 
@@ -356,7 +356,7 @@ E3 设置与客户端：Cursor 设置、CLI 管理、项目配置描述改为插
 
 验收：独立模型源、主题包和自定义视图在各自声明支持的宿主上可安装；非内置 Agent ID 无需修改核心枚举、Web 选择器或 Mac 显示分支即可完成最小会话流程；失败不损坏现有安装；旧任务和页面资产仍有效；未经授权的跨项目读写与命令执行被执行边界拒绝。
 
-实施状态：部分完成，第三方分发尚未开放。独立安装、授权、版本与回滚、数据版本、独立进程（Node 权限模型）、操作系统隔离、样例包、打包脚本和 [插件开发指南](../PLUGINS.md)，以及 Web 的隔离框架消息桥与 Mac 的 WKWebView 已完成。第三方边界的实测结果：Node 权限模型不限制网络和信号，向服务进程发 `SIGKILL` 即可杀死服务；macOS 上用 Seatbelt（`sandbox-exec`）补上，进程只能执行 Node、只读自己的包与状态目录、只能给自己发信号、默认没有网络，授予 `network` 才能对外连接（服务自己的端口除外），由 `plugins-host/install.test.ts` 在无 Node 权限模型的条件下单独断言。其他平台没有等价实现：安装包拒绝激活，除非操作员设 `RIFFET_UNSAFE_PLUGIN_PROCESS=1` 并接受状态里一直显示的警告。每个平台实际强制什么、哪些仍不受限（CPU、磁盘、授权后合法读到的内容），见 PLUGIN_ARCHITECTURE.md「执行位置」。验收由 `plugins-host/acceptance.test.ts` 经 HTTP 接口覆盖：样例模型源与主题包的安装和目录、损坏的新版本回到旧版本、旧版本的资产地址在其版本还装着时继续有效、`example.echo`（`examples/plugins/echo`，开发包）在没有任何核心分支的情况下完成会话、发送、回复与完成。缺口：已安装包不能贡献 Agent 后端，非内置 Agent ID 只由可信开发包验证；（以下三项已补：新版本提升 `dataVersion` 后激活失败时，宿主在重启上一个版本前把这次升级的备份放回；Mac 按自己的桥协议版本核对 `hostApi.web`；Web 与 Mac 取入口脚本时地址带 `?v=<integrity 或版本>`。）旧版本的文件只在手动卸载时清理；签名与来源验证未定；Linux、Windows 没有操作系统隔离；`session-stats` 样例的安装与文件路由没有端到端测试，Mac 的 WKWebView 承接只做了编译。
+实施状态：部分完成，第三方分发尚未开放。独立安装、授权、版本与回滚、数据版本、独立进程（Node 权限模型）、操作系统隔离、样例包、打包脚本和 [插件开发指南](../PLUGINS.md)，以及 Web 的隔离框架消息桥与 Mac 的 WKWebView 已完成。第三方边界的实测结果：Node 权限模型不限制网络和信号，向服务进程发 `SIGKILL` 即可杀死服务；macOS 上用 Seatbelt（`sandbox-exec`）补上，进程只能执行 Node、只读自己的包与状态目录、只能给自己发信号、默认没有网络，授予 `network` 才能对外连接（服务自己的端口除外），由 `plugins-host/install.test.ts` 在无 Node 权限模型的条件下单独断言。其他平台没有等价实现：安装包拒绝激活，除非操作员设 `RIFFET_UNSAFE_PLUGIN_PROCESS=1` 并接受状态里一直显示的警告。每个平台实际强制什么、哪些仍不受限（CPU、磁盘、授权后合法读到的内容），见 PLUGIN_ARCHITECTURE.md「执行位置」。验收由 `plugins-host/acceptance.test.ts` 经 HTTP 接口覆盖：样例模型源与主题包的安装和目录、损坏的新版本回到旧版本、旧版本的资产地址在其版本还装着时继续有效、`example.echo`（`examples/plugins/echo`，开发包）在没有任何核心分支的情况下完成会话、发送、回复与完成。缺口：已安装包不能提供 Agent 后端，非内置 Agent ID 只由可信开发包验证；（以下三项已补：新版本提升 `dataVersion` 后激活失败时，宿主在重启上一个版本前把这次升级的备份放回；Mac 按自己的桥协议版本核对 `hostApi.web`；Web 与 Mac 取入口脚本时地址带 `?v=<integrity 或版本>`。）旧版本的文件只在手动卸载时清理；签名与来源验证未定；Linux、Windows 没有操作系统隔离；`session-stats` 样例的安装与文件路由没有端到端测试，Mac 的 WKWebView 承接只做了编译。
 
 ### 依赖与顺序
 
@@ -385,10 +385,10 @@ E 是工作量和回归风险最大的阶段，建议的顺序是：A 与 E1 同
 | 外部插件进程在各目标系统的权限约束 | 阶段 F | 已定：macOS 用 Seatbelt（`sandbox-exec`）加 Node 权限模型；其他平台拒绝激活，操作员设 `RIFFET_UNSAFE_PLUGIN_PROCESS=1` 才只靠权限模型运行。Linux（用户命名空间、Landlock）与 Windows 待定 |
 | 签名、来源验证与第三方分发的权限策略 | 接纳第三方分发前 | 现在只有完整性摘要，只证明内容未变 |
 | SDK 的发布形式与稳定性声明 | 开放第三方安装前 | `plugin-api`、`plugin-web` 与消息桥客户端没有独立发布的包，样例靠复制源码；Agent 协议与 Web SDK 标为实验性 |
-| 已安装包贡献 Agent 后端 | 出现第三方 Agent 接入需求时 | 跨进程的 `AgentBackend` 与 `AgentHost`（同步 `view`、终端与预留池）能否成立；现在只有可信开发包可以声明 |
+| 已安装包提供 Agent 后端 | 出现第三方 Agent 接入需求时 | 跨进程的 `AgentBackend` 与 `AgentHost`（同步 `view`、终端与预留池）能否成立；现在只有可信开发包可以声明 |
 | 自定义协议的模型源目录 | 出现第三方模型源或插件 Agent 需要 `openai-chat` 或自定义协议时 | 已安装包的模型源按协议声明与解析、插件 Agent 经 `host.modelSources.resolve` 读取已完成；`ModelSourceProvider.catalog` 仍只接受 `claude`、`codex`，`openai-chat` 与自定义协议的目录读不到 |
 | 可选依赖与插件间服务注册 | 出现消费其他插件服务的插件时 | 已定：可选依赖变化时依赖它的插件重新激活；同进程的内置与开发包可经 `Contributions.services` 与 `host.services.get(pluginId, name, range)` 使用服务（须在 `requires` 里列出提供方，调用不带额外权限），已安装包不提供也拿不到。服务没有 schema 声明，完整的动态依赖重绑定仍待实际需求 |
-| 插件命令的执行路径、菜单与快捷键 | 出现贡献命令的插件时 | 已定：`POST /api/integrations/:id/commands/:name` 重新校验插件状态、作用域、可见性、项目与会话归属、`when` 与参数，同一 `requestId` 十分钟内只执行一次；Android 插件贡献一个命令；Web 命令面板与快捷键、Mac 命令入口由客户端实现。已安装包的命令由子进程代理执行，宿主不向它提供 `host.tasks` |
+| 插件命令的执行路径、菜单与快捷键 | 出现提供命令的插件时 | 已定：`POST /api/integrations/:id/commands/:name` 重新校验插件状态、作用域、可见性、项目与会话归属、`when` 与参数，同一 `requestId` 十分钟内只执行一次；Android 插件提供一个命令；Web 命令面板与快捷键、Mac 命令入口由客户端实现。已安装包的命令由子进程代理执行，宿主不向它提供 `host.tasks` |
 | 客户端自行核对 `hostApi.web` 与消息桥版本 | 下一次升级 Web SDK 或消息桥版本前 | 第 4.4 节不允许以服务端版本代替客户端版本；Mac 单独发布 |
 | 有任务时停用与升级的等待状态 | 支持运行中升级，或第二个任务插件出现时 | 已定并实现（第 8 节）：`stopping` 状态，`force` 立即进行。运行中升级仍不支持，等待中的切换不跨重启保留 |
 | 升级失败后的数据回滚 | 下一次修改安装流程时 | 新版本已提升数据格式再失败时，是否自动恢复备份让旧版本启动 |
@@ -410,7 +410,7 @@ E 是工作量和回归风险最大的阶段，建议的顺序是：A 与 E1 同
 
 ## 13. 独立插件管理产品（2026-11-07）
 
-插件管理属于工作台一级页面；模型设置、外观设置和项目任务分别消费插件贡献。SettingsPage 服务只表达草稿与忙碌状态，不决定页面必须位于全局设置中。已有 settings 视图声明继续有效，Web 将它挂在插件行内配置区，Mac 复用现有原生配置渲染器。
+插件管理属于工作台一级页面；模型设置、外观设置和项目任务分别使用插件提供的内容。SettingsPage 服务只表达草稿与忙碌状态，不决定页面必须位于全局设置中。已有 settings 视图声明继续有效，Web 将它挂在插件行内配置区，Mac 复用现有原生配置渲染器。
 
 | 范围 | 实现 |
 | --- | --- |
