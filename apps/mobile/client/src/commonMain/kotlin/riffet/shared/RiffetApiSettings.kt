@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.put
+import riffet.contracts.ClientMetricsReport
 import riffet.contracts.AppSettings
 import riffet.contracts.AppSettingsUpdate
 import riffet.contracts.AuxiliaryModelOption
@@ -71,6 +72,12 @@ suspend fun RiffetApi.machineReport(): MachineReport = get("/api/system/machine"
 /** `GET /api/system/monitor`: the service's load, request counts and process tree. */
 @Throws(Exception::class)
 suspend fun RiffetApi.serviceMonitor(): ServiceMonitorSnapshot = get("/api/system/monitor").decode()
+
+/** `POST /api/system/client-metrics`: this app's own figures (docs/guide/performance.md §4); best effort. */
+@Throws(Exception::class)
+suspend fun RiffetApi.reportClientMetrics(body: ClientMetricsReport) {
+    post("/api/system/client-metrics", wireBody(body)).discard()
+}
 
 /** Stops a process in the service's tree; the server refuses the server itself and outsiders. */
 @Throws(Exception::class)

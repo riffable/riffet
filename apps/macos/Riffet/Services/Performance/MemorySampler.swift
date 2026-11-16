@@ -1,4 +1,5 @@
 import Foundation
+import RiffetKit
 
 /// The app's memory footprint and its caches' sizes every few minutes, kept for the last hours in a
 /// bounded ring (docs/guide/performance.md §4). `PerfMonitor.report` carries them.
@@ -46,7 +47,27 @@ final class MemorySampler {
         let sample = Sample(at: Date(), footprintBytes: Self.footprint(), caches: CacheRegistry.shared.snapshot())
         samples.append(sample)
         if samples.count > Self.capacity { samples.removeFirst(samples.count - Self.capacity) }
+        report(sample)
         return sample
+    }
+
+    /// Sends the sample to the service monitor; a failed report is not retried.
+    private func report(_ sample: Sample) {
+        guard let api = AppModel.shared.host.api else { return }
+        let body = ClientMetricsReport(
+            clientId: "app",
+            platform: "mac",
+            appVersion: AppModel.bundledVersion,
+            sample: ClientMetricsSample(
+                at: 0,
+                footprintBytes: KotlinLong(value: sample.footprintBytes),
+                managedHeapBytes: KotlinHeapKt.kotlinHeapBytes(),
+                streams: nil,
+                hitches: nil,
+                caches: sample.caches.map { ClientCacheSample(name: $0.name, bytes: $0.bytes.map { KotlinLong(value: $0) }, limitBytes: KotlinLong(value: $0.limit), count: nil) }
+            )
+        )
+        Task { try? await api.reportClientMetrics(body: body) }
     }
 
     /// What Activity Monitor calls Memory: `phys_footprint` from `TASK_VM_INFO`.

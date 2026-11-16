@@ -23,5 +23,8 @@ object CacheRegistry {
 
     fun clear() = caches.value.values.forEach { runCatching { it.clear() } }
 
+    /** Every registered cache, for the metrics report. */
+    fun snapshot(): List<RegisteredCache> = caches.value.values.sortedBy { it.name }
+
     fun totalBytes(): Long = caches.value.values.sumOf { runCatching { it.sizeBytes() }.getOrDefault(0L) }
 }

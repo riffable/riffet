@@ -502,6 +502,8 @@ data class ServiceMonitorSnapshot(
     /** Oldest first, at most the last 30 minutes. */
     val series: List<ServiceMonitorSample> = emptyList(),
     val processes: List<ServiceProcess> = emptyList(),
+    /** Clients that reported in the last six hours, most recent first. */
+    val clients: List<ClientMetrics> = emptyList(),
 )
 
 /*

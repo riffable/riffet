@@ -206,6 +206,7 @@ final class AppModel {
             workbench.store.forgetSessionStates()
         }
         host.foreground = phase != .background
+        MetricsReporter.shared.foreground(phase == .active)
         if phase == .active {
             consumeNotification()
             Task {

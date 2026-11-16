@@ -45,6 +45,12 @@ final class CacheRegistry: @unchecked Sendable {
         entries[name] = Entry(limit: limit, purge: purge)
     }
 
+    /// Names and limits, for the metrics report.
+    func snapshot() -> [(name: String, limit: Int64)] {
+        lock.lock(); defer { lock.unlock() }
+        return entries.map { (name: $0.key, limit: $0.value.limit) }.sorted { $0.name < $1.name }
+    }
+
     func purgeAll() {
         lock.lock(); let held = Array(entries.values); lock.unlock()
         held.forEach { $0.purge() }

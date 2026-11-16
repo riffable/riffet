@@ -176,6 +176,7 @@ object RiffetHost {
         }
         scope.launch { _store.collectLatest { store -> if (store != null) watch(store) } }
         watchNetwork()
+        MetricsReporter.run(scope, inFront) { connection.apiOrNull() }
         // Whatever the reader opens is read: its alert has nothing left to say.
         scope.launch {
             snapshotFlow { navigation.session?.id }.collect { id -> if (id != null) currentOrigin?.let { notifier.cancel(id, it) } }
