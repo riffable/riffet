@@ -122,7 +122,7 @@ SwiftUI 在主线程上解析页面的视图类型、计算 body。iOS 的主线
 
 | 区域 | iOS | 来源 |
 |---|---|---|
-| Tab 栏 | 新会话、任务、设置三个目的地，只有图标，默认停在任务，待处理数是任务上的系统 `.badge`；每个 Tab 一个 `NavigationStack(path:)` | `Features/Home/HomeView.swift` 的 `RiffetRootView` |
+| Tab 栏 | 新会话、助理、任务、设置四个目的地，只有图标，启动时停在「设置 → 通用 → 启动时打开」选的一项（默认助理，仅存本机），待处理数是任务上的系统 `.badge`；助理页是会话页，没有主对话时是新会话页的输入框加 记忆 / 规则 / 能力 三张卡片；每个 Tab 一个 `NavigationStack(path:)` | `Features/Home/HomeView.swift` 的 `RiffetRootView` |
 | 页面栈 | 会话、子 Agent、Git、文件、终端、设置的下一级都压栈打开；压栈后 Tab 栏收起，宽窗口不收 | `navigationDestination` |
 | 宽窗口 | 水平与垂直都是 regular 时，任务 Tab 改为列表在左（宽 32%，限 320–420pt）、会话在右，与单栏共用一个 path，折叠、展开或调整窗口时会话不重新挂载 | `HomeView.swift` |
 | 会话详情 | 点会话页标题打开的 sheet（`.medium` / `.large`），对应 Android 的右侧栏，内容按 [移动端页面](mobile.md) §2.7 | `Features/Conversation/ConversationView.swift` 的 `ConversationInformation` |

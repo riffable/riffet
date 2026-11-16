@@ -28,10 +28,10 @@ Claude、Droid、DSH、TRAE、Git、JSON、Markdown、URL。
 | 分享 | Share | |
 | 发布 | Publish | 分享到外部 |
 | 任务 | Task | 一件跨会话跟踪的工作（docs/TASK-BOARD.md），代码名 `WorkItem` |
-| 收件箱 | Inbox | 唯一会打扰用户的地方：要回答的、要验收的、督办推不动的 |
+| 收件箱 | Inbox | 唯一会打扰用户的地方：要回答的、要验收的、跟进推不动的 |
 | 任务看板 | Task board | 任务的页面，导航和标题都用这个名字 |
 | 个人助理 | Assistant | 用户自己的常驻 Agent（docs/ASSISTANT.md）：一条主对话加后台运行。导航、页头、标题都用「个人助理」；文档里说它的组成部分时可简称助理 |
-| 督办 | Supervisor | 助理在后台盯进行中任务的部分，不占主对话 |
+| 跟进 | Follow-up | 助理在后台盯进行中任务的部分，不占主对话 |
 | 自动化 | Automation | 模板加触发方式（计划、手动、后续）；页面名「自动化」。不叫定时任务，不译成 cron job |
 | 扩展 | Extension | Agent 插件体系 |
 | 插件 | Plugin | |

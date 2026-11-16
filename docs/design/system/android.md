@@ -87,7 +87,7 @@
 
 | 区域 | Android | 来源 |
 |---|---|---|
-| 底栏 | 新会话、任务、设置三个目的地，只有图标；宽屏换成侧边导航栏。`variants.navigation` 决定平铺（贴底、表面延伸到手势区）或浮动（胶囊外壳、四周留白） | `ui/app/HomeTabs.kt`、`ui/design/TabBar.kt` |
+| 底栏 | 新会话、助理、任务、设置四个目的地，只有图标；启动时停在「设置 → 通用 → 启动时打开」选的一项（默认助理，仅存本机）；助理页在 tab 里直接画主对话，没有主对话时是新会话页的输入框加 记忆 / 规则 / 能力 三张卡片；宽屏换成侧边导航栏。`variants.navigation` 决定平铺（贴底、表面延伸到手势区）或浮动（胶囊外壳、四周留白） | `ui/app/HomeTabs.kt`、`ui/design/TabBar.kt` |
 | 页面栈 | 统计、下载、Git、文件、子 Agent、终端等压栈打开，二级页隐藏底栏；会话页是工作台上的一层 | `ui/app/PageStack.kt`、`PageHost` |
 | 左侧栏 | 头部是你的头像和名字；服务器卡片（点开在选择面板里切换）、下载和统计磁贴、收藏的文件夹 | `ui/app/SideDrawers.kt`、`WorkbenchDrawer`；部件在 `ui/app/PaneParts.kt` |
 | 右侧栏 | 会话详情：变更、文件、终端、查找磁贴，正在进行的子 Agent 与后台任务，紧凑的详情，一行操作，删除；宽 `drawerWidth`（304），与屏幕边至少留 `drawerMinGap`；结构见 [移动端页面](mobile.md) §2.7 | `ui/app/SideDrawers.kt`、`session/SessionDetailsPane.kt` |

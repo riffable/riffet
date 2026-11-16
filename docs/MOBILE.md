@@ -220,16 +220,16 @@ Android 的连接声明 `quick-chat`、`pi-agent` 与 `projectless-tasks`。无�
 这个汇总分组只用于筛选，不作为新会话的项目，也不显示在指定项目内新建的 + 操作。
 内部任务目录不会自动成为新会话默认项目。Android 界面仍按内置 Agent 枚举处理，不声明 `plugin-agents`。
 
-### 首页导航：底栏三个 tab
+### 首页导航：底栏四个 tab
 
 `Workbench`（`RiffetApp.kt`）是根页面，`HomeShell`（`HomeTabs.kt`）给它套上 M3 `NavigationBar`：
-**新会话 / 任务 / 设置**，只有图标（文字是 contentDescription），选中背景读取 `rowRadius`（默认 12dp）；
+**新会话 / 助理 / 任务 / 设置**，只有图标（文字是 contentDescription），选中背景读取 `rowRadius`（默认 12dp）；
 按压与焦点反馈限制在同一背景内，外层仅承担点击范围，不再绘制第二层矩形。「任务」带等待确认的会话数角标
-（`BadgedBox`，`waitingCount`）。上次停留的 tab 存为设备偏好（`home-tab`），首次启动是「任务」。各 tab 的状态由
+（`BadgedBox`，`waitingCount`）。启动时打开的 tab 是设备偏好（`DisplaySettings.launchTab`，设置 → 通用 → 启动时打开），默认「助理」；助理页直接在 tab 里画主对话（`Project.mainSessionId` 指向的会话），没有时是新会话页的输入框加 记忆 / 规则 / 能力 卡片（`ProjectHome.kt` 的 `AssistantHome`）。各 tab 的状态由
 `rememberSaveableStateHolder` 保留，切换时按 M3 的 fade-through 过渡（旧页 90ms 淡出，新页 210ms 淡入并从 96% 放大）。
 再点当前 tab 回到列表顶部（`TabChrome.reselected`；离顶部很远时先跳近再滑）。系统返回在「新会话」「设置」上先回到「任务」（`TabBackTarget`）。
 
-**底栏只在三个 tab 的根页上出现**：工作台推出的页面（下载、统计、Git、文件、会话……）本来就盖住它；
+**底栏只在四个 tab 的根页上出现**：工作台推出的页面（下载、统计、Git、文件、会话……）本来就盖住它；
 tab 里面推进去的页面（设置的各个分区）由 `PageHost` 报给 `TabChrome`，有一层就藏起底栏/侧边栏。是一条规则，不按页面各写。
 推入的页面从第一帧就按满高布局，底栏叠在上面向下滑走；返回后底栏再滑上来，页面不跟着重排。
 底栏用主题色：容器与页面、顶栏同色（`pageColor()`，无分隔线），指示器 `accentSoft`，选中图标 `accent`，未选 `fg2`；
