@@ -95,6 +95,7 @@ internal val settingsSearchCatalogue: List<SettingsSearchEntry> = buildList {
     row("gestures.haptics", SettingsSection.GESTURES, Res.string.settings_haptics, "haptics vibration 震动 振动", "chu jue fan kui zhen dong") { NativeFeature.HAPTICS.supported }
     group("appearance.mode", SettingsSection.APPEARANCE, Res.string.settings_appearance, "light dark system mode", "ming an mo shi gen sui xi tong")
     row("appearance.amoled", SettingsSection.APPEARANCE, Res.string.settings_amoled, "amoled oled black", "chun hei hei se")
+    group("appearance.code-theme", SettingsSection.APPEARANCE, Res.string.settings_code_theme, "code syntax highlighting theme intellij github vitesse catppuccin solarized monochrome 代码 高亮 语法", "dai ma gao liang yu fa feng ge")
     group("appearance.material", SettingsSection.STYLE, Res.string.settings_surface_material, "surface material solid frosted blur glass liquid strength 纯色 磨砂 玻璃 液态 通透 强度", "biao mian cai zhi chun se mo sha bo li ye tai qiang du")
     row("appearance.resources", SettingsSection.APPEARANCE, Res.string.settings_appearance_resources, "appearance resources plugins", "wai guan zi yuan cha jian")
     beneath("appearance.preset", SettingsSection.APPEARANCE, Res.string.settings_appearance_preset, "preset appearance", "yu she")

@@ -25,6 +25,32 @@
 - 移动端另有 19 个设计颜色角色（`page`、`card`、`floating`、`press`、`selected`……，见 `packages/contracts/src/theme-design.ts`），由上表的角色派生，组件优先用它们。
 - 文字与底色的对比度至少 4.5:1，非文字（图标、边框、焦点环）至少 3:1，由 `scripts/check-theme-contrast.ts` 检查所有内置主题。
 
+### 1.1 代码高亮角色
+
+代码高亮风格独立于界面主题（`data-theme`），由设备本地偏好选择（默认 `auto` 跟随界面主题，或指定内置风格）。所有风格共用 14 个语法色角色与 2 个界面派生角色，定义在 `packages/contracts/src/code-theme.ts` 与 `scripts/code-themes.ts`：
+
+| 角色 | 用于 | 说明 |
+|---|---|---|
+| `fg` | 默认正文、运算符、标点、普通变量 | 继承界面主题 `fg`，保证任何纸底上的最高可读性 |
+| `comment` | 注释 | 默认斜体（`commentItalic`），渲染时向 `fg-3` 微混 |
+| `keyword` | 关键字、存储修饰符、基础类型关键字 | |
+| `string` | 字符串、字符、正则、diff 插入片段 | |
+| `number` | 数字字面量 | |
+| `constant` | 布尔、空值、全大写常量、枚举成员 | |
+| `declaration` | 函数与方法声明或调用标识 | |
+| `type` | 类、接口、结构体、类型名 | |
+| `property` | 成员属性、对象字段 | |
+| `namespace` | 包名、命名空间、导入路径 | |
+| `tag` | HTML / XML 标签、选择器 | |
+| `attribute` | 属性名、对象或配置键名 | |
+| `annotation` | 注解、装饰器 | |
+| `escape` | 转义字符、模板插值定界符 | |
+| `heading` | 标记语言标题 | |
+| `link` | 代码内链接 | 继承界面主题 `accent` |
+
+- **无独立底色**：代码块始终画在界面主题的 `bg-subtle`（文件预览为 `bg`）上，不取第三方主题自带背景。
+- **纸底融合**：非注释语法色向当前主题 `fg` 混合（浅色留 88% 原色、深色 90%），注释向 `fg-3` 混合（浅色 80%、深色 85%），避免高饱和语法色在纸底上发飘。
+
 ## 2. 文字
 
 ### 2.1 角色
@@ -293,6 +319,7 @@
 | 类别 | 来源 | 生成 |
 |---|---|---|
 | 颜色角色 | `apps/web/src/styles/index.css` | `pnpm gen:theme` → Android、Mac、iOS |
+| 代码高亮风格 | `packages/contracts/src/code-theme.ts`、`scripts/code-themes.ts` | `pnpm gen:theme` → Web（`index.css` 标记区、`code-themes.generated.ts`）、Android、Mac、iOS |
 | 桌面阴影 | `apps/web/src/styles/index.css` | `pnpm gen:styles` → Mac 的 `Elevation` |
 | 桌面风格：配方、圆角、文字、布局 | `packages/contracts/src/interface-styles.ts` | `pnpm gen:styles` → Mac（Web CSS 待接入） |
 | 间距、桌面文字阶梯、动效时长与曲线 | `packages/contracts/src/design-tokens.ts` | `pnpm gen:tokens` → Web 的 CSS 变量（`index.css` 的标记区）、Mac 的 `Space` 和 `Motion`（`Controls.swift` 的标记区）；移动端待接入 |

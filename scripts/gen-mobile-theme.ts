@@ -3,7 +3,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { NOT_A_COLOR_ROLE, colorRoleNames, parseStylesheet } from './theme-blocks';
 import { colorToHex, parseColor, THEME_ANSI_KEYS, THEME_ROLES } from '../packages/contracts/src/theme.js';
+import { BUILTIN_CODE_THEME_IDS, CODE_THEME_ROLES, DEFAULT_CODE_THEME_ID, UI_THEME_DEFAULT_CODE_THEME } from '../packages/contracts/src/code-theme.js';
 import { BUILTIN_ANSI } from './theme-ansi';
+import { BUILTIN_CODE_THEMES } from './code-themes';
 import { themeContrastFailures } from './check-theme-contrast';
 
 /**
@@ -85,8 +87,34 @@ function assertAnsi(): void {
   if (unknown.length) throw new Error(`scripts/theme-ansi.ts names themes the stylesheet does not define: ${unknown.join(', ')}`);
 }
 
+function assertCodeThemes(): void {
+  const seen = new Set<string>();
+  for (const entry of BUILTIN_CODE_THEMES) {
+    if (seen.has(entry.id)) throw new Error(`Duplicate code theme id in scripts/code-themes.ts: ${entry.id}`);
+    seen.add(entry.id);
+    for (const mode of ['light', 'dark'] as const) {
+      const half = entry[mode];
+      for (const role of CODE_THEME_ROLES) {
+        const value = half.colors[role];
+        if (!/^#[0-9a-f]{6}$/i.test(value)) {
+          throw new Error(`Code theme "${entry.id}" ${mode} role "${role}" is not #rrggbb: ${value}`);
+        }
+      }
+    }
+  }
+  for (const id of BUILTIN_CODE_THEME_IDS) {
+    if (!seen.has(id)) throw new Error(`BUILTIN_CODE_THEME_IDS names "${id}" which scripts/code-themes.ts does not define`);
+  }
+  for (const id of seen) {
+    if (!(BUILTIN_CODE_THEME_IDS as readonly string[]).includes(id)) {
+      throw new Error(`scripts/code-themes.ts defines "${id}" which is missing from BUILTIN_CODE_THEME_IDS`);
+    }
+  }
+}
+
 assertRoleContract();
 assertAnsi();
+assertCodeThemes();
 
 /**
  * Refuses to emit a half-defined theme. Compose's `RiffetColors` has one constructor per theme, so a
@@ -264,6 +292,67 @@ write(')');
 write();
 write('/** The web easing curve closest to what the UI uses for structural motion. */');
 if (theme.has('--ease-out-soft')) write(`const val RIFFET_EASE_OUT_SOFT = ${JSON.stringify(theme.get('--ease-out-soft')!)}`);
+write();
+
+write('/** Code syntax highlighting roles (docs/design/system/foundations.md §1.1). */');
+write('@Immutable');
+write('data class RiffetCodeColors(');
+for (const role of CODE_THEME_ROLES) write(`    val ${role}: Color,`);
+write('    val commentItalic: Boolean = true,');
+write(')');
+write();
+for (const entry of BUILTIN_CODE_THEMES) {
+  const prefix = camel(`--code-${entry.id}`);
+  for (const [suffix, half] of [['Light', entry.light], ['Dark', entry.dark]] as const) {
+    write(`val ${prefix}${suffix} = RiffetCodeColors(`);
+    for (const role of CODE_THEME_ROLES) write(`    ${role} = ${color(half.colors[role], `code/${entry.id}/${role}`)},`);
+    write(`    commentItalic = ${half.commentItalic ?? true},`);
+    write(')');
+    write();
+  }
+}
+write('@Immutable');
+write('data class RiffetCodeTheme(');
+write('    val id: String,');
+write('    val name: String,');
+write('    val light: RiffetCodeColors,');
+write('    val dark: RiffetCodeColors,');
+write(')');
+write();
+write('val RiffetCodeThemes: List<RiffetCodeTheme> = listOf(');
+for (const entry of BUILTIN_CODE_THEMES) {
+  const prefix = camel(`--code-${entry.id}`);
+  write(`    RiffetCodeTheme(${JSON.stringify(entry.id)}, ${JSON.stringify(entry.name)}, ${prefix}Light, ${prefix}Dark),`);
+}
+write(')');
+write();
+write(`val RiffetDefaultCodeTheme: RiffetCodeTheme = RiffetCodeThemes.first { it.id == ${JSON.stringify(DEFAULT_CODE_THEME_ID)} }`);
+write();
+write('private val UI_THEME_DEFAULT_CODE_THEME: Map<String, String> = mapOf(');
+for (const [uiId, codeId] of Object.entries(UI_THEME_DEFAULT_CODE_THEME)) {
+  write(`    ${JSON.stringify(uiId)} to ${JSON.stringify(codeId)},`);
+}
+write(')');
+write();
+write('fun resolveCodeThemeId(selection: String?, uiThemeId: String? = null): String {');
+write('    if (selection != null && RiffetCodeThemes.any { it.id == selection }) return selection');
+write(`    return uiThemeId?.let { UI_THEME_DEFAULT_CODE_THEME[it] } ?: ${JSON.stringify(DEFAULT_CODE_THEME_ID)}`);
+write('}');
+write();
+write('fun riffetCodeTheme(selection: String?, uiThemeId: String? = null): RiffetCodeTheme {');
+write('    val id = resolveCodeThemeId(selection, uiThemeId)');
+write('    return RiffetCodeThemes.firstOrNull { it.id == id } ?: RiffetDefaultCodeTheme');
+write('}');
+write();
+write('fun riffetCodeColors(roles: Map<String, String>, commentItalic: Boolean = true): RiffetCodeColors? {');
+for (const role of CODE_THEME_ROLES) {
+  write(`    val ${role} = RiffetColorParsing.parse(roles[${JSON.stringify(role)}]) ?: return null`);
+}
+write('    return RiffetCodeColors(');
+for (const role of CODE_THEME_ROLES) write(`        ${role} = ${role},`);
+write('        commentItalic = commentItalic,');
+write('    )');
+write('}');
 write();
 
 /**
@@ -506,6 +595,83 @@ emit('enum RiffetRadiusValue {');
 for (const name of radii) emit(`    static let ${camel(name.replace(/^--radius-/, '')).replace(/^(\d)/, 'x$1')}: CGFloat = ${px(theme.get(name)!)}`);
 emit('}');
 emit('');
+emit('/** Code syntax highlighting roles (docs/design/system/foundations.md §1.1). */');
+emit('struct RiffetCodePaletteValues: Sendable {');
+for (const role of CODE_THEME_ROLES) emit(`    let ${role}: RiffetRGBA`);
+emit('    let commentItalic: Bool');
+emit();
+emit('    init(');
+for (const role of CODE_THEME_ROLES) emit(`        ${role}: RiffetRGBA,`);
+emit('        commentItalic: Bool = true');
+emit('    ) {');
+for (const role of CODE_THEME_ROLES) emit(`        self.${role} = ${role}`);
+emit('        self.commentItalic = commentItalic');
+emit('    }');
+emit();
+emit('    init?(roleValues: [String: String], commentItalic: Bool = true) {');
+emit('        guard');
+for (const role of CODE_THEME_ROLES) {
+  emit(`            let ${role} = RiffetRGBA(hex: roleValues[${JSON.stringify(role)}])${role === CODE_THEME_ROLES.at(-1) ? '' : ','}`);
+}
+emit('        else { return nil }');
+emit('        self.init(');
+for (const role of CODE_THEME_ROLES) emit(`            ${role}: ${role},`);
+emit('            commentItalic: commentItalic');
+emit('        )');
+emit('    }');
+emit();
+emit('    func roleValues() -> [String: String] {');
+emit('        [');
+for (const role of CODE_THEME_ROLES) {
+  emit(`            ${JSON.stringify(role)}: ${role}.hex${role === CODE_THEME_ROLES.at(-1) ? '' : ','}`);
+}
+emit('        ]');
+emit('    }');
+emit('}');
+emit();
+emit('struct RiffetCodeThemeValues: Sendable {');
+emit('    let id: String');
+emit('    let name: String');
+emit('    let light: RiffetCodePaletteValues');
+emit('    let dark: RiffetCodePaletteValues');
+emit('}');
+emit();
+emit('enum RiffetCodeThemeCatalog {');
+for (const entry of BUILTIN_CODE_THEMES) {
+  const prefix = camel(`--${entry.id}`);
+  for (const [suffix, half] of [['Light', entry.light], ['Dark', entry.dark]] as const) {
+    emit(`    static let ${prefix}${suffix} = RiffetCodePaletteValues(`);
+    for (const role of CODE_THEME_ROLES) emit(`        ${role}: ${swiftRgba(half.colors[role], `code/${entry.id}/${role}`)},`);
+    emit(`        commentItalic: ${half.commentItalic ?? true}`);
+    emit('    )');
+  }
+}
+emit();
+emit('    static let all: [RiffetCodeThemeValues] = [');
+for (const entry of BUILTIN_CODE_THEMES) {
+  const prefix = camel(`--${entry.id}`);
+  emit(`        RiffetCodeThemeValues(id: ${JSON.stringify(entry.id)}, name: ${JSON.stringify(entry.name)}, light: ${prefix}Light, dark: ${prefix}Dark),`);
+}
+emit('    ]');
+emit();
+emit('    static let uiThemeDefaults: [String: String] = [');
+for (const [uiId, codeId] of Object.entries(UI_THEME_DEFAULT_CODE_THEME)) {
+  emit(`        ${JSON.stringify(uiId)}: ${JSON.stringify(codeId)},`);
+}
+emit('    ]');
+emit();
+emit('    static func resolveId(selection: String?, uiThemeId: String? = nil) -> String {');
+emit('        if let selection, all.contains(where: { $0.id == selection }) { return selection }');
+emit(`        if let uiThemeId, let mapped = uiThemeDefaults[uiThemeId] { return mapped }`);
+emit(`        return ${JSON.stringify(DEFAULT_CODE_THEME_ID)}`);
+emit('    }');
+emit();
+emit('    static func resolve(selection: String?, uiThemeId: String? = nil) -> RiffetCodeThemeValues {');
+emit('        let id = resolveId(selection: selection, uiThemeId: uiThemeId)');
+emit('        return all.first(where: { $0.id == id }) ?? all[0]');
+emit('    }');
+emit('}');
+emit('');
 
 function px(value: string): string {
   const match = /^(\d+(?:\.\d+)?)px$/.exec(value.trim());
@@ -578,17 +744,88 @@ for (const entry of themes) {
 emitBuiltin('};');
 emitBuiltin('');
 
+const webCodeThemes: string[] = [];
+const emitCodeTheme = (line = '') => webCodeThemes.push(line);
+emitCodeTheme('// Generated by scripts/gen-mobile-theme.ts from scripts/code-themes.ts.');
+emitCodeTheme('// Do not edit by hand: change scripts/code-themes.ts and re-run `pnpm gen:theme`.');
+emitCodeTheme("import type { BuiltinCodeTheme, BuiltinCodeThemeId } from '@contracts';");
+emitCodeTheme();
+emitCodeTheme('/** Every built-in code syntax theme in picker order. */');
+emitCodeTheme('export const BUILTIN_CODE_THEMES: readonly BuiltinCodeTheme[] = [');
+for (const entry of BUILTIN_CODE_THEMES) {
+  emitCodeTheme('  {');
+  emitCodeTheme(`    id: ${JSON.stringify(entry.id)},`);
+  emitCodeTheme(`    name: ${JSON.stringify(entry.name)},`);
+  if (entry.credit) emitCodeTheme(`    credit: ${JSON.stringify(entry.credit)},`);
+  for (const mode of ['light', 'dark'] as const) {
+    const half = entry[mode];
+    emitCodeTheme(`    ${mode}: {`);
+    emitCodeTheme(`      commentItalic: ${half.commentItalic ?? true},`);
+    emitCodeTheme('      colors: {');
+    for (const role of CODE_THEME_ROLES) {
+      emitCodeTheme(`        ${role}: ${JSON.stringify(half.colors[role].toLowerCase())},`);
+    }
+    emitCodeTheme('      },');
+    emitCodeTheme('    },');
+  }
+  emitCodeTheme('  },');
+}
+emitCodeTheme('];');
+emitCodeTheme();
+emitCodeTheme('export function codeThemeDefinition(id: BuiltinCodeThemeId): BuiltinCodeTheme {');
+emitCodeTheme('  return BUILTIN_CODE_THEMES.find((entry) => entry.id === id) ?? BUILTIN_CODE_THEMES[0]!;');
+emitCodeTheme('}');
+emitCodeTheme();
+
+function emitCssCodeThemes(): string {
+  const raw = readFileSync(cssPath, 'utf8');
+  const begin = '/* BEGIN GENERATED code-themes (scripts/gen-mobile-theme.ts) */';
+  const end = '/* END GENERATED code-themes */';
+  const start = raw.indexOf(begin);
+  const stop = raw.indexOf(end);
+  if (start < 0 || stop < start) throw new Error('gen:theme: markers for code-themes missing in apps/web/src/styles/index.css');
+  const cssLines: string[] = [begin];
+  const emitDecls = (half: (typeof BUILTIN_CODE_THEMES)[number]['light'], dark: boolean, includeBase: boolean) => {
+    if (includeBase) {
+      cssLines.push('  --code-fg: var(--fg);');
+      cssLines.push('  --code-link: var(--accent);');
+    }
+    cssLines.push(`  --code-comment-style: ${(half.commentItalic ?? true) ? 'italic' : 'normal'};`);
+    const fgMix = dark ? 90 : 88;
+    const commentMix = dark ? 85 : 80;
+    for (const role of CODE_THEME_ROLES) {
+      const hex = half.colors[role].toLowerCase();
+      const target = role === 'comment' ? `color-mix(in oklab, ${hex} ${commentMix}%, var(--fg-3))` : `color-mix(in oklab, ${hex} ${fgMix}%, var(--fg))`;
+      cssLines.push(`  --code-${role}: ${target};`);
+    }
+  };
+  for (const entry of BUILTIN_CODE_THEMES) {
+    const isDefault = entry.id === DEFAULT_CODE_THEME_ID;
+    cssLines.push(isDefault ? `:root,\n[data-code-theme=${JSON.stringify(entry.id)}]:not(.dark) {` : `[data-code-theme=${JSON.stringify(entry.id)}]:not(.dark) {`);
+    emitDecls(entry.light, false, isDefault);
+    cssLines.push('}');
+    cssLines.push(isDefault ? `.dark,\n[data-code-theme=${JSON.stringify(entry.id)}].dark {` : `[data-code-theme=${JSON.stringify(entry.id)}].dark {`);
+    emitDecls(entry.dark, true, false);
+    cssLines.push('}');
+  }
+  cssLines.push(end);
+  return raw.slice(0, start) + cssLines.join('\n') + raw.slice(stop + end.length);
+}
+
 const swiftOut = resolve(root, 'apps/macos/Riffet/Theme/RiffetTheme.swift');
 // The iOS app consumes the identical Swift palette; only the handwritten wrapper differs.
 const iosSwiftOut = resolve(root, 'apps/mobile/iosApp/Riffet/Theme/RiffetTheme.swift');
 const webAnsiOut = resolve(root, 'apps/web/src/lib/theme-ansi.generated.ts');
 const webBuiltinsOut = resolve(root, 'apps/web/src/lib/theme-builtins.generated.ts');
+const webCodeThemesOut = resolve(root, 'apps/web/src/lib/code-themes.generated.ts');
 const outputs: [string, string][] = [
+  [cssPath, emitCssCodeThemes()],
   [outPath, lines.join('\n')],
   [swiftOut, swift.join('\n')],
   [iosSwiftOut, swift.join('\n')],
   [webAnsiOut, webAnsi.join('\n')],
   [webBuiltinsOut, webBuiltins.join('\n')],
+  [webCodeThemesOut, webCodeThemes.join('\n')],
 ];
 let stale = false;
 for (const [path, generated] of outputs) {

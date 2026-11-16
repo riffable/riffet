@@ -1915,3 +1915,458 @@ enum RiffetRadiusValue {
     static let x2xl: CGFloat = 16
     static let x3xl: CGFloat = 20
 }
+
+/** Code syntax highlighting roles (docs/design/system/foundations.md §1.1). */
+struct RiffetCodePaletteValues: Sendable {
+    let comment: RiffetRGBA
+    let keyword: RiffetRGBA
+    let string: RiffetRGBA
+    let number: RiffetRGBA
+    let constant: RiffetRGBA
+    let declaration: RiffetRGBA
+    let type: RiffetRGBA
+    let property: RiffetRGBA
+    let namespace: RiffetRGBA
+    let tag: RiffetRGBA
+    let attribute: RiffetRGBA
+    let annotation: RiffetRGBA
+    let escape: RiffetRGBA
+    let heading: RiffetRGBA
+    let commentItalic: Bool
+
+    init(
+        comment: RiffetRGBA,
+        keyword: RiffetRGBA,
+        string: RiffetRGBA,
+        number: RiffetRGBA,
+        constant: RiffetRGBA,
+        declaration: RiffetRGBA,
+        type: RiffetRGBA,
+        property: RiffetRGBA,
+        namespace: RiffetRGBA,
+        tag: RiffetRGBA,
+        attribute: RiffetRGBA,
+        annotation: RiffetRGBA,
+        escape: RiffetRGBA,
+        heading: RiffetRGBA,
+        commentItalic: Bool = true
+    ) {
+        self.comment = comment
+        self.keyword = keyword
+        self.string = string
+        self.number = number
+        self.constant = constant
+        self.declaration = declaration
+        self.type = type
+        self.property = property
+        self.namespace = namespace
+        self.tag = tag
+        self.attribute = attribute
+        self.annotation = annotation
+        self.escape = escape
+        self.heading = heading
+        self.commentItalic = commentItalic
+    }
+
+    init?(roleValues: [String: String], commentItalic: Bool = true) {
+        guard
+            let comment = RiffetRGBA(hex: roleValues["comment"]),
+            let keyword = RiffetRGBA(hex: roleValues["keyword"]),
+            let string = RiffetRGBA(hex: roleValues["string"]),
+            let number = RiffetRGBA(hex: roleValues["number"]),
+            let constant = RiffetRGBA(hex: roleValues["constant"]),
+            let declaration = RiffetRGBA(hex: roleValues["declaration"]),
+            let type = RiffetRGBA(hex: roleValues["type"]),
+            let property = RiffetRGBA(hex: roleValues["property"]),
+            let namespace = RiffetRGBA(hex: roleValues["namespace"]),
+            let tag = RiffetRGBA(hex: roleValues["tag"]),
+            let attribute = RiffetRGBA(hex: roleValues["attribute"]),
+            let annotation = RiffetRGBA(hex: roleValues["annotation"]),
+            let escape = RiffetRGBA(hex: roleValues["escape"]),
+            let heading = RiffetRGBA(hex: roleValues["heading"])
+        else { return nil }
+        self.init(
+            comment: comment,
+            keyword: keyword,
+            string: string,
+            number: number,
+            constant: constant,
+            declaration: declaration,
+            type: type,
+            property: property,
+            namespace: namespace,
+            tag: tag,
+            attribute: attribute,
+            annotation: annotation,
+            escape: escape,
+            heading: heading,
+            commentItalic: commentItalic
+        )
+    }
+
+    func roleValues() -> [String: String] {
+        [
+            "comment": comment.hex,
+            "keyword": keyword.hex,
+            "string": string.hex,
+            "number": number.hex,
+            "constant": constant.hex,
+            "declaration": declaration.hex,
+            "type": type.hex,
+            "property": property.hex,
+            "namespace": namespace.hex,
+            "tag": tag.hex,
+            "attribute": attribute.hex,
+            "annotation": annotation.hex,
+            "escape": escape.hex,
+            "heading": heading.hex
+        ]
+    }
+}
+
+struct RiffetCodeThemeValues: Sendable {
+    let id: String
+    let name: String
+    let light: RiffetCodePaletteValues
+    let dark: RiffetCodePaletteValues
+}
+
+enum RiffetCodeThemeCatalog {
+    static let intellijLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5490, 0.5490, 0.5490, 1.0000),
+        keyword: RiffetRGBA(0.0000, 0.2000, 0.7020, 1.0000),
+        string: RiffetRGBA(0.0235, 0.4902, 0.0902, 1.0000),
+        number: RiffetRGBA(0.0902, 0.3137, 0.9216, 1.0000),
+        constant: RiffetRGBA(0.5294, 0.0627, 0.5804, 1.0000),
+        declaration: RiffetRGBA(0.0000, 0.3843, 0.4784, 1.0000),
+        type: RiffetRGBA(0.1647, 0.1725, 0.1804, 1.0000),
+        property: RiffetRGBA(0.5294, 0.0627, 0.5804, 1.0000),
+        namespace: RiffetRGBA(0.1647, 0.1725, 0.1804, 1.0000),
+        tag: RiffetRGBA(0.0000, 0.2000, 0.7020, 1.0000),
+        attribute: RiffetRGBA(0.0902, 0.2902, 0.8314, 1.0000),
+        annotation: RiffetRGBA(0.6196, 0.5333, 0.0510, 1.0000),
+        escape: RiffetRGBA(0.0000, 0.2157, 0.6510, 1.0000),
+        heading: RiffetRGBA(0.0000, 0.2000, 0.7020, 1.0000),
+        commentItalic: true
+    )
+    static let intellijDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4784, 0.4941, 0.5216, 1.0000),
+        keyword: RiffetRGBA(0.8118, 0.5569, 0.4275, 1.0000),
+        string: RiffetRGBA(0.4157, 0.6706, 0.4510, 1.0000),
+        number: RiffetRGBA(0.1647, 0.6745, 0.7216, 1.0000),
+        constant: RiffetRGBA(0.7804, 0.4902, 0.7333, 1.0000),
+        declaration: RiffetRGBA(0.3373, 0.6588, 0.9608, 1.0000),
+        type: RiffetRGBA(0.8235, 0.8314, 0.8431, 1.0000),
+        property: RiffetRGBA(0.7804, 0.4902, 0.7333, 1.0000),
+        namespace: RiffetRGBA(0.8235, 0.8314, 0.8431, 1.0000),
+        tag: RiffetRGBA(0.8353, 0.7176, 0.4706, 1.0000),
+        attribute: RiffetRGBA(0.7294, 0.7294, 0.7294, 1.0000),
+        annotation: RiffetRGBA(0.7020, 0.6824, 0.3765, 1.0000),
+        escape: RiffetRGBA(0.8118, 0.5569, 0.4275, 1.0000),
+        heading: RiffetRGBA(0.8118, 0.5569, 0.4275, 1.0000),
+        commentItalic: true
+    )
+    static let githubLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4157, 0.4510, 0.4902, 1.0000),
+        keyword: RiffetRGBA(0.8431, 0.2275, 0.2863, 1.0000),
+        string: RiffetRGBA(0.0118, 0.1843, 0.3843, 1.0000),
+        number: RiffetRGBA(0.0000, 0.3608, 0.7725, 1.0000),
+        constant: RiffetRGBA(0.0000, 0.3608, 0.7725, 1.0000),
+        declaration: RiffetRGBA(0.4353, 0.2588, 0.7569, 1.0000),
+        type: RiffetRGBA(0.4353, 0.2588, 0.7569, 1.0000),
+        property: RiffetRGBA(0.0000, 0.3608, 0.7725, 1.0000),
+        namespace: RiffetRGBA(0.1412, 0.1608, 0.1804, 1.0000),
+        tag: RiffetRGBA(0.1333, 0.5255, 0.2275, 1.0000),
+        attribute: RiffetRGBA(0.4353, 0.2588, 0.7569, 1.0000),
+        annotation: RiffetRGBA(0.8431, 0.2275, 0.2863, 1.0000),
+        escape: RiffetRGBA(0.1333, 0.5255, 0.2275, 1.0000),
+        heading: RiffetRGBA(0.0000, 0.3608, 0.7725, 1.0000),
+        commentItalic: true
+    )
+    static let githubDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5451, 0.5804, 0.6196, 1.0000),
+        keyword: RiffetRGBA(0.9765, 0.4588, 0.5137, 1.0000),
+        string: RiffetRGBA(0.6196, 0.7961, 1.0000, 1.0000),
+        number: RiffetRGBA(0.4745, 0.7216, 1.0000, 1.0000),
+        constant: RiffetRGBA(0.4745, 0.7216, 1.0000, 1.0000),
+        declaration: RiffetRGBA(0.7020, 0.5725, 0.9412, 1.0000),
+        type: RiffetRGBA(0.7020, 0.5725, 0.9412, 1.0000),
+        property: RiffetRGBA(0.4745, 0.7216, 1.0000, 1.0000),
+        namespace: RiffetRGBA(0.8824, 0.8941, 0.9098, 1.0000),
+        tag: RiffetRGBA(0.5216, 0.9098, 0.6157, 1.0000),
+        attribute: RiffetRGBA(0.7020, 0.5725, 0.9412, 1.0000),
+        annotation: RiffetRGBA(0.9765, 0.4588, 0.5137, 1.0000),
+        escape: RiffetRGBA(0.5216, 0.9098, 0.6157, 1.0000),
+        heading: RiffetRGBA(0.4745, 0.7216, 1.0000, 1.0000),
+        commentItalic: true
+    )
+    static let vitesseLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5569, 0.5961, 0.5569, 1.0000),
+        keyword: RiffetRGBA(0.1176, 0.4588, 0.3098, 1.0000),
+        string: RiffetRGBA(0.7098, 0.4118, 0.3490, 1.0000),
+        number: RiffetRGBA(0.1843, 0.4745, 0.5412, 1.0000),
+        constant: RiffetRGBA(0.6510, 0.3686, 0.1686, 1.0000),
+        declaration: RiffetRGBA(0.3490, 0.5294, 0.2275, 1.0000),
+        type: RiffetRGBA(0.1804, 0.5608, 0.5098, 1.0000),
+        property: RiffetRGBA(0.6000, 0.5176, 0.0941, 1.0000),
+        namespace: RiffetRGBA(0.6902, 0.3529, 0.4706, 1.0000),
+        tag: RiffetRGBA(0.1176, 0.4588, 0.3098, 1.0000),
+        attribute: RiffetRGBA(0.6902, 0.4902, 0.2824, 1.0000),
+        annotation: RiffetRGBA(0.6706, 0.3490, 0.3490, 1.0000),
+        escape: RiffetRGBA(0.6706, 0.3686, 0.2471, 1.0000),
+        heading: RiffetRGBA(0.1098, 0.4196, 0.2824, 1.0000),
+        commentItalic: true
+    )
+    static let vitesseDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4588, 0.5216, 0.4588, 1.0000),
+        keyword: RiffetRGBA(0.3020, 0.5765, 0.4588, 1.0000),
+        string: RiffetRGBA(0.7882, 0.5412, 0.4902, 1.0000),
+        number: RiffetRGBA(0.2980, 0.6039, 0.5686, 1.0000),
+        constant: RiffetRGBA(0.7882, 0.5647, 0.4627, 1.0000),
+        declaration: RiffetRGBA(0.5020, 0.6510, 0.3961, 1.0000),
+        type: RiffetRGBA(0.3647, 0.6627, 0.5804, 1.0000),
+        property: RiffetRGBA(0.7216, 0.6627, 0.3961, 1.0000),
+        namespace: RiffetRGBA(0.8588, 0.5333, 0.6039, 1.0000),
+        tag: RiffetRGBA(0.3020, 0.5765, 0.4588, 1.0000),
+        attribute: RiffetRGBA(0.7412, 0.5922, 0.4157, 1.0000),
+        annotation: RiffetRGBA(0.7961, 0.4627, 0.4627, 1.0000),
+        escape: RiffetRGBA(0.9020, 0.8000, 0.4667, 1.0000),
+        heading: RiffetRGBA(0.3020, 0.5765, 0.4588, 1.0000),
+        commentItalic: true
+    )
+    static let oneLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.6275, 0.6314, 0.6549, 1.0000),
+        keyword: RiffetRGBA(0.6510, 0.1490, 0.6431, 1.0000),
+        string: RiffetRGBA(0.3137, 0.6314, 0.3098, 1.0000),
+        number: RiffetRGBA(0.5961, 0.4078, 0.0039, 1.0000),
+        constant: RiffetRGBA(0.5961, 0.4078, 0.0039, 1.0000),
+        declaration: RiffetRGBA(0.2510, 0.4706, 0.9490, 1.0000),
+        type: RiffetRGBA(0.7569, 0.5176, 0.0039, 1.0000),
+        property: RiffetRGBA(0.8941, 0.3373, 0.2863, 1.0000),
+        namespace: RiffetRGBA(0.7569, 0.5176, 0.0039, 1.0000),
+        tag: RiffetRGBA(0.8941, 0.3373, 0.2863, 1.0000),
+        attribute: RiffetRGBA(0.5961, 0.4078, 0.0039, 1.0000),
+        annotation: RiffetRGBA(0.6510, 0.1490, 0.6431, 1.0000),
+        escape: RiffetRGBA(0.0039, 0.5176, 0.7373, 1.0000),
+        heading: RiffetRGBA(0.8941, 0.3373, 0.2863, 1.0000),
+        commentItalic: true
+    )
+    static let oneDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4980, 0.5176, 0.5569, 1.0000),
+        keyword: RiffetRGBA(0.7765, 0.4706, 0.8667, 1.0000),
+        string: RiffetRGBA(0.5961, 0.7647, 0.4745, 1.0000),
+        number: RiffetRGBA(0.8196, 0.6039, 0.4000, 1.0000),
+        constant: RiffetRGBA(0.8980, 0.7529, 0.4824, 1.0000),
+        declaration: RiffetRGBA(0.3804, 0.6863, 0.9373, 1.0000),
+        type: RiffetRGBA(0.8980, 0.7529, 0.4824, 1.0000),
+        property: RiffetRGBA(0.8784, 0.4235, 0.4588, 1.0000),
+        namespace: RiffetRGBA(0.8980, 0.7529, 0.4824, 1.0000),
+        tag: RiffetRGBA(0.8784, 0.4235, 0.4588, 1.0000),
+        attribute: RiffetRGBA(0.8196, 0.6039, 0.4000, 1.0000),
+        annotation: RiffetRGBA(0.7765, 0.4706, 0.8667, 1.0000),
+        escape: RiffetRGBA(0.3373, 0.7137, 0.7608, 1.0000),
+        heading: RiffetRGBA(0.8784, 0.4235, 0.4588, 1.0000),
+        commentItalic: true
+    )
+    static let catppuccinLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4863, 0.4980, 0.5765, 1.0000),
+        keyword: RiffetRGBA(0.5333, 0.2235, 0.9373, 1.0000),
+        string: RiffetRGBA(0.2510, 0.6275, 0.1686, 1.0000),
+        number: RiffetRGBA(0.9961, 0.3922, 0.0431, 1.0000),
+        constant: RiffetRGBA(0.8235, 0.0588, 0.2235, 1.0000),
+        declaration: RiffetRGBA(0.1176, 0.4000, 0.9608, 1.0000),
+        type: RiffetRGBA(0.8745, 0.5569, 0.1137, 1.0000),
+        property: RiffetRGBA(0.0902, 0.5725, 0.6000, 1.0000),
+        namespace: RiffetRGBA(0.8745, 0.5569, 0.1137, 1.0000),
+        tag: RiffetRGBA(0.1176, 0.4000, 0.9608, 1.0000),
+        attribute: RiffetRGBA(0.8745, 0.5569, 0.1137, 1.0000),
+        annotation: RiffetRGBA(0.9961, 0.3922, 0.0431, 1.0000),
+        escape: RiffetRGBA(0.9176, 0.4627, 0.7961, 1.0000),
+        heading: RiffetRGBA(0.1176, 0.4000, 0.9608, 1.0000),
+        commentItalic: true
+    )
+    static let catppuccinDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5765, 0.6000, 0.6980, 1.0000),
+        keyword: RiffetRGBA(0.7961, 0.6510, 0.9686, 1.0000),
+        string: RiffetRGBA(0.6510, 0.8902, 0.6314, 1.0000),
+        number: RiffetRGBA(0.9804, 0.7020, 0.5294, 1.0000),
+        constant: RiffetRGBA(0.9529, 0.5451, 0.6588, 1.0000),
+        declaration: RiffetRGBA(0.5373, 0.7059, 0.9804, 1.0000),
+        type: RiffetRGBA(0.9765, 0.8863, 0.6863, 1.0000),
+        property: RiffetRGBA(0.5804, 0.8863, 0.8353, 1.0000),
+        namespace: RiffetRGBA(0.9765, 0.8863, 0.6863, 1.0000),
+        tag: RiffetRGBA(0.5373, 0.7059, 0.9804, 1.0000),
+        attribute: RiffetRGBA(0.9765, 0.8863, 0.6863, 1.0000),
+        annotation: RiffetRGBA(0.9804, 0.7020, 0.5294, 1.0000),
+        escape: RiffetRGBA(0.9608, 0.7608, 0.9059, 1.0000),
+        heading: RiffetRGBA(0.5373, 0.7059, 0.9804, 1.0000),
+        commentItalic: true
+    )
+    static let solarizedLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5765, 0.6314, 0.6314, 1.0000),
+        keyword: RiffetRGBA(0.5216, 0.6000, 0.0000, 1.0000),
+        string: RiffetRGBA(0.1647, 0.6314, 0.5961, 1.0000),
+        number: RiffetRGBA(0.8275, 0.2118, 0.5098, 1.0000),
+        constant: RiffetRGBA(0.7098, 0.5373, 0.0000, 1.0000),
+        declaration: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        type: RiffetRGBA(0.7961, 0.2941, 0.0863, 1.0000),
+        property: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        namespace: RiffetRGBA(0.7961, 0.2941, 0.0863, 1.0000),
+        tag: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        attribute: RiffetRGBA(0.3961, 0.4824, 0.5137, 1.0000),
+        annotation: RiffetRGBA(0.4235, 0.4431, 0.7686, 1.0000),
+        escape: RiffetRGBA(0.8627, 0.1961, 0.1843, 1.0000),
+        heading: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        commentItalic: true
+    )
+    static let solarizedDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.3451, 0.4314, 0.4588, 1.0000),
+        keyword: RiffetRGBA(0.5216, 0.6000, 0.0000, 1.0000),
+        string: RiffetRGBA(0.1647, 0.6314, 0.5961, 1.0000),
+        number: RiffetRGBA(0.8275, 0.2118, 0.5098, 1.0000),
+        constant: RiffetRGBA(0.7098, 0.5373, 0.0000, 1.0000),
+        declaration: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        type: RiffetRGBA(0.7961, 0.2941, 0.0863, 1.0000),
+        property: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        namespace: RiffetRGBA(0.7961, 0.2941, 0.0863, 1.0000),
+        tag: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        attribute: RiffetRGBA(0.5765, 0.6314, 0.6314, 1.0000),
+        annotation: RiffetRGBA(0.4235, 0.4431, 0.7686, 1.0000),
+        escape: RiffetRGBA(0.8627, 0.1961, 0.1843, 1.0000),
+        heading: RiffetRGBA(0.1490, 0.5451, 0.8235, 1.0000),
+        commentItalic: true
+    )
+    static let rosePineLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5961, 0.5765, 0.6471, 1.0000),
+        keyword: RiffetRGBA(0.1569, 0.4118, 0.5137, 1.0000),
+        string: RiffetRGBA(0.7608, 0.4824, 0.1216, 1.0000),
+        number: RiffetRGBA(0.8431, 0.5098, 0.4941, 1.0000),
+        constant: RiffetRGBA(0.8431, 0.5098, 0.4941, 1.0000),
+        declaration: RiffetRGBA(0.7059, 0.3882, 0.4784, 1.0000),
+        type: RiffetRGBA(0.3373, 0.5804, 0.6235, 1.0000),
+        property: RiffetRGBA(0.3373, 0.5804, 0.6235, 1.0000),
+        namespace: RiffetRGBA(0.3373, 0.5804, 0.6235, 1.0000),
+        tag: RiffetRGBA(0.3373, 0.5804, 0.6235, 1.0000),
+        attribute: RiffetRGBA(0.5647, 0.4784, 0.6627, 1.0000),
+        annotation: RiffetRGBA(0.5647, 0.4784, 0.6627, 1.0000),
+        escape: RiffetRGBA(0.1569, 0.4118, 0.5137, 1.0000),
+        heading: RiffetRGBA(0.3373, 0.5804, 0.6235, 1.0000),
+        commentItalic: true
+    )
+    static let rosePineDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4314, 0.4157, 0.5255, 1.0000),
+        keyword: RiffetRGBA(0.1922, 0.4549, 0.5608, 1.0000),
+        string: RiffetRGBA(0.9647, 0.7569, 0.4667, 1.0000),
+        number: RiffetRGBA(0.9216, 0.7373, 0.7294, 1.0000),
+        constant: RiffetRGBA(0.9216, 0.7373, 0.7294, 1.0000),
+        declaration: RiffetRGBA(0.9216, 0.4353, 0.5725, 1.0000),
+        type: RiffetRGBA(0.6118, 0.8118, 0.8471, 1.0000),
+        property: RiffetRGBA(0.6118, 0.8118, 0.8471, 1.0000),
+        namespace: RiffetRGBA(0.6118, 0.8118, 0.8471, 1.0000),
+        tag: RiffetRGBA(0.6118, 0.8118, 0.8471, 1.0000),
+        attribute: RiffetRGBA(0.7686, 0.6549, 0.9059, 1.0000),
+        annotation: RiffetRGBA(0.7686, 0.6549, 0.9059, 1.0000),
+        escape: RiffetRGBA(0.1922, 0.4549, 0.5608, 1.0000),
+        heading: RiffetRGBA(0.6118, 0.8118, 0.8471, 1.0000),
+        commentItalic: true
+    )
+    static let everforestLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5765, 0.6235, 0.5686, 1.0000),
+        keyword: RiffetRGBA(0.9725, 0.3333, 0.3216, 1.0000),
+        string: RiffetRGBA(0.7686, 0.5373, 0.0000, 1.0000),
+        number: RiffetRGBA(0.8745, 0.4118, 0.7294, 1.0000),
+        constant: RiffetRGBA(0.8745, 0.4118, 0.7294, 1.0000),
+        declaration: RiffetRGBA(0.5529, 0.6314, 0.0039, 1.0000),
+        type: RiffetRGBA(0.2275, 0.5804, 0.7725, 1.0000),
+        property: RiffetRGBA(0.3608, 0.4157, 0.4471, 1.0000),
+        namespace: RiffetRGBA(0.2078, 0.6549, 0.4863, 1.0000),
+        tag: RiffetRGBA(0.9608, 0.4902, 0.1490, 1.0000),
+        attribute: RiffetRGBA(0.7686, 0.5373, 0.0000, 1.0000),
+        annotation: RiffetRGBA(0.2078, 0.6549, 0.4863, 1.0000),
+        escape: RiffetRGBA(0.5529, 0.6314, 0.0039, 1.0000),
+        heading: RiffetRGBA(0.9725, 0.3333, 0.3216, 1.0000),
+        commentItalic: true
+    )
+    static let everforestDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5216, 0.5725, 0.5373, 1.0000),
+        keyword: RiffetRGBA(0.9020, 0.4941, 0.5020, 1.0000),
+        string: RiffetRGBA(0.8588, 0.7373, 0.4980, 1.0000),
+        number: RiffetRGBA(0.8392, 0.6000, 0.7137, 1.0000),
+        constant: RiffetRGBA(0.8392, 0.6000, 0.7137, 1.0000),
+        declaration: RiffetRGBA(0.6549, 0.7529, 0.5020, 1.0000),
+        type: RiffetRGBA(0.4980, 0.7333, 0.7020, 1.0000),
+        property: RiffetRGBA(0.8275, 0.7765, 0.6667, 1.0000),
+        namespace: RiffetRGBA(0.5137, 0.7529, 0.5725, 1.0000),
+        tag: RiffetRGBA(0.9020, 0.5961, 0.4588, 1.0000),
+        attribute: RiffetRGBA(0.8588, 0.7373, 0.4980, 1.0000),
+        annotation: RiffetRGBA(0.5137, 0.7529, 0.5725, 1.0000),
+        escape: RiffetRGBA(0.6549, 0.7529, 0.5020, 1.0000),
+        heading: RiffetRGBA(0.9020, 0.4941, 0.5020, 1.0000),
+        commentItalic: true
+    )
+    static let monochromeLight = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.5451, 0.5804, 0.6196, 1.0000),
+        keyword: RiffetRGBA(0.1216, 0.1373, 0.1569, 1.0000),
+        string: RiffetRGBA(0.3412, 0.3765, 0.4157, 1.0000),
+        number: RiffetRGBA(0.2941, 0.3333, 0.3882, 1.0000),
+        constant: RiffetRGBA(0.2157, 0.2549, 0.3176, 1.0000),
+        declaration: RiffetRGBA(0.1412, 0.1608, 0.1843, 1.0000),
+        type: RiffetRGBA(0.2157, 0.2549, 0.3176, 1.0000),
+        property: RiffetRGBA(0.2941, 0.3333, 0.3882, 1.0000),
+        namespace: RiffetRGBA(0.4314, 0.4667, 0.5059, 1.0000),
+        tag: RiffetRGBA(0.1216, 0.1373, 0.1569, 1.0000),
+        attribute: RiffetRGBA(0.3412, 0.3765, 0.4157, 1.0000),
+        annotation: RiffetRGBA(0.4314, 0.4667, 0.5059, 1.0000),
+        escape: RiffetRGBA(0.2941, 0.3333, 0.3882, 1.0000),
+        heading: RiffetRGBA(0.1216, 0.1373, 0.1569, 1.0000),
+        commentItalic: true
+    )
+    static let monochromeDark = RiffetCodePaletteValues(
+        comment: RiffetRGBA(0.4314, 0.4627, 0.5059, 1.0000),
+        keyword: RiffetRGBA(0.9412, 0.9647, 0.9882, 1.0000),
+        string: RiffetRGBA(0.6941, 0.7294, 0.7686, 1.0000),
+        number: RiffetRGBA(0.7882, 0.8196, 0.8510, 1.0000),
+        constant: RiffetRGBA(0.8157, 0.8431, 0.8706, 1.0000),
+        declaration: RiffetRGBA(0.9020, 0.9294, 0.9529, 1.0000),
+        type: RiffetRGBA(0.8157, 0.8431, 0.8706, 1.0000),
+        property: RiffetRGBA(0.7882, 0.8196, 0.8510, 1.0000),
+        namespace: RiffetRGBA(0.5451, 0.5804, 0.6196, 1.0000),
+        tag: RiffetRGBA(0.9412, 0.9647, 0.9882, 1.0000),
+        attribute: RiffetRGBA(0.6941, 0.7294, 0.7686, 1.0000),
+        annotation: RiffetRGBA(0.5451, 0.5804, 0.6196, 1.0000),
+        escape: RiffetRGBA(0.7882, 0.8196, 0.8510, 1.0000),
+        heading: RiffetRGBA(0.9412, 0.9647, 0.9882, 1.0000),
+        commentItalic: true
+    )
+
+    static let all: [RiffetCodeThemeValues] = [
+        RiffetCodeThemeValues(id: "intellij", name: "IntelliJ", light: intellijLight, dark: intellijDark),
+        RiffetCodeThemeValues(id: "github", name: "GitHub", light: githubLight, dark: githubDark),
+        RiffetCodeThemeValues(id: "vitesse", name: "Vitesse", light: vitesseLight, dark: vitesseDark),
+        RiffetCodeThemeValues(id: "one", name: "One", light: oneLight, dark: oneDark),
+        RiffetCodeThemeValues(id: "catppuccin", name: "Catppuccin", light: catppuccinLight, dark: catppuccinDark),
+        RiffetCodeThemeValues(id: "solarized", name: "Solarized", light: solarizedLight, dark: solarizedDark),
+        RiffetCodeThemeValues(id: "rose-pine", name: "Rosé Pine", light: rosePineLight, dark: rosePineDark),
+        RiffetCodeThemeValues(id: "everforest", name: "Everforest", light: everforestLight, dark: everforestDark),
+        RiffetCodeThemeValues(id: "monochrome", name: "Monochrome", light: monochromeLight, dark: monochromeDark),
+    ]
+
+    static let uiThemeDefaults: [String: String] = [
+        "solarized": "solarized",
+        "catppuccin": "catppuccin",
+        "rose-pine": "rose-pine",
+        "everforest": "everforest",
+        "pencil": "monochrome",
+    ]
+
+    static func resolveId(selection: String?, uiThemeId: String? = nil) -> String {
+        if let selection, all.contains(where: { $0.id == selection }) { return selection }
+        if let uiThemeId, let mapped = uiThemeDefaults[uiThemeId] { return mapped }
+        return "intellij"
+    }
+
+    static func resolve(selection: String?, uiThemeId: String? = nil) -> RiffetCodeThemeValues {
+        let id = resolveId(selection: selection, uiThemeId: uiThemeId)
+        return all.first(where: { $0.id == id }) ?? all[0]
+    }
+}

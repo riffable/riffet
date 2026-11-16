@@ -29,6 +29,8 @@ enum PreferenceKey {
     static let windowMaterial = "riffet.window-material"
     /// The interface style (`InterfaceStyle.rawValue`).
     static let interfaceStyle = "riffet.interface-style"
+    /// Code syntax highlighting theme (`auto` or a built-in id).
+    static let codeTheme = "riffet.code-theme"
     /// How much of the material shows through the sidebar and the content, in percent.
     static let sidebarTransparency = "riffet.sidebar-transparency"
     static let contentTransparency = "riffet.content-transparency"
@@ -259,6 +261,7 @@ final class DisplayPreferences {
             NotificationCenter.default.post(name: .riffetInterfaceStyleChanged, object: nil)
         }
     }
+    var codeTheme: String { didSet { save(PreferenceKey.codeTheme, codeTheme) } }
     /// The recipe of the style on screen.
     var style: StyleSpec { interfaceStyle.spec }
     /// 0–100, for the sidebar and the content each.
@@ -302,6 +305,10 @@ final class DisplayPreferences {
         interfaceStyle = defaults.string(forKey: PreferenceKey.interfaceStyle)
             .map { $0 == "claude" ? InterfaceStyle.line.rawValue : $0 }
             .flatMap(InterfaceStyle.init(rawValue:)) ?? .defaultValue
+        let storedCodeTheme = defaults.string(forKey: PreferenceKey.codeTheme)
+        codeTheme = storedCodeTheme.flatMap { id in
+            RiffetCodeThemeCatalog.all.contains(where: { $0.id == id }) || ThemeLibraryRules.isValidID(id) ? id : nil
+        } ?? "auto"
         sidebarTransparency = defaults.object(forKey: PreferenceKey.sidebarTransparency) as? Double ?? 60
         contentTransparency = defaults.object(forKey: PreferenceKey.contentTransparency) as? Double ?? 0
         NSWorkspace.shared.notificationCenter.addObserver(

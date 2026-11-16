@@ -9,6 +9,7 @@ struct ConversationView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
+    @Environment(ThemeStore.self) private var themeStore
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.locale) private var locale
     @Environment(\.scenePhase) private var scenePhase
@@ -432,7 +433,7 @@ struct ConversationView: View {
         var result: [ConversationTranscriptList.Row] = []
         let find = findHighlight
         func append<V: View>(_ id: String, revision: AnyHashable, top: CGFloat = 0, highlight: ConversationFindHighlight? = nil, content: V) {
-            result.append(.init(id: id, revision: rowRevision(revision, colorScheme, dynamicTypeSize, locale.identifier, highlight ?? ConversationFindHighlight(needle: "", nth: 0)), content: AnyView(content
+            result.append(.init(id: id, revision: rowRevision(revision, colorScheme, dynamicTypeSize, locale.identifier, themeStore.codeThemeId, highlight ?? ConversationFindHighlight(needle: "", nth: 0)), content: AnyView(content
                 .environment(\.conversationFindHighlight, highlight)
                 .modifier(ConversationFindFlash(highlight: highlight))
                 .environment(\.colorScheme, colorScheme).environment(\.dynamicTypeSize, dynamicTypeSize).environment(\.locale, locale)

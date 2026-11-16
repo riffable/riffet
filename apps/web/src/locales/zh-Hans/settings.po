@@ -76,6 +76,11 @@ msgstr "{0} 个图标，复制内容为组件名。各端按同一套语义名�
 msgid "{0} 个模型"
 msgstr "{0} 个模型"
 
+#. placeholder {0}: CODE_ROLES.length
+#: src/app/design/foundations/ColorChapter.tsx
+msgid "{0} 个语法色角色独立于界面主题选择，渲染时向正文色混合，保持落在纸底上的可读性。"
+msgstr "{0} 个语法色角色独立于界面主题选择，渲染时向正文色混合，保持落在纸底上的可读性。"
+
 #. placeholder {0}: THEME_ROLES.length
 #. placeholder {1}: SURFACES.length
 #. placeholder {2}: INKS.length
@@ -346,6 +351,10 @@ msgstr "id 必须是 custom- 加 8–64 位小写字母、数字或连字符"
 msgid "iPhone 在后台将不再收到通知"
 msgstr "iPhone 在后台将不再收到通知"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "JSON 格式无法解析"
+msgstr "JSON 格式无法解析"
+
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
 msgstr "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
@@ -441,6 +450,10 @@ msgstr "UiKit"
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "UiKit 与 Tailwind 类"
 msgstr "UiKit 与 Tailwind 类"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "VS Code 主题 JSON"
+msgstr "VS Code 主题 JSON"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "Web"
@@ -661,6 +674,14 @@ msgstr "不是可用的组合"
 #: src/app/settings/ThemeEditor.tsx
 msgid "不是有效的主题字段"
 msgstr "不是有效的主题字段"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不是有效的代码高亮字段"
+msgstr "不是有效的代码高亮字段"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "不是有效的代码高亮角色"
+msgstr "不是有效的代码高亮角色"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "不是有效的颜色角色"
@@ -1012,6 +1033,16 @@ msgstr "代码字体"
 #: src/app/design/components/DisplayChapter.tsx
 msgid "代码有两种写法：工具输出用 CodeBlock，回答里的代码围栏由 Markdown 画。外观与行为各自实现。"
 msgstr "代码有两种写法：工具输出用 CodeBlock，回答里的代码围栏由 Markdown 画。外观与行为各自实现。"
+
+#: src/app/design/foundations/ColorChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "代码高亮"
+msgstr "代码高亮"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "代码高亮（14 色）"
+msgstr "代码高亮（14 色）"
 
 #: src/app/settings/ThemeEditor.tsx
 msgid "以本地版本覆盖"
@@ -2868,6 +2899,14 @@ msgstr "失败详情：连接在 8 秒后超时。"
 msgid "头像、名字首字、通用人形，依次回落。"
 msgstr "头像、名字首字、通用人形，依次回落。"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "套用预设"
+msgstr "套用预设"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "套用预设…"
+msgstr "套用预设…"
+
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "子进程"
 msgstr "子进程"
@@ -3088,6 +3127,10 @@ msgstr "对象列表，每行进入二级页"
 #: src/app/design/patterns/SelectionChapter.tsx
 msgid "对象名作为下方各组的标题，点开切换；对象再多也放得下。"
 msgstr "对象名作为下方各组的标题，点开切换；对象再多也放得下。"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "导入 VS Code 主题…"
+msgstr "导入 VS Code 主题…"
 
 #: src/app/settings/SupportSections.tsx
 msgid "导出"
@@ -3436,6 +3479,18 @@ msgstr "已完成"
 msgid "已完成 · 12 项检查通过"
 msgstr "已完成 · 12 项检查通过"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "已导入浅色代码高亮配色"
+msgstr "已导入浅色代码高亮配色"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "已导入深浅两套代码高亮配色"
+msgstr "已导入深浅两套代码高亮配色"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "已导入深色代码高亮配色"
+msgstr "已导入深色代码高亮配色"
+
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "已开启"
 msgstr "已开启"
@@ -3609,6 +3664,10 @@ msgstr "应用内模块经 usePluginHost().ui 取得。"
 #: src/app/settings/settingsSections.ts
 msgid "应用图标"
 msgstr "应用图标"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "应用导入"
+msgstr "应用导入"
 
 #: src/app/design/android/PagesChapter.tsx
 #: src/app/design/android/StylesChapter.tsx
@@ -3824,6 +3883,10 @@ msgid "必须是 16 个颜色"
 msgstr "必须是 16 个颜色"
 
 #: src/app/settings/ThemeEditor.tsx
+msgid "必须是布尔值"
+msgstr "必须是布尔值"
+
+#: src/app/settings/ThemeEditor.tsx
 msgid "必须是文本"
 msgstr "必须是文本"
 
@@ -3876,6 +3939,10 @@ msgstr "恢复备份"
 #: src/app/settings/SupportSections.tsx
 msgid "恢复完成后，使用目标状态目录启动 Riffet。"
 msgstr "恢复完成后，使用目标状态目录启动 Riffet。"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "恢复跟随主题"
+msgstr "恢复跟随主题"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "恢复默认"
@@ -4905,6 +4972,10 @@ msgstr "无法读取任务文件位置"
 msgid "无法读取可用模型"
 msgstr "无法读取可用模型"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "无法读取所选文件"
+msgstr "无法读取所选文件"
+
 #: src/app/settings/PushKeySection.tsx
 msgid "无法读取推送设置"
 msgstr "无法读取推送设置"
@@ -5169,6 +5240,10 @@ msgstr "未找到"
 msgid "未找到可执行文件"
 msgstr "未找到可执行文件"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "未找到可用的 VS Code 语法配色字段"
+msgstr "未找到可用的 VS Code 语法配色字段"
+
 #: src/app/settings/PreferencesSections.tsx
 msgid "未授予通知权限。"
 msgstr "未授予通知权限。"
@@ -5235,6 +5310,11 @@ msgstr "来源"
 #: src/app/design/components/FeedbackChapter.tsx
 msgid "来源清空后保留一次退场动画，可显示「已恢复」。"
 msgstr "来源清空后保留一次退场动画，可显示「已恢复」。"
+
+#: src/app/settings/PreferencesSections.tsx
+#: src/app/settings/ThemeEditor.tsx
+msgid "极简墨色"
+msgstr "极简墨色"
 
 #: src/app/design/catalog.tsx
 #: src/app/design/engineering/ArchitectureChapter.tsx
@@ -5704,6 +5784,10 @@ msgstr "沿用 CLI 默认"
 #: src/app/design/mac/TypeChapter.tsx
 msgid "注脚"
 msgstr "注脚"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "注释斜体"
+msgstr "注释斜体"
 
 #: src/app/design/mac/notes.ts
 msgid "浅底"
@@ -6500,6 +6584,14 @@ msgstr "类型"
 msgid "类型决定骨架与内容列；同一类型的页面不另起布局。"
 msgstr "类型决定骨架与内容列；同一类型的页面不另起布局。"
 
+#: src/app/settings/ThemeEditor.tsx
+msgid "粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。"
+msgstr "粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "粘贴 VS Code 主题 JSON（含 tokenColors）…"
+msgstr "粘贴 VS Code 主题 JSON（含 tokenColors）…"
+
 #: src/app/settings/AuxiliaryPreviewDialog.tsx
 msgid "粘贴对话内容"
 msgstr "粘贴对话内容"
@@ -6867,6 +6959,15 @@ msgstr "自动编辑"
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "自定义 API"
 msgstr "自定义 API"
+
+#: src/app/settings/PreferencesSections.tsx
+msgctxt "settings-code-theme-customize"
+msgid "自定义…"
+msgstr "自定义…"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "自定义代码高亮"
+msgstr "自定义代码高亮"
 
 #: src/app/design/mac/notes.ts
 msgid "自绘"
@@ -7431,6 +7532,10 @@ msgstr "跟平台与跟 Web"
 msgid "跟平台与跟共用的规范"
 msgstr "跟平台与跟共用的规范"
 
+#: src/app/settings/PreferencesSections.tsx
+msgid "跟随界面主题"
+msgstr "跟随界面主题"
+
 #: src/app/design/android/PhoneMiniature.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/DesignPage.tsx
@@ -7865,6 +7970,10 @@ msgstr "选择控件的选用"
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "选择控件的选用规则"
 msgstr "选择控件的选用规则"
+
+#: src/app/settings/ThemeEditor.tsx
+msgid "选择文件…"
+msgstr "选择文件…"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SelectionChapter.tsx
@@ -8483,6 +8592,7 @@ msgstr "颜色角色与主题取值；间距、字号、圆角、动效；风格
 #: src/app/design/catalog.tsx
 #: src/app/design/mac/StylesChapter.tsx
 #: src/app/design/overview/SystemChapter.tsx
+#: src/app/settings/PreferencesSections.tsx
 msgid "风格"
 msgstr "风格"
 

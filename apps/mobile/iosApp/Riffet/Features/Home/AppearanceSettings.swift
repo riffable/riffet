@@ -158,6 +158,66 @@ struct AppIconSetting: View {
     var body: some View { AppIconPicker(selection: $icon) }
 }
 
+/// Code syntax highlighting theme, with a live preview of the selected style.
+struct CodeThemeSettingsView: View {
+    @Environment(ThemeStore.self) private var themeStore
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var scheme
+    @State private var syntax: ConversationSyntax.Result?
+
+    private static let snippet = """
+    // Syntax preview
+    @tagged("api")
+    async function loadConfig(limit = 42): Promise<Config> {
+      const mode = true;
+      return { name: "riffet", count: limit };
+    }
+    """
+
+    var body: some View {
+        let resolved = themeStore.codeTheme
+        let displayed = syntax?.attributed(palette: palette, codeTheme: resolved, dark: scheme == .dark) ?? AttributedString(Self.snippet)
+        RiffetForm {
+            Section {
+                Text(displayed)
+                    .riffetFont(.monoSmall)
+                    .foregroundStyle(palette.fg)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(RiffetMetrics.groupInset)
+                    .background(palette.bgSubtle, in: RoundedRectangle(cornerRadius: RiffetMetrics.controlRadius, style: .continuous))
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+            }
+            Section {
+                SettingsCheckRow(
+                    title: String(localized: "跟随界面主题", bundle: .riffet),
+                    selected: themeStore.codeThemeId == "auto"
+                ) {
+                    themeStore.codeThemeId = "auto"
+                }
+                ForEach(RiffetCodeThemeCatalog.all, id: \.id) { entry in
+                    SettingsCheckRow(
+                        title: Self.displayName(for: entry),
+                        selected: themeStore.codeThemeId == entry.id
+                    ) {
+                        themeStore.codeThemeId = entry.id
+                    }
+                }
+            } footer: { Text("仅保存在这台设备") }
+        }
+        .navigationTitle(String(localized: "代码高亮", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
+        .task {
+            if syntax == nil {
+                syntax = await ConversationSyntax.shared.highlight(Self.snippet, language: "typescript")
+            }
+        }
+    }
+
+    static func displayName(for entry: RiffetCodeThemeValues) -> String {
+        entry.id == "monochrome" ? String(localized: "极简墨色", bundle: .riffet) : entry.name
+    }
+}
+
 // MARK: - Language
 
 /// The language this app runs in. iOS keeps a per-app choice in the app's own `AppleLanguages`

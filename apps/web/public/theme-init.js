@@ -23,6 +23,10 @@
     'agent-cursor', 'agent-codex', 'agent-claude', 'agent-dsh',
     'chart-1', 'chart-2', 'chart-3', 'chart-4', 'chart-5', 'chart-6', 'chart-7', 'chart-8'
   ];
+  var CODE_THEME_ROLES = [
+    'comment', 'keyword', 'string', 'number', 'constant', 'declaration', 'type',
+    'property', 'namespace', 'tag', 'attribute', 'annotation', 'escape', 'heading'
+  ];
   var LIBRARY_KEY = 'riffet.theme.library.v1';
   // Stored ids from before a rename; keep the first frame on the same palette as the runtime.
   var LEGACY_THEMES = { claude: 'kiln' };
@@ -55,6 +59,25 @@
     return value;
   }
 
+  function readSyntaxHalf(value) {
+    if (!value || typeof value !== 'object' || !value.colors || typeof value.colors !== 'object') return null;
+    var colors = {};
+    for (var index = 0; index < CODE_THEME_ROLES.length; index++) {
+      var role = CODE_THEME_ROLES[index];
+      var color = value.colors[role];
+      if (typeof color !== 'string' || !ROLE_COLOR.test(color)) return null;
+      colors[role] = color.toLowerCase();
+    }
+    return { colors: colors, commentItalic: typeof value.commentItalic === 'boolean' ? value.commentItalic : true };
+  }
+
+  function readSyntax(value) {
+    if (!value || typeof value !== 'object') return null;
+    var light = readSyntaxHalf(value.light);
+    var dark = readSyntaxHalf(value.dark);
+    return light && dark ? { light: light, dark: dark } : null;
+  }
+
   function readTheme(value) {
     if (!value || typeof value !== 'object') return null;
     if (typeof value.id !== 'string' || !ID_PATTERN.test(value.id)) return null;
@@ -64,7 +87,8 @@
     var dark = readPalette(palette.dark);
     if (!light || !dark) return null;
     if (!readAnsi(value.ansi && value.ansi.light) || !readAnsi(value.ansi && value.ansi.dark)) return null;
-    return { id: value.id, light: light, dark: dark };
+    var syntax = value.syntax !== undefined ? readSyntax(value.syntax) : null;
+    return { id: value.id, light: light, dark: dark, syntax: syntax };
   }
 
   /*
@@ -94,7 +118,8 @@
       if (!value || typeof value.key !== 'string' || !PLUGIN_ID_PATTERN.test(value.key)) return null;
       var light = readPalette(value.light);
       var dark = readPalette(value.dark);
-      return light && dark ? { id: value.key, light: light, dark: dark } : null;
+      var syntax = value.syntax !== undefined ? readSyntax(value.syntax) : null;
+      return light && dark ? { id: value.key, light: light, dark: dark, syntax: syntax } : null;
     } catch (_) { return null; }
   }
 
@@ -108,6 +133,22 @@
     return lines.join('\n');
   }
 
+  function syntaxBlock(selector, half, isDark) {
+    var fgMix = isDark ? 90 : 88;
+    var commentMix = isDark ? 85 : 80;
+    var lines = [selector + ' {', '  --code-comment-style: ' + (half.commentItalic ? 'italic' : 'normal') + ';'];
+    for (var index = 0; index < CODE_THEME_ROLES.length; index++) {
+      var role = CODE_THEME_ROLES[index];
+      var hex = half.colors[role];
+      var target = role === 'comment'
+        ? 'color-mix(in oklab, ' + hex + ' ' + commentMix + '%, var(--fg-3))'
+        : 'color-mix(in oklab, ' + hex + ' ' + fgMix + '%, var(--fg))';
+      lines.push('  --code-' + role + ': ' + target + ';');
+    }
+    lines.push('}');
+    return lines.join('\n');
+  }
+
   /*
    * Same selectors the built-in palettes use, so a custom theme is indistinguishable to the rest of
    * the app: `.dark` still means the mode, `data-theme` still means the palette.
@@ -115,8 +156,17 @@
   function injectCustomThemes(themes, styleId) {
     if (!themes.length) return;
     var css = themes.map(function (theme) {
-      return block('[data-theme="' + theme.id + '"]:not(.dark)', 'light', theme.light) + '\n\n' +
-        block('[data-theme="' + theme.id + '"].dark', 'dark', theme.dark);
+      var parts = [
+        block('[data-theme="' + theme.id + '"]:not(.dark)', 'light', theme.light),
+        block('[data-theme="' + theme.id + '"].dark', 'dark', theme.dark)
+      ];
+      if (theme.syntax) {
+        parts.push(
+          syntaxBlock('[data-code-theme="' + theme.id + '"]:not(.dark)', theme.syntax.light, false),
+          syntaxBlock('[data-code-theme="' + theme.id + '"].dark', theme.syntax.dark, true)
+        );
+      }
+      return parts.join('\n\n');
     }).join('\n\n');
     var style = document.getElementById(styleId);
     if (!style) {
@@ -154,6 +204,30 @@
     injectCustomThemes([pluginPalette], PLUGIN_STYLE_ID);
     root.setAttribute('data-theme', pluginPalette.id);
   }
+  var CODE_THEMES = ['intellij', 'github', 'vitesse', 'one', 'catppuccin', 'solarized', 'rose-pine', 'everforest', 'monochrome'];
+  var UI_CODE_MAP = { solarized: 'solarized', catppuccin: 'catppuccin', 'rose-pine': 'rose-pine', everforest: 'everforest', pencil: 'monochrome' };
+  var codeTheme = 'intellij';
+  var hasCustomSyntax = function (id) {
+    for (var i = 0; i < customThemes.length; i++) {
+      if (customThemes[i].id === id && customThemes[i].syntax) return true;
+    }
+    return false;
+  };
+  try {
+    var displayRaw = localStorage.getItem('riffet.display');
+    var displayParsed = displayRaw && JSON.parse(displayRaw);
+    var choice = displayParsed && displayParsed.codeTheme;
+    if (typeof choice === 'string' && (CODE_THEMES.indexOf(choice) !== -1 || hasCustomSyntax(choice))) {
+      codeTheme = choice;
+    } else if (pluginPalette && pluginPalette.syntax) {
+      codeTheme = pluginPalette.id;
+    } else if (!pluginPalette && theme && hasCustomSyntax(theme)) {
+      codeTheme = theme;
+    } else if (!pluginPalette && theme && Object.prototype.hasOwnProperty.call(UI_CODE_MAP, theme)) {
+      codeTheme = UI_CODE_MAP[theme];
+    }
+  } catch (_) { /* unreadable display settings: default to intellij */ }
+  root.setAttribute('data-code-theme', codeTheme);
 
   /*
    * The browser chrome colour is read back from the applied `--bg` rather than carried here as a

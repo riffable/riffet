@@ -1,6 +1,228 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "套用预设" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply preset"
+          }
+        }
+      }
+    },
+    "导入 VS Code 主题…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import VS Code theme…"
+          }
+        }
+      }
+    },
+    "导入 VS Code 主题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import VS Code theme"
+          }
+        }
+      }
+    },
+    "恢复跟随主题" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow theme"
+          }
+        }
+      }
+    },
+    "注释斜体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Italic comments"
+          }
+        }
+      }
+    },
+    "自定义代码高亮" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize code highlighting"
+          }
+        }
+      }
+    },
+    "自定义…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize…"
+          }
+        }
+      }
+    },
+    "代码高亮（14 色）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code highlighting (14 colours)"
+          }
+        }
+      }
+    },
+    "粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste VS Code theme JSON / JSONC or choose a file to import."
+          }
+        }
+      }
+    },
+    "选择文件…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose file…"
+          }
+        }
+      }
+    },
+    "应用导入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply import"
+          }
+        }
+      }
+    },
+    "无法读取所选文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read the selected file"
+          }
+        }
+      }
+    },
+    "JSON 格式无法解析" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid JSON"
+          }
+        }
+      }
+    },
+    "未找到可用的 VS Code 语法配色字段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable VS Code syntax colors found"
+          }
+        }
+      }
+    },
+    "关键字" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Keyword" } } }
+    },
+    "函数与声明" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Function & declaration" } } }
+    },
+    "命名空间" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Namespace" } } }
+    },
+    "字符串" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "String" } } }
+    },
+    "属性名" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Attribute" } } }
+    },
+    "常量" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Constant" } } }
+    },
+    "成员属性" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Property" } } }
+    },
+    "数字" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Number" } } }
+    },
+    "标签" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Tag" } } }
+    },
+    "标题" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Heading" } } }
+    },
+    "注解" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Annotation" } } }
+    },
+    "注释" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Comment" } } }
+    },
+    "类型" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Type" } } }
+    },
+    "转义与插值" : {
+      "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Escape & interpolation" } } }
+    },
+    "代码高亮": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code highlighting"
+          }
+        }
+      }
+    },
+    "风格": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Style"
+          }
+        }
+      }
+    },
+    "极简墨色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monochrome"
+          }
+        }
+      }
+    },
+    "跟随界面主题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow theme"
+          }
+        }
+      }
+    },
     "个人资料与更多": {
       "localizations": {
         "en": {

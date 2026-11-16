@@ -2618,49 +2618,329 @@ html.dark {
 }
 
 /*
- * The code palette: the colours an Android Studio (IntelliJ Light / Dark) user reads code in, each
- * mixed a little toward the theme's text so it sits on every theme's paper. The code view's Shiki
- * tokens and the chat's Prism tokens both draw from it.
+ * The code palette: the colours the code view's Shiki tokens and the chat's Prism tokens draw from.
+ * Each built-in code theme mixes its syntax hues slightly toward the active theme's text so code
+ * sits on any theme's paper without an opaque background of its own.
  */
-:root {
+/* BEGIN GENERATED code-themes (scripts/gen-mobile-theme.ts) */
+:root,
+[data-code-theme="intellij"]:not(.dark) {
   --code-fg: var(--fg);
+  --code-link: var(--accent);
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #8c8c8c 80%, var(--fg-3));
   --code-keyword: color-mix(in oklab, #0033b3 88%, var(--fg));
   --code-string: color-mix(in oklab, #067d17 88%, var(--fg));
   --code-number: color-mix(in oklab, #1750eb 88%, var(--fg));
-  --code-comment: color-mix(in oklab, #8c8c8c 80%, var(--fg-3));
-  --code-annotation: color-mix(in oklab, #9e880d 88%, var(--fg));
-  --code-escape: color-mix(in oklab, #0037a6 88%, var(--fg));
-  --code-declaration: color-mix(in oklab, #00627a 88%, var(--fg));
-  --code-type: var(--fg);
-  --code-namespace: var(--fg);
-  --code-property: color-mix(in oklab, #871094 88%, var(--fg));
   --code-constant: color-mix(in oklab, #871094 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #00627a 88%, var(--fg));
+  --code-type: color-mix(in oklab, #2a2c2e 88%, var(--fg));
+  --code-property: color-mix(in oklab, #871094 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #2a2c2e 88%, var(--fg));
   --code-tag: color-mix(in oklab, #0033b3 88%, var(--fg));
   --code-attribute: color-mix(in oklab, #174ad4 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #9e880d 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #0037a6 88%, var(--fg));
   --code-heading: color-mix(in oklab, #0033b3 88%, var(--fg));
-  --code-link: var(--accent);
 }
-.dark {
+.dark,
+[data-code-theme="intellij"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #7a7e85 85%, var(--fg-3));
   --code-keyword: color-mix(in oklab, #cf8e6d 90%, var(--fg));
   --code-string: color-mix(in oklab, #6aab73 90%, var(--fg));
   --code-number: color-mix(in oklab, #2aacb8 90%, var(--fg));
-  --code-comment: color-mix(in oklab, #7a7e85 85%, var(--fg-3));
-  --code-annotation: color-mix(in oklab, #b3ae60 90%, var(--fg));
-  --code-escape: color-mix(in oklab, #cf8e6d 90%, var(--fg));
-  --code-declaration: color-mix(in oklab, #56a8f5 90%, var(--fg));
-  --code-property: color-mix(in oklab, #c77dbb 90%, var(--fg));
   --code-constant: color-mix(in oklab, #c77dbb 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #56a8f5 90%, var(--fg));
+  --code-type: color-mix(in oklab, #d2d4d7 90%, var(--fg));
+  --code-property: color-mix(in oklab, #c77dbb 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #d2d4d7 90%, var(--fg));
   --code-tag: color-mix(in oklab, #d5b778 90%, var(--fg));
   --code-attribute: color-mix(in oklab, #bababa 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #b3ae60 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #cf8e6d 90%, var(--fg));
   --code-heading: color-mix(in oklab, #cf8e6d 90%, var(--fg));
 }
+[data-code-theme="github"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #6a737d 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #d73a49 88%, var(--fg));
+  --code-string: color-mix(in oklab, #032f62 88%, var(--fg));
+  --code-number: color-mix(in oklab, #005cc5 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #005cc5 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #6f42c1 88%, var(--fg));
+  --code-type: color-mix(in oklab, #6f42c1 88%, var(--fg));
+  --code-property: color-mix(in oklab, #005cc5 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #24292e 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #22863a 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #6f42c1 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #d73a49 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #22863a 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #005cc5 88%, var(--fg));
+}
+[data-code-theme="github"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #8b949e 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #f97583 90%, var(--fg));
+  --code-string: color-mix(in oklab, #9ecbff 90%, var(--fg));
+  --code-number: color-mix(in oklab, #79b8ff 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #79b8ff 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #b392f0 90%, var(--fg));
+  --code-type: color-mix(in oklab, #b392f0 90%, var(--fg));
+  --code-property: color-mix(in oklab, #79b8ff 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #e1e4e8 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #85e89d 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #b392f0 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #f97583 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #85e89d 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #79b8ff 90%, var(--fg));
+}
+[data-code-theme="vitesse"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #8e988e 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #1e754f 88%, var(--fg));
+  --code-string: color-mix(in oklab, #b56959 88%, var(--fg));
+  --code-number: color-mix(in oklab, #2f798a 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #a65e2b 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #59873a 88%, var(--fg));
+  --code-type: color-mix(in oklab, #2e8f82 88%, var(--fg));
+  --code-property: color-mix(in oklab, #998418 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #b05a78 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #1e754f 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #b07d48 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #ab5959 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #ab5e3f 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #1c6b48 88%, var(--fg));
+}
+[data-code-theme="vitesse"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #758575 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #4d9375 90%, var(--fg));
+  --code-string: color-mix(in oklab, #c98a7d 90%, var(--fg));
+  --code-number: color-mix(in oklab, #4c9a91 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #c99076 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #80a665 90%, var(--fg));
+  --code-type: color-mix(in oklab, #5da994 90%, var(--fg));
+  --code-property: color-mix(in oklab, #b8a965 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #db889a 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #4d9375 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #bd976a 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #cb7676 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #e6cc77 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #4d9375 90%, var(--fg));
+}
+[data-code-theme="one"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #a0a1a7 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #a626a4 88%, var(--fg));
+  --code-string: color-mix(in oklab, #50a14f 88%, var(--fg));
+  --code-number: color-mix(in oklab, #986801 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #986801 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #4078f2 88%, var(--fg));
+  --code-type: color-mix(in oklab, #c18401 88%, var(--fg));
+  --code-property: color-mix(in oklab, #e45649 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #c18401 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #e45649 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #986801 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #a626a4 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #0184bc 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #e45649 88%, var(--fg));
+}
+[data-code-theme="one"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #7f848e 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #c678dd 90%, var(--fg));
+  --code-string: color-mix(in oklab, #98c379 90%, var(--fg));
+  --code-number: color-mix(in oklab, #d19a66 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #e5c07b 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #61afef 90%, var(--fg));
+  --code-type: color-mix(in oklab, #e5c07b 90%, var(--fg));
+  --code-property: color-mix(in oklab, #e06c75 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #e5c07b 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #e06c75 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #d19a66 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #c678dd 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #56b6c2 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #e06c75 90%, var(--fg));
+}
+[data-code-theme="catppuccin"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #7c7f93 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #8839ef 88%, var(--fg));
+  --code-string: color-mix(in oklab, #40a02b 88%, var(--fg));
+  --code-number: color-mix(in oklab, #fe640b 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #d20f39 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #1e66f5 88%, var(--fg));
+  --code-type: color-mix(in oklab, #df8e1d 88%, var(--fg));
+  --code-property: color-mix(in oklab, #179299 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #df8e1d 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #1e66f5 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #df8e1d 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #fe640b 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #ea76cb 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #1e66f5 88%, var(--fg));
+}
+[data-code-theme="catppuccin"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #9399b2 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #cba6f7 90%, var(--fg));
+  --code-string: color-mix(in oklab, #a6e3a1 90%, var(--fg));
+  --code-number: color-mix(in oklab, #fab387 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #f38ba8 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #89b4fa 90%, var(--fg));
+  --code-type: color-mix(in oklab, #f9e2af 90%, var(--fg));
+  --code-property: color-mix(in oklab, #94e2d5 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #f9e2af 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #89b4fa 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #f9e2af 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #fab387 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #f5c2e7 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #89b4fa 90%, var(--fg));
+}
+[data-code-theme="solarized"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #93a1a1 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #859900 88%, var(--fg));
+  --code-string: color-mix(in oklab, #2aa198 88%, var(--fg));
+  --code-number: color-mix(in oklab, #d33682 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #b58900 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #268bd2 88%, var(--fg));
+  --code-type: color-mix(in oklab, #cb4b16 88%, var(--fg));
+  --code-property: color-mix(in oklab, #268bd2 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #cb4b16 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #268bd2 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #657b83 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #6c71c4 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #dc322f 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #268bd2 88%, var(--fg));
+}
+[data-code-theme="solarized"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #586e75 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #859900 90%, var(--fg));
+  --code-string: color-mix(in oklab, #2aa198 90%, var(--fg));
+  --code-number: color-mix(in oklab, #d33682 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #b58900 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #268bd2 90%, var(--fg));
+  --code-type: color-mix(in oklab, #cb4b16 90%, var(--fg));
+  --code-property: color-mix(in oklab, #268bd2 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #cb4b16 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #268bd2 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #93a1a1 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #6c71c4 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #dc322f 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #268bd2 90%, var(--fg));
+}
+[data-code-theme="rose-pine"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #9893a5 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #286983 88%, var(--fg));
+  --code-string: color-mix(in oklab, #c27b1f 88%, var(--fg));
+  --code-number: color-mix(in oklab, #d7827e 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #d7827e 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #b4637a 88%, var(--fg));
+  --code-type: color-mix(in oklab, #56949f 88%, var(--fg));
+  --code-property: color-mix(in oklab, #56949f 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #56949f 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #56949f 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #907aa9 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #907aa9 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #286983 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #56949f 88%, var(--fg));
+}
+[data-code-theme="rose-pine"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #6e6a86 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #31748f 90%, var(--fg));
+  --code-string: color-mix(in oklab, #f6c177 90%, var(--fg));
+  --code-number: color-mix(in oklab, #ebbcba 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #ebbcba 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #eb6f92 90%, var(--fg));
+  --code-type: color-mix(in oklab, #9ccfd8 90%, var(--fg));
+  --code-property: color-mix(in oklab, #9ccfd8 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #9ccfd8 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #9ccfd8 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #c4a7e7 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #c4a7e7 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #31748f 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #9ccfd8 90%, var(--fg));
+}
+[data-code-theme="everforest"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #939f91 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #f85552 88%, var(--fg));
+  --code-string: color-mix(in oklab, #c48900 88%, var(--fg));
+  --code-number: color-mix(in oklab, #df69ba 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #df69ba 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #8da101 88%, var(--fg));
+  --code-type: color-mix(in oklab, #3a94c5 88%, var(--fg));
+  --code-property: color-mix(in oklab, #5c6a72 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #35a77c 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #f57d26 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #c48900 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #35a77c 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #8da101 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #f85552 88%, var(--fg));
+}
+[data-code-theme="everforest"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #859289 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #e67e80 90%, var(--fg));
+  --code-string: color-mix(in oklab, #dbbc7f 90%, var(--fg));
+  --code-number: color-mix(in oklab, #d699b6 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #d699b6 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #a7c080 90%, var(--fg));
+  --code-type: color-mix(in oklab, #7fbbb3 90%, var(--fg));
+  --code-property: color-mix(in oklab, #d3c6aa 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #83c092 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #e69875 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #dbbc7f 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #83c092 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #a7c080 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #e67e80 90%, var(--fg));
+}
+[data-code-theme="monochrome"]:not(.dark) {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #8b949e 80%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #1f2328 88%, var(--fg));
+  --code-string: color-mix(in oklab, #57606a 88%, var(--fg));
+  --code-number: color-mix(in oklab, #4b5563 88%, var(--fg));
+  --code-constant: color-mix(in oklab, #374151 88%, var(--fg));
+  --code-declaration: color-mix(in oklab, #24292f 88%, var(--fg));
+  --code-type: color-mix(in oklab, #374151 88%, var(--fg));
+  --code-property: color-mix(in oklab, #4b5563 88%, var(--fg));
+  --code-namespace: color-mix(in oklab, #6e7781 88%, var(--fg));
+  --code-tag: color-mix(in oklab, #1f2328 88%, var(--fg));
+  --code-attribute: color-mix(in oklab, #57606a 88%, var(--fg));
+  --code-annotation: color-mix(in oklab, #6e7781 88%, var(--fg));
+  --code-escape: color-mix(in oklab, #4b5563 88%, var(--fg));
+  --code-heading: color-mix(in oklab, #1f2328 88%, var(--fg));
+}
+[data-code-theme="monochrome"].dark {
+  --code-comment-style: italic;
+  --code-comment: color-mix(in oklab, #6e7681 85%, var(--fg-3));
+  --code-keyword: color-mix(in oklab, #f0f6fc 90%, var(--fg));
+  --code-string: color-mix(in oklab, #b1bac4 90%, var(--fg));
+  --code-number: color-mix(in oklab, #c9d1d9 90%, var(--fg));
+  --code-constant: color-mix(in oklab, #d0d7de 90%, var(--fg));
+  --code-declaration: color-mix(in oklab, #e6edf3 90%, var(--fg));
+  --code-type: color-mix(in oklab, #d0d7de 90%, var(--fg));
+  --code-property: color-mix(in oklab, #c9d1d9 90%, var(--fg));
+  --code-namespace: color-mix(in oklab, #8b949e 90%, var(--fg));
+  --code-tag: color-mix(in oklab, #f0f6fc 90%, var(--fg));
+  --code-attribute: color-mix(in oklab, #b1bac4 90%, var(--fg));
+  --code-annotation: color-mix(in oklab, #8b949e 90%, var(--fg));
+  --code-escape: color-mix(in oklab, #c9d1d9 90%, var(--fg));
+  --code-heading: color-mix(in oklab, #f0f6fc 90%, var(--fg));
+}
+/* END GENERATED code-themes */
 
 .token.comment,
 .token.prolog,
 .token.doctype,
 .token.cdata {
   color: var(--code-comment);
-  font-style: italic;
+  font-style: var(--code-comment-style, italic);
 }
 .token.punctuation,
 .token.operator,
@@ -2670,22 +2950,27 @@ html.dark {
   color: var(--code-fg);
 }
 .token.namespace {
-  opacity: 0.8;
+  color: var(--code-namespace);
+  opacity: 0.85;
 }
 .token.tag,
 .token.selector {
   color: var(--code-tag);
 }
-.token.attr-name,
-.token.property {
+.token.attr-name {
   color: var(--code-attribute);
+}
+.token.property {
+  color: var(--code-property);
 }
 .token.annotation,
 .token.decorator {
   color: var(--code-annotation);
 }
 .token.boolean,
-.token.constant,
+.token.constant {
+  color: var(--code-constant);
+}
 .token.keyword,
 .token.atrule,
 .token.important,
@@ -2701,6 +2986,9 @@ html.dark {
 .token.regex,
 .token.inserted {
   color: var(--code-string);
+}
+.token.escape {
+  color: var(--code-escape);
 }
 .token.deleted {
   color: var(--danger);

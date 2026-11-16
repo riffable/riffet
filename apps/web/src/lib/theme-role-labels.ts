@@ -1,6 +1,6 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
-import { THEME_ANSI_KEYS, type ThemeRole } from '@contracts';
+import { THEME_ANSI_KEYS, type CodeThemeRole, type ThemeRole } from '@contracts';
 
 /**
  * How the editor presents the palette. The grouping and labels are presentation only; the role
@@ -109,6 +109,23 @@ export const THEME_ANSI_LABELS: Record<(typeof THEME_ANSI_KEYS)[number], string>
   brightMagenta: msg`亮品红`,
   brightCyan: msg`亮青`,
   brightWhite: msg`亮白`,
+});
+
+export const CODE_ROLE_LABELS: Record<CodeThemeRole, string> = translatedRecord({
+  comment: msg`注释`,
+  keyword: msg`关键字`,
+  string: msg`字符串`,
+  number: msg`数字`,
+  constant: msg`常量`,
+  declaration: msg`函数与声明`,
+  type: msg`类型`,
+  property: msg`成员属性`,
+  namespace: msg`命名空间`,
+  tag: msg({ message: '标签', context: 'code-syntax-role-tag' }),
+  attribute: msg`属性名`,
+  annotation: msg`注解`,
+  escape: msg`转义与插值`,
+  heading: msg({ message: '标题', context: 'code-syntax-role-heading' }),
 });
 
 /**

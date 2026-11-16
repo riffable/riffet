@@ -1810,3 +1810,421 @@ val RiffetRadius = RiffetRadii(
 
 /** The web easing curve closest to what the UI uses for structural motion. */
 const val RIFFET_EASE_OUT_SOFT = "cubic-bezier(0.2, 0.7, 0.2, 1)"
+
+/** Code syntax highlighting roles (docs/design/system/foundations.md §1.1). */
+@Immutable
+data class RiffetCodeColors(
+    val comment: Color,
+    val keyword: Color,
+    val string: Color,
+    val number: Color,
+    val constant: Color,
+    val declaration: Color,
+    val type: Color,
+    val property: Color,
+    val namespace: Color,
+    val tag: Color,
+    val attribute: Color,
+    val annotation: Color,
+    val escape: Color,
+    val heading: Color,
+    val commentItalic: Boolean = true,
+)
+
+val codeIntellijLight = RiffetCodeColors(
+    comment = Color(0xFF8C8C8C),
+    keyword = Color(0xFF0033B3),
+    string = Color(0xFF067D17),
+    number = Color(0xFF1750EB),
+    constant = Color(0xFF871094),
+    declaration = Color(0xFF00627A),
+    type = Color(0xFF2A2C2E),
+    property = Color(0xFF871094),
+    namespace = Color(0xFF2A2C2E),
+    tag = Color(0xFF0033B3),
+    attribute = Color(0xFF174AD4),
+    annotation = Color(0xFF9E880D),
+    escape = Color(0xFF0037A6),
+    heading = Color(0xFF0033B3),
+    commentItalic = true,
+)
+
+val codeIntellijDark = RiffetCodeColors(
+    comment = Color(0xFF7A7E85),
+    keyword = Color(0xFFCF8E6D),
+    string = Color(0xFF6AAB73),
+    number = Color(0xFF2AACB8),
+    constant = Color(0xFFC77DBB),
+    declaration = Color(0xFF56A8F5),
+    type = Color(0xFFD2D4D7),
+    property = Color(0xFFC77DBB),
+    namespace = Color(0xFFD2D4D7),
+    tag = Color(0xFFD5B778),
+    attribute = Color(0xFFBABABA),
+    annotation = Color(0xFFB3AE60),
+    escape = Color(0xFFCF8E6D),
+    heading = Color(0xFFCF8E6D),
+    commentItalic = true,
+)
+
+val codeGithubLight = RiffetCodeColors(
+    comment = Color(0xFF6A737D),
+    keyword = Color(0xFFD73A49),
+    string = Color(0xFF032F62),
+    number = Color(0xFF005CC5),
+    constant = Color(0xFF005CC5),
+    declaration = Color(0xFF6F42C1),
+    type = Color(0xFF6F42C1),
+    property = Color(0xFF005CC5),
+    namespace = Color(0xFF24292E),
+    tag = Color(0xFF22863A),
+    attribute = Color(0xFF6F42C1),
+    annotation = Color(0xFFD73A49),
+    escape = Color(0xFF22863A),
+    heading = Color(0xFF005CC5),
+    commentItalic = true,
+)
+
+val codeGithubDark = RiffetCodeColors(
+    comment = Color(0xFF8B949E),
+    keyword = Color(0xFFF97583),
+    string = Color(0xFF9ECBFF),
+    number = Color(0xFF79B8FF),
+    constant = Color(0xFF79B8FF),
+    declaration = Color(0xFFB392F0),
+    type = Color(0xFFB392F0),
+    property = Color(0xFF79B8FF),
+    namespace = Color(0xFFE1E4E8),
+    tag = Color(0xFF85E89D),
+    attribute = Color(0xFFB392F0),
+    annotation = Color(0xFFF97583),
+    escape = Color(0xFF85E89D),
+    heading = Color(0xFF79B8FF),
+    commentItalic = true,
+)
+
+val codeVitesseLight = RiffetCodeColors(
+    comment = Color(0xFF8E988E),
+    keyword = Color(0xFF1E754F),
+    string = Color(0xFFB56959),
+    number = Color(0xFF2F798A),
+    constant = Color(0xFFA65E2B),
+    declaration = Color(0xFF59873A),
+    type = Color(0xFF2E8F82),
+    property = Color(0xFF998418),
+    namespace = Color(0xFFB05A78),
+    tag = Color(0xFF1E754F),
+    attribute = Color(0xFFB07D48),
+    annotation = Color(0xFFAB5959),
+    escape = Color(0xFFAB5E3F),
+    heading = Color(0xFF1C6B48),
+    commentItalic = true,
+)
+
+val codeVitesseDark = RiffetCodeColors(
+    comment = Color(0xFF758575),
+    keyword = Color(0xFF4D9375),
+    string = Color(0xFFC98A7D),
+    number = Color(0xFF4C9A91),
+    constant = Color(0xFFC99076),
+    declaration = Color(0xFF80A665),
+    type = Color(0xFF5DA994),
+    property = Color(0xFFB8A965),
+    namespace = Color(0xFFDB889A),
+    tag = Color(0xFF4D9375),
+    attribute = Color(0xFFBD976A),
+    annotation = Color(0xFFCB7676),
+    escape = Color(0xFFE6CC77),
+    heading = Color(0xFF4D9375),
+    commentItalic = true,
+)
+
+val codeOneLight = RiffetCodeColors(
+    comment = Color(0xFFA0A1A7),
+    keyword = Color(0xFFA626A4),
+    string = Color(0xFF50A14F),
+    number = Color(0xFF986801),
+    constant = Color(0xFF986801),
+    declaration = Color(0xFF4078F2),
+    type = Color(0xFFC18401),
+    property = Color(0xFFE45649),
+    namespace = Color(0xFFC18401),
+    tag = Color(0xFFE45649),
+    attribute = Color(0xFF986801),
+    annotation = Color(0xFFA626A4),
+    escape = Color(0xFF0184BC),
+    heading = Color(0xFFE45649),
+    commentItalic = true,
+)
+
+val codeOneDark = RiffetCodeColors(
+    comment = Color(0xFF7F848E),
+    keyword = Color(0xFFC678DD),
+    string = Color(0xFF98C379),
+    number = Color(0xFFD19A66),
+    constant = Color(0xFFE5C07B),
+    declaration = Color(0xFF61AFEF),
+    type = Color(0xFFE5C07B),
+    property = Color(0xFFE06C75),
+    namespace = Color(0xFFE5C07B),
+    tag = Color(0xFFE06C75),
+    attribute = Color(0xFFD19A66),
+    annotation = Color(0xFFC678DD),
+    escape = Color(0xFF56B6C2),
+    heading = Color(0xFFE06C75),
+    commentItalic = true,
+)
+
+val codeCatppuccinLight = RiffetCodeColors(
+    comment = Color(0xFF7C7F93),
+    keyword = Color(0xFF8839EF),
+    string = Color(0xFF40A02B),
+    number = Color(0xFFFE640B),
+    constant = Color(0xFFD20F39),
+    declaration = Color(0xFF1E66F5),
+    type = Color(0xFFDF8E1D),
+    property = Color(0xFF179299),
+    namespace = Color(0xFFDF8E1D),
+    tag = Color(0xFF1E66F5),
+    attribute = Color(0xFFDF8E1D),
+    annotation = Color(0xFFFE640B),
+    escape = Color(0xFFEA76CB),
+    heading = Color(0xFF1E66F5),
+    commentItalic = true,
+)
+
+val codeCatppuccinDark = RiffetCodeColors(
+    comment = Color(0xFF9399B2),
+    keyword = Color(0xFFCBA6F7),
+    string = Color(0xFFA6E3A1),
+    number = Color(0xFFFAB387),
+    constant = Color(0xFFF38BA8),
+    declaration = Color(0xFF89B4FA),
+    type = Color(0xFFF9E2AF),
+    property = Color(0xFF94E2D5),
+    namespace = Color(0xFFF9E2AF),
+    tag = Color(0xFF89B4FA),
+    attribute = Color(0xFFF9E2AF),
+    annotation = Color(0xFFFAB387),
+    escape = Color(0xFFF5C2E7),
+    heading = Color(0xFF89B4FA),
+    commentItalic = true,
+)
+
+val codeSolarizedLight = RiffetCodeColors(
+    comment = Color(0xFF93A1A1),
+    keyword = Color(0xFF859900),
+    string = Color(0xFF2AA198),
+    number = Color(0xFFD33682),
+    constant = Color(0xFFB58900),
+    declaration = Color(0xFF268BD2),
+    type = Color(0xFFCB4B16),
+    property = Color(0xFF268BD2),
+    namespace = Color(0xFFCB4B16),
+    tag = Color(0xFF268BD2),
+    attribute = Color(0xFF657B83),
+    annotation = Color(0xFF6C71C4),
+    escape = Color(0xFFDC322F),
+    heading = Color(0xFF268BD2),
+    commentItalic = true,
+)
+
+val codeSolarizedDark = RiffetCodeColors(
+    comment = Color(0xFF586E75),
+    keyword = Color(0xFF859900),
+    string = Color(0xFF2AA198),
+    number = Color(0xFFD33682),
+    constant = Color(0xFFB58900),
+    declaration = Color(0xFF268BD2),
+    type = Color(0xFFCB4B16),
+    property = Color(0xFF268BD2),
+    namespace = Color(0xFFCB4B16),
+    tag = Color(0xFF268BD2),
+    attribute = Color(0xFF93A1A1),
+    annotation = Color(0xFF6C71C4),
+    escape = Color(0xFFDC322F),
+    heading = Color(0xFF268BD2),
+    commentItalic = true,
+)
+
+val codeRosePineLight = RiffetCodeColors(
+    comment = Color(0xFF9893A5),
+    keyword = Color(0xFF286983),
+    string = Color(0xFFC27B1F),
+    number = Color(0xFFD7827E),
+    constant = Color(0xFFD7827E),
+    declaration = Color(0xFFB4637A),
+    type = Color(0xFF56949F),
+    property = Color(0xFF56949F),
+    namespace = Color(0xFF56949F),
+    tag = Color(0xFF56949F),
+    attribute = Color(0xFF907AA9),
+    annotation = Color(0xFF907AA9),
+    escape = Color(0xFF286983),
+    heading = Color(0xFF56949F),
+    commentItalic = true,
+)
+
+val codeRosePineDark = RiffetCodeColors(
+    comment = Color(0xFF6E6A86),
+    keyword = Color(0xFF31748F),
+    string = Color(0xFFF6C177),
+    number = Color(0xFFEBBCBA),
+    constant = Color(0xFFEBBCBA),
+    declaration = Color(0xFFEB6F92),
+    type = Color(0xFF9CCFD8),
+    property = Color(0xFF9CCFD8),
+    namespace = Color(0xFF9CCFD8),
+    tag = Color(0xFF9CCFD8),
+    attribute = Color(0xFFC4A7E7),
+    annotation = Color(0xFFC4A7E7),
+    escape = Color(0xFF31748F),
+    heading = Color(0xFF9CCFD8),
+    commentItalic = true,
+)
+
+val codeEverforestLight = RiffetCodeColors(
+    comment = Color(0xFF939F91),
+    keyword = Color(0xFFF85552),
+    string = Color(0xFFC48900),
+    number = Color(0xFFDF69BA),
+    constant = Color(0xFFDF69BA),
+    declaration = Color(0xFF8DA101),
+    type = Color(0xFF3A94C5),
+    property = Color(0xFF5C6A72),
+    namespace = Color(0xFF35A77C),
+    tag = Color(0xFFF57D26),
+    attribute = Color(0xFFC48900),
+    annotation = Color(0xFF35A77C),
+    escape = Color(0xFF8DA101),
+    heading = Color(0xFFF85552),
+    commentItalic = true,
+)
+
+val codeEverforestDark = RiffetCodeColors(
+    comment = Color(0xFF859289),
+    keyword = Color(0xFFE67E80),
+    string = Color(0xFFDBBC7F),
+    number = Color(0xFFD699B6),
+    constant = Color(0xFFD699B6),
+    declaration = Color(0xFFA7C080),
+    type = Color(0xFF7FBBB3),
+    property = Color(0xFFD3C6AA),
+    namespace = Color(0xFF83C092),
+    tag = Color(0xFFE69875),
+    attribute = Color(0xFFDBBC7F),
+    annotation = Color(0xFF83C092),
+    escape = Color(0xFFA7C080),
+    heading = Color(0xFFE67E80),
+    commentItalic = true,
+)
+
+val codeMonochromeLight = RiffetCodeColors(
+    comment = Color(0xFF8B949E),
+    keyword = Color(0xFF1F2328),
+    string = Color(0xFF57606A),
+    number = Color(0xFF4B5563),
+    constant = Color(0xFF374151),
+    declaration = Color(0xFF24292F),
+    type = Color(0xFF374151),
+    property = Color(0xFF4B5563),
+    namespace = Color(0xFF6E7781),
+    tag = Color(0xFF1F2328),
+    attribute = Color(0xFF57606A),
+    annotation = Color(0xFF6E7781),
+    escape = Color(0xFF4B5563),
+    heading = Color(0xFF1F2328),
+    commentItalic = true,
+)
+
+val codeMonochromeDark = RiffetCodeColors(
+    comment = Color(0xFF6E7681),
+    keyword = Color(0xFFF0F6FC),
+    string = Color(0xFFB1BAC4),
+    number = Color(0xFFC9D1D9),
+    constant = Color(0xFFD0D7DE),
+    declaration = Color(0xFFE6EDF3),
+    type = Color(0xFFD0D7DE),
+    property = Color(0xFFC9D1D9),
+    namespace = Color(0xFF8B949E),
+    tag = Color(0xFFF0F6FC),
+    attribute = Color(0xFFB1BAC4),
+    annotation = Color(0xFF8B949E),
+    escape = Color(0xFFC9D1D9),
+    heading = Color(0xFFF0F6FC),
+    commentItalic = true,
+)
+
+@Immutable
+data class RiffetCodeTheme(
+    val id: String,
+    val name: String,
+    val light: RiffetCodeColors,
+    val dark: RiffetCodeColors,
+)
+
+val RiffetCodeThemes: List<RiffetCodeTheme> = listOf(
+    RiffetCodeTheme("intellij", "IntelliJ", codeIntellijLight, codeIntellijDark),
+    RiffetCodeTheme("github", "GitHub", codeGithubLight, codeGithubDark),
+    RiffetCodeTheme("vitesse", "Vitesse", codeVitesseLight, codeVitesseDark),
+    RiffetCodeTheme("one", "One", codeOneLight, codeOneDark),
+    RiffetCodeTheme("catppuccin", "Catppuccin", codeCatppuccinLight, codeCatppuccinDark),
+    RiffetCodeTheme("solarized", "Solarized", codeSolarizedLight, codeSolarizedDark),
+    RiffetCodeTheme("rose-pine", "Rosé Pine", codeRosePineLight, codeRosePineDark),
+    RiffetCodeTheme("everforest", "Everforest", codeEverforestLight, codeEverforestDark),
+    RiffetCodeTheme("monochrome", "Monochrome", codeMonochromeLight, codeMonochromeDark),
+)
+
+val RiffetDefaultCodeTheme: RiffetCodeTheme = RiffetCodeThemes.first { it.id == "intellij" }
+
+private val UI_THEME_DEFAULT_CODE_THEME: Map<String, String> = mapOf(
+    "solarized" to "solarized",
+    "catppuccin" to "catppuccin",
+    "rose-pine" to "rose-pine",
+    "everforest" to "everforest",
+    "pencil" to "monochrome",
+)
+
+fun resolveCodeThemeId(selection: String?, uiThemeId: String? = null): String {
+    if (selection != null && RiffetCodeThemes.any { it.id == selection }) return selection
+    return uiThemeId?.let { UI_THEME_DEFAULT_CODE_THEME[it] } ?: "intellij"
+}
+
+fun riffetCodeTheme(selection: String?, uiThemeId: String? = null): RiffetCodeTheme {
+    val id = resolveCodeThemeId(selection, uiThemeId)
+    return RiffetCodeThemes.firstOrNull { it.id == id } ?: RiffetDefaultCodeTheme
+}
+
+fun riffetCodeColors(roles: Map<String, String>, commentItalic: Boolean = true): RiffetCodeColors? {
+    val comment = RiffetColorParsing.parse(roles["comment"]) ?: return null
+    val keyword = RiffetColorParsing.parse(roles["keyword"]) ?: return null
+    val string = RiffetColorParsing.parse(roles["string"]) ?: return null
+    val number = RiffetColorParsing.parse(roles["number"]) ?: return null
+    val constant = RiffetColorParsing.parse(roles["constant"]) ?: return null
+    val declaration = RiffetColorParsing.parse(roles["declaration"]) ?: return null
+    val type = RiffetColorParsing.parse(roles["type"]) ?: return null
+    val property = RiffetColorParsing.parse(roles["property"]) ?: return null
+    val namespace = RiffetColorParsing.parse(roles["namespace"]) ?: return null
+    val tag = RiffetColorParsing.parse(roles["tag"]) ?: return null
+    val attribute = RiffetColorParsing.parse(roles["attribute"]) ?: return null
+    val annotation = RiffetColorParsing.parse(roles["annotation"]) ?: return null
+    val escape = RiffetColorParsing.parse(roles["escape"]) ?: return null
+    val heading = RiffetColorParsing.parse(roles["heading"]) ?: return null
+    return RiffetCodeColors(
+        comment = comment,
+        keyword = keyword,
+        string = string,
+        number = number,
+        constant = constant,
+        declaration = declaration,
+        type = type,
+        property = property,
+        namespace = namespace,
+        tag = tag,
+        attribute = attribute,
+        annotation = annotation,
+        escape = escape,
+        heading = heading,
+        commentItalic = commentItalic,
+    )
+}

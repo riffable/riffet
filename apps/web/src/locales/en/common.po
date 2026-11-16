@@ -147,6 +147,10 @@ msgstr "The saved message conflicts with the current state and can't be retried"
 msgid "全部时间"
 msgstr "All time"
 
+#: src/lib/theme-role-labels.ts
+msgid "关键字"
+msgstr "Keyword"
+
 #: src/components/ui/dialog.tsx
 msgid "关闭"
 msgstr "Close"
@@ -158,6 +162,10 @@ msgstr "Dismiss notification"
 #: src/lib/extensions.ts
 msgid "内置"
 msgstr "Built-in"
+
+#: src/lib/theme-role-labels.ts
+msgid "函数与声明"
+msgstr "Function & declaration"
 
 #: src/lib/shares.ts
 msgid "分享服务暂不可用"
@@ -253,6 +261,10 @@ msgstr "Thu"
 msgid "周日"
 msgstr "Sun"
 
+#: src/lib/theme-role-labels.ts
+msgid "命名空间"
+msgstr "Namespace"
+
 #: src/lib/app-icon.ts
 #: src/lib/theme-role-labels.ts
 msgid "品红"
@@ -315,6 +327,10 @@ msgstr "Failed"
 msgid "奶油纸底与墨绿黑，为长时间阅读设计。"
 msgstr "Cream paper with deep green-black ink, made for long reading sessions."
 
+#: src/lib/theme-role-labels.ts
+msgid "字符串"
+msgstr "String"
+
 #: src/lib/stats-format.ts
 msgctxt "common-status-completed"
 msgid "完成"
@@ -323,6 +339,10 @@ msgstr "Completed"
 #: src/lib/api.ts
 msgid "导出失败"
 msgstr "Export failed"
+
+#: src/lib/theme-role-labels.ts
+msgid "属性名"
+msgstr "Attribute"
 
 #: src/lib/theme-role-labels.ts
 msgid "工具提示"
@@ -335,6 +355,10 @@ msgstr "Copied"
 #: src/components/ui/feedback-notice.tsx
 msgid "已恢复"
 msgstr "Recovered"
+
+#: src/lib/theme-role-labels.ts
+msgid "常量"
+msgstr "Constant"
 
 #: src/lib/theme-role-labels.ts
 msgid "弱化背景"
@@ -416,6 +440,10 @@ msgstr "Success tint"
 msgid "成功率"
 msgstr "Success rate"
 
+#: src/lib/theme-role-labels.ts
+msgid "成员属性"
+msgstr "Property"
+
 #: src/components/PairingQrScanner.tsx
 msgid "扫描配对二维码"
 msgstr "Scan pairing QR code"
@@ -449,6 +477,10 @@ msgstr "Discard changes"
 #: src/lib/dialogs.ts
 msgid "放弃未保存的修改？"
 msgstr "Discard unsaved changes?"
+
+#: src/lib/theme-role-labels.ts
+msgid "数字"
+msgstr "Number"
 
 #: src/lib/files.ts
 msgid "文件夹太大，无法打包下载（上限 2 万个文件或 2 GiB）"
@@ -530,6 +562,16 @@ msgstr "No pairing QR code found"
 msgid "柔和的低对比紫调，适合暗光环境。"
 msgstr "Soft, low-contrast purple for low light."
 
+#: src/lib/theme-role-labels.ts
+msgctxt "code-syntax-role-tag"
+msgid "标签"
+msgstr "Tag"
+
+#: src/lib/theme-role-labels.ts
+msgctxt "code-syntax-role-heading"
+msgid "标题"
+msgstr "Heading"
+
 #: src/lib/app-icon.ts
 msgid "橙色"
 msgstr "Orange"
@@ -566,6 +608,14 @@ msgstr "Body text / Page"
 #: src/lib/theme-role-labels.ts
 msgid "气泡背景"
 msgstr "Bubble background"
+
+#: src/lib/theme-role-labels.ts
+msgid "注解"
+msgstr "Annotation"
+
+#: src/lib/theme-role-labels.ts
+msgid "注释"
+msgstr "Comment"
 
 #: src/lib/stats-series.ts
 msgid "活跃天数"
@@ -616,6 +666,10 @@ msgstr "Graphite"
 #: src/components/ui/overlays.tsx
 msgid "确定"
 msgstr "Confirm"
+
+#: src/lib/theme-role-labels.ts
+msgid "类型"
+msgstr "Type"
 
 #: src/lib/app-icon.ts
 msgid "粉色"
@@ -697,6 +751,10 @@ msgstr "Warning / Page"
 #: src/lib/theme-role-labels.ts
 msgid "警告浅底"
 msgstr "Warning tint"
+
+#: src/lib/theme-role-labels.ts
+msgid "转义与插值"
+msgstr "Escape & interpolation"
 
 #: src/lib/stats-series.ts
 msgid "轮次"

@@ -147,6 +147,10 @@ msgstr "保存的消息存在冲突，无法重试"
 msgid "全部时间"
 msgstr "全部时间"
 
+#: src/lib/theme-role-labels.ts
+msgid "关键字"
+msgstr "关键字"
+
 #: src/components/ui/dialog.tsx
 msgid "关闭"
 msgstr "关闭"
@@ -158,6 +162,10 @@ msgstr "关闭通知"
 #: src/lib/extensions.ts
 msgid "内置"
 msgstr "内置"
+
+#: src/lib/theme-role-labels.ts
+msgid "函数与声明"
+msgstr "函数与声明"
 
 #: src/lib/shares.ts
 msgid "分享服务暂不可用"
@@ -253,6 +261,10 @@ msgstr "周四"
 msgid "周日"
 msgstr "周日"
 
+#: src/lib/theme-role-labels.ts
+msgid "命名空间"
+msgstr "命名空间"
+
 #: src/lib/app-icon.ts
 #: src/lib/theme-role-labels.ts
 msgid "品红"
@@ -315,6 +327,10 @@ msgstr "失败"
 msgid "奶油纸底与墨绿黑，为长时间阅读设计。"
 msgstr "奶油纸底与墨绿黑，为长时间阅读设计。"
 
+#: src/lib/theme-role-labels.ts
+msgid "字符串"
+msgstr "字符串"
+
 #: src/lib/stats-format.ts
 msgctxt "common-status-completed"
 msgid "完成"
@@ -323,6 +339,10 @@ msgstr "完成"
 #: src/lib/api.ts
 msgid "导出失败"
 msgstr "导出失败"
+
+#: src/lib/theme-role-labels.ts
+msgid "属性名"
+msgstr "属性名"
 
 #: src/lib/theme-role-labels.ts
 msgid "工具提示"
@@ -335,6 +355,10 @@ msgstr "已复制"
 #: src/components/ui/feedback-notice.tsx
 msgid "已恢复"
 msgstr "已恢复"
+
+#: src/lib/theme-role-labels.ts
+msgid "常量"
+msgstr "常量"
 
 #: src/lib/theme-role-labels.ts
 msgid "弱化背景"
@@ -416,6 +440,10 @@ msgstr "成功浅底"
 msgid "成功率"
 msgstr "成功率"
 
+#: src/lib/theme-role-labels.ts
+msgid "成员属性"
+msgstr "成员属性"
+
 #: src/components/PairingQrScanner.tsx
 msgid "扫描配对二维码"
 msgstr "扫描配对二维码"
@@ -449,6 +477,10 @@ msgstr "放弃修改"
 #: src/lib/dialogs.ts
 msgid "放弃未保存的修改？"
 msgstr "放弃未保存的修改？"
+
+#: src/lib/theme-role-labels.ts
+msgid "数字"
+msgstr "数字"
 
 #: src/lib/files.ts
 msgid "文件夹太大，无法打包下载（上限 2 万个文件或 2 GiB）"
@@ -530,6 +562,16 @@ msgstr "未识别到配对二维码"
 msgid "柔和的低对比紫调，适合暗光环境。"
 msgstr "柔和的低对比紫调，适合暗光环境。"
 
+#: src/lib/theme-role-labels.ts
+msgctxt "code-syntax-role-tag"
+msgid "标签"
+msgstr "标签"
+
+#: src/lib/theme-role-labels.ts
+msgctxt "code-syntax-role-heading"
+msgid "标题"
+msgstr "标题"
+
 #: src/lib/app-icon.ts
 msgid "橙色"
 msgstr "橙色"
@@ -566,6 +608,14 @@ msgstr "正文 / 页面"
 #: src/lib/theme-role-labels.ts
 msgid "气泡背景"
 msgstr "气泡背景"
+
+#: src/lib/theme-role-labels.ts
+msgid "注解"
+msgstr "注解"
+
+#: src/lib/theme-role-labels.ts
+msgid "注释"
+msgstr "注释"
 
 #: src/lib/stats-series.ts
 msgid "活跃天数"
@@ -616,6 +666,10 @@ msgstr "石墨"
 #: src/components/ui/overlays.tsx
 msgid "确定"
 msgstr "确定"
+
+#: src/lib/theme-role-labels.ts
+msgid "类型"
+msgstr "类型"
 
 #: src/lib/app-icon.ts
 msgid "粉色"
@@ -697,6 +751,10 @@ msgstr "警告 / 页面"
 #: src/lib/theme-role-labels.ts
 msgid "警告浅底"
 msgstr "警告浅底"
+
+#: src/lib/theme-role-labels.ts
+msgid "转义与插值"
+msgstr "转义与插值"
 
 #: src/lib/stats-series.ts
 msgid "轮次"

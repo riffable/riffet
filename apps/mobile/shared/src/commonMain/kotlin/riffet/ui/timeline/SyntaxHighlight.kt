@@ -1,12 +1,13 @@
 package riffet.ui.timeline
 
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
+import riffet.theme.RiffetCodeColors
 import riffet.theme.RiffetColors
+import riffet.theme.RiffetDefaultCodeTheme
 
 /*
  * Syntax colouring for code blocks and the file preview.
@@ -153,25 +154,33 @@ internal fun languageForPath(path: String): String? {
 
 internal fun isHighlightable(language: String?): Boolean = language != null && language.lowercase() in syntaxes
 
-private class Palette(private val colors: RiffetColors) {
-    // Hues pulled 38% toward the grey scale, as the Mac and web scales do: a semantic colour at
-    // full strength (a warning-orange `true`) reads as UI status inside code, not as syntax.
-    fun muted(color: Color): Color = lerp(color, colors.fg3, 0.38f)
-
-    val comment = SpanStyle(color = colors.fg3, fontStyle = FontStyle.Italic)
+private class Palette(colors: RiffetColors, code: RiffetCodeColors) {
+    val comment = SpanStyle(
+        color = code.comment,
+        fontStyle = if (code.commentItalic) FontStyle.Italic else FontStyle.Normal,
+    )
     val punctuation = SpanStyle(color = colors.fg3)
-    val keyword = SpanStyle(color = muted(colors.accent))
-    val function = SpanStyle(color = muted(colors.accentHover))
-    val string = SpanStyle(color = muted(colors.success))
-    val number = SpanStyle(color = muted(colors.warning))
-    val tag = SpanStyle(color = muted(colors.danger))
+    val keyword = SpanStyle(color = code.keyword)
+    val function = SpanStyle(color = code.declaration)
+    val string = SpanStyle(color = code.string)
+    val number = SpanStyle(color = code.number)
+    val constant = SpanStyle(color = code.constant)
+    val tag = SpanStyle(color = code.tag)
+    val attribute = SpanStyle(color = code.attribute)
+    val property = SpanStyle(color = code.property)
+    val annotation = SpanStyle(color = code.annotation)
 }
 
 /** [code] with colour spans for [language]; plain text when the language is unknown. */
-internal fun highlightCode(code: String, language: String?, colors: RiffetColors): AnnotatedString {
+internal fun highlightCode(
+    code: String,
+    language: String?,
+    colors: RiffetColors,
+    codeColors: RiffetCodeColors = RiffetDefaultCodeTheme.light,
+): AnnotatedString {
     val syntax = language?.lowercase()?.let { syntaxes[it] } ?: return AnnotatedString(code)
     if (code.length > MAX_HIGHLIGHT_CHARS) return AnnotatedString(code)
-    val palette = Palette(colors)
+    val palette = Palette(colors, codeColors)
     return buildAnnotatedString {
         append(code)
         SyntaxScanner(code, syntax, palette) { style, start, end -> addStyle(style, start, end) }.run()
@@ -204,7 +213,7 @@ private class SyntaxScanner(
                 }
                 ch == '"' || ch == '\'' || (ch == '`' && syntax.backtickStrings) -> {
                     string(ch)
-                    val style = if (syntax.family == Family.JSON && followedByColon()) palette.tag else palette.string
+                    val style = if (syntax.family == Family.JSON && followedByColon()) palette.attribute else palette.string
                     emit(style, start, i)
                 }
                 ch.isDigit() && (start == 0 || !isIdentifierPart(text[start - 1])) -> {
@@ -307,10 +316,11 @@ private class SyntaxScanner(
         while (i < text.length && isIdentifierPart(text[i])) i++
         val word = text.substring(start, i)
         val style = when {
-            syntax.family == Family.YAML && followedByColon() -> palette.tag
-            syntax.family == Family.CSS && followedByColon() -> palette.tag
+            word.startsWith("@") -> palette.annotation
+            syntax.family == Family.YAML && followedByColon() -> palette.attribute
+            syntax.family == Family.CSS && followedByColon() -> palette.property
             word in syntax.keywords -> palette.keyword
-            word in constants -> palette.number
+            word in constants -> palette.constant
             i < text.length && text[i] == '(' && syntax.family != Family.YAML -> palette.function
             else -> null
         }
@@ -351,7 +361,7 @@ private class SyntaxScanner(
                 isIdentifierStart(c) -> {
                     i++
                     while (i < text.length && (isIdentifierPart(text[i]) || text[i] == ':' || text[i] == '-' || text[i] == '.')) i++
-                    emit(palette.function, at, i)
+                    emit(palette.attribute, at, i)
                 }
                 else -> i++
             }

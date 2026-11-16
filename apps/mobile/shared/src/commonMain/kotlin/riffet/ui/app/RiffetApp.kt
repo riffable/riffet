@@ -398,7 +398,9 @@ fun RiffetApp(
     RiffetTheme(darkTheme = darkTheme, entry = appearanceResources?.palette ?: currentTheme, interfaceStyle = display.interfaceStyle, amoled = display.amoled,
         surfaceMaterial = display.surfaceMaterial, materialStrength = display.materialStrength,
         pageAnimation = display.pageAnimation,
-        uiFont = appearanceResources?.uiFont, monoFont = appearanceResources?.monoFont) {
+        uiFont = appearanceResources?.uiFont, monoFont = appearanceResources?.monoFont,
+        codeThemeId = display.codeTheme,
+        customCodeThemes = themes.filter { it.syntax != null }) {
         val density = LocalDensity.current
         val focusCoordinator = remember(store) { FocusCoordinator() }
         // Keep confirmation drafts across page navigation and session switches, scoped to the server.

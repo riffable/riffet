@@ -134,6 +134,7 @@ struct SettingsView: View {
         var appearance = [
             SettingsEntry(title: String(localized: "主题", bundle: .riffet), icon: "paintpalette", value: themeStore.entry.name, kind: .link { AnyView(ThemeSettingsView()) }),
             SettingsEntry(title: String(localized: "显示模式", bundle: .riffet), icon: "circle.lefthalf.filled", value: displayModeName, kind: .link { AnyView(DisplayModeSettingsView()) }),
+            SettingsEntry(title: String(localized: "代码高亮", bundle: .riffet), icon: "chevron.left.forwardslash.chevron.right", value: codeThemeName, kind: .link { AnyView(CodeThemeSettingsView()) }),
         ]
         if UIApplication.shared.supportsAlternateIcons {
             appearance.append(SettingsEntry(title: String(localized: "应用图标", bundle: .riffet), icon: "app", value: AppIconVariant.current.name, kind: .link { AnyView(AppIconSetting()) }))
@@ -174,6 +175,13 @@ struct SettingsView: View {
         case "dark": String(localized: "深色", bundle: .riffet)
         default: String(localized: "跟随系统", bundle: .riffet)
         }
+    }
+
+    private var codeThemeName: String {
+        if themeStore.codeThemeId == "auto" {
+            return String(localized: "跟随界面主题", bundle: .riffet)
+        }
+        return CodeThemeSettingsView.displayName(for: themeStore.codeTheme)
     }
 
     private var defaultAgentName: String? {

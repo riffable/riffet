@@ -58,6 +58,16 @@ struct CachedThemeSeed: Codable, Sendable, Equatable {
     var softness: Double
 }
 
+struct CachedThemeSyntaxHalf: Codable, Sendable, Equatable {
+    var colors: [String: String]
+    var commentItalic: Bool?
+}
+
+struct CachedThemeSyntax: Codable, Sendable, Equatable {
+    var light: CachedThemeSyntaxHalf
+    var dark: CachedThemeSyntaxHalf
+}
+
 /// One theme as stored on disk. Mirrors the wire keys (`description`, not `summary`) so the file
 /// and the API document stay recognisably the same shape.
 struct CachedCustomTheme: Codable, Sendable {
@@ -67,21 +77,23 @@ struct CachedCustomTheme: Codable, Sendable {
     var palette: CachedThemePalette
     var ansi: CachedThemeAnsi
     var design: CachedThemeDesign? = nil
+    var syntax: CachedThemeSyntax? = nil
     /// The editor canvas behind the palette. Kept so a save from here does not drop it for the web.
     var seed: CachedThemeSeed? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, palette, ansi, design, seed
+        case id, name, palette, ansi, design, syntax, seed
         case summary = "description"
     }
 
-    init(id: String, name: String, summary: String?, palette: CachedThemePalette, ansi: CachedThemeAnsi, design: CachedThemeDesign? = nil, seed: CachedThemeSeed? = nil) {
+    init(id: String, name: String, summary: String?, palette: CachedThemePalette, ansi: CachedThemeAnsi, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
         self.palette = palette
         self.ansi = ansi
         self.design = design
+        self.syntax = syntax
         self.seed = seed
     }
 
@@ -96,6 +108,12 @@ struct CachedCustomTheme: Codable, Sendable {
         ansi = CachedThemeAnsi(light: theme.ansi.light, dark: theme.ansi.dark)
         if let value = theme.design {
             design = try? JSONDecoder().decode(CachedThemeDesign.self, from: Data(ThemeDesignCodec.shared.encode(value: value).utf8))
+        }
+        syntax = theme.syntax.map { value in
+            CachedThemeSyntax(
+                light: CachedThemeSyntaxHalf(colors: value.light.colors, commentItalic: value.light.commentItalic),
+                dark: CachedThemeSyntaxHalf(colors: value.dark.colors, commentItalic: value.dark.commentItalic)
+            )
         }
         seed = theme.seed.map { value in
             CachedThemeSeed(points: value.points.map { .init(hue: $0.hue, radius: $0.radius) }, softness: value.softness)
@@ -115,6 +133,12 @@ struct CachedCustomTheme: Codable, Sendable {
                 guard let bytes = try? JSONEncoder().encode(value), let text = String(data: bytes, encoding: .utf8) else { return nil }
                 return try? ThemeDesignCodec.shared.decode(text: text)
             },
+            syntax: syntax.map { value in
+                ThemeSyntax(
+                    light: ThemeSyntaxHalf(colors: value.light.colors, commentItalic: value.light.commentItalic ?? true),
+                    dark: ThemeSyntaxHalf(colors: value.dark.colors, commentItalic: value.dark.commentItalic ?? true)
+                )
+            },
             seed: seed.map { value in
                 ThemeSeed(points: value.points.map { ThemeSeedPoint(hue: $0.hue, radius: $0.radius) }, softness: value.softness)
             }
@@ -128,12 +152,19 @@ struct CachedCustomTheme: Codable, Sendable {
               let dark = RiffetPaletteValues(roleValues: palette.dark),
               let ansi = RiffetAnsiValues(light: ansi.light, dark: ansi.dark)
         else { return nil }
+        let syntaxEntry: RiffetCodeThemeValues? = syntax.flatMap { value in
+            guard let lightSyntax = RiffetCodePaletteValues(roleValues: value.light.colors, commentItalic: value.light.commentItalic ?? true),
+                  let darkSyntax = RiffetCodePaletteValues(roleValues: value.dark.colors, commentItalic: value.dark.commentItalic ?? true)
+            else { return nil }
+            return RiffetCodeThemeValues(id: id, name: name.isEmpty ? id : name, light: lightSyntax, dark: darkSyntax)
+        }
         return ThemeEntry(
             id: id,
             name: name.isEmpty ? id : name,
             summary: summary ?? String(localized: "自定义主题"),
             values: RiffetThemeValues(id: id, light: light, dark: dark, ansi: ansi),
-            revision: revision
+            revision: revision,
+            syntax: syntaxEntry
         )
     }
 }

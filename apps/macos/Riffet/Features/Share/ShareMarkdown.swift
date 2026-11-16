@@ -324,14 +324,14 @@ private struct BlockView: View {
             var piece = AttributedString(run.text)
             piece.font = Font(font)
             switch run.token {
-            case .keyword?, .tag?: piece.foregroundColor = colors.keyword
-            case .string?: piece.foregroundColor = colors.string
-            case .constant?: piece.foregroundColor = colors.number
+            case .keyword?, .tag?, .heading?: piece.foregroundColor = colors.keyword
+            case .string?, .escape?: piece.foregroundColor = colors.string
+            case .constant?, .number?, .annotation?: piece.foregroundColor = colors.number
             case .comment?:
                 piece.foregroundColor = colors.comment
                 piece.font = italic
-            case .function?: piece.foregroundColor = colors.function
-            case .punctuation?, .variable?: piece.foregroundColor = colors.punctuation
+            case .declaration?, .type?, .property?, .attribute?: piece.foregroundColor = colors.function
+            case .punctuation?, .namespace?: piece.foregroundColor = colors.punctuation
             case nil: piece.foregroundColor = colors.ink2
             }
             result += piece

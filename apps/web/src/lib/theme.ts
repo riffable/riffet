@@ -14,13 +14,14 @@
 
 import { applyThemeAppearance, readShareAppearance } from './theme-palette';
 import { useSyncExternalStore } from 'react';
-import type { ThemeAnsi } from '@contracts';
+import { isCustomCodeThemeId, isKnownCodeThemeId, resolveCodeThemeId, type ThemeAnsi } from '@contracts';
 import { activePluginPalette, releasePluginPalette, subscribeAppearance, syncAppearance } from './appearance';
+import { getDisplaySettings, subscribeDisplaySettings } from './display-settings';
 import { createStore, useStore } from './store';
 import { readStored, writeStored } from './utils';
 import { DEFAULT_THEME_ID, canonicalThemeId, isKnownTheme, parseThemeMode, type ResolvedMode, type ThemeMode } from './themes';
 import {
-  ensureCustomThemeCss, isCustomThemeId, subscribeThemeLibrary, syncThemeLibrary, themeLibrarySynced, themeOption, themeRevision,
+  customTheme, ensureCustomThemeCss, isCustomThemeId, subscribeThemeLibrary, syncThemeLibrary, themeLibrarySynced, themeOption, themeRevision,
 } from './theme-library';
 
 /** Re-exported so call sites keep importing the mode vocabulary from the runtime module. */
@@ -57,6 +58,17 @@ function resolveMode(mode: ThemeMode): ResolvedMode {
 const initialMode = readMode();
 const store = createStore<{ mode: ThemeMode; themeId: string; resolved: ResolvedMode }>({ mode: initialMode, themeId: readThemeId(), resolved: resolveMode(initialMode) });
 
+function resolveActiveCodeTheme(selection: string, activeUiId: string, plugin?: { key: string; hasSyntax?: boolean }): string {
+  if (isKnownCodeThemeId(selection)) return selection;
+  if (isCustomCodeThemeId(selection)) {
+    const picked = customTheme(selection);
+    if (picked?.syntax) return selection;
+  }
+  if (plugin?.hasSyntax) return plugin.key;
+  if (!plugin && isCustomThemeId(activeUiId) && customTheme(activeUiId)?.syntax) return activeUiId;
+  return resolveCodeThemeId('auto', plugin ? undefined : activeUiId);
+}
+
 /**
  * Everything a theme change has to touch, in one place. The browser chrome colour is read back from
  * the applied `--bg` instead of being a hard-coded pair, so a new theme gets a matching toolbar
@@ -67,8 +79,11 @@ function apply(): void {
   ensureCustomThemeCss();
   const { mode, themeId } = store.get();
   const resolved = resolveMode(mode);
+  const plugin = activePluginPalette();
+  const activeUiId = plugin?.key ?? (isCustomThemeId(themeId) && !themeOption(themeId) ? DEFAULT_THEME_ID : themeId);
+  const codeThemeId = resolveActiveCodeTheme(getDisplaySettings().codeTheme, activeUiId, plugin);
   // A plugin palette in effect is painted over the chosen theme; the stored choice stays beneath it.
-  applyThemeAppearance(activePluginPalette()?.key ?? (isCustomThemeId(themeId) && !themeOption(themeId) ? DEFAULT_THEME_ID : themeId), resolved);
+  applyThemeAppearance(activeUiId, resolved, codeThemeId);
   store.set({ resolved });
 }
 
@@ -104,6 +119,7 @@ media.addEventListener('change', onSystemChange);
 window.addEventListener('storage', onStorageChange);
 const unsubscribeLibrary = subscribeThemeLibrary(onLibraryChange);
 const unsubscribeAppearance = subscribeAppearance(apply);
+const unsubscribeDisplay = subscribeDisplaySettings(apply);
 apply();
 // The cache already painted; this is only the background refresh that may add or remove themes.
 // It never blocks a frame and a failure leaves the cached palette in place.
@@ -114,6 +130,7 @@ import.meta.hot?.dispose(() => {
   window.removeEventListener('storage', onStorageChange);
   unsubscribeLibrary();
   unsubscribeAppearance();
+  unsubscribeDisplay();
 });
 
 export function setThemeMode(next: ThemeMode): void {

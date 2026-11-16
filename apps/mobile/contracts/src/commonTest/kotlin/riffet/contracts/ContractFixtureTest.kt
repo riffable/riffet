@@ -88,6 +88,19 @@ class ContractFixtureTest {
         invalid.forEach { payload -> assertFails { json.decodeFromString(ThemeDesignSerializer, payload) } }
     }
 
+    @Test
+    fun optionalThemeSyntaxRoundTripsAndLegacyThemesOmitIt() {
+        val legacy = CustomTheme("custom-test-theme-1", "Test", palette = ThemePalette(emptyMap(), emptyMap()), ansi = ThemeAnsi(emptyList(), emptyList()))
+        val wire = json.encodeToString(CustomTheme.serializer(), legacy)
+        assertTrue("syntax" !in wire)
+        val half = ThemeSyntaxHalf(
+            colors = mapOf("comment" to "#8c8c8c", "keyword" to "#0033b3"),
+            commentItalic = false,
+        )
+        val withSyntax = legacy.copy(syntax = ThemeSyntax(light = half, dark = half.copy(commentItalic = true)))
+        assertEquals(withSyntax, json.decodeFromString(CustomTheme.serializer(), json.encodeToString(CustomTheme.serializer(), withSyntax)))
+    }
+
     @Suppress("UNCHECKED_CAST")
     private fun serializerFor(name: String): KSerializer<Any>? = when (name.substringBefore('#').substringBefore('~')) {
         "ShareDraftRequest" -> ShareDraftRequest.serializer()

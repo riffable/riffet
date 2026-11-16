@@ -479,7 +479,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
     /// What the style is made of besides appearance; reading it inside the tracking registers it.
     private static func styleSignature() -> String {
         let preferences = DisplayPreferences.shared
-        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.toolRun.rawValue),\(preferences.style.block.rawValue),\(preferences.style.window.rawValue),\(preferences.style.inlineCode.rawValue),\(preferences.style.ink.rawValue),\(preferences.style.text.readingLine)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
+        return "\(ThemeStore.shared.entry.id)|\(ThemeStore.shared.revision)|\(preferences.codeTheme)|\(ThemeStore.shared.codeThemeRevision)|\(AppearanceStore.shared.fonts.key)|\(preferences.textScale)|\(preferences.density)|\(preferences.contentWidth)|\(preferences.style.radii.control),\(preferences.style.radii.container),\(preferences.style.radii.floating),\(preferences.style.radii.card),\(preferences.style.toolRun.rawValue),\(preferences.style.block.rawValue),\(preferences.style.window.rawValue),\(preferences.style.inlineCode.rawValue),\(preferences.style.ink.rawValue),\(preferences.style.text.readingLine)|\(preferences.style.fonts.ui),\(preferences.style.fonts.mono)|\(IconPack.shared.effective)"
     }
 
     /// The style changed (appearance, theme, text size, column width): every row lays out again.
@@ -618,7 +618,9 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
 
     private func restyleIfNeeded() {
         let preferences = DisplayPreferences.shared
-        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.toolRun != style.toolRun || preferences.style.inlineCode != style.inlineCode || preferences.style.text.readingLine != style.bodyLineHeight || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
+        let resolvedCodeTheme = ThemeStore.shared.codeTheme
+        let resolvedCodeRevision = ThemeStore.shared.codeThemeRevision
+        if preferences.textScale != style.scale || preferences.contentWidth != style.column || preferences.density != style.density || ThemeStore.shared.entry.id != style.palette.values.id || ThemeStore.shared.revision != style.palette.revision || resolvedCodeTheme.id != style.codeTheme.id || resolvedCodeRevision != style.codeThemeRevision || AppearanceStore.shared.fonts != style.fonts || preferences.style.radii != style.radii || preferences.style.toolRun != style.toolRun || preferences.style.inlineCode != style.inlineCode || preferences.style.text.readingLine != style.bodyLineHeight || preferences.style.fonts != style.styleFonts || IconPack.shared.effective != style.iconPack {
             style = TranscriptStyle.current(dark: style.dark)
             applyChromeStyle()
         }

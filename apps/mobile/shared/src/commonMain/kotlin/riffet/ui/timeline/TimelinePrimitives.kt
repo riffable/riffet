@@ -342,12 +342,13 @@ internal fun CodeBlock(
     modifier: Modifier = Modifier,
 ) {
     val colors = TimelineTheme.colors
+    val codeColors = TimelineTheme.codeColors
     val style = textStyle ?: TimelineTheme.type.codeBlock
     val shape = if (rounded) RoundedCornerShape(LocalInterfaceStyle.current.controlRadius) else RectangleShape
-    val body = remember(text, prefix, language, colors) {
+    val body = remember(text, prefix, language, colors, codeColors) {
         buildAnnotatedString {
             if (prefix != null) withStyle(SpanStyle(color = colors.fg4)) { append(prefix) }
-            append(if (isHighlightable(language)) highlightCode(text, language, colors) else AnnotatedString(text))
+            append(if (isHighlightable(language)) highlightCode(text, language, colors, codeColors) else AnnotatedString(text))
         }
     }
     Box(
@@ -454,13 +455,14 @@ private const val CODE_PIECE_LINES = 24
 @Composable
 private fun CodeLines(code: String, language: String?, style: TextStyle, color: Color, modifier: Modifier) {
     val colors = TimelineTheme.colors
+    val codeColors = TimelineTheme.codeColors
     val split = remember(code) { completePiecesEnd(code) }
     val head = if (split < 0) "" else code.substring(0, split)
     val tail = if (split < 0) code else code.substring(split + 1)
-    val pieces = remember(head, language, colors) {
-        if (head.isEmpty()) emptyList() else splitPieces(highlightCode(head, language, colors))
+    val pieces = remember(head, language, colors, codeColors) {
+        if (head.isEmpty()) emptyList() else splitPieces(highlightCode(head, language, colors, codeColors))
     }
-    val last = remember(tail, language, colors) { highlightCode(tail, language, colors) }
+    val last = remember(tail, language, colors, codeColors) { highlightCode(tail, language, colors, codeColors) }
     val count = pieces.size + 1
     Column(modifier) {
         pieces.forEachIndexed { index, piece ->

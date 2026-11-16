@@ -13,9 +13,9 @@ final class CodeHighlighter: @unchecked Sendable {
         let token: Token?
     }
 
-    /// The web's token groups (`index.css`, "Syntax highlighting"), each one palette color.
+    /// The shared 14 syntax roles (plus punctuation), matching the web's `--code-*` palette.
     enum Token: Sendable {
-        case comment, punctuation, tag, constant, string, keyword, function, variable
+        case comment, punctuation, keyword, string, number, constant, declaration, type, property, namespace, tag, attribute, annotation, escape, heading
     }
 
     /// Larger sources stay plain: tokenizing them costs more than the colors are worth.
@@ -122,12 +122,21 @@ final class CodeHighlighter: @unchecked Sendable {
             switch name {
             case "comment", "prolog", "doctype", "cdata": return .comment
             case "punctuation": return .punctuation
-            case "property", "tag", "selector", "attr-name", "builtin", "symbol", "deleted": return .tag
-            case "boolean", "number", "constant", "important", "regex": return .constant
-            case "string", "char", "attr-value", "inserted": return .string
-            case "keyword", "atrule", "title": return .keyword
-            case "function", "class-name": return .function
-            case "operator", "entity", "url", "variable": return .variable
+            case "tag", "selector": return .tag
+            case "attr-name": return .attribute
+            case "property": return .property
+            case "annotation", "decorator": return .annotation
+            case "boolean", "constant": return .constant
+            case "number": return .number
+            case "keyword", "atrule", "important", "builtin": return .keyword
+            case "string", "char", "attr-value", "regex", "inserted": return .string
+            case "escape": return .escape
+            case "function": return .declaration
+            case "title": return .heading
+            case "class-name", "symbol": return .type
+            case "namespace": return .namespace
+            case "deleted": return .tag
+            case "operator", "entity", "url", "variable": return nil
             default: continue
             }
         }

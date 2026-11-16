@@ -13,7 +13,9 @@ import riffet.cache.createLocalFiles
 import riffet.contracts.*
 import riffet.shared.*
 import riffet.theme.riffetAnsi
+import riffet.theme.riffetCodeColors
 import riffet.theme.riffetColors
+import riffet.theme.RiffetCodeTheme
 
 /** Device-local contribution choices. Null inherits the preset; "default" explicitly opts out. */
 @Serializable
@@ -140,10 +142,15 @@ fun rememberAppearanceResources(api: RiffetApi, scopeKey: String): AppearanceRes
         val contribution = requireNotNull(resolved.palette)
         val bytes = appearanceResourceBytes(api, scopeKey, contribution.asset, 512 * 1024L)
         val custom = RiffetJson.instance.decodeFromString(CustomTheme.serializer(), bytes.decodeToString())
+        val syntaxEntry = custom.syntax?.let { s ->
+            val lightSyntax = riffetCodeColors(s.light.colors, s.light.commentItalic)
+            val darkSyntax = riffetCodeColors(s.dark.colors, s.dark.commentItalic)
+            if (lightSyntax != null && darkSyntax != null) RiffetCodeTheme("plugin-" + contribution.asset.sha256.take(16), localizedAppearanceTitle(contribution.title), lightSyntax, darkSyntax) else null
+        }
         ThemeEntry("plugin-" + contribution.asset.sha256.take(16), localizedAppearanceTitle(contribution.title), "",
             requireNotNull(riffetColors(custom.palette.light)), requireNotNull(riffetColors(custom.palette.dark)),
             requireNotNull(riffetAnsi(custom.ansi.light)), requireNotNull(riffetAnsi(custom.ansi.dark)),
-            contribution.asset.sha256, custom.design)
+            contribution.asset.sha256, custom.design, syntaxEntry)
     }
     AppearanceResourceEffect(state, AppearanceSlot.UI_FONT, resolved.uiFont?.let { it.role to it.files }, update = { state.uiFont = it }) {
         loadAppearanceFont(api, scopeKey, requireNotNull(resolved.uiFont))

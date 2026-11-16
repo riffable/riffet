@@ -3,6 +3,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { IconArrowLeft, IconArrowRight, IconChevronDown } from '@/components/icons';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Segmented, UnderlineTabs } from '@/components/ui/controls';
+import { useDisplaySettings } from '@/lib/display-settings';
 import { setThemeMode, useTheme, type ThemeMode } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { PageScaffold } from '../PageScaffold';
@@ -133,7 +134,8 @@ export const DesignPage = memo(function DesignPage({ sidebarCollapsed, onClose, 
 }) {
   const { t } = useLingui();
   const theme = useTheme();
-  const paint = `${theme.themeId}:${theme.resolved}:${theme.revision}:${theme.paletteKey ?? ''}`;
+  const { codeTheme } = useDisplaySettings();
+  const paint = `${theme.themeId}:${theme.resolved}:${theme.revision}:${theme.paletteKey ?? ''}:${codeTheme}`;
   const scroller = useRef<HTMLDivElement>(null);
   const { nav } = useStores();
   const platform = useNav((state) => state.designPlatform);

@@ -1,6 +1,21 @@
 {
   "sourceLanguage" : "zh-Hans",
   "strings" : {
+    "代码高亮" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Code highlighting" } }
+      }
+    },
+    "极简墨色" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Monochrome" } }
+      }
+    },
+    "跟随界面主题" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Follow theme" } }
+      }
+    },
     "查找" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Find" } }

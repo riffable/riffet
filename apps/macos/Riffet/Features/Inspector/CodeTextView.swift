@@ -70,7 +70,10 @@ struct CodeTextView: NSViewRepresentable {
         }
         ruler.fontSize = fontSize
         let styleFonts = DisplayPreferences.shared.style.fonts
-        let key = "\(language ?? "")|\(fontSize)|\(palette.values.id)|\(palette.revision)|\(AppearanceFonts.current.key)|\(styleFonts)"
+        let codeTheme = ThemeStore.shared.codeTheme
+        let codeRevision = ThemeStore.shared.codeThemeRevision
+        let commentItalic = (scroll.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? codeTheme.dark : codeTheme.light).commentItalic
+        let key = "\(language ?? "")|\(fontSize)|\(palette.values.id)|\(palette.revision)|\(codeTheme.id)|\(codeRevision)|\(commentItalic)|\(AppearanceFonts.current.key)|\(styleFonts)"
         if coordinator.applied != key || coordinator.appliedText != text {
             coordinator.applied = key
             coordinator.appliedText = text
@@ -81,14 +84,14 @@ struct CodeTextView: NSViewRepresentable {
             coordinator.build?.cancel()
             coordinator.build = Task { @MainActor in
                 let cached = language.flatMap { CodeHighlighter.shared.cached(text, language: $0) }
-                let first = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: cached, palette: palette, fontSize: fontSize, styleFonts: styleFonts) }.value
+                let first = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: cached, palette: palette, codeTheme: codeTheme, codeRevision: codeRevision, commentItalic: commentItalic, fontSize: fontSize, styleFonts: styleFonts) }.value
                 guard !Task.isCancelled, coordinator.applied == key, coordinator.appliedText == text else { return }
                 textView.textStorage?.setAttributedString(first.text)
                 ruler.reset(text: text, starts: first.starts)
                 if let target = coordinator.pendingTarget { coordinator.pendingTarget = nil; coordinator.jump(to: target, palette: palette) }
                 guard let language, cached == nil, text.utf16.count <= CodeHighlighter.maxLength,
                       let runs = await CodeHighlighter.shared.runs(text, language: language), !Task.isCancelled, coordinator.applied == key, coordinator.appliedText == text else { return }
-                let colored = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: runs, palette: palette, fontSize: fontSize, styleFonts: styleFonts, starts: first.starts) }.value
+                let colored = await Task.detached(priority: .userInitiated) { Self.prepare(text, runs: runs, palette: palette, codeTheme: codeTheme, codeRevision: codeRevision, commentItalic: commentItalic, fontSize: fontSize, styleFonts: styleFonts, starts: first.starts) }.value
                 guard !Task.isCancelled, coordinator.applied == key, coordinator.appliedText == text else { return }
                 textView.textStorage?.setAttributedString(colored.text)
             }
@@ -104,7 +107,7 @@ struct CodeTextView: NSViewRepresentable {
     }
 
     /// The styled text and where each line starts, built on any thread.
-    nonisolated static func prepare(_ text: String, runs: [CodeHighlighter.Run]?, palette: Palette, fontSize: CGFloat, styleFonts: StyleSpec.Fonts, starts known: [Int]? = nil) -> (text: NSAttributedString, starts: [Int]) {
+    nonisolated static func prepare(_ text: String, runs: [CodeHighlighter.Run]?, palette: Palette, codeTheme: RiffetCodeThemeValues = RiffetCodeThemeCatalog.all[0], codeRevision: String = "builtin", commentItalic: Bool = true, fontSize: CGFloat, styleFonts: StyleSpec.Fonts, starts known: [Int]? = nil) -> (text: NSAttributedString, starts: [Int]) {
         let font = RiffetFace.nsFont(size: fontSize, mono: true, plugin: AppearanceFonts.current, style: styleFonts) ?? NSFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
         let italic = font.riffetItalic
         let paragraph = NSMutableParagraphStyle()
@@ -117,14 +120,23 @@ struct CodeTextView: NSViewRepresentable {
             for run in runs {
                 var attributes = base
                 switch run.token {
-                case .comment: attributes[.foregroundColor] = palette.nsColor(\.fg3); attributes[.font] = italic
+                case .comment:
+                    attributes[.foregroundColor] = palette.codeNSColor(\.comment, codeTheme: codeTheme, codeRevision: codeRevision)
+                    if commentItalic { attributes[.font] = italic }
                 case .punctuation: attributes[.foregroundColor] = palette.nsColor(\.fg3)
-                case .tag: attributes[.foregroundColor] = palette.nsColor(\.danger)
-                case .constant: attributes[.foregroundColor] = palette.nsColor(\.warning)
-                case .string: attributes[.foregroundColor] = palette.nsColor(\.success)
-                case .keyword: attributes[.foregroundColor] = palette.nsColor(\.accent)
-                case .function: attributes[.foregroundColor] = palette.nsColor(\.accentHover)
-                case .variable: attributes[.foregroundColor] = palette.nsColor(\.fg2)
+                case .keyword: attributes[.foregroundColor] = palette.codeNSColor(\.keyword, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .string: attributes[.foregroundColor] = palette.codeNSColor(\.string, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .number: attributes[.foregroundColor] = palette.codeNSColor(\.number, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .constant: attributes[.foregroundColor] = palette.codeNSColor(\.constant, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .declaration: attributes[.foregroundColor] = palette.codeNSColor(\.declaration, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .type: attributes[.foregroundColor] = palette.codeNSColor(\.type, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .property: attributes[.foregroundColor] = palette.codeNSColor(\.property, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .namespace: attributes[.foregroundColor] = palette.codeNSColor(\.namespace, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .tag: attributes[.foregroundColor] = palette.codeNSColor(\.tag, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .attribute: attributes[.foregroundColor] = palette.codeNSColor(\.attribute, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .annotation: attributes[.foregroundColor] = palette.codeNSColor(\.annotation, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .escape: attributes[.foregroundColor] = palette.codeNSColor(\.escape, codeTheme: codeTheme, codeRevision: codeRevision)
+                case .heading: attributes[.foregroundColor] = palette.codeNSColor(\.heading, codeTheme: codeTheme, codeRevision: codeRevision)
                 case nil: break
                 }
                 value.append(NSAttributedString(string: run.text, attributes: attributes))

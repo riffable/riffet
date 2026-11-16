@@ -27,6 +27,19 @@ data class ThemeAnsi(
     val dark: List<String>,
 )
 
+/** Sixteen syntax colors per mode, mirroring `CustomCodeSyntax` in `packages/contracts/src/code-theme.ts`. */
+@Serializable
+data class ThemeSyntaxHalf(
+    val colors: Map<String, String>,
+    val commentItalic: Boolean = true,
+)
+
+@Serializable
+data class ThemeSyntax(
+    val light: ThemeSyntaxHalf,
+    val dark: ThemeSyntaxHalf,
+)
+
 @Serializable
 data class CustomTheme(
     /** `custom-` followed by 8–64 lowercase letters, digits or dashes. */
@@ -36,6 +49,8 @@ data class CustomTheme(
     val palette: ThemePalette,
     val ansi: ThemeAnsi,
     val design: ThemeDesign? = null,
+    /** Optional code syntax highlighting colors; absence follows the UI theme or `auto`. */
+    val syntax: ThemeSyntax? = null,
     /** The editor canvas the palette was drawn from; clients paint [palette] and never derive from it. */
     val seed: ThemeSeed? = null,
 )

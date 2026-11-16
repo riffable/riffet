@@ -6,9 +6,12 @@ import riffet.contracts.CustomTheme
 import riffet.contracts.ThemeLibrary
 import riffet.shared.ThemeId
 import riffet.theme.RiffetAnsi
+import riffet.theme.RiffetCodeColors
+import riffet.theme.RiffetCodeTheme
 import riffet.theme.RiffetColors
 import riffet.theme.RiffetThemes
 import riffet.theme.riffetAnsi
+import riffet.theme.riffetCodeColors
 import riffet.theme.riffetColors
 
 /**
@@ -31,6 +34,7 @@ data class ThemeEntry(
     val ansiDark: RiffetAnsi,
     val revision: String,
     val design: ThemeDesign? = null,
+    val syntax: RiffetCodeTheme? = null,
 )
 
 /** The built-ins, in the picker's order. [ThemeId] supplies the names and order; the colours are
@@ -70,6 +74,11 @@ private fun CustomTheme.toEntry(revision: String): ThemeEntry? {
     if (!CustomThemeId.matches(id)) return null
     val name = name.trim()
     if (name.isEmpty() || name.length > 60) return null
+    val syntaxEntry = syntax?.let { s ->
+        val lightSyntax = riffetCodeColors(s.light.colors, s.light.commentItalic)
+        val darkSyntax = riffetCodeColors(s.dark.colors, s.dark.commentItalic)
+        if (lightSyntax != null && darkSyntax != null) RiffetCodeTheme(id, name, lightSyntax, darkSyntax) else null
+    }
     return ThemeEntry(
         id = id,
         name = name,
@@ -80,5 +89,6 @@ private fun CustomTheme.toEntry(revision: String): ThemeEntry? {
         ansiDark = riffetAnsi(ansi.dark) ?: return null,
         revision = revision,
         design = design,
+        syntax = syntaxEntry,
     )
 }

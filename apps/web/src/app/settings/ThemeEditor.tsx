@@ -1,24 +1,26 @@
-import { useEffect, useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
-  contrastRatio, normalizeThemeColor, normalizeThemeSeed, parseColor, THEME_ANSI_KEYS, THEME_ROLES, validateCustomThemes,
-  type CustomTheme, type ThemeDesign, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeValidationIssue,
+  CODE_THEME_ROLES, contrastRatio, importCodeThemeJson, normalizeThemeColor, normalizeThemeSeed, parseColor, resolveCodeThemeId, THEME_ANSI_KEYS, THEME_ROLES, validateCustomThemes,
+  type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf, type CustomTheme, type ThemeDesign, type ThemePalette, type ThemeRole, type ThemeSeed, type ThemeValidationIssue,
 } from '@contracts';
 import { BrandMark } from '@/components/BrandMark';
 import { IconArrowUp, IconCalendarClock, IconFolderOpen, IconPlus, IconSearch, IconSquarePen } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/controls';
+import { Input, Select, Switch, Textarea } from '@/components/ui/controls';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Notice } from '@/components/ui/notice';
 import { HttpError } from '@/lib/api';
 import { pluginPaletteColors } from '@/lib/appearance';
+import { BUILTIN_CODE_THEMES, codeThemeDefinition } from '@/lib/code-themes.generated';
 import { confirmDialog, useDiscardGuard } from '@/lib/dialogs';
+import { cachedHighlight, highlightCode } from '@/lib/highlight';
 import { setThemeId, useTheme } from '@/lib/theme';
 import { customThemeCss, currentThemeLibrary, saveThemeLibrary, syncThemeLibrary } from '@/lib/theme-library';
 import { DEFAULT_THEME_ID } from '@/lib/themes';
-import { THEME_ANSI_LABELS, THEME_CONTRAST_CHECKS, THEME_ROLE_GROUPS, THEME_ROLE_LABELS } from '@/lib/theme-role-labels';
+import { CODE_ROLE_LABELS, THEME_ANSI_LABELS, THEME_CONTRAST_CHECKS, THEME_ROLE_GROUPS, THEME_ROLE_LABELS } from '@/lib/theme-role-labels';
 import { applySeed, inferSeed } from '@/lib/theme-seed';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
@@ -37,12 +39,16 @@ interface Draft {
   ansi: { light: string[]; dark: string[] };
   /** Preserve design overrides while this editor changes palette fields. */
   design?: ThemeDesign;
+  /** Optional custom code syntax highlighting colors for light and dark modes. */
+  syntax?: CustomCodeSyntax;
   /** Set once the canvas has drawn this palette; absent for a copy nobody has drawn yet. */
   seed?: ThemeSeed;
 }
 
 /** What the editor opens on: a new theme drawn from a palette, or an existing custom theme. */
-export type ThemeEditorTarget = { from: string } | { edit: string };
+export type ThemeEditorTarget =
+  | { from: string; openSyntax?: boolean; syntaxFrom?: string }
+  | { edit: string; openSyntax?: boolean; syntaxFrom?: string };
 
 /**
  * The custom-theme editor, opened from the palette gallery.
@@ -72,6 +78,7 @@ export function ThemeEditor({ open, target, onOpenChange }: { open: boolean; tar
   const [issues, setIssues] = useState<ThemeValidationIssue[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState<{ base: CustomTheme[]; revision?: string } | null>(null);
+  const openSyntax = Boolean(target.openSyntax);
 
   // Every opening starts a fresh draft from its target, in the mode the page is showing.
   useEffect(() => {
@@ -82,8 +89,12 @@ export function ThemeEditor({ open, target, onOpenChange }: { open: boolean; tar
     setSaving(false);
     setMode(resolved);
     const next = 'edit' in target ? editDraft(target.edit) : newDraft(target.from, t`我的主题`);
-    setDraft(next);
-    setPristine(next);
+    const syntaxSeed = target.syntaxFrom ?? resolveCodeThemeId('auto', 'from' in target ? target.from : target.edit);
+    const withSyntax = next && openSyntax && !next.syntax
+      ? { ...next, syntax: syntaxFromPreset(syntaxSeed) }
+      : next;
+    setDraft(withSyntax);
+    setPristine(withSyntax);
     if (!next) setError(t`这套主题已经被其他设备删除，请重新加载主题库。`);
     // `resolved` is read once per opening; following it would reset the tab mid-edit.
   }, [open, target]);
@@ -212,6 +223,7 @@ export function ThemeEditor({ open, target, onOpenChange }: { open: boolean; tar
                 draft={draft}
                 mode={mode}
                 issues={issues}
+                openSyntax={openSyntax}
                 onChange={setDraft}
                 onMode={setMode}
               />
@@ -231,10 +243,11 @@ export function ThemeEditor({ open, target, onOpenChange }: { open: boolean; tar
   );
 }
 
-function ThemeForm({ draft, mode, issues, onChange, onMode }: {
+function ThemeForm({ draft, mode, issues, openSyntax, onChange, onMode }: {
   draft: Draft;
   mode: Mode;
   issues: ThemeValidationIssue[];
+  openSyntax?: boolean;
   onChange: (draft: Draft) => void;
   onMode: (mode: Mode) => void;
 }) {
@@ -301,7 +314,7 @@ function ThemeForm({ draft, mode, issues, onChange, onMode }: {
         <Preview draft={draft} mode={mode} />
       </div>
 
-      <details>
+      <details open={openSyntax || undefined}>
         <summary className="cursor-pointer text-xs font-medium text-fg-2"><Trans>逐项调整</Trans></summary>
         <div className="mt-3 flex flex-col gap-4">
           <span className="text-2xs text-fg-4"><Trans>颜色支持 #rrggbb 与 #rrggbbaa</Trans></span>
@@ -321,6 +334,14 @@ function ThemeForm({ draft, mode, issues, onChange, onMode }: {
               </div>
             </section>
           ))}
+
+          <SyntaxSection
+            draft={draft}
+            mode={mode}
+            defaultOpen={openSyntax}
+            onChange={onChange}
+            onMode={onMode}
+          />
 
           <details className="rounded-lg border border-line px-3 py-2">
             <summary className="cursor-pointer text-xs font-medium text-fg-2"><Trans>终端颜色（16 色）</Trans></summary>
@@ -360,6 +381,203 @@ function ThemeForm({ draft, mode, issues, onChange, onMode }: {
         </div>
       </details>
     </div>
+  );
+}
+
+const SYNTAX_PREVIEW_SNIPPET = `// Syntax preview
+@tagged("api")
+async function loadConfig(limit = 42): Promise<Config> {
+  const mode = true;
+  return { name: "riffet", count: limit };
+}`;
+
+function syntaxFromPreset(id: string): CustomCodeSyntax {
+  const preset = codeThemeDefinition(resolveCodeThemeId(id));
+  return {
+    light: { colors: { ...preset.light.colors }, commentItalic: preset.light.commentItalic ?? true },
+    dark: { colors: { ...preset.dark.colors }, commentItalic: preset.dark.commentItalic ?? true },
+  };
+}
+
+function SyntaxSection({ draft, mode, defaultOpen, onChange, onMode }: {
+  draft: Draft;
+  mode: Mode;
+  defaultOpen?: boolean;
+  onChange: (draft: Draft) => void;
+  onMode: (mode: Mode) => void;
+}) {
+  const { t } = useLingui();
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importError, setImportError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [previewHtml, setPreviewHtml] = useState<string | undefined>(() => cachedHighlight(SYNTAX_PREVIEW_SNIPPET, 'typescript'));
+
+  useEffect(() => {
+    let active = true;
+    if (previewHtml === undefined) {
+      void highlightCode(SYNTAX_PREVIEW_SNIPPET, 'typescript').then((html) => {
+        if (active && html !== undefined) setPreviewHtml(html);
+      });
+    }
+    return () => { active = false; };
+  }, [previewHtml]);
+
+  const syntax = draft.syntax;
+  const half = syntax?.[mode];
+  const previewCss = useMemo(() => (syntax ? customThemeCss([previewTheme(draft)]) : ''), [draft, syntax]);
+
+  const enableSyntax = (presetId = DEFAULT_THEME_ID) => {
+    onChange({ ...draft, syntax: syntaxFromPreset(presetId) });
+  };
+
+  const setSyntaxColor = (role: CodeThemeRole, value: string) => {
+    if (!syntax) return;
+    onChange({
+      ...draft,
+      syntax: {
+        ...syntax,
+        [mode]: {
+          ...syntax[mode],
+          colors: { ...syntax[mode].colors, [role]: value },
+        },
+      },
+    });
+  };
+
+  const setCommentItalic = (commentItalic: boolean) => {
+    if (!syntax) return;
+    onChange({
+      ...draft,
+      syntax: { ...syntax, [mode]: { ...syntax[mode], commentItalic } },
+    });
+  };
+
+  const applyImport = (raw: string) => {
+    const result = importCodeThemeJson(raw);
+    if (!result.ok) {
+      setImportError(result.reason === 'invalid-json' ? t`JSON 格式无法解析` : t`未找到可用的 VS Code 语法配色字段`);
+      return;
+    }
+    setImportError(null);
+    if (result.value.syntax) {
+      onChange({ ...draft, syntax: result.value.syntax });
+      setImportOpen(false);
+      setImportText('');
+      toast.success(t`已导入深浅两套代码高亮配色`);
+      return;
+    }
+    if (result.value.half) {
+      const targetMode = result.value.mode ?? mode;
+      const base = syntax ?? syntaxFromPreset(DEFAULT_THEME_ID);
+      onChange({
+        ...draft,
+        syntax: { ...base, [targetMode]: result.value.half },
+      });
+      if (result.value.mode && result.value.mode !== mode) onMode(result.value.mode);
+      setImportOpen(false);
+      setImportText('');
+      toast.success(targetMode === 'light' ? t`已导入浅色代码高亮配色` : t`已导入深色代码高亮配色`);
+    }
+  };
+
+  const onFilePick = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setImportText(text);
+      applyImport(text);
+    } catch {
+      setImportError(t`无法读取所选文件`);
+    }
+  };
+
+  return (
+    <details open={defaultOpen || undefined} className="rounded-lg border border-line px-3 py-2">
+      <summary className="cursor-pointer text-xs font-medium text-fg-2"><Trans>代码高亮（14 色）</Trans></summary>
+      <div className="mt-3 flex flex-col gap-3">
+        {!syntax ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="xs" onClick={() => enableSyntax()}><Trans>自定义代码高亮</Trans></Button>
+            <Button size="xs" variant="ghost" onClick={() => setImportOpen((value) => !value)}><Trans>导入 VS Code 主题…</Trans></Button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <Select<string>
+              label={t`套用预设`}
+              value=""
+              placeholder={t`套用预设…`}
+              className="h-7 w-40 text-xs"
+              onChange={(id) => enableSyntax(id)}
+              options={BUILTIN_CODE_THEMES.map((item) => ({
+                value: item.id,
+                label: item.id === 'monochrome' ? t`极简墨色` : item.name,
+              }))}
+            />
+            <Button size="xs" onClick={() => setImportOpen((value) => !value)}><Trans>导入 VS Code 主题…</Trans></Button>
+            <Button size="xs" variant="ghost" className="ml-auto" onClick={() => onChange({ ...draft, syntax: undefined })}><Trans>恢复跟随主题</Trans></Button>
+          </div>
+        )}
+
+        {importOpen && (
+          <div className="flex flex-col gap-2 rounded-lg border border-line bg-subtle p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-2xs text-fg-3"><Trans>粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。</Trans></span>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".json,.jsonc,application/json"
+                className="sr-only"
+                onChange={(event) => { void onFilePick(event.target.files?.[0]); event.target.value = ''; }}
+              />
+              <Button size="xs" onClick={() => fileRef.current?.click()}><Trans>选择文件…</Trans></Button>
+            </div>
+            <Textarea
+              rows={4}
+              value={importText}
+              onChange={(event) => { setImportText(event.target.value); if (importError) setImportError(null); }}
+              placeholder={t`粘贴 VS Code 主题 JSON（含 tokenColors）…`}
+              aria-label={t`VS Code 主题 JSON`}
+              className="font-mono text-xs"
+            />
+            {importError && <p role="alert" className="text-xs text-danger">{importError}</p>}
+            <div className="flex justify-end gap-2">
+              <Button size="xs" variant="ghost" onClick={() => { setImportOpen(false); setImportError(null); }}><Trans context="settings-cancel-action">取消</Trans></Button>
+              <Button size="xs" variant="primary" disabled={!importText.trim()} onClick={() => applyImport(importText)}><Trans>应用导入</Trans></Button>
+            </div>
+          </div>
+        )}
+
+        {syntax && half && (
+          <>
+            <div
+              data-theme={`preview-${draft.id}`}
+              data-code-theme={`preview-${draft.id}`}
+              className={cn('rounded-lg bg-subtle px-3 py-2.5 font-mono text-xs leading-5 text-fg', mode === 'dark' && 'dark')}
+            >
+              <style>{previewCss}</style>
+              <pre className="overflow-x-auto">
+                {previewHtml ? <code dangerouslySetInnerHTML={{ __html: previewHtml }} /> : <code>{SYNTAX_PREVIEW_SNIPPET}</code>}
+              </pre>
+            </div>
+            <label className="flex items-center justify-between gap-2 py-0.5 text-xs text-fg-2">
+              <span><Trans>注释斜体</Trans></span>
+              <Switch checked={half.commentItalic ?? true} onCheckedChange={setCommentItalic} aria-label={t`注释斜体`} />
+            </label>
+            <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
+              {CODE_THEME_ROLES.map((role) => (
+                <ColorField
+                  key={role}
+                  label={CODE_ROLE_LABELS[role]}
+                  value={half.colors[role]}
+                  onChange={(value) => setSyntaxColor(role, value)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -476,17 +694,23 @@ function buildTheme(draft: Draft): CustomTheme {
     palette: { light: { ...draft.palette.light }, dark: { ...draft.palette.dark } },
     ansi: { light: [...draft.ansi.light], dark: [...draft.ansi.dark] },
     ...(draft.design ? { design: structuredClone(draft.design) } : {}),
+    ...(draft.syntax ? { syntax: structuredClone(draft.syntax) } : {}),
     ...(draft.seed ? { seed: structuredClone(draft.seed) } : {}),
   };
 }
 
 function previewTheme(draft: Draft): CustomTheme {
   const clean = (value: string | undefined) => normalizeThemeColor(value) ?? 'transparent';
+  const cleanOpaque = (value: string | undefined) => normalizeThemeColor(value) ?? '#000000';
   const palette = (mode: Mode): ThemePalette => {
     const values = {} as Record<ThemeRole, string>;
     for (const role of THEME_ROLES) values[role] = clean(draft.palette[mode][role]);
     return values;
   };
+  const syntaxHalf = (half: CustomCodeSyntaxHalf): CustomCodeSyntaxHalf => ({
+    commentItalic: half.commentItalic ?? true,
+    colors: Object.fromEntries(CODE_THEME_ROLES.map((role) => [role, cleanOpaque(half.colors[role])])) as CustomCodeSyntaxHalf['colors'],
+  });
   return {
     id: `preview-${draft.id}`,
     name: draft.name,
@@ -495,6 +719,7 @@ function previewTheme(draft: Draft): CustomTheme {
       light: draft.ansi.light.map((color) => normalizeThemeColor(color) ?? '#000000'),
       dark: draft.ansi.dark.map((color) => normalizeThemeColor(color) ?? '#000000'),
     },
+    ...(draft.syntax ? { syntax: { light: syntaxHalf(draft.syntax.light), dark: syntaxHalf(draft.syntax.dark) } } : {}),
   };
 }
 
@@ -508,6 +733,7 @@ function editDraft(id: string): Draft | null {
     palette: { light: { ...theme.palette.light }, dark: { ...theme.palette.dark } },
     ansi: { light: [...theme.ansi.light], dark: [...theme.ansi.dark] },
     ...(theme.design ? { design: structuredClone(theme.design) } : {}),
+    ...(theme.syntax ? { syntax: structuredClone(theme.syntax) } : {}),
     ...(theme.seed ? { seed: structuredClone(theme.seed) } : {}),
   };
 }
@@ -522,13 +748,14 @@ function newDraft(from: string, name: string): Draft {
 }
 
 /** A palette to start from: a built-in from the generated table, a plugin's palette, or an existing custom theme. The copy is the user's own: it takes a new custom id when saved. */
-function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 'seed'> | null {
+function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 'syntax' | 'seed'> | null {
   const plugin = pluginPaletteColors(id);
   if (plugin) {
     return {
       palette: { light: { ...plugin.palette.light }, dark: { ...plugin.palette.dark } },
       ansi: { light: [...plugin.ansi.light], dark: [...plugin.ansi.dark] },
       ...(plugin.design ? { design: structuredClone(plugin.design) } : {}),
+      ...(plugin.syntax ? { syntax: structuredClone(plugin.syntax) } : {}),
     };
   }
   const builtin = BUILTIN_THEME_PALETTES[id];
@@ -545,6 +772,7 @@ function paletteSource(id: string): Pick<Draft, 'palette' | 'ansi' | 'design' | 
     palette: { light: { ...custom.palette.light }, dark: { ...custom.palette.dark } },
     ansi: { light: [...custom.ansi.light], dark: [...custom.ansi.dark] },
     ...(custom.design ? { design: structuredClone(custom.design) } : {}),
+    ...(custom.syntax ? { syntax: structuredClone(custom.syntax) } : {}),
     ...(custom.seed ? { seed: structuredClone(custom.seed) } : {}),
   };
 }
@@ -567,6 +795,9 @@ const ISSUE_MESSAGES: Record<string, MessageDescriptor> = {
   'is missing': msg`缺少`,
   'is not a theme role': msg`不是有效的颜色角色`,
   'is not a theme field': msg`不是有效的主题字段`,
+  'is not a syntax field': msg`不是有效的代码高亮字段`,
+  'is not a code role': msg`不是有效的代码高亮角色`,
+  'must be a boolean': msg`必须是布尔值`,
   'must be custom- followed by 8–64 lowercase letters, digits or dashes': msg`id 必须是 custom- 加 8–64 位小写字母、数字或连字符`,
 };
 
@@ -588,11 +819,16 @@ function fieldLabel(path: string): string {
   if (path === 'id') return i18n._(msg`主题 id`);
   if (path === 'name') return i18n._(msg`名称`);
   if (path === 'description') return i18n._(msg({ message: '说明', context: 'settings-theme-description' }));
-  if (path === 'palette' || path === 'ansi') return i18n._(msg`颜色`);
+  if (path === 'palette' || path === 'ansi' || path === 'syntax') return i18n._(msg`颜色`);
   const palette = /^palette\.(light|dark)\.(.+)$/.exec(path);
   if (palette) {
     const mode = i18n._(palette[1] === 'light' ? msg`浅色` : msg`深色`);
     return `${mode} · ${THEME_ROLE_LABELS[palette[2] as ThemeRole] ?? palette[2]}`;
+  }
+  const syntax = /^syntax\.(light|dark)\.colors\.(.+)$/.exec(path);
+  if (syntax) {
+    const mode = i18n._(syntax[1] === 'light' ? msg`浅色` : msg`深色`);
+    return `${i18n._(msg`代码高亮`)} · ${mode} · ${CODE_ROLE_LABELS[syntax[2] as CodeThemeRole] ?? syntax[2]}`;
   }
   const ansi = /^ansi\.(light|dark)\[(\d+)\]$/.exec(path);
   if (ansi) {

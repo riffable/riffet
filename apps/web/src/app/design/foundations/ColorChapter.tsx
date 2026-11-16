@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { THEME_ROLES, type ThemeRole } from '@contracts';
+import { CODE_THEME_ROLES, THEME_ROLES, type ThemeRole } from '@contracts';
 import { IconCircleAlert, IconCircleCheck, IconTriangleAlert } from '@/components/icons';
 import { cn } from '@/lib/utils';
 import { Chapter, display, ease, Frame, Plate, readFill, readInk, Token, usePainted, useScrollProgress, Value } from '../specimen';
@@ -9,6 +9,7 @@ const ofGroup = (prefix: RegExp) => THEME_ROLES.filter((role) => prefix.test(rol
 const SURFACES = ofGroup(/^bg/);
 const INKS = ofGroup(/^fg(-\d)?$/);
 const AGENTS = ofGroup(/^agent-/);
+const CODE_ROLES = ['fg', ...CODE_THEME_ROLES, 'link'] as const;
 
 /** A row of skeleton text: the shape of an interface, without its words. */
 function Lines({ widths, className }: { widths: string[]; className?: string }) {
@@ -169,12 +170,13 @@ function StatusSpecimen() {
   );
 }
 
-function IndexRow({ role }: { role: ThemeRole }) {
+function IndexRow({ role, prefix = '' }: { role: string; prefix?: string }) {
   const [ref, value] = usePainted<string | undefined, HTMLSpanElement>(readFill);
+  const token = `${prefix}${role}`;
   return (
     <div className="flex h-9 items-center gap-3 edge-b">
-      <span ref={ref} className="size-4 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_var(--line)]" style={{ background: `var(--${role})` }} />
-      <Token className="min-w-0 flex-1 truncate">{role}</Token>
+      <span ref={ref} className="size-4 shrink-0 rounded-sm shadow-[inset_0_0_0_1px_var(--line)]" style={{ background: `var(--${token})` }} />
+      <Token className="min-w-0 flex-1 truncate">{token}</Token>
       <Value className="shrink-0">{value}</Value>
     </div>
   );
@@ -201,6 +203,11 @@ export function ColorChapter() {
       <Plate number={5} title={t`全部角色`} note={t`取值读自当前主题。`}>
         <div className="grid gap-x-8 edge-t sm:grid-cols-2 lg:grid-cols-3">
           {THEME_ROLES.map((role) => <IndexRow key={role} role={role} />)}
+        </div>
+      </Plate>
+      <Plate number={6} title={t`代码高亮`} note={t`${CODE_ROLES.length} 个语法色角色独立于界面主题选择，渲染时向正文色混合，保持落在纸底上的可读性。`}>
+        <div className="grid gap-x-8 edge-t sm:grid-cols-2 lg:grid-cols-3">
+          {CODE_ROLES.map((role) => <IndexRow key={role} role={role} prefix="code-" />)}
         </div>
       </Plate>
     </Chapter>

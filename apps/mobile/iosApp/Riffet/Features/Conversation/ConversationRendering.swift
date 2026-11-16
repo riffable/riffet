@@ -133,33 +133,50 @@ actor ConversationSyntax {
     static let shared = ConversationSyntax()
     struct Key: Hashable { let text: String; let language: String }
     struct Run { let text: String; let token: String? }
-    final class Result {
+    final class Result: @unchecked Sendable {
         let text: String
         let language: String
         let runs: [Run]
-        private let lightText: AttributedString
-        private let darkText: AttributedString
+        private let lock = NSLock()
+        private var cache: [CacheKey: AttributedString] = [:]
+        private struct CacheKey: Hashable { let uiTheme: String; let codeTheme: String; let dark: Bool }
         init(text: String, language: String, runs: [Run]) {
             self.text = text; self.language = language; self.runs = runs
-            // Token styling runs on this parser actor exactly once per cached result. Scrolling
-            // and theme changes only select an immutable, copy-on-write attributed value.
-            lightText = Self.styled(runs, dark: false)
-            darkText = Self.styled(runs, dark: true)
         }
-        func attributed(dark: Bool) -> AttributedString { dark ? darkText : lightText }
-        private static func styled(_ runs: [Run], dark: Bool) -> AttributedString {
+        func attributed(palette: Palette, codeTheme: RiffetCodeThemeValues, dark: Bool) -> AttributedString {
+            let key = CacheKey(uiTheme: palette.id, codeTheme: codeTheme.id, dark: dark)
+            lock.lock()
+            if let hit = cache[key] { lock.unlock(); return hit }
+            lock.unlock()
+            let built = Self.styled(runs, palette: palette, codeTheme: codeTheme, dark: dark)
+            lock.lock()
+            cache[key] = built
+            lock.unlock()
+            return built
+        }
+        private static func styled(_ runs: [Run], palette: Palette, codeTheme: RiffetCodeThemeValues, dark: Bool) -> AttributedString {
+            let commentItalic = (dark ? codeTheme.dark : codeTheme.light).commentItalic
             var output = AttributedString()
             for run in runs {
                 var part = AttributedString(run.text)
                 switch run.token {
-                case "comment": part.foregroundColor = .secondary; part.inlinePresentationIntent = .emphasized
-                case "punctuation": part.foregroundColor = .secondary
-                case "tag": part.foregroundColor = dark ? Color(red: 1, green: 0.52, blue: 0.59) : Color(red: 0.64, green: 0.13, blue: 0.25)
-                case "constant": part.foregroundColor = dark ? Color(red: 0.96, green: 0.73, blue: 0.38) : Color(red: 0.62, green: 0.36, blue: 0.03)
-                case "string": part.foregroundColor = dark ? Color(red: 0.54, green: 0.80, blue: 0.62) : Color(red: 0.12, green: 0.45, blue: 0.25)
-                case "keyword": part.foregroundColor = dark ? Color(red: 0.72, green: 0.63, blue: 1) : Color(red: 0.41, green: 0.25, blue: 0.75)
-                case "function": part.foregroundColor = dark ? Color(red: 0.53, green: 0.75, blue: 1) : Color(red: 0.15, green: 0.34, blue: 0.65)
-                case "variable": part.foregroundColor = dark ? Color(red: 0.83, green: 0.70, blue: 0.96) : Color(red: 0.50, green: 0.29, blue: 0.63)
+                case "comment":
+                    part.foregroundColor = palette.codeColor(\.comment, codeTheme: codeTheme)
+                    if commentItalic { part.inlinePresentationIntent = .emphasized }
+                case "punctuation": part.foregroundColor = palette.fg3
+                case "keyword": part.foregroundColor = palette.codeColor(\.keyword, codeTheme: codeTheme)
+                case "string": part.foregroundColor = palette.codeColor(\.string, codeTheme: codeTheme)
+                case "number": part.foregroundColor = palette.codeColor(\.number, codeTheme: codeTheme)
+                case "constant": part.foregroundColor = palette.codeColor(\.constant, codeTheme: codeTheme)
+                case "declaration": part.foregroundColor = palette.codeColor(\.declaration, codeTheme: codeTheme)
+                case "type": part.foregroundColor = palette.codeColor(\.type, codeTheme: codeTheme)
+                case "property": part.foregroundColor = palette.codeColor(\.property, codeTheme: codeTheme)
+                case "namespace": part.foregroundColor = palette.codeColor(\.namespace, codeTheme: codeTheme)
+                case "tag": part.foregroundColor = palette.codeColor(\.tag, codeTheme: codeTheme)
+                case "attribute": part.foregroundColor = palette.codeColor(\.attribute, codeTheme: codeTheme)
+                case "annotation": part.foregroundColor = palette.codeColor(\.annotation, codeTheme: codeTheme)
+                case "escape": part.foregroundColor = palette.codeColor(\.escape, codeTheme: codeTheme)
+                case "heading": part.foregroundColor = palette.codeColor(\.heading, codeTheme: codeTheme)
                 default: break
                 }
                 output += part
@@ -208,12 +225,20 @@ actor ConversationSyntax {
         switch name {
         case "comment", "prolog", "doctype", "cdata": return "comment"
         case "punctuation": return "punctuation"
-        case "property", "tag", "selector", "attr-name", "builtin", "symbol", "deleted": return "tag"
-        case "boolean", "number", "constant", "important", "regex": return "constant"
-        case "string", "char", "attr-value", "inserted": return "string"
-        case "keyword", "atrule", "title": return "keyword"
-        case "function", "class-name": return "function"
-        case "operator", "entity", "url", "variable": return "variable"
+        case "tag", "selector", "deleted": return "tag"
+        case "attr-name": return "attribute"
+        case "property": return "property"
+        case "annotation", "decorator": return "annotation"
+        case "boolean", "constant": return "constant"
+        case "number": return "number"
+        case "keyword", "atrule", "important", "builtin": return "keyword"
+        case "string", "char", "attr-value", "regex", "inserted": return "string"
+        case "escape": return "escape"
+        case "function": return "declaration"
+        case "title": return "heading"
+        case "class-name", "symbol": return "type"
+        case "namespace": return "namespace"
+        case "operator", "entity", "url", "variable": return nil
         default: return nil
         }
     }

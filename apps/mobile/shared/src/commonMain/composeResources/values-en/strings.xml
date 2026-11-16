@@ -343,4 +343,8 @@
     <string name="settings_appearance_background">Background</string>
     <string name="settings_appearance_resource_failed">Some appearance resources could not be loaded; defaults are used.</string>
     <string name="settings_appearance_catalog_failed">The appearance catalog is temporarily unavailable.</string>
+    <string name="settings_code_theme">Code highlighting</string>
+    <string name="settings_code_theme_style">Style</string>
+    <string name="settings_code_theme_auto">Follow theme</string>
+    <string name="settings_code_theme_monochrome">Monochrome</string>
 </resources>

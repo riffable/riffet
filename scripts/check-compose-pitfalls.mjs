@@ -21,7 +21,7 @@ const staticLocals = new Set([
   'LocalSessionReferenceOpen', 'LocalSessionReferenceStore', 'LocalSettingsSearchTarget', 'LocalSubagentOpen',
   'LocalTabChrome', 'LocalTabContentBottomPadding', 'LocalTabMenu', 'LocalTerminalOpen', 'LocalVisualHostResumed',
   'LocalRiffetMotion', 'LocalRiffetSnackbar', 'LocalRiffetSurfaces', 'LocalRiffetWindowInfo', 'LocalRiffetColors',
-  'LocalRiffetTypography', 'LocalRiffetDarkTheme', 'LocalRiffetThemeEntry',
+  'LocalRiffetCodeColors', 'LocalRiffetTypography', 'LocalRiffetDarkTheme', 'LocalRiffetThemeEntry',
 ]);
 
 const rules = [

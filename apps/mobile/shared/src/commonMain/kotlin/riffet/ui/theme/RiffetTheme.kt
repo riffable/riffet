@@ -35,8 +35,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import riffet.theme.RiffetCodeColors
 import riffet.theme.RiffetColors
+import riffet.theme.RiffetDefaultCodeTheme
 import riffet.theme.RiffetDefaultTheme
+import riffet.theme.riffetCodeTheme
 import riffet.ui.design.LocalRiffetSurfaces
 import riffet.ui.design.RiffetPressIndication
 import riffet.ui.design.riffetSurfaces
@@ -128,6 +131,8 @@ internal val RiffetDefaultTypography: RiffetTypography by lazy { RiffetTypograph
 val LocalRiffetColors: ProvidableCompositionLocal<RiffetColors> =
     staticCompositionLocalOf { RiffetDefaultTheme.light }
 
+val LocalRiffetCodeColors = staticCompositionLocalOf { RiffetDefaultCodeTheme.light }
+
 val LocalRiffetTypography: ProvidableCompositionLocal<RiffetTypography> =
     staticCompositionLocalOf { RiffetDefaultTypography }
 
@@ -170,6 +175,8 @@ fun RiffetTheme(
     pageAnimation: PageAnimation = PageAnimation.DEFAULT,
     uiFont: FontFamily? = null,
     monoFont: FontFamily? = null,
+    codeThemeId: String = "auto",
+    customCodeThemes: List<ThemeEntry> = emptyList(),
     content: @Composable () -> Unit,
 ) {
     val pureBlack = darkTheme && amoled
@@ -191,6 +198,36 @@ fun RiffetTheme(
         "floating" to "#1c1c1c", "navigation" to "#121212", "input" to "#181818",
     ) else design.colors
     val surfaces = riffetSurfaces(colors, darkTheme, style.components.surfaces, surfaceOverrides)
+    val rawCodeColors = remember(codeThemeId, entry, customCodeThemes, darkTheme) {
+        val customPicked = if (codeThemeId.startsWith("custom-")) {
+            customCodeThemes.firstOrNull { it.id == codeThemeId }?.syntax
+        } else null
+        val theme = customPicked
+            ?: (if (codeThemeId == "auto") entry.syntax else null)
+            ?: riffetCodeTheme(codeThemeId, entry.id)
+        if (darkTheme) theme.dark else theme.light
+    }
+    val codeColors = remember(rawCodeColors, colors.fg, colors.fg3, darkTheme) {
+        val fgWeight = if (darkTheme) 0.10f else 0.12f
+        val commentWeight = if (darkTheme) 0.15f else 0.20f
+        RiffetCodeColors(
+            comment = lerp(rawCodeColors.comment, colors.fg3, commentWeight),
+            keyword = lerp(rawCodeColors.keyword, colors.fg, fgWeight),
+            string = lerp(rawCodeColors.string, colors.fg, fgWeight),
+            number = lerp(rawCodeColors.number, colors.fg, fgWeight),
+            constant = lerp(rawCodeColors.constant, colors.fg, fgWeight),
+            declaration = lerp(rawCodeColors.declaration, colors.fg, fgWeight),
+            type = lerp(rawCodeColors.type, colors.fg, fgWeight),
+            property = lerp(rawCodeColors.property, colors.fg, fgWeight),
+            namespace = lerp(rawCodeColors.namespace, colors.fg, fgWeight),
+            tag = lerp(rawCodeColors.tag, colors.fg, fgWeight),
+            attribute = lerp(rawCodeColors.attribute, colors.fg, fgWeight),
+            annotation = lerp(rawCodeColors.annotation, colors.fg, fgWeight),
+            escape = lerp(rawCodeColors.escape, colors.fg, fgWeight),
+            heading = lerp(rawCodeColors.heading, colors.fg, fgWeight),
+            commentItalic = rawCodeColors.commentItalic,
+        )
+    }
     val type = design.preset.typography.native.withAppearanceFont(uiFont)
     val defaults = design.preset.typography.shared
     val riffetType = defaults.overridden(design.typography).withAppearanceFonts(uiFont, monoFont)
@@ -220,6 +257,7 @@ fun RiffetTheme(
             bgElevated = if ("card" in design.colors) surfaces.card else colors.bgElevated,
             bgPopover = if ("floating" in design.colors) surfaces.floating else colors.bgPopover,
         ),
+        LocalRiffetCodeColors provides codeColors,
         LocalRiffetThemeEntry provides renderEntry,
         LocalRiffetTypography provides riffetType,
         LocalInterfaceStyle provides style,

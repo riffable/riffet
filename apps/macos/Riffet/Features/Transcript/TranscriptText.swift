@@ -257,35 +257,35 @@ struct TranscriptText {
             return result
         }
         let italic = style.italic(font)
+        let commentItalic = (style.dark ? style.codeTheme.dark : style.codeTheme.light).commentItalic
         for run in runs {
             var attributes = base
             if let token = run.token {
                 attributes[.foregroundColor] = color(token)
-                if token == .comment { attributes[.font] = italic }
+                if token == .comment && commentItalic { attributes[.font] = italic }
             }
             result.append(NSAttributedString(string: run.text, attributes: attributes))
         }
         return result
     }
 
-    /**
-     * Syntax hues pulled toward the grey scale: the palette's semantic colours at full strength
-     * (a warning-orange `true`, a danger-red tag) read as UI status, not as code, and out-shout
-     * the prose around the block. Blending keeps the hue families distinguishable but quiet.
-     */
-    private func muted(_ color: NSColor) -> NSColor {
-        color.blended(withFraction: 0.38, of: style.color(\.fg3)) ?? color
-    }
-
     private func color(_ token: CodeHighlighter.Token) -> NSColor {
         switch token {
-        case .comment, .punctuation: style.color(\.fg3)
-        case .tag: muted(style.color(\.danger))
-        case .constant: muted(style.color(\.warning))
-        case .string: muted(style.color(\.success))
-        case .keyword: muted(style.color(\.accent))
-        case .function: muted(style.color(\.accentHover))
-        case .variable: style.color(\.fg2)
+        case .comment: style.codeColor(\.comment)
+        case .punctuation: style.color(\.fg3)
+        case .keyword: style.codeColor(\.keyword)
+        case .string: style.codeColor(\.string)
+        case .number: style.codeColor(\.number)
+        case .constant: style.codeColor(\.constant)
+        case .declaration: style.codeColor(\.declaration)
+        case .type: style.codeColor(\.type)
+        case .property: style.codeColor(\.property)
+        case .namespace: style.codeColor(\.namespace)
+        case .tag: style.codeColor(\.tag)
+        case .attribute: style.codeColor(\.attribute)
+        case .annotation: style.codeColor(\.annotation)
+        case .escape: style.codeColor(\.escape)
+        case .heading: style.codeColor(\.heading)
         }
     }
 }

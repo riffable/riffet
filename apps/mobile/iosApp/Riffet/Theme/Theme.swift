@@ -48,6 +48,7 @@ struct ThemeEntry: Identifiable, Sendable {
 @Observable
 final class ThemeStore {
     private static let key = "riffet.ios.theme"
+    private static let codeThemeKey = "riffet.ios.code-theme"
 
     var themeId: String {
         didSet {
@@ -56,11 +57,23 @@ final class ThemeStore {
         }
     }
 
+    var codeThemeId: String {
+        didSet {
+            UserDefaults.standard.set(codeThemeId, forKey: Self.codeThemeKey)
+        }
+    }
+
     init() {
         let stored = UserDefaults.standard.string(forKey: Self.key)
         themeId = Self.migrated(stored) ?? Self.builtins[0].id
+        let storedCode = UserDefaults.standard.string(forKey: Self.codeThemeKey)
+        codeThemeId = storedCode.flatMap { id in RiffetCodeThemeCatalog.all.contains(where: { $0.id == id }) ? id : nil } ?? "auto"
         if stored != nil, stored != themeId { UserDefaults.standard.set(themeId, forKey: Self.key) }
         PaletteColorCache.shared.use(entry.values)
+    }
+
+    var codeTheme: RiffetCodeThemeValues {
+        RiffetCodeThemeCatalog.resolve(selection: codeThemeId, uiThemeId: themeId)
     }
 
     /// Ids from before a theme was renamed keep the reader's choice; an id
@@ -158,6 +171,23 @@ struct Palette: Sendable, Equatable {
     func uiColor(_ role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable) -> UIColor {
         PaletteColorCache.shared.color(role)
     }
+
+    /// A syntax highlighting colour mixed toward the UI theme's `fg` / `fg3` so code sits on any paper.
+    func codeColor(_ role: KeyPath<RiffetCodePaletteValues, RiffetRGBA> & Sendable, codeTheme: RiffetCodeThemeValues) -> Color {
+        let storage = storage
+        let isComment = role == \RiffetCodePaletteValues.comment
+        return ThemeColors.shared.codeColor(storage.id, codeTheme: codeTheme.id, key: role) {
+            let lightRaw = codeTheme.light[keyPath: role]
+            let darkRaw = codeTheme.dark[keyPath: role]
+            let light = isComment
+                ? lightRaw.mixed(with: storage.values.light.fg3, 0.20)
+                : lightRaw.mixed(with: storage.values.light.fg, 0.12)
+            let dark = isComment
+                ? darkRaw.mixed(with: storage.values.dark.fg3, 0.15)
+                : darkRaw.mixed(with: storage.values.dark.fg, 0.10)
+            return (light, dark)
+        }
+    }
 }
 
 /// SwiftUI colours, cached per theme so a theme's colours keep their identity while it is in use.
@@ -165,12 +195,26 @@ private final class ThemeColors: @unchecked Sendable {
     static let shared = ThemeColors()
     private let lock = NSLock()
     private var colors: [Key: Color] = [:]
+    private var codeColors: [CodeKey: Color] = [:]
 
     /// The colour for a theme and role; `make` gives its light and dark values and runs once.
     func color(_ theme: String, key: AnyHashable, _ make: () -> (light: RiffetRGBA, dark: RiffetRGBA)) -> Color {
         cached(Key(theme: theme, role: key)) { let pair = make(); return Self.dynamic(light: pair.light, dark: pair.dark) }
     }
+    func codeColor(_ theme: String, codeTheme: String, key: AnyHashable, _ make: () -> (light: RiffetRGBA, dark: RiffetRGBA)) -> Color {
+        let cacheKey = CodeKey(theme: theme, codeTheme: codeTheme, role: key)
+        lock.lock()
+        if let hit = codeColors[cacheKey] { lock.unlock(); return hit }
+        lock.unlock()
+        let pair = make()
+        let color = Self.dynamic(light: pair.light, dark: pair.dark)
+        lock.lock()
+        codeColors[cacheKey] = color
+        lock.unlock()
+        return color
+    }
     private struct Key: Hashable { let theme: String; let role: AnyHashable }
+    private struct CodeKey: Hashable { let theme: String; let codeTheme: String; let role: AnyHashable }
     private func cached(_ key: Key, _ make: () -> Color) -> Color {
         lock.lock(); defer { lock.unlock() }
         if let hit = colors[key] { return hit }

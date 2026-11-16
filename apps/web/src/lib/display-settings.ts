@@ -1,3 +1,4 @@
+import { CODE_THEME_AUTO, parseCodeThemeSelection, type CodeThemeSelection } from '@contracts';
 import { createStore, useStore } from './store';
 import { readStored, writeStored } from './utils';
 
@@ -18,6 +19,8 @@ export interface DisplaySettings {
   /** Insets around both the live terminal and its history, in CSS pixels. */
   terminalPaddingHorizontal: number;
   terminalPaddingVertical: number;
+  /** Code syntax highlighting theme (`auto` follows the UI theme, or a built-in id). */
+  codeTheme: CodeThemeSelection;
 }
 
 const KEY = 'riffet.display';
@@ -32,6 +35,7 @@ export const MAX_TERMINAL_PADDING_VERTICAL = 32;
 export const defaultDisplaySettings: DisplaySettings = {
   textSize: 'standard', density: 'standard', terminalFontSize: 12.5,
   terminalPaddingHorizontal: 24, terminalPaddingVertical: 16,
+  codeTheme: CODE_THEME_AUTO,
 };
 
 const hasOwn = <T extends object>(value: T, key: PropertyKey) => Object.prototype.hasOwnProperty.call(value, key);
@@ -61,6 +65,7 @@ export function parseDisplaySettings(raw: string): DisplaySettings {
     terminalPaddingVertical: typeof vertical === 'number' && Number.isFinite(vertical)
       ? Math.min(MAX_TERMINAL_PADDING_VERTICAL, Math.max(0, vertical))
       : defaultDisplaySettings.terminalPaddingVertical,
+    codeTheme: parseCodeThemeSelection(parsed.codeTheme),
   };
 }
 
@@ -98,6 +103,14 @@ if (typeof window !== 'undefined') {
 import.meta.hot?.dispose(() => {
   window.removeEventListener('storage', onStorage);
 });
+
+export function getDisplaySettings(): DisplaySettings {
+  return store.get();
+}
+
+export function subscribeDisplaySettings(listener: () => void): () => void {
+  return store.subscribe(listener);
+}
 
 export function useDisplaySettings(): DisplaySettings {
   return useStore(store, (settings) => settings);

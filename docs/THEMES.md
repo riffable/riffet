@@ -1008,3 +1008,13 @@ OEM 折叠屏 extensions、真实设备 GPU 性能、系统键盘／手势全组
 
 新增产品文案为搜索入口／空结果，以及外观资源、预设、配色、界面字体、等宽字体、背景、刷新和
 两种加载失败提示。标签说明可选项，失败提示说明当前默认或缓存行为；无操作说明副标题。
+
+## 16. 代码高亮风格（2026-11-16）
+
+代码高亮风格作为独立于界面配色与明暗模式的设备本地偏好，在四端「主题」设置里提供「跟随界面主题（`auto`）」与 9 套内置风格（`intellij`、`github`、`vitesse`、`one`、`catppuccin`、`solarized`、`rose-pine`、`everforest`、`monochrome`），各含明暗两半，具体角色与纸底融合规则见 [基础](design/system/foundations.md) §1.1。
+
+- **单一来源**：契约在 `packages/contracts/src/code-theme.ts`（14 个语法色角色与 `auto` 映射规则），调色板在 `scripts/code-themes.ts`，由 `pnpm gen:theme` 统一生成到 Web CSS（`apps/web/src/styles/index.css` 的 `code-themes` 标记区）、`apps/web/src/lib/code-themes.generated.ts`、Android `RiffetTheme.kt` 以及 Mac / iOS 的 `RiffetTheme.swift`。
+- **`auto` 映射**：自定义主题或插件配色自带 `syntax` 时优先使用其自带配色；`solarized`、`catppuccin`、`rose-pine`、`everforest` 界面主题自动匹配同名高亮风格；`pencil` 自动匹配 `monochrome`；其余界面主题（含默认 `riffet`、阅读主题与未附带 `syntax` 的自定义主题）使用 `intellij`。
+- **用户自定义与导入**：`CustomTheme` 支持可选字段 `syntax: { light, dark }`（各含 14 个角色色值与 `commentItalic`，由 `packages/contracts/src/theme.ts` 校验与规范化，缺省时兼容既有主题的 `revision`）。Web（`ThemeEditor.tsx`）与 macOS（`ThemeEditorView.swift`）编辑器支持套用内置预设、逐项编辑 14 色与注释斜体，并支持导入社区 VS Code / TextMate JSON(C) 主题自动映射到 14 角色。Android 与 iOS 在选择列表中消费随主题库同步下来的自定义代码风格。
+- **各端存储**：Web 存在 `riffet.display`（`codeTheme`），macOS 存在 `UserDefaults["riffet.code-theme"]`，Android 存在 `DisplaySettings`（`display.code-theme`），iOS 存在 `UserDefaults["riffet.ios.code-theme"]`。
+

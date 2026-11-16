@@ -244,6 +244,7 @@ struct ConversationCode: View {
     @ScaledMetric(relativeTo: .body) private var codeLineHeight = 20.0
     @Environment(\.colorScheme) private var scheme
     @Environment(\.palette) private var palette
+    @Environment(ThemeStore.self) private var themeStore
     @Environment(\.conversationReadAction) private var readAction
     @Environment(\.conversationDisclosureState) private var disclosureState
     @State private var expanded = false
@@ -271,7 +272,7 @@ struct ConversationCode: View {
         let presentation = presentationCache.presentation(text: text, expanded: isExpanded)
         let source = presentation.visibleText
         let highlighted = highlighting?.text == source && highlighting?.language == ConversationSyntax.language(language ?? "")
-        let displayed = highlighted ? highlighting!.attributed(dark: scheme == .dark) : presentation.plainText
+        let displayed = highlighted ? highlighting!.attributed(palette: palette, codeTheme: themeStore.codeTheme, dark: scheme == .dark) : presentation.plainText
         return VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 0) {
                 Text((language?.isEmpty == false ? language! : "text").uppercased()).riffetFont(.monoSmall).tracking(0.8).foregroundStyle(palette.fg3).lineLimit(1)

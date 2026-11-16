@@ -97,6 +97,14 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         preferences?.setString(AMOLED_KEY, enabled.toString())
         amoled = enabled
     }
+
+    var codeTheme: String by mutableStateOf(preferences?.string(CODE_THEME_KEY) ?: "auto")
+        private set
+
+    fun changeCodeTheme(id: String) {
+        preferences?.setString(CODE_THEME_KEY, id)
+        codeTheme = id
+    }
     var interfaceStyle: InterfaceStyle by mutableStateOf(
         InterfaceStyle.entries.firstOrNull { it.key == preferences?.string(INTERFACE_STYLE_KEY) } ?: InterfaceStyle.MATERIAL3,
     )
@@ -133,6 +141,7 @@ class DisplaySettings(private val preferences: AppPreferences?) {
         internal const val SURFACE_MATERIAL_KEY = "display.surface-material"
         internal const val MATERIAL_STRENGTH_KEY = "display.material-strength"
         private const val AMOLED_KEY = "display.amoled"
+        private const val CODE_THEME_KEY = "display.code-theme"
         private const val TEXT_SIZE_KEY = "display.text-size"
         private const val SPACING_KEY = "display.spacing"
 

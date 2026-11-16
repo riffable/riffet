@@ -280,6 +280,7 @@
 - **否决**：按正文是否截断决定是否给出允许；按终端选项的序号猜允许与拒绝。
 - **规则**：`docs/design/system/surfaces.md` 审批卡一节；代码 `apps/server/src/agent-host/interaction-choice.ts`、`apps/macos/Riffet/Features/Conversation/InteractionCard.swift`、手机两端的 `InteractionCard`。
 
+
 ## 2026-11-15 · 侧栏底部入口合并到头像
 
 - **决定**：Web 与 Mac 的侧栏底部只保留头像。点击打开个人菜单，顶部是可进入个人资料的头像与昵称，下面直接列出原更多菜单的功能，再放主题（Mac 为外观）与设置；所有菜单项保留前置图标。远端与离线信息收进菜单，只有异常时在头像显示提醒点。
@@ -293,3 +294,11 @@
 - **原因**：手机的工具行只放得下一个胶囊。权限设定以后很少改；上下文用量却随对话增长，快满时需要读者处理（压缩或另开会话），放在输入框里更有用。
 - **否决**：圆环与权限名并排；没有用量时画一个 0% 的空环。
 - **规则**：`docs/design/system/surfaces.md` §1.8；代码在 iPhone 的 `Design/RiffetDesign.swift`（`RiffetModelLabel`、`RiffetContextRing`），Android 的 `ui/composer/Composer.kt`（`SettingsChip`）。
+
+## 2026-11-16 · 代码高亮风格独立于界面主题
+
+- **决定**：代码高亮风格作为独立于界面配色（`data-theme`）与明暗模式（`.dark`）的设备偏好：默认「跟随界面主题」（`auto`，按 UI 主题自动匹配，其余用 IntelliJ），内置 IntelliJ、GitHub、Vitesse、One、Catppuccin、Solarized、Rosé Pine、Everforest、极简墨色（Monochrome）九套明暗双半风格。代码块始终使用界面主题的 `bg-subtle` / `bg`，前景语法色向正文色微混，保证落在任何纸底上都可读。设置放进各端的「主题」页，使用 `Select` / 系统 `Picker` / 列表选择（[模式](system/patterns.md) §3）。
+- **原因**：Riffet 的阅读主题以低色度纸底与近无彩墨色为主，而代码高亮表达语法语义；解耦后既保留默认的和谐联动，也允许用户自选熟悉的编辑器风格而不必更换整套界面配色。四端高亮引擎不同（Shiki、Prism、Kotlin 扫描器），统一定义 14 个语义色角色（加 `commentItalic`）即可一处定义、四端同步消费。
+- **否决**：在代码块里套用第三方主题自带背景（破坏页面纸感与层次）；将代码高亮写死为界面主题的附庸；四端各自维护映射与色表（iOS 原先硬编码 RGB，Mac 与 Android 直接借用 UI 状态色）。
+- **规则**：`docs/design/system/foundations.md` §1.1、`docs/THEMES.md` §16、`docs/design/system/surfaces.md` §1.5。
+

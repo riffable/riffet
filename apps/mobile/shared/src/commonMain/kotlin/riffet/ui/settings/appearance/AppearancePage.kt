@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import org.jetbrains.compose.resources.stringResource
 import riffet.shared.DisplaySettings
 import riffet.shared.ThemeMode
+import riffet.theme.RiffetCodeThemes
 import riffet.ui.app.PageHost
 import riffet.ui.app.PageStack
 import riffet.ui.design.LocalInterfaceStyle
@@ -46,7 +47,11 @@ import riffet.ui.theme.LocalAppearanceResources
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.ThemeEntry
+import riffet.ui.timeline.CodeBlock
 import riffet_mobile.shared.generated.resources.*
+
+private const val CODE_THEME_PREVIEW_SNIPPET =
+    "// Syntax preview\n@tagged(\"api\")\nasync function loadConfig(limit = 42): Promise<Config> {\n  const mode = true;\n  return { name: \"riffet\", count: limit };\n}"
 
 private sealed interface AppearanceRoute {
     data object Main : AppearanceRoute
@@ -101,6 +106,33 @@ internal fun AppearancePage(
                         title = stringResource(Res.string.settings_amoled),
                         description = stringResource(Res.string.settings_amoled_desc),
                         checked = display.amoled, onCheckedChange = display::changeAmoled,
+                    )
+                }
+                val codeThemeTitle = stringResource(Res.string.settings_code_theme)
+                val autoLabel = stringResource(Res.string.settings_code_theme_auto)
+                val monochromeLabel = stringResource(Res.string.settings_code_theme_monochrome)
+                val customSyntaxThemes = remember(themes) { themes.filter { it.syntax != null } }
+                val effectiveCodeTheme = if (display.codeTheme.startsWith("custom-") && customSyntaxThemes.none { it.id == display.codeTheme }) "auto" else display.codeTheme
+                val codeThemeOptions = remember(autoLabel, monochromeLabel, customSyntaxThemes) {
+                    listOf("auto" to autoLabel) + RiffetCodeThemes.map { theme ->
+                        theme.id to if (theme.id == "monochrome") monochromeLabel else theme.name
+                    } + customSyntaxThemes.map { it.id to it.name }
+                }
+                SettingsGroup(title = codeThemeTitle) {
+                    SettingsChoiceRow(
+                        title = stringResource(Res.string.settings_code_theme_style),
+                        options = codeThemeOptions,
+                        value = effectiveCodeTheme,
+                        onSelect = display::changeCodeTheme,
+                    )
+                    CodeBlock(
+                        text = CODE_THEME_PREVIEW_SNIPPET,
+                        language = "typescript",
+                        textStyle = LocalRiffetTypography.current.monoSmall,
+                        modifier = Modifier.padding(
+                            horizontal = LocalInterfaceStyle.current.metrics.groupInset,
+                            vertical = LocalInterfaceStyle.current.metrics.controlInset,
+                        ),
                     )
                 }
                 if (resources != null) SettingsGroup("") {

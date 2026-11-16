@@ -68,6 +68,49 @@ struct ThemeSettings: View {
                 .padding(.vertical, Space.xs)
             }
 
+            Section("代码高亮") {
+                let customSyntaxThemes = theme.customThemes.filter { $0.syntax != nil }
+                let selection = (prefs.codeTheme.hasPrefix("custom-") && !customSyntaxThemes.contains { $0.id == prefs.codeTheme }) ? "auto" : prefs.codeTheme
+                SettingsRow("风格") {
+                    HStack(spacing: Space.sm) {
+                        Picker("风格", selection: Binding(get: { selection }, set: { prefs.codeTheme = $0 })) {
+                            Text("跟随界面主题").tag("auto")
+                            Divider()
+                            ForEach(RiffetCodeThemeCatalog.all, id: \.id) { entry in
+                                if entry.id == "monochrome" {
+                                    Text("极简墨色").tag(entry.id)
+                                } else {
+                                    Text(verbatim: entry.name).tag(entry.id)
+                                }
+                            }
+                            if !customSyntaxThemes.isEmpty {
+                                Divider()
+                                ForEach(customSyntaxThemes, id: \.id) { custom in
+                                    Text(verbatim: custom.name).tag(custom.id)
+                                }
+                            }
+                        }
+                        .labelsHidden()
+                        .formPicker()
+                        .fixedSize()
+                        if theme.canEditThemes {
+                            Button("自定义…") {
+                                if selection.hasPrefix("custom-") {
+                                    editorTarget = .edit(selection, openSyntax: true)
+                                } else if theme.customThemes.contains(where: { $0.id == theme.themeId }) {
+                                    editorTarget = .edit(theme.themeId, openSyntax: true)
+                                } else {
+                                    editorTarget = .new(theme.entry, openSyntax: true)
+                                }
+                            }
+                            .buttonStyle(SolidButtonStyle(kind: .secondary))
+                        }
+                    }
+                }
+
+                CodeThemePreview(codeThemeId: selection)
+            }
+
             AppearancePackRows()
 
             SettingsScopeFooter()
@@ -87,6 +130,83 @@ struct ThemeSettings: View {
         refreshedAt = .now
         model.theme.refresh()
         appearance.refresh()
+    }
+}
+
+/// Live preview of the active code syntax theme inside ThemeSettings.
+private struct CodeThemePreview: View {
+    let codeThemeId: String
+    @Environment(AppModel.self) private var model
+    @Environment(\.palette) private var palette
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var runs: [CodeHighlighter.Run]?
+
+    private static let snippet = """
+    // Syntax preview
+    @tagged("api")
+    async function loadConfig(limit = 42): Promise<Config> {
+      const mode = true;
+      return { name: "riffet", count: limit };
+    }
+    """
+
+    var body: some View {
+        let codeTheme = model.theme.resolveCodeTheme(selection: codeThemeId)
+        let codeRevision = model.theme.resolveCodeThemeRevision(selection: codeThemeId)
+        Text(attributed(codeTheme: codeTheme, codeRevision: codeRevision))
+            .font(RiffetFont.codeSmall)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Space.md)
+            .background(palette.formFill(palette.bgSubtle), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line))
+            .padding(.vertical, Space.xs)
+            .task {
+                if runs == nil {
+                    runs = await CodeHighlighter.shared.runs(Self.snippet, language: "typescript")
+                }
+            }
+    }
+
+    private func attributed(codeTheme: RiffetCodeThemeValues, codeRevision: String) -> AttributedString {
+        guard let runs else {
+            var plain = AttributedString(Self.snippet)
+            plain.foregroundColor = palette.fg
+            return plain
+        }
+        let dark = colorScheme == .dark
+        let commentItalic = (dark ? codeTheme.dark : codeTheme.light).commentItalic
+        var result = AttributedString()
+        for run in runs {
+            var part = AttributedString(run.text)
+            if let token = run.token {
+                part.foregroundColor = Color(nsColor: color(token, codeTheme: codeTheme, codeRevision: codeRevision))
+                if token == .comment && commentItalic { part.inlinePresentationIntent = .emphasized }
+            } else {
+                part.foregroundColor = palette.fg
+            }
+            result += part
+        }
+        return result
+    }
+
+    private func color(_ token: CodeHighlighter.Token, codeTheme: RiffetCodeThemeValues, codeRevision: String) -> NSColor {
+        switch token {
+        case .comment: palette.codeNSColor(\.comment, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .punctuation: palette.nsColor(\.fg3)
+        case .keyword: palette.codeNSColor(\.keyword, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .string: palette.codeNSColor(\.string, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .number: palette.codeNSColor(\.number, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .constant: palette.codeNSColor(\.constant, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .declaration: palette.codeNSColor(\.declaration, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .type: palette.codeNSColor(\.type, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .property: palette.codeNSColor(\.property, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .namespace: palette.codeNSColor(\.namespace, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .tag: palette.codeNSColor(\.tag, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .attribute: palette.codeNSColor(\.attribute, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .annotation: palette.codeNSColor(\.annotation, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .escape: palette.codeNSColor(\.escape, codeTheme: codeTheme, codeRevision: codeRevision)
+        case .heading: palette.codeNSColor(\.heading, codeTheme: codeTheme, codeRevision: codeRevision)
+        }
     }
 }
 

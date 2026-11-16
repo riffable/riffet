@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { APPEARANCE_DEFAULT, DEFAULT_IDLE_RECLAIM_MINUTES, DEFAULT_MAX_LIVE_AGENTS, type AppSettings, type AppearanceCatalog } from '@contracts';
+import { APPEARANCE_DEFAULT, CODE_THEME_AUTO, DEFAULT_IDLE_RECLAIM_MINUTES, DEFAULT_MAX_LIVE_AGENTS, isKnownCodeThemeId, parseCodeThemeSelection, type AppSettings, type AppearanceCatalog } from '@contracts';
 import { IconCheck, IconFolderOpen, IconLogOut, IconPencilLine, IconPlus, IconRotateCcw, IconSave } from '@/components/icons';
 import { IconQrCode } from '@/components/icons-base';
 import { AppIconTile } from '@/components/BrandMark';
@@ -14,11 +14,13 @@ import { Tip } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { appIcons, setAppIcon, useAppIcon } from '@/lib/app-icon';
 import { palettesOf, selectAppearanceItem, selectPreset, syncAppearance, useAppearance } from '@/lib/appearance';
+import { BUILTIN_CODE_THEMES } from '@/lib/code-themes.generated';
 import { defaultDisplaySettings, MAX_TERMINAL_PADDING_HORIZONTAL, MAX_TERMINAL_PADDING_VERTICAL, setDisplaySettings, terminalFontSizes, useDisplaySettings, type Density, type TextSize } from '@/lib/display-settings';
+import { cachedHighlight, highlightCode } from '@/lib/highlight';
 import { localeOptions, setLocale, useLocale, type CatalogLocale } from '@/lib/i18n';
 import { setThemeId, setThemeMode, useTheme, type ThemeMode } from '@/lib/theme';
 import { localizedText } from '@/lib/plugins';
-import { syncThemeLibrary, useThemeOptions } from '@/lib/theme-library';
+import { isCustomThemeId, syncThemeLibrary, useCurrentThemeLibrary, useThemeOptions } from '@/lib/theme-library';
 import { type ThemeDefinition } from '@/lib/themes';
 import { toast } from '@/lib/toast';
 import { cn, errorMessage } from '@/lib/utils';
@@ -91,15 +93,46 @@ function themeCredits(themes: readonly ThemeDefinition[]): string {
   return new Intl.ListFormat(i18n.locale, { type: 'conjunction' }).format(credited);
 }
 
+const CODE_PREVIEW_SNIPPET = `// Syntax preview
+@tagged("api")
+async function loadConfig(limit = 42): Promise<Config> {
+  const mode = true;
+  return { name: "riffet", count: limit };
+}`;
+
+function CodeThemePreview() {
+  const [html, setHtml] = useState<string | undefined>(() => cachedHighlight(CODE_PREVIEW_SNIPPET, 'typescript'));
+  useEffect(() => {
+    let active = true;
+    if (html === undefined) {
+      void highlightCode(CODE_PREVIEW_SNIPPET, 'typescript').then((result) => {
+        if (active && result !== undefined) setHtml(result);
+      });
+    }
+    return () => { active = false; };
+  }, [html]);
+  return (
+    <div className="py-3.5">
+      <pre className="overflow-x-auto rounded-lg bg-subtle px-3.5 py-3 font-mono text-xs leading-5 text-fg">
+        {html ? <code dangerouslySetInnerHTML={{ __html: html }} /> : <code>{CODE_PREVIEW_SNIPPET}</code>}
+      </pre>
+    </div>
+  );
+}
+
 /** 主题: light or dark, the palette, and the shared library of custom themes. */
 export function ThemeSection() {
   const { t } = useLingui();
   const { mode, themeId, paletteKey } = useTheme();
+  const display = useDisplaySettings();
   const { catalog, selection, effective } = useAppearance();
   const plugins = palettesOf(catalog);
   // Built-ins plus whatever the shared library holds; a custom theme edited on another device
   // appears here without a reload.
   const themes = useThemeOptions();
+  const customSyntaxThemes = useCurrentThemeLibrary().themes.filter((entry) => Boolean(entry.syntax));
+  const selectedCustomSyntax = customSyntaxThemes.some((entry) => entry.id === display.codeTheme);
+  const effectiveCodeValue = display.codeTheme.startsWith('custom-') && !selectedCustomSyntax ? CODE_THEME_AUTO : display.codeTheme;
   const credits = themeCredits(themes);
   const [editorOpen, setEditorOpen] = useState(false);
   /** Kept after closing, so the dialog animates out on the theme it showed. Null until first opened, which loads the editor. */
@@ -141,6 +174,41 @@ export function ThemeSection() {
       </div>
       {/* Upstream credits sit under the gallery rather than in the cards, so every card is one line. */}
       <p className="pb-3.5 text-xs text-fg-3"><Trans>配色来源：{credits}</Trans></p>
+    </Group>
+    <Group title={t`代码高亮`}>
+      <Row title={t`风格`}>
+        <div className="flex items-center gap-2 max-md:w-full">
+          <Select<string>
+            label={t`风格`}
+            className="w-48 max-md:min-w-0 max-md:flex-1"
+            value={effectiveCodeValue}
+            onChange={(value) => setDisplaySettings({ codeTheme: parseCodeThemeSelection(value) })}
+            options={[
+              { value: CODE_THEME_AUTO, label: t`跟随界面主题` },
+              ...BUILTIN_CODE_THEMES.map((item) => ({
+                value: item.id,
+                label: item.id === 'monochrome' ? t`极简墨色` : item.name,
+              })),
+              ...customSyntaxThemes.map((item) => ({
+                value: item.id,
+                label: item.name,
+              })),
+            ]}
+          />
+          <Button
+            size="sm"
+            onClick={() => {
+              const syntaxFrom = isKnownCodeThemeId(effectiveCodeValue) ? effectiveCodeValue : undefined;
+              if (selectedCustomSyntax) openEditor({ edit: display.codeTheme, openSyntax: true, syntaxFrom });
+              else if (!paletteKey && isCustomThemeId(themeId)) openEditor({ edit: themeId, openSyntax: true, syntaxFrom });
+              else openEditor({ from: paletteKey ?? themeId, openSyntax: true, syntaxFrom });
+            }}
+          >
+            <Trans context="settings-code-theme-customize">自定义…</Trans>
+          </Button>
+        </div>
+      </Row>
+      <CodeThemePreview />
     </Group>
     {editorTarget && <Suspense fallback={null}><ThemeEditor open={editorOpen} target={editorTarget} onOpenChange={setEditorOpen} /></Suspense>}
   </div>;

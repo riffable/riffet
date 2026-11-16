@@ -14,6 +14,16 @@ struct ThemeEntry: Identifiable, Sendable {
     let summary: String
     let values: RiffetThemeValues
     let revision: String
+    let syntax: RiffetCodeThemeValues?
+
+    init(id: String, name: String, summary: String, values: RiffetThemeValues, revision: String, syntax: RiffetCodeThemeValues? = nil) {
+        self.id = id
+        self.name = name
+        self.summary = summary
+        self.values = values
+        self.revision = revision
+        self.syntax = syntax
+    }
 
     var ansi: RiffetAnsiValues { values.ansi }
 }
@@ -71,6 +81,40 @@ final class ThemeStore {
     var entry: ThemeEntry { AppearanceStore.shared.paletteEntry ?? catalog.first { $0.id == themeId } ?? Self.builtins[0] }
     var palette: Palette { Palette(values: entry.values, revision: entry.revision) }
     /// The revision of the palette currently on screen; caches and redraw keys include it.
+    var revision: String { entry.revision }
+    /// Resolves the active code syntax theme: an explicit built-in or custom theme, or `auto`
+    /// falling back to the active UI theme's custom syntax (or mapped built-in syntax).
+    var codeTheme: RiffetCodeThemeValues {
+        resolveCodeTheme(selection: DisplayPreferences.shared.codeTheme)
+    }
+
+    /// Revision key for the active code syntax theme so editing a custom theme's syntax invalidates caches.
+    var codeThemeRevision: String {
+        resolveCodeThemeRevision(selection: DisplayPreferences.shared.codeTheme)
+    }
+
+    func resolveCodeThemeRevision(selection: String) -> String {
+        if selection.hasPrefix("custom-"), let custom = customThemes.first(where: { $0.id == selection }), custom.syntax != nil {
+            return custom.revision
+        }
+        if selection != "auto", RiffetCodeThemeCatalog.all.contains(where: { $0.id == selection }) {
+            return "builtin"
+        }
+        return entry.syntax != nil ? entry.revision : "builtin"
+    }
+
+    func resolveCodeTheme(selection: String) -> RiffetCodeThemeValues {
+        if selection.hasPrefix("custom-"), let custom = customThemes.first(where: { $0.id == selection }), let syntax = custom.syntax {
+            return syntax
+        }
+        if selection != "auto", RiffetCodeThemeCatalog.all.contains(where: { $0.id == selection }) {
+            return RiffetCodeThemeCatalog.resolve(selection: selection, uiThemeId: entry.id)
+        }
+        if let syntax = entry.syntax {
+            return syntax
+        }
+        return RiffetCodeThemeCatalog.resolve(selection: "auto", uiThemeId: entry.id)
+    }
     var revision: String { entry.revision }
 
     @ObservationIgnored private var generation = 0
@@ -263,6 +307,11 @@ struct Palette: Sendable {
     func nsColor(_ role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable, opacity: CGFloat = 1) -> NSColor {
         PaletteCache.shared.nsColor(values, revision, role, opacity)
     }
+
+    /// A syntax highlighting colour mixed toward the active UI theme's `fg` / `fg3` so code sits on any paper.
+    func codeNSColor(_ role: KeyPath<RiffetCodePaletteValues, RiffetRGBA> & Sendable, codeTheme: RiffetCodeThemeValues, codeRevision: String = "builtin") -> NSColor {
+        PaletteCache.shared.codeNSColor(values, revision, codeTheme, codeRevision, role)
+    }
 }
 
 private final class PaletteCache: @unchecked Sendable {
@@ -275,8 +324,17 @@ private final class PaletteCache: @unchecked Sendable {
         let opacity: CGFloat
     }
 
+    private struct CodeKey: Hashable {
+        let theme: String
+        let revision: String
+        let codeTheme: String
+        let codeRevision: String
+        let role: AnyKeyPath
+    }
+
     private let lock = NSLock()
     private var nsColors: [Key: NSColor] = [:]
+    private var codeNSColors: [CodeKey: NSColor] = [:]
     private var colors: [Key: Color] = [:]
 
     func nsColor(_ values: RiffetThemeValues, _ revision: String, _ role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable, _ opacity: CGFloat) -> NSColor {
@@ -290,6 +348,25 @@ private final class PaletteCache: @unchecked Sendable {
             return NSColor(srgbRed: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha * opacity)
         }
         nsColors[key] = color
+        return color
+    }
+
+    func codeNSColor(_ values: RiffetThemeValues, _ revision: String, _ codeTheme: RiffetCodeThemeValues, _ codeRevision: String, _ role: KeyPath<RiffetCodePaletteValues, RiffetRGBA> & Sendable) -> NSColor {
+        let key = CodeKey(theme: values.id, revision: revision, codeTheme: codeTheme.id, codeRevision: codeRevision, role: role)
+        lock.lock()
+        defer { lock.unlock() }
+        if let hit = codeNSColors[key] { return hit }
+        let isComment = role == \RiffetCodePaletteValues.comment
+        let color = NSColor(name: nil) { appearance in
+            let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+            let ui = dark ? values.dark : values.light
+            let raw = (dark ? codeTheme.dark : codeTheme.light)[keyPath: role]
+            let mixed = isComment
+                ? raw.mixed(with: ui.fg3, dark ? 0.15 : 0.20)
+                : raw.mixed(with: ui.fg, dark ? 0.10 : 0.12)
+            return NSColor(srgbRed: mixed.red, green: mixed.green, blue: mixed.blue, alpha: mixed.alpha)
+        }
+        codeNSColors[key] = color
         return color
     }
 
@@ -365,5 +442,11 @@ extension RiffetRGBA {
         let channel = { (value: Double) in String(format: "%02x", Int((value * 255).rounded())) }
         let rgb = "#" + channel(red) + channel(green) + channel(blue)
         return alpha >= 1 ? rgb : rgb + channel(alpha)
+    }
+
+    /// This colour moved `amount` of the way towards `other`, alpha included.
+    func mixed(with other: RiffetRGBA, _ amount: Double) -> RiffetRGBA {
+        let lerp = { (a: Double, b: Double) in a + (b - a) * amount }
+        return RiffetRGBA(lerp(red, other.red), lerp(green, other.green), lerp(blue, other.blue), lerp(alpha, other.alpha))
     }
 }

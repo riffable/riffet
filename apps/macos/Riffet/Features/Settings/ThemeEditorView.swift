@@ -1,16 +1,23 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 import RiffetKit
 
 /// What the editor opens on: a new theme drawn from a palette, or an existing custom theme.
 enum ThemeEditorTarget: Identifiable {
-    case new(ThemeEntry)
-    case edit(String)
+    case new(ThemeEntry, openSyntax: Bool = false)
+    case edit(String, openSyntax: Bool = false)
 
     var id: String {
         switch self {
-        case .new(let entry): "new:" + entry.id
-        case .edit(let id): id
+        case .new(let entry, let openSyntax): "new:" + entry.id + (openSyntax ? ":syntax" : "")
+        case .edit(let id, let openSyntax): id + (openSyntax ? ":syntax" : "")
+        }
+    }
+
+    var openSyntax: Bool {
+        switch self {
+        case .new(_, let openSyntax), .edit(_, let openSyntax): openSyntax
         }
     }
 }
@@ -35,6 +42,11 @@ struct ThemeEditorView: View {
     @State private var draft: ThemeDraft?
     @State private var mode: ThemeDraftMode = .light
     @State private var showManual = false
+    @State private var showSyntax = false
+    @State private var showImportSheet = false
+    @State private var importText = ""
+    @State private var importError: String?
+    @State private var syntaxPreviewRuns: [CodeHighlighter.Run]?
     @State private var busy = false
     @State private var error: String?
     /// The library as it was before a rejected save. Overwriting re-applies the draft on top of
@@ -44,12 +56,24 @@ struct ThemeEditorView: View {
 
     init(target: ThemeEditorTarget) {
         let store = ThemeStore.shared
+        let openSyntax = target.openSyntax
+        _showManual = State(initialValue: openSyntax)
+        _showSyntax = State(initialValue: openSyntax)
         switch target {
-        case .new(let entry):
-            _draft = State(initialValue: ThemeDraft.new(from: entry, library: store.library.themes))
-        case .edit(let id):
+        case .new(let entry, _):
+            var next = ThemeDraft.new(from: entry, library: store.library.themes)
+            if openSyntax && next.syntax == nil {
+                next.syntax = ThemeDraft.syntaxFromPreset(RiffetCodeThemeCatalog.resolve(selection: "auto", uiThemeId: entry.id))
+            }
+            _draft = State(initialValue: next)
+        case .edit(let id, _):
             let theme = store.library.themes.first { $0.id == id }
-            _draft = State(initialValue: theme.map(ThemeDraft.init(editing:)))
+            var next = theme.map(ThemeDraft.init(editing:))
+            if openSyntax, var resolved = next, resolved.syntax == nil {
+                resolved.syntax = ThemeDraft.syntaxFromPreset(RiffetCodeThemeCatalog.resolve(selection: "auto", uiThemeId: id))
+                next = resolved
+            }
+            _draft = State(initialValue: next)
             if theme == nil {
                 _error = State(initialValue: String(localized: "这套主题已经被其他设备删除，请重新加载主题库。"))
             }
@@ -95,6 +119,14 @@ struct ThemeEditorView: View {
             Button("取消", role: .cancel) {}
         } message: {
             Text("“\(draft?.trimmedName ?? "")”会从所有设备上移除，正在使用它的设备会回到 Riffet。")
+        }
+        .sheet(isPresented: $showImportSheet) {
+            importSheet
+        }
+        .task {
+            if syntaxPreviewRuns == nil {
+                syntaxPreviewRuns = await CodeHighlighter.shared.runs(Self.syntaxPreviewSnippet, language: "typescript")
+            }
         }
     }
 
@@ -183,6 +215,58 @@ struct ThemeEditorView: View {
             }
         }
         Section {
+            DisclosureGroup("代码高亮（14 色）", isExpanded: $showSyntax) {
+                if let syntax = draft?.syntax {
+                    let half = mode == .light ? syntax.light : syntax.dark
+                    syntaxPreview(half: half)
+                    HStack(spacing: Space.sm) {
+                        Menu("套用预设") {
+                            ForEach(RiffetCodeThemeCatalog.all, id: \.id) { preset in
+                                Button(preset.id == "monochrome" ? String(localized: "极简墨色") : preset.name) {
+                                    draft?.syntax = ThemeDraft.syntaxFromPreset(preset)
+                                }
+                            }
+                        }
+                        .fixedSize()
+                        Button("导入 VS Code 主题…") {
+                            importError = nil
+                            showImportSheet = true
+                        }
+                        .buttonStyle(SolidButtonStyle(kind: .secondary))
+                        Spacer(minLength: 0)
+                        Button("恢复跟随主题") {
+                            draft?.syntax = nil
+                        }
+                        .buttonStyle(.plain)
+                        .font(RiffetFont.caption)
+                        .foregroundStyle(palette.fg3)
+                    }
+                    Toggle("注释斜体", isOn: Binding(
+                        get: { half.commentItalic ?? true },
+                        set: { draft?.setSyntaxCommentItalic($0, mode: mode) }
+                    ))
+                    ForEach(ThemeEditorRoles.syntaxRoles, id: \.self) { role in
+                        ThemeColorRow(label: ThemeEditorRoles.syntaxLabel(role), value: half.colors[role] ?? "#000000") { value in
+                            draft?.setSyntaxColor(value, role: role, mode: mode)
+                        }
+                        .equatable()
+                    }
+                } else {
+                    HStack(spacing: Space.sm) {
+                        Button("自定义代码高亮") {
+                            draft?.syntax = ThemeDraft.syntaxFromPreset(RiffetCodeThemeCatalog.all[0])
+                        }
+                        .buttonStyle(SolidButtonStyle(kind: .secondary))
+                        Button("导入 VS Code 主题…") {
+                            importError = nil
+                            showImportSheet = true
+                        }
+                        .buttonStyle(SolidButtonStyle(kind: .secondary))
+                    }
+                }
+            }
+        }
+        Section {
             DisclosureGroup("终端颜色（16 色）") {
                 ForEach(0..<16, id: \.self) { index in
                     ThemeColorRow(label: ThemeEditorRoles.ansiLabel(index), value: ansi(index)) { value in
@@ -203,6 +287,150 @@ struct ThemeEditorView: View {
                     contrastResult(check)
                 }
             }
+        }
+    }
+
+    private static let syntaxPreviewSnippet = """
+    // Syntax preview
+    @tagged("api")
+    async function loadConfig(limit = 42): Promise<Config> {
+      const mode = true;
+      return { name: "riffet", count: limit };
+    }
+    """
+
+    @ViewBuilder
+    private func syntaxPreview(half: CachedThemeSyntaxHalf) -> some View {
+        let fg = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["fg"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg : RiffetThemeCatalog.all[0].dark.fg)
+        let fg3 = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["fg-3"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.fg3 : RiffetThemeCatalog.all[0].dark.fg3)
+        let bgSubtle = previewValues.flatMap { RiffetRGBA(hex: (mode == .light ? draft?.light : draft?.dark)?["bg-subtle"]) } ?? (mode == .light ? RiffetThemeCatalog.all[0].light.bgSubtle : RiffetThemeCatalog.all[0].dark.bgSubtle)
+        let displayed: AttributedString = {
+            guard let runs = syntaxPreviewRuns else {
+                var plain = AttributedString(Self.syntaxPreviewSnippet)
+                plain.foregroundColor = Color(.sRGB, red: fg.red, green: fg.green, blue: fg.blue, opacity: fg.alpha)
+                return plain
+            }
+            let dark = mode == .dark
+            let commentItalic = half.commentItalic ?? true
+            var out = AttributedString()
+            for run in runs {
+                var part = AttributedString(run.text)
+                if let token = run.token {
+                    let role = Self.syntaxRoleKey(token)
+                    if let role, let hex = half.colors[role], let raw = RiffetRGBA(hex: hex) {
+                        let mixed = role == "comment"
+                            ? raw.mixed(with: fg3, dark ? 0.15 : 0.20)
+                            : raw.mixed(with: fg, dark ? 0.10 : 0.12)
+                        part.foregroundColor = Color(.sRGB, red: mixed.red, green: mixed.green, blue: mixed.blue, opacity: mixed.alpha)
+                        if token == .comment && commentItalic { part.inlinePresentationIntent = .emphasized }
+                    } else {
+                        part.foregroundColor = Color(.sRGB, red: fg3.red, green: fg3.green, blue: fg3.blue, opacity: fg3.alpha)
+                    }
+                } else {
+                    part.foregroundColor = Color(.sRGB, red: fg.red, green: fg.green, blue: fg.blue, opacity: fg.alpha)
+                }
+                out += part
+            }
+            return out
+        }()
+        Text(displayed)
+            .font(RiffetFont.codeSmall)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Space.md)
+            .background(Color(.sRGB, red: bgSubtle.red, green: bgSubtle.green, blue: bgSubtle.blue, opacity: bgSubtle.alpha), in: RoundedRectangle(cornerRadius: Radius.container, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Radius.container, style: .continuous).strokeBorder(palette.line))
+            .padding(.vertical, Space.xs)
+    }
+
+    private static func syntaxRoleKey(_ token: CodeHighlighter.Token) -> String? {
+        switch token {
+        case .comment: "comment"
+        case .punctuation: nil
+        case .keyword: "keyword"
+        case .string: "string"
+        case .number: "number"
+        case .constant: "constant"
+        case .declaration: "declaration"
+        case .type: "type"
+        case .property: "property"
+        case .namespace: "namespace"
+        case .tag: "tag"
+        case .attribute: "attribute"
+        case .annotation: "annotation"
+        case .escape: "escape"
+        case .heading: "heading"
+        }
+    }
+
+    private var importSheet: some View {
+        VStack(alignment: .leading, spacing: Space.md) {
+            HStack {
+                Text("导入 VS Code 主题")
+                    .font(RiffetFont.text(RiffetTextSize.lg, weight: .medium))
+                    .foregroundStyle(palette.fg)
+                Spacer()
+                Button("选择文件…") {
+                    pickImportFile()
+                }
+                .buttonStyle(SolidButtonStyle(kind: .secondary))
+            }
+            Text("粘贴 VS Code 主题 JSON / JSONC 内容，或选择文件导入。")
+                .font(RiffetFont.caption)
+                .foregroundStyle(palette.fg3)
+            TextEditor(text: $importText)
+                .font(RiffetFont.codeSmall)
+                .frame(minHeight: 180)
+                .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).strokeBorder(palette.line))
+            if let importError {
+                Text(importError)
+                    .font(RiffetFont.caption)
+                    .foregroundStyle(palette.danger)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { showImportSheet = false }
+                    .buttonStyle(SolidButtonStyle(kind: .secondary))
+                    .keyboardShortcut(.cancelAction)
+                Button("应用导入") { applyImport(importText) }
+                    .buttonStyle(SolidButtonStyle(kind: .primary))
+                    .disabled(importText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(Space.lg)
+        .frame(width: 448)
+    }
+
+    private func pickImportFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let content = try String(contentsOf: url, encoding: .utf8)
+            importText = content
+            applyImport(content)
+        } catch {
+            importError = String(localized: "无法读取所选文件")
+        }
+    }
+
+    private func applyImport(_ raw: String) {
+        do {
+            let result = try VSCodeCodeThemeImporter.parse(raw)
+            importError = nil
+            if let syntax = result.syntax {
+                draft?.syntax = syntax
+            } else if let half = result.half {
+                let targetMode: ThemeDraftMode = result.mode == "dark" ? .dark : result.mode == "light" ? .light : mode
+                var base = draft?.syntax ?? ThemeDraft.syntaxFromPreset(RiffetCodeThemeCatalog.all[0])
+                if targetMode == .light { base.light = half } else { base.dark = half }
+                draft?.syntax = base
+                mode = targetMode
+            }
+            importText = ""
+            showImportSheet = false
+        } catch {
+            importError = error.localizedDescription
         }
     }
 
@@ -392,10 +620,12 @@ private struct ThemeDraft {
     var isNew: Bool
     /// Carried through untouched: this editor does not change design overrides.
     var design: CachedThemeDesign?
+    /// Optional custom code syntax highlighting colors for light and dark modes.
+    var syntax: CachedThemeSyntax?
     /// Set once the canvas has drawn this palette; absent for a copy nobody has drawn yet.
     var seed: CachedThemeSeed?
 
-    init(id: String, name: String, summary: String, light: [String: String], dark: [String: String], ansiLight: [String], ansiDark: [String], isNew: Bool, design: CachedThemeDesign? = nil, seed: CachedThemeSeed? = nil) {
+    init(id: String, name: String, summary: String, light: [String: String], dark: [String: String], ansiLight: [String], ansiDark: [String], isNew: Bool, design: CachedThemeDesign? = nil, syntax: CachedThemeSyntax? = nil, seed: CachedThemeSeed? = nil) {
         self.id = id
         self.name = name
         self.summary = summary
@@ -405,6 +635,7 @@ private struct ThemeDraft {
         self.ansiDark = ansiDark
         self.isNew = isNew
         self.design = design
+        self.syntax = syntax
         self.seed = seed
     }
 
@@ -419,6 +650,7 @@ private struct ThemeDraft {
             ansiDark: theme.ansi.dark,
             isNew: false,
             design: theme.design,
+            syntax: theme.syntax,
             seed: theme.seed
         )
     }
@@ -444,7 +676,15 @@ private struct ThemeDraft {
             ansiDark: custom?.ansi.dark ?? entry.values.ansi.dark.map(\.hex),
             isNew: true,
             design: custom?.design,
+            syntax: custom?.syntax,
             seed: custom?.seed
+        )
+    }
+
+    static func syntaxFromPreset(_ preset: RiffetCodeThemeValues) -> CachedThemeSyntax {
+        CachedThemeSyntax(
+            light: CachedThemeSyntaxHalf(colors: preset.light.roleValues(), commentItalic: preset.light.commentItalic),
+            dark: CachedThemeSyntaxHalf(colors: preset.dark.roleValues(), commentItalic: preset.dark.commentItalic)
         )
     }
 
@@ -473,6 +713,18 @@ private struct ThemeDraft {
         guard index < colors.count else { return }
         colors[index] = value
         if mode == .light { ansiLight = colors } else { ansiDark = colors }
+    }
+
+    mutating func setSyntaxColor(_ value: String, role: String, mode: ThemeDraftMode) {
+        guard var syntax else { return }
+        if mode == .light { syntax.light.colors[role] = value } else { syntax.dark.colors[role] = value }
+        self.syntax = syntax
+    }
+
+    mutating func setSyntaxCommentItalic(_ italic: Bool, mode: ThemeDraftMode) {
+        guard var syntax else { return }
+        if mode == .light { syntax.light.commentItalic = italic } else { syntax.dark.commentItalic = italic }
+        self.syntax = syntax
     }
 
     static func newID() -> String {
@@ -517,6 +769,12 @@ private struct ThemeDraft {
                     issues.append(String(localized: "终端 · \(mode.title) · \(ThemeEditorRoles.ansiLabel(index))：必须是 #rrggbb。"))
                 }
             }
+            if let syntax {
+                let syntaxHalf = mode == .light ? syntax.light : syntax.dark
+                for role in ThemeEditorRoles.syntaxRoles where RiffetRGBA(hex: syntaxHalf.colors[role]) == nil {
+                    issues.append(String(localized: "代码高亮 · \(mode.title) · \(ThemeEditorRoles.syntaxLabel(role))：必须是 #rrggbb 或 #rrggbbaa。"))
+                }
+            }
         }
         return issues
     }
@@ -529,6 +787,7 @@ private struct ThemeDraft {
             palette: CachedThemePalette(light: light, dark: dark),
             ansi: CachedThemeAnsi(light: ansiLight, dark: ansiDark),
             design: design,
+            syntax: syntax,
             seed: seed
         )
     }
@@ -617,6 +876,30 @@ private enum ThemeEditorRoles {
     ]
 
     static let ansiLabels = [String(localized: "黑"), String(localized: "红"), String(localized: "绿"), String(localized: "黄"), String(localized: "蓝"), String(localized: "品红"), String(localized: "青"), String(localized: "白"), String(localized: "亮黑"), String(localized: "亮红"), String(localized: "亮绿"), String(localized: "亮黄"), String(localized: "亮蓝"), String(localized: "亮品红"), String(localized: "亮青"), String(localized: "亮白")]
+
+    static let syntaxRoles = [
+        "comment", "keyword", "string", "number", "constant", "declaration", "type",
+        "property", "namespace", "tag", "attribute", "annotation", "escape", "heading",
+    ]
+
+    static let syntaxLabels: [String: String] = [
+        "comment": String(localized: "注释"),
+        "keyword": String(localized: "关键字"),
+        "string": String(localized: "字符串"),
+        "number": String(localized: "数字"),
+        "constant": String(localized: "常量"),
+        "declaration": String(localized: "函数与声明"),
+        "type": String(localized: "类型"),
+        "property": String(localized: "成员属性"),
+        "namespace": String(localized: "命名空间"),
+        "tag": String(localized: "标签"),
+        "attribute": String(localized: "属性名"),
+        "annotation": String(localized: "注解"),
+        "escape": String(localized: "转义与插值"),
+        "heading": String(localized: "标题"),
+    ]
+
+    static func syntaxLabel(_ role: String) -> String { syntaxLabels[role] ?? role }
 
     static func label(_ role: String) -> String { labels[role] ?? role }
 

@@ -8,7 +8,7 @@
 | 5 模式 | 页面骨架、设置行、弹窗结构、确认与通知 | [patterns.md](patterns.md)；Web 的 `app/settings/SettingsLayout.tsx`、`lib/dialogs.ts`、`lib/toast.ts` |
 | 4 组件 | 每种组件每端一个实现 | Web `apps/web/src/components/ui/`；Mac `apps/macos/Riffet/Theme/`；Android `apps/mobile/shared/src/commonMain/kotlin/riffet/ui/design/`；iOS `apps/mobile/iosApp/Riffet/Design/` |
 | 3 生成文件 | 各端可直接引用的常量 | 见下表，文件头标明「generated」，手改会被 `--check` 拦截 |
-| 2 源 | 颜色角色与主题取值；间距、字号、圆角、动效；风格配方 | `apps/web/src/styles/index.css`；`packages/contracts/src/design-tokens.ts`、`mobile-styles.ts`、`interface-styles.ts`、`theme.ts`（`THEME_ROLES`） |
+| 2 源 | 颜色角色与主题取值；代码高亮；间距、字号、圆角、动效；风格配方 | `apps/web/src/styles/index.css`；`scripts/code-themes.ts`；`packages/contracts/src/design-tokens.ts`、`mobile-styles.ts`、`interface-styles.ts`、`theme.ts`（`THEME_ROLES`）、`code-theme.ts` |
 | 1 原则 | 三条原则与设计决定 | [README](README.md) §2、[DECISIONS](../DECISIONS.md) |
 
 - 页面只经组件和模式使用样式。组件只引用颜色角色（`fg`、`bg-elevated`……）和档位（`--duration-fast`、`rounded-xl`……），不写色值和像素。
@@ -18,7 +18,7 @@
 
 | 命令 | 读 | 写 |
 |---|---|---|
-| `pnpm gen:theme` | `index.css` 的主题 | Android `riffet/theme/RiffetTheme.kt`；Mac `Theme/RiffetTheme.swift`；iOS `Theme/RiffetTheme.swift`；Web `lib/theme-builtins.generated.ts`、`lib/theme-ansi.generated.ts` |
+| `pnpm gen:theme` | `index.css` 的主题、`scripts/code-themes.ts` | Web `index.css`（`code-themes` 标记区）、`lib/theme-builtins.generated.ts`、`lib/theme-ansi.generated.ts`、`lib/code-themes.generated.ts`；Android `riffet/theme/RiffetTheme.kt`；Mac `Theme/RiffetTheme.swift`；iOS `Theme/RiffetTheme.swift` |
 | `pnpm gen:tokens` | `design-tokens.ts`、`mobile-styles.ts` | Web `index.css` 的生成段；Mac `Theme/Controls.swift`；Android `ui/design/MobileStyles.generated.kt`；iOS `Design/RiffetDesign.swift` |
 | `pnpm gen:styles` | `interface-styles.ts`、`index.css` | Mac `Theme/InterfaceStyles.swift` |
 

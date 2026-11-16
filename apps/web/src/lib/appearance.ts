@@ -17,7 +17,7 @@
 import { useSyncExternalStore } from 'react';
 import {
   APPEARANCE_DEFAULT, validateCustomThemes,
-  type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearancePalette, type AppearanceSelection, type ThemeAnsi, type ThemeDesign, type ThemePalette,
+  type AppearanceBackground, type AppearanceCatalog, type AppearanceFont, type AppearancePalette, type AppearanceSelection, type CustomCodeSyntax, type ThemeAnsi, type ThemeDesign, type ThemePalette,
 } from '@contracts';
 import { api } from './api';
 import { effectiveAppearance, fontStack, paletteKey, parseSelection, type EffectiveAppearance } from './appearance-select';
@@ -33,11 +33,11 @@ const STYLE_ID = 'riffet-plugin-themes';
 /** The page of a frozen share has no workbench to decorate. */
 const inert = import.meta.env.MODE === 'share';
 
-interface PaletteData { palette: { light: ThemePalette; dark: ThemePalette }; ansi: ThemeAnsi; design?: ThemeDesign }
+interface PaletteData { palette: { light: ThemePalette; dark: ThemePalette }; ansi: ThemeAnsi; design?: ThemeDesign; syntax?: CustomCodeSyntax }
 interface State { selection: AppearanceSelection; catalog?: AppearanceCatalog; palettes: Record<string, PaletteData> }
 
 /** The painted palette in effect: what the theme runtime reads to paint, key caches and colour the terminal. */
-export interface PluginPalette { key: string; revision: string; ansi: ThemeAnsi }
+export interface PluginPalette { key: string; revision: string; ansi: ThemeAnsi; hasSyntax?: boolean }
 
 const listeners = new Set<() => void>();
 let state: State = inert ? { selection: {}, palettes: {} } : readCache();
@@ -55,7 +55,14 @@ function isCatalog(value: unknown): value is AppearanceCatalog {
 function readPalette(value: unknown): PaletteData | undefined {
   const checked = validateCustomThemes([value]);
   const theme = checked.themes[0];
-  return theme ? { palette: theme.palette, ansi: theme.ansi, ...(theme.design ? { design: theme.design } : {}) } : undefined;
+  return theme
+    ? {
+      palette: theme.palette,
+      ansi: theme.ansi,
+      ...(theme.design ? { design: theme.design } : {}),
+      ...(theme.syntax ? { syntax: theme.syntax } : {}),
+    }
+    : undefined;
 }
 
 function readCache(): State {
@@ -147,7 +154,12 @@ export async function applyFont(variable: '--font-sans' | '--font-mono', font: F
 
 function writeFirstFrame(): void {
   const data = effective.palette && state.palettes[effective.palette.asset.sha256];
-  writeStored(FIRST_FRAME_KEY, data && effective.palette ? JSON.stringify({ key: paletteKey(effective.palette), light: data.palette.light, dark: data.palette.dark }) : undefined);
+  writeStored(FIRST_FRAME_KEY, data && effective.palette ? JSON.stringify({
+    key: paletteKey(effective.palette),
+    light: data.palette.light,
+    dark: data.palette.dark,
+    ...(data.syntax ? { syntax: data.syntax } : {}),
+  }) : undefined);
 }
 
 /** Recomputes what is in effect from the state, applies it to the page, and tells subscribers. */
@@ -155,7 +167,9 @@ function commit(next: State): void {
   state = next;
   effective = effectiveAppearance(state.selection, state.catalog);
   const data = effective.palette && state.palettes[effective.palette.asset.sha256];
-  const painted = effective.palette && data ? { key: paletteKey(effective.palette), revision: effective.palette.asset.sha256, ansi: data.ansi } : undefined;
+  const painted = effective.palette && data
+    ? { key: paletteKey(effective.palette), revision: effective.palette.asset.sha256, ansi: data.ansi, hasSyntax: Boolean(data.syntax) }
+    : undefined;
   // The same palette keeps its object, so what renders on it does not render again.
   if (painted?.key !== plugin?.key || painted?.revision !== plugin?.revision) plugin = painted;
   background = effective.background;

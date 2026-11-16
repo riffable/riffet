@@ -10,7 +10,9 @@ import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import riffet.shared.DisplaySettings
+import riffet.theme.RiffetCodeColors
 import riffet.theme.RiffetColors
+import riffet.ui.theme.LocalRiffetCodeColors
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.RiffetTypography
@@ -32,6 +34,9 @@ import riffet.ui.design.LocalInterfaceStyle
 internal object TimelineTheme {
     val colors: RiffetColors
         @Composable @ReadOnlyComposable get() = LocalRiffetColors.current
+
+    val codeColors: RiffetCodeColors
+        @Composable @ReadOnlyComposable get() = LocalRiffetCodeColors.current
 
     val type: RiffetTypography
         @Composable @ReadOnlyComposable get() = LocalRiffetTypography.current

@@ -137,8 +137,9 @@ internal fun DiffBlock(
             // web's `min-w-max`), so the add/delete backgrounds run edge to edge. The height is
             // capped like the web's `max-h-80`, with its own bounded scroll.
             val language = path?.let(::languageForPath)
-            val highlighted = remember(diff, language, colors) {
-                if (isHighlightable(language)) diff.lines.map { highlightCode(it.text, language, colors) } else null
+            val codeColors = TimelineTheme.codeColors
+            val highlighted = remember(diff, language, colors, codeColors) {
+                if (isHighlightable(language)) diff.lines.map { highlightCode(it.text, language, colors, codeColors) } else null
             }
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val viewport = maxWidth

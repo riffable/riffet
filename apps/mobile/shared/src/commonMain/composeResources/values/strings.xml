@@ -343,4 +343,8 @@
     <string name="settings_appearance_background">背景</string>
     <string name="settings_appearance_resource_failed">部分外观资源未能加载，暂用默认样式。</string>
     <string name="settings_appearance_catalog_failed">外观目录暂不可用。</string>
+    <string name="settings_code_theme">代码高亮</string>
+    <string name="settings_code_theme_style">风格</string>
+    <string name="settings_code_theme_auto">跟随界面主题</string>
+    <string name="settings_code_theme_monochrome">极简墨色</string>
 </resources>

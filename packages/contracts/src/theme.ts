@@ -1,4 +1,5 @@
 import { checkThemeDesign, normalizeThemeDesign, type ThemeDesign } from './theme-design.js';
+import { CODE_THEME_ROLES, type CodeThemePalette, type CodeThemeRole, type CustomCodeSyntax, type CustomCodeSyntaxHalf } from './code-theme.js';
 export * from './theme-design.js';
 
 /**
@@ -60,6 +61,8 @@ export interface CustomTheme {
   ansi: ThemeAnsi;
   /** Absence retains style defaults and the legacy content hash. */
   design?: ThemeDesign;
+  /** Optional syntax highlighting palette per mode; absence follows the UI theme or `auto`. */
+  syntax?: CustomCodeSyntax;
   /**
    * The canvas the palette was drawn from, kept so the editor can reopen it. The palette stays the
    * source of truth: clients paint [palette] and never derive from this.
@@ -267,13 +270,59 @@ function checkSeed(issues: ThemeValidationIssue[], path: string, value: unknown)
   });
 }
 
+function checkSyntaxHalf(issues: ThemeValidationIssue[], path: string, value: unknown): void {
+  if (!isRecord(value)) {
+    issues.push({ path, message: 'must be an object' });
+    return;
+  }
+  for (const key of Object.keys(value)) {
+    if (key !== 'colors' && key !== 'commentItalic') {
+      issues.push({ path: `${path}.${key}`, message: 'is not a syntax field' });
+    }
+  }
+  if (value.commentItalic !== undefined && typeof value.commentItalic !== 'boolean') {
+    issues.push({ path: `${path}.commentItalic`, message: 'must be a boolean' });
+  }
+  if (!isRecord(value.colors)) {
+    issues.push({ path: `${path}.colors`, message: 'must be an object' });
+    return;
+  }
+  for (const key of Object.keys(value.colors)) {
+    if (!(CODE_THEME_ROLES as readonly string[]).includes(key)) {
+      issues.push({ path: `${path}.colors.${key}`, message: 'is not a code role' });
+    }
+  }
+  for (const role of CODE_THEME_ROLES) {
+    const color = value.colors[role];
+    if (color === undefined) {
+      issues.push({ path: `${path}.colors.${role}`, message: 'is missing' });
+      continue;
+    }
+    if (normalizeThemeColor(color) === null) {
+      issues.push({ path: `${path}.colors.${role}`, message: 'must be #rrggbb or #rrggbbaa' });
+    }
+  }
+}
+
+function checkSyntax(issues: ThemeValidationIssue[], path: string, value: unknown): void {
+  if (!isRecord(value)) {
+    issues.push({ path, message: 'must be an object' });
+    return;
+  }
+  if (Object.keys(value).some((key) => key !== 'light' && key !== 'dark')) {
+    issues.push({ path, message: 'may only contain light and dark' });
+  }
+  checkSyntaxHalf(issues, `${path}.light`, value.light);
+  checkSyntaxHalf(issues, `${path}.dark`, value.dark);
+}
+
 function checkTheme(issues: ThemeValidationIssue[], path: string, value: unknown): void {
   if (!isRecord(value)) {
     issues.push({ path, message: 'must be an object' });
     return;
   }
   for (const key of Object.keys(value)) {
-    if (!['id', 'name', 'description', 'palette', 'ansi', 'design', 'seed'].includes(key)) issues.push({ path: `${path}.${key}`, message: 'is not a theme field' });
+    if (!['id', 'name', 'description', 'palette', 'ansi', 'design', 'syntax', 'seed'].includes(key)) issues.push({ path: `${path}.${key}`, message: 'is not a theme field' });
   }
   if (typeof value.id !== 'string' || !THEME_ID.test(value.id)) {
     issues.push({ path: `${path}.id`, message: 'must be custom- followed by 8–64 lowercase letters, digits or dashes' });
@@ -282,6 +331,7 @@ function checkTheme(issues: ThemeValidationIssue[], path: string, value: unknown
   checkText(issues, `${path}.description`, value.description, 200, false);
 
   if (value.design !== undefined) checkThemeDesign(issues, path + '.design', value.design);
+  if (value.syntax !== undefined) checkSyntax(issues, path + '.syntax', value.syntax);
   if (value.seed !== undefined) checkSeed(issues, `${path}.seed`, value.seed);
 
   if (!isRecord(value.palette)) {
@@ -360,8 +410,27 @@ export function normalizeThemes(themes: CustomTheme[]): CustomTheme[] {
     },
     ansi: { light: [...theme.ansi.light.map((color) => color.toLowerCase())], dark: [...theme.ansi.dark.map((color) => color.toLowerCase())] },
     ...(theme.design !== undefined ? { design: normalizeThemeDesign(theme.design) } : {}),
+    ...(theme.syntax !== undefined ? { syntax: normalizeCodeSyntax(theme.syntax) } : {}),
     ...(theme.seed !== undefined ? { seed: normalizeThemeSeed(theme.seed) } : {}),
   }));
+}
+
+function normalizeCodeSyntaxHalf(half: CustomCodeSyntaxHalf): CustomCodeSyntaxHalf {
+  const colors = {} as CodeThemePalette;
+  for (const role of CODE_THEME_ROLES) {
+    colors[role] = normalizeThemeColor(half.colors[role]) ?? half.colors[role];
+  }
+  return {
+    colors,
+    commentItalic: half.commentItalic ?? true,
+  };
+}
+
+export function normalizeCodeSyntax(syntax: CustomCodeSyntax): CustomCodeSyntax {
+  return {
+    light: normalizeCodeSyntaxHalf(syntax.light),
+    dark: normalizeCodeSyntaxHalf(syntax.dark),
+  };
 }
 
 /** Rounds the canvas so a drag that lands on the same colour hashes the same. */

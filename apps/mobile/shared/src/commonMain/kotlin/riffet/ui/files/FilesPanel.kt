@@ -76,6 +76,7 @@ import riffet.ui.settings.SettingsButton
 import riffet.ui.settings.SettingsNoticeKind
 import riffet.ui.sessionlist.relativeTimeAgo
 import riffet.ui.settings.SettingsSegmented
+import riffet.ui.theme.LocalRiffetCodeColors
 import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.ui.theme.LocalRiffetMotion
@@ -87,6 +88,7 @@ import riffet.ui.timeline.languageForPath
 import riffet.ui.timeline.platformNowMillis
 import riffet.shared.DownloadCenter
 import riffet.shared.downloadsSupported
+import riffet.theme.RiffetCodeColors
 import riffet.theme.RiffetColors
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.text.AnnotatedString
@@ -654,11 +656,12 @@ private fun PreviewBody(
 @Composable
 private fun TextPreview(preview: FilePreview, requestedLine: Int?, insets: PaddingValues) {
     val colors = LocalRiffetColors.current
+    val codeColors = LocalRiffetCodeColors.current
     val lines = remember(preview.path, preview.content) { preview.content.split("\n") }
     // Coloured off the main thread; the plain lines show until it lands.
-    val highlighted by produceState<List<AnnotatedString>?>(null, preview.path, preview.content, colors) {
+    val highlighted by produceState<List<AnnotatedString>?>(null, preview.path, preview.content, colors, codeColors) {
         val language = languageForPath(preview.path) ?: return@produceState
-        value = withContext(Dispatchers.Default) { highlightLines(preview.content, language, colors) }
+        value = withContext(Dispatchers.Default) { highlightLines(preview.content, language, colors, codeColors) }
     }
     val listState = rememberLazyListState()
 
@@ -773,8 +776,8 @@ private fun ImagePreview(preview: FilePreview, projectId: String) {
 }
 
 /** [content] coloured as [language] and cut back into lines, keeping spans that cross a line. */
-private fun highlightLines(content: String, language: String, colors: RiffetColors): List<AnnotatedString> {
-    val annotated = highlightCode(content, language, colors)
+private fun highlightLines(content: String, language: String, colors: RiffetColors, codeColors: RiffetCodeColors): List<AnnotatedString> {
+    val annotated = highlightCode(content, language, colors, codeColors)
     val result = ArrayList<AnnotatedString>()
     var start = 0
     while (true) {

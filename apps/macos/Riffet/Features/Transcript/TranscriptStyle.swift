@@ -5,6 +5,8 @@ import RiffetKit
 /// thread and handed to the layout queue. Two layouts made with equal `key`s are interchangeable.
 struct TranscriptStyle: @unchecked Sendable {
     let palette: Palette
+    let codeTheme: RiffetCodeThemeValues
+    let codeThemeRevision: String
     let scale: CGFloat
     let density: CGFloat
     /// The reading column the reader chose (640–1600).
@@ -41,13 +43,15 @@ struct TranscriptStyle: @unchecked Sendable {
     static let gutterWidth: CGFloat = 28
 
     /// The revision belongs in the key: editing a custom theme keeps its id and changes its colours.
-    var key: String { "\(palette.values.id)|\(palette.revision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(toolRun.rawValue)|\(block.rawValue),\(paper == \.bg)|\(iconPack)|\(mark == \.accent),\(link == \.accent)|\(bodyLineHeight),\(inlineCode.rawValue),\(ink.rawValue)" }
+    var key: String { "\(palette.values.id)|\(palette.revision)|\(codeTheme.id)|\(codeThemeRevision)|\(scale)|\(density)|\(column)|\(dark)|\(fonts.key)|\(styleFonts.ui),\(styleFonts.mono)|\(radii.control),\(radii.container),\(radii.card),\(radii.floating)|\(toolRun.rawValue)|\(block.rawValue),\(paper == \.bg)|\(iconPack)|\(mark == \.accent),\(link == \.accent)|\(bodyLineHeight),\(inlineCode.rawValue),\(ink.rawValue)" }
 
     @MainActor
     static func current(dark: Bool) -> TranscriptStyle {
         let preferences = DisplayPreferences.shared
         let native = preferences.style.backend == .native
-        return TranscriptStyle(palette: ThemeStore.shared.palette, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, toolRun: preferences.style.toolRun, block: preferences.style.block, paper: preferences.style.window == .flat ? \.bgElevated : \.bg, iconPack: IconPack.shared.effective, mark: preferences.style.ink == .quiet ? \.fg2 : Palette.markRole, link: native ? \.fg : \.accent, native: native, bodyLineHeight: preferences.style.text.readingLine, inlineCode: preferences.style.inlineCode, ink: preferences.style.ink)
+        let codeTheme = ThemeStore.shared.codeTheme
+        let codeRevision = ThemeStore.shared.codeThemeRevision
+        return TranscriptStyle(palette: ThemeStore.shared.palette, codeTheme: codeTheme, codeThemeRevision: codeRevision, scale: preferences.textScale, density: preferences.density, column: preferences.contentWidth, dark: dark, fonts: AppearanceStore.shared.fonts, styleFonts: preferences.style.fonts, radii: preferences.style.radii, toolRun: preferences.style.toolRun, block: preferences.style.block, paper: preferences.style.window == .flat ? \.bgElevated : \.bg, iconPack: IconPack.shared.effective, mark: preferences.style.ink == .quiet ? \.fg2 : Palette.markRole, link: native ? \.fg : \.accent, native: native, bodyLineHeight: preferences.style.text.readingLine, inlineCode: preferences.style.inlineCode, ink: preferences.style.ink)
     }
 
     func s(_ size: CGFloat) -> CGFloat { ladderTextSize(size) * scale }
@@ -68,6 +72,10 @@ struct TranscriptStyle: @unchecked Sendable {
 
     func color(_ role: KeyPath<RiffetPaletteValues, RiffetRGBA> & Sendable, _ opacity: CGFloat = 1) -> NSColor {
         palette.nsColor(role, opacity: opacity)
+    }
+
+    func codeColor(_ role: KeyPath<RiffetCodePaletteValues, RiffetRGBA> & Sendable) -> NSColor {
+        palette.codeNSColor(role, codeTheme: codeTheme, codeRevision: codeThemeRevision)
     }
 
     /// The role's colour in this appearance as `#rrggbb` (for pages that take a colour).

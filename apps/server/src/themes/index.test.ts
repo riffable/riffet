@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { THEME_ANSI_KEYS, THEME_ROLES, type CustomTheme, type ThemePalette, type ThemeDesign } from '../../../../packages/contracts/src/index.js';
+import { CODE_THEME_ROLES, importCodeThemeJson, THEME_ANSI_KEYS, THEME_ROLES, type CodeThemePalette, type CustomCodeSyntax, type CustomTheme, type ThemePalette, type ThemeDesign } from '../../../../packages/contracts/src/index.js';
 import { AppError } from '../errors.js';
 import { ThemeService, themeLibraryRevision } from './index.js';
 
@@ -155,5 +155,65 @@ describe('ThemeService', () => {
     const error = await themes.replaceLibrary({ expectedRevision: 'anything', themes: [theme()] }).catch(value => value);
     expect((error as AppError).code).toBe('THEME_STORAGE_CORRUPT');
     expect(readFileSync(file, 'utf8')).toBe('{ not json');
+  });
+
+  it('persists and canonicalizes optional custom code syntax and rejects invalid syntax shapes', async () => {
+    const { themes, stateDir } = service();
+    const revision = themes.getLibrary().revision;
+    const makeColors = (hex: string) => Object.fromEntries(CODE_THEME_ROLES.map((role) => [role, hex])) as CodeThemePalette;
+    const syntax: CustomCodeSyntax = {
+      light: { colors: makeColors('#0033B3'), commentItalic: false },
+      dark: { colors: makeColors('#CF8E6D') },
+    };
+    const saved = await themes.replaceLibrary({ expectedRevision: revision, themes: [{ ...theme(), syntax }] });
+    expect(saved.themes[0]?.syntax).toEqual({
+      light: { colors: makeColors('#0033b3'), commentItalic: false },
+      dark: { colors: makeColors('#cf8e6d'), commentItalic: true },
+    });
+    expect(new ThemeService({ stateDir }).getLibrary()).toEqual(saved);
+
+    // Reordered keys and hex casing keep the same revision (idempotent retry).
+    const reorderedDark = Object.fromEntries([...CODE_THEME_ROLES].reverse().map((role) => [role, '#cf8e6d'])) as CodeThemePalette;
+    const retried = await themes.replaceLibrary({
+      expectedRevision: revision,
+      themes: [{ ...theme(), syntax: { dark: { commentItalic: true, colors: reorderedDark }, light: syntax.light } }],
+    });
+    expect(retried).toEqual(saved);
+
+    const invalidSyntaxes: unknown[] = [
+      null,
+      { light: { colors: makeColors('#0033b3') } },
+      { light: { colors: { comment: '#0033b3' } }, dark: { colors: makeColors('#cf8e6d') } },
+      { light: { colors: { ...makeColors('#0033b3'), comment: 'red' } }, dark: { colors: makeColors('#cf8e6d') } },
+      { light: { colors: makeColors('#0033b3'), commentItalic: 'yes' }, dark: { colors: makeColors('#cf8e6d') } },
+    ];
+    for (const bad of invalidSyntaxes) {
+      const err = await themes.replaceLibrary({ expectedRevision: saved.revision, themes: [{ ...theme(), syntax: bad } as CustomTheme] }).catch((v) => v);
+      expect(err).toBeInstanceOf(AppError);
+      expect((err as AppError).code).toBe('INVALID_THEMES');
+    }
+  });
+
+  it('imports VS Code JSONC themes into Riffet syntax roles', () => {
+    const imported = importCodeThemeJson(`{
+      // JSONC comment
+      "name": "Sample Dark",
+      "type": "dark",
+      "colors": { "editor.foreground": "#e6edf3", "editor.background": "#0d1117" },
+      "tokenColors": [
+        { "scope": ["comment", "punctuation.definition.comment"], "settings": { "foreground": "#8b949e", "fontStyle": "italic" } },
+        { "scope": "keyword", "settings": { "foreground": "#ff7b72" } },
+        { "scope": "string", "settings": { "foreground": "#a5d6ff" } },
+        { "scope": "constant.numeric", "settings": { "foreground": "#79c0ff" } },
+      ],
+    }`);
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) return;
+    expect(imported.value.mode).toBe('dark');
+    expect(imported.value.half?.commentItalic).toBe(true);
+    expect(imported.value.half?.colors.comment).toBe('#8b949e');
+    expect(imported.value.half?.colors.keyword).toBe('#ff7b72');
+    expect(imported.value.half?.colors.string).toBe('#a5d6ff');
+    expect(imported.value.half?.colors.number).toBe('#79c0ff');
   });
 });
