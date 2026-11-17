@@ -281,6 +281,10 @@ msgstr "Middle omitted · Show all"
 msgid "主会话模型"
 msgstr "Main conversation model"
 
+#: src/app/session/Timeline.tsx
+msgid "主对话"
+msgstr "Main conversation"
+
 #: src/app/session/Markdown.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "交互预览"
@@ -602,6 +606,10 @@ msgstr "Send failed"
 msgid "发送失败，可恢复内容后重试"
 msgstr "Send failed. Restore the content and try again."
 
+#: src/app/session/toolView.ts
+msgid "发送消息"
+msgstr "Send messages"
+
 #: src/app/session/nativeRunCommands.ts
 msgid "发送记录缺失，无法重试"
 msgstr "The send record is missing, so it can't be retried."
@@ -632,6 +640,10 @@ msgstr "Disable word wrap"
 #: src/app/session/ComposerDock.tsx
 msgid "受阻"
 msgstr "Blocked"
+
+#: src/app/session/Timeline.tsx
+msgid "另一个 Agent"
+msgstr "Another agent"
 
 #: src/app/session/marks.tsx
 msgid "只能收藏位图图片"

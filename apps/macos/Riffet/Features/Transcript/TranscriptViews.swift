@@ -774,7 +774,7 @@ final class FooterView: FragmentView {
     func configure(_ spec: FooterSpec) {
         if let current = self.spec, current.time == spec.time, current.copy == spec.copy, current.trailing == spec.trailing,
            current.speed?.label == spec.speed?.label, current.status?.0 == spec.status?.0, current.status?.1 === spec.status?.1, current.statusSymbol == spec.statusSymbol,
-           current.turnRunId == spec.turnRunId, current.keepsShown == spec.keepsShown {
+           current.turnRunId == spec.turnRunId, current.keepsShown == spec.keepsShown, current.source == spec.source {
             self.spec = spec
             tick()
             return
@@ -815,18 +815,21 @@ final class FooterView: FragmentView {
         guard let spec, let style = host?.style else { return [] }
         let font = NSFont.riffetDigits(size: style.s(11))
         var result: [(NSAttributedString, String?)] = []
-        if let status = spec.status {
+        // A leading glyph and a label in one colour: the sender, then the delivery status.
+        func labelled(_ text: String, symbol: String?, color: NSColor) -> NSAttributedString {
             let label = NSMutableAttributedString(string: "")
-            if let name = spec.statusSymbol, let image = symbolImage(name, size: style.s(11), color: status.1) {
+            if let symbol, let image = symbolImage(symbol, size: style.s(11), color: color) {
                 let attachment = NSTextAttachment()
                 attachment.image = image
                 attachment.bounds = CGRect(x: 0, y: -2, width: style.s(11), height: style.s(11))
                 label.append(NSAttributedString(attachment: attachment))
                 label.append(NSAttributedString(string: " "))
             }
-            label.append(NSAttributedString(string: status.0, attributes: [.font: style.font(11), .foregroundColor: status.1]))
-            result.append((label, "status"))
+            label.append(NSAttributedString(string: text, attributes: [.font: style.font(11), .foregroundColor: color]))
+            return label
         }
+        if let source = spec.source { result.append((labelled(source, symbol: "person.crop.square", color: style.color(\.fg3)), "source")) }
+        if let status = spec.status { result.append((labelled(status.0, symbol: spec.statusSymbol, color: status.1), "status")) }
         if let time = formatDateTime(value: spec.time) {
             result.append((NSAttributedString(string: time, attributes: [.font: font, .foregroundColor: style.color(\.fg3)]), "time"))
         }

@@ -44,6 +44,8 @@
     <!-- Messages -->
     <string name="timeline_copy_message">Copy message</string>
     <string name="timeline_steer">Follow-up</string>
+    <string name="timeline_from_coordinator">Main conversation</string>
+    <string name="timeline_from_peer">Another agent</string>
     <string name="timeline_thinking">Thinking…</string>
 
     <!-- Plans, notifications and statuses -->
@@ -77,6 +79,7 @@
     <string name="timeline_tool_run_move">Move files</string>
     <string name="timeline_tool_run_fetch">Browse the web</string>
     <string name="timeline_tool_run_agent">Delegate tasks</string>
+    <string name="timeline_tool_run_message">Send messages</string>
     <string name="timeline_tool_run_think">Thinking</string>
     <string name="timeline_tool_run_switch_mode">Switch modes</string>
     <string name="timeline_tool_run_question">Ask the user</string>

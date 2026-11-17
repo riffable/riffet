@@ -594,6 +594,26 @@ describe('Claude subagent transcripts', () => {
     expect(frame!.history).toMatchObject({ generation: 'claude-sub:child-1', hasMore: false });
   });
 
+  it('reads the leading conversation\'s message and the hand-back as the child\'s conversation', async () => {
+    const child = (row: Record<string, unknown>) => ({ isSidechain: true, agentId: 'child-1', sessionId: 'native-session', ...row });
+    const file = subagentSession(
+      [agentCall('tool-1', { description: 'Child', prompt: 'Do it' })],
+      [{ agentId: 'child-1', meta: { toolUseId: 'tool-1', agentType: 'general-purpose' }, lines: [
+        childRow('child-1', { type: 'user', uuid: 'cu1', text: 'Do it', at: at(1) }),
+        child({ type: 'user', uuid: 'cu2', timestamp: at(2), isMeta: true, origin: { kind: 'coordinator' },
+          message: { role: 'user', content: 'The coordinator sent a message while you were working:\nAlso check Mac.\n\nAddress this before completing your current task.' } }),
+        child({ type: 'assistant', uuid: 'ca1', timestamp: at(3), message: { id: 'm1', role: 'assistant', stop_reason: 'tool_use',
+          content: [{ type: 'tool_use', id: 'hb-1', name: 'SubagentHandback', input: { message: '## Report' } }] } }),
+        child({ type: 'user', uuid: 'cu3', timestamp: at(4), toolUseResult: { success: true, message: 'Report delivered to your caller.' },
+          message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'hb-1', content: [{ type: 'text', text: '{"success":true}' }] }] } }),
+      ] }],
+    );
+    const events = (await open(file)).subagentFrames()[0]!.events;
+    expect(events.map(event => event.type)).toEqual(['user_message_chunk', 'user_message_chunk', 'agent_message_chunk']);
+    expect(events[1]!.data).toMatchObject({ from: 'coordinator', content: { text: 'Also check Mac.' } });
+    expect(events[2]!.data).toMatchObject({ phase: 'final_answer', content: { text: '## Report' } });
+  });
+
   it('keeps sidechain rows out of the parent and reads them from the child', async () => {
     const file = subagentSession(
       [agentCall('tool-1', { description: 'Child', prompt: 'Do it' }, 'Task')],
@@ -905,17 +925,23 @@ describe('Claude subagent notifications', () => {
     expect(transcript.allEvents().map((event) => event.type)).toEqual(['user_message_chunk']);
   });
 
-  it('keeps a hand-back receipt out of a task report without dropping real output', async () => {
+  it('shows a hand-back report once, in place of the receipt that follows it, without dropping real output', async () => {
     const taskId = 'a9f4ad73eb6bcb9f6';
     const receipt = `This agent's report was delivered to you as a message from "${taskId}" (its SubagentHandback call). Read it there; it is not repeated here.`;
     const output = `${receipt}\n\nThe actual report follows: the native clients share the same failure.`;
+    const handback = {
+      type: 'user', uuid: 'handback', timestamp: '2026-10-04T05:00:04.000Z', isMeta: true, promptId: 'handback-prompt',
+      origin: { kind: 'peer', from: taskId, senderTaskId: taskId, name: 'general-purpose', handback: true, handbackReportText: '成语：抛砖引玉' },
+      message: { role: 'user', content: `Another Claude session sent a message:\n<agent-message from="${taskId}">\n[Subagent hand-back] The report follows:\n  成语：抛砖引玉\n</agent-message>` },
+    };
     const transcript = await open([
+      handback,
       noticeRow(notice({ result: receipt })),
       { ...noticeRow(notice({ toolUseId: 'tool-2', result: output })), uuid: 'notice-with-report' },
     ]);
     const reports = transcript.allEvents().filter(event => event.type === 'task_notification');
-    expect(reports[0]?.data).toMatchObject({ status: 'completed', taskId, subagentToolCallId: 'tool-1' });
-    expect(reports[0]?.data.detail).toBeUndefined();
+    expect(reports).toHaveLength(2);
+    expect(reports[0]?.data).toMatchObject({ kind: 'subagent', status: 'completed', taskId, detail: '成语：抛砖引玉' });
     expect(reports[1]?.data.detail).toBe(output);
   });
 

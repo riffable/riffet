@@ -149,6 +149,8 @@ struct FooterSpec {
     var clock: DisclosureSpec.Clock?
     /// The line holds a delivery status and its actions, so the time stays with them.
     var keepsShown = false
+    /// Who wrote a message the reader did not type: the main conversation or another agent.
+    var source: String? = nil
 }
 
 /// A fenced block's chrome: language, the Markdown and wrap switches, copy.

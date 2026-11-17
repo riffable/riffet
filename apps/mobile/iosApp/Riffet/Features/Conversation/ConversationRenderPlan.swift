@@ -308,6 +308,7 @@ struct ConversationToolRunHeader: View {
         case "agent": String(localized: "委派任务", bundle: .riffet)
         case "think": String(localized: "思考", bundle: .riffet)
         case "switch_mode": String(localized: "切换模式", bundle: .riffet)
+        case "message": String(localized: "发送消息", bundle: .riffet)
         case "question": String(localized: "询问用户", bundle: .riffet)
         case "plan": String(localized: "更新计划", bundle: .riffet)
         default: String(localized: "调用工具", bundle: .riffet)

@@ -397,6 +397,10 @@ msgstr "iPhones in the background will no longer get notifications"
 msgid "JSON 格式无法解析"
 msgstr "Invalid JSON"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "Kotlin 字段已经补上，按原来的要求继续做 Mac 部分"
+msgstr "The Kotlin fields are in. Continue with the Mac part as briefed."
+
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
 msgstr "Mac does not hand-write these values: edit the source, run the generator, then confirm the output is current with --check."

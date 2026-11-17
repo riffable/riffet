@@ -522,7 +522,13 @@ struct RowBuilder {
             }
         }
         let time = timelineItemTime(item: item)
-        let footer = FooterSpec(status: footerStatus, time: time, copy: item.text, trailing: true, statusSymbol: item.run?.native?.intent == "steer" ? "arrow.turn.up.right" : nil, keepsShown: !actions.isEmpty)
+        // A message another agent wrote names who: the main conversation, or another agent.
+        let source: String? = switch item.from {
+        case "coordinator": String(localized: "主对话")
+        case "peer": String(localized: "另一个 Agent")
+        default: nil
+        }
+        let footer = FooterSpec(status: footerStatus, time: time, copy: item.text, trailing: true, statusSymbol: item.run?.native?.intent == "steer" ? "arrow.turn.up.right" : nil, keepsShown: !actions.isEmpty || source != nil, source: source)
         if actions.isEmpty {
             fragments.append(Fragment(frame: CGRect(x: x, y: cursor, width: width, height: 20), kind: .footer(footer)))
             cursor += 20
@@ -806,6 +812,7 @@ struct RowBuilder {
         case "fetch": String(localized: "访问网页")
         case "agent": String(localized: "委派任务")
         case "think": String(localized: "思考")
+        case "message": String(localized: "发送消息")
         case "switch_mode": String(localized: "切换模式")
         case "question": String(localized: "询问用户")
         case "plan": String(localized: "更新计划")
@@ -1789,6 +1796,7 @@ enum ToolSymbols {
         case "fetch": "globe"
         case "switch_mode": "repeat"
         case "agent": "person.crop.circle"
+        case "message": "paperplane"
         case "question": "questionmark.bubble"
         case "goal": "target"
         default: "wrench.and.screwdriver"

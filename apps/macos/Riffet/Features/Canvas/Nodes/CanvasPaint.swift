@@ -281,6 +281,7 @@ enum CanvasIcons {
         case "fetch": .globe
         case "switch_mode": .repeat
         case "agent": .bot
+        case "message": .send
         case "question": .messageCircleQuestion
         case "plan": .listChecks
         default: .wrench

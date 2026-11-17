@@ -359,6 +359,7 @@ internal fun toolIcon(kind: String): ImageVector = when (kind) {
     "fetch" -> RiffetIcons.Globe
     "switch_mode" -> RiffetIcons.Repeat
     "agent" -> RiffetIcons.Bot
+    "message" -> RiffetIcons.Send
     "question" -> RiffetIcons.MessageQuestion
     "goal" -> RiffetIcons.Target
     else -> RiffetIcons.Wrench

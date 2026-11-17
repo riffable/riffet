@@ -129,6 +129,7 @@ private fun toolRunLabel(kind: String): StringResource = when (kind) {
     "move" -> Res.string.timeline_tool_run_move
     "fetch" -> Res.string.timeline_tool_run_fetch
     "agent" -> Res.string.timeline_tool_run_agent
+    "message" -> Res.string.timeline_tool_run_message
     "think" -> Res.string.timeline_tool_run_think
     "switch_mode" -> Res.string.timeline_tool_run_switch_mode
     "question" -> Res.string.timeline_tool_run_question

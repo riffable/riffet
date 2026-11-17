@@ -6156,6 +6156,26 @@
         }
       }
     },
+    "另一个 Agent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Another agent"
+          }
+        }
+      }
+    },
+    "主对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Main conversation"
+          }
+        }
+      }
+    },
     "主按钮": {
       "localizations": {
         "en": {

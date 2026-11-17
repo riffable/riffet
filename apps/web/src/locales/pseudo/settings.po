@@ -397,6 +397,10 @@ msgstr ""
 msgid "JSON 格式无法解析"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "Kotlin 字段已经补上，按原来的要求继续做 Mac 部分"
+msgstr ""
+
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
 msgstr ""

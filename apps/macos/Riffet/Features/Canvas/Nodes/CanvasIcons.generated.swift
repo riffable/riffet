@@ -35,6 +35,7 @@ enum CanvasIcon: String, CaseIterable, Sendable {
     case maximize = "maximize"
     case play = "play"
     case target = "target"
+    case send = "send"
     case image = "image"
 
     var paths: [String] {
@@ -72,6 +73,7 @@ enum CanvasIcon: String, CaseIterable, Sendable {
         case .maximize: ["M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3"]
         case .play: ["M6 3L20 12L6 21L6 3Z"]
         case .target: ["M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0", "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"]
+        case .send: ["M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z", "m21.854 2.147-10.94 10.939"]
         case .image: ["M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2Z", "M7 9a2 2 0 1 0 4 0a2 2 0 1 0 -4 0", "m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"]
         }
     }

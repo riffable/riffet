@@ -260,6 +260,8 @@ sealed interface TimelineItem {
         val references: List<riffet.contracts.CapturedSessionReference> = emptyList(),
         /** Its failure is already represented by a loaded timeline status, including after replay. */
         val failureShown: Boolean = false,
+        /** `coordinator` (the main conversation writing into a subagent) or `peer` (another agent); null when the reader typed it. */
+        val from: String? = null,
     ) : TimelineItem
 
     data class Assistant(

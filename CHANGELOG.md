@@ -19,6 +19,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - A new task takes one sentence, lets you pick the model, and is either added to To do or started right away; completion criteria are optional. A new Task board settings page sets the default agent and model, and whether new conversations become tasks (off by default).
 - Settings are regrouped: new Features, Access and Server groups; bots, the assistant and quick chat sit under Features.
 - Work a turn delegated (subagents, background commands) stays visible after the turn ends.
+- A Claude Code subagent's report shows in the main conversation's notice and as the answer on the subagent's page; messages the main conversation sends a subagent mid-task show on both sides.
 
 ### Backends
 

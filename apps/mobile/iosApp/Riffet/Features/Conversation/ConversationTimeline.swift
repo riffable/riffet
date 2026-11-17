@@ -3,6 +3,15 @@ import UIKit
 import RiffetKit
 import Observation
 
+/// Who wrote a user row the reader did not type: the main conversation, or another agent.
+func conversationAgentSender(_ from: String?) -> String? {
+    switch from {
+    case "coordinator": String(localized: "主对话", bundle: .riffet)
+    case "peer": String(localized: "另一个 Agent", bundle: .riffet)
+    default: nil
+    }
+}
+
 struct ConversationTimelineRow: View, Equatable {
     let row: any TimelineRow
     let workbench: Workbench
@@ -227,8 +236,17 @@ struct ConversationTimelineItem: View {
                         .padding(.horizontal, 14).padding(.vertical, 10)
                         .background(palette.selected, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .frame(maxWidth: 300, alignment: .trailing)
-                    if let date = ServerTime.date(user.event.createdAt) {
-                        Text(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4)
+                    let sender = conversationAgentSender(user.from)
+                    let date = ServerTime.date(user.event.createdAt)
+                    if sender != nil || date != nil {
+                        HStack(spacing: 4) {
+                            if let sender {
+                                Label(sender, systemImage: ConversationToolHeader.symbol(kind: "agent")).labelStyle(.titleAndIcon).riffetFont(.caption).foregroundStyle(palette.fg3)
+                            }
+                            if let date {
+                                Text(date.formatted(Date.FormatStyle(date: .omitted, time: .shortened).locale(AppLocalization.shared.locale))).riffetFont(.caption).monospacedDigit().foregroundStyle(palette.fg4)
+                            }
+                        }
                     }
                 }
                 if let run = user.run, !user.failureShown, !nativeDeliveryLabel(run).isEmpty {

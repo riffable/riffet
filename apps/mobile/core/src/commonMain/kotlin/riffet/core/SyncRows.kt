@@ -39,6 +39,7 @@ fun timelineItem(row: TimelineRow, sessionId: String, run: Run? = null, failureS
             run = run,
             references = body.references.orEmpty(),
             failureShown = failureShown,
+            from = str(event.data["from"])?.takeIf { it == "coordinator" || it == "peer" },
         )
         is TimelineRow.Body.Assistant -> TimelineItem.Assistant(
             key = row.key,

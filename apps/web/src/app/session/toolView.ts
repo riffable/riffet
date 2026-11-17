@@ -65,7 +65,7 @@ export function toolRunSummary(items: Extract<TimelineItem, { kind: 'tool' }>[])
   const labels = {
     read: msg`读取文件`, search: msg`搜索内容`, execute: msg({ message: '运行命令', context: 'tool-action' }),
     edit: msg`修改文件`, delete: msg`删除文件`, move: msg`移动文件`, fetch: msg`访问网页`,
-    agent: msg`委派任务`, think: msg`思考`, switch_mode: msg`切换模式`, question: msg`询问用户`, plan: msg`更新计划`,
+    agent: msg`委派任务`, message: msg`发送消息`, think: msg`思考`, switch_mode: msg`切换模式`, question: msg`询问用户`, plan: msg`更新计划`,
     other: msg`调用工具`,
   };
   const kinds = new Set<keyof typeof labels>();

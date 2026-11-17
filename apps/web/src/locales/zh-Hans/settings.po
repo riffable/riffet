@@ -397,6 +397,10 @@ msgstr "iPhone 在后台将不再收到通知"
 msgid "JSON 格式无法解析"
 msgstr "JSON 格式无法解析"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "Kotlin 字段已经补上，按原来的要求继续做 Mac 部分"
+msgstr "Kotlin 字段已经补上，按原来的要求继续做 Mac 部分"
+
 #: src/app/design/mac/PlatformChapter.tsx
 msgid "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"
 msgstr "Mac 不手写这些值：改源文件，运行生成器，再用 --check 确认生成物最新。"

@@ -44,6 +44,8 @@ export interface ClaudeTaskNotice {
   result?: string;
   /** A Monitor's `<event>`: one line it printed. */
   eventText?: string;
+  /** The result is only a receipt: the agent's report arrived as its own hand-back row, which shows it. */
+  handedBack?: true;
   taskType?: string;
   tokens?: number;
   durationMs?: number;
@@ -105,7 +107,8 @@ export function taskNotification(content: unknown): ClaudeTaskNotice | undefined
   const taskId = notificationField(inner, 'task-id');
   const toolUseId = notificationField(inner, 'tool-use-id');
   const outputFile = notificationField(inner, 'output-file');
-  const result = taskReportDetail(notificationField(inner, 'result'), taskId);
+  const reported = notificationField(inner, 'result');
+  const result = taskReportDetail(reported, taskId);
   const eventText = notificationField(inner, 'event');
   const taskType = notificationField(inner, 'task-type');
   return {
@@ -117,6 +120,7 @@ export function taskNotification(content: unknown): ClaudeTaskNotice | undefined
     ...(toolUseId ? { toolUseId } : {}),
     ...(outputFile ? { outputFile } : {}),
     ...(result ? { result } : {}),
+    ...(reported && !result ? { handedBack: true as const } : {}),
     ...(eventText ? { eventText } : {}),
     ...(taskType ? { taskType } : {}),
     ...(Number.isFinite(tokens) ? { tokens } : {}),
@@ -477,6 +481,12 @@ export class ClaudeActivities {
     const known = id ? this.states.get(id) : undefined;
     const kind = (known?.task?.kind as ClaudeTaskKind | undefined) ?? kindFromSummary(notice);
     return { ...(kind ? { kind } : {}), ...(known?.task?.command ? { command: known.task.command } : {}) };
+  }
+
+  /** The agent a task id names, as its launch titled it. */
+  agentOf(taskId: string): { title: string; toolCallId?: string } | undefined {
+    const known = this.states.get(activityId('claude', taskId));
+    return known?.task?.kind === 'agent' ? { title: known.title, ...(known.toolCallId ? { toolCallId: known.toolCallId } : {}) } : undefined;
   }
 
   private put(next: NativeActivity, at: string, runId: string | undefined): MappedEvent[] {

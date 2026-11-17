@@ -16,7 +16,7 @@ const NAMES = [
   'arrow-right-left', 'fold-horizontal', 'brain', 'clock', 'check', 'circle', 'circle-alert', 'circle-check', 'folder', 'folder-closed',
   'git-branch', 'git-commit-horizontal', 'git-fork', 'globe', 'list-checks', 'paperclip', 'plus', 'search', 'sparkle', 'sparkles',
   'square-terminal', 'message-circle-question', 'wrench', 'file-text', 'file-pen-line', 'trash-2', 'repeat', 'bot', 'loader-circle',
-  'minus', 'maximize', 'play', 'target',
+  'minus', 'maximize', 'play', 'target', 'send',
 ];
 // `IconImage` of the canvas plugin is drawn by hand (not Lucide's own `image`), in the same set's style.
 const EXTRA = { image: [{ tag: 'rect', a: { x: 3, y: 3, width: 18, height: 18, rx: 2 } }, { tag: 'circle', a: { cx: 9, cy: 9, r: 2 } }, { tag: 'path', a: { d: 'm21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21' } }] };

@@ -193,6 +193,7 @@ struct ConversationToolHeader: View {
         case "fetch": return "globe"
         case "switch_mode": return "arrow.2.squarepath"
         case "agent": return "person.crop.circle"
+        case "message": return "paperplane"
         case "question": return "questionmark.bubble"
         case "goal": return "target"
         default: return "wrench.and.screwdriver"

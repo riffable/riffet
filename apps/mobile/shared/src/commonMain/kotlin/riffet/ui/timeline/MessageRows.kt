@@ -144,8 +144,20 @@ internal fun UserRow(item: TimelineItem.User, stopShown: Boolean = true) {
             } else {
                 CopyTextButton(item.text, stringResource(Res.string.timeline_copy_message))
             }
-            if (delivery != null || time != null) {
+            if (delivery != null || time != null || item.from != null) {
                 Spacer(Modifier.width(4.dp))
+                if (item.from != null) {
+                    Icon(RiffetIcons.Bot, null, modifier = Modifier.size(12.dp), tint = colors.fg3)
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = stringResource(if (item.from == "peer") Res.string.timeline_from_peer else Res.string.timeline_from_coordinator),
+                        style = type.caption,
+                        color = colors.fg3,
+                        maxLines = 1,
+                        softWrap = false,
+                    )
+                    Spacer(Modifier.width(4.dp))
+                }
                 if (item.run?.native?.intent == "steer") {
                     Icon(RiffetIcons.Steer, stringResource(Res.string.timeline_steer), modifier = Modifier.size(12.dp), tint = colors.fg3)
                     Spacer(Modifier.width(4.dp))

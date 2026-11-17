@@ -193,6 +193,31 @@ export function subagentSettles(row: ClaudeRow): boolean | undefined {
   return calls.some(part => string(part?.name) !== 'SubagentHandback') ? false : undefined;
 }
 
+/**
+ * A subagent's report delivered to the agent that launched it (`SubagentHandback`): Claude Code writes it as a
+ * hidden peer row, with the report itself beside the framing it wraps it in.
+ */
+function handbackOf(row: ClaudeRow): { taskId: string; report: string } | undefined {
+  const origin = record(row.origin);
+  if (row.type !== 'user' || origin?.kind !== 'peer' || origin.handback !== true) return undefined;
+  const taskId = string(origin.senderTaskId) ?? string(origin.from), report = string(origin.handbackReportText);
+  return taskId && report?.trim() ? { taskId, report } : undefined;
+}
+
+/**
+ * What another agent wrote to a subagent while it worked: the conversation leading it (`coordinator`) or
+ * another agent (`peer`). The CLI's framing around it is addressed to the model, not part of the message.
+ */
+function agentMessageOf(row: ClaudeRow): { text: string; from: 'coordinator' | 'peer' } | undefined {
+  if (!subagentWake(row)) return undefined;
+  const origin = record(row.origin)!;
+  const raw = rowText(record(row.message)?.content);
+  const text = origin.kind === 'coordinator'
+    ? raw.replace(/^The coordinator sent a message while you were working:\n/, '').replace(/\s*Address this before completing your current task\.\s*$/, '')
+    : string(origin.body) ?? /<agent-message(?:\s[^>]*)?>\n?([\s\S]*?)\n?<\/agent-message>/.exec(raw)?.[1] ?? '';
+  return text.trim() ? { text: text.trim(), from: origin.kind === 'coordinator' ? 'coordinator' : 'peer' } : undefined;
+}
+
 /** The live turn a child's frame names: only while it runs, and only once a round is known. */
 function liveSubagentTurn(state: ClaudeSubagentState, running: boolean): { activeTurnId?: string } {
   return running && state.turnId ? { activeTurnId: state.turnId } : {};
@@ -397,14 +422,16 @@ function describeTool(name: string, input: Record<string, unknown>, unbounded = 
       : ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) ? `${name} ${path?.split(/[\\/]/).at(-1) ?? 'file'}`
         : name === 'AskUserQuestion' ? 'Ask a question'
           : name === 'ExitPlanMode' ? 'Review plan'
-            : subagent ? string(input.description) ?? 'Subagent' : name;
+            : subagent ? string(input.description) ?? 'Subagent'
+              : name === 'SendMessage' ? string(input.summary)?.trim() || name : name;
   const kind = name === 'Bash' || name === 'Monitor' ? 'execute'
     : name === 'Read' ? 'read'
       : ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(name) ? 'edit'
         : name === 'AskUserQuestion' ? 'question'
           : name === 'ExitPlanMode' ? 'plan'
             : subagent ? 'agent'
-              : ['Grep', 'Glob', 'WebSearch'].includes(name) ? 'search' : 'other';
+              : name === 'SendMessage' ? 'message'
+                : ['Grep', 'Glob', 'WebSearch'].includes(name) ? 'search' : 'other';
   /**
    * The reader asked to see what a file edit did, and the CLI's own input carries both sides of it:
    * `Edit` sends the replaced and the replacement text, `Write` sends the new file whole. Every
@@ -426,6 +453,8 @@ function describeTool(name: string, input: Record<string, unknown>, unbounded = 
     // rather than as a `plan` event: that channel carries todo entries, and a client reading it for
     // `entries` drops a body it finds there.
     ...(name === 'ExitPlanMode' && string(input.plan) ? { content: [{ type: 'markdown', text: unbounded ? string(input.plan)! : clip(string(input.plan)!) }] } : {}),
+    // A message to another agent is prose for that agent; its result only says it was delivered.
+    ...(name === 'SendMessage' && string(input.message)?.trim() ? { content: [{ type: 'markdown', text: unbounded ? string(input.message)! : clip(string(input.message)!) }] } : {}),
     ...((name === 'Bash' || name === 'Monitor') && string(input.command) ? { command: input.command } : {}),
     // A call that returns at once and keeps running: the row says so before the result shows the task id.
     ...(!subagent && input.run_in_background === true ? { background: true } : {}),
@@ -609,6 +638,8 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         || (toolResults.length === 1 && (call?.name === 'TaskCreate' || call?.name === 'TaskUpdate') && rowResult.success === false)
         || (call?.name === 'TaskUpdate' && resultTaskId !== undefined && resultTaskId === callTaskId && rowResult.success === false);
       hooks.onToolResult?.(toolUseId, failed);
+      // The hand-back already shows as the subagent's answer; its result only says it was delivered.
+      if (call?.name === 'SubagentHandback' && !failed) { state.calls.delete(toolUseId); continue; }
       if (call?.name === 'TaskCreate' || call?.name === 'TaskUpdate') {
         const resultText = typeof part.content === 'string' ? part.content : rowText(part.content);
         const result = resultMatchesCall ? rowResult : {};
@@ -623,7 +654,8 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         continue;
       }
       const observed = hooks.observedChanges?.(toolUseId) ?? [];
-      const resultContent = [...toolResultContent(part.content, call, failed, hooks.unbounded), ...observed];
+      const receipt = call?.name === 'SendMessage' && !failed;
+      const resultContent = [...(receipt ? [] : toolResultContent(part.content, call, failed, hooks.unbounded)), ...observed];
       events.push({ ...resultBase(index, call), type: 'tool_call_update', data: {
         sessionUpdate: 'tool_call_update', toolCallId: toolUseId, status: failed ? 'failed' : 'completed',
         ...(call ? { toolName: call.name } : { contextMissing: true }),
@@ -647,12 +679,27 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       // emits for its own task notifications.
       const notice = taskNotification(content);
       const peerPromptId = hiddenPeerPrompt(row);
-      if (peerPromptId) {
-        if (state.nativeTurnId !== peerPromptId) {
-          state.nativeTurnId = peerPromptId;
-          state.turnId = `claude-turn:${uuid}`;
-          state.turnAt = createdAt;
-        }
+      if (peerPromptId && state.nativeTurnId !== peerPromptId) {
+        state.nativeTurnId = peerPromptId;
+        state.turnId = `claude-turn:${uuid}`;
+        state.turnAt = createdAt;
+      }
+      // A subagent's report is the notice of its end, in the turn it opens for the agent that launched it.
+      const handback = handbackOf(row);
+      if (handback) {
+        const agent = state.activities?.agentOf(handback.taskId);
+        events.push({ ...base(0), type: 'task_notification', data: {
+          sessionUpdate: 'task_notification', kind: 'subagent', status: 'completed', title: agent?.title ?? '子 Agent', taskId: handback.taskId,
+          ...(agent?.toolCallId ? { subagentToolCallId: agent.toolCallId } : {}),
+          detail: hooks.unbounded ? handback.report : clip(handback.report),
+        } });
+        return events;
+      }
+      if (peerPromptId) return events;
+      // In a subagent's own transcript, a message from the agent leading it reads as that agent's prompt.
+      const message = allowSidechain ? agentMessageOf(row) : undefined;
+      if (message) {
+        events.push({ ...base(0), type: 'user_message_chunk', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: message.text }, from: message.from } });
         return events;
       }
       // Other injected rows ride along with a prompt — a loaded skill's whole body, the caveat in
@@ -695,7 +742,8 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       if (notice) {
         const info = activities?.noticeInfo(notice);
         const monitorEvent = info?.kind === 'monitor' && notice.eventText !== undefined && notice.sourceStatus === undefined;
-        events.push({ ...base(0), runId: state.turnId, type: 'task_notification', data: {
+        // A receipt for a report its hand-back row already showed.
+        if (!notice.handedBack) events.push({ ...base(0), runId: state.turnId, type: 'task_notification', data: {
           sessionUpdate: 'task_notification', kind: noticeRowKind(info?.kind), status: monitorEvent ? 'running' : notice.status,
           ...(notice.sourceStatus ? { sourceStatus: notice.sourceStatus } : {}),
           title: notice.title,
@@ -760,6 +808,13 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       const input = record(part.input) ?? {};
       state.calls.set(part.id, { name: part.name, input, ...(state.turnId ? { runId: state.turnId } : {}), ...(state.nativeTurnId ? { nativeTurnId: state.nativeTurnId } : {}) });
       hooks.onToolUse?.(part.id, part.name, input);
+      // A subagent ends a round by handing its report back: that report is its answer.
+      const report = part.name === 'SubagentHandback' ? string(input.message) : undefined;
+      if (report?.trim()) {
+        if (model && model !== '<synthetic>') hooks.onMessageModel?.(base(ordinal).nativeId, model);
+        events.push({ ...base(ordinal++), type: 'agent_message_chunk', data: { sessionUpdate: 'agent_message_chunk', phase: 'final_answer', content: { type: 'text', text: hooks.unbounded ? report : clip(report) } } });
+        continue;
+      }
       events.push({ ...base(ordinal++), type: 'tool_call', data: { sessionUpdate: 'tool_call', toolCallId: part.id, toolName: part.name, status: 'in_progress', ...describeTool(part.name, input, hooks.unbounded) } });
     }
   }

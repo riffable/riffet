@@ -44,6 +44,8 @@
     <!-- Messages -->
     <string name="timeline_copy_message">复制消息</string>
     <string name="timeline_steer">补充</string>
+    <string name="timeline_from_coordinator">主对话</string>
+    <string name="timeline_from_peer">另一个 Agent</string>
     <string name="timeline_thinking">思考中…</string>
 
     <!-- Plans, notifications and statuses -->
@@ -77,6 +79,7 @@
     <string name="timeline_tool_run_move">移动文件</string>
     <string name="timeline_tool_run_fetch">访问网页</string>
     <string name="timeline_tool_run_agent">委派任务</string>
+    <string name="timeline_tool_run_message">发送消息</string>
     <string name="timeline_tool_run_think">思考</string>
     <string name="timeline_tool_run_switch_mode">切换模式</string>
     <string name="timeline_tool_run_question">询问用户</string>

@@ -281,6 +281,10 @@ msgstr "中间部分已省略 · 展开全部"
 msgid "主会话模型"
 msgstr "主会话模型"
 
+#: src/app/session/Timeline.tsx
+msgid "主对话"
+msgstr "主对话"
+
 #: src/app/session/Markdown.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "交互预览"
@@ -602,6 +606,10 @@ msgstr "发送失败"
 msgid "发送失败，可恢复内容后重试"
 msgstr "发送失败，可恢复内容后重试"
 
+#: src/app/session/toolView.ts
+msgid "发送消息"
+msgstr "发送消息"
+
 #: src/app/session/nativeRunCommands.ts
 msgid "发送记录缺失，无法重试"
 msgstr "发送记录缺失，无法重试"
@@ -632,6 +640,10 @@ msgstr "取消自动换行"
 #: src/app/session/ComposerDock.tsx
 msgid "受阻"
 msgstr "受阻"
+
+#: src/app/session/Timeline.tsx
+msgid "另一个 Agent"
+msgstr "另一个 Agent"
 
 #: src/app/session/marks.tsx
 msgid "只能收藏位图图片"

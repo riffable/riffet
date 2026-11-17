@@ -281,6 +281,10 @@ msgstr ""
 msgid "主会话模型"
 msgstr ""
 
+#: src/app/session/Timeline.tsx
+msgid "主对话"
+msgstr ""
+
 #: src/app/session/Markdown.tsx
 #: src/app/session/VisualizationPreview.tsx
 msgid "交互预览"
@@ -602,6 +606,10 @@ msgstr ""
 msgid "发送失败，可恢复内容后重试"
 msgstr ""
 
+#: src/app/session/toolView.ts
+msgid "发送消息"
+msgstr ""
+
 #: src/app/session/nativeRunCommands.ts
 msgid "发送记录缺失，无法重试"
 msgstr ""
@@ -631,6 +639,10 @@ msgstr ""
 
 #: src/app/session/ComposerDock.tsx
 msgid "受阻"
+msgstr ""
+
+#: src/app/session/Timeline.tsx
+msgid "另一个 Agent"
 msgstr ""
 
 #: src/app/session/marks.tsx

@@ -3,7 +3,7 @@ import { createContext, memo, useCallback, useContext, useMemo, type ReactNode }
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { IconArrowRightLeft, IconBot, IconBrain, IconMessageCircleQuestion, IconChevronRight, IconCircle, IconCircleAlert, IconCircleCheck, IconCircleDashed, IconDownload, IconFilePenLine, IconFileText, IconGlobe, IconImage, IconListChecks, IconListTodo, IconRepeat, IconSearch, IconSquareArrowOutUpRight, IconSquareTerminal, IconTrash2, IconWrench, IconX } from '@/components/icons';
+import { IconArrowRightLeft, IconBot, IconBrain, IconMessageCircleQuestion, IconChevronRight, IconCircle, IconCircleAlert, IconCircleCheck, IconCircleDashed, IconDownload, IconFilePenLine, IconFileText, IconGlobe, IconImage, IconListChecks, IconListTodo, IconRepeat, IconSend, IconSearch, IconSquareArrowOutUpRight, IconSquareTerminal, IconTrash2, IconWrench, IconX } from '@/components/icons';
 import { ZoomableImage } from './ImageViewer';
 import { useImageSource } from './imageSource';
 import { revealOnOwnHover, useRestReveal } from './sessionLayout';
@@ -42,7 +42,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 export const toolIcons: Record<string, typeof IconWrench> = {
   read: IconFileText, edit: IconFilePenLine, delete: IconTrash2, move: IconArrowRightLeft, search: IconSearch,
-  execute: IconSquareTerminal, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, agent: IconBot, question: IconMessageCircleQuestion,
+  execute: IconSquareTerminal, think: IconBrain, fetch: IconGlobe, switch_mode: IconRepeat, agent: IconBot, message: IconSend, question: IconMessageCircleQuestion,
   plan: IconListChecks,
 };
 
@@ -139,9 +139,11 @@ function MessageQuotes({ quotes }: { quotes: string[] }) {
   );
 }
 
-export const UserMessage = memo(function UserMessage({ stopShown = true, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
+export const UserMessage = memo(function UserMessage({ stopShown = true, from, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
+  /** Written by another agent, not the reader: the conversation leading a subagent, or a peer agent. */
+  from?: 'coordinator' | 'peer';
   text: string;
   attachments: UserAttachment[];
   references?: CapturedSessionReference[];
@@ -188,7 +190,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, text, a
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {(text || time || delivery) && (
-        <div data-slot="message-meta" {...rest} className={cn('flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !resources && revealOnOwnHover)}>
+        <div data-slot="message-meta" {...rest} className={cn('flex max-w-[82%] cursor-default select-none flex-wrap items-center justify-end gap-x-2 gap-y-1 px-1 text-2xs text-fg-3 transition-opacity', statusRow, !footerPinned && !delivery && !from && !resources && revealOnOwnHover)}>
+          {from && <span className="inline-flex items-center gap-1"><IconBot aria-hidden className="size-3" />{from === 'coordinator' ? <Trans>主对话</Trans> : <Trans>另一个 Agent</Trans>}</span>}
           {run?.native?.intent === 'steer' && <span className="inline-flex items-center gap-1"><IconCornerUpRight aria-hidden className="size-3" /><Trans>补充</Trans></span>}
           {delivery && (deliveryError ? <button type="button" aria-expanded={errorOpen} onClick={() => setErrorOpen(!errorOpen)} className={cn(statusAction, 'inline-flex items-center gap-0.5 text-fg-3 hover:text-fg')}>{delivery}<IconChevronRight aria-hidden className={cn('size-3 transition-transform', errorOpen && 'rotate-90')} /></button> : <span role="status" className="min-w-0 [overflow-wrap:anywhere]">{delivery}</span>)}
           {!taskOutcome && openTerminal}

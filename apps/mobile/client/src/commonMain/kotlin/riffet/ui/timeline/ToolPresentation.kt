@@ -288,7 +288,7 @@ fun processHeaderLabel(row: TimelineRow.Process, nowMillis: Long): String {
 
 /** `1 tool` / `3 tools`, or null for a block with no tool calls. */
 private val toolRunCategories = setOf(
-    "read", "search", "execute", "edit", "delete", "move", "fetch", "agent", "think", "switch_mode", "question", "plan",
+    "read", "search", "execute", "edit", "delete", "move", "fetch", "agent", "message", "think", "switch_mode", "question", "plan",
 )
 
 /**

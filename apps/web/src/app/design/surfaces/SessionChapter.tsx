@@ -209,6 +209,7 @@ function Messages() {
         <MessageCommandBlock icon="languages" title={t`译文`} text="Focus went back to the top of the page after the dialog closed. It now returns to the button that opened the dialog, and Esc is handled too." onClose={() => {}} />
         <MessageCommandBlock icon="languages" title={t`翻译`} onClose={() => {}} />
         <UserMessage text={resuming.prompt} attachments={[]} time={ISO} run={resuming} footerPinned onCancelNativeRun={() => {}} />
+        <UserMessage from="coordinator" text={t`Kotlin 字段已经补上，按原来的要求继续做 Mac 部分`} attachments={[]} time={ISO} />
       </Frame>
       <Matrix rows={[
         { label: t`用户消息`, cells: [<Value key="a">rounded-3xl · px 16 · py 10 · bg-bubble</Value>, <Value key="b">max-w min(82%, 560px)</Value>] },
