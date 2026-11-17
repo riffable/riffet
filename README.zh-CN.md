@@ -159,9 +159,16 @@ riffet plugin install my-plugin.tgz
 
 ### 1. 安装
 
-<!-- TODO(release): npm 包与 GitHub Releases 客户端产物正式发布后，更新下方预留说明与直链。 -->
+**方式 A：npm 与预构建客户端**
 
-**方式 A：从源码构建（当前可用）**
+| 组件 | 获取方式 | 说明 |
+| :--- | :--- | :--- |
+| 服务端与 Web 工作台 | `npm install -g riffet` | 升级运行 `npm i -g riffet@latest && riffet restart`。不要通过 `npx` 运行：Hook 与 MCP 路径需保持固定 |
+| macOS 应用 | [GitHub Releases 下载 `Riffet.dmg`](https://github.com/riffable/riffet/releases) *（即将发布）* | macOS 15+，Apple Silicon；内置服务端运行时 |
+| Android 应用 | [GitHub Releases 下载 `APK`](https://github.com/riffable/riffet/releases) | 扫描二维码，或输入地址与一次性配对码 |
+| iPhone 应用 | 源码构建（`apps/mobile/iosApp`） | iOS 18+，使用自己的 Apple 团队 ID 签名（见[构建说明](apps/mobile/iosApp/README.md)） |
+
+**方式 B：从源码构建**
 
 ```bash
 git clone https://github.com/riffable/riffet.git ~/.local/src/riffet
@@ -171,15 +178,6 @@ pnpm install && pnpm build
 mkdir -p "$HOME/.local/bin"
 ln -s "$HOME/.local/src/riffet/scripts/riffet.mjs" "$HOME/.local/bin/riffet"
 ```
-
-**方式 B：npm 与预构建客户端（尚未发布）**
-
-| 组件 | 获取方式 | 说明 |
-| :--- | :--- | :--- |
-| 服务端与 Web 工作台 | `npm install -g riffet` *（即将发布）* | 升级运行 `npm i -g riffet@latest && riffet restart`。不要通过 `npx` 运行：Hook 与 MCP 路径需保持固定 |
-| macOS 应用 | [GitHub Releases 下载 `Riffet.dmg`](https://github.com/riffable/riffet/releases) *（即将发布）* | macOS 15+，Apple Silicon；内置服务端运行时 |
-| Android 应用 | [GitHub Releases 下载 `APK`](https://github.com/riffable/riffet/releases) *（即将发布）* | 扫描二维码，或输入地址与一次性配对码 |
-| iPhone 应用 | 源码构建（`apps/mobile/iosApp`） | iOS 18+，使用自己的 Apple 团队 ID 签名（见[构建说明](apps/mobile/iosApp/README.md)） |
 
 ### 2. 检查环境并启动
 

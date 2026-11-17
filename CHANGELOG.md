@@ -63,6 +63,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ### Clients
 
+- Installs without a source build: `npm install -g riffet`, and an Android APK on GitHub Releases. The macOS DMG is not published yet.
 - macOS: native conversation canvas; web parity for tabs, overview, code navigation and settings; beta updates through Sparkle (About → receive beta updates).
 - iPhone: pages rebuilt on a shared design layer, push notifications, and fixes for main-thread crashes.
 - Android: pull down for search on root pages, the full title in the details pane, and a composer that folds back when empty.

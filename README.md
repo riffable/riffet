@@ -159,9 +159,16 @@ riffet plugin install my-plugin.tgz
 
 ### 1. Install
 
-<!-- TODO(release): Uncomment/update download links once npm package and GitHub Release assets are published. -->
+**Option A: npm and prebuilt apps**
 
-**Option A: build from source (available now)**
+| Component | Channel | Notes |
+| :--- | :--- | :--- |
+| Server and web workbench | `npm install -g riffet` | Upgrade with `npm i -g riffet@latest && riffet restart`. Do not run it through `npx`: hook and MCP paths must stay permanent |
+| macOS app | [`Riffet.dmg` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime |
+| Android app | [`APK` on Releases](https://github.com/riffable/riffet/releases) | Pairs by QR code, or by address and one-time code |
+| iPhone app | Source build (`apps/mobile/iosApp`) | iOS 18+; signed with your own Apple team ID ([guide](apps/mobile/iosApp/README.md)) |
+
+**Option B: build from source**
 
 ```bash
 git clone https://github.com/riffable/riffet.git ~/.local/src/riffet
@@ -171,15 +178,6 @@ pnpm install && pnpm build
 mkdir -p "$HOME/.local/bin"
 ln -s "$HOME/.local/src/riffet/scripts/riffet.mjs" "$HOME/.local/bin/riffet"
 ```
-
-**Option B: npm and prebuilt apps (not yet published)**
-
-| Component | Channel | Notes |
-| :--- | :--- | :--- |
-| Server and web workbench | `npm install -g riffet` *(upcoming)* | Upgrade with `npm i -g riffet@latest && riffet restart`. Do not run it through `npx`: hook and MCP paths must stay permanent |
-| macOS app | [`Riffet.dmg` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | macOS 15+, Apple Silicon; bundles the server runtime |
-| Android app | [`APK` on Releases](https://github.com/riffable/riffet/releases) *(upcoming)* | Pairs by QR code, or by address and one-time code |
-| iPhone app | Source build (`apps/mobile/iosApp`) | iOS 18+; signed with your own Apple team ID ([guide](apps/mobile/iosApp/README.md)) |
 
 ### 2. Check the environment and start
 

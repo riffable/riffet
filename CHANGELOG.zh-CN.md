@@ -63,6 +63,7 @@
 
 ### 客户端
 
+- 无需源码构建即可安装：`npm install -g riffet`，Android APK 在 GitHub Releases 下载。macOS DMG 暂未发布。
 - macOS：原生会话画布；标签页、概览、代码导航和设置与 Web 对齐；通过 Sparkle 接收测试版更新（关于 → 接收测试版更新）。
 - iPhone：页面基于共享设计层重建，支持推送通知，修复主线程崩溃。
 - Android：根页面下拉显示搜索，详情面板显示完整标题，输入框为空时自动收起。
