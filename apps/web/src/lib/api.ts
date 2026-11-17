@@ -111,6 +111,7 @@ import type {
   WorkbenchEvent,
   WorktreeComparison,
   WorktreeInfo,
+  ReleaseNotes,
 } from '@contracts';
 import { API, CLIENT_FEATURES_HEADER, TERMINAL_APPEARANCE_HEADER, TERMINAL_PROTOCOL } from '@contracts';
 import { pageTerminalAppearance } from './terminal-theme';
@@ -531,6 +532,9 @@ export const api = {
   /** `keepalive` lets the batch leave while the page is being hidden or closed; the browser caps such a body at 64 KB. */
   uploadJankReport: (report: unknown, keepalive = false) => request<void>('/api/client-jank', { ...json('POST', report), keepalive }),
   checkForUpdates: () => request<UpdateCheck>('/api/update'),
+  /** The server's last check, without waiting for the network; `null` before any check. */
+  updateStatus: () => request<UpdateCheck | null>('/api/update/status'),
+  releaseNotes: (language: string) => request<ReleaseNotes>(`/api/update/notes?language=${encodeURIComponent(language)}`),
   authStatus: async () => {
     const status = await request<AuthStatus>('/api/auth/status', { signal: timeout() });
     setCsrfToken(status.csrfToken);

@@ -46,7 +46,7 @@
     "apps/server/src/backends/shared/share-read.ts": 1,
     "apps/server/src/backends/shared/workspace-observer.ts": 1,
     "apps/server/src/channels/service.ts": 1,
-    "apps/server/src/cli-update.ts": 3,
+    "apps/server/src/cli/source-update.ts": 3,
     "apps/server/src/clientLogs.ts": 1,
     "apps/server/src/context-references/input.ts": 2,
     "apps/server/src/git/index.ts": 28,

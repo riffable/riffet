@@ -358,7 +358,7 @@ export async function createApp(options: AppOptions = {}) {
   // Unauthenticated on purpose: iOS reads it here to match a push to its server before it signs in; it is an id, not a credential.
   const serverId=readServerId(stateDir);
   app.get('/health',async()=>({ok:true,version:SERVER_VERSION,build:SERVER_BUILD,instanceId:options.instanceId,serverId,managedBy:LAUNCHED_BY,protocol:PROTOCOL_INFO}));
-  registerUpdateRoutes(app);
+  registerUpdateRoutes(app,stateDir);
   registerServiceRoutes(app,deps);
   registerProjectRoutes(app,deps);
   registerSessionRoutes(app,deps);

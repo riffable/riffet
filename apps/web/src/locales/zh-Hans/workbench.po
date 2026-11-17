@@ -1144,6 +1144,10 @@ msgctxt "workbench-sidebar-new-action"
 msgid "新建会话"
 msgstr "新建会话"
 
+#: src/app/SidebarUpdateButton.tsx
+msgid "新版本 {version} 可用"
+msgstr "新版本 {version} 可用"
+
 #: src/app/ImportSessionDialog.tsx
 msgid "新项目"
 msgstr "新项目"

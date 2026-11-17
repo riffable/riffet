@@ -72,7 +72,7 @@ AUTH=--no-auth
 [ "\${RIFFET_AUTH:-0}" = "1" ] && AUTH=--auth
 export RIFFET_MANAGED_BY=app
 $BUNDLED
-exec $NODE $CLI serve --state-dir "\$STATE" --host "\${RIFFET_HOST:-127.0.0.1}" --port "\${RIFFET_PORT:-4337}" --cli "\${RIFFET_CLI:-cursor-agent}" \$AUTH --no-token
+exec $NODE $CLI serve --state-dir "\$STATE" --host "\${RIFFET_HOST:-127.0.0.1}" --port "\${RIFFET_PORT:-4337}" --cli "\${RIFFET_CLI:-cursor-agent}" \$AUTH
 LAUNCHER
 chmod 755 "$DEST/riffet-server"
 

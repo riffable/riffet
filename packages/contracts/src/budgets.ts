@@ -102,6 +102,20 @@ export const SERVER_BUDGET = {
   loopBlockMs: 200,
 } as const;
 
+/** Checking for a newer Riffet release (docs/UPDATE.md「提示」). */
+export const UPDATE_CHECK_BUDGET = {
+  /** A check result is reused this long by the CLI, the server and every client; a check runs out of band once it is older. */
+  cacheHours: 24,
+  /** A failed check, or one already started by another reader, is not repeated sooner than this. */
+  retryMinutes: 30,
+  /** A client open this long asks the server again (the server answers from its cache). */
+  clientRefreshHours: 6,
+  /** Largest CHANGELOG read for release notes. */
+  changelogBytes: 2 * MIB,
+  /** How long reading the CHANGELOG may take. */
+  changelogReadMs: 10_000,
+} as const;
+
 /** Processes the server starts for conversations, and how long they may stay (docs/guide/performance.md §3.10). */
 export const AGENT_PROCESS_BUDGET = {
   /** A conversation's CLI unused this long, with nothing retaining it, is stopped; `AppSettings.idleReclaimMinutes` overrides it. */

@@ -598,7 +598,7 @@ start_daemon() {
 }
 
 daemon_flags() {
-  local flags=(start --state-dir "$STATE_DIR" --host "$HOST" --port "$PORT" --cli "$CLI_PATH" --no-token)
+  local flags=(start --state-dir "$STATE_DIR" --host "$HOST" --port "$PORT" --cli "$CLI_PATH")
   if [[ $AUTH -eq 1 ]]; then flags+=(--auth); else flags+=(--no-auth); fi
   printf '%q ' "${flags[@]}"
   inherit_flags

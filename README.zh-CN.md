@@ -211,8 +211,12 @@ riffet stop            # 关闭 Web 服务；tmux 中的 Agent 终端继续运�
 riffet restart         # 按已保存的监听与认证参数重启
 riffet logs -f         # 持续查看服务日志，令牌已脱敏
 riffet token           # 向标准输出打印管理员令牌（如 riffet token | pbcopy）
-riffet login-url       # 输出一步登录链接
+riffet url --login     # 输出一步登录链接
+riffet ls              # 列出会话，当前目录所属项目在前（-a 列出全部）
+riffet resume          # 在当前终端继续一个会话（可搜索的选择器）
 riffet doctor          # 检查运行环境（--json 输出机器可读报告）
+riffet service install # 登录时自动启动（launchd / systemd），另有 status、uninstall
+riffet completion zsh  # zsh、bash、fish 的命令补全
 riffet update --check  # 检查 origin 是否有更新的 vX.Y.Z 发布 tag
 riffet update          # 更新干净的发布 tag 源码目录并按原配置恢复服务
 riffet plugin --help   # 开发、打包、安装与诊断插件

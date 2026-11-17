@@ -1,7 +1,7 @@
 import type { BuildInfo, ReleaseTag, SourceInfo, UpdateCheck } from '@contracts';
 import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runProcess, type ProcessResult } from './git/exec.js';
+import { runProcess, type ProcessResult } from '../git/exec.js';
 
 const STABLE_TAG = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$(?!\s)/;
 const OBJECT_ID = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;

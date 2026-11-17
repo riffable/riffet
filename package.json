@@ -14,10 +14,10 @@
     "node": ">=24.19.0"
   },
   "scripts": {
-    "dev": "tsx apps/server/src/cli.ts --dev",
+    "dev": "tsx apps/server/src/cli.ts serve --dev --port 4317",
     "dev:web": "vite --config apps/web/vite.config.ts",
     "build": "node scripts/build-info.mjs --build",
-    "start": "node dist/cli.js",
+    "start": "node dist/cli.js serve",
     "pack:npm": "node scripts/pack-npm.mjs",
     "typecheck": "tsc --noEmit",
     "check:case": "node scripts/check-case-collisions.mjs",
@@ -74,6 +74,7 @@
     "build:site": "tsx scripts/build-site.ts"
   },
   "dependencies": {
+    "@clack/prompts": "1.9.0",
     "@codemirror/merge": "6.12.2",
     "@codemirror/state": "6.7.6",
     "@codemirror/view": "6.43.13",

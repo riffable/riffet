@@ -391,7 +391,7 @@ function WorkbenchShell({ onLogout }: { onLogout?: (() => void) | undefined }) {
       onAddProject={() => { void nav.navigate(() => { ui.set({ addProjectOpen: true }); ui.setMobileSidebar(false); }); }}
       onProjectAction={(target, action) => void projectAction(target, action)}
       onSessionAction={onSessionAction}
-      onOpenSettings={() => openSettingsAt()}
+      onOpenSettings={openSettingsAt}
       onCustomizeSidebar={() => openSettingsAt('sidebar')}
       onOpenProfile={() => openSettingsAt('profile')}
       onOpenStats={() => openPage('stats')}

@@ -117,7 +117,7 @@ Kotlin 接口要桥接完成回调，`DeviceTokenStore` 因此由 Kotlin 的 `Se
 | S1 | `apps/macos/scripts/build-server-payload.sh`（新） | 产出 App 内置的服务载荷：校验过 SHASUMS256 的官方 Node（版本取自仓库根的 `.node-version`）、`dist/`（含 `dist/public`、`bridge-runtime`、`hook-cli.mjs`）、`dist/runtime-package.json` 列出的生产依赖（含 `node-pty` 的 darwin-arm64 预编译产物与 `katex`），其他平台的预编译产物删掉。该清单由 `pnpm build` 从打包结果推导，引用了未在 `dependencies` 声明的包时构建失败 |
 | S2 | `apps/server/src/environment.ts` | 设置 `RIFFET_BUNDLED_NODE=1` 时，`nodeDirectories()` 不再把内置 node 的目录追加到终端与 Agent 的 `PATH`。它目前追加在末尾，不会遮住用户自己的 node，但用户没装 node 时 Agent 会用到 App 里的那份，这不是用户能预期的 |
 | S3 | `apps/server/src/app.ts`、`version.ts` | `/health` 增加 `managedBy`（`cli` / `launchd` / `app`，来自启动器设置的 `RIFFET_MANAGED_BY`，读后从环境删除，子进程不继承）；`version` 改读 package.json |
-| S4 | `apps/server/src/cli.ts` | `start` 与 `install-service` 写入各自的 `RIFFET_MANAGED_BY`；App 的 LaunchAgent 已加载时 `install-service` 拒绝再装 `local.riffet`；`status` 显示托管方；`stop` 遇到 App 托管的服务提示去 App 里停止（它本来就会因进程命令行不含 `dist/cli.js` 而拒绝发信号） |
+| S4 | `apps/server/src/cli/` | `start` 与 `service install` 写入各自的 `RIFFET_MANAGED_BY`；App 的 LaunchAgent 已加载时 `service install` 拒绝再装 `local.riffet`；`status` 显示托管方；`stop` 遇到 App 托管的服务提示去 App 里停止（它本来就会因进程命令行不含 `dist/cli.js` 而拒绝发信号） |
 
 本机免配对**不需要**服务端改动，见下一节。
 
@@ -156,17 +156,17 @@ Kotlin 接口要桥接完成回调，`DeviceTokenStore` 因此由 Kotlin 的 `Se
 | 没有运行中的服务，也没有登录服务 | 引导用户开启「由 Riffet.app 托管」 |
 
 **同一个状态目录只能有一个托管方。** 两个 `KeepAlive` 的 LaunchAgent 抢同一把 `server.lock`，结果是一个不停被
-launchd 拉起又退出。「改由 App 托管」先做 `riffet uninstall-service` 的等价动作（`bootout` 加删 plist），再注册
+launchd 拉起又退出。「改由 App 托管」先做 `riffet service uninstall` 的等价动作（`bootout` 加删 plist），再注册
 App 的 agent；反向切换同理。
 
 ### App 托管
 
 - plist 放在 `Contents/Library/LaunchAgents/`，用 `BundleProgram` 指向内置 node，参数是
-  `serve --state-dir … --host 127.0.0.1 --port 4337 --no-auth --no-token`（与 `cli.ts` 的 `serviceArgs` 一致），
+  `serve --state-dir … --host 127.0.0.1 --port 4337 --no-auth`（与 `cli/service.ts` 的 `serviceArgs` 一致），
   `KeepAlive` 与 `RunAtLoad` 打开，日志写状态目录的 `server.log`。
 - `SMAppService.agent(plistName:).register()` 之后读 `status`；`.requiresApproval` 时引导用户去
   「系统设置 → 通用 → 登录项」放行，界面不能假装已经在跑。
-- **环境变量**：`install-service` 会把当时的环境快照写进 plist，App 内的 plist 是静态文件，做不到。这里依赖
+- **环境变量**：`service install` 会把当时的环境快照写进 plist，App 内的 plist 是静态文件，做不到。这里依赖
   服务端自己的环境解析（`applyProcessEnvironment`），CI 的「The daemon starts with a bare PATH」已经覆盖
   裸 `PATH` 启动；M4 要在一台全新的 Mac 上实测 nvm/mise 安装的 CLI 能否被找到。
 - 菜单栏与设置页提供启动、停止、重启、打开日志、`riffet doctor` 报告（`GET /api/doctor`）。

@@ -1,8 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { UpdateCheck } from '../../../../packages/contracts/src/index.js';
-import { checkForUpdates } from '../update.js';
-import { checkNpmUpdate, isNpmInstall } from '../update-npm.js';
-import { SERVER_BUILD, SOURCE_ROOT } from '../version.js';
+import type { ReleaseNotes, UpdateCheck } from '../../../../packages/contracts/src/index.js';
+import { availableTag, checkLatest, claimBackgroundCheck, readCachedCheck, releaseNotes, updateChannel, writeCachedCheck } from '../update/status.js';
+import { SERVER_BUILD } from '../version.js';
 
 // Only fixed messages cross the HTTP boundary: Git failures can include credential URLs
 // and local paths. Users can diagnose their clone's authentication in the terminal.
@@ -17,26 +16,47 @@ const messages: Record<UpdateCheck['status'], string> = {
 };
 
 /** Protected by the same app-level authentication hook as all private /api routes. */
-export function registerUpdateRoutes(app: FastifyInstance): void {
+export function registerUpdateRoutes(app: FastifyInstance, stateDir: string): void {
   let inflight: Promise<UpdateCheck> | undefined;
   const unavailable = (): UpdateCheck => ({ status: 'unavailable', current: SERVER_BUILD, latest: null, source: null, message: messages.unavailable });
-  // An npm install has no clone to inspect; it asks the registry instead.
-  const npm = isNpmInstall();
-  app.get('/api/update', async () => {
-    if (!SOURCE_ROOT && !npm) return unavailable();
-    // Share concurrent manual checks without caching a stale result as "up to date".
-    if (!inflight) {
-      inflight = (npm ? checkNpmUpdate(SERVER_BUILD) : checkForUpdates({ root: SOURCE_ROOT!, current: SERVER_BUILD })
-        .then((result): UpdateCheck => ({
-          status: result.status,
-          current: SERVER_BUILD,
-          latest: result.latest && { tag: result.latest.tag, version: result.latest.version, commit: result.latest.commit, objectId: result.latest.objectId },
-          source: result.source && { tag: result.source.tag, commit: result.source.commit, dirty: result.source.dirty },
-          message: messages[result.status],
-        })))
-        .catch(unavailable)
-        .finally(() => { inflight = undefined; });
-    }
+  const safe = (result: UpdateCheck): UpdateCheck => ({
+    status: result.status,
+    current: SERVER_BUILD,
+    latest: result.latest && { tag: result.latest.tag, version: result.latest.version, commit: result.latest.commit, objectId: result.latest.objectId },
+    source: result.source && { tag: result.source.tag, commit: result.source.commit, dirty: result.source.dirty },
+    message: messages[result.status],
+    ...(result.latestVersion ? { latestVersion: result.latestVersion } : {}),
+    ...(result.checkedAt ? { checkedAt: result.checkedAt } : {}),
+  });
+  /** One check at a time; its answer is what every client and the CLI read next. */
+  const check = (): Promise<UpdateCheck> => {
+    if (updateChannel() === 'none') return Promise.resolve(unavailable());
+    // Share concurrent checks without caching a stale result as "up to date".
+    inflight ??= checkLatest()
+      .then(result => writeCachedCheck(stateDir, result))
+      .then(safe)
+      .catch(unavailable)
+      .finally(() => { inflight = undefined; });
     return inflight;
+  };
+
+  /** Checks now: the "Check for updates" button. */
+  app.get('/api/update', async () => check());
+
+  /**
+   * The last check, without waiting for the network: the sidebar and the About page read it on load.
+   * An answer older than a day, or a failed one, starts a check for the next reader unless one is under way.
+   */
+  app.get('/api/update/status', async () => {
+    const cached = readCachedCheck(stateDir);
+    if ((!cached || cached.stale) && !inflight && claimBackgroundCheck(stateDir)) void check();
+    return cached ? safe(cached.check) : null;
+  });
+
+  /** What the available release changes, from its CHANGELOG. */
+  app.get<{ Querystring: { language?: string } }>('/api/update/notes', async (request): Promise<ReleaseNotes> => {
+    const tag = availableTag(readCachedCheck(stateDir)?.check);
+    if (!tag) return { notes: [], compareUrl: null };
+    return releaseNotes(tag, String(request.query.language ?? 'en'));
   });
 }

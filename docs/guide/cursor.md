@@ -52,9 +52,9 @@ CLI 启动参数与 API Key 一起原子保存到服务端的私有 `cursor-cli.
 也可以通过启动命令选择入口：
 
 ```bash
-node dist/cli.js start --cli cursor-agent
-node dist/cli.js start --cli /absolute/path/to/cursor-wrapper
-node dist/cli.js start --cli shell:my_cursor
+riffet start --cli cursor-agent
+riffet start --cli /absolute/path/to/cursor-wrapper
+riffet start --cli shell:my_cursor
 ```
 
 没有设置对应字段时，普通可执行入口继续继承服务进程的 `CURSOR_API_KEY`、`CURSOR_API_ENDPOINT` 和 `CURSOR_CONFIG_DIR`。未指定配置目录时使用 `~/.cursor`；`RIFFET_CONFIG_DIR` 仍可指定配置浏览目录。通用 shell 函数通过 `/bin/zsh -lic` 执行，参数作为位置参数传递，不拼接成 shell 源码。工作台不按函数名称猜测配置目录，也不重写 Cursor 的审批策略。

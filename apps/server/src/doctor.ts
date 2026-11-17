@@ -84,7 +84,7 @@ async function backendChecks(settings: SettingsService): Promise<Array<DoctorChe
   }));
 }
 
-function portFree(host: string, port: number): Promise<NodeJS.ErrnoException | undefined> {
+export function portFree(host: string, port: number): Promise<NodeJS.ErrnoException | undefined> {
   return new Promise(resolve => {
     const server = createServer();
     server.once('error', error => resolve(error as NodeJS.ErrnoException));
@@ -131,27 +131,29 @@ export async function machineReport(): Promise<MachineReport> {
   return { tmux: tmux.code === 0 && !old, tailscale, warnings, checkedAt: new Date().toISOString() };
 }
 
+export interface DoctorSection { title: 'Runtime' | 'Agents' | 'Server' | 'Plugins'; checks: DoctorCheck[] }
+
 /**
- * The rows of every enabled integration. An Agent that a plugin provides (Cursor) reports with the Agents,
- * where the core's own CLIs are listed; any other plugin's rows come last.
+ * The rows of every enabled integration, grouped. An Agent that a plugin provides (Cursor) reports with the
+ * Agents, where the core's own CLIs are listed; any other plugin's rows come last.
  */
-export async function doctorChecks(input: { stateDir: string; host: string; port: string; settings: SettingsService; machine: MachineReport; daemon?: { host: string; port: number } }): Promise<DoctorCheck[]> {
+export async function doctorChecks(input: { stateDir: string; host: string; port: string; settings: SettingsService; machine: MachineReport; daemon?: { host: string; port: number } }): Promise<DoctorSection[]> {
   const tmux: DoctorCheck = input.machine.tmux
     ? { id: 'tmux', label: 'tmux', status: 'ok', detail: 'available' }
     : { id: 'tmux', label: 'tmux', status: 'fail', detail: input.machine.warnings.find(warning => warning.includes('too old')) ?? `not found or could not be started; agent sessions and terminals need tmux ${TMUX_MIN_VERSION} or newer`, fix: 'Install or upgrade it with `brew install tmux` (macOS) or `sudo apt install tmux` (Debian/Ubuntu; 22.04 and newer have 3.2a or later).' };
   const { agents, others } = await pluginChecks(input.stateDir, input.settings);
   const core = await backendChecks(input.settings);
   const installed = [...agents, ...core, ...others].some(check => check.installed);
+  const strip = (checks: Array<DoctorCheck & { installed?: boolean }>) => checks.map(({ installed: _installed, ...check }) => check);
   return [
-    nodeCheck(),
-    tmux,
-    ...agents,
-    ...core,
-    ...installed ? [] : [{ id: 'backend:any', label: 'Agent CLIs', status: 'fail' as const, detail: 'none of the supported agent CLIs could be found', fix: 'Install and sign in to at least one of the CLIs above.' }],
-    await portCheck(input.host, input.port, input.daemon),
-    await stateDirCheck(input.stateDir),
-    ...others,
-  ].map(({ installed: _installed, ...check }) => check);
+    { title: 'Runtime' as const, checks: [nodeCheck(), tmux] },
+    { title: 'Agents' as const, checks: strip([
+      ...agents, ...core,
+      ...installed ? [] : [{ id: 'backend:any', label: 'Agent CLIs', status: 'fail' as const, detail: 'none of the supported agent CLIs could be found', fix: 'Install and sign in to at least one of the CLIs above.' }],
+    ]) },
+    { title: 'Server' as const, checks: [await portCheck(input.host, input.port, input.daemon), await stateDirCheck(input.stateDir)] },
+    { title: 'Plugins' as const, checks: strip(others) },
+  ].filter(section => section.checks.length);
 }
 
 /** The registry only evaluates here, so whatever a plugin opened is released before the command ends. */
@@ -163,17 +165,4 @@ async function pluginChecks(stateDir: string, settings: SettingsService): Promis
     const isAgent = (check: DoctorCheck) => owners.some(prefix => check.id.startsWith(prefix));
     return { agents: checks.filter(isAgent), others: checks.filter(check => !isAgent(check)) };
   } finally { await plugins.close(); }
-}
-
-const MARK: Record<DoctorStatus, string> = { ok: '✅', warn: '⚠️ ', fail: '❌' };
-
-export function formatDoctorChecks(checks: DoctorCheck[]): string {
-  const lines = checks.flatMap(check => [
-    `${MARK[check.status]} ${check.label}: ${check.detail}`,
-    ...(check.status !== 'ok' && check.fix ? [`   → ${check.fix}`] : []),
-  ]);
-  const failed = checks.filter(check => check.status === 'fail').length;
-  const warned = checks.filter(check => check.status === 'warn').length;
-  lines.push('', failed ? `${failed} problem(s) must be fixed${warned ? `, ${warned} warning(s)` : ''}.` : warned ? `Ready, with ${warned} warning(s).` : 'Everything looks good.');
-  return lines.join('\n');
 }

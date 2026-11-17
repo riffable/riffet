@@ -118,9 +118,9 @@ tmux server 会保留它第一次启动时继承的环境，而 riffet 的持久
 |---|---|---|
 | 交互终端里 `riffet start` / `riffet restart` | 直接继承调用者环境 | 继承 + 追加 |
 | `riffet-restart.sh` | 清洗后采集登录 shell PATH，从中取 node，预检后启动 | 采集（成功则钉 `RIFFET_PATH`） |
-| macOS 登录服务 | `riffet install-service` → `~/Library/LaunchAgents/local.riffet.plist` | 安装时快照进 `EnvironmentVariables` |
-| Linux 用户服务 | `riffet install-service` → `~/.config/systemd/user/riffet.service` | 安装时快照进 `Environment=` |
-| 换了工具链之后 | `riffet install-service --refresh-environment` | 重新快照并 `daemon-reload` + `restart` |
+| macOS 登录服务 | `riffet service install` → `~/Library/LaunchAgents/local.riffet.plist` | 安装时快照进 `EnvironmentVariables` |
+| Linux 用户服务 | `riffet service install` → `~/.config/systemd/user/riffet.service` | 安装时快照进 `Environment=` |
+| 换了工具链之后 | `riffet service install --refresh-environment` | 重新快照并 `daemon-reload` + `restart` |
 | `systemd` 系统服务 / docker / CI | 前台运行 `riffet serve`，或用 `RIFFET_PATH` / `environment.json` 指定 | 显式配置或缓存 |
 
 Linux 用户服务默认只在该用户登录期间运行；`loginctl enable-linger $USER` 可让它在登出后继续。

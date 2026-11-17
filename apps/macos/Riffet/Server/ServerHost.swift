@@ -8,7 +8,7 @@ import RiffetKit
 enum ServerManager: String, Sendable {
     /// The LaunchAgent inside Riffet.app, registered with SMAppService.
     case app
-    /// `riffet install-service`: `~/Library/LaunchAgents/local.riffet.plist`.
+    /// `riffet service install`: `~/Library/LaunchAgents/local.riffet.plist`.
     case loginService
     /// A daemon started by `riffet start` in a terminal.
     case cli

@@ -72,7 +72,13 @@ riffet update --app --configuration Debug  # 同时存在两个 App 时明确选
 
 未安装快捷命令时，在 clone 内使用 `node scripts/riffet.mjs update ...`。自定义数据目录沿用 `--state-dir`。`--json` 只与 `--check` 一起使用，`--configuration` 只用于 `--app`。
 
-Web 的「设置 → 关于」展示 Web 自身和 Server 的构建版本，点击「检查更新」后调用受现有认证保护的 `GET /api/update`。检查发生在 Server 所在机器，只提供读取能力。CLI 检查时，活跃 Server 的当前版本以健康接口为准；服务未运行时使用该 CLI 自身嵌入的构建记录。JSON 结果包含当前构建、本地源码和远端最新发布信息。
+npm 安装的 `riffet update` 拿运行中服务的版本（没有运行时用已安装的版本）与 npm 上的最新版本比较，由安装它的包管理器（按安装位置识别 npm、pnpm、bun 或 Yarn）安装新版本，安装期间服务照常运行；装好后按 `riffet restart` 的方式等运行中的回合结束再重启（登录服务托管时由 launchd / systemd 重启），并核对新实例报告的版本。新版本已装好、只差重启时（例如上次重启失败），再次执行只做重启。安装前与源码更新做同样的检查：App 托管、服务器属于其他安装、登录服务运行的是其他安装或状态目录时都不动手。pnpm 的全局包按版本放在各自目录，服务、登录服务和重启都经由 `node_modules/riffet` 链接启动，更新后指向新版本。全局目录对当前用户不可写时不动手，给出需要执行的命令；重启失败时给出回到原版本的安装命令。
+
+### 提示
+
+检查结果保存在状态目录的 `update-check.json`，CLI、Server 和各客户端读同一份，每条结果记着它描述的构建，按 `UPDATE_CHECK_BUDGET.cacheHours` 复用；过期后由读到它的一方在后台重新检查，读的一方不等待网络，同一时间只有一方在检查（`retryMinutes` 内不重复发起）。检查失败不覆盖同一构建上一次的结果，`retryMinutes` 后重试。「检查更新」按钮和 `riffet update --check` 立即检查，不受这些限制。`riffet status` 和启动输出在有新版本时多一行提示（`RIFFET_NO_UPDATE_NOTIFIER=1` 关闭）。Web 侧栏底部右侧显示更新提示，点击进入「设置 → 关于」；关于页列出两版本之间的变更记录（新版本 tag 上的 `CHANGELOG.md` / `CHANGELOG.zh-CN.md`，从 GitHub 读取），当前版本也是发布版本时附代码对比链接。界面规则见 [设计决定](design/DECISIONS.md) 2026-11-17「有新版本时侧栏底部右侧显示更新提示」。
+
+Web 的「设置 → 关于」展示 Web 自身和 Server 的构建版本，打开时读取已保存的检查结果（`GET /api/update/status`），点击「检查更新」后调用受现有认证保护的 `GET /api/update` 立即检查并更新保存的结果，变更记录来自 `GET /api/update/notes`。检查发生在 Server 所在机器，只提供读取能力。CLI 检查时，活跃 Server 的当前版本以健康接口为准；服务未运行时使用该 CLI 自身嵌入的构建记录。JSON 结果包含当前构建、本地源码和远端最新发布信息。
 
 Mac 的「设置 → 关于 → 检查更新」由 App 原生代码直接执行本机 Git，读取关联 clone 的 `origin` tag，并与 bundle 内 App 自身的构建信息比较。此过程不调用 Server 或 CLI，Server 未启动、连接远程 Server 时都可检查 App 更新。「复制 App 更新命令」包含源码路径和构建模式。所连接 Server 的版本继续在「诊断」中查看；原有发行包更新入口独立保留。
 
@@ -118,12 +124,12 @@ App 更新使用同样的 tag 规则。自动替换范围限定为该 clone 下�
 
 ## 代码位置与验证
 
-实现复用现有入口，不增加运行时依赖：
+实现复用现有入口：
 
 - `scripts/build-info.mjs` 生成构建记录，Vite、esbuild 和 Mac 构建入口共享同一快照；`packages/contracts/src/update.ts` 定义公开字段。
-- `apps/server/src/update.ts` 负责 Git tag 解析、远端查询、冲突检测和目标 tag 获取。
-- `apps/server/src/cli-update.ts` 负责源码更新、锁、日志及 App 替换；`cli.ts` 对接原服务管理器与健康核对，`scripts/riffet.mjs` 转发命令。
-- `apps/server/src/routes/update.ts` 与 Web 关于页提供手动检查；Mac 的 `Services/GitUpdates.swift` 独立实现本机检查。
+- `apps/server/src/update/git.ts` 负责 Git tag 解析、远端查询、冲突检测和目标 tag 获取；`update/npm.ts` 负责 npm 版本查询与识别包管理器；`update/status.ts` 负责共享的检查结果与变更记录。
+- `apps/server/src/cli/source-update.ts` 负责源码更新、锁、日志及 App 替换；`cli/update.ts` 对接服务管理器、健康核对与 npm 更新，`scripts/riffet.mjs` 只是运行 `dist/cli.js` 的薄转发。
+- `apps/server/src/routes/update.ts`、Web 关于页（`settings/UpdateSection.tsx`）与侧栏提示（`SidebarUpdateButton.tsx`）提供检查与提示；Mac 的 `Services/GitUpdates.swift` 独立实现本机检查。
 
 核心验证使用临时本地 Git 仓库，覆盖两类 tag、版本排序、tag 变化、只读检查、脏工作树、分支保留、更新互斥、跨状态目录占用和构建失败恢复。CLI 隔离验证实际执行停服与重启，核对新实例的 tag、commit 和原启动配置；依赖安装在该验证中使用替身。Server / Web 做类型检查与正式构建，Mac 做独立 Debug 构建、测试目标编译及本机 Git 协议验证。真实登录服务停启、已安装 App 的替换重开与完整 Release 出包不在本次自动验证范围。
 

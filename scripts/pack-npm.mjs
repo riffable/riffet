@@ -28,8 +28,8 @@ try { runtime = read('dist/runtime-package.json'); info = read('dist/build-info.
 catch { fail('dist/ is missing or incomplete; run `RIFFET_PUBLIC_BUILD=1 pnpm build` first.'); }
 if (info.sourceRoot) fail('dist/ was built with a source checkout path; rebuild with RIFFET_PUBLIC_BUILD=1 so the package carries no build-machine path.');
 if (runtime.version !== project.version) fail(`dist/ was built for ${runtime.version}, but package.json is ${project.version}; rebuild.`);
-// The launcher imports commander itself; it is a runtime dependency of dist/cli.js as well.
-if (!runtime.dependencies.commander) fail('dist/runtime-package.json does not list commander, which scripts/riffet.mjs needs.');
+// The command line is dist/cli.js; scripts/riffet.mjs only runs it.
+for (const name of ['commander', '@clack/prompts']) if (!runtime.dependencies[name]) fail(`dist/runtime-package.json does not list ${name}, which the riffet command needs.`);
 
 rmSync(out, { recursive: true, force: true });
 mkdirSync(join(out, 'scripts'), { recursive: true });

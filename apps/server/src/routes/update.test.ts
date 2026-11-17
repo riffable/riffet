@@ -10,7 +10,7 @@ const fixtures = vi.hoisted(() => ({
   current: { version: '0.5.0', buildNumber: 1, tag: 'v0.5.0', commit: 'a'.repeat(40), dirty: false },
   check: vi.fn(),
 }));
-vi.mock('../update.js', () => ({ checkForUpdates: fixtures.check }));
+vi.mock('../update/git.js', () => ({ checkForUpdates: fixtures.check }));
 vi.mock('../version.js', async (importOriginal) => ({
   ...await importOriginal<typeof import('../version.js')>(),
   SERVER_BUILD: fixtures.current,
@@ -81,5 +81,17 @@ describe('read-only update endpoint', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().status).toBe('unavailable');
     expect(response.body).not.toMatch(/secret|example\.test/);
+  });
+
+  it('keeps an available update when a later check fails, and does not start a second background check', async () => {
+    const { app, headers } = await boot();
+    const latest = { tag: 'v0.6.0', version: '0.6.0', commit: 'b'.repeat(40), objectId: 'b'.repeat(40) };
+    fixtures.check.mockResolvedValueOnce({ status: 'available', current: fixtures.current, latest, source: null });
+    expect((await app.inject({ url: '/api/update', headers })).json().status).toBe('available');
+    fixtures.check.mockResolvedValueOnce({ status: 'unavailable', current: fixtures.current, latest: null, source: null });
+    expect((await app.inject({ url: '/api/update', headers })).json().status).toBe('unavailable');
+    const cached = (await app.inject({ url: '/api/update/status', headers })).json();
+    expect(cached).toMatchObject({ status: 'available', latest: { tag: 'v0.6.0' } });
+    expect(fixtures.check).toHaveBeenCalledTimes(2);
   });
 });

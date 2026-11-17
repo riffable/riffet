@@ -211,8 +211,12 @@ riffet stop            # stop the web server; live tmux agent terminals keep run
 riffet restart         # restart with the saved listener and auth settings
 riffet logs -f         # tail server logs; tokens are redacted
 riffet token           # print the admin token to stdout (e.g. riffet token | pbcopy)
-riffet login-url       # print a one-step browser login URL
+riffet url --login     # print a one-step browser login URL
+riffet ls              # list conversations, this directory's project first (-a for all)
+riffet resume          # continue a conversation in this terminal (searchable picker)
 riffet doctor          # inspect the environment (--json for a machine-readable report)
+riffet service install # start at login (launchd / systemd); also status, uninstall
+riffet completion zsh  # tab completion for zsh, bash or fish
 riffet update --check  # check origin for newer stable vX.Y.Z release tags
 riffet update          # update a clean source release checkout and restore the daemon
 riffet plugin --help   # develop, pack, install, and diagnose plugins

@@ -1798,10 +1798,6 @@ msgstr ""
 msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
 msgstr ""
 
-#: src/app/settings/UpdateSection.tsx
-msgid "最新发布"
-msgstr ""
-
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "最近"
@@ -2858,6 +2854,10 @@ msgstr ""
 
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "在 foundations.md 写明用途"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "在 GitHub 比较代码"
 msgstr ""
 
 #: src/app/design/android/ComponentChapter.tsx
@@ -4052,6 +4052,11 @@ msgstr ""
 msgid "强调色只用于焦点环、文本选区和链接"
 msgstr ""
 
+#. placeholder {0}: serverBuild.tag ?? serverBuild.version
+#: src/app/settings/UpdateSection.tsx
+msgid "当前 {0}"
+msgstr ""
+
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "当前不可用"
@@ -4836,6 +4841,7 @@ msgid "收藏夹"
 msgstr ""
 
 #: src/app/design/components/FeedbackChapter.tsx
+#: src/app/settings/UpdateSection.tsx
 msgid "收起"
 msgstr ""
 
@@ -5083,6 +5089,10 @@ msgstr ""
 
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "新建终端"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "新版本 {available}"
 msgstr ""
 
 #: src/app/settings/channels/CardSettings.tsx
@@ -5415,6 +5425,10 @@ msgstr ""
 msgid "显示"
 msgstr ""
 
+#: src/app/settings/UpdateSection.tsx
+msgid "显示全部"
+msgstr ""
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "显示在侧栏里"
 msgstr ""
@@ -5515,6 +5529,14 @@ msgstr ""
 #: src/app/settings/channels/shared.tsx
 #: src/app/settings/PairingDialogs.tsx
 msgid "有效至 {0}"
+msgstr ""
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本"
+msgstr ""
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本 · 已查看"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
@@ -5867,7 +5889,7 @@ msgid "检查"
 msgstr ""
 
 #: src/app/settings/UpdateSection.tsx
-msgid "检查中…"
+msgid "检查于{checkedAt}"
 msgstr ""
 
 #: src/app/design/mac/notes.ts
@@ -5987,6 +6009,10 @@ msgstr ""
 
 #: src/app/settings/StorageSection.tsx
 msgid "正在读取存储空间"
+msgstr ""
+
+#: src/app/settings/UpdateSection.tsx
+msgid "正在读取更新内容…"
 msgstr ""
 
 #: src/app/settings/ServiceStatusSection.tsx

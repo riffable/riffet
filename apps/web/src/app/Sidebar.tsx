@@ -28,6 +28,8 @@ import { useHeld } from './session/sessionLayout';
 import { useLists, useSettings, useStores, useWorkItems } from './state/stores';
 import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
 import { useTabs } from './tabs/useTabs';
+import type { SettingsSection } from './settings/settingsSections';
+import { SidebarUpdateButton } from './SidebarUpdateButton';
 import { SidebarUserMenu } from './SidebarUserMenu';
 import { StatusIcon, useStatusLabel } from './work-items/parts';
 
@@ -48,7 +50,8 @@ interface Props {
   onAddProject: () => void;
   onProjectAction: (project: ProjectRecord, action: EntityAction) => void;
   onSessionAction: (session: Session, action: SessionAction) => void;
-  onOpenSettings: () => void;
+  /** Opens settings, on `section` when given. */
+  onOpenSettings: (section?: SettingsSection) => void;
   /** Opens the settings page that picks which destinations are rows and which sit under 更多. */
   onCustomizeSidebar: () => void;
   /** Opens settings on the personal info page. */
@@ -591,8 +594,9 @@ export function Sidebar(props: Props) {
           stale={props.stale}
           mobile={mobile}
           onOpenProfile={props.onOpenProfile}
-          onOpenSettings={props.onOpenSettings}
+          onOpenSettings={() => props.onOpenSettings()}
         />
+        <SidebarUpdateButton onOpen={() => props.onOpenSettings('about')} />
       </div>
     </nav>
   );

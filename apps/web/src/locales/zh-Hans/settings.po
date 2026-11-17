@@ -1798,10 +1798,6 @@ msgstr "最多 {limit} 个字符"
 msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
 msgstr "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
 
-#: src/app/settings/UpdateSection.tsx
-msgid "最新发布"
-msgstr "最新发布"
-
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "最近"
@@ -2859,6 +2855,10 @@ msgstr "在 DECISIONS.md 追加新决定"
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "在 foundations.md 写明用途"
 msgstr "在 foundations.md 写明用途"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "在 GitHub 比较代码"
+msgstr "在 GitHub 比较代码"
 
 #: src/app/design/android/ComponentChapter.tsx
 msgid "在 timeline 目录，未进组件层"
@@ -4052,6 +4052,11 @@ msgstr "强调色"
 msgid "强调色只用于焦点环、文本选区和链接"
 msgstr "强调色只用于焦点环、文本选区和链接"
 
+#. placeholder {0}: serverBuild.tag ?? serverBuild.version
+#: src/app/settings/UpdateSection.tsx
+msgid "当前 {0}"
+msgstr "当前 {0}"
+
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "当前不可用"
@@ -4836,6 +4841,7 @@ msgid "收藏夹"
 msgstr "收藏夹"
 
 #: src/app/design/components/FeedbackChapter.tsx
+#: src/app/settings/UpdateSection.tsx
 msgid "收起"
 msgstr "收起"
 
@@ -5084,6 +5090,10 @@ msgstr "新建会话时"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "新建终端"
 msgstr "新建终端"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "新版本 {available}"
+msgstr "新版本 {available}"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "新设置从下一条回复开始生效"
@@ -5415,6 +5425,10 @@ msgstr "是"
 msgid "显示"
 msgstr "显示"
 
+#: src/app/settings/UpdateSection.tsx
+msgid "显示全部"
+msgstr "显示全部"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "显示在侧栏里"
 msgstr "显示在侧栏里"
@@ -5516,6 +5530,14 @@ msgstr "有提交和取消的任务"
 #: src/app/settings/PairingDialogs.tsx
 msgid "有效至 {0}"
 msgstr "有效至 {0}"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本"
+msgstr "有新版本"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本 · 已查看"
+msgstr "有新版本 · 已查看"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "有新版本可用"
@@ -5867,8 +5889,8 @@ msgid "检查"
 msgstr "检查"
 
 #: src/app/settings/UpdateSection.tsx
-msgid "检查中…"
-msgstr "检查中…"
+msgid "检查于{checkedAt}"
+msgstr "检查于{checkedAt}"
 
 #: src/app/design/mac/notes.ts
 msgid "检查器页签"
@@ -5988,6 +6010,10 @@ msgstr "正在读取…"
 #: src/app/settings/StorageSection.tsx
 msgid "正在读取存储空间"
 msgstr "正在读取存储空间"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "正在读取更新内容…"
+msgstr "正在读取更新内容…"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "正在读取服务器状态"

@@ -11,37 +11,44 @@
 ```bash
 riffet                 # 启动后台服务并打开浏览器
 riffet start           # 启动后台服务
-riffet status          # 查看状态、地址与数据目录
+riffet status          # 查看状态、地址与数据目录（--json 机器可读）
 riffet pair            # 输出局域网地址、一次性配对码与二维码
 riffet pair --json     # 机器可读结果（含短期配对凭据）
 riffet stop            # 关闭 Web 服务
-riffet restart         # 按上次启动参数重启
+riffet restart         # 按上次启动参数重启；--wait-idle <秒> 等待运行中的回合，--force 立即重启
 riffet logs            # 查看最近 100 行日志，登录链接中的令牌会脱敏
 riffet logs -f         # 持续查看日志，Ctrl+C 退出日志
 riffet logs -n 30      # 查看最近 30 行日志
+riffet logs --since 10m --scope codex,claude   # 按时间与范围过滤；--json 每行一个对象
 riffet url             # 显示工作台地址
 riffet token           # 显示访问令牌（登录页要求输入的就是它）
-riffet login-url       # 显示带令牌的登录链接
+riffet url --login     # 显示带令牌的登录链接
+riffet ls              # 列出会话，当前目录所属项目在前；-a 列出全部，-n 限制条数，--json 机器可读
+riffet resume          # 在当前终端继续会话；终端中显示可搜索的选择器，也可传 ID 或标题
+riffet service install # 登录时自动启动；另有 service status、service uninstall
+riffet update          # 检查并安装新版本；--check 只检查
+riffet completion zsh  # 命令补全；在终端运行会提示要加进 rc 文件的一行
+riffet -v              # 版本号
 riffet doctor          # 逐项检查 Node、tmux、各后端 CLI、端口和数据目录
 riffet doctor --json   # 输出完整的环境与能力报告
 riffet serve           # 前台运行，Ctrl+C 关闭 Web 服务
 riffet --help          # 查看全部用法
 ```
 
-快捷命令默认使用 `http://127.0.0.1:4337/`、`cursor-agent` 和持久数据目录 `~/.local/share/riffet`。它不会因运行目录变化而切换数据或自动添加项目；需要添加当前目录时，使用 `riffet start --workspace .`。已经启动时，再次执行 `riffet` 会复用同一服务并打开页面。
+`riffet` 单独运行等同 `riffet open`。命令名拼错时会提示 “Did you mean …”。`riffet` 与 `riffet-server` 是同一个入口，默认都使用 `http://127.0.0.1:4337/`、`cursor-agent` 和持久数据目录 `~/.local/share/riffet`。它不会因运行目录变化而切换数据或自动添加项目；需要添加当前目录时，使用 `riffet start --workspace .`。已经启动时，再次执行 `riffet` 会复用同一服务并打开页面。输出语言为英文；`--no-color` 关闭颜色，同时遵循 `NO_COLOR` 与 `FORCE_COLOR`。退出码：0 成功，1 失败，2 用法错误，130 被中断。
 
-可用 `--state-dir`、`--port`、`--host`、`--cli`、`--workspace`、`--allow-host` 覆盖参数，或设置 `RIFFET_STATE_DIR`、`RIFFET_PORT`、`RIFFET_HOST`、`RIFFET_CLI` 环境变量。成功监听后，启动参数原子保存到 `<数据目录>/server-config.json`；`daemon.json` 只记录运行实例。`stop` 保留启动配置，之后 `start` 和 `restart` 都会恢复它。显式参数覆盖保存值，例如 `riffet restart --host 0.0.0.0 --auth`。快捷命令显式指定局域网地址时默认启用认证，`--no-auth` 仅允许回环地址。非法端口、局域网免认证或不存在的 workspace 会在停止前被拒绝。快捷命令的状态、启动和日志输出不显示登录令牌；需要令牌时用 `riffet token`（只向标准输出打印令牌本身，可直接接 `pbcopy`），或用 `riffet login-url` 取得带令牌的登录链接。令牌读自 `<数据目录>/access-token`，服务停止时也能读取。
+可用 `--state-dir`、`--port`、`--host`、`--cli`、`--workspace`、`--allow-host` 覆盖参数，或设置 `RIFFET_STATE_DIR`、`RIFFET_PORT`、`RIFFET_HOST`、`RIFFET_CLI` 环境变量；`--state-dir` 是全局选项，可写在子命令之前或之后。成功监听后，启动参数原子保存到 `<数据目录>/server-config.json`；`daemon.json` 只记录运行实例。`stop` 保留启动配置，之后 `start` 和 `restart` 都会恢复它。显式参数与环境变量覆盖保存值，例如 `riffet restart --host 0.0.0.0 --auth`。首次启动监听 127.0.0.1 且不要求令牌；任何非回环 `--host` 自动要求令牌，`--auth` / `--no-auth` 可覆盖，`--no-auth` 仅允许回环地址。非法端口、局域网免认证或不存在的 workspace 会在停止前被拒绝。`start`、`status` 和 `serve` 不显示令牌或登录链接；需要令牌时用 `riffet token`（只向标准输出打印令牌本身，可直接接 `pbcopy`），或用 `riffet url --login` 取得带令牌的登录链接。有新版本时，`status` 和启动输出会附一行提示；后台最多每天检查一次，`RIFFET_NO_UPDATE_NOTIFIER=1` 关闭。令牌读自 `<数据目录>/access-token`，服务停止时也能读取。
 
-`riffet doctor` 默认输出逐项清单：✅ 正常、⚠️ 可用但需留意、❌ 必须处理，每个非 ✅ 项后面附修复提示。检查项包括 Node 版本是否满足 `package.json` 的 `engines`、tmux、六个后端 CLI 能否解析（含「设置 → Agent 与模型」里各配置填写的入口；Cursor 还会检查登录状态）、目标端口是否空闲（已被本工作台占用视为正常）以及数据目录是否只有当前用户可访问。存在 ❌ 时退出码为 1，可用于脚本。`--json` 输出原有的完整环境与能力报告，并附带同一份检查结果。
+`riffet doctor` 默认按 Runtime / Agents / Server / Plugins 分组输出逐项清单：✓ 正常、! 可用但需留意、✗ 必须处理，每个非 ✓ 项后面附修复提示。检查项包括 Node 版本是否满足 `package.json` 的 `engines`、tmux、六个后端 CLI 能否解析（含「设置 → Agent 与模型」里各配置填写的入口；Cursor 还会检查登录状态）、目标端口是否空闲（已被本工作台占用视为正常）以及数据目录是否只有当前用户可访问。存在 ✗ 时退出码为 1，可用于脚本。`--json` 输出完整的环境与能力报告，并附带同一份检查结果，每项带 `group` 字段。`--compact` 压缩 `workbench.db`，要求 Riffet 已停止。
 
-命令入口是 `scripts/riffet.mjs`；本机通过 `~/.local/bin/riffet` 符号链接安装。移动项目后需要重新创建该链接。在其他 Mac 安装时，构建项目后执行（并确保 `~/.local/bin` 在 PATH 中）：
+命令实现在 `apps/server/src/cli/`；`scripts/riffet.mjs` 只是运行 `dist/cli.js` 的薄转发，本机通过 `~/.local/bin/riffet` 符号链接安装。移动项目后需要重新创建该链接。在其他 Mac 安装时，构建项目后执行（并确保 `~/.local/bin` 在 PATH 中）：
 
 ```bash
 mkdir -p "$HOME/.local/bin"
 ln -s /absolute/path/to/riffet/scripts/riffet.mjs "$HOME/.local/bin/riffet"
 ```
 
-以下是直接调用项目 CLI 的方式，其默认端口仍为 4317：
+未安装快捷命令时，可在构建后直接调用 `dist/cli.js`（与 `riffet` 相同，默认端口 4337）：
 
 ```bash
 cd /path/to/riffet
@@ -50,14 +57,13 @@ pnpm build
 node dist/cli.js start --cli cursor-agent
 ```
 
-启动命令会打印工作台地址和一次登录链接。打开链接后，Web 将换取 HttpOnly 会话 Cookie，并移除地址中的令牌。令牌、数据库和备份保存在 `~/.local/share/riffet`，目录权限为 0700，数据文件权限为 0600。
+启动命令打印工作台地址，不打印令牌；需要登录链接时用 `riffet url --login`，打开后 Web 将换取 HttpOnly 会话 Cookie，并移除地址中的令牌。令牌、数据库和备份保存在 `~/.local/share/riffet`，目录权限为 0700，数据文件权限为 0600。
 
 ```bash
 node dist/cli.js status
-node dist/cli.js status --no-token
 node dist/cli.js stop
 node dist/cli.js restart
-node dist/cli.js doctor --cli cursor-agent
+node dist/cli.js doctor
 node dist/cli.js doctor --json
 ```
 
@@ -76,9 +82,10 @@ node dist/cli.js doctor --json
 登录启动（macOS 使用 launchd，Linux 使用 `systemd --user`）：
 
 ```bash
-node dist/cli.js install-service --cli cursor-agent
-node dist/cli.js install-service --refresh-environment   # 安装新的 CLI 或 Node 后重新快照环境
-node dist/cli.js uninstall-service
+riffet service install --cli cursor-agent
+riffet service install --refresh-environment   # 安装新的 CLI 或 Node 后重新快照环境
+riffet service status
+riffet service uninstall
 ```
 
 登录服务使用构建后的 CLI，并保留安装时的 PATH。更换 Node 安装位置或移动项目后，需要重新安装登录服务。Linux 上的用户服务只在登录期间运行，`loginctl enable-linger $USER` 可让它在注销后继续运行。
@@ -98,7 +105,7 @@ riffet restart --host 0.0.0.0 --auth
 riffet pair
 ```
 
-首次直接部署也可用 `riffet start --host 0.0.0.0`；快捷命令会启用认证。直接调用 `node dist/cli.js` 时默认端口为 4317，通常应显式指定 `--port 4337`。已经运行的 `start` 会复用原实例；要改变监听地址请用 `restart`。
+首次直接部署也可用 `riffet start --host 0.0.0.0`；快捷命令会启用认证。已经运行的 `start` 会复用原实例；要改变监听地址请用 `restart`。
 
 `riffet pair` 从运行实例取得地址并发行一个 5 分钟有效、只能使用一次的配对码，终端同时打印二维码。每连接一个新客户端，重新执行该命令：
 
@@ -108,7 +115,7 @@ riffet pair
 | iPhone / Android / 另一台 Mac 上的 App | 扫码或输入地址和配对码，可保存多台服务器并切换 | 各客户端的设备凭据 |
 | 本机 / 局域网 Web | 打开地址，在登录页输入配对码 | HttpOnly Cookie；保留 CSRF、SSE、WebSocket 鉴权 |
 
-Web 仍支持 `riffet token` / `riffet login-url` 的原有管理员登录方式。通过配对码连接的浏览器与原生客户端均可在设备列表撤销；撤销会立即断开该设备已有的实时流和终端连接，并拒绝后续请求及未执行的终端输入，其他设备不受影响。主令牌不进入二维码，浏览器也不把设备 bearer token 存入 localStorage。
+Web 仍支持 `riffet token` / `riffet url --login` 的原有管理员登录方式。通过配对码连接的浏览器与原生客户端均可在设备列表撤销；撤销会立即断开该设备已有的实时流和终端连接，并拒绝后续请求及未执行的终端输入，其他设备不受影响。主令牌不进入二维码，浏览器也不把设备 bearer token 存入 localStorage。
 
 `riffet pair --json` 返回 `localUrl`、`urls`、`code`、`expiresAt`（Unix 毫秒）和 `qrPayload`（v1 JSON 字符串）。此输出包含临时配对凭据，应只交给准备连接的客户端。`riffet status` 是只读状态查询，不生成配对码。仅绑定回环时，`pair` 会明确提示先启用局域网监听，不会输出手机无法使用的二维码。
 
@@ -129,8 +136,8 @@ Web 仍支持 `riffet token` / `riffet login-url` 的原有管理员登录方式
 恢复必须使用一个空状态目录：
 
 ```bash
-node dist/cli.js restore --backup /absolute/backup/directory --state-dir /absolute/empty/state
-node dist/cli.js start --state-dir /absolute/empty/state --cli cursor-agent
+riffet restore --backup /absolute/backup/directory --state-dir /absolute/empty/state
+riffet start --state-dir /absolute/empty/state --cli cursor-agent
 ```
 
 恢复会验证清单、文件路径、符号链接与校验和，发现损坏时不写入最终目录。更新工作台前可创建备份。数据库若来自更新的工作台版本，旧版本会拒绝打开。

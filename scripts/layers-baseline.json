@@ -81,8 +81,7 @@
   "tasks -> workspace": 2,
   "terminal -> backends/shared": 1,
   "terminal -> task-workspaces": 1,
-  "update-npm.ts -> update.ts": 1,
-  "update.ts -> git": 1,
+  "update -> git": 1,
   "workspace -> previews": 1,
   "workspace -> task-workspaces": 1
 }

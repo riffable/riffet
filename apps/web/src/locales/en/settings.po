@@ -1798,10 +1798,6 @@ msgstr "Up to {limit} characters"
 msgid "最大宽 720，左右 32（手机 16），顶 max(48, 14vh)，底 64"
 msgstr "Max width 720, sides 32 (mobile 16), top max(48, 14vh), bottom 64"
 
-#: src/app/settings/UpdateSection.tsx
-msgid "最新发布"
-msgstr "Latest release"
-
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "最近"
@@ -2859,6 +2855,10 @@ msgstr "Append a new decision to DECISIONS.md"
 #: src/app/design/engineering/ArchitectureChapter.tsx
 msgid "在 foundations.md 写明用途"
 msgstr "Document its use in foundations.md"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "在 GitHub 比较代码"
+msgstr "Compare code on GitHub"
 
 #: src/app/design/android/ComponentChapter.tsx
 msgid "在 timeline 目录，未进组件层"
@@ -4052,6 +4052,11 @@ msgstr "Accent"
 msgid "强调色只用于焦点环、文本选区和链接"
 msgstr "The accent colour is used only for focus rings, text selection and links"
 
+#. placeholder {0}: serverBuild.tag ?? serverBuild.version
+#: src/app/settings/UpdateSection.tsx
+msgid "当前 {0}"
+msgstr "You have {0}"
+
 #: src/app/settings/AgentSettingsSection.tsx
 #: src/app/settings/BackendProfilesSection.tsx
 msgid "当前不可用"
@@ -4836,6 +4841,7 @@ msgid "收藏夹"
 msgstr "Favorites"
 
 #: src/app/design/components/FeedbackChapter.tsx
+#: src/app/settings/UpdateSection.tsx
 msgid "收起"
 msgstr "Collapse"
 
@@ -5084,6 +5090,10 @@ msgstr "When creating a session"
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "新建终端"
 msgstr "New terminal"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "新版本 {available}"
+msgstr "Version {available}"
 
 #: src/app/settings/channels/CardSettings.tsx
 msgid "新设置从下一条回复开始生效"
@@ -5415,6 +5425,10 @@ msgstr "Yes"
 msgid "显示"
 msgstr "Display"
 
+#: src/app/settings/UpdateSection.tsx
+msgid "显示全部"
+msgstr "Show all"
+
 #: src/app/design/patterns/FormsChapter.tsx
 msgid "显示在侧栏里"
 msgstr "Shown in the sidebar"
@@ -5516,6 +5530,14 @@ msgstr "A task with submit and cancel"
 #: src/app/settings/PairingDialogs.tsx
 msgid "有效至 {0}"
 msgstr "Valid until {0}"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本"
+msgstr "Update available"
+
+#: src/app/design/patterns/OverlayChapter.tsx
+msgid "有新版本 · 已查看"
+msgstr "Update available · seen"
 
 #: src/app/settings/UpdateSection.tsx
 msgid "有新版本可用"
@@ -5867,8 +5889,8 @@ msgid "检查"
 msgstr "Checks"
 
 #: src/app/settings/UpdateSection.tsx
-msgid "检查中…"
-msgstr "Checking…"
+msgid "检查于{checkedAt}"
+msgstr "Checked {checkedAt}"
 
 #: src/app/design/mac/notes.ts
 msgid "检查器页签"
@@ -5988,6 +6010,10 @@ msgstr "Loading…"
 #: src/app/settings/StorageSection.tsx
 msgid "正在读取存储空间"
 msgstr "Reading storage"
+
+#: src/app/settings/UpdateSection.tsx
+msgid "正在读取更新内容…"
+msgstr "Reading what changed…"
 
 #: src/app/settings/ServiceStatusSection.tsx
 msgid "正在读取服务器状态"

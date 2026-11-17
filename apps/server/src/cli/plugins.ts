@@ -1,20 +1,23 @@
 import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { existsSync, mkdirSync, realpathSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { validatePackage, watchPlugin, type PluginBuildResult } from '../../../packages/plugin-api/src/tooling.js';
-import { claimStateDirectory } from './compat.js';
-import { PluginStore } from './plugins/store.js';
-import type { PluginDescriptor } from '../../../packages/contracts/src/index.js';
-import { localServerUrl, type PairingDaemon } from './cli-pairing.js';
-import { AppError } from './errors.js';
-import { PackageStore, checkExpected, type PackageInput } from './plugins-host/packages.js';
-import { addMarketSource, checkMarketSource, checkSourceAddress, downloadMarketPackage, findMarketSource, installedPackages, listMarket, marketRecord, marketSourceId, marketSources, parseMarketReference, removeMarketSource, resolveMarketPackage, setMarketSourceEnabled, type MarketOptions, type MarketPackage, type MarketReference } from './plugins-host/market.js';
-import { buildRegistry, writeIndex } from './plugins-host/index-builder.js';
-import type { PluginMarketList, PluginSource } from '../../../packages/contracts/src/index.js';
-import { developmentDirectories, readPackage } from './plugins/development.js';
-import { PluginLogs } from './plugins/logs.js';
-import { PLUGIN_ID } from '../../../packages/contracts/src/plugins.js';
-import type { PluginLogEntry } from '../../../packages/contracts/src/plugin-management.js';
+import { validatePackage, watchPlugin, type PluginBuildResult } from '../../../../packages/plugin-api/src/tooling.js';
+import { claimStateDirectory } from '../compat.js';
+import { PluginStore } from '../plugins/store.js';
+import type { PluginDescriptor } from '../../../../packages/contracts/src/index.js';
+import type { PairingDaemon } from './pair.js';
+import { Api } from './api.js';
+import { MARK, columns, out, tilde, type Status } from './ui.js';
+import { AppError } from '../errors.js';
+import { PackageStore, checkExpected, type PackageInput } from '../plugins-host/packages.js';
+import { addMarketSource, checkMarketSource, checkSourceAddress, downloadMarketPackage, findMarketSource, installedPackages, listMarket, marketRecord, marketSourceId, marketSources, parseMarketReference, removeMarketSource, resolveMarketPackage, setMarketSourceEnabled, type MarketOptions, type MarketPackage, type MarketReference } from '../plugins-host/market.js';
+import { buildRegistry, writeIndex } from '../plugins-host/index-builder.js';
+import type { PluginMarketList, PluginSource } from '../../../../packages/contracts/src/index.js';
+import { developmentDirectories, readPackage } from '../plugins/development.js';
+import { PluginLogs } from '../plugins/logs.js';
+import { PLUGIN_ID } from '../../../../packages/contracts/src/plugins.js';
+import type { PluginLogEntry } from '../../../../packages/contracts/src/plugin-management.js';
 
 // `riffet plugin ...`: installing and managing plugin packages from a terminal. A running server does
 // the work (so the new version starts or is undone in the process that serves it); without one, the
@@ -37,7 +40,7 @@ export async function linkDevelopmentPlugin(context: PluginCliContext, directory
   }
   const { manifest } = await validatePackage(path);
   const id = String(manifest.id);
-  if ((await import('./plugins/registry.js')).isBuiltinPlugin(id)) throw new AppError('PLUGIN_ID_TAKEN', `${id} is a built-in plugin`, 409);
+  if ((await import('../plugins/registry.js')).isBuiltinPlugin(id)) throw new AppError('PLUGIN_ID_TAKEN', `${id} is a built-in plugin`, 409);
   mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
   const release = claimStateDirectory(context.stateDir);
   try {
@@ -60,7 +63,7 @@ export async function unlinkDevelopmentPlugin(context: PluginCliContext, id: str
     const release = claimStateDirectory(context.stateDir);
     try { new PluginStore(context.stateDir).setDevelopmentPackage(id, null); } finally { release(); }
   }
-  return [`Unlinked ${id}. Its settings and data were kept.`];
+  return [done(`Unlinked ${out.bold(id)} ${out.dim('· settings and data are kept')}`)];
 }
 
 /** Re-probe the daemon after each build so stopping/starting Riffet needs no watcher restart. */
@@ -84,20 +87,15 @@ export async function developPlugin(context: () => Promise<PluginCliContext>, di
 interface Reply { status: number; body: { error?: { code?: string; message?: string; details?: unknown } } & Record<string, unknown> }
 
 async function connect(daemon: PairingDaemon, token: string): Promise<(method: string, path: string, body?: unknown) => Promise<Reply>> {
-  const base = localServerUrl(daemon);
-  const login = await fetch(`${base}/api/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token }), signal: AbortSignal.timeout(5000) });
-  if (!login.ok) throw new Error(`Could not authenticate with the running server (HTTP ${login.status}); check --state-dir.`);
-  const { csrfToken } = await login.json() as { csrfToken?: unknown };
-  const cookie = login.headers.getSetCookie().map(value => value.split(';')[0]).find(value => value?.startsWith('cw_session='));
-  if (typeof csrfToken !== 'string' || !cookie) throw new Error('The running server did not return an authentication session.');
-  return async (method, path, body) => {
-    const response = await fetch(`${base}${path}`, {
-      method, headers: { cookie, 'x-csrf-token': csrfToken, ...(body === undefined ? {} : { 'content-type': 'application/json' }) },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(120_000),
-    });
-    return { status: response.status, body: await response.json().catch(() => ({})) as Reply['body'] };
-  };
+  const api = await Api.login(daemon, token);
+  return (method, path, body) => api.request(method, path, body) as Promise<Reply>;
 }
+
+const done = (text: string) => `${out.ok(MARK.ok)} ${text}`;
+const asks = (id: string, version: string, capabilities: string[]) => [
+  `${out.warn(MARK.warn)} ${out.bold(id)} ${version} asks for ${capabilities.length ? capabilities.map(item => out.bold(item)).join(', ') : 'nothing'}`,
+  `  ${out.dim(MARK.arrow)} Run again with ${out.cmd('--yes')} ${out.dim('(or --grant <list>)')} to grant exactly these`,
+];
 
 const fail = (reply: Reply): never => { throw new Error(reply.body.error?.message ?? `The server answered HTTP ${reply.status}.`); };
 
@@ -105,7 +103,11 @@ function parseGrant(value: string | undefined): string[] | undefined {
   return value === undefined ? undefined : value.split(',').map(item => item.trim()).filter(Boolean);
 }
 
-interface InstallOptions { grant?: string; yes?: boolean; trusted?: boolean; from?: string }
+interface InstallOptions {
+  grant?: string; yes?: boolean; trusted?: boolean; from?: string;
+  /** Asked in a terminal when the package needs capabilities nobody granted yet. */
+  confirm?: (id: string, version: string, capabilities: string[]) => Promise<boolean>;
+}
 type InstallTarget = { path: string } | { market: MarketReference };
 
 /** What the offline commands read of the sources and of what is installed. */
@@ -135,14 +137,14 @@ async function installTarget(context: PluginCliContext, target: InstallTarget, o
     let reply = await call('POST', '/api/integrations/install', { ...target, grant: given ?? [], trusted: options.trusted === true });
     const details = reply.body.error?.details as { id?: string; version?: string; sourceId?: string; capabilities?: string[] } | undefined;
     if (reply.status === 409 && reply.body.error?.code === 'PLUGIN_GRANT_REQUIRED' && details?.capabilities) {
-      if (!options.yes) return [`${details.id} ${details.version} asks for: ${details.capabilities.join(', ')}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'].map(String);
+      if (!options.yes && !await options.confirm?.(String(details.id), String(details.version), details.capabilities)) return asks(String(details.id), String(details.version), details.capabilities);
       // The release the user was shown, even if the index changed since.
       const confirmed = market && details.id && details.version ? { market: { ...(details.sourceId ? { source: details.sourceId } : {}), id: details.id, version: details.version } } : target;
       reply = await call('POST', '/api/integrations/install', { ...confirmed, grant: details.capabilities, trusted: options.trusted === true });
     }
     if (reply.status !== 200) fail(reply);
     const installed = reply.body as unknown as PluginDescriptor;
-    return [`Installed ${installed.id} ${installed.version ?? ''} (${installed.enabled ? 'running' : installed.status?.message ?? 'off'}).`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
+    return [done(`Installed ${out.bold(installed.id)} ${installed.version ?? ''} ${out.dim('· ' + (installed.enabled ? 'running' : installed.status?.message ?? 'off'))}`), ...(options.trusted ? [`  ${out.dim('Trusted: its server code runs with Riffet\'s permissions')}`] : [])];
   }
   const store = new PackageStore(context.stateDir);
   let found: MarketPackage | undefined;
@@ -155,7 +157,7 @@ async function installTarget(context: PluginCliContext, target: InstallTarget, o
     try { checkExpected(staged, found); } catch (error) { await store.discard(staged); throw error; }
   }
   // The server refuses a built-in id when it installs; without one running, the same refusal is made here (`stage` has refused the reserved `riffet.` namespace).
-  if ((await import('./plugins/registry.js')).isBuiltinPlugin(String(staged.manifest.id))) {
+  if ((await import('../plugins/registry.js')).isBuiltinPlugin(String(staged.manifest.id))) {
     await store.discard(staged);
     throw new AppError('PLUGIN_ID_TAKEN', `${String(staged.manifest.id)} is a built-in plugin; an installed package cannot take its id`, 409);
   }
@@ -164,15 +166,16 @@ async function installTarget(context: PluginCliContext, target: InstallTarget, o
     throw new AppError('PLUGIN_ID_TAKEN', `${String(staged.manifest.id)} is linked for development; unlink it before installing`, 409);
   }
   try { checkMarketSource(store.record(String(staged.manifest.id)), origin, String(staged.manifest.id)); } catch (error) { await store.discard(staged); throw error; }
-  const grant = options.yes ? staged.capabilities : [...new Set(given ?? [])].sort();
+  const confirmed = !options.yes && given === undefined && await options.confirm?.(String(staged.manifest.id), String(staged.manifest.version), staged.capabilities);
+  const grant = options.yes || confirmed ? staged.capabilities : [...new Set(given ?? [])].sort();
   if (grant.length !== staged.capabilities.length || grant.some((item, index) => item !== staged.capabilities[index])) {
     await store.discard(staged);
-    return [`${staged.manifest.id} ${staged.manifest.version} asks for: ${staged.capabilities.join(', ') || 'nothing'}`, 'Run again with --yes (or --grant <list>) to grant exactly these.'];
+    return asks(String(staged.manifest.id), String(staged.manifest.version), staged.capabilities);
   }
   const id = String(staged.manifest.id);
   const existing = store.record(id);
   const { status } = await store.commit(staged, origin, true);
-  return [status === 'present' ? `${id} ${staged.manifest.version} is already installed.` : `Installed ${id} ${staged.manifest.version}${existing ? ' and selected it' : ''}; it takes effect when Riffet starts.`, ...(options.trusted ? ['Trusted server code runs with Riffet\'s permissions.'] : [])];
+  return [status === 'present' ? done(`${out.bold(id)} ${staged.manifest.version} is already installed`) : done(`Installed ${out.bold(id)} ${staged.manifest.version}${existing ? ' and selected it' : ''} ${out.dim('· takes effect when Riffet starts')}`), ...(options.trusted ? [`  ${out.dim('Trusted: its server code runs with Riffet\'s permissions')}`] : [])];
 }
 
 /**
@@ -187,19 +190,22 @@ export async function updatePlugins(context: PluginCliContext, ids: string[], op
     if (reply.status !== 200) fail(reply);
     list = reply.body as unknown as PluginMarketList;
   } else list = await listMarket({ ...offlineMarket(context), fresh: true });
-  const lines = list.sources.filter(source => source.enabled && source.error).map(source => `Source ${source.id} could not be read: ${source.error}`);
+  const lines = list.sources.filter(source => source.enabled && source.error).map(source => `${out.fail(MARK.fail)} Source ${out.bold(source.id)} could not be read: ${source.error}`);
   const targets = list.plugins.filter(entry => entry.update && (!ids.length || ids.includes(entry.id)));
   for (const id of ids) {
     if (targets.some(entry => entry.id === id)) continue;
     const known = list.plugins.filter(entry => entry.id === id && entry.installed);
-    lines.push(known.some(entry => entry.installed?.sameSource) ? `${id} is up to date.` : known.length ? `${id} was installed from another origin; it has no update here.` : `${id} is not installed from a source.`);
+    lines.push(known.some(entry => entry.installed?.sameSource) ? done(`${out.bold(id)} is up to date`) : known.length ? `${out.dim(MARK.dot)} ${out.bold(id)} was installed from elsewhere; no update here` : `${out.dim(MARK.dot)} ${out.bold(id)} is not installed from a source`);
   }
   for (const entry of targets) lines.push(...await installTarget(context, { market: { source: entry.sourceId, id: entry.id, version: entry.version } }, options));
-  return lines.length ? lines : ['Everything installed from a source is up to date.'];
+  return lines.length ? lines : [done('Everything installed from a source is up to date')];
 }
 
-const sourceLine = (source: PluginSource) =>
-  [source.id, source.enabled ? 'on' : 'off', source.url, ...(source.name ? [source.name] : []), ...(source.plugins !== undefined ? [`${source.plugins} plugins`] : []), ...(source.error ? [`error: ${source.error}`] : [])].join('  ');
+const sourceRows = (sources: PluginSource[]) => columns(sources.map(source => [
+  source.error && source.enabled ? out.fail(MARK.running) : source.enabled ? out.ok(MARK.running) : out.dim(MARK.stopped),
+  out.bold(source.id), out.url(source.url),
+  source.error && source.enabled ? out.fail(source.error) : out.dim([source.name, source.plugins !== undefined ? `${source.plugins} plugins` : undefined, source.enabled ? undefined : 'off'].filter(Boolean).join(' · ')),
+]));
 
 /** `riffet plugin source list|add|remove|enable|disable`. Offline, plugins.json is changed under the state-directory lock. */
 export async function manageSources(context: PluginCliContext, action: 'list' | 'add' | 'remove' | 'enable' | 'disable', argument?: string): Promise<string[]> {
@@ -213,55 +219,89 @@ export async function manageSources(context: PluginCliContext, action: 'list' | 
       : await call('PATCH', `/api/integrations/sources/${encodeURIComponent(argument!)}`, { enabled: action === 'enable' });
     if (reply.status !== 200) fail(reply);
     const sources = (reply.body as unknown as PluginMarketList).sources;
-    return action === 'add' ? [`Added ${sourceLine(sources.find(item => item.id === idOf(argument!)) ?? sources.at(-1)!)}`] : sources.map(sourceLine);
+    return action === 'add' ? [done(`Added ${out.bold(idOf(argument!))}`), ...sourceRows(sources.filter(item => item.id === idOf(argument!)))] : sourceRows(sources);
   }
-  if (action === 'list') return marketSources(new PluginStore(context.stateDir)).map(source => sourceLine({ ...source }));
+  if (action === 'list') return sourceRows(marketSources(new PluginStore(context.stateDir)).map(source => ({ ...source })));
   mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
   const release = claimStateDirectory(context.stateDir);
   try {
     const store = new PluginStore(context.stateDir);
-    if (action === 'add') { const added = await addMarketSource(store, argument!); return [`Added ${added.id}  ${added.url}`]; }
+    if (action === 'add') { const added = await addMarketSource(store, argument!); return [done(`Added ${out.bold(added.id)} ${out.url(added.url)}`)]; }
     const id = findMarketSource(store, argument!)?.id ?? argument!;
     if (action === 'remove') removeMarketSource(store, id); else setMarketSourceEnabled(store, id, action === 'enable');
-    return [`${action === 'remove' ? 'Removed' : action === 'enable' ? 'Turned on' : 'Turned off'} ${id}.${action === 'remove' ? ' Packages installed from it are kept.' : ''}`];
+    return [done(`${action === 'remove' ? 'Removed' : action === 'enable' ? 'Turned on' : 'Turned off'} ${out.bold(id)}${action === 'remove' ? out.dim(' · packages installed from it are kept') : ''}`)];
   } finally { release(); }
 }
 
 /** `riffet plugin index build`: a static plugin index any server can add as a source (docs/PLUGINS.md「插件市场」). */
 export async function buildPluginIndex(registryDirectory: string, options: { out: string; name?: string; published?: string }): Promise<string[]> {
   const registry = resolve(registryDirectory);
-  const out = resolve(options.out);
+  const destination = resolve(options.out);
   if (!existsSync(registry)) throw new Error(`${registry} does not exist.`);
-  if (out === registry) throw new Error('--out must be a different directory from the registry.');
+  if (destination === registry) throw new Error('--out must be a different directory from the registry.');
   const published = options.published ?? 'none';
-  const plugins = await buildRegistry({ registry, out, ...(published !== 'none' ? { published, carryForward: true, strictPublished: true } : {}), warn: message => console.warn(message) });
-  await writeIndex(out, { plugins, ...(options.name ? { name: options.name } : {}) });
-  return [`${join(out, 'index.json')}: ${plugins.length} plugins`, ...plugins.map(entry => `  ${entry.id}  ${entry.versions.map(item => item.version).join(', ')}`)];
+  const plugins = await buildRegistry({ registry, out: destination, ...(published !== 'none' ? { published, carryForward: true, strictPublished: true } : {}), warn: message => console.warn(message) });
+  await writeIndex(destination, { plugins, ...(options.name ? { name: options.name } : {}) });
+  return [done(`${tilde(join(destination, 'index.json'))} ${out.dim(`· ${plugins.length} plugins`)}`), ...columns(plugins.map(entry => [out.bold(entry.id), out.dim(entry.versions.map(item => item.version).join(', '))]), { indent: 2 })];
+}
+
+interface ListedVersion { version: string; selected: boolean; trusted?: boolean; capabilities: string[]; source: string }
+interface Listed { id: string; state?: Status | 'off'; message?: string; versions: ListedVersion[] }
+
+/** Where a version came from, short enough for one line: a source id, or the end of a path. */
+function shortSource(source: string): string {
+  const path = tilde(source.replace(/^path:/, ''));
+  return path.length <= 40 ? path : '…/' + path.split('/').slice(-2).join('/');
+}
+
+/** One line per package, its installed versions below it, columns aligned across the whole list. */
+function renderPlugins(items: Listed[]): string[] {
+  if (!items.length) return [`${out.dim(MARK.dot)} No plugin packages are installed`];
+  const versionRows = items.flatMap(item => item.versions.map(version => [
+    version.selected ? out.accent(MARK.running) : ' ',
+    version.selected ? out.bold(version.version) : out.dim(version.version),
+    version.trusted ? 'trusted' : out.dim('isolated'),
+    version.capabilities.length ? version.capabilities.join(', ') : out.dim('—'),
+    out.dim(shortSource(version.source)),
+  ]));
+  const aligned = columns(versionRows, { indent: 4 });
+  const lines: string[] = [];
+  let row = 0;
+  for (const item of items) {
+    const marker = item.state === undefined ? out.dim(MARK.dot) : item.state === 'off' ? out.dim(MARK.stopped) : item.state === 'ok' ? out.ok(MARK.running) : item.state === 'warn' ? out.warn(MARK.running) : out.fail(MARK.running);
+    const message = item.message ? item.message.split(homedir()).join('~') : '';
+    lines.push(`${marker} ${out.bold(item.id)}${message ? '  ' + (item.state === 'fail' ? out.fail(message) : out.dim(message)) : ''}`);
+    for (let index = 0; index < item.versions.length; index++) lines.push(aligned[row++]!);
+  }
+  return lines;
 }
 
 export async function listPlugins(context: PluginCliContext): Promise<string[]> {
   if (context.daemon) {
     const reply = await (await connect(context.daemon, context.token()))('GET', '/api/integrations');
     if (reply.status !== 200) fail(reply);
-    return ((reply.body.integrations ?? []) as PluginDescriptor[]).filter(item => item.source === 'installed').flatMap(item => [
-      `${item.id}  ${item.enabled ? 'on' : 'off'}  ${item.status?.message ?? ''}`.trimEnd(),
-      ...(item.installed?.versions ?? []).map(version => `  ${version.selected ? '*' : ' '} ${version.version}  ${version.trusted ? 'trusted' : 'isolated'}  [${version.capabilities.join(', ')}]  ${version.source}`),
-    ]);
+    return renderPlugins(((reply.body.integrations ?? []) as PluginDescriptor[]).filter(item => item.source === 'installed').map(item => ({
+      id: item.id,
+      state: !item.enabled ? 'off' as const : item.status?.state === 'unavailable' ? 'fail' as const : item.status?.state === 'attention' ? 'warn' as const : 'ok' as const,
+      message: [item.enabled ? undefined : 'off', item.status?.message].filter(Boolean).join(' · '),
+      versions: item.installed?.versions ?? [],
+    })));
   }
-  return new PackageStore(context.stateDir).records().flatMap(record => [
-    record.id,
-    ...record.versions.map(version => `  ${version.version === record.selected ? '*' : ' '} ${version.version}  ${version.trusted ? 'trusted' : 'isolated'}  [${version.capabilities.join(', ')}]  ${version.source}`),
-  ]);
+  return renderPlugins(new PackageStore(context.stateDir).records().map(record => ({
+    id: record.id,
+    message: 'Riffet is not running',
+    versions: record.versions.map(version => ({ ...version, selected: version.version === record.selected })),
+  })));
 }
 
 export async function selectPlugin(context: PluginCliContext, id: string, version: string): Promise<string[]> {
   if (context.daemon) {
     const reply = await (await connect(context.daemon, context.token()))('POST', `/api/integrations/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/select`, {});
     if (reply.status !== 200) fail(reply);
-    return [`${id} now uses ${version}.`];
+    return [done(`${out.bold(id)} now runs ${version}`)];
   }
   new PackageStore(context.stateDir).select(id, version);
-  return [`${id} will use ${version} when Riffet starts.`];
+  return [done(`${out.bold(id)} will run ${version} ${out.dim('· when Riffet starts')}`)];
 }
 
 export async function uninstallPlugin(context: PluginCliContext, id: string, version?: string, target: { source?: 'installed' | 'development'; path?: string } = {}): Promise<string[]> {
@@ -274,7 +314,7 @@ export async function uninstallPlugin(context: PluginCliContext, id: string, ver
     const query = new URLSearchParams({ ...(target.source ? { source: target.source } : {}), ...(target.path ? { path: resolve(target.path) } : {}) });
     const reply = await (await connect(context.daemon, context.token()))('DELETE', `/api/integrations/${encodeURIComponent(id)}${version ? `/versions/${encodeURIComponent(version)}` : query.size ? '?' + query.toString() : ''}`);
     if (reply.status !== 200) fail(reply);
-    return [`Removed ${id}${version ? ` ${version}` : ''}. Its settings and data were kept.`];
+    return [done(`Removed ${out.bold(id)}${version ? ` ${version}` : ''} ${out.dim('· settings and data are kept')}`)];
   }
   mkdirSync(context.stateDir, { recursive: true, mode: 0o700 });
   const release = claimStateDirectory(context.stateDir);
@@ -304,7 +344,7 @@ export async function uninstallPlugin(context: PluginCliContext, id: string, ver
       for (const entry of record?.versions ?? []) if (!version || version === entry.version) await store.retire(id, entry.version, () => false);
     }
   } finally { release(); }
-  return [`Removed ${id}${version ? ` ${version}` : ''}. Its settings and data were kept.`];
+  return [done(`Removed ${out.bold(id)}${version ? ` ${version}` : ''} ${out.dim('· settings and data are kept')}`)];
 }
 
 export async function deletePluginData(context: PluginCliContext, id: string): Promise<string[]> {
@@ -312,7 +352,7 @@ export async function deletePluginData(context: PluginCliContext, id: string): P
     const reply = await (await connect(context.daemon, context.token()))('DELETE', `/api/integrations/${encodeURIComponent(id)}/data`);
     if (reply.status !== 200) fail(reply);
   } else await new PackageStore(context.stateDir).deleteData(id);
-  return [`Deleted the data of ${id}.`];
+  return [done(`Deleted the data of ${out.bold(id)}`)];
 }
 
 /** Recovery also works with the daemon stopped, without importing any plugin code. */
@@ -327,7 +367,7 @@ export async function recoverPlugins(context: PluginCliContext, mode: string): P
     const release = claimStateDirectory(context.stateDir);
     try { new PluginStore(context.stateDir).setRecovery(enabled); } finally { release(); }
   }
-  return [enabled ? 'External plugins are paused. Original enablement policies are retained.' : 'Original plugin enablement policies restored.'];
+  return [done(enabled ? `External plugins are paused ${out.dim('· `riffet plugin recovery off` restores them')}` : 'Plugins are back to their own on/off settings')];
 }
 
 export async function inspectPlugin(context: PluginCliContext, id: string, action: 'reload' | 'diagnostics'): Promise<string[]> {
@@ -353,5 +393,6 @@ export async function readPluginLogs(context: PluginCliContext, id: string, opti
       try { const item = store.item(pluginId); return [...Object.values(item.settings), ...Object.values(item.secrets)]; } catch { return []; }
     }).read(id);
   }
-  return logs.slice(-limit).map(entry => `${entry.at} ${entry.level} ${entry.pluginId}@${entry.version ?? 'unversioned'} #${entry.generation} ${entry.phase}: ${entry.message}`);
+  const level = (value: string) => value === 'error' ? out.fail(value.padEnd(5)) : value === 'warn' ? out.warn(value.padEnd(5)) : out.dim(value.padEnd(5));
+  return logs.slice(-limit).map(entry => `${out.dim(entry.at)} ${level(entry.level)} ${out.dim(`${entry.version ?? 'unversioned'} #${entry.generation}`)} ${out.tag(entry.phase)} ${entry.message}`);
 }

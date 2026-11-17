@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDoctorChecks, satisfiesMinimum } from './doctor.js';
+import { satisfiesMinimum } from './doctor.js';
 import { cliVersionStatus, versionAtLeast } from './backends/shared/cli-version.js';
 
 describe('doctor', () => {
@@ -24,18 +24,5 @@ describe('doctor', () => {
     // Cursor's hyphen suffix is a commit, not a prerelease.
     expect(versionAtLeast('2026.10.01-e373342', '2026.10.01')).toBe(true);
     expect(cliVersionStatus({ testedThrough: '2026.10.01' }, '2026.10.02-a1b2c3d')).toBe('untested');
-  });
-
-  it('prints a fix hint only for items that need one', () => {
-    const text = formatDoctorChecks([
-      { id: 'node', label: 'Node.js', status: 'ok', detail: 'v24.20.0', fix: 'unused' },
-      { id: 'tmux', label: 'tmux', status: 'fail', detail: 'missing', fix: 'brew install tmux' },
-      { id: 'backend:droid', label: 'Droid', status: 'warn', detail: 'not found', fix: 'install droid' },
-    ]);
-    expect(text).toContain('✅ Node.js: v24.20.0');
-    expect(text).not.toContain('unused');
-    expect(text).toContain('❌ tmux: missing\n   → brew install tmux');
-    expect(text).toContain('→ install droid');
-    expect(text).toContain('1 problem(s) must be fixed, 1 warning(s).');
   });
 });

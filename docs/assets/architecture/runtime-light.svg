@@ -38,7 +38,7 @@
 <text x="447" y="545.5" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">auxiliary/gateway</text>
 <text x="447" y="558.5" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start">kernel</text>
 <rect x="438" y="583" width="138" height="38" rx="5" fill="#f4f2ee" stroke="none" stroke-width="1"/>
-<text x="447" y="599.5" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">update-npm.ts</text>
+<text x="447" y="599.5" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">update</text>
 <text x="447" y="612.5" font-size="9.5" font-weight="400" fill="#6e737b" text-anchor="start">features</text>
 <rect x="764" y="151" width="138" height="38" rx="5" fill="#f4f2ee" stroke="none" stroke-width="1"/>
 <text x="773" y="167.5" font-size="10.5" font-weight="500" fill="#15171a" text-anchor="start" class="m">backends/claude</text>

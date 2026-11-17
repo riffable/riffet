@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { BuildInfo } from '@contracts';
-import { assertSourceStartAllowed, claimUpdate, runSourceUpdate, type UpdateLifecycle } from './cli-update.js';
+import { assertSourceStartAllowed, claimUpdate, runSourceUpdate, type UpdateLifecycle } from './source-update.js';
 
 const cleanups: Array<() => Promise<void>> = [];
 const originalPath = process.env.PATH;
@@ -62,12 +62,12 @@ if (action === 'build') {
   const events: string[] = [];
   const lifecycle: UpdateLifecycle = {
     stop: async () => {
-      expect(() => assertSourceStartAllowed(root)).toThrow('正在更新');
+      expect(() => assertSourceStartAllowed(root)).toThrow('being updated');
       events.push(`stop:${git(root, 'rev-parse', 'HEAD')}`);
     },
     restore: async release => {
       expect(() => assertSourceStartAllowed(root)).not.toThrow();
-      expect(() => claimUpdate(root)).toThrow('已有更新进程');
+      expect(() => claimUpdate(root)).toThrow('Another update is running');
       const built = JSON.parse(await readFile(join(root, 'dist/build-info.json'), 'utf8'));
       expect(built.build.commit).toBe(release.commit);
       events.push(`restore:${release.commit}`);
@@ -93,17 +93,17 @@ describe('source installation update effects', () => {
     const fixture = await installation();
     const release = claimUpdate(fixture.root);
     try {
-      expect(() => assertSourceStartAllowed(fixture.root)).toThrow('正在更新');
-      await expect(runSourceUpdate(fixture)).rejects.toThrow('已有更新进程');
+      expect(() => assertSourceStartAllowed(fixture.root)).toThrow('being updated');
+      await expect(runSourceUpdate(fixture)).rejects.toThrow('Another update is running');
     }
     finally { release(); }
     await writeFile(join(fixture.root, '.riffet/update.lock'), '2147483647');
-    expect(() => assertSourceStartAllowed(fixture.root)).toThrow('正在更新');
-    await expect(runSourceUpdate(fixture)).rejects.toThrow('遗留更新锁');
+    expect(() => assertSourceStartAllowed(fixture.root)).toThrow('being updated');
+    await expect(runSourceUpdate(fixture)).rejects.toThrow('stale update lock');
     expect(await readFile(join(fixture.root, '.riffet/update.lock'), 'utf8')).toBe('2147483647');
     await rm(join(fixture.root, '.riffet/update.lock'));
     await writeFile(join(fixture.root, 'local-note.txt'), 'user-owned content');
-    await expect(runSourceUpdate(fixture)).rejects.toThrow('干净的发布 tag');
+    await expect(runSourceUpdate(fixture)).rejects.toThrow('clean checkout of a release tag');
     expect(await readFile(join(fixture.root, 'local-note.txt'), 'utf8')).toBe('user-owned content');
     expect(fixture.git('rev-parse', 'HEAD')).toBe(fixture.first);
     expect(fixture.events).toEqual([]);
@@ -117,7 +117,7 @@ describe('source installation update effects', () => {
     const child = spawn(process.execPath, [entry, 'serve', '--state-dir', join(fixture.root, '.riffet/other-state')], { stdio: 'ignore' });
     await once(child, 'spawn');
     try {
-      await expect(runSourceUpdate(fixture)).rejects.toThrow('其它状态目录');
+      await expect(runSourceUpdate(fixture)).rejects.toThrow('another state directory');
       expect(fixture.git('rev-parse', 'HEAD')).toBe(fixture.first);
       expect(fixture.events).toEqual([]);
     } finally {
@@ -138,7 +138,7 @@ describe('source installation update effects', () => {
     const child = spawn(process.execPath, [join(alias, 'apps/macos/build/Debug/Riffet.app/Contents/MacOS/Riffet')], { stdio: 'ignore' });
     await once(child, 'spawn');
     try {
-      await expect(runSourceUpdate({ ...fixture, app: true, configuration: 'Debug' })).rejects.toThrow('退出此 App');
+      await expect(runSourceUpdate({ ...fixture, app: true, configuration: 'Debug' })).rejects.toThrow('quit the App');
       expect(fixture.git('rev-parse', 'HEAD')).toBe(fixture.first);
       expect(fixture.events).toEqual([]);
     } finally {
@@ -150,7 +150,7 @@ describe('source installation update effects', () => {
   it('does not start an incomplete build and releases its lock so the same target can be retried', async () => {
     const fixture = await installation();
     process.env.RIFFET_UPDATE_PROBE_FAIL = '1';
-    await expect(runSourceUpdate(fixture)).rejects.toThrow('pnpm 失败');
+    await expect(runSourceUpdate(fixture)).rejects.toThrow('pnpm failed');
     expect(fixture.events).toEqual([`stop:${fixture.first}`]);
     expect(fixture.git('rev-parse', 'HEAD')).toBe(fixture.second);
     expect(fixture.git('rev-parse', 'refs/heads/installed')).toBe(fixture.first);

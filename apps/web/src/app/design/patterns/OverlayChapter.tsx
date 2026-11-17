@@ -10,6 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tip } from '@/components/ui/tooltip';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
+import { UpdateNotice } from '../../SidebarUpdateButton';
 import { SidebarUserMenu } from '../../SidebarUserMenu';
 import { Chapter, Family, Frame, Plate, Specimen } from '../specimen';
 
@@ -139,6 +140,18 @@ export function OverlayChapter() {
         </Specimen>
         <Specimen name={t`无法连接服务器`}>
           <SidebarUserMenu stale={{ mode: 'offline' }} onOpenProfile={() => {}} onOpenSettings={() => {}} />
+        </Specimen>
+        <Specimen name={t`有新版本`} wide>
+          <div className="flex h-12 w-64 items-center gap-1 px-2">
+            <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} />
+            <div className="ml-auto"><UpdateNotice version="v0.7.1" seen={false} onOpen={() => {}} /></div>
+          </div>
+        </Specimen>
+        <Specimen name={t`有新版本 · 已查看`} wide>
+          <div className="flex h-12 w-64 items-center gap-1 px-2">
+            <SidebarUserMenu owner={{ revision: 0, name: 'River' }} onOpenProfile={() => {}} onOpenSettings={() => {}} />
+            <div className="ml-auto"><UpdateNotice version="v0.7.1" seen onOpen={() => {}} /></div>
+          </div>
         </Specimen>
       </Family>
       <Plate number={2} title={t`弹窗结构`} note={t`标题陈述要发生的事，主操作写动词加对象。手机上，确认与小表单从底部弹出，按钮等宽铺满一行。`}>
