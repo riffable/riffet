@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Riffet</title>
-<meta name="description" content="A self-hosted workbench for coding agents. Read the work, step in, and pick it up on any screen.">
+<meta name="description" content="A self-hosted workbench for agent CLIs. Read the work, step in, and pick it up on any screen.">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <style>
 :root {
@@ -344,7 +344,7 @@ footer span { color: var(--ink-3); }
       <div id="hero-mark"></div>
       <div class="hero-text">
         <h1 data-t="h1">Keep the riff going.</h1>
-        <p class="lede" data-t="lede">Riffet is a self-hosted server and a set of clients for coding-agent CLIs. A session runs on the host and can be read, steered, and resumed from the web, macOS, iPhone, Android, and Feishu / Lark.</p>
+        <p class="lede" data-t="lede">Riffet is a self-hosted workbench for agent CLIs. Sessions run on a macOS or Linux host and can be started, read, steered, and resumed from the web, macOS, iPhone, Android, and Feishu / Lark.</p>
         <div class="cmd"><span><span class="p">$ </span>npm install -g riffet</span><button type="button" data-copy="npm install -g riffet" aria-label="Copy"><svg viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1.8"/><path d="M10.5 3.2v-.2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3v5A1.5 1.5 0 0 0 4 9.5h.2"/></svg></button></div>
         <div class="hero-links"><a href="https://github.com/riffable/riffet">GitHub</a><a href="https://github.com/riffable/riffet/releases" data-t="apps">Apps</a></div>
       </div>
@@ -399,7 +399,7 @@ footer span { color: var(--ink-3); }
       </div>
       <div class="next"></div>
     </div>
-    <p class="note-line">Web</p>
+    <p class="note-line">Web · macOS</p>
     <div class="ledger">
       <div><b data-t="f1">Highlights and bookmarks</b><span data-t="f1p">Answers, images and files are bookmarked individually. Each is stored as a snapshot and remains available after the session is deleted.</span><em>Web · macOS</em></div>
       <div><b data-t="f2">Sharing and PDF</b><span data-t="f2p">A session is published as a read-only page or exported as a PDF.</span><em>Web · macOS</em></div>
@@ -414,7 +414,7 @@ footer span { color: var(--ink-3); }
       <div><svg viewBox="0 0 132 44"><path d="M2 30H130"/><path class="b" d="M52 30C66 30 64 12 80 12H100"/><circle cx="52" cy="30" r="4.5"/><circle class="b" cx="104" cy="12" r="4.5"/></svg>
         <h3><span data-t="m4">Side chat</span><em>Web</em></h3><p data-t="m4p">A selected passage is discussed in a separate thread, without writing to the main conversation.</p></div>
       <div><svg viewBox="0 0 132 44"><path d="M2 12H62"/><path d="M2 32H130"/><path class="b" d="M66 12C82 12 76 32 92 32"/><circle cx="66" cy="12" r="4.5"/></svg>
-        <h3><span data-t="m5">@ session</span><em>Claude Code · Codex</em></h3><p data-t="m5p">Cites an earlier conversation. The agent receives a brief and a transcript snapshot it can read further.</p></div>
+        <h3><span data-t="m5">@ session</span><em>Claude Code · Codex · Antigravity</em></h3><p data-t="m5p">Cites an earlier conversation. The agent receives a brief and a transcript snapshot it can read further.</p></div>
       <div><svg viewBox="0 0 132 44"><path d="M2 30H130"/><path class="b" d="M66 25V11H100"/><circle cx="66" cy="30" r="4.5"/></svg>
         <h3 data-t="m6">Diff comments</h3><p data-t="m6p">Comments on changed lines are sent back to the agent together.</p></div>
     </div>
@@ -431,10 +431,14 @@ footer span { color: var(--ink-3); }
     </div>
     <div class="ledger">
       <div><b data-t="f7">Terminal</b><span data-t="f7p">A terminal session is continued in Riffet and handed back with riffet resume. Only one side writes at a time.</span><em>Claude Code · Codex</em></div>
-      <div><b data-t="f3">Quick chat</b><span data-t="f3p">A question outside any project. ⌃⌥Space on macOS; the text-selection menu on Android.</span><em>Web · macOS · Android</em></div>
+      <div><b data-t="f8">Personal assistant</b><span data-t="f8p">A persistent cross-project assistant with its own memory, rules, capability packs and background runs, isolated on Claude Code or Codex.</span><em>Web · macOS · iPhone · Android · <span data-t="feishu">Feishu</span></em></div>
+      <div><b data-t="f9">Task board and automations</b><span data-t="f9p">Conversations belong to tasks with status tracking and an inbox for decisions; scheduled prompts keep their run history.</span><em>Web · macOS · iPhone · Android</em></div>
+      <div><b data-t="f10">Riffet browser</b><span data-t="f10p">A managed Chromium panel streamed live so user and agent operate pages together, with handoff for sign-in.</span><em>Web · macOS</em></div>
+      <div><b data-t="f11">Git panel</b><span data-t="f11p">Review diffs, stage by line, commit, switch branches and follow live status from any client.</span><em>Web · macOS · iPhone · Android</em></div>
+      <div><b data-t="f3">Quick chat</b><span data-t="f3p">A question outside any project. ⌃⌥Space on macOS; the text-selection menu on Android.</span><em>Web · macOS · iPhone · Android</em></div>
       <div><b data-t="f4">Menu bar and widgets</b><span data-t="f4p">Running and pending-approval counts in the menu bar and widgets, with approval in place.</span><em>macOS</em></div>
-      <div><b data-t="f5">Notifications</b><span data-t="f5p">Permission requests are approved or denied from the notification.</span><em>macOS · Android</em></div>
-      <div><b data-t="f6">Feishu · Lark bot</b><span data-t="f6p">Tasks are created and permission requests handled in DMs and group topics. No public IP or domain required.</span><em data-t="feishu">Feishu · Lark</em></div>
+      <div><b data-t="f5">Notifications</b><span data-t="f5p">Permission requests are approved or denied from the notification.</span><em>macOS · iPhone · Android</em></div>
+      <div><b data-t="f6">Feishu · Lark bot</b><span data-t="f6p">Tasks are created and permission requests handled in DMs and group topics, with the assistant in DMs. No public IP or domain required.</span><em data-t="feishu">Feishu · Lark</em></div>
     </div>
   </section>
 
@@ -469,7 +473,7 @@ footer span { color: var(--ink-3); }
       <div class="dev mac"><aside><b style="--w:70%"></b><b class="sel" style="--w:54%"></b><b style="--w:78%"></b><b style="--w:46%"></b><b style="--w:62%"></b></aside><div><span class="me"></span><i></i><i class="m"></i><i class="s"></i><div class="act" style="width:46%"><span></span><span></span></div><span class="box"></span></div></div>
       <dl class="yours">
         <dt data-t="y2">Icon</dt><dd id="icons"></dd>
-        <dt data-t="y3">Style</dt><dd class="lines"><span class="mono">macOS</span>Native · Riffet · Claude<br><span class="mono">Android</span>Material 3 · iOS · Expressive · Miuix · Fluent</dd>
+        <dt data-t="y3">Style</dt><dd class="lines"><span class="mono">macOS</span>Native · Riffet · Line<br><span class="mono">Android</span>Material 3 · iOS · Expressive · Miuix · Fluent</dd>
       </dl>
       </div>
     </div>
@@ -489,7 +493,7 @@ footer span { color: var(--ink-3); }
 
   <section>
     <h2 data-t="s10">Plugins</h2>
-    <p><span data-t="s10p">Plugins add model sources, views, commands and palettes. The canvas is implemented as one.</span> <a href="plugins/" data-t="browse">Browse plugins</a></p>
+    <p><span data-t="s10p">Plugins add agent backends, model sources, views, commands, a managed browser and palettes across multiple plugin sources. The canvas and browser are implemented as plugins.</span> <a href="plugins/" data-t="browse">Browse plugins</a></p>
 <pre class="start"><span class="p">$ </span>riffet plugin dev ./my-plugin
 <span class="p">$ </span>riffet plugin pack ./my-plugin --out my-plugin.tgz
 <span class="p">$ </span>riffet plugin install my-plugin.tgz</pre>
@@ -522,7 +526,7 @@ document.documentElement.dataset.theme = q.get('theme') || (matchMedia('(prefers
 const ZH = {
   docs: '文档', apps: '客户端下载', rel: '下载', log: '更新记录',
   h1: 'Keep the riff going.',
-  lede: 'Riffet 是自托管的编码 Agent CLI 服务端与客户端。会话在主机上运行，可从 Web、macOS、iPhone、Android 与飞书阅读、引导和继续。',
+  lede: 'Riffet 是自托管的 Agent CLI 工作台。会话在 macOS 或 Linux 主机上运行，可从 Web、macOS、iPhone、Android 与飞书发起、阅读、引导和继续。',
   mapcap: '本机 · 局域网 · Tailscale / VPN · HTTPS 代理', feishu: '飞书',
   s1: '时间线与终端', s1p: '连续的工具调用折叠为摘要，文件改动以 diff 呈现。会话所在的终端作为第二视图，用于查看执行细节。',
   s1title: '配对测试偶发失败', vchat: '对话', vterm: '终端',
@@ -542,18 +546,22 @@ const ZH = {
   f2: '分享与 PDF', f2p: '会话可发布为只读页面，或导出为 PDF。',
   s4: '客户端', s4p: '各端均为原生应用，遵循所在平台的交互规范。任务在主机上运行，客户端断开后不受影响。',
   f7: '终端', f7p: '终端里的会话可导入 Riffet 继续，也可用 riffet resume 交还终端。同一时刻只有一方写入。',
+  f8: '个人助理', f8p: '跨项目常驻的个人助理，拥有独立记忆、规则、能力包与后台运行，运行在隔离的 Claude Code 或 Codex 上。',
+  f9: '任务看板与自动化', f9p: '会话可归属到带状态的任务，需要人工决定时进入收件箱；定时提示词保留运行记录。',
+  f10: 'Riffet 浏览器', f10p: '托管的 Chromium 面板实时推流，支持人与 Agent 共同操作页面，并在登录时交接给用户。',
+  f11: 'Git 面板', f11p: '在任意客户端查看 Diff、按行暂存、提交、切换分支并实时跟踪状态。',
   f3: '快速对话', f3p: '不属于任何项目的提问。macOS 通过 ⌃⌥Space 唤起，Android 可从文本选择菜单进入。',
   f4: '菜单栏与小组件', f4p: '在菜单栏与小组件中查看运行中和待批准的任务数量，并直接批准。',
   f5: '通知', f5p: '权限请求可在通知中直接批准或拒绝。',
- 
-  f6: '飞书机器人', f6p: '在私聊或群话题中创建任务、处理权限请求。无需公网 IP 或域名。',
+
+  f6: '飞书机器人', f6p: '在私聊或群话题中创建任务、处理权限请求，并在私聊中提供个人助理。无需公网 IP 或域名。',
   s9: '外观', s9p: '色盘上的两个点分别决定表面色与强调色，据此生成完整的明暗配色，并同步到所有设备。本页随色盘实时变化。',
   y2: '图标', y3: '界面风格',
   s6: '支持的 Agent',
   s6i: 'Riffet 驱动官方 CLI，其登录、Rules、Skills、MCP 与订阅保持原样生效。',
   s6p: '完整能力表见',
   t1: '时间线', t2: '终端', t3: '引导', t4: '子 Agent',
-  s10: '插件', s10p: '插件可添加模型源、视图、命令与配色。画布即以插件实现。', browse: '浏览插件',
+  s10: '插件', s10p: '插件可添加 Agent 后端、模型源、视图、命令、托管浏览器与配色，并支持多插件源。画布与浏览器即以插件实现。', browse: '浏览插件',
   s7: '安装', pair: '# 用于其他设备的配对码和二维码',
   s5p: '代码、终端与登录凭证保留在服务端（Mac 或远端机器）。客户端直连服务端。',
 };
@@ -663,7 +671,7 @@ new ResizeObserver(layout).observe(main);
 addEventListener('scroll', write, { passive: true });
 
 /* ── Agents: one list feeds the map, the race and the table. Add a row here when a backend lands. ── */
-const AGENTS = [['Cursor', 'cursor', 1, 1, 1, 1], ['Claude Code', 'claude', 1, 1, 1, 1], ['Codex', 'codex', 1, 1, 1, 1], ['TRAE CLI', 'traex', 1, 1, 1, 1], ['DeepSeek Harness', 'dsh', 1, 0, 0, 1], ['Factory Droid', 'droid', 1, 0, 0, 1], ['pi', 'pi', 1, 0, 0, 0]];
+const AGENTS = [['Cursor', 'cursor', 1, 1, 1, 1], ['Claude Code', 'claude', 1, 1, 1, 1], ['Codex', 'codex', 1, 1, 1, 1], ['Antigravity', 'agy', 1, 1, 0, 1], ['TRAE CLI', 'traex', 1, 1, 1, 1], ['DeepSeek Harness', 'dsh', 1, 0, 0, 1], ['Factory Droid', 'droid', 1, 0, 0, 1], ['pi', 'pi', 1, 0, 0, 0]];
 document.getElementById('agents').innerHTML = AGENTS.map(([name, cli, ...has]) => `<tr><td>${name}</td><td>${cli}</td>${has.map((yes) => `<td>${yes ? '<span class="y"></span>' : '<span class="n">–</span>'}</td>`).join('')}</tr>`).join('');
 
 /* ── The map: a prompt comes in from one screen, one CLI works, the answer reaches every screen ── */

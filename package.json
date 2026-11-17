@@ -4,7 +4,7 @@
   "buildNumber": 26111701,
   "private": true,
   "type": "module",
-  "description": "A self-hosted workbench for native Cursor, Codex, Claude Code, DeepSeek Harness, Factory Droid and TRAE CLI sessions, reachable from a browser, Mac or phone",
+  "description": "A self-hosted workbench and personal assistant for Cursor, Codex, Claude Code, Antigravity, TRAE CLI, Factory Droid, DeepSeek Harness and pi, reachable from a browser, Mac, phone or Feishu",
   "license": "Apache-2.0",
   "bin": {
     "riffet": "scripts/riffet.mjs",
