@@ -243,6 +243,10 @@ msgstr "Keep the original enablement policies for later restoration"
 msgid "信任此插件"
 msgstr "Trust this plugin"
 
+#: src/app/Sidebar.tsx
+msgid "修改状态"
+msgstr "Change status"
+
 #: src/app/Workbench.tsx
 msgid "停止当前运行"
 msgstr "Stop current run"

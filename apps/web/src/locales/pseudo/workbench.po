@@ -243,6 +243,10 @@ msgstr ""
 msgid "信任此插件"
 msgstr ""
 
+#: src/app/Sidebar.tsx
+msgid "修改状态"
+msgstr ""
+
 #: src/app/Workbench.tsx
 msgid "停止当前运行"
 msgstr ""

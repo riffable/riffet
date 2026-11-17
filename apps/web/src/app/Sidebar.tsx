@@ -4,13 +4,13 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Notice } from '@/components/ui/notice';
 import { IconArchive, IconArchiveRestore, IconBookmarkFilled, IconChevronRight, IconEllipsis, IconEye, IconFolderClosed, IconFolderOpen, IconFolderPlus, IconPanelLeft, IconMessageCirclePlus, IconPencilLine, IconPin, IconPinOff, IconPlus, IconSearch, IconSettings2, IconSquareKanban, IconSquarePen, IconSquareTerminal, IconTag, IconTrash2, IconX } from '@/components/icons';
-import { isDoneUnseen, type NativeBackendCatalogEntry, type Session } from '@contracts';
+import { isDoneUnseen, WORK_ITEM_STATUSES, type NativeBackendCatalogEntry, type Session, type WorkItemStatus } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { Collapse } from '@/components/ui/collapse';
 import { Spinner, StatusDot } from '@/components/ui/controls';
 import { BrandMark } from '@/components/BrandMark';
 import { AgentLogo } from '@/components/AgentLogo';
-import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger, MenuSub } from '@/components/ui/dropdown-menu';
 import { ListRow, rowConceal, rowReveal } from '@/components/ui/list-row';
 import { Tip } from '@/components/ui/tooltip';
 import { api, type ProjectRecord } from '@/lib/api';
@@ -25,10 +25,11 @@ import { shortcutLabel } from '@/lib/platform';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useDeletionLoading } from './SessionDeletion';
 import { useHeld } from './session/sessionLayout';
-import { useLists, useSettings, useStores } from './state/stores';
+import { useLists, useSettings, useStores, useWorkItems } from './state/stores';
 import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINATIONS, type WebSidebarDestination } from './sidebarDestinations';
 import { useTabs } from './tabs/useTabs';
 import { SidebarUserMenu } from './SidebarUserMenu';
+import { StatusIcon, useStatusLabel } from './work-items/parts';
 import { TaskSessionTitle } from './work-items/TaskSessionTitle';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
@@ -159,6 +160,22 @@ function RowMenu({ children, label }: { children: ReactNode; label: string }) {
   );
 }
 
+/** A task conversation's 修改状态 ▸, in place of 转为任务. Absent until the task is loaded. */
+function TaskStatusSub({ workItemId }: { workItemId: string }) {
+  const { t } = useLingui();
+  const { workItems } = useStores();
+  const statusLabel = useStatusLabel();
+  const status = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId)?.status);
+  if (!status) return null;
+  return (
+    <MenuSub icon={<StatusIcon status={status} className="size-4" />} label={t`修改状态`} value={statusLabel(status)}>
+      <DropdownMenuRadioGroup value={status} onValueChange={(value) => { if (value !== status) void workItems.update(workItemId, { status: value as WorkItemStatus }); }}>
+        {WORK_ITEM_STATUSES.map((entry) => <DropdownMenuRadioItem key={entry} value={entry}><StatusIcon status={entry} className="size-4" />{statusLabel(entry)}</DropdownMenuRadioItem>)}
+      </DropdownMenuRadioGroup>
+    </MenuSub>
+  );
+}
+
 /**
  * One conversation row. It takes plain values and the sidebar's stable callbacks, so a list update
  * re-renders only the rows whose conversation (or label) actually changed.
@@ -218,7 +235,9 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
         <RowMenu label={t`会话操作`}>
           <DropdownMenuItem onSelect={() => onAction(session, 'rename')}><IconPencilLine /><Trans>重命名</Trans></DropdownMenuItem>
           {!hideTags && <DropdownMenuItem onSelect={() => onAction(session, 'tags')}><IconTag /><Trans>编辑标签</Trans></DropdownMenuItem>}
-          {!hideTags && !session.workItemId && <DropdownMenuItem onSelect={() => onAction(session, 'work-item')}><IconSquareKanban /><Trans>转为任务</Trans></DropdownMenuItem>}
+          {!hideTags && (session.workItemId
+            ? <TaskStatusSub workItemId={session.workItemId} />
+            : <DropdownMenuItem onSelect={() => onAction(session, 'work-item')}><IconSquareKanban /><Trans>转为任务</Trans></DropdownMenuItem>)}
           <DropdownMenuItem onSelect={() => onAction(session, 'pin')}>{session.pinnedAt ? <><IconPinOff /><Trans>取消置顶</Trans></> : <><IconPin /><Trans>置顶会话</Trans></>}</DropdownMenuItem>
           {tabsOn && !mobile && !session.archivedAt && (kept
             ? <DropdownMenuItem onSelect={() => tabs.close(session.id)}><IconX /><Trans>移出标签栏</Trans></DropdownMenuItem>
