@@ -157,7 +157,7 @@
     "@types/d3-scale": "4.0.9",
     "@types/d3-shape": "3.2.0",
     "@types/mdast": "4.0.4",
-    "@types/node": "^24.0.0",
+    "@types/node": "^26.6.6",
     "@types/pngjs": "6.0.5",
     "@types/qrcode": "1.5.5",
     "@types/react": "19.1.8",
