@@ -217,13 +217,16 @@ function handbackNotice(handback: { taskId: string; report: string }, state: Map
 }
 
 /**
- * What another agent wrote to a subagent while it worked: the conversation leading it (`coordinator`) or
- * another agent (`peer`). The CLI's framing around it is addressed to the model, not part of the message.
+ * What another agent wrote to this one: the conversation leading a subagent (`coordinator`), or another agent
+ * (`peer`) — a subagent writing to the conversation that launched it, say. A hidden row when it starts a round,
+ * a `queued_command` attachment when it reaches one already running. A report is not a message
+ * (`handbackOf`), and the CLI's framing around a message is addressed to the model, not part of it.
  */
 function agentMessageOf(row: ClaudeRow): { text: string; from: 'coordinator' | 'peer' } | undefined {
-  if (!subagentWake(row)) return undefined;
-  const origin = record(row.origin)!;
-  const raw = rowText(record(row.message)?.content);
+  const attachment = row.type === 'attachment' ? record(row.attachment) : undefined;
+  const origin = attachment?.type === 'queued_command' ? record(attachment.origin) : subagentWake(row) ? record(row.origin) : undefined;
+  if (origin?.kind !== 'coordinator' && origin?.kind !== 'peer' || origin.handback === true) return undefined;
+  const raw = attachment ? string(attachment.prompt) ?? '' : rowText(record(row.message)?.content);
   const text = origin.kind === 'coordinator'
     ? raw.replace(/^The coordinator sent a message while you were working:\n/, '').replace(/\s*Address this before completing your current task\.\s*$/, '')
     : string(origin.body) ?? /<agent-message(?:\s[^>]*)?>\n?([\s\S]*?)\n?<\/agent-message>/.exec(raw)?.[1] ?? '';
@@ -596,11 +599,15 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
   const type = row.type;
   // A subagent's own file is entirely sidechain rows; only the parent file has to drop them.
   if (!allowSidechain && row.isSidechain === true) return [];
+  // What reaches a turn already running: a subagent's report, or a message from another agent.
   const handback = type === 'attachment' ? handbackOf(row) : undefined;
-  if (handback) return [{
+  const delivered = type === 'attachment' && !handback ? agentMessageOf(row) : undefined;
+  if (handback || delivered) return [{
     sessionId: session.id, nativeId: `claude:${session.nativeSessionId ?? session.id}:${uuid}:0`, nativeAliases: [uuid],
     ...(state.turnId ? { runId: state.turnId } : {}), ...(state.nativeTurnId ? { nativeTurnId: state.nativeTurnId } : {}), createdAt,
-    type: 'task_notification', data: handbackNotice(handback, state, hooks),
+    ...(handback
+      ? { type: 'task_notification', data: handbackNotice(handback, state, hooks) }
+      : { type: 'user_message_chunk', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: delivered!.text }, from: delivered!.from } }),
   }];
   if (type === 'attachment' && !allowSidechain && row.agentId === undefined) {
     const attachment = record(row.attachment);
@@ -708,13 +715,13 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         events.push({ ...base(0), type: 'task_notification', data: handbackNotice(handback, state, hooks) });
         return events;
       }
-      if (peerPromptId) return events;
-      // In a subagent's own transcript, a message from the agent leading it reads as that agent's prompt.
-      const message = allowSidechain ? agentMessageOf(row) : undefined;
+      // A message from another agent reads as that agent's prompt.
+      const message = agentMessageOf(row);
       if (message) {
         events.push({ ...base(0), type: 'user_message_chunk', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: message.text }, from: message.from } });
         return events;
       }
+      if (peerPromptId) return events;
       // Other injected rows ride along with a prompt — a loaded skill's whole body, the caveat in
       // front of a local command's output — and are neither prompts nor turns of their own.
       if (!notice && row.isMeta === true) return events;

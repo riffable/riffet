@@ -602,6 +602,8 @@ describe('Claude subagent transcripts', () => {
         childRow('child-1', { type: 'user', uuid: 'cu1', text: 'Do it', at: at(1) }),
         child({ type: 'user', uuid: 'cu2', timestamp: at(2), isMeta: true, origin: { kind: 'coordinator' },
           message: { role: 'user', content: 'The coordinator sent a message while you were working:\nAlso check Mac.\n\nAddress this before completing your current task.' } }),
+        // One that reaches a round already running is an attachment.
+        child({ type: 'attachment', uuid: 'cu2b', timestamp: at(2), attachment: { type: 'queued_command', prompt: 'And iPhone.', origin: { kind: 'coordinator' }, isMeta: true } }),
         child({ type: 'assistant', uuid: 'ca1', timestamp: at(3), message: { id: 'm1', role: 'assistant', stop_reason: 'tool_use',
           content: [{ type: 'tool_use', id: 'hb-1', name: 'SubagentHandback', input: { message: '## Report' } }] } }),
         child({ type: 'user', uuid: 'cu3', timestamp: at(4), toolUseResult: { success: true, message: 'Report delivered to your caller.' },
@@ -609,9 +611,10 @@ describe('Claude subagent transcripts', () => {
       ] }],
     );
     const events = (await open(file)).subagentFrames()[0]!.events;
-    expect(events.map(event => event.type)).toEqual(['user_message_chunk', 'user_message_chunk', 'agent_message_chunk']);
+    expect(events.map(event => event.type)).toEqual(['user_message_chunk', 'user_message_chunk', 'user_message_chunk', 'agent_message_chunk']);
     expect(events[1]!.data).toMatchObject({ from: 'coordinator', content: { text: 'Also check Mac.' } });
-    expect(events[2]!.data).toMatchObject({ phase: 'final_answer', content: { text: '## Report' } });
+    expect(events[2]!.data).toMatchObject({ from: 'coordinator', content: { text: 'And iPhone.' } });
+    expect(events[3]!.data).toMatchObject({ phase: 'final_answer', content: { text: '## Report' } });
   });
 
   it('keeps sidechain rows out of the parent and reads them from the child', async () => {
