@@ -4,7 +4,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../store.js';
 import { TerminalService, type TerminalBehaviour } from './service.js';
@@ -156,6 +156,23 @@ describe.skipIf(!tmuxCapability)('TerminalService history and CLI lifecycle', ()
     await vi.waitFor(() => expect(store.getSession(session.id).state).toBe('failed'), { timeout: 5_000 });
     expect(store.getSession(session.id).error).toContain('gateway rejected [REDACTED]');
     expect(store.getSession(session.id).error).not.toContain('opaque-private-test-key');
+  });
+
+  it('reads the startup error from the dead pane when the CLI failed while no stream was attached', async () => {
+    const { service, store, session, terminal, database } = await cursor("while [ ! -f go ]; do sleep 0.02; done\nprintf 'Error: gateway rejected opaque-private-test-key\\n'\nexit 1");
+    await service.closeAll();
+    const directory = dirname(database);
+    writeFileSync(join(directory, 'go'), '');
+    // The pane is dead before anything attaches: the error is only on the retained screen.
+    const pane = `cw-${terminal.id.replaceAll('-', '').slice(0, 20)}`;
+    await vi.waitFor(() => expect(execFileSync('tmux', ['-S', service.socket, 'display-message', '-p', '-t', pane, '#{pane_dead}'], { encoding: 'utf8' }).trim()).toBe('1'), { timeout: 5_000 });
+    const restored = new TerminalService(store, { stateDir: join(directory, 'state'), behaviour: { resolve: () => agentPanes, launchEnv: () => ({ managed: ['CURSOR_API_KEY'], secrets: ['CURSOR_API_KEY'] }) } });
+    cleanups.push(async () => { await restored.closeAll(); });
+    await vi.waitFor(async () => {
+      await restored.get(terminal.id);
+      expect(store.getSession(session.id).state).toBe('failed');
+    }, { timeout: 5_000 });
+    expect(store.getSession(session.id).error).toContain('gateway rejected [REDACTED]');
   });
 
   it('does not reinterpret output from an already ready CLI as a startup failure', async () => {

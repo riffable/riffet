@@ -8,6 +8,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 - Cursor: a first message with several lines, or one ending in `;`, no longer fails with "Native terminal launch command is invalid" when no warm CLI is ready.
 - A conversation that failed while its first message was sending shows the error once, not twice.
+- An agent that fails at startup (a wrong model, an invalid key) before Riffet has attached to its terminal now shows as failed with its reason, instead of going idle with no explanation.
 - A failed conversation's mark on its sidebar row or tab (the red dot, "出错" on the Mac, "Failed" and the avatar mark on phones) clears once you have opened it.
 
 ## 0.8.0 - 2026-11-17

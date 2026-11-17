@@ -191,6 +191,8 @@ const BACKGROUND_COLS = 100;
 const BACKGROUND_ROWS = 40;
 const BACKGROUND_RESIZE_DELAY_MS = 3000;
 const REATTACH_DELAY_MS = 250;
+/** How far back a dead pane is read for a startup error the stream did not carry. */
+const STARTUP_SCAN_LINES = 500;
 /**
  * Scrollback kept per pane: what a seed carries and `GET /history` reads. tmux's default of 2000 lines is a few screens of
  * an agent turn. Set on Riffet's private tmux server before a session is created, because a pane's
@@ -1622,8 +1624,15 @@ export class TerminalService {
         else if (source?.output.length) this.sendSnapshot(viewer, marker, { data: '\u001bc' + source.output.text(), cols: info.cols, rows: info.rows });
       }
     }
-    const startupError = source && !source.agentReady
-      ? (source.behaviour ?? this.behaviourFor(info.kind, info.sessionId, isWarmupTerminal(info) ? warmupOf(info).backendId : undefined))?.startupError?.(redactSensitiveText(stripTerminalSequences(source.output.text()))) : undefined;
+    const behaviour = source?.behaviour ?? this.behaviourFor(info.kind, info.sessionId, isWarmupTerminal(info) ? warmupOf(info).backendId : undefined);
+    let startupError = source && !source.agentReady
+      ? behaviour?.startupError?.(redactSensitiveText(stripTerminalSequences(source.output.text()))) : undefined;
+    // The stream starts at attach: a CLI that printed its error before then, or exited before Riffet
+    // attached at all, left the words only on the retained pane, which `killSession` below destroys.
+    if (!startupError && behaviour?.startupError && !source?.agentReady) {
+      startupError = await this.paneStartupError(id, behaviour);
+      if (this.shuttingDown || this.stopping.has(id)) return;
+    }
     const updated = this.store.updateTerminal(id, { state: 'exited', exitCode: exitCode ?? undefined, ownerId: undefined, epoch: info.epoch + 1 });
     const attached = this.runtime.get(id);
     this.runtime.delete(id);
@@ -1633,6 +1642,18 @@ export class TerminalService {
     this.emit(id, { type: 'exit', exitCode: exitCode ?? undefined });
     this.clearObservers(id);
     await this.killSession(id).catch(() => undefined);
+  }
+
+  /**
+   * A dead pane's own text read as a startup failure. Without a stream there is no record of the Agent
+   * having come up, so the pane answers that too; a start fails within a screenful or two, so the tail suffices.
+   */
+  private async paneStartupError(id: string, behaviour: TerminalBehaviour): Promise<string | undefined> {
+    const captured = await this.tmux(['capture-pane', '-p', '-J', '-S', `-${STARTUP_SCAN_LINES}`, '-t', terminalName(id)]).catch(() => undefined);
+    if (!captured?.trim()) return undefined;
+    const text = redactSensitiveText(stripTerminalSequences(captured));
+    if (behaviour.ready?.(text)) return undefined;
+    return behaviour.startupError?.(text);
   }
 
   private commandFor(kind: TerminalInfo['kind'], input: TerminalCreateInput): { command: string; args: string[]; env?:NodeJS.ProcessEnv; tmuxEnv?: Record<string, string> } {
