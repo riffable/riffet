@@ -1,18 +1,21 @@
 import { createPortal } from 'react-dom';
-import { useContext, useEffect, useRef, useState, type RefObject } from 'react';
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { i18n } from '@lingui/core';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { DiscussionSource, Mark, MarkColor } from '@contracts';
-import { IconCopy, IconHighlighter, IconImageDown, IconMessagesSquare, IconTrash2 } from '@/components/icons';
+import { IconCopy, IconHighlighter, IconImageDown, IconMessagesSquare, IconTextQuote, IconTrash2 } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/controls';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { Tip } from '@/components/ui/tooltip';
 import { copyWithToast } from '@/lib/files';
 import { cn } from '@/lib/utils';
 import { anchorIds, MARK_COLORS, markBodies, markColorLabels, markSwatch, SessionMarksContext, type MarkTarget } from './marks';
 import { findQuote, quoteAt, rangeAt, textOffset } from './textQuote';
 import { ShareImageDialog, ShareSessionContext, type ShareSource } from '../marks/ShareImage';
 import { isComposingKey } from './composerKeyboard';
+import { commandIcon, MessageCommandBlock, useSelectionCommands } from './messageCommands';
+import type { PluginCommand } from '@/plugins/commands';
 
 /** A burst of DOM changes (a streamed frame, a window of rows mounting) re-resolves the highlights once. */
 const REPAINT_MS = 100;
@@ -20,7 +23,78 @@ const REPAINT_MS = 100;
 const highlightsSupported = () => typeof CSS !== 'undefined' && 'highlights' in CSS && typeof Highlight === 'function';
 
 interface Resolved { mark: Mark; range: Range }
-interface Selected { target: MarkTarget; text: string; start: number; end: number; rect: DOMRect }
+interface Selected {
+  target: MarkTarget; text: string; start: number; end: number; range: Range;
+  /** Chosen when it shows, by the room there was: the toolbar keeps its side while the text scrolls. */
+  above: boolean;
+}
+/** A plugin command's answer about a selection, beside it; `text` is absent while the command runs. */
+interface Card {
+  command: PluginCommand; range: Range; text?: string; title?: string;
+  /** Chosen when it opens, by the room there was: the card keeps its side while the text scrolls. */
+  above: boolean; room: number;
+  /** Playing its way out; removed when that ends. */
+  closing?: boolean;
+}
+
+/** The colour 高亮 applies on a plain click: the one last picked, in this tab. */
+let lastColor: MarkColor = 'yellow';
+
+/**
+ * Keeps [element] beside [range] (above it or below it, centred, inside the host's width), in the coordinates of
+ * [host]: a box at the top of the transcript's scrolled content. A plain scroll moves the text and the element
+ * together on the compositor and changes nothing here; this runs again only for what moves the text inside the
+ * content (rows above settling, a stream, a resize). [onShown] hears whether the text is in the transcript's view.
+ */
+function useBesideRange(scrollRef: RefObject<HTMLElement | null>, host: HTMLElement | undefined, elementRef: RefObject<HTMLElement | null>, range: Range | undefined, above: boolean | undefined, onShown: (shown: boolean) => void) {
+  const shownRef = useRef(onShown);
+  shownRef.current = onShown;
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current;
+    const element = elementRef.current;
+    if (!scroller || !host || !element || !range) return;
+    let frame = 0;
+    let shown: boolean | undefined;
+    const place = () => {
+      frame = 0;
+      const rect = range.getBoundingClientRect();
+      const view = scroller.getBoundingClientRect();
+      const visible = Boolean(rect.width || rect.height) && rect.bottom > view.top && rect.top < view.bottom;
+      if (visible !== shown) { shown = visible; shownRef.current(visible); }
+      if (!visible) return;
+      const origin = host.getBoundingClientRect();
+      const width = element.offsetWidth;
+      const centre = rect.left + rect.width / 2 - origin.left;
+      element.style.left = `${Math.min(Math.max(centre, width / 2 + 8), origin.width - width / 2 - 8)}px`;
+      element.style.top = `${(above ? rect.top - 8 : rect.bottom + 8) - origin.top}px`;
+    };
+    const schedule = () => { frame ||= requestAnimationFrame(place); };
+    place();
+    const observer = new MutationObserver(schedule);
+    observer.observe(scroller, { childList: true, subtree: true, characterData: true });
+    scroller.addEventListener('scroll', schedule, { passive: true });
+    window.addEventListener('resize', schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      scroller.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+    };
+  }, [scrollRef, host, elementRef, range, above]);
+}
+
+/** The selection as one quote for the composer: a code fence when it lies inside one code block, its words otherwise. */
+function quoteOf(range: Range, text: string): string {
+  const common = range.commonAncestorContainer;
+  const element = common instanceof Element ? common : common.parentElement;
+  if (element?.closest('pre')) {
+    const code = text.replace(/^\n+|\s+$/g, '');
+    const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map((match) => match[0].length));
+    const fence = '`'.repeat(Math.max(3, longest + 1));
+    return `${fence}\n${code}\n${fence}`;
+  }
+  return text.trim().replace(/\n{3,}/g, '\n\n');
+}
 
 /** The markable answer body that holds [node], if any. */
 function bodyOf(node: Node | null): HTMLElement | undefined {
@@ -46,6 +120,35 @@ function ColorButtons({ current, onPick }: { current?: MarkColor; onPick: (color
       ))}
     </span>
   );
+}
+
+/**
+ * 高亮 in the selection toolbar: a click applies the last colour; the colours show beside it, away from the text, while
+ * the pointer rests on it or focus is inside (a tap shows them where there is no hover).
+ */
+function HighlightButton({ above, onPick }: { above: boolean; onPick: (color: MarkColor) => void }) {
+  const { t } = useLingui();
+  const [colorsShown, setColorsShown] = useState(false);
+  return (
+    <span className="group/highlight relative flex">
+      <Button
+        size="icon-sm"
+        variant="quiet"
+        aria-label={t({ context: 'session-highlight-action', message: '高亮' })}
+        aria-expanded={colorsShown}
+        className="no-hover:size-9"
+        onClick={() => { if (window.matchMedia('(hover: none)').matches && !colorsShown) setColorsShown(true); else onPick(lastColor); }}
+      ><IconHighlighter /></Button>
+      <span className={cn('absolute left-1/2 hidden -translate-x-1/2 group-hover/highlight:flex group-focus-within/highlight:flex', above ? 'bottom-full pb-2.5' : 'top-full pt-2.5', colorsShown && 'flex')}>
+        <span className="flex rounded-full bg-popover p-1 shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)]"><ColorButtons onPick={onPick} /></span>
+      </span>
+    </span>
+  );
+}
+
+/** An icon-only toolbar item, named by its tooltip. */
+function ToolbarIcon({ label, side, onClick, children }: { label: string; side: 'top' | 'bottom'; onClick: () => void; children: ReactNode }) {
+  return <Tip label={label} side={side}><Button size="icon-sm" variant="quiet" aria-label={label} className="no-hover:size-9" onClick={onClick}>{children}</Button></Tip>;
 }
 
 /** Color, note and delete for one highlight, opened by clicking it. */
@@ -79,8 +182,20 @@ function HighlightEditor({ mark, onChange, onRemove }: { mark: Mark; onChange: (
  * editor when it is clicked. Rows are windowed and re-render on their own, so where each highlight
  * sits is resolved again after every change to the transcript's DOM rather than kept.
  */
-export function MarkLayer({ scrollRef, onDiscuss }: { scrollRef: RefObject<HTMLElement | null>; onDiscuss?: (source: DiscussionSource) => void }) {
+export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObject<HTMLElement | null>; onDiscuss?: (source: DiscussionSource) => void; onQuote?: (quote: string) => void }) {
   const { t } = useLingui();
+  const selectionCommands = useSelectionCommands();
+  const [card, setCard] = useState<Card>();
+  const cardRef = useRef<HTMLElement>(null);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  /** Out of the transcript's view the toolbar fades and waits; it shows again when the selection scrolls back. */
+  const [toolbarShown, setToolbarShown] = useState(true);
+  /**
+   * Where the toolbar and the card live: a zero-height box at the top of the transcript's scrolled content, so they
+   * scroll with the text natively, on the compositor, instead of being moved after each scroll.
+   */
+  const [floatHost, setFloatHost] = useState<HTMLDivElement>();
+  const closeCard = () => setCard((current) => (current && !current.closing ? { ...current, closing: true } : current));
   const marks = useContext(SessionMarksContext);
   const session = useContext(ShareSessionContext);
   const resolved = useRef<Resolved[]>([]);
@@ -148,23 +263,22 @@ export function MarkLayer({ scrollRef, onDiscuss }: { scrollRef: RefObject<HTMLE
       const start = textOffset(body, range.startContainer, range.startOffset);
       const end = textOffset(body, range.endContainer, range.endOffset);
       if (!quoteAt(text, start, end)) { setSelected(undefined); return; }
-      setSelected({ target, text, start, end, rect: range.getBoundingClientRect() });
+      const rect = range.getBoundingClientRect();
+      setSelected({ target, text, start, end, range: range.cloneRange(), above: rect.top - scroller.getBoundingClientRect().top > 56 });
+      setToolbarShown(true);
+      setCard((current) => (current && !current.closing ? { ...current, closing: true } : current));
     };
+    /** The toolbar and the card sit inside the transcript; what happens in them is not the reader selecting text. */
+    const floating = (event: Event) => event.target instanceof Node && Boolean(toolbarRef.current?.contains(event.target) || cardRef.current?.contains(event.target));
     // Shown once the pointer or the keyboard lets go, not while a drag is still extending it.
-    const settled = (event: Event) => { if (!(event instanceof KeyboardEvent) || event.shiftKey || event.key === 'Shift') window.setTimeout(readSelection, 0); };
+    const settled = (event: Event) => {
+      if (floating(event)) return;
+      if (!(event instanceof KeyboardEvent) || event.shiftKey || event.key === 'Shift') window.setTimeout(readSelection, 0);
+    };
     const changed = () => { const selection = document.getSelection(); if (!selection || selection.isCollapsed) setSelected(undefined); };
-    /**
-     * The reader scrolling away puts the toolbar away. A scroll the transcript makes on its own
-     * (rows settling above, a window of rows mounting) keeps it, beside the selection where it went.
-     */
-    const dismissed = () => setSelected(undefined);
-    const keyed = (event: KeyboardEvent) => { if (!event.shiftKey && ['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(event.key)) dismissed(); };
-    const scrolled = () => setSelected((current) => {
-      const selection = document.getSelection();
-      return current && selection?.rangeCount && !selection.isCollapsed ? { ...current, rect: selection.getRangeAt(0).getBoundingClientRect() } : current;
-    });
     /** A click on painted text opens that highlight; there is no element to listen on. */
     const clicked = (event: MouseEvent) => {
+      if (floating(event)) return;
       if (event.button !== 0 || (event.target instanceof Element && event.target.closest('a,button,input,textarea,[role="button"]'))) return;
       if (!document.getSelection()?.isCollapsed) return;
       const hit = resolved.current.find(({ range }) => [...range.getClientRects()].some((rect) => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom));
@@ -172,19 +286,11 @@ export function MarkLayer({ scrollRef, onDiscuss }: { scrollRef: RefObject<HTMLE
     };
     scroller.addEventListener('mouseup', settled);
     scroller.addEventListener('keyup', settled);
-    scroller.addEventListener('wheel', dismissed, { passive: true });
-    scroller.addEventListener('touchmove', dismissed, { passive: true });
-    scroller.addEventListener('keydown', keyed);
-    scroller.addEventListener('scroll', scrolled, { passive: true });
     scroller.addEventListener('click', clicked);
     document.addEventListener('selectionchange', changed);
     return () => {
       scroller.removeEventListener('mouseup', settled);
       scroller.removeEventListener('keyup', settled);
-      scroller.removeEventListener('wheel', dismissed);
-      scroller.removeEventListener('touchmove', dismissed);
-      scroller.removeEventListener('keydown', keyed);
-      scroller.removeEventListener('scroll', scrolled);
       scroller.removeEventListener('click', clicked);
       document.removeEventListener('selectionchange', changed);
     };
@@ -197,10 +303,40 @@ export function MarkLayer({ scrollRef, onDiscuss }: { scrollRef: RefObject<HTMLE
     return () => window.removeEventListener('keydown', escape);
   }, [selected]);
 
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !marks) return;
+    const host = document.createElement('div');
+    host.style.position = 'relative';
+    host.style.height = '0';
+    scroller.prepend(host);
+    setFloatHost(host);
+    return () => { host.remove(); setFloatHost(undefined); };
+  }, [scrollRef, Boolean(marks)]);
+
+  useBesideRange(scrollRef, floatHost, toolbarRef, selected?.range, selected?.above, setToolbarShown);
+  // The card does not come back: it was one answer, and asking again is one click.
+  useBesideRange(scrollRef, floatHost, cardRef, card?.range, card?.above, (shown) => { if (!shown) closeCard(); });
+
+  const cardOpen = Boolean(card);
+  useEffect(() => {
+    if (!cardOpen) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') closeCard(); };
+    // A click, not a press: a finger that scrolls the transcript presses outside too.
+    const outside = (event: MouseEvent) => { if (!(event.target instanceof Node && cardRef.current?.contains(event.target))) closeCard(); };
+    window.addEventListener('keydown', escape);
+    document.addEventListener('click', outside, true);
+    return () => {
+      window.removeEventListener('keydown', escape);
+      document.removeEventListener('click', outside, true);
+    };
+  }, [cardOpen]);
+
   if (!marks) return null;
   const editingMark = editing && marks.marks.find((mark) => mark.id === editing.id);
   const highlight = (color: MarkColor) => {
     if (!selected) return;
+    lastColor = color;
     const quote = quoteAt(selected.text, selected.start, selected.end);
     if (quote) marks.highlight(selected.target, quote, color);
     document.getSelection()?.removeAllRanges();
@@ -219,33 +355,91 @@ export function MarkLayer({ scrollRef, onDiscuss }: { scrollRef: RefObject<HTMLE
     });
     setSharingOpen(true);
   };
-  // Above the selection, or below it when that would leave the window.
-  const above = selected ? selected.rect.top > 56 : true;
+  const quote = () => {
+    const selection = document.getSelection();
+    if (!selected || !onQuote || !selection?.rangeCount) return;
+    const text = selection.toString() || selected.text.slice(selected.start, selected.end);
+    if (text.trim()) onQuote(quoteOf(selection.getRangeAt(0), text));
+    selection.removeAllRanges();
+    setSelected(undefined);
+  };
+  const runCommand = async (command: PluginCommand) => {
+    const selection = document.getSelection();
+    if (!selected || !selection?.rangeCount) return;
+    const text = (selection.toString() || selected.text.slice(selected.start, selected.end)).trim();
+    if (!text) return;
+    const range = selection.getRangeAt(0).cloneRange();
+    // The selection stays painted while the card is open, so the reader still sees what it is about.
+    setSelected(undefined);
+    const rect = range.getBoundingClientRect();
+    const view = scrollRef.current?.getBoundingClientRect() ?? new DOMRect(0, 0, window.innerWidth, window.innerHeight);
+    const roomAbove = rect.top - view.top;
+    const roomBelow = view.bottom - rect.bottom;
+    const above = roomAbove > roomBelow;
+    setCard({ command, range, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
+    const runId = selected.target.anchor.runId;
+    const answer = await selectionCommands.run(command, { text, ...(runId ? { runId } : {}) });
+    // Closed, or replaced by another, meanwhile: the answer is not wanted.
+    setCard((current) => current?.range !== range || current.closing ? current : answer ? { ...current, ...answer } : { ...current, closing: true });
+  };
+  // Above the selection, or below it when there was no room above.
+  const above = selected?.above ?? true;
+  const tipSide = above ? 'top' : 'bottom';
+  const lead = Boolean(onQuote || onDiscuss);
+  const cardWidth = Math.min(448, (floatHost?.clientWidth ?? window.innerWidth) - 16);
   return (
     <>
-      {selected && createPortal(
+      {selected && floatHost && createPortal(
         <div
+          ref={toolbarRef}
           role="toolbar"
           aria-label={t`选中文字操作`}
+          inert={!toolbarShown}
           // Pressing a button must not collapse the selection it acts on.
           onMouseDown={(event) => event.preventDefault()}
-          style={{ left: Math.min(Math.max(selected.rect.left + selected.rect.width / 2, Math.min(240, window.innerWidth / 2)), Math.max(window.innerWidth - 240, window.innerWidth / 2)), top: above ? selected.rect.top - 8 : selected.rect.bottom + 8 }}
-          className={cn('fixed z-(--z-menu) flex max-w-[calc(100vw-16px)] -translate-x-1/2 flex-wrap items-center gap-1 rounded-xl bg-popover p-1 text-fg shadow-pop animate-in fade-in-0 duration-[var(--duration-fast)]', above && '-translate-y-full')}
+          className={cn(
+            'absolute z-(--z-menu) flex max-w-[calc(100%-16px)] -translate-x-1/2 items-center gap-0.5 rounded-xl bg-popover p-1 text-fg shadow-pop animate-in fade-in-0 transition-opacity duration-[var(--duration-fast)] ease-[var(--ease-standard)]',
+            above && '-translate-y-full',
+            !toolbarShown && 'pointer-events-none opacity-0',
+          )}
         >
-          {onDiscuss && <Button size="xs" variant="quiet" onClick={() => {
-            const quote = quoteAt(selected.text, selected.start, selected.end);
-            if (!quote) return;
-            onDiscuss({ anchor: selected.target.anchor, quote });
+          {onQuote && <Button size="sm" variant="quiet" className="no-hover:h-9" onClick={quote}><IconTextQuote /><Trans context="session-quote-action">引用</Trans></Button>}
+          {onDiscuss && <Button size="sm" variant="quiet" className="no-hover:h-9" onClick={() => {
+            const quoted = quoteAt(selected.text, selected.start, selected.end);
+            if (!quoted) return;
+            onDiscuss({ anchor: selected.target.anchor, quote: quoted });
             document.getSelection()?.removeAllRanges();
             setSelected(undefined);
           }}><IconMessagesSquare /><Trans>侧边聊天</Trans></Button>}
-          <span className="flex items-center gap-1 pl-1.5 pr-0.5 text-xs text-fg-3"><IconHighlighter className="size-3.5" /><Trans context="session-highlight-action">高亮</Trans></span>
-          <ColorButtons onPick={highlight} />
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-line-strong" />
-          <Button size="xs" variant="quiet" onClick={() => { void copyWithToast(document.getSelection()?.toString() ?? selected.text.slice(selected.start, selected.end)); setSelected(undefined); }}><IconCopy /><Trans>复制</Trans></Button>
-          {session && <Button size="xs" variant="quiet" onClick={share}><IconImageDown /><Trans>导出图片</Trans></Button>}
+          {lead && <span aria-hidden className="mx-1 h-4 w-px bg-line-strong" />}
+          <HighlightButton above={above} onPick={highlight} />
+          {selectionCommands.commands.map((command) => {
+            const Icon = commandIcon(command.icon);
+            return <ToolbarIcon key={command.id} label={command.title} side={tipSide} onClick={() => void runCommand(command)}><Icon /></ToolbarIcon>;
+          })}
+          <ToolbarIcon label={t`复制`} side={tipSide} onClick={() => { void copyWithToast(document.getSelection()?.toString() ?? selected.text.slice(selected.start, selected.end)); setSelected(undefined); }}><IconCopy /></ToolbarIcon>
+          {session && <ToolbarIcon label={t`导出图片`} side={tipSide} onClick={share}><IconImageDown /></ToolbarIcon>}
         </div>,
-        document.body,
+        floatHost,
+      )}
+      {card && floatHost && createPortal(
+        <MessageCommandBlock
+          ref={cardRef}
+          icon={card.command.icon}
+          title={card.title ?? card.command.title}
+          {...(card.text !== undefined ? { text: card.text } : {})}
+          onClose={closeCard}
+          onAnimationEnd={(event) => { if (card.closing && event.target === event.currentTarget) setCard(undefined); }}
+          className={cn(
+            'absolute z-(--z-menu) -translate-x-1/2 bg-popover shadow-pop',
+            card.above ? '-translate-y-full origin-bottom' : 'origin-top',
+            card.closing
+              ? 'pointer-events-none animate-out fill-mode-forwards fade-out-0 zoom-out-[var(--enter-scale)] duration-[var(--duration-exit-fast)] ease-[var(--ease-accelerate)]'
+              : 'animate-in fade-in-0 zoom-in-[var(--enter-scale)] duration-[var(--duration-fast)] ease-[var(--ease-decelerate)]',
+          )}
+          style={{ width: cardWidth, maxHeight: card.room }}
+        />,
+        floatHost,
       )}
       {sharing && <ShareImageDialog source={sharing} open={sharingOpen} onOpenChange={setSharingOpen} />}
       <Popover open={editingOpen && Boolean(editingMark)} onOpenChange={setEditingOpen}>

@@ -429,6 +429,8 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
     transcriptScrollRef.current?.scrollByReader(deltaY, deltaMode) ?? false
   ), []);
   const [restoreDraft, setRestoreDraft] = useState<{ text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: import('../session/composerAttachmentIntake').PendingUpload[]; onPersisted?: () => void; nonce: number }>();
+  const [quoted, setQuoted] = useState<{ text: string; nonce: number }>();
+  const quote = useCallback((text: string) => setQuoted({ text, nonce: Date.now() }), []);
   const [pickedApproval, setPickedApproval] = useState<string>();
   const [switchingApproval, setSwitchingApproval] = useState(false);
   const [switchingModel, setSwitchingModel] = useState(false);
@@ -1207,6 +1209,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           }}
           onTurnAction={quickChat || archived || assistant ? undefined : turnAction}
           onDiscuss={discussionAllowed && !archived ? discuss : undefined}
+          onQuote={archived || held ? undefined : quote}
           lead={lineage}
           runActionPending={runActionPending}
           focus={discussionFocus ?? focus}
@@ -1313,6 +1316,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             dock={dock}
             dockAttached={queueShown}
             restoreDraft={restoreDraft}
+            quote={quoted}
           />
         </div>
         {held && <TerminalHoldBar session={session} />}

@@ -3737,6 +3737,10 @@ msgstr ""
 msgid "已拒绝"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "已改为回到打开弹窗的按钮，并补上 Esc 的处理。"
+msgstr ""
+
 #: src/app/settings/UpdateSection.tsx
 msgid "已是最新发布版本"
 msgstr ""
@@ -4439,6 +4443,10 @@ msgstr ""
 
 #: src/app/design/foundations/AccessibilityChapter.tsx
 msgid "指针能做的，键盘都能做。"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "按 Esc 关闭时也回到这个按钮吗"
 msgstr ""
 
 #: src/app/design/android/StylesChapter.tsx

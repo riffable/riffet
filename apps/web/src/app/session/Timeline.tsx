@@ -1,4 +1,4 @@
-import { IconCopy, IconCornerUpRight, IconEllipsis, IconGitFork, IconImageDown, IconRotateCcw } from '@/components/icons';
+import { IconCopy, IconCornerUpRight, IconEllipsis, IconGitFork, IconImageDown, IconRotateCcw, IconTextQuote } from '@/components/icons';
 import { createContext, memo, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
@@ -37,6 +37,8 @@ import { RememberedScope, useRemembered } from './rememberedState';
 import { FailureDetails } from './FailureDetails';
 import { reasoningPreview } from '../../../../../packages/timeline/src/findText';
 import { SessionReferences } from './SessionReferences';
+import { quoteLabel, splitQuotes } from './quotes';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export const toolIcons: Record<string, typeof IconWrench> = {
   read: IconFileText, edit: IconFilePenLine, delete: IconTrash2, move: IconArrowRightLeft, search: IconSearch,
@@ -118,6 +120,25 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at, pluginItems
 const statusRow = 'min-h-lh no-hover:min-h-11';
 const statusAction = 'no-hover:min-h-11';
 
+/** The quotes a message starts with (quotes.ts), as chips under it; one opens to the whole quote. */
+function MessageQuotes({ quotes }: { quotes: string[] }) {
+  if (!quotes.length) return null;
+  return (
+    <div className="flex max-w-[82%] flex-wrap justify-end gap-1.5">
+      {quotes.map((quote, index) => (
+        <Popover key={index}>
+          <PopoverTrigger asChild>
+            <button type="button" className="inline-flex min-h-11 max-w-64 items-center gap-1.5 rounded-md bg-subtle px-2 text-xs text-fg-2 hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-hover md:min-h-7">
+              <IconTextQuote className="size-3 shrink-0 text-fg-3" /><span className="truncate">{quoteLabel(quote)}</span>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="max-h-80 w-96 overflow-y-auto px-4 py-3"><Markdown text={quote} /></PopoverContent>
+        </Popover>
+      ))}
+    </div>
+  );
+}
+
 export const UserMessage = memo(function UserMessage({ stopShown = true, text, attachments, references, recipientSessionId, onOpenSession, time, footerPinned, run, failureShown = false, runActionPending, onOpenTerminal, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun }: {
   /** The turn stopped with nothing after this prompt, so the prompt is where 已停止 is told. */
   stopShown?: boolean;
@@ -145,6 +166,8 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, text, a
   const taskOutcome = run ? nativeTaskOutcome(run) : undefined;
   const delivery = run?.native && !taskOutcome && !failureShown ? nativeDeliveryLabel(run, stopShown) : '';
   const rest = useRestReveal();
+  // A message that is nothing but a quote stays as it was written: there would be no bubble to hang the chip from.
+  const quoted = useMemo(() => { const split = splitQuotes(text); return split.body.trim() ? split : { quotes: [], body: text }; }, [text]);
   const [errorOpen, setErrorOpen] = useRemembered(`delivery-error:${run?.id ?? ''}`, false);
   // While it is on its way the status says enough; the time returns once it has arrived or settled.
   const sending = Boolean(delivery && run && ['submitting', 'queued', 'starting', 'sent'].includes(sendPhase(run) ?? ''));
@@ -159,8 +182,9 @@ export const UserMessage = memo(function UserMessage({ stopShown = true, text, a
   return (
     <div className="flex flex-col items-end gap-1.5">
       <div className="flex max-w-[min(82%,560px)] items-start gap-1">
-        <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg">{text}</div>
+        <div className="min-w-0 whitespace-pre-wrap break-words rounded-3xl bg-bubble px-4 py-2.5 text-base text-fg">{quoted.body}</div>
       </div>
+      <MessageQuotes quotes={quoted.quotes} />
       <MessageAttachments attachments={attachments} />
       {recipientSessionId && !resources && <SessionReferences references={references ?? run?.native?.contextSnapshots} recipientSessionId={recipientSessionId} onOpenSession={onOpenSession} />}
       {(text || time || delivery) && (

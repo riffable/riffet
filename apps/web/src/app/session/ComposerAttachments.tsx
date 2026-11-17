@@ -1,13 +1,14 @@
 import { memo, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { Attachment } from '@contracts';
-import { IconFileText, IconImage, IconPaperclip, IconX } from '@/components/icons';
+import { IconFileText, IconImage, IconPaperclip, IconTextQuote, IconX } from '@/components/icons';
 import { Spinner } from '@/components/ui/controls';
 import { isSessionReference, type PromptContextReference } from '@/lib/api';
 import { AgentLogo } from '@/components/AgentLogo';
 import { basename } from '@/lib/utils';
 import { COMPOSER_IMAGE_TILE, focusIndexAfterRemoval, formatBytes, isImageAttachment, type PendingUpload } from './composerAttachmentIntake';
 import { ImageViewer } from './ImageViewer';
+import { quoteLabel } from './quotes';
 
 /*
  * The composer's attachment area, as a controlled component: the draft arrays and every mutation
@@ -119,6 +120,8 @@ function UploadingTile({ name }: { name: string }) {
 export interface ComposerAttachmentsProps {
   attachments: Attachment[];
   references: PromptContextReference[];
+  /** Quotes taken from answers, after the references (quotes.ts). */
+  quotes: readonly string[];
   /** Each drawn where its attachment will appear, in its shape, so finishing an upload moves nothing. */
   pending: readonly PendingUpload[];
   disabled?: boolean;
@@ -128,6 +131,7 @@ export interface ComposerAttachmentsProps {
   onRetryUpload?: (key: string) => void;
   onRemoveUpload?: (key: string) => void;
   onRemoveReference: (index: number) => void;
+  onRemoveQuote: (index: number) => void;
   onOpenReferenceSession?: (id: string) => void;
   /**
    * Accepted so the host can hand the rail the same intake path it uses for the window-level drop.
@@ -139,10 +143,10 @@ export interface ComposerAttachmentsProps {
 }
 
 /** Memoized: the host re-renders on every keystroke of the draft, and the rail does not depend on it. */
-export const ComposerAttachments = memo(function ComposerAttachments({ attachments, references, pending, disabled, variant = 'rail', onRemoveAttachment, onRemoveReference, onOpenReferenceSession, onRetryUpload, onRemoveUpload, onError }: ComposerAttachmentsProps): ReactNode {
+export const ComposerAttachments = memo(function ComposerAttachments({ attachments, references, quotes, pending, disabled, variant = 'rail', onRemoveAttachment, onRemoveReference, onRemoveQuote, onOpenReferenceSession, onRetryUpload, onRemoveUpload, onError }: ComposerAttachmentsProps): ReactNode {
   const { t } = useLingui();
   const railRef = useRef<HTMLDivElement>(null);
-  const pendingFocusRef = useRef<{ index?: number; attachmentId?: string; reference?: PromptContextReference } | undefined>(undefined);
+  const pendingFocusRef = useRef<{ index?: number; attachmentId?: string; reference?: PromptContextReference; quotes?: readonly string[] } | undefined>(undefined);
   const images = attachments.filter(isImageAttachment);
   const files = attachments.filter((attachment) => !isImageAttachment(attachment));
   const uploading = pending.length > 0;
@@ -159,26 +163,31 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     pendingFocusRef.current = undefined;
     if (!pending || pending.index === undefined) return;
     // A host that refused the removal must not have focus moved as if it had happened.
-    const kept = pending.attachmentId !== undefined ? attachments.some((item) => item.id === pending.attachmentId) : references.includes(pending.reference!);
+    const kept = pending.attachmentId !== undefined ? attachments.some((item) => item.id === pending.attachmentId)
+      : pending.quotes ? quotes === pending.quotes : references.includes(pending.reference!);
     if (kept) return;
     railRef.current?.querySelectorAll<HTMLElement>(TILE_SELECTOR)[pending.index]?.focus();
-  }, [attachments, references]);
+  }, [attachments, references, quotes]);
 
   const referencePositions = references.map((_, index) => references.slice(0, index).reduce((count, item) => count + (isSessionReference(item) && onOpenReferenceSession ? 2 : 1), 0));
   const referenceTargets = references.reduce((count, item) => count + (isSessionReference(item) && onOpenReferenceSession ? 2 : 1), 0);
-  const total = referenceTargets + attachments.length;
+  const total = referenceTargets + quotes.length + attachments.length;
+  const removeQuote = (index: number) => {
+    pendingFocusRef.current = { index: focusIndexAfterRemoval(referenceTargets + index, total), quotes };
+    onRemoveQuote(index);
+  };
   const removeReference = (index: number) => {
     pendingFocusRef.current = { index: focusIndexAfterRemoval(referencePositions[index]!, total - (isSessionReference(references[index]!) && onOpenReferenceSession ? 1 : 0)), reference: references[index] };
     onRemoveReference(index);
   };
   const removeAttachment = (attachment: Attachment) => {
     const image = images.indexOf(attachment);
-    const position = referenceTargets + (image >= 0 ? image : images.length + files.indexOf(attachment));
+    const position = referenceTargets + quotes.length + (image >= 0 ? image : images.length + files.indexOf(attachment));
     pendingFocusRef.current = { index: focusIndexAfterRemoval(position, total), attachmentId: attachment.id };
     onRemoveAttachment(attachment.id);
   };
 
-  if (!attachments.length && !references.length && !uploading) return null;
+  if (!attachments.length && !references.length && !quotes.length && !uploading) return null;
 
   if (variant === 'summary') {
     // Content only: the host keeps the button, its chevron and its `aria-expanded`.
@@ -188,7 +197,7 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
         <span className="min-w-0 flex-1 truncate">
           {[
             attachments.length ? t`${attachments.length} 个附件` : '',
-            references.length ? t`${references.length} 个引用` : '',
+            references.length + quotes.length ? t`${references.length + quotes.length} 个引用` : '',
             uploading ? t`上传中` : '',
           ].filter(Boolean).join(' · ')}
         </span>
@@ -200,7 +209,7 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
     <div ref={railRef} className="flex flex-col gap-1.5 px-3 pt-3">
       {/* References and attachments stay on separate rows: thumbnails would push a reference chip
           onto the next line anyway, and two stable rows beat one mixed, reflowing one (§5.4). */}
-      {references.length > 0 && (
+      {(references.length > 0 || quotes.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {references.map((reference, index) => {
             const session = isSessionReference(reference);
@@ -209,6 +218,11 @@ export const ComposerAttachments = memo(function ComposerAttachments({ attachmen
               {name}
             </Chip>;
           })}
+          {quotes.map((quote, index) => (
+            <Chip key={`quote:${index}`} icon={<IconTextQuote />} title={quote} removeLabel={t`移除引用`} disabled={disabled} onRemove={() => removeQuote(index)}>
+              {quoteLabel(quote)}
+            </Chip>
+          ))}
         </div>
       )}
       {(images.length > 0 || files.length > 0 || uploading) && (

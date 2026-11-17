@@ -1,6 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type ComponentType } from 'react';
+import { createContext, useCallback, useContext, useMemo, useSyncExternalStore, type AnimationEventHandler, type ComponentType, type CSSProperties, type Ref } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import { PLUGIN_COMMAND_BUDGET, type CommandIcon, type LocalizedText } from '@contracts';
+import { PLUGIN_COMMAND_BUDGET, type CommandIcon, type CommandSelection, type LocalizedText } from '@contracts';
 import { IconBookOpen, IconFileText, IconLanguages, IconListChecks, IconMessageSquareQuote, IconPuzzle, IconSearch, IconSparkles, IconVolume2, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/controls';
@@ -8,7 +8,7 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { HttpError } from '@/lib/errors';
 import { localizedText, runPluginCommand, usePlugins } from '@/lib/plugins';
 import { toast } from '@/lib/toast';
-import { errorMessage, newId } from '@/lib/utils';
+import { cn, errorMessage, newId } from '@/lib/utils';
 import { enabledCommands, type PluginCommand } from '@/plugins/commands';
 import { Markdown } from './Markdown';
 
@@ -85,22 +85,57 @@ export function useMessageCommandItems(text: string | undefined, runId: string |
     } catch (error) {
       if (results.get(key) !== running) return;
       drop(key);
-      // A use the plugin declares is chosen on the 辅助模型 page; a plain completion runs on 快速对话's model.
-      const unchosen = error instanceof HttpError && error.code === 'PLUGIN_MODEL_NOT_CHOSEN' && openSettings;
-      const section = unchosen && (error.details as { use?: unknown } | undefined)?.use ? 'auxiliary' : 'quickchat';
-      toast.error(errorMessage(error), unchosen ? { action: { label: t`选择模型`, onClick: () => openSettings(section) } } : undefined);
+      toastFailure(error, t`选择模型`, openSettings);
     }
   }, [i18n.locale, openSettings, runId, sessionId, t, text]);
   if (!sessionId || !text?.trim() || text.length > PLUGIN_COMMAND_BUDGET.messageChars) return [];
   return commands.map((command) => ({ command, run: () => void run(command) }));
 }
 
+/** A command that failed; when its model is not chosen yet, with a button to where it is chosen. */
+function toastFailure(error: unknown, chooseLabel: string, openSettings: ((section: 'auxiliary' | 'quickchat') => void) | undefined): void {
+  // A use the plugin declares is chosen on the 辅助模型 page; a plain completion runs on 快速对话's model.
+  const unchosen = error instanceof HttpError && error.code === 'PLUGIN_MODEL_NOT_CHOSEN' && openSettings;
+  const section = unchosen && (error.details as { use?: unknown } | undefined)?.use ? 'auxiliary' : 'quickchat';
+  toast.error(errorMessage(error), unchosen ? { action: { label: chooseLabel, onClick: () => openSettings(section) } } : undefined);
+}
+
+/**
+ * The selection toolbar's plugin items: the enabled plugins' `selection` commands. `run` answers the `text` a command
+ * gives for the shown card, or nothing when it answered otherwise or failed (said in a toast). Nothing is kept: the
+ * card is gone once closed, and the plugin keeps what it wants to reuse.
+ */
+export function useSelectionCommands(): { commands: PluginCommand[]; run(command: PluginCommand, selection: CommandSelection): Promise<{ text: string; title?: string } | undefined> } {
+  const { t, i18n } = useLingui();
+  const scope = useContext(MessageCommandsContext);
+  const descriptors = usePlugins();
+  const commands = useMemo(() => scope ? enabledCommands(descriptors, i18n.locale, 'selection') : [], [descriptors, i18n.locale, scope]);
+  const sessionId = scope?.sessionId;
+  const openSettings = scope?.openModelSettings;
+  const run = useCallback(async (command: PluginCommand, selection: CommandSelection) => {
+    if (!sessionId || !selection.text.trim() || selection.text.length > PLUGIN_COMMAND_BUDGET.messageChars) return undefined;
+    try {
+      const result = await runPluginCommand(command.id, { requestId: newId(), sessionId, locale: i18n.locale, selection });
+      if (result.kind === 'text') {
+        const title = localizedText(result.title, [i18n.locale]);
+        return { text: result.text, ...(title ? { title } : {}) };
+      }
+      const message = result.kind === 'done' ? localizedText(result.message, [i18n.locale]) : undefined;
+      if (message) toast.success(message);
+    } catch (error) {
+      toastFailure(error, t`选择模型`, openSettings);
+    }
+    return undefined;
+  }, [i18n.locale, openSettings, sessionId, t]);
+  return { commands, run };
+}
+
 /** One result under an answer: the command's icon (a spinner while it runs), its title, copy and close, then the Markdown. */
-export function MessageCommandBlock({ icon, title, text, onClose }: { icon: CommandIcon | undefined; title: string; /** Absent while the command runs. */ text?: string; onClose(): void }) {
+export function MessageCommandBlock({ icon, title, text, onClose, className, style, ref, onAnimationEnd }: { icon: CommandIcon | undefined; title: string; /** Absent while the command runs. */ text?: string; onClose(): void; className?: string; style?: CSSProperties; ref?: Ref<HTMLElement>; onAnimationEnd?: AnimationEventHandler<HTMLElement> }) {
   const { t } = useLingui();
   const Icon = commandIcon(icon);
   return (
-    <section aria-busy={text === undefined || undefined} aria-label={title} className="rounded-xl bg-subtle px-4 py-3">
+    <section ref={ref} style={style} onAnimationEnd={onAnimationEnd} aria-busy={text === undefined || undefined} aria-label={title} className={cn('flex flex-col rounded-xl bg-subtle px-4 py-3', className)}>
       <div className="flex items-center gap-2 text-sm">
         {text === undefined ? <Spinner className="size-4 text-fg-3" /> : <Icon className="size-4 text-fg-3" />}
         <span className="font-medium text-fg">{title}</span>
@@ -109,7 +144,7 @@ export function MessageCommandBlock({ icon, title, text, onClose }: { icon: Comm
           <Button variant="ghost" size="icon-xs" aria-label={t`关闭`} title={t`关闭`} onClick={onClose}><IconX /></Button>
         </div>
       </div>
-      {text !== undefined && <div className="mt-2 min-w-0"><Markdown text={text} /></div>}
+      {text !== undefined && <div className="mt-2 min-h-0 min-w-0 overflow-y-auto"><Markdown text={text} /></div>}
     </section>
   );
 }

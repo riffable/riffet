@@ -30,6 +30,7 @@ import { useHeld, useLingering, WAIT_GRACE_MS } from './sessionLayout';
 import { Collapse } from '@/components/ui/collapse';
 import { shouldForwardWheel } from './composerFullscreenGeometry';
 import { ComposerAttachments } from './ComposerAttachments';
+import { joinQuotes, splitQuotes } from './quotes';
 import { attachmentMimeType, planIntake, type CandidateFile, type PendingUpload } from './composerAttachmentIntake';
 import { mentionsDeletedSession } from '@/lib/session-deletion';
 import { detectSlashTrigger, invokedSlashItems, removeSlashToken, slashCandidates, slashMenuGroups } from './slashMenu';
@@ -301,6 +302,8 @@ export interface ComposerProps {
   backgroundCount?: number;
   /** Puts a message (e.g. one taken back from the queue) into the draft; a new `nonce` applies it again. */
   restoreDraft?: { text: string; attachments: Attachment[]; context?: PromptContextReference[]; missingAttachments?: PendingUpload[]; onPersisted?: () => void; nonce: number };
+  /** Adds a quote taken from the transcript to the draft; a new `nonce` adds it again. */
+  quote?: { text: string; nonce: number };
   /** Dock cards rendered directly above the input card (todos, outgoing queue). */
   dock?: ReactNode;
   /** Delivery and other blocking feedback must remain reachable in fullscreen editing. */
@@ -486,7 +489,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const [, refreshDraftPersistence] = useState(0);
   const draftWarningId = useId();
   const enterBehavior = readEnterKeyBehavior(props.enterBehavior);
-  const [text, setText] = useState(() => readDraft(storageKey).text);
+  // A stored draft keeps its quotes as the block quotes its text starts with (quotes.ts).
+  const [text, setText] = useState(() => splitQuotes(readDraft(storageKey).text).body);
+  const [quotes, setQuotes] = useState<string[]>(() => splitQuotes(readDraft(storageKey).text).quotes);
   const [attachments, setAttachments] = useState<Attachment[]>(() => readDraft(storageKey).attachments);
   const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>(() => readDraft(storageKey).pendingUploads ?? []);
   const pendingUploadsRef = useRef(pendingUploads);
@@ -498,7 +503,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     setPendingUploads(pendingUploadsRef.current);
   };
   const uploading = pendingUploads.length > 0;
-  const draftAtRisk = unsavedDrafts.has(storageKey) && Boolean(text || attachments.length || (persistReferences && references.length));
+  const draftAtRisk = unsavedDrafts.has(storageKey) && Boolean(text || quotes.length || attachments.length || (persistReferences && references.length));
   const [submitting, setSubmitting] = useState(false);
   const [trigger, setTrigger] = useState<Trigger | null>(null);
   const [highlight, setHighlight] = useState(0);
@@ -575,7 +580,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const [focused, setFocused] = useState(false);
   const blurTimerRef = useRef<number | undefined>(undefined);
   const compact = isMobile && variant === 'dock' && !focused && !mobileSettingsOpen && !dragging
-    && !text && !attachments.length && !references.length && !uploading && !draftAtRisk;
+    && !text && !quotes.length && !attachments.length && !references.length && !uploading && !draftAtRisk;
   /**
    * Entrance motion for the controls the compact/full toggle adds.
    *
@@ -595,6 +600,14 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     textRef.current = next;
     textRevisionRef.current += 1;
     setText(next);
+  };
+
+  const quotesRef = useRef(quotes);
+  /** Quotes are part of the text that is sent, so a change to them is a change to the text. */
+  const updateQuotes = (next: string[]) => {
+    quotesRef.current = next;
+    textRevisionRef.current += 1;
+    setQuotes(next);
   };
 
   const updateAttachments = (next: Attachment[] | ((current: Attachment[]) => Attachment[])) => {
@@ -634,7 +647,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     uploadFilesRef.current.clear();
     activeUploadKeysRef.current.clear();
     updatePendingUploads(() => stored.pendingUploads ?? []);
-    updateText(stored.text);
+    const storedText = splitQuotes(stored.text);
+    updateText(storedText.body);
+    updateQuotes(storedText.quotes);
     updateAttachments(stored.attachments);
     for (const item of stored.attachments) if (stored.keys?.[item.id]) attachmentKeysRef.current.set(item.id, stored.keys[item.id]!);
     dismissedTriggerRef.current = null;
@@ -697,7 +712,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   }).current;
   /** The draft as it stands, read from the refs the updaters keep current ahead of the next render. */
   const currentDraft = (): StoredDraft => ({
-    text: textRef.current, attachments: attachmentsRef.current, references: persistReferences ? referencesRef.current : [], projectId: referenceScope.current,
+    text: joinQuotes(quotesRef.current, textRef.current), attachments: attachmentsRef.current, references: persistReferences ? referencesRef.current : [], projectId: referenceScope.current,
     ...(pendingUploadsRef.current.length ? { pendingUploads: pendingUploadsRef.current } : {}),
     keys: Object.fromEntries(attachmentsRef.current.flatMap((item) => { const key = attachmentKeysRef.current.get(item.id); return key ? [[item.id, key]] : []; })),
   });
@@ -706,7 +721,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     pendingDraftRef.current = { key: storageKey, draft: currentDraft() };
     window.clearTimeout(draftTimerRef.current);
     draftTimerRef.current = window.setTimeout(flushDraft, 400);
-  }, [storageKey, text, attachments, references, pendingUploads, referenceProjectId, flushDraft]);
+  }, [storageKey, text, quotes, attachments, references, pendingUploads, referenceProjectId, flushDraft]);
   // Cleanups run before the next commit's effects, so the old key is written before the reset reads the new one.
   useEffect(() => flushDraft, [storageKey, flushDraft]);
   useEffect(() => {
@@ -723,7 +738,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   useEffect(() => {
     if (!restoreDraft) return;
     const current = textRef.current;
-    updateText(current.trim() ? `${restoreDraft.text}\n${current}` : restoreDraft.text);
+    const restored = splitQuotes(restoreDraft.text);
+    updateText(current.trim() ? `${restored.body}\n${current}` : restored.body);
+    if (restored.quotes.length) updateQuotes([...restored.quotes, ...quotesRef.current]);
     updateAttachments((existing) => [...restoreDraft.attachments.filter((item) => !existing.some((other) => other.id === item.id)), ...existing]);
     if (restoreDraft.context) updateReferences(mergeRestoredReferences(referencesRef.current, restoreDraft.context));
     if (restoreDraft.missingAttachments) updatePendingUploads(current => [...current, ...restoreDraft.missingAttachments!.filter(item => !current.some(other => other.key === item.key))]);
@@ -734,9 +751,16 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [restoreDraft]);
 
+  const quote = props.quote;
   useEffect(() => {
-    props.onDraftChange?.(Boolean(text.trim() || attachments.length));
-  }, [attachments.length, props.onDraftChange, text]);
+    if (!quote) return;
+    updateQuotes([...quotesRef.current, quote.text]);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, [quote]);
+
+  useEffect(() => {
+    props.onDraftChange?.(Boolean(text.trim() || quotes.length || attachments.length));
+  }, [attachments.length, props.onDraftChange, quotes.length, text]);
 
   const heldFeedback = useHeld(props.feedback);
   const minimumHeight = variant === 'hero' ? 76 : compact ? 44 : 52;
@@ -1130,16 +1154,21 @@ export const Composer = memo(function Composer(props: ComposerProps) {
     updateReferences(referencesRef.current.filter((_, itemIndex) => itemIndex !== index));
     refocusDraft();
   };
+  const removeQuote = (index: number) => {
+    updateQuotes(quotesRef.current.filter((_, itemIndex) => itemIndex !== index));
+    refocusDraft();
+  };
 
   /*
    * The rail is memoized, so it gets callbacks that never change and forward to this render's
    * handlers — the ones above close over the host's latest props.
    */
-  const railHandlersRef = useRef({ removeAttachment, removeReference, ingestFiles });
-  railHandlersRef.current = { removeAttachment, removeReference, ingestFiles };
+  const railHandlersRef = useRef({ removeAttachment, removeReference, removeQuote, ingestFiles });
+  railHandlersRef.current = { removeAttachment, removeReference, removeQuote, ingestFiles };
   const [railHandlers] = useState(() => ({
     onRemoveAttachment: (id: string) => railHandlersRef.current.removeAttachment(id),
     onRemoveReference: (index: number) => railHandlersRef.current.removeReference(index),
+    onRemoveQuote: (index: number) => railHandlersRef.current.removeQuote(index),
     onDropFiles: (dropped: File[]) => { void railHandlersRef.current.ingestFiles(dropped); },
     onError: (message: string) => onErrorRef.current(message),
   }));
@@ -1206,8 +1235,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
 
   const canSubmit = Boolean(text.trim()) && !disabled && !props.submitDisabled && !submitting && !uploading;
   const submit = async (later?: Date) => {
-    const prompt = textRef.current;
-    if (!prompt.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0) return;
+    const body = textRef.current;
+    const prompt = joinQuotes(quotesRef.current, body);
+    if (!body.trim() || disabled || props.submitDisabled || submittingRef.current || pendingUploadsRef.current.length > 0) return;
     if (later && !props.onSendLater) return;
     const submittedTextRevision = textRevisionRef.current;
     const submittedAttachments = [...attachmentsRef.current];
@@ -1222,6 +1252,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
       stored = true;
       if (textRevisionRef.current === submittedTextRevision) {
         updateText('');
+        if (quotesRef.current.length) updateQuotes([]);
         setTrigger(null);
       }
       if (submittedAttachments.length) {
@@ -1287,8 +1318,9 @@ export const Composer = memo(function Composer(props: ComposerProps) {
   const toolsInMenu = !isMobile && Boolean(props.toolsPicker);
   const hasMobileSettings = Boolean(props.toolbar || props.toolsPicker || props.onModelChange || props.startPickers || props.endPickers || props.usage);
   const showStop = Boolean(props.onStop && (props.stopping || (running || props.backgroundCount) && !text.trim()));
+  const referenceCount = visibleReferences.length + quotes.length;
   const attachedSummary = [
-    visibleReferences.length ? t`${visibleReferences.length} 个引用` : '',
+    referenceCount ? t`${referenceCount} 个引用` : '',
     attachments.length ? t`${attachments.length} 个附件` : '',
     uploading ? t`上传中` : '',
   ].filter(Boolean).join(' · ');
@@ -1425,7 +1457,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
           onDragLeave={() => setDragging(false)}
           onDrop={(event) => { if (event.dataTransfer.files.length) { event.preventDefault(); setDragging(false); void ingestFiles(event.dataTransfer.files); } }}
         >
-          {(visibleReferences.length > 0 || attachments.length > 0 || uploading) && <>
+          {(visibleReferences.length > 0 || quotes.length > 0 || attachments.length > 0 || uploading) && <>
             {/*
               Desktop shows the rail outright; a phone keeps the one-line summary and its expand
               toggle it has always had, because the rail would push the textarea off a small screen.
@@ -1435,6 +1467,7 @@ export const Composer = memo(function Composer(props: ComposerProps) {
               variant="rail"
               attachments={attachments}
               references={visibleReferences}
+              quotes={quotes}
               onOpenReferenceSession={props.onOpenReferenceSession ? openReferenceSession : undefined}
               pending={pendingUploads}
               onRetryUpload={retryUpload}

@@ -12,9 +12,7 @@ msgstr ""
 msgid "、"
 msgstr "、"
 
-#. placeholder {0}: references.length
-#. placeholder {0}: visibleReferences.length
-#: src/app/session/Composer.tsx
+#. placeholder {0}: references.length + quotes.length
 #: src/app/session/ComposerAttachments.tsx
 msgid "{0} 个引用"
 msgstr "{0} 个引用"
@@ -106,6 +104,10 @@ msgstr "{overlaps} 个文件与其他尝试重叠"
 #: src/app/session/TranscriptView.tsx
 msgid "{pendingConfirmationCount} 项待确认"
 msgstr "{pendingConfirmationCount} 项待确认"
+
+#: src/app/session/Composer.tsx
+msgid "{referenceCount} 个引用"
+msgstr "{referenceCount} 个引用"
 
 #: src/app/session/SessionWorkActions.tsx
 msgid "{running} 运行 · {done} 完成"
@@ -1052,6 +1054,11 @@ msgstr "开始"
 msgid "引用"
 msgstr "引用"
 
+#: src/app/session/MarkLayer.tsx
+msgctxt "session-quote-action"
+msgid "引用"
+msgstr "引用"
+
 #. placeholder {0}: formatDateTime(selected.capturedAt)
 #: src/app/session/SessionReferences.tsx
 msgid "引用于 {0}"
@@ -1758,6 +1765,10 @@ msgstr "移除 /{0}"
 #: src/app/session/ComposerAttachments.tsx
 msgid "移除会话引用"
 msgstr "移除会话引用"
+
+#: src/app/session/ComposerAttachments.tsx
+msgid "移除引用"
+msgstr "移除引用"
 
 #: src/app/session/ComposerDock.tsx
 msgid "等待上一条消息确认"

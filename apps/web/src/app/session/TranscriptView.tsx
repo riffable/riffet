@@ -610,6 +610,8 @@ interface Props {
   /** Rewinding the code to before a turn, or forking a conversation from it. */
   onTurnAction?: (action: TurnAction, runId: string) => void;
   onDiscuss?: (source: DiscussionSource) => void;
+  /** Adds a selection to the conversation's composer as a quote. */
+  onQuote?: (quote: string) => void;
   runActionPending?: (run: Run) => boolean;
   /** Measured output speed per run, keyed by the run id a turn key refers to. */
   metricsByRun?: Map<string, RunMetrics>;
@@ -622,7 +624,7 @@ interface Props {
   progress?: ReactNode;
 }
 
-export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, runActionPending, metricsByRun, focus, outlineTarget, progress: suppliedProgress }: Props) {
+export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, onOpenSession, timeline, timelineVersion = 0, resetVersion = 0, turns: suppliedTurns, turnsVersion = 0, loaded, catchingUp = false, historyLoad: suppliedHistoryLoad, onRetryHistory, running, activeTurnId, root, onOpenPath, onOpenInEditor, onOpenTerminal, empty, lead, children, pendingConfirmationCount = 0, hasMoreHistory, completedProcessesOpen, historyContextIncomplete, historyStale, loadingEarlier, onLoadEarlier, hasMoreLater, loadingLater, onLoadLater, onReaderEnd, onJumpToLatest, onLoadTurn, onFind, onLoadPlace, onExpandRow, onRetryNativeRun, onCancelNativeRun, onCheckNativeRun, onContinueNativeRun, nativeRecoveries, onSendQueuedNow, onRestoreNativeRun, onTurnAction, onDiscuss, onQuote, runActionPending, metricsByRun, focus, outlineTarget, progress: suppliedProgress }: Props) {
   const { t } = useLingui();
   const resources = useTranscriptResources();
   const [confirmationOffscreen, setConfirmationOffscreen] = useState(false);
@@ -1540,7 +1542,7 @@ export function TranscriptView({ embedded = false, scrollHandleRef, sessionId, o
       {!embedded && !resources && <ChapterNavigation scrollRef={scrollRef} columnRef={contentRef} onNavigate={navigateToChapter} scope={`${sessionId}:${resetVersion}`} />}
 
       <div role="status" className="sr-only">{announcement.text && <span key={announcement.seq}>{announcement.text}</span>}</div>
-      {!resources && <MarkLayer scrollRef={scrollRef} onDiscuss={onDiscuss} />}
+      {!resources && <MarkLayer scrollRef={scrollRef} onDiscuss={onDiscuss} onQuote={onQuote} />}
       {find && (
         <div
           role="search"
