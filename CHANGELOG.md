@@ -25,6 +25,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 - Antigravity CLI is a supported agent.
 - Antigravity: a model the gateway serves under its own id (such as `gemini-4-hydrogen-sonar`) no longer turns into agy's default model when the conversation starts, and the conversation says so when agy still picks another; models offer a thinking effort; agy 1.5.10 is supported.
+- A provider that uses a model source no longer shows as not ready right after Riffet or the source's plugin starts.
 - Codex conversations continue when switching to a compatible model provider; Codex CLI 0.167.2 is supported.
 - Codex has a Deny permission mode: it edits the workspace freely and refuses anything more instead of asking.
 - Goals from Claude Code `/goal`, Codex and DeepSeek Harness show on every client.

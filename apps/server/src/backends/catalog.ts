@@ -374,6 +374,9 @@ export class BackendCatalog {
     const key = `${driver.id}:${profile.id}`;
     const cached = this.availability.get(key);
     if (cached && cached.checkedAt + AVAILABILITY_FRESH_MS > Date.now()) return cached.result;
+    // A source in its own process answers `resolve` only from a finished `prepare`; without one the probe would
+    // read (and cache) "not ready" for a source that is fine.
+    await prepareSource(profile.config).catch(() => undefined);
     const result = await driver.available(this.host, profile)
       .catch(error => ({ available: false, reason: error instanceof Error ? error.message : 'Backend is unavailable' }));
     this.availability.set(key, { result, checkedAt: Date.now() });
