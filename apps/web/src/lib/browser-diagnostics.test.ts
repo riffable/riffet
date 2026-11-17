@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import { browserDiagnosticsReport, clearBrowserDiagnostics, startBrowserDiagnostics, stopBrowserDiagnostics } from './browser-diagnostics';
 
 const methods = ['pushState', 'replaceState', 'back', 'forward', 'go'] as const;
@@ -20,7 +20,7 @@ class TestFrame extends TestElement {
 function browser() {
   const values = new Map<string, string>();
   const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) };
-  const originals = Object.fromEntries(methods.map(method => [method, vi.fn((..._args: unknown[]) => method)])) as Record<typeof methods[number], ReturnType<typeof vi.fn>>;
+  const originals = Object.fromEntries(methods.map(method => [method, vi.fn((..._args: unknown[]) => method)])) as Record<typeof methods[number], Mock<(...args: unknown[]) => string>>;
   const history = Object.assign(Object.create(originals) as typeof originals & { state: unknown; length: number }, {
     state: { credential: 'PRIVATE_HISTORY_STATE', 'riffet.navigation': { id: 'PRIVATE_PAIR_ID', role: 'guard' } }, length: 2,
   });

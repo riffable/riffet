@@ -57,8 +57,8 @@ describe('additive compatibility', () => {
     const shape = jsonSchema(ShareDraftRequestSchema);
     const before = snapshot({ ShareDraftRequest: { direction: 'request', schema: shape } });
     expect(compareSnapshots(before, snapshot({ ShareDraftRequest: { direction: 'request', schema: structuredClone(shape) } }))).toEqual([]);
-    const narrowed = structuredClone(shape) as { properties: { selection: { anyOf: Array<{ properties: { count?: { maximum: number } } }> } } };
-    const recent = narrowed.properties.selection.anyOf.find(branch => branch.properties.count);
+    const narrowed = structuredClone(shape) as { properties: { selection: { oneOf: Array<{ properties: { count?: { maximum: number } } }> } } };
+    const recent = narrowed.properties.selection.oneOf.find(branch => branch.properties.count);
     recent!.properties.count!.maximum = 10;
     expect(compareSnapshots(before, snapshot({ ShareDraftRequest: { direction: 'request', schema: narrowed } }))).toContainEqual(expect.objectContaining({ rule: 'constraint-tightened' }));
   });

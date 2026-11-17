@@ -126,7 +126,7 @@ describe('pi client compatibility', () => {
   it('accepts explicit EventSource features only on authenticated GET streams', async () => {
     const app = Fastify();
     cleanups.push(() => app.close());
-    app.setErrorHandler((error, _request, reply) => reply.code((error as {statusCode?:number}).statusCode ?? 500).send({ error: { code: error.code } }));
+    app.setErrorHandler<{ code?: string; statusCode?: number }>((error, _request, reply) => reply.code(error.statusCode ?? 500).send({ error: { code: error.code } }));
     app.addHook('onRequest', async request => {
       if (request.headers.cookie !== 'paired') throw new AppError('UNAUTHENTICATED', 'Sign in', 401);
     });

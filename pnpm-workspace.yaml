@@ -4,3 +4,7 @@ allowBuilds:
   node-pty: true
   protobufjs: false
   tesseract.js: false
+overrides:
+  # One KaTeX for the whole tree: the web app loads the direct dependency's stylesheet, so
+  # rehype-katex and mermaid must render the class names that stylesheet targets.
+  katex: 0.19.1

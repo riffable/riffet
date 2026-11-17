@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => {
   const on = vi.fn();
   const publish = vi.fn(() => ({ stop, on }));
   const destroy = vi.fn((callback?: () => void) => callback?.());
-  const Bonjour = vi.fn(() => ({ publish, destroy }));
+  const Bonjour = vi.fn(function () { return { publish, destroy }; });
   const mdnsNames = vi.fn(() => ['studio-mac.local']);
   return { Bonjour, publish, destroy, stop, on, mdnsNames };
 });

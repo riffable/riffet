@@ -69,7 +69,7 @@ function harness(options: { idleReconcileMs?: number; idleOutcomeGraceMs?: numbe
   const dispatch = new NativeDispatcher(store, native, runtime, {} as never, { intervalMs: 60_000, ...options });
   cleanups.push(() => dispatch.close());
   const app = Fastify();
-  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ error: { code: error instanceof AppError ? error.code : 'INTERNAL_ERROR', message: error.message } }));
+  app.setErrorHandler<Error>((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ error: { code: error instanceof AppError ? error.code : 'INTERNAL_ERROR', message: error.message } }));
   cleanups.push(() => app.close());
   const readNativeInput = vi.fn(async (body: NativeMessageBody, options?: { validateAttachments?: boolean }) => {
     if (missingAttachment && body.attachments?.length && options?.validateAttachments !== false) throw new AppError('ATTACHMENT_NOT_FOUND', 'removed', 404);

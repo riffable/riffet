@@ -22,7 +22,7 @@ async function harness(backend: 'claude' | 'traex' = 'claude', driver: Partial<N
   const invalidate = vi.fn();
   const profile = { id: 'local', backendId: backend, name: 'Fixture', config: { configDir: user, executable: join(root, 'unavailable-agent') } };
   const app = Fastify();
-  app.setErrorHandler((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'ERROR', message: error.message }));
+  app.setErrorHandler<Error>((error, _request, reply) => reply.code(error instanceof AppError ? error.statusCode : 500).send({ code: error instanceof AppError ? error.code : 'ERROR', message: error.message }));
   registerExtensionRoutes(app, { stateDir: root, store: { getProject: () => project, getSession: () => ({ projectId: 'project', backendId: 'codex', backendProfileId: 'local' }) }, nativeBackends: { catalog: { validateProfile: (_backend: string, id?: string) => { if (id && id !== 'local') throw new AppError('NOT_FOUND', 'profile', 404); return profile; }, invalidateSlashCatalogs: invalidate }, registry: { require: () => driver }, host: {} } } as unknown as RouteDeps);
   cleanups.push(() => app.close());
   return { app, user, invalidate };

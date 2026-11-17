@@ -1054,26 +1054,16 @@
             ]
           },
           "titleSource": {
-            "open": true,
             "type": "string",
             "enum": [
               "prompt",
               "provider",
               "generated",
               "user"
-            ]
+            ],
+            "open": true
           },
           "backendId": {
-            "negotiated": [
-              "chat",
-              "pi",
-              "antigravity"
-            ],
-            "negotiatedPattern": {
-              "feature": "plugin-agents",
-              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-              "maxLength": 64
-            },
             "type": "string",
             "enum": [
               "cursor",
@@ -1085,7 +1075,17 @@
               "pi",
               "antigravity",
               "chat"
-            ]
+            ],
+            "negotiated": [
+              "chat",
+              "pi",
+              "antigravity"
+            ],
+            "negotiatedPattern": {
+              "feature": "plugin-agents",
+              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+              "maxLength": 64
+            }
           },
           "backendProfileId": {
             "type": "string"
@@ -1211,7 +1211,6 @@
             "type": "object",
             "properties": {
               "kind": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "fork",
@@ -1223,7 +1222,8 @@
                   "discussion",
                   "channel",
                   "assistant"
-                ]
+                ],
+                "open": true
               },
               "sessionId": {
                 "type": "string"
@@ -1263,13 +1263,13 @@
                 ]
               },
               "job": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "supervise",
                   "consolidate",
                   "delegation"
-                ]
+                ],
+                "open": true
               },
               "assistantRunId": {
                 "type": "string"
@@ -1398,7 +1398,6 @@
                 "type": "string"
               },
               "status": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "active",
@@ -1407,7 +1406,8 @@
                   "usage_limited",
                   "budget_limited",
                   "complete"
-                ]
+                ],
+                "open": true
               },
               "reason": {
                 "type": "string"
@@ -1515,26 +1515,16 @@
                   ]
                 },
                 "titleSource": {
-                  "open": true,
                   "type": "string",
                   "enum": [
                     "prompt",
                     "provider",
                     "generated",
                     "user"
-                  ]
+                  ],
+                  "open": true
                 },
                 "backendId": {
-                  "negotiated": [
-                    "chat",
-                    "pi",
-                    "antigravity"
-                  ],
-                  "negotiatedPattern": {
-                    "feature": "plugin-agents",
-                    "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                    "maxLength": 64
-                  },
                   "type": "string",
                   "enum": [
                     "cursor",
@@ -1546,7 +1536,17 @@
                     "pi",
                     "antigravity",
                     "chat"
-                  ]
+                  ],
+                  "negotiated": [
+                    "chat",
+                    "pi",
+                    "antigravity"
+                  ],
+                  "negotiatedPattern": {
+                    "feature": "plugin-agents",
+                    "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                    "maxLength": 64
+                  }
                 },
                 "backendProfileId": {
                   "type": "string"
@@ -1672,7 +1672,6 @@
                   "type": "object",
                   "properties": {
                     "kind": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "fork",
@@ -1684,7 +1683,8 @@
                         "discussion",
                         "channel",
                         "assistant"
-                      ]
+                      ],
+                      "open": true
                     },
                     "sessionId": {
                       "type": "string"
@@ -1724,13 +1724,13 @@
                       ]
                     },
                     "job": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "supervise",
                         "consolidate",
                         "delegation"
-                      ]
+                      ],
+                      "open": true
                     },
                     "assistantRunId": {
                       "type": "string"
@@ -1859,7 +1859,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "active",
@@ -1868,7 +1867,8 @@
                         "usage_limited",
                         "budget_limited",
                         "complete"
-                      ]
+                      ],
+                      "open": true
                     },
                     "reason": {
                       "type": "string"
@@ -2056,16 +2056,6 @@
                       "type": "string"
                     },
                     "backendId": {
-                      "negotiated": [
-                        "chat",
-                        "pi",
-                        "antigravity"
-                      ],
-                      "negotiatedPattern": {
-                        "feature": "plugin-agents",
-                        "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                        "maxLength": 64
-                      },
                       "type": "string",
                       "enum": [
                         "cursor",
@@ -2077,7 +2067,17 @@
                         "pi",
                         "antigravity",
                         "chat"
-                      ]
+                      ],
+                      "negotiated": [
+                        "chat",
+                        "pi",
+                        "antigravity"
+                      ],
+                      "negotiatedPattern": {
+                        "feature": "plugin-agents",
+                        "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                        "maxLength": 64
+                      }
                     },
                     "projectName": {
                       "type": "string"
@@ -2095,20 +2095,20 @@
                       "type": "object",
                       "properties": {
                         "source": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "native",
                             "journal"
-                          ]
+                          ],
+                          "open": true
                         },
                         "completeness": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "complete",
                             "partial"
-                          ]
+                          ],
+                          "open": true
                         },
                         "messages": {
                           "type": "number"
@@ -2228,16 +2228,6 @@
                 "type": "string"
               },
               "backendId": {
-                "negotiated": [
-                  "chat",
-                  "pi",
-                  "antigravity"
-                ],
-                "negotiatedPattern": {
-                  "feature": "plugin-agents",
-                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                  "maxLength": 64
-                },
                 "type": "string",
                 "enum": [
                   "cursor",
@@ -2249,7 +2239,17 @@
                   "pi",
                   "antigravity",
                   "chat"
-                ]
+                ],
+                "negotiated": [
+                  "chat",
+                  "pi",
+                  "antigravity"
+                ],
+                "negotiatedPattern": {
+                  "feature": "plugin-agents",
+                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                  "maxLength": 64
+                }
               },
               "cursorSessionId": {
                 "type": "string"
@@ -2318,22 +2318,22 @@
                     "type": "number"
                   },
                   "tokens": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "provider",
                       "estimated",
                       "mixed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "window": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "stream",
                       "transcript",
                       "observed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "steps": {
                     "type": "number"
@@ -2528,16 +2528,6 @@
                           "type": "string"
                         },
                         "backendId": {
-                          "negotiated": [
-                            "chat",
-                            "pi",
-                            "antigravity"
-                          ],
-                          "negotiatedPattern": {
-                            "feature": "plugin-agents",
-                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                            "maxLength": 64
-                          },
                           "type": "string",
                           "enum": [
                             "cursor",
@@ -2549,7 +2539,17 @@
                             "pi",
                             "antigravity",
                             "chat"
-                          ]
+                          ],
+                          "negotiated": [
+                            "chat",
+                            "pi",
+                            "antigravity"
+                          ],
+                          "negotiatedPattern": {
+                            "feature": "plugin-agents",
+                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                            "maxLength": 64
+                          }
                         },
                         "projectName": {
                           "type": "string"
@@ -2567,20 +2567,20 @@
                           "type": "object",
                           "properties": {
                             "source": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "native",
                                 "journal"
-                              ]
+                              ],
+                              "open": true
                             },
                             "completeness": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "complete",
                                 "partial"
-                              ]
+                              ],
+                              "open": true
                             },
                             "messages": {
                               "type": "number"
@@ -2700,16 +2700,6 @@
                     "type": "string"
                   },
                   "backendId": {
-                    "negotiated": [
-                      "chat",
-                      "pi",
-                      "antigravity"
-                    ],
-                    "negotiatedPattern": {
-                      "feature": "plugin-agents",
-                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                      "maxLength": 64
-                    },
                     "type": "string",
                     "enum": [
                       "cursor",
@@ -2721,7 +2711,17 @@
                       "pi",
                       "antigravity",
                       "chat"
-                    ]
+                    ],
+                    "negotiated": [
+                      "chat",
+                      "pi",
+                      "antigravity"
+                    ],
+                    "negotiatedPattern": {
+                      "feature": "plugin-agents",
+                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                      "maxLength": 64
+                    }
                   },
                   "cursorSessionId": {
                     "type": "string"
@@ -2790,22 +2790,22 @@
                         "type": "number"
                       },
                       "tokens": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "provider",
                           "estimated",
                           "mixed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "window": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "stream",
                           "transcript",
                           "observed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "steps": {
                         "type": "number"
@@ -2987,12 +2987,12 @@
                 "type": "number"
               },
               "mode": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "delta",
                   "snapshot"
-                ]
+                ],
+                "open": true
               },
               "session": {
                 "type": "object",
@@ -3032,26 +3032,16 @@
                     ]
                   },
                   "titleSource": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "prompt",
                       "provider",
                       "generated",
                       "user"
-                    ]
+                    ],
+                    "open": true
                   },
                   "backendId": {
-                    "negotiated": [
-                      "chat",
-                      "pi",
-                      "antigravity"
-                    ],
-                    "negotiatedPattern": {
-                      "feature": "plugin-agents",
-                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                      "maxLength": 64
-                    },
                     "type": "string",
                     "enum": [
                       "cursor",
@@ -3063,7 +3053,17 @@
                       "pi",
                       "antigravity",
                       "chat"
-                    ]
+                    ],
+                    "negotiated": [
+                      "chat",
+                      "pi",
+                      "antigravity"
+                    ],
+                    "negotiatedPattern": {
+                      "feature": "plugin-agents",
+                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                      "maxLength": 64
+                    }
                   },
                   "backendProfileId": {
                     "type": "string"
@@ -3189,7 +3189,6 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "fork",
@@ -3201,7 +3200,8 @@
                           "discussion",
                           "channel",
                           "assistant"
-                        ]
+                        ],
+                        "open": true
                       },
                       "sessionId": {
                         "type": "string"
@@ -3241,13 +3241,13 @@
                         ]
                       },
                       "job": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "supervise",
                           "consolidate",
                           "delegation"
-                        ]
+                        ],
+                        "open": true
                       },
                       "assistantRunId": {
                         "type": "string"
@@ -3376,7 +3376,6 @@
                         "type": "string"
                       },
                       "status": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "active",
@@ -3385,7 +3384,8 @@
                           "usage_limited",
                           "budget_limited",
                           "complete"
-                        ]
+                        ],
+                        "open": true
                       },
                       "reason": {
                         "type": "string"
@@ -3456,13 +3456,13 @@
                         "type": "object",
                         "properties": {
                           "tone": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "neutral",
                               "progress",
                               "danger"
-                            ]
+                            ],
+                            "open": true
                           },
                           "label": {
                             "type": "object",
@@ -3572,7 +3572,6 @@
                     ]
                   },
                   "phase": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "offline",
@@ -3580,7 +3579,8 @@
                       "busy",
                       "idle",
                       "attention"
-                    ]
+                    ],
+                    "open": true
                   },
                   "activeTurnId": {
                     "type": "string"
@@ -3607,14 +3607,14 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "no_data",
                           "live",
                           "zero",
                           "stale"
-                        ]
+                        ],
+                        "open": true
                       },
                       "windowSeconds": {
                         "type": "number"
@@ -3629,22 +3629,22 @@
                         "type": "number"
                       },
                       "window": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "stream",
                           "transcript",
                           "observed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "tokens": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "provider",
                           "estimated",
                           "mixed"
-                        ]
+                        ],
+                        "open": true
                       }
                     },
                     "required": [
@@ -3658,7 +3658,6 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "connected",
@@ -3666,7 +3665,8 @@
                           "reconnecting",
                           "conflict",
                           "failed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "message": {
                         "type": "string"
@@ -3707,13 +3707,13 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "loading",
                           "ready",
                           "error"
-                        ]
+                        ],
+                        "open": true
                       },
                       "message": {
                         "type": "string"
@@ -3760,25 +3760,25 @@
                     "type": "string"
                   },
                   "transcript": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "ok",
                       "unavailable",
                       "unparsed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "notice": {
                     "type": "string"
                   },
                   "noticeLevel": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "info",
                       "warning",
                       "error"
-                    ]
+                    ],
+                    "open": true
                   },
                   "interaction": {
                     "type": "object",
@@ -3790,12 +3790,12 @@
                         "type": "string"
                       },
                       "transport": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "terminal",
                           "protocol"
-                        ]
+                        ],
+                        "open": true
                       },
                       "terminalId": {
                         "type": "string"
@@ -3814,7 +3814,6 @@
                         "additionalProperties": {}
                       },
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "question",
@@ -3822,7 +3821,8 @@
                           "plan",
                           "confirmation",
                           "choice"
-                        ]
+                        ],
+                        "open": true
                       },
                       "title": {
                         "type": "string"
@@ -3882,12 +3882,12 @@
                               "type": "string"
                             },
                             "tone": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "primary",
                                 "danger"
-                              ]
+                              ],
+                              "open": true
                             },
                             "shortLabel": {
                               "type": "string"
@@ -3928,7 +3928,6 @@
                         "type": "object",
                         "properties": {
                           "reason": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "turn_running",
@@ -3940,7 +3939,8 @@
                               "workspace",
                               "recovering",
                               "retrying"
-                            ]
+                            ],
+                            "open": true
                           },
                           "runId": {
                             "type": "string"
@@ -3969,12 +3969,12 @@
                         "type": "string"
                       },
                       "transport": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "terminal",
                           "protocol"
-                        ]
+                        ],
+                        "open": true
                       },
                       "terminalId": {
                         "type": "string"
@@ -3993,7 +3993,6 @@
                         "additionalProperties": {}
                       },
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "question",
@@ -4001,7 +4000,8 @@
                           "plan",
                           "confirmation",
                           "choice"
-                        ]
+                        ],
+                        "open": true
                       },
                       "title": {
                         "type": "string"
@@ -4061,12 +4061,12 @@
                               "type": "string"
                             },
                             "tone": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "primary",
                                 "danger"
-                              ]
+                              ],
+                              "open": true
                             },
                             "shortLabel": {
                               "type": "string"
@@ -4206,16 +4206,6 @@
                                 "type": "string"
                               },
                               "backendId": {
-                                "negotiated": [
-                                  "chat",
-                                  "pi",
-                                  "antigravity"
-                                ],
-                                "negotiatedPattern": {
-                                  "feature": "plugin-agents",
-                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                                  "maxLength": 64
-                                },
                                 "type": "string",
                                 "enum": [
                                   "cursor",
@@ -4227,7 +4217,17 @@
                                   "pi",
                                   "antigravity",
                                   "chat"
-                                ]
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
                               },
                               "projectName": {
                                 "type": "string"
@@ -4245,20 +4245,20 @@
                                 "type": "object",
                                 "properties": {
                                   "source": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "native",
                                       "journal"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "completeness": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "complete",
                                       "partial"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "messages": {
                                     "type": "number"
@@ -4378,16 +4378,6 @@
                           "type": "string"
                         },
                         "backendId": {
-                          "negotiated": [
-                            "chat",
-                            "pi",
-                            "antigravity"
-                          ],
-                          "negotiatedPattern": {
-                            "feature": "plugin-agents",
-                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                            "maxLength": 64
-                          },
                           "type": "string",
                           "enum": [
                             "cursor",
@@ -4399,7 +4389,17 @@
                             "pi",
                             "antigravity",
                             "chat"
-                          ]
+                          ],
+                          "negotiated": [
+                            "chat",
+                            "pi",
+                            "antigravity"
+                          ],
+                          "negotiatedPattern": {
+                            "feature": "plugin-agents",
+                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                            "maxLength": 64
+                          }
                         },
                         "cursorSessionId": {
                           "type": "string"
@@ -4468,22 +4468,22 @@
                               "type": "number"
                             },
                             "tokens": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "provider",
                                 "estimated",
                                 "mixed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "window": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "stream",
                                 "transcript",
                                 "observed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "steps": {
                               "type": "number"
@@ -4564,16 +4564,15 @@
                       "type": "string"
                     },
                     "kind": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "compaction",
                         "background_task",
                         "local_command"
-                      ]
+                      ],
+                      "open": true
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "running",
@@ -4582,7 +4581,8 @@
                         "failed",
                         "stopped",
                         "unknown"
-                      ]
+                      ],
+                      "open": true
                     },
                     "title": {
                       "type": "string"
@@ -4609,12 +4609,12 @@
                       "type": "object",
                       "properties": {
                         "via": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "protocol",
                             "session"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -4625,12 +4625,12 @@
                       "type": "object",
                       "properties": {
                         "trigger": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "manual",
                             "auto"
-                          ]
+                          ],
+                          "open": true
                         },
                         "preTokens": {
                           "type": "number"
@@ -4647,7 +4647,6 @@
                       "type": "object",
                       "properties": {
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "shell",
@@ -4655,7 +4654,8 @@
                             "agent",
                             "workflow",
                             "terminal"
-                          ]
+                          ],
+                          "open": true
                         },
                         "command": {
                           "type": "string"
@@ -4720,11 +4720,11 @@
                     }
                   },
                   "limitKind": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "compaction"
-                    ]
+                    ],
+                    "open": true
                   },
                   "breakdownEstimated": {
                     "type": "boolean"
@@ -4760,14 +4760,14 @@
                           "type": "number"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "completed",
                             "failed",
                             "cancelled"
-                          ]
+                          ],
+                          "open": true
                         },
                         "at": {
                           "type": "string"
@@ -4970,12 +4970,12 @@
                                 "type": "string"
                               },
                               "type": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "image",
                                   "file"
-                                ]
+                                ],
+                                "open": true
                               },
                               "mimeType": {
                                 "type": "string"
@@ -5007,16 +5007,6 @@
                                 "type": "string"
                               },
                               "backendId": {
-                                "negotiated": [
-                                  "chat",
-                                  "pi",
-                                  "antigravity"
-                                ],
-                                "negotiatedPattern": {
-                                  "feature": "plugin-agents",
-                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                                  "maxLength": 64
-                                },
                                 "type": "string",
                                 "enum": [
                                   "cursor",
@@ -5028,7 +5018,17 @@
                                   "pi",
                                   "antigravity",
                                   "chat"
-                                ]
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
                               },
                               "projectName": {
                                 "type": "string"
@@ -5046,20 +5046,20 @@
                                 "type": "object",
                                 "properties": {
                                   "source": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "native",
                                       "journal"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "completeness": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "complete",
                                       "partial"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "messages": {
                                     "type": "number"
@@ -5101,14 +5101,14 @@
                           }
                         },
                         "pending": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "queued",
                             "preparing",
                             "unconfirmed",
                             "failed"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -5210,12 +5210,12 @@
                           "type": "string"
                         },
                         "phase": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "commentary",
                             "final_answer"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -5316,12 +5316,12 @@
                           "type": "string"
                         },
                         "channel": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "thinking",
                             "narration"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -5435,14 +5435,14 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "succeeded",
                                 "failed",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "startedAt": {
                               "type": "string"
@@ -5480,16 +5480,15 @@
                               "type": "string"
                             },
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "compaction",
                                 "background_task",
                                 "local_command"
-                              ]
+                              ],
+                              "open": true
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
@@ -5498,7 +5497,8 @@
                                 "failed",
                                 "stopped",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "title": {
                               "type": "string"
@@ -5525,12 +5525,12 @@
                               "type": "object",
                               "properties": {
                                 "via": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "protocol",
                                     "session"
-                                  ]
+                                  ],
+                                  "open": true
                                 }
                               },
                               "required": [
@@ -5541,12 +5541,12 @@
                               "type": "object",
                               "properties": {
                                 "trigger": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "manual",
                                     "auto"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "preTokens": {
                                   "type": "number"
@@ -5563,7 +5563,6 @@
                               "type": "object",
                               "properties": {
                                 "kind": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "shell",
@@ -5571,7 +5570,8 @@
                                     "agent",
                                     "workflow",
                                     "terminal"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "command": {
                                   "type": "string"
@@ -5640,14 +5640,14 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "completed",
                                 "failed",
                                 "cancelled"
-                              ]
+                              ],
+                              "open": true
                             },
                             "startedAt": {
                               "type": "string"
@@ -5987,12 +5987,12 @@
                           "const": "status"
                         },
                         "tone": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "danger",
                             "muted"
-                          ]
+                          ],
+                          "open": true
                         },
                         "text": {
                           "type": "string"
@@ -6103,7 +6103,6 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -6111,7 +6110,8 @@
                             "failed",
                             "cancelled",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "sourceStatus": {
                           "type": "string"
@@ -6132,13 +6132,13 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "succeeded",
                                 "failed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "exitCode": {
                               "type": "number"
@@ -6265,16 +6265,15 @@
                               "type": "string"
                             },
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "compaction",
                                 "background_task",
                                 "local_command"
-                              ]
+                              ],
+                              "open": true
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
@@ -6283,7 +6282,8 @@
                                 "failed",
                                 "stopped",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "title": {
                               "type": "string"
@@ -6310,12 +6310,12 @@
                               "type": "object",
                               "properties": {
                                 "via": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "protocol",
                                     "session"
-                                  ]
+                                  ],
+                                  "open": true
                                 }
                               },
                               "required": [
@@ -6326,12 +6326,12 @@
                               "type": "object",
                               "properties": {
                                 "trigger": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "manual",
                                     "auto"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "preTokens": {
                                   "type": "number"
@@ -6348,7 +6348,6 @@
                               "type": "object",
                               "properties": {
                                 "kind": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "shell",
@@ -6356,7 +6355,8 @@
                                     "agent",
                                     "workflow",
                                     "terminal"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "command": {
                                   "type": "string"
@@ -6538,12 +6538,12 @@
                                 "type": "string"
                               },
                               "type": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "image",
                                   "file"
-                                ]
+                                ],
+                                "open": true
                               },
                               "mimeType": {
                                 "type": "string"
@@ -6575,16 +6575,6 @@
                                 "type": "string"
                               },
                               "backendId": {
-                                "negotiated": [
-                                  "chat",
-                                  "pi",
-                                  "antigravity"
-                                ],
-                                "negotiatedPattern": {
-                                  "feature": "plugin-agents",
-                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                                  "maxLength": 64
-                                },
                                 "type": "string",
                                 "enum": [
                                   "cursor",
@@ -6596,7 +6586,17 @@
                                   "pi",
                                   "antigravity",
                                   "chat"
-                                ]
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
                               },
                               "projectName": {
                                 "type": "string"
@@ -6614,20 +6614,20 @@
                                 "type": "object",
                                 "properties": {
                                   "source": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "native",
                                       "journal"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "completeness": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "complete",
                                       "partial"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "messages": {
                                     "type": "number"
@@ -6669,14 +6669,14 @@
                           }
                         },
                         "pending": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "queued",
                             "preparing",
                             "unconfirmed",
                             "failed"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -6778,12 +6778,12 @@
                           "type": "string"
                         },
                         "phase": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "commentary",
                             "final_answer"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -6884,12 +6884,12 @@
                           "type": "string"
                         },
                         "channel": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "thinking",
                             "narration"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -7003,14 +7003,14 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "succeeded",
                                 "failed",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "startedAt": {
                               "type": "string"
@@ -7048,16 +7048,15 @@
                               "type": "string"
                             },
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "compaction",
                                 "background_task",
                                 "local_command"
-                              ]
+                              ],
+                              "open": true
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
@@ -7066,7 +7065,8 @@
                                 "failed",
                                 "stopped",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "title": {
                               "type": "string"
@@ -7093,12 +7093,12 @@
                               "type": "object",
                               "properties": {
                                 "via": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "protocol",
                                     "session"
-                                  ]
+                                  ],
+                                  "open": true
                                 }
                               },
                               "required": [
@@ -7109,12 +7109,12 @@
                               "type": "object",
                               "properties": {
                                 "trigger": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "manual",
                                     "auto"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "preTokens": {
                                   "type": "number"
@@ -7131,7 +7131,6 @@
                               "type": "object",
                               "properties": {
                                 "kind": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "shell",
@@ -7139,7 +7138,8 @@
                                     "agent",
                                     "workflow",
                                     "terminal"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "command": {
                                   "type": "string"
@@ -7208,14 +7208,14 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "completed",
                                 "failed",
                                 "cancelled"
-                              ]
+                              ],
+                              "open": true
                             },
                             "startedAt": {
                               "type": "string"
@@ -7555,12 +7555,12 @@
                           "const": "status"
                         },
                         "tone": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "danger",
                             "muted"
-                          ]
+                          ],
+                          "open": true
                         },
                         "text": {
                           "type": "string"
@@ -7671,7 +7671,6 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -7679,7 +7678,8 @@
                             "failed",
                             "cancelled",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "sourceStatus": {
                           "type": "string"
@@ -7700,13 +7700,13 @@
                               "type": "string"
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
                                 "succeeded",
                                 "failed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "exitCode": {
                               "type": "number"
@@ -7833,16 +7833,15 @@
                               "type": "string"
                             },
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "compaction",
                                 "background_task",
                                 "local_command"
-                              ]
+                              ],
+                              "open": true
                             },
                             "status": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "running",
@@ -7851,7 +7850,8 @@
                                 "failed",
                                 "stopped",
                                 "unknown"
-                              ]
+                              ],
+                              "open": true
                             },
                             "title": {
                               "type": "string"
@@ -7878,12 +7878,12 @@
                               "type": "object",
                               "properties": {
                                 "via": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "protocol",
                                     "session"
-                                  ]
+                                  ],
+                                  "open": true
                                 }
                               },
                               "required": [
@@ -7894,12 +7894,12 @@
                               "type": "object",
                               "properties": {
                                 "trigger": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "manual",
                                     "auto"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "preTokens": {
                                   "type": "number"
@@ -7916,7 +7916,6 @@
                               "type": "object",
                               "properties": {
                                 "kind": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "shell",
@@ -7924,7 +7923,8 @@
                                     "agent",
                                     "workflow",
                                     "terminal"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "command": {
                                   "type": "string"
@@ -7997,13 +7997,13 @@
                 "type": "string"
               },
               "reason": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "rebuilt",
                   "promoted",
                   "fold"
-                ]
+                ],
+                "open": true
               }
             },
             "required": [
@@ -8038,13 +8038,13 @@
                         "type": "object",
                         "properties": {
                           "tone": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "neutral",
                               "progress",
                               "danger"
-                            ]
+                            ],
+                            "open": true
                           },
                           "label": {
                             "type": "object",
@@ -8154,7 +8154,6 @@
                     ]
                   },
                   "phase": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "offline",
@@ -8162,7 +8161,8 @@
                       "busy",
                       "idle",
                       "attention"
-                    ]
+                    ],
+                    "open": true
                   },
                   "activeTurnId": {
                     "type": "string"
@@ -8189,14 +8189,14 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "no_data",
                           "live",
                           "zero",
                           "stale"
-                        ]
+                        ],
+                        "open": true
                       },
                       "windowSeconds": {
                         "type": "number"
@@ -8211,22 +8211,22 @@
                         "type": "number"
                       },
                       "window": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "stream",
                           "transcript",
                           "observed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "tokens": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "provider",
                           "estimated",
                           "mixed"
-                        ]
+                        ],
+                        "open": true
                       }
                     },
                     "required": [
@@ -8240,7 +8240,6 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "connected",
@@ -8248,7 +8247,8 @@
                           "reconnecting",
                           "conflict",
                           "failed"
-                        ]
+                        ],
+                        "open": true
                       },
                       "message": {
                         "type": "string"
@@ -8289,13 +8289,13 @@
                     "type": "object",
                     "properties": {
                       "state": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "loading",
                           "ready",
                           "error"
-                        ]
+                        ],
+                        "open": true
                       },
                       "message": {
                         "type": "string"
@@ -8342,25 +8342,25 @@
                     "type": "string"
                   },
                   "transcript": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "ok",
                       "unavailable",
                       "unparsed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "notice": {
                     "type": "string"
                   },
                   "noticeLevel": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "info",
                       "warning",
                       "error"
-                    ]
+                    ],
+                    "open": true
                   },
                   "interaction": {
                     "type": "object",
@@ -8372,12 +8372,12 @@
                         "type": "string"
                       },
                       "transport": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "terminal",
                           "protocol"
-                        ]
+                        ],
+                        "open": true
                       },
                       "terminalId": {
                         "type": "string"
@@ -8396,7 +8396,6 @@
                         "additionalProperties": {}
                       },
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "question",
@@ -8404,7 +8403,8 @@
                           "plan",
                           "confirmation",
                           "choice"
-                        ]
+                        ],
+                        "open": true
                       },
                       "title": {
                         "type": "string"
@@ -8464,12 +8464,12 @@
                               "type": "string"
                             },
                             "tone": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "primary",
                                 "danger"
-                              ]
+                              ],
+                              "open": true
                             },
                             "shortLabel": {
                               "type": "string"
@@ -8510,7 +8510,6 @@
                         "type": "object",
                         "properties": {
                           "reason": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "turn_running",
@@ -8522,7 +8521,8 @@
                               "workspace",
                               "recovering",
                               "retrying"
-                            ]
+                            ],
+                            "open": true
                           },
                           "runId": {
                             "type": "string"
@@ -8564,12 +8564,12 @@
                         "type": "string"
                       },
                       "transport": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "terminal",
                           "protocol"
-                        ]
+                        ],
+                        "open": true
                       },
                       "terminalId": {
                         "type": "string"
@@ -8588,7 +8588,6 @@
                         "additionalProperties": {}
                       },
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "question",
@@ -8596,7 +8595,8 @@
                           "plan",
                           "confirmation",
                           "choice"
-                        ]
+                        ],
+                        "open": true
                       },
                       "title": {
                         "type": "string"
@@ -8656,12 +8656,12 @@
                               "type": "string"
                             },
                             "tone": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "primary",
                                 "danger"
-                              ]
+                              ],
+                              "open": true
                             },
                             "shortLabel": {
                               "type": "string"
@@ -8814,16 +8814,6 @@
                                 "type": "string"
                               },
                               "backendId": {
-                                "negotiated": [
-                                  "chat",
-                                  "pi",
-                                  "antigravity"
-                                ],
-                                "negotiatedPattern": {
-                                  "feature": "plugin-agents",
-                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                                  "maxLength": 64
-                                },
                                 "type": "string",
                                 "enum": [
                                   "cursor",
@@ -8835,7 +8825,17 @@
                                   "pi",
                                   "antigravity",
                                   "chat"
-                                ]
+                                ],
+                                "negotiated": [
+                                  "chat",
+                                  "pi",
+                                  "antigravity"
+                                ],
+                                "negotiatedPattern": {
+                                  "feature": "plugin-agents",
+                                  "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                  "maxLength": 64
+                                }
                               },
                               "projectName": {
                                 "type": "string"
@@ -8853,20 +8853,20 @@
                                 "type": "object",
                                 "properties": {
                                   "source": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "native",
                                       "journal"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "completeness": {
-                                    "open": true,
                                     "type": "string",
                                     "enum": [
                                       "complete",
                                       "partial"
-                                    ]
+                                    ],
+                                    "open": true
                                   },
                                   "messages": {
                                     "type": "number"
@@ -8986,16 +8986,6 @@
                           "type": "string"
                         },
                         "backendId": {
-                          "negotiated": [
-                            "chat",
-                            "pi",
-                            "antigravity"
-                          ],
-                          "negotiatedPattern": {
-                            "feature": "plugin-agents",
-                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                            "maxLength": 64
-                          },
                           "type": "string",
                           "enum": [
                             "cursor",
@@ -9007,7 +8997,17 @@
                             "pi",
                             "antigravity",
                             "chat"
-                          ]
+                          ],
+                          "negotiated": [
+                            "chat",
+                            "pi",
+                            "antigravity"
+                          ],
+                          "negotiatedPattern": {
+                            "feature": "plugin-agents",
+                            "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                            "maxLength": 64
+                          }
                         },
                         "cursorSessionId": {
                           "type": "string"
@@ -9076,22 +9076,22 @@
                               "type": "number"
                             },
                             "tokens": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "provider",
                                 "estimated",
                                 "mixed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "window": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "stream",
                                 "transcript",
                                 "observed"
-                              ]
+                              ],
+                              "open": true
                             },
                             "steps": {
                               "type": "number"
@@ -9278,16 +9278,6 @@
                               "type": "string"
                             },
                             "backendId": {
-                              "negotiated": [
-                                "chat",
-                                "pi",
-                                "antigravity"
-                              ],
-                              "negotiatedPattern": {
-                                "feature": "plugin-agents",
-                                "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                                "maxLength": 64
-                              },
                               "type": "string",
                               "enum": [
                                 "cursor",
@@ -9299,7 +9289,17 @@
                                 "pi",
                                 "antigravity",
                                 "chat"
-                              ]
+                              ],
+                              "negotiated": [
+                                "chat",
+                                "pi",
+                                "antigravity"
+                              ],
+                              "negotiatedPattern": {
+                                "feature": "plugin-agents",
+                                "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                                "maxLength": 64
+                              }
                             },
                             "projectName": {
                               "type": "string"
@@ -9317,20 +9317,20 @@
                               "type": "object",
                               "properties": {
                                 "source": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "native",
                                     "journal"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "completeness": {
-                                  "open": true,
                                   "type": "string",
                                   "enum": [
                                     "complete",
                                     "partial"
-                                  ]
+                                  ],
+                                  "open": true
                                 },
                                 "messages": {
                                   "type": "number"
@@ -9450,16 +9450,6 @@
                         "type": "string"
                       },
                       "backendId": {
-                        "negotiated": [
-                          "chat",
-                          "pi",
-                          "antigravity"
-                        ],
-                        "negotiatedPattern": {
-                          "feature": "plugin-agents",
-                          "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                          "maxLength": 64
-                        },
                         "type": "string",
                         "enum": [
                           "cursor",
@@ -9471,7 +9461,17 @@
                           "pi",
                           "antigravity",
                           "chat"
-                        ]
+                        ],
+                        "negotiated": [
+                          "chat",
+                          "pi",
+                          "antigravity"
+                        ],
+                        "negotiatedPattern": {
+                          "feature": "plugin-agents",
+                          "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                          "maxLength": 64
+                        }
                       },
                       "cursorSessionId": {
                         "type": "string"
@@ -9540,22 +9540,22 @@
                             "type": "number"
                           },
                           "tokens": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "provider",
                               "estimated",
                               "mixed"
-                            ]
+                            ],
+                            "open": true
                           },
                           "window": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "stream",
                               "transcript",
                               "observed"
-                            ]
+                            ],
+                            "open": true
                           },
                           "steps": {
                             "type": "number"
@@ -9648,16 +9648,15 @@
                       "type": "string"
                     },
                     "kind": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "compaction",
                         "background_task",
                         "local_command"
-                      ]
+                      ],
+                      "open": true
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "running",
@@ -9666,7 +9665,8 @@
                         "failed",
                         "stopped",
                         "unknown"
-                      ]
+                      ],
+                      "open": true
                     },
                     "title": {
                       "type": "string"
@@ -9693,12 +9693,12 @@
                       "type": "object",
                       "properties": {
                         "via": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "protocol",
                             "session"
-                          ]
+                          ],
+                          "open": true
                         }
                       },
                       "required": [
@@ -9709,12 +9709,12 @@
                       "type": "object",
                       "properties": {
                         "trigger": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "manual",
                             "auto"
-                          ]
+                          ],
+                          "open": true
                         },
                         "preTokens": {
                           "type": "number"
@@ -9731,7 +9731,6 @@
                       "type": "object",
                       "properties": {
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "shell",
@@ -9739,7 +9738,8 @@
                             "agent",
                             "workflow",
                             "terminal"
-                          ]
+                          ],
+                          "open": true
                         },
                         "command": {
                           "type": "string"
@@ -9806,14 +9806,14 @@
                       "type": "number"
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "running",
                         "completed",
                         "failed",
                         "cancelled"
-                      ]
+                      ],
+                      "open": true
                     },
                     "at": {
                       "type": "string"
@@ -9893,11 +9893,11 @@
                     }
                   },
                   "limitKind": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "compaction"
-                    ]
+                    ],
+                    "open": true
                   },
                   "breakdownEstimated": {
                     "type": "boolean"
@@ -9931,12 +9931,12 @@
                     "type": "number"
                   },
                   "tokens": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "provider",
                       "estimated"
-                    ]
+                    ],
+                    "open": true
                   },
                   "durationMs": {
                     "type": "number"
@@ -9948,13 +9948,13 @@
                     "type": "number"
                   },
                   "window": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "stream",
                       "transcript",
                       "observed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "live": {
                     "type": "boolean"
@@ -9982,22 +9982,22 @@
                     "type": "number"
                   },
                   "tokens": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "provider",
                       "estimated",
                       "mixed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "window": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "stream",
                       "transcript",
                       "observed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "steps": {
                     "type": "number"
@@ -10068,26 +10068,16 @@
                     ]
                   },
                   "titleSource": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "prompt",
                       "provider",
                       "generated",
                       "user"
-                    ]
+                    ],
+                    "open": true
                   },
                   "backendId": {
-                    "negotiated": [
-                      "chat",
-                      "pi",
-                      "antigravity"
-                    ],
-                    "negotiatedPattern": {
-                      "feature": "plugin-agents",
-                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                      "maxLength": 64
-                    },
                     "type": "string",
                     "enum": [
                       "cursor",
@@ -10099,7 +10089,17 @@
                       "pi",
                       "antigravity",
                       "chat"
-                    ]
+                    ],
+                    "negotiated": [
+                      "chat",
+                      "pi",
+                      "antigravity"
+                    ],
+                    "negotiatedPattern": {
+                      "feature": "plugin-agents",
+                      "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                      "maxLength": 64
+                    }
                   },
                   "backendProfileId": {
                     "type": "string"
@@ -10225,7 +10225,6 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "fork",
@@ -10237,7 +10236,8 @@
                           "discussion",
                           "channel",
                           "assistant"
-                        ]
+                        ],
+                        "open": true
                       },
                       "sessionId": {
                         "type": "string"
@@ -10277,13 +10277,13 @@
                         ]
                       },
                       "job": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "supervise",
                           "consolidate",
                           "delegation"
-                        ]
+                        ],
+                        "open": true
                       },
                       "assistantRunId": {
                         "type": "string"
@@ -10412,7 +10412,6 @@
                         "type": "string"
                       },
                       "status": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "active",
@@ -10421,7 +10420,8 @@
                           "usage_limited",
                           "budget_limited",
                           "complete"
-                        ]
+                        ],
+                        "open": true
                       },
                       "reason": {
                         "type": "string"
@@ -10612,12 +10612,12 @@
                       "type": "string"
                     },
                     "type": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "image",
                         "file"
-                      ]
+                      ],
+                      "open": true
                     },
                     "mimeType": {
                       "type": "string"
@@ -10649,16 +10649,6 @@
                       "type": "string"
                     },
                     "backendId": {
-                      "negotiated": [
-                        "chat",
-                        "pi",
-                        "antigravity"
-                      ],
-                      "negotiatedPattern": {
-                        "feature": "plugin-agents",
-                        "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                        "maxLength": 64
-                      },
                       "type": "string",
                       "enum": [
                         "cursor",
@@ -10670,7 +10660,17 @@
                         "pi",
                         "antigravity",
                         "chat"
-                      ]
+                      ],
+                      "negotiated": [
+                        "chat",
+                        "pi",
+                        "antigravity"
+                      ],
+                      "negotiatedPattern": {
+                        "feature": "plugin-agents",
+                        "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                        "maxLength": 64
+                      }
                     },
                     "projectName": {
                       "type": "string"
@@ -10688,20 +10688,20 @@
                       "type": "object",
                       "properties": {
                         "source": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "native",
                             "journal"
-                          ]
+                          ],
+                          "open": true
                         },
                         "completeness": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "complete",
                             "partial"
-                          ]
+                          ],
+                          "open": true
                         },
                         "messages": {
                           "type": "number"
@@ -10743,14 +10743,14 @@
                 }
               },
               "pending": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "queued",
                   "preparing",
                   "unconfirmed",
                   "failed"
-                ]
+                ],
+                "open": true
               }
             },
             "required": [
@@ -10852,12 +10852,12 @@
                 "type": "string"
               },
               "phase": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "commentary",
                   "final_answer"
-                ]
+                ],
+                "open": true
               }
             },
             "required": [
@@ -10958,12 +10958,12 @@
                 "type": "string"
               },
               "channel": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "thinking",
                   "narration"
-                ]
+                ],
+                "open": true
               }
             },
             "required": [
@@ -11077,14 +11077,14 @@
                     "type": "string"
                   },
                   "status": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "running",
                       "succeeded",
                       "failed",
                       "unknown"
-                    ]
+                    ],
+                    "open": true
                   },
                   "startedAt": {
                     "type": "string"
@@ -11122,16 +11122,15 @@
                     "type": "string"
                   },
                   "kind": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "compaction",
                       "background_task",
                       "local_command"
-                    ]
+                    ],
+                    "open": true
                   },
                   "status": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "running",
@@ -11140,7 +11139,8 @@
                       "failed",
                       "stopped",
                       "unknown"
-                    ]
+                    ],
+                    "open": true
                   },
                   "title": {
                     "type": "string"
@@ -11167,12 +11167,12 @@
                     "type": "object",
                     "properties": {
                       "via": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "protocol",
                           "session"
-                        ]
+                        ],
+                        "open": true
                       }
                     },
                     "required": [
@@ -11183,12 +11183,12 @@
                     "type": "object",
                     "properties": {
                       "trigger": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "manual",
                           "auto"
-                        ]
+                        ],
+                        "open": true
                       },
                       "preTokens": {
                         "type": "number"
@@ -11205,7 +11205,6 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "shell",
@@ -11213,7 +11212,8 @@
                           "agent",
                           "workflow",
                           "terminal"
-                        ]
+                        ],
+                        "open": true
                       },
                       "command": {
                         "type": "string"
@@ -11282,14 +11282,14 @@
                     "type": "string"
                   },
                   "status": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "running",
                       "completed",
                       "failed",
                       "cancelled"
-                    ]
+                    ],
+                    "open": true
                   },
                   "startedAt": {
                     "type": "string"
@@ -11629,12 +11629,12 @@
                 "const": "status"
               },
               "tone": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "danger",
                   "muted"
-                ]
+                ],
+                "open": true
               },
               "text": {
                 "type": "string"
@@ -11745,7 +11745,6 @@
                 "type": "string"
               },
               "status": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "running",
@@ -11753,7 +11752,8 @@
                   "failed",
                   "cancelled",
                   "unknown"
-                ]
+                ],
+                "open": true
               },
               "sourceStatus": {
                 "type": "string"
@@ -11774,13 +11774,13 @@
                     "type": "string"
                   },
                   "status": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "running",
                       "succeeded",
                       "failed"
-                    ]
+                    ],
+                    "open": true
                   },
                   "exitCode": {
                     "type": "number"
@@ -11907,16 +11907,15 @@
                     "type": "string"
                   },
                   "kind": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "compaction",
                       "background_task",
                       "local_command"
-                    ]
+                    ],
+                    "open": true
                   },
                   "status": {
-                    "open": true,
                     "type": "string",
                     "enum": [
                       "running",
@@ -11925,7 +11924,8 @@
                       "failed",
                       "stopped",
                       "unknown"
-                    ]
+                    ],
+                    "open": true
                   },
                   "title": {
                     "type": "string"
@@ -11952,12 +11952,12 @@
                     "type": "object",
                     "properties": {
                       "via": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "protocol",
                           "session"
-                        ]
+                        ],
+                        "open": true
                       }
                     },
                     "required": [
@@ -11968,12 +11968,12 @@
                     "type": "object",
                     "properties": {
                       "trigger": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "manual",
                           "auto"
-                        ]
+                        ],
+                        "open": true
                       },
                       "preTokens": {
                         "type": "number"
@@ -11990,7 +11990,6 @@
                     "type": "object",
                     "properties": {
                       "kind": {
-                        "open": true,
                         "type": "string",
                         "enum": [
                           "shell",
@@ -11998,7 +11997,8 @@
                           "agent",
                           "workflow",
                           "terminal"
-                        ]
+                        ],
+                        "open": true
                       },
                       "command": {
                         "type": "string"
@@ -12159,12 +12159,12 @@
                             "type": "string"
                           },
                           "type": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "image",
                               "file"
-                            ]
+                            ],
+                            "open": true
                           },
                           "mimeType": {
                             "type": "string"
@@ -12196,16 +12196,6 @@
                             "type": "string"
                           },
                           "backendId": {
-                            "negotiated": [
-                              "chat",
-                              "pi",
-                              "antigravity"
-                            ],
-                            "negotiatedPattern": {
-                              "feature": "plugin-agents",
-                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                              "maxLength": 64
-                            },
                             "type": "string",
                             "enum": [
                               "cursor",
@@ -12217,7 +12207,17 @@
                               "pi",
                               "antigravity",
                               "chat"
-                            ]
+                            ],
+                            "negotiated": [
+                              "chat",
+                              "pi",
+                              "antigravity"
+                            ],
+                            "negotiatedPattern": {
+                              "feature": "plugin-agents",
+                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                              "maxLength": 64
+                            }
                           },
                           "projectName": {
                             "type": "string"
@@ -12235,20 +12235,20 @@
                             "type": "object",
                             "properties": {
                               "source": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "native",
                                   "journal"
-                                ]
+                                ],
+                                "open": true
                               },
                               "completeness": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "complete",
                                   "partial"
-                                ]
+                                ],
+                                "open": true
                               },
                               "messages": {
                                 "type": "number"
@@ -12290,14 +12290,14 @@
                       }
                     },
                     "pending": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "queued",
                         "preparing",
                         "unconfirmed",
                         "failed"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -12399,12 +12399,12 @@
                       "type": "string"
                     },
                     "phase": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "commentary",
                         "final_answer"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -12505,12 +12505,12 @@
                       "type": "string"
                     },
                     "channel": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "thinking",
                         "narration"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -12624,14 +12624,14 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "succeeded",
                             "failed",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "startedAt": {
                           "type": "string"
@@ -12669,16 +12669,15 @@
                           "type": "string"
                         },
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "compaction",
                             "background_task",
                             "local_command"
-                          ]
+                          ],
+                          "open": true
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -12687,7 +12686,8 @@
                             "failed",
                             "stopped",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "title": {
                           "type": "string"
@@ -12714,12 +12714,12 @@
                           "type": "object",
                           "properties": {
                             "via": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "protocol",
                                 "session"
-                              ]
+                              ],
+                              "open": true
                             }
                           },
                           "required": [
@@ -12730,12 +12730,12 @@
                           "type": "object",
                           "properties": {
                             "trigger": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "manual",
                                 "auto"
-                              ]
+                              ],
+                              "open": true
                             },
                             "preTokens": {
                               "type": "number"
@@ -12752,7 +12752,6 @@
                           "type": "object",
                           "properties": {
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "shell",
@@ -12760,7 +12759,8 @@
                                 "agent",
                                 "workflow",
                                 "terminal"
-                              ]
+                              ],
+                              "open": true
                             },
                             "command": {
                               "type": "string"
@@ -12829,14 +12829,14 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "completed",
                             "failed",
                             "cancelled"
-                          ]
+                          ],
+                          "open": true
                         },
                         "startedAt": {
                           "type": "string"
@@ -13176,12 +13176,12 @@
                       "const": "status"
                     },
                     "tone": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "danger",
                         "muted"
-                      ]
+                      ],
+                      "open": true
                     },
                     "text": {
                       "type": "string"
@@ -13292,7 +13292,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "running",
@@ -13300,7 +13299,8 @@
                         "failed",
                         "cancelled",
                         "unknown"
-                      ]
+                      ],
+                      "open": true
                     },
                     "sourceStatus": {
                       "type": "string"
@@ -13321,13 +13321,13 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "succeeded",
                             "failed"
-                          ]
+                          ],
+                          "open": true
                         },
                         "exitCode": {
                           "type": "number"
@@ -13454,16 +13454,15 @@
                           "type": "string"
                         },
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "compaction",
                             "background_task",
                             "local_command"
-                          ]
+                          ],
+                          "open": true
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -13472,7 +13471,8 @@
                             "failed",
                             "stopped",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "title": {
                           "type": "string"
@@ -13499,12 +13499,12 @@
                           "type": "object",
                           "properties": {
                             "via": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "protocol",
                                 "session"
-                              ]
+                              ],
+                              "open": true
                             }
                           },
                           "required": [
@@ -13515,12 +13515,12 @@
                           "type": "object",
                           "properties": {
                             "trigger": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "manual",
                                 "auto"
-                              ]
+                              ],
+                              "open": true
                             },
                             "preTokens": {
                               "type": "number"
@@ -13537,7 +13537,6 @@
                           "type": "object",
                           "properties": {
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "shell",
@@ -13545,7 +13544,8 @@
                                 "agent",
                                 "workflow",
                                 "terminal"
-                              ]
+                              ],
+                              "open": true
                             },
                             "command": {
                               "type": "string"
@@ -13620,12 +13620,12 @@
             "type": "number"
           },
           "mode": {
-            "open": true,
             "type": "string",
             "enum": [
               "delta",
               "snapshot"
-            ]
+            ],
+            "open": true
           },
           "from": {
             "type": "number"
@@ -13738,12 +13738,12 @@
                             "type": "string"
                           },
                           "type": {
-                            "open": true,
                             "type": "string",
                             "enum": [
                               "image",
                               "file"
-                            ]
+                            ],
+                            "open": true
                           },
                           "mimeType": {
                             "type": "string"
@@ -13775,16 +13775,6 @@
                             "type": "string"
                           },
                           "backendId": {
-                            "negotiated": [
-                              "chat",
-                              "pi",
-                              "antigravity"
-                            ],
-                            "negotiatedPattern": {
-                              "feature": "plugin-agents",
-                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
-                              "maxLength": 64
-                            },
                             "type": "string",
                             "enum": [
                               "cursor",
@@ -13796,7 +13786,17 @@
                               "pi",
                               "antigravity",
                               "chat"
-                            ]
+                            ],
+                            "negotiated": [
+                              "chat",
+                              "pi",
+                              "antigravity"
+                            ],
+                            "negotiatedPattern": {
+                              "feature": "plugin-agents",
+                              "pattern": "^[a-z0-9][a-z0-9-]*\\.[a-z0-9][a-z0-9.-]*$",
+                              "maxLength": 64
+                            }
                           },
                           "projectName": {
                             "type": "string"
@@ -13814,20 +13814,20 @@
                             "type": "object",
                             "properties": {
                               "source": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "native",
                                   "journal"
-                                ]
+                                ],
+                                "open": true
                               },
                               "completeness": {
-                                "open": true,
                                 "type": "string",
                                 "enum": [
                                   "complete",
                                   "partial"
-                                ]
+                                ],
+                                "open": true
                               },
                               "messages": {
                                 "type": "number"
@@ -13869,14 +13869,14 @@
                       }
                     },
                     "pending": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "queued",
                         "preparing",
                         "unconfirmed",
                         "failed"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -13978,12 +13978,12 @@
                       "type": "string"
                     },
                     "phase": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "commentary",
                         "final_answer"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -14084,12 +14084,12 @@
                       "type": "string"
                     },
                     "channel": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "thinking",
                         "narration"
-                      ]
+                      ],
+                      "open": true
                     }
                   },
                   "required": [
@@ -14203,14 +14203,14 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "succeeded",
                             "failed",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "startedAt": {
                           "type": "string"
@@ -14248,16 +14248,15 @@
                           "type": "string"
                         },
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "compaction",
                             "background_task",
                             "local_command"
-                          ]
+                          ],
+                          "open": true
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -14266,7 +14265,8 @@
                             "failed",
                             "stopped",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "title": {
                           "type": "string"
@@ -14293,12 +14293,12 @@
                           "type": "object",
                           "properties": {
                             "via": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "protocol",
                                 "session"
-                              ]
+                              ],
+                              "open": true
                             }
                           },
                           "required": [
@@ -14309,12 +14309,12 @@
                           "type": "object",
                           "properties": {
                             "trigger": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "manual",
                                 "auto"
-                              ]
+                              ],
+                              "open": true
                             },
                             "preTokens": {
                               "type": "number"
@@ -14331,7 +14331,6 @@
                           "type": "object",
                           "properties": {
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "shell",
@@ -14339,7 +14338,8 @@
                                 "agent",
                                 "workflow",
                                 "terminal"
-                              ]
+                              ],
+                              "open": true
                             },
                             "command": {
                               "type": "string"
@@ -14408,14 +14408,14 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "completed",
                             "failed",
                             "cancelled"
-                          ]
+                          ],
+                          "open": true
                         },
                         "startedAt": {
                           "type": "string"
@@ -14755,12 +14755,12 @@
                       "const": "status"
                     },
                     "tone": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "danger",
                         "muted"
-                      ]
+                      ],
+                      "open": true
                     },
                     "text": {
                       "type": "string"
@@ -14871,7 +14871,6 @@
                       "type": "string"
                     },
                     "status": {
-                      "open": true,
                       "type": "string",
                       "enum": [
                         "running",
@@ -14879,7 +14878,8 @@
                         "failed",
                         "cancelled",
                         "unknown"
-                      ]
+                      ],
+                      "open": true
                     },
                     "sourceStatus": {
                       "type": "string"
@@ -14900,13 +14900,13 @@
                           "type": "string"
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
                             "succeeded",
                             "failed"
-                          ]
+                          ],
+                          "open": true
                         },
                         "exitCode": {
                           "type": "number"
@@ -15033,16 +15033,15 @@
                           "type": "string"
                         },
                         "kind": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "compaction",
                             "background_task",
                             "local_command"
-                          ]
+                          ],
+                          "open": true
                         },
                         "status": {
-                          "open": true,
                           "type": "string",
                           "enum": [
                             "running",
@@ -15051,7 +15050,8 @@
                             "failed",
                             "stopped",
                             "unknown"
-                          ]
+                          ],
+                          "open": true
                         },
                         "title": {
                           "type": "string"
@@ -15078,12 +15078,12 @@
                           "type": "object",
                           "properties": {
                             "via": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "protocol",
                                 "session"
-                              ]
+                              ],
+                              "open": true
                             }
                           },
                           "required": [
@@ -15094,12 +15094,12 @@
                           "type": "object",
                           "properties": {
                             "trigger": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "manual",
                                 "auto"
-                              ]
+                              ],
+                              "open": true
                             },
                             "preTokens": {
                               "type": "number"
@@ -15116,7 +15116,6 @@
                           "type": "object",
                           "properties": {
                             "kind": {
-                              "open": true,
                               "type": "string",
                               "enum": [
                                 "shell",
@@ -15124,7 +15123,8 @@
                                 "agent",
                                 "workflow",
                                 "terminal"
-                              ]
+                              ],
+                              "open": true
                             },
                             "command": {
                               "type": "string"
@@ -15249,13 +15249,13 @@
         "type": "object",
         "properties": {
           "platform": {
-            "open": true,
             "type": "string",
             "enum": [
               "android",
               "ios",
               "mac"
-            ]
+            ],
+            "open": true
           },
           "appVersion": {
             "type": "string",
@@ -15265,7 +15265,6 @@
             "maxItems": 64,
             "type": "array",
             "items": {
-              "open": true,
               "type": "string",
               "enum": [
                 "notify",
@@ -15278,7 +15277,8 @@
                 "screen.observe",
                 "screen.act",
                 "app.launch"
-              ]
+              ],
+              "open": true
             }
           },
           "allowControl": {
@@ -15401,13 +15401,13 @@
             "type": "string"
           },
           "platform": {
-            "open": true,
             "type": "string",
             "enum": [
               "android",
               "ios",
               "mac"
-            ]
+            ],
+            "open": true
           },
           "appVersion": {
             "type": "string"
@@ -15424,7 +15424,6 @@
           "capabilities": {
             "type": "array",
             "items": {
-              "open": true,
               "type": "string",
               "enum": [
                 "notify",
@@ -15437,7 +15436,8 @@
                 "screen.observe",
                 "screen.act",
                 "app.launch"
-              ]
+              ],
+              "open": true
             }
           },
           "allowControl": {
@@ -15447,21 +15447,21 @@
             "type": "object",
             "properties": {
               "route": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "direct",
                   "none"
-                ]
+                ],
+                "open": true
               },
               "reason": {
-                "open": true,
                 "type": "string",
                 "enum": [
                   "no_key",
                   "no_token",
                   "failed"
-                ]
+                ],
+                "open": true
               },
               "detail": {
                 "type": "string"
@@ -15495,7 +15495,6 @@
             "type": "string"
           },
           "capability": {
-            "open": true,
             "type": "string",
             "enum": [
               "notify",
@@ -15508,7 +15507,8 @@
               "screen.observe",
               "screen.act",
               "app.launch"
-            ]
+            ],
+            "open": true
           },
           "args": {
             "type": "object",
@@ -15675,13 +15675,13 @@
             "type": "string"
           },
           "kind": {
-            "open": true,
             "type": "string",
             "enum": [
               "act",
               "launch",
               "authorize"
-            ]
+            ],
+            "open": true
           },
           "package": {
             "type": "string"
@@ -15740,14 +15740,14 @@
         "type": "object",
         "properties": {
           "state": {
-            "open": true,
             "type": "string",
             "enum": [
               "ready",
               "unauthorized",
               "absent",
               "no-adb"
-            ]
+            ],
+            "open": true
           }
         },
         "required": [
@@ -15762,12 +15762,12 @@
         "type": "object",
         "properties": {
           "restrictedSettings": {
-            "open": true,
             "type": "string",
             "enum": [
               "allowed",
               "unsupported"
-            ]
+            ],
+            "open": true
           }
         },
         "required": [

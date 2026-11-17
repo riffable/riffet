@@ -45,6 +45,16 @@ function openObjects(value: unknown): unknown {
   const object = Object.fromEntries(Object.entries(value as JsonSchema).map(([key, field]) => [key, openObjects(field)]));
   // zod marks every strict object as closed; this API has always ignored unknown fields.
   if (object.type === 'object' && object.additionalProperties === false) delete object.additionalProperties;
+  // zod 4.6 writes a union of primitives as `type: [...]` and a discriminated union as `oneOf`; the
+  // snapshots, the compatibility rules and the fixture branches all read unions as `anyOf`.
+  if (Array.isArray(object.oneOf) && !object.anyOf) {
+    object.anyOf = object.oneOf;
+    delete object.oneOf;
+  }
+  if (Array.isArray(object.type) && object.type.length > 1) {
+    const { type, ...rest } = object;
+    return { anyOf: (type as unknown[]).map(item => ({ type: item })), ...rest };
+  }
   return object;
 }
 
