@@ -5,12 +5,17 @@ import io.ktor.http.Url
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import riffet.i18n.L10n
 import riffet.ui.timeline.platformNowMillis
 import kotlin.coroutines.CoroutineContext
+
+/** How long one pairing address may take to answer before the next in line is used. */
+private const val REACH_TIMEOUT_MILLIS = 4_000L
 
 /** One installed connection; saved credentials remain bound to each service's origin. */
 class RiffetConnection(
@@ -131,7 +136,7 @@ class RiffetConnection(
         // A server that answers where it is reached had another reason to fail the read.
         if (http.provesDevice(reached, current.token)) return null
         val scheme = Url(current.baseUrl).protocol.name
-        val found = (candidates().map { it.trim().trimEnd('/') } + current.baseUrl)
+        val found = (candidates().map { it.trim().trimEnd('/') } + current.alternates + current.baseUrl)
             .distinct()
             .filter { it != reached && runCatching { Url(it).protocol.name == scheme }.getOrDefault(false) }
             .firstOrNull { http.provesDevice(it, current.token) }
@@ -164,12 +169,49 @@ class RiffetConnection(
     fun requireApi(): RiffetApi = api ?: throw RiffetNotConnectedException()
     fun apiOrNull(): RiffetApi? = api
 
+    /** Pairs at the first of the payload's addresses that answers; the rest stay as [PairedCredential.alternates]. */
     @Throws(Exception::class)
-    suspend fun pair(payload: PairingPayload): IssuedDevice =
-        pair(payload.baseUrl, payload.code, deviceInfo.deviceName, payload.name)
+    suspend fun pair(payload: PairingPayload): IssuedDevice {
+        val urls = payload.baseUrls
+        val base = if (urls.size == 1) payload.baseUrl else firstReachable(urls)
+            ?: throw RiffetNetworkException(L10n.uiText("connection.pairingTimeout"), IllegalStateException("No pairing address answered"))
+        return pair(base, payload.code, deviceInfo.deviceName, payload.name, alternates = urls - base)
+    }
+
+    /**
+     * The first of [baseUrls], in their order, whose server answers the public `GET /api/auth/status`.
+     * All are asked at once, so an address the network drops costs one timeout, not one each.
+     */
+    @Throws(Exception::class)
+    suspend fun firstReachable(baseUrls: List<String>, timeoutMillis: Long = REACH_TIMEOUT_MILLIS): String? = coroutineScope {
+        val probes = baseUrls.map { url -> async { withTimeoutOrNull(timeoutMillis) { answers(url) } == true } }
+        try {
+            baseUrls.zip(probes).firstOrNull { (_, answered) -> answered.await() }?.first
+        } finally {
+            probes.forEach { it.cancel() }
+        }
+    }
+
+    private suspend fun answers(baseUrl: String): Boolean = try {
+        probe(baseUrl).authStatus()
+        true
+    } catch (cancellation: CancellationException) {
+        throw cancellation
+    } catch (http: RiffetHttpException) {
+        // A typed error is still a Riffet server answering; a bare status is something else.
+        http.code != null
+    } catch (_: Throwable) {
+        false
+    }
 
     @Throws(Exception::class)
-    suspend fun pair(baseUrl: String, code: String, deviceName: String, name: String? = null): IssuedDevice =
+    suspend fun pair(
+        baseUrl: String,
+        code: String,
+        deviceName: String,
+        name: String? = null,
+        alternates: List<String> = emptyList(),
+    ): IssuedDevice =
         pairingChanges.withLock {
             val state = tokens.pairings()
             val target = probe(baseUrl)
@@ -185,6 +227,8 @@ class RiffetConnection(
                 name = previous?.name ?: name?.trim()?.takeIf { it.isNotEmpty() },
                 deviceId = issued.device.id,
                 lastUsedAt = platformNowMillis(),
+                alternates = alternates.map { it.trim().trimEnd('/') }.filter { serverOrigin(it) != origin }.distinct()
+                    .ifEmpty { previous?.alternates.orEmpty() },
             )
             withContext(NonCancellable) {
                 val next = state.copy(activeOrigin = origin, servers = state.servers.filterNot { it.origin == origin } + saved)

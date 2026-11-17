@@ -1,6 +1,7 @@
 package riffet.shared
 
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -38,6 +39,12 @@ data class PairingPayload(
      * plain HTTP, which is what such a server is serving.
      */
     val scheme: String = HTTP,
+    /**
+     * Every address the server listens on, [host] first. A network can block one of them (Wi-Fi
+     * that isolates wireless clients) while another answers, so a scan tries them in order; a QR
+     * from an older server carries only [host].
+     */
+    val hosts: List<String> = listOf(host),
 ) {
     /**
      * Plain HTTP over a LAN is the documented tradeoff (`docs/MOBILE.md`, 网络接入): the token
@@ -46,12 +53,17 @@ data class PairingPayload(
      */
     val baseUrl: String get() = "$scheme://$host:$port"
 
+    /** [hosts] as base URLs, [baseUrl] first. */
+    val baseUrls: List<String> get() = (listOf(host) + hosts).distinct().map { "$scheme://$it:$port" }
+
     companion object {
         /** The only protocol version this build can redeem. */
         const val CURRENT_VERSION: Int = 1
 
         const val HTTP: String = "http"
         const val HTTPS: String = "https"
+
+        private const val MAX_HOSTS = 8
 
         fun parse(json: String): PairingPayload {
             val element = try {
@@ -77,7 +89,15 @@ data class PairingPayload(
             // the URL as something else. Anything unrecognised means plain HTTP.
             val scheme = (payload["scheme"] as? JsonPrimitive)?.contentOrNull
                 ?.trim()?.lowercase()?.takeIf { it == HTTP || it == HTTPS } ?: HTTP
-            return PairingPayload(v = version, host = host, port = port, code = code, name = name, scheme = scheme)
+            // Only plain host names and IPv4 literals: anything else could reshape the URL it is put into.
+            val hosts = (payload["hosts"] as? JsonArray).orEmpty()
+                .mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim() }
+                .filter { it.isNotEmpty() && it.all { char -> char in 'a'..'z' || char in 'A'..'Z' || char in '0'..'9' || char in ".-_" } }
+                .take(MAX_HOSTS)
+            return PairingPayload(
+                v = version, host = host, port = port, code = code, name = name, scheme = scheme,
+                hosts = (listOf(host) + hosts).distinct(),
+            )
         }
     }
 }

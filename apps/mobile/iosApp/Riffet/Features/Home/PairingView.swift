@@ -89,6 +89,8 @@ struct PairingView: View {
     @State private var scannerError: String?
     @State private var serviceName: String?
     @State private var namedAddress = ""
+    /// The scanned QR's other addresses, tried when the one in the field does not answer.
+    @State private var alternates: [String] = []
     /// The fields are filled once: coming back from the scanner must not put the old address back.
     @State private var prefilled = false
 
@@ -160,7 +162,7 @@ struct PairingView: View {
                 do {
                     let value = try model.decodePairing(raw)
                     address = value.address; code = value.code
-                    serviceName = value.name; namedAddress = value.address
+                    serviceName = value.name; namedAddress = value.address; alternates = value.alternates
                     scannerError = nil; model.error = nil
                 } catch { scannerError = error.riffetMessage }
             }, onFailure: { failure in scannerError = failure.localizedDescription; scanning = false })
@@ -172,6 +174,7 @@ struct PairingView: View {
 
     private func pair() {
         guard !model.connectionBusy, !address.isEmpty, !code.isEmpty else { return }
-        Task { if await model.pair(address: address, code: code, name: address == namedAddress ? serviceName : nil) { code = ""; dismiss() } }
+        let scanned = address == namedAddress
+        Task { if await model.pair(address: address, code: code, name: scanned ? serviceName : nil, alternates: scanned ? alternates : []) { code = ""; dismiss() } }
     }
 }

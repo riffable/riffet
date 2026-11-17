@@ -62,7 +62,7 @@ export async function requestCliPairing(record: PairingDaemon,token: string,fetc
   const scheme=body.scheme==='https'?'https':'http';
   const port=typeof body.port==='number'&&Number.isInteger(body.port)&&body.port>0&&body.port<=65535?body.port:record.port;
   const urls=candidates.map(host=>url(host,port,scheme));
-  const qrPayload=JSON.stringify({v:1,scheme,host:candidates[0],port,code:body.code,name:hostname()});
+  const qrPayload=JSON.stringify({v:1,scheme,host:candidates[0],...(candidates.length>1?{hosts:candidates}:{}),port,code:body.code,name:hostname()});
   return {localUrl,urls,code:body.code,expiresAt:body.expiresAt,qrPayload};
 }
 /** The QR code with the addresses and the code beside it; the QR keeps its own light background, so phones read it on dark terminals too. */

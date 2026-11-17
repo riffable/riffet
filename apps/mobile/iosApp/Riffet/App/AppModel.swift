@@ -57,14 +57,21 @@ final class AppModel {
             await refreshPairedServers()
         } catch { self.error = error.riffetMessage }
     }
-    func pair(address: String, code: String, name: String? = nil) async -> Bool {
+    func pair(address: String, code: String, name: String? = nil, alternates: [String] = []) async -> Bool {
         guard !connectionBusy else { return false }
         pairing = true; error = nil; needsNetworkSettings = false
         defer { pairing = false }
         do {
-            let url = try ServerAddress.normalized(address)
+            let entered = try ServerAddress.normalized(address)
             guard !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ClientFailure(String(localized: "请输入 Mac 上显示的配对码", bundle: .riffet)) }
-            _ = try await host.pair(baseUrl: url.absoluteString, code: code, deviceName: UIDevice.current.name, name: name)
+            // A scanned QR lists every address of the server; pair at the first that answers.
+            let candidates = [entered.absoluteString] + alternates
+            var url = entered
+            if !alternates.isEmpty, let reached = try await host.firstReachable(baseUrls: candidates), let reachedURL = URL(string: reached) {
+                url = reachedURL
+            }
+            _ = try await host.pair(baseUrl: url.absoluteString, code: code, deviceName: UIDevice.current.name, name: name,
+                                    alternates: candidates.filter { $0 != url.absoluteString })
             let store = try host.install(baseUrl: url.absoluteString)
             install(store: store, url: url)
             await refreshPairedServers()
@@ -94,9 +101,9 @@ final class AppModel {
         }
         return message
     }
-    func decodePairing(_ raw: String) throws -> (address: String, code: String, name: String?) {
+    func decodePairing(_ raw: String) throws -> (address: String, code: String, name: String?, alternates: [String]) {
         let payload = try host.parsePairing(raw: raw)
-        return (payload.baseUrl, payload.code, payload.name)
+        return (payload.baseUrl, payload.code, payload.name, Array(payload.baseUrls.dropFirst()))
     }
     private func install(store: SessionStore, url: URL) {
         if let previous = workbench, !ServerAddress.sameOrigin(previous.baseURL, url) {

@@ -116,11 +116,23 @@ class IOSHost {
     }
 
     @Throws(Exception::class)
-    suspend fun pair(baseUrl: String, code: String, deviceName: String, name: String?): IssuedDevice {
+    suspend fun pair(baseUrl: String, code: String, deviceName: String, name: String?): IssuedDevice =
+        pair(baseUrl, code, deviceName, name, emptyList())
+
+    /** [alternates] are the scanned QR's other addresses, kept for when [baseUrl] stops answering. */
+    @Throws(Exception::class)
+    suspend fun pair(baseUrl: String, code: String, deviceName: String, name: String?, alternates: List<String>): IssuedDevice {
         val pairing = RiffetConnection(tokens, config = clientConfig)
         return try {
-            pairing.pair(baseUrl, code, deviceName, name)
+            pairing.pair(baseUrl, code, deviceName, name, alternates)
         } finally { pairing.close() }
+    }
+
+    /** The first of [baseUrls], in order, where a Riffet server answers; null when none does. */
+    @Throws(Exception::class)
+    suspend fun firstReachable(baseUrls: List<String>): String? {
+        val probe = RiffetConnection(tokens, config = clientConfig)
+        return try { probe.firstReachable(baseUrls) } finally { probe.close() }
     }
 
     @Throws(Exception::class)

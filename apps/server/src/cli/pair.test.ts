@@ -17,7 +17,7 @@ describe('explicit CLI pairing',()=>{
     expect(fetcher.mock.calls[1][1]?.headers).toMatchObject({cookie:'cw_session=secret-cookie','x-csrf-token':'csrf'});
     expect(result.urls).toEqual(['http://192.168.1.2:4337','http://10.0.0.2:4337','http://Mac.local:4337']);
     expect(result.code).toBe('2345ABCD');
-    expect(JSON.parse(result.qrPayload)).toMatchObject({v:1,host:'192.168.1.2',port:4337,scheme:'http',code:result.code});
+    expect(JSON.parse(result.qrPayload)).toMatchObject({v:1,host:'192.168.1.2',hosts:['192.168.1.2','10.0.0.2','Mac.local'],port:4337,scheme:'http',code:result.code});
     expect(JSON.stringify(result)).not.toMatch(/master-secret|secret-cookie|csrf/);
   });
   it('honours the new server-selected host instead of choosing a different QR target',async()=>{

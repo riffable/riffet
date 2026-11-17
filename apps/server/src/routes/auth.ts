@@ -79,7 +79,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: RouteDeps): void 
     const connection=connectionAddresses({bindHost:typeof listener==='object'&&listener?listener.address:'127.0.0.1',
       port:typeof listener==='object'&&listener?listener.port:0,scheme:pairingScheme(request),authority:request.headers.host,allowedHosts:auth.allowedHosts});
     const pairing=createPairingCode();
-    const payload=JSON.stringify({v:1,scheme:connection.scheme,host:connection.host,port:connection.port,code:pairing.code,name:request.body?.name?.trim()||hostname()});
+    // `hosts` lists every address on this listener, `host` first: a network can isolate one interface
+    // (wireless clients from each other) while another is reachable, and the phone tries them all.
+    const payload=JSON.stringify({v:1,scheme:connection.scheme,host:connection.host,...(connection.hosts.length>1?{hosts:connection.hosts}:{}),port:connection.port,code:pairing.code,name:request.body?.name?.trim()||hostname()});
     // Only the short-lived code travels in the QR; the master access token is never handed out here.
     // `payload` is the exact string `qr` encodes, so a native client can draw its own QR instead of parsing the SVG.
     return {code:pairing.code,expiresAt:pairing.expiresAt,qr:await QRCode.toString(payload,{type:'svg'}),payload,...connection};

@@ -41,6 +41,8 @@ internal data class PairedCredential(
     val lastUsedAt: Long = 0,
     /** Where the server was last reached when that is not [baseUrl]; see [ServerRoutes]. */
     val route: String? = null,
+    /** The pairing QR's other addresses, tried by [RiffetConnection.relocate] where discovery finds nothing. */
+    val alternates: List<String> = emptyList(),
 ) {
     fun server() = PairedServer(origin, baseUrl, name, lastUsedAt)
 }

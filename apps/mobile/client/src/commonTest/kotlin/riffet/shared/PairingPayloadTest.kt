@@ -22,6 +22,15 @@ class PairingPayloadTest {
     }
 
     @Test
+    fun everyListedAddressIsACandidateWithTheHostFirst() {
+        val payload = PairingPayload.parse(
+            """{"v":1,"host":"10.0.0.2","hosts":["10.0.0.2","192.168.1.2","mac.local","evil/path","x@y"],"port":4337,"code":"7KQ2M4ZP"}""",
+        )
+        assertEquals(listOf("http://10.0.0.2:4337", "http://192.168.1.2:4337", "http://mac.local:4337"), payload.baseUrls)
+        assertEquals(listOf("http://macbook.local:4310"), PairingPayload.parse("""{"v":1,"host":"macbook.local","port":4310,"code":"7KQ2M4ZP"}""").baseUrls)
+    }
+
+    @Test
     fun unknownVersionIsATypedFailureNotACrash() {
         val error = assertFailsWith<PairingPayloadException> {
             PairingPayload.parse("""{"v":2,"host":"macbook.local","port":4310,"code":"ABCDEFGH"}""")

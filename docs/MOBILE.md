@@ -85,18 +85,22 @@ iPhone 也经 SKIE 导出的 `RiffetKit` 复用 `:client`，并已配置 iosArm6
 
 ### Mac 换地址
 
-二维码只带配对时的一个局域网地址。Mac 换网络或 DHCP 换 IP 后，手机连旧地址只会超时。
+二维码的 `host` 是首选地址，`hosts` 按同样的顺序列出监听端口上的全部地址（多块网卡、mDNS 名）。
+公司网络常把一块网卡隔开（无线客户端互相不通），另一块仍能到达，所以扫码配对时手机同时请求每个地址的
+`GET /api/auth/status`，按列表顺序取第一个应答的配对，其余地址存进这个配对的 `alternates`。旧服务端
+只给 `host`，旧客户端忽略 `hosts`。Mac 换网络或 DHCP 换 IP 后，手机连原地址只会超时：
 
 - 服务端：`allowedHosts` 按需重读网卡（带短缓存），新 IP 不用重启服务就能通过 `checkOrigin`；
   mDNS 名 `<hostname>.local` 和 `--allow-host` 加入的 Tailscale 名一直有效。
 - 手机端：读取失败、网络又是通的时候（每分钟最多一次），在局域网里重新发现 `_riffet._tcp`，加上配对时
-  的原地址一起作为候选。每个候选先回答 `POST /api/devices/prove {device, nonce}`：服务端用这台设备记录里
+  的原地址和 `alternates` 一起作为候选。每个候选先回答 `POST /api/devices/prove {device, nonce}`：服务端用这台设备记录里
   保存的令牌哈希对 nonce 做 HMAC-SHA256。只有持有该记录的服务端答得出来，令牌本身不会发出去，伪造的
   广播也拿不到令牌。当前地址仍能证明时，什么都不改。
 - 证明通过的地址记成这个配对的 `route`。配对的源保持不变，令牌绑定、设备副本、草稿、通知和快捷方式
   都按源存放，所以都不受影响；只有发送时由 `ServerRouting` 改写 host 和 port（`ServerRoutes.kt`）。
   回到原网络后，原地址重新证明通过，`route` 随之清空。
-- 局域网不允许组播（常见于公司网络）时发现不到候选，仍需重新扫码。
+- 局域网不允许组播（常见于公司网络）时发现不到新候选，只能试 `alternates`；都不通时仍需重新扫码。
+  目前只有 Android 会自动换地址。
 
 ### 为什么 Bearer 跳过 CSRF 是正确的
 
