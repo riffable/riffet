@@ -352,7 +352,8 @@ export function Disclosure({ icon, title, detail, inline, status, open, onToggle
  */
 export const ThoughtRow = memo(function ThoughtRow({ text, channel, running }: { text: string; channel: ReasoningChannel; running?: boolean }) {
   const [open, setOpen] = useRemembered('thought', false);
-  if (channel === 'narration') return <Markdown text={text} className="md-muted" streaming={running} />;
+  // `data-narration` lets the selection toolbar act on it (MarkLayer); it has no anchor for highlights.
+  if (channel === 'narration') return <div data-narration className="min-w-0"><Markdown text={text} className="md-muted" streaming={running} /></div>;
   return (
     // The brain icon already says what this row is, so the preview itself is the title — and it
     // reads as prose rather than as the bold label the other collapsed rows use for a tool name.

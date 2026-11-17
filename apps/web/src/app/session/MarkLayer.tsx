@@ -24,7 +24,9 @@ const highlightsSupported = () => typeof CSS !== 'undefined' && 'highlights' in 
 
 interface Resolved { mark: Mark; range: Range }
 interface Selected {
-  target: MarkTarget; text: string; start: number; end: number; range: Range;
+  /** The answer the text is in; absent for narration, which has no anchor to keep a highlight or a side chat against. */
+  target?: MarkTarget;
+  text: string; start: number; end: number; range: Range;
   /** Chosen when it shows, by the room there was: the toolbar keeps its side while the text scrolls. */
   above: boolean;
 }
@@ -96,10 +98,10 @@ function quoteOf(range: Range, text: string): string {
   return text.trim().replace(/\n{3,}/g, '\n\n');
 }
 
-/** The markable answer body that holds [node], if any. */
-function bodyOf(node: Node | null): HTMLElement | undefined {
+/** The answer body or the narration (`ThoughtRow`) that holds [node]: the text the selection toolbar acts on. */
+function selectableOf(node: Node | null): HTMLElement | undefined {
   const element = node instanceof Element ? node : node?.parentElement;
-  return element?.closest<HTMLElement>('[data-mark-ids]') ?? undefined;
+  return element?.closest<HTMLElement>('[data-mark-ids], [data-narration]') ?? undefined;
 }
 
 function ColorButtons({ current, onPick }: { current?: MarkColor; onPick: (color: MarkColor) => void }) {
@@ -177,10 +179,10 @@ function HighlightEditor({ mark, onChange, onRemove }: { mark: Mark; onChange: (
 }
 
 /**
- * Highlights (片段收藏) over the transcript: paints the conversation's highlights with the CSS Custom
- * Highlight API, offers 高亮 for a selection inside one finished answer, and opens a highlight's
- * editor when it is clicked. Rows are windowed and re-render on their own, so where each highlight
- * sits is resolved again after every change to the transcript's DOM rather than kept.
+ * Highlights (片段收藏) and the selection toolbar over the transcript: paints the conversation's highlights with
+ * the CSS Custom Highlight API, offers the toolbar for a selection inside one answer or one narration, and opens a
+ * highlight's editor when it is clicked. Rows are windowed and re-render on their own, so where each highlight sits
+ * is resolved again after every change to the transcript's DOM rather than kept.
  */
 export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObject<HTMLElement | null>; onDiscuss?: (source: DiscussionSource) => void; onQuote?: (quote: string) => void }) {
   const { t } = useLingui();
@@ -251,14 +253,15 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !marks) return;
-    /** A selection inside one markable answer offers the toolbar; anything else hides it. */
+    /** A selection inside one answer or one narration offers the toolbar; anything else hides it. */
     const readSelection = () => {
       const selection = document.getSelection();
       if (!selection || selection.isCollapsed || !selection.rangeCount) { setSelected(undefined); return; }
       const range = selection.getRangeAt(0);
-      const body = bodyOf(range.startContainer);
-      const target = body && markBodies.get(body);
-      if (!body || !target || bodyOf(range.endContainer) !== body || !scroller.contains(body)) { setSelected(undefined); return; }
+      const body = selectableOf(range.startContainer);
+      // Narration has no anchor: it offers what needs none (引用, the plugin items, 复制).
+      const target = body?.hasAttribute('data-narration') ? undefined : body && markBodies.get(body);
+      if (!body || (!target && !body.hasAttribute('data-narration')) || selectableOf(range.endContainer) !== body || !scroller.contains(body)) { setSelected(undefined); return; }
       const text = body.textContent ?? '';
       const start = textOffset(body, range.startContainer, range.startOffset);
       const end = textOffset(body, range.endContainer, range.endOffset);
@@ -335,7 +338,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   if (!marks) return null;
   const editingMark = editing && marks.marks.find((mark) => mark.id === editing.id);
   const highlight = (color: MarkColor) => {
-    if (!selected) return;
+    if (!selected?.target) return;
     lastColor = color;
     const quote = quoteAt(selected.text, selected.start, selected.end);
     if (quote) marks.highlight(selected.target, quote, color);
@@ -343,7 +346,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     setSelected(undefined);
   };
   const share = () => {
-    if (!selected || !session) return;
+    if (!selected?.target || !session) return;
     const text = document.getSelection()?.toString().trim() || selected.text.slice(selected.start, selected.end).trim();
     document.getSelection()?.removeAllRanges();
     setSelected(undefined);
@@ -377,7 +380,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
     const roomBelow = view.bottom - rect.bottom;
     const above = roomAbove > roomBelow;
     setCard({ command, range, above, room: Math.max(160, Math.min(400, (above ? roomAbove : roomBelow) - 16)) });
-    const runId = selected.target.anchor.runId;
+    const runId = selected.target?.anchor.runId;
     const answer = await selectionCommands.run(command, { text, ...(runId ? { runId } : {}) });
     // Closed, or replaced by another, meanwhile: the answer is not wanted.
     setCard((current) => current?.range !== range || current.closing ? current : answer ? { ...current, ...answer } : { ...current, closing: true });
@@ -385,7 +388,7 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
   // Above the selection, or below it when there was no room above.
   const above = selected?.above ?? true;
   const tipSide = above ? 'top' : 'bottom';
-  const lead = Boolean(onQuote || onDiscuss);
+  const lead = Boolean(onQuote || (onDiscuss && selected?.target));
   const cardWidth = Math.min(448, (floatHost?.clientWidth ?? window.innerWidth) - 16);
   return (
     <>
@@ -404,21 +407,21 @@ export function MarkLayer({ scrollRef, onDiscuss, onQuote }: { scrollRef: RefObj
           )}
         >
           {onQuote && <Button size="sm" variant="quiet" className="no-hover:h-9" onClick={quote}><IconTextQuote /><Trans context="session-quote-action">引用</Trans></Button>}
-          {onDiscuss && <Button size="sm" variant="quiet" className="no-hover:h-9" onClick={() => {
+          {onDiscuss && selected.target && <Button size="sm" variant="quiet" className="no-hover:h-9" onClick={() => {
             const quoted = quoteAt(selected.text, selected.start, selected.end);
-            if (!quoted) return;
+            if (!quoted || !selected.target) return;
             onDiscuss({ anchor: selected.target.anchor, quote: quoted });
             document.getSelection()?.removeAllRanges();
             setSelected(undefined);
           }}><IconMessagesSquare /><Trans>侧边聊天</Trans></Button>}
           {lead && <span aria-hidden className="mx-1 h-4 w-px bg-line-strong" />}
-          <HighlightButton above={above} onPick={highlight} />
+          {selected.target && <HighlightButton above={above} onPick={highlight} />}
           {selectionCommands.commands.map((command) => {
             const Icon = commandIcon(command.icon);
             return <ToolbarIcon key={command.id} label={command.title} side={tipSide} onClick={() => void runCommand(command)}><Icon /></ToolbarIcon>;
           })}
           <ToolbarIcon label={t`复制`} side={tipSide} onClick={() => { void copyWithToast(document.getSelection()?.toString() ?? selected.text.slice(selected.start, selected.end)); setSelected(undefined); }}><IconCopy /></ToolbarIcon>
-          {session && <ToolbarIcon label={t`导出图片`} side={tipSide} onClick={share}><IconImageDown /></ToolbarIcon>}
+          {session && selected.target && <ToolbarIcon label={t`导出图片`} side={tipSide} onClick={share}><IconImageDown /></ToolbarIcon>}
         </div>,
         floatHost,
       )}
