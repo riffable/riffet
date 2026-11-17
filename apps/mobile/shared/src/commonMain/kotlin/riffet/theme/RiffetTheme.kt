@@ -1785,7 +1785,7 @@ object RiffetProse {
     val quoteInset = 14.dp
     val ruleGap = 20.dp
     val tableGap = 14.dp
-    val tableCellVertical = 7.dp
+    val tableCellVertical = 8.dp
     val tableCellHorizontal = 12.dp
 }
 
