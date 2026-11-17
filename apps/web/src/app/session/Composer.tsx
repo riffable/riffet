@@ -1695,7 +1695,8 @@ export const Composer = memo(function Composer(props: ComposerProps) {
                     disabled={showStop ? props.stopping || props.stopDisabled || submitting : !canSubmit}
                     onClick={showStop ? props.onStop : () => void submit()}
                     className={cn(
-                      'grid size-11 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] duration-[var(--duration-base)] ease-[var(--ease-standard)] active:scale-90 disabled:active:scale-100 md:size-8',
+                      // The phone's circle is 36 like iOS; the tap area reaches 44 around it.
+                      'relative grid size-9 shrink-0 place-items-center rounded-full transition-[background-color,color,transform] duration-[var(--duration-base)] ease-[var(--ease-standard)] before:absolute before:-inset-1 active:scale-90 disabled:active:scale-100 md:size-8 md:before:hidden',
                       showStop ? 'bg-primary text-primary-fg hover:bg-primary-hover disabled:opacity-50' : 'bg-primary text-primary-fg hover:bg-primary-hover disabled:bg-fg/[0.08] disabled:text-fg-4',
                     )}
                   >

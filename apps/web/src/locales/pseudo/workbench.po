@@ -157,6 +157,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr ""
 
+#: src/app/SessionInfo.tsx
+msgctxt "session-info-task"
+msgid "任务"
+msgstr ""
+
 #. placeholder {0}: item.number
 #: src/app/SessionInfo.tsx
 msgid "任务 #{0}"
@@ -168,7 +173,6 @@ msgid "任务看板"
 msgstr ""
 
 #: src/app/CommandPalette.tsx
-#: src/app/Header.tsx
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-noun"
 msgid "会话"
@@ -250,10 +254,10 @@ msgstr ""
 #: src/app/Workbench.tsx
 msgid "停止当前运行"
 msgstr ""
+
 #: src/app/plugins/PluginSources.tsx
 msgid "停用插件源"
 msgstr ""
-
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
@@ -271,8 +275,8 @@ msgstr ""
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
 msgstr ""
-#: src/app/plugins/PluginsNav.tsx
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
 msgstr ""
@@ -476,8 +480,8 @@ msgid "取消"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
-#: src/app/plugins/PluginSources.tsx
 #: src/app/DirectoryPicker.tsx
+#: src/app/plugins/PluginSources.tsx
 msgctxt "workbench-cancel-action"
 msgid "取消"
 msgstr ""
@@ -539,10 +543,10 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可用"
 msgstr ""
+
 #: src/app/plugins/PluginSources.tsx
 msgid "启用插件源"
 msgstr ""
-
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用策略"
@@ -624,8 +628,8 @@ msgstr ""
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 msgstr ""
-#: src/app/plugins/PluginSources.tsx
 
+#: src/app/plugins/PluginSources.tsx
 #: src/app/SidebarUserMenu.tsx
 msgid "复制地址"
 msgstr ""
@@ -728,8 +732,8 @@ msgstr ""
 msgid "已复制地址"
 msgstr ""
 
-#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已安装"
 msgstr ""
@@ -785,8 +789,8 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 msgid "开启"
 msgstr ""
-#: src/app/plugins/PluginsNav.tsx
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "异常"
 msgstr ""
@@ -964,6 +968,7 @@ msgstr ""
 msgid "提供模型源"
 msgstr ""
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
@@ -973,7 +978,6 @@ msgstr ""
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件 ID"
 msgstr ""
-#: src/app/plugins/PluginsNav.tsx
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件已不可用，当前内容会保留到关闭"
@@ -1425,17 +1429,24 @@ msgstr ""
 msgid "更多"
 msgstr ""
 
+#: src/app/Header.tsx
+msgctxt "session-sheet-more"
+msgid "更多"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr ""
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "更多操作"
 msgstr ""
 
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginsPage.tsx
 msgid "更新"
 msgstr ""
 
@@ -1443,15 +1454,18 @@ msgstr ""
 msgid "更早"
 msgstr ""
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
+msgid "有更新"
+msgstr ""
+
+#: src/app/plugins/PluginMark.tsx
 msgid "服务与分享"
-#: src/app/plugins/PluginSources.tsx
 msgstr ""
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
 msgstr ""
-#: src/app/plugins/PluginsPage.tsx
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
@@ -1459,12 +1473,7 @@ msgstr ""
 msgid "未关联项目"
 msgstr ""
 
-#: src/app/plugins/PluginsNav.tsx
 #: src/app/Sidebar.tsx
-msgid "有更新"
-msgstr ""
-
-#: src/app/plugins/PluginMark.tsx
 msgid "未读"
 msgstr ""
 
@@ -1488,6 +1497,11 @@ msgstr ""
 
 #: src/app/App.tsx
 msgid "查看访问令牌"
+msgstr ""
+
+#: src/app/SessionInfo.tsx
+msgctxt "session-info-tags"
+msgid "标签"
 msgstr ""
 
 #: src/app/tabs/TabStyleSetting.tsx
@@ -1593,6 +1607,11 @@ msgstr ""
 msgid "添加"
 msgstr ""
 
+#: src/app/plugins/PluginsNav.tsx
+#: src/app/plugins/PluginSources.tsx
+msgid "添加插件源"
+msgstr ""
+
 #: src/app/ProjectHome.tsx
 msgid "添加第一个项目"
 msgstr ""
@@ -1612,11 +1631,6 @@ msgstr ""
 #: src/plugins/ModelField.tsx
 msgid "清除"
 msgstr ""
-#: src/app/plugins/PluginsNav.tsx
-#: src/app/plugins/PluginSources.tsx
-msgid "添加插件源"
-msgstr ""
-
 
 #: src/plugins/LogRecords.tsx
 msgid "清除筛选"

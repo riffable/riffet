@@ -32,8 +32,9 @@ interface HeaderProps {
 export function PageHeader({ title, meta, actions, divided, sidebarCollapsed, onOpenSidebar, onExpandSidebar, className }: HeaderProps & { className?: string }) {
   const { t } = useLingui();
   return (
-    <header className={cn('flex h-12 shrink-0 items-center gap-2 px-3 max-md:edge-b md:h-13 md:pl-4', divided && 'edge-b', className)}>
-      <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
+    // A phone's bar matches the conversation header: 44 buttons 6 from the edges, the title 16 after the menu glyph (mobile.md §10.2).
+    <header className={cn('flex h-12 shrink-0 items-center gap-2 px-1.5 max-md:edge-b md:h-13 md:px-3 md:pl-4', divided && 'edge-b', className)}>
+      <Button size="icon-sm" variant="quiet" className="-mr-2 size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenSidebar}><IconMenu /></Button>
       {sidebarCollapsed && <ExpandSidebarButton onClick={onExpandSidebar} />}
       <h1 className="min-w-0 truncate text-sm font-medium text-fg">{title}</h1>
       {meta}

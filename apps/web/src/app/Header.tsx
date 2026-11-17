@@ -1,10 +1,11 @@
 import { Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import { IconArchive, IconArchiveRestore, IconCheck, IconEllipsis, IconGitBranch, IconInfoOutline, IconMenu, IconPanelRight, IconPencilLine, IconPin, IconPinOff, IconTag, IconTrash2 } from '@/components/icons';
 import type { Session } from '@contracts';
 import { Button } from '@/components/ui/button';
 import { AgentLogo } from '@/components/AgentLogo';
+import { ActionBarButton } from '@/components/ui/action-bar';
 import { Badge, Spinner, StatusDot, StatusPillActions } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -153,8 +154,6 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     : undefined;
   // Where to go (changes, files, terminal) lives in 会话信息; this menu is only what can be done to the session.
   const desktopGroups: HeaderAction[][] = [menu, sessionActions, [...(archiveAction ? [archiveAction] : []), ...(deleteAction ? [deleteAction] : [])]].filter((group) => group.length > 0);
-  // The phone's sheet lists the same commands; archive stays apart from the rest.
-  const sheetActions: HeaderAction[] = [...menu, ...sessionActions];
   const selection = parseSelection(session?.model);
   const modelLabel = cleanLabel(selection.model);
   // Switches (fast=true) are the composer's icons, not words; only valued parameters such as effort read here.
@@ -167,7 +166,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
     </Badge>
   );
 
-  const sessionInfo = (onNavigate: () => void, sheet: boolean) => session && (
+  const sessionInfo = (onNavigate: () => void, sheet: boolean, barEnd?: ReactNode) => session && (
     <SessionInfo
       session={session}
       quickChat={quickChat}
@@ -188,6 +187,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       onNavigate={onNavigate}
       {...(isAssistantMain ? { assistant: assistantSetup } : {})}
       head={!sheet}
+      barEnd={barEnd}
     >
       {info}
     </SessionInfo>
@@ -246,14 +246,15 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
   }
 
   return (
-    <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-1 bg-bg px-1.5 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
+    <header className={cn('workbench-header flex min-h-12 shrink-0 items-center gap-0 bg-bg px-1.5 md:gap-1 max-md:edge-b md:h-13 md:pl-4 md:pr-3', center && 'grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]')}>
       <div className={center ? 'flex min-w-0 items-center gap-1' : 'contents'}>
         <Button size="icon-sm" variant="quiet" className="size-11 md:hidden" aria-label={t`打开侧边栏`} onClick={onOpenMobileSidebar}><IconMenu /></Button>
         {sidebarCollapsed && !tabbed && (
           <ExpandSidebarButton onClick={onExpandSidebar} />
         )}
 
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1 text-sm">
+        {/* On a phone the title starts right after the menu button's own padding (mobile.md §10.2). */}
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-sm md:pl-1">
           {project && !session && !(center && mobile) && <><span className="min-w-0 truncate font-medium text-fg">{assistantPage ? t`个人助理` : projectName}</span>{worktreeBadge}</>}
           {project && session && !mobile && !isAssistantMain && (
             <>
@@ -262,7 +263,7 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
             </>
           )}
           {session && mobile && (
-            <button type="button" onClick={() => setDetailsOpen(true)} className="flex min-h-11 min-w-0 max-w-full flex-1 items-center gap-1.5 overflow-hidden rounded-md px-1 text-left hover:bg-hover" aria-label={t`会话信息与操作`}>
+            <button type="button" onClick={() => setDetailsOpen(true)} className="flex min-h-11 min-w-0 max-w-full flex-1 items-center gap-1.5 overflow-hidden text-left" aria-label={t`会话信息与操作`}>
               <span className="min-w-0 truncate font-medium leading-5 text-fg" title={title}>{title}</span>
               {worktreeBadge}
               {state && status === undefined && <span className="flex shrink-0" role="status" aria-label={state.label} title={state.label}>{state.tone === 'accent' ? <Spinner className="size-3 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />}</span>}
@@ -299,64 +300,47 @@ export function Header({ project, originProject, session, sidebarCollapsed, onEx
       </div>
 
       {center && <div className="flex h-full min-h-12 min-w-0 items-center justify-center">{center}</div>}
+      {session && mobile && (
+        <Button size="icon-sm" variant="quiet" aria-label={t`会话信息`} aria-haspopup="dialog" onClick={() => setDetailsOpen(true)} className="relative size-11 shrink-0">
+          <IconInfoOutline />
+          {infoBadge && <span aria-hidden className="absolute right-2.5 top-2.5 size-1.5 rounded-full bg-accent ring-2 ring-bg" />}
+        </Button>
+      )}
       {tabbed ? chrome?.actions && createPortal(actions, chrome.actions) : actions}
       {isAssistantMain && <AssistantInstructions setup={assistantSetup} />}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent mobileSheet>
-          <DialogHeader className="gap-2">
-            <DialogTitle className="break-words">{title}</DialogTitle>
-            <DialogDescription className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              {state && <Badge tone={state.tone === 'idle' ? 'neutral' : state.tone}><StatusDot tone={state.tone} pulse={state.pulse} />{state.label}</Badge>}
-              {!quickChat && <span>{session ? label(sessionBackend(session)) : 'Agent'}</span>}
-            </DialogDescription>
+          {/* The phone's session sheet (mobile.md §10.4): title and status, places and 更多, what runs, facts. */}
+          <DialogHeader className="gap-1">
+            <DialogTitle className="break-words text-base leading-6">{title}</DialogTitle>
+            {(state || !quickChat) && (
+              <DialogDescription className="flex min-w-0 items-center gap-1.5">
+                {state && (state.tone === 'accent' ? <Spinner className="size-3 shrink-0 text-accent" /> : <StatusDot tone={state.tone} pulse={state.pulse} />)}
+                <span className={cn('min-w-0 truncate', state && stateText[state.tone])}>
+                  {[state?.label, quickChat || !session ? undefined : label(sessionBackend(session))].filter(Boolean).join(' · ')}
+                </span>
+              </DialogDescription>
+            )}
           </DialogHeader>
-          <DialogBody className="space-y-4 pb-6">
+          <DialogBody className="flex flex-col gap-4 pb-6 *:shrink-0">
             {/* Closes the sheet when a row opens something of its own, such as a subagent. */}
-            <div className="space-y-3" onClickCapture={(event) => { if (closesOverlay(event.target)) setDetailsOpen(false); }}>
+            <div className="flex flex-col gap-4" onClickCapture={(event) => { if (closesOverlay(event.target)) setDetailsOpen(false); }}>
               {alerts && <div className="flex flex-wrap items-center gap-2">{alerts}</div>}
-              {sessionInfo(() => setDetailsOpen(false), true)}
+              {sessionInfo(() => setDetailsOpen(false), true, desktopGroups.length > 0 && (
+                // Every command of the session, grouped as the desktop ⋯ menu: the sheet stays one screen.
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild><ActionBarButton icon={<IconEllipsis />} label={t({ message: '更多', context: 'session-sheet-more' })} /></DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-64">
+                    {desktopGroups.map((group, index) => (
+                      <Fragment key={`${index}:${group[0]!.id}`}>
+                        {index > 0 && <DropdownMenuSeparator />}
+                        {group.map((action) => <ActionMenuItem key={action.id} action={action} onSelect={() => { setDetailsOpen(false); action.onSelect(); }} />)}
+                      </Fragment>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ))}
             </div>
-
-            {sheetActions.length > 0 && (
-              <section className="-mx-2">
-                <h3 className="px-2 pb-1 text-xs font-medium text-fg-3"><Trans context="workbench-session-noun">会话</Trans></h3>
-                {sheetActions.map((action) => (
-                  <button
-                    key={action.id}
-                    type="button"
-                    disabled={action.disabled}
-                    onClick={() => { setDetailsOpen(false); action.onSelect(); }}
-                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-fg hover:bg-hover active:bg-active disabled:opacity-50 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-fg-3"
-                  >
-                    {action.icon}<span className="min-w-0 flex-1 truncate">{action.label}</span>
-                    {action.hint && <span className="shrink-0 text-sm tabular-nums text-fg-3">{action.hint}</span>}
-                    {action.active && <IconCheck className="size-4 shrink-0 text-fg" />}
-                  </button>
-                ))}
-              </section>
-            )}
-
-            {archiveAction && (
-              <div className="-mx-2 edge-t pt-1">
-                <button
-                  type="button"
-                  onClick={() => { setDetailsOpen(false); archiveAction.onSelect(); }}
-                  className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-fg-2 hover:bg-hover active:bg-active [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-fg-3"
-                >
-                  {archiveAction.icon}<span className="min-w-0 flex-1 truncate">{archiveAction.label}</span>
-                </button>
-                {deleteAction && (
-                  <button
-                    type="button"
-                    disabled={deleteAction.disabled}
-                    onClick={() => { setDetailsOpen(false); deleteAction.onSelect(); }}
-                    className="flex h-12 w-full items-center gap-3 rounded-lg px-2 text-left text-base text-danger hover:bg-danger-soft active:bg-danger-soft disabled:opacity-50 [&_svg]:size-4.5 [&_svg]:shrink-0 [&_svg]:text-danger"
-                  >
-                    {deleteAction.icon}<span className="min-w-0 flex-1 truncate">{deleteAction.label}</span>
-                  </button>
-                )}
-              </div>
-            )}
           </DialogBody>
         </DialogContent>
       </Dialog>

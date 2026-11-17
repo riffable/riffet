@@ -104,7 +104,10 @@ export function WorkItemsPage({ projects, sessions, backends, sidebarCollapsed, 
       onClose={onClose}
       onOpenSidebar={onOpenSidebar}
       onExpandSidebar={onExpandSidebar}
-      actions={<Button size="sm" variant="primary" onClick={() => setDraft(newDraft())}><IconPlus /><Trans>新建任务</Trans></Button>}
+      // A phone's top bar takes icons only (mobile.md §10.2), as 自动化's 新建 does.
+      actions={mobile
+        ? <Button size="icon-sm" variant="quiet" className="size-11" aria-label={t`新建任务`} onClick={() => setDraft(newDraft())}><IconPlus /></Button>
+        : <Button size="sm" variant="primary" onClick={() => setDraft(newDraft())}><IconPlus /><Trans>新建任务</Trans></Button>}
       pinned={selected && (
         <WorkItemPanel
           key={selected.item.id}

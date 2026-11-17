@@ -5,11 +5,47 @@ import { cn } from '@/lib/utils';
 import { OverlayOpenContext, OverlayScopeContext, useClosingSnapshot, useOverlayState } from '@/lib/overlay-navigation';
 import { useTypingFocusReturn } from './focus-return';
 
+/** The menu's state for its trigger; Radix keeps its own toggle private. */
+const ToggleContext = React.createContext<{ open: () => boolean; set: (open: boolean) => void } | null>(null);
+
 export function DropdownMenu({ open, defaultOpen, onOpenChange, ...props }: React.ComponentProps<typeof Primitive.Root>) {
   const { scope, ...state } = useOverlayState({ open, defaultOpen, onOpenChange });
-  return <OverlayScopeContext.Provider value={scope}><OverlayOpenContext.Provider value={state.open}><Primitive.Root {...props} {...state} /></OverlayOpenContext.Provider></OverlayScopeContext.Provider>;
+  const latest = React.useRef(state);
+  latest.current = state;
+  const toggle = React.useMemo(() => ({ open: () => latest.current.open, set: (next: boolean) => latest.current.onOpenChange(next) }), []);
+  return <OverlayScopeContext.Provider value={scope}><OverlayOpenContext.Provider value={state.open}><ToggleContext.Provider value={toggle}><Primitive.Root {...props} {...state} /></ToggleContext.Provider></OverlayOpenContext.Provider></OverlayScopeContext.Provider>;
 }
-export const DropdownMenuTrigger = Primitive.Trigger;
+
+/**
+ * Radix opens on `pointerdown` for every pointer, so a finger that lands on a ⋯ to scroll a list
+ * opens its menu. A touch or pen opens on the click instead, which a scroll cancels — as Radix's
+ * own Select does. The mouse keeps press-to-open.
+ */
+export function DropdownMenuTrigger({ onPointerDown, onClick, ...props }: React.ComponentProps<typeof Primitive.Trigger>) {
+  const toggle = React.useContext(ToggleContext);
+  // The pointer of the press, and whether the menu was open then: a tap on the trigger of an open
+  // non-modal menu dismisses it on the press, and the click must not open it again.
+  const press = React.useRef<{ type: string; wasOpen: boolean } | null>(null);
+  return (
+    <Primitive.Trigger
+      {...props}
+      onPointerDown={(event) => {
+        onPointerDown?.(event);
+        press.current = { type: event.pointerType, wasOpen: toggle?.open() ?? false };
+        // A prevented default skips Radix's handler; only a mouse opens on the press.
+        if (toggle && event.pointerType !== 'mouse') event.preventDefault();
+      }}
+      onClick={(event) => {
+        onClick?.(event);
+        const pressed = press.current;
+        press.current = null;
+        // `detail` is 0 for a click from the keyboard, which Radix already answered on keydown.
+        if (!toggle || !pressed || pressed.type === 'mouse' || event.detail === 0 || event.defaultPrevented || props.disabled) return;
+        toggle.set(!pressed.wasOpen);
+      }}
+    />
+  );
+}
 export const DropdownMenuGroup = Primitive.Group;
 export const DropdownMenuRadioGroup = Primitive.RadioGroup;
 

@@ -1,9 +1,10 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
 import { i18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import type { Session } from '@contracts';
 import { IconBrain, IconCheck, IconChevronDown, IconChevronRight, IconCopy, IconFolder, IconGitCompare, IconFileText, IconMessageSquareText, IconRepeat, IconSettings2, IconShieldCheck, IconSparkles, IconSquareKanban, IconTerminal } from '@/components/icons';
+import { ActionBar, ActionBarButton } from '@/components/ui/action-bar';
 import { Badge, Spinner, StatusDot } from '@/components/ui/controls';
 import { ListRow, listRowClass, rowReveal } from '@/components/ui/list-row';
 import { AgentLogo } from '@/components/AgentLogo';
@@ -40,6 +41,18 @@ export const infoRow = cn(listRowClass, 'text-fg');
  * renders nothing otherwise, so an empty group never leaves a heading or a seam behind.
  */
 export function InfoSection({ title, summary, children }: { title: string; summary?: ReactNode; children: ReactNode }) {
+  // The phone's sheet stacks its blocks as cards under a heading (mobile.md §10.4).
+  if (useContext(InfoSheetContext)) {
+    return (
+      <section>
+        <div className="flex h-7 items-center gap-2 text-xs text-fg-3">
+          <h3 className="font-normal">{title}</h3>
+          {summary && <span className="ml-auto tabular-nums text-fg-4">{summary}</span>}
+        </div>
+        <div className="rounded-xl border border-line p-1">{children}</div>
+      </section>
+    );
+  }
   return (
     <section className="edge-t p-1.5">
       <div className="flex h-7 items-center gap-2 px-2.5 text-xs text-fg-3">
@@ -50,6 +63,9 @@ export function InfoSection({ title, summary, children }: { title: string; summa
     </section>
   );
 }
+
+/** Set by the phone's sheet: its groups are cards, its places a bar. */
+const InfoSheetContext = createContext(false);
 
 /** The row standing in for `hidden` more; selecting it unfolds them in place. */
 export function InfoMore({ hidden, onClick }: { hidden: number; onClick: () => void }) {
@@ -82,6 +98,26 @@ function TaskPlaceRow({ workItemId, onNavigate }: { workItemId: string; onNaviga
   // Through `navigate`, as the sidebar's entry goes: a draft's discard guard still asks first.
   const open = () => { onNavigate(); void nav.navigate(() => { workItems.reveal(item.id); nav.openPage('tasks'); }); };
   return <PlaceRow icon={<IconSquareKanban />} label={t`任务 #${item.number}`} hint={statusLabel(item.status)} onClick={open} />;
+}
+
+/** The phone sheet's fact row for the same 任务: its number and status, opening it on the board. */
+function TaskFact({ workItemId, onNavigate }: { workItemId: string; onNavigate: () => void }) {
+  const { t } = useLingui();
+  const { workItems, nav } = useStores();
+  const statusLabel = useStatusLabel();
+  const item = useWorkItems((state) => state.items?.find((entry) => entry.id === workItemId));
+  if (!item) return null;
+  const open = () => { onNavigate(); void nav.navigate(() => { workItems.reveal(item.id); nav.openPage('tasks'); }); };
+  return <>
+    <dt className="min-w-0 text-xs leading-5 text-fg-3">{t({ message: '任务', context: 'session-info-task' })}</dt>
+    <dd className="flex min-h-5 min-w-0 items-center text-sm leading-5 text-fg">
+      <button type="button" onClick={open} className="-mx-1 flex min-w-0 items-center gap-1.5 rounded-md px-1 text-left hover:bg-hover">
+        <span className="tabular-nums">#{item.number}</span>
+        <span className="min-w-0 truncate text-fg-3">{statusLabel(item.status)}</span>
+        <IconChevronRight className="size-3.5 shrink-0 text-fg-4" />
+      </button>
+    </dd>
+  </>;
 }
 
 /** A value that copies itself: a path or a branch. The icon only shows once it has something to say. */
@@ -158,6 +194,8 @@ export interface SessionInfoProps {
   head?: boolean;
   /** The session's own groups: side discussions, subagents, background tasks, marks. */
   children?: ReactNode;
+  /** The phone sheet's last cell in its bar: 更多, the session's commands. */
+  barEnd?: ReactNode;
 }
 
 /**
@@ -165,7 +203,7 @@ export interface SessionInfoProps {
  * the top — who is working, on what, and how it is going — then the facts as a labelled list, the
  * places it can take you, and what is running in it.
  */
-export function SessionInfo({ session, quickChat, project, projectName, model, modelDetail, branch, changes, changesVisible, state, usage, approval, panelTab, terminalOpen, onTogglePanel, onToggleTerminal, onNavigate, assistant, head = true, children }: SessionInfoProps) {
+export function SessionInfo({ session, quickChat, project, projectName, model, modelDetail, branch, changes, changesVisible, state, usage, approval, panelTab, terminalOpen, onTogglePanel, onToggleTerminal, onNavigate, assistant, head = true, children, barEnd }: SessionInfoProps) {
   const { t } = useLingui();
   const mobile = useMediaQuery(MOBILE_LAYOUT_QUERY);
   const title = mainSessionIdOf(project) === session.id ? t`个人助理` : session.title;
@@ -180,11 +218,57 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
   const facts: [label: string, value: ReactNode][] = [
     ...(model ? [[t`模型`, <span key="model" className="flex min-w-0 flex-wrap items-baseline gap-x-1.5"><span className="min-w-0 break-words font-mono text-xs">{model}</span>{modelDetail && <span className="min-w-0 text-xs text-fg-3">{modelDetail}</span>}</span>] as [string, ReactNode]] : []),
     ...(session.approval && !quickChat ? [[t`权限`, approval || session.approval] as [string, ReactNode]] : []),
-    ...(usage && usage.size > 0 ? [[t`上下文用量`, <ContextValue key="usage" usage={usage} />] as [string, ReactNode]] : []),
+    // The phone's composer carries the context ring; its sheet skips the row.
+    ...(head && usage && usage.size > 0 ? [[t`上下文用量`, <ContextValue key="usage" usage={usage} />] as [string, ReactNode]] : []),
     ...(project && !quickChat ? [[t`目录`, <CopyValue key="cwd" value={project.cwd} display={<>{projectName && <span className="font-sans text-fg">{projectName} </span>}<span className="text-fg-3">{tildePath(project.cwd)}</span></>} label={t`目录`} />] as [string, ReactNode]] : []),
     ...(branch ? [[t`分支`, <CopyValue key="branch" value={branch} label={t`分支`} />] as [string, ReactNode]] : []),
-    [t({ message: '创建', context: 'workbench-created-at' }), <span key="created" className="tabular-nums">{formatDateTime(session.createdAt)}</span>],
+    ...(!head && tags.length > 0 ? [[t({ message: '标签', context: 'session-info-tags' }), <span key="tags" className="flex flex-wrap gap-1">{tags.map((tag) => <Badge key={tag}>{tag}</Badge>)}</span>] as [string, ReactNode]] : []),
+    ...(head ? [[t({ message: '创建', context: 'workbench-created-at' }), <span key="created" className="tabular-nums">{formatDateTime(session.createdAt)}</span>] as [string, ReactNode]] : []),
   ];
+  const factList = (
+    <dl className={cn('grid grid-cols-[fit-content(40%)_minmax(0,1fr)] items-start gap-x-3 gap-y-1.5', head ? 'px-4 pb-3' : 'rounded-xl border border-line px-3 py-2.5')}>
+      {!head && session.workItemId && <TaskFact workItemId={session.workItemId} onNavigate={onNavigate} />}
+      {facts.map(([label, value]) => (
+        <Fragment key={label}>
+          <dt className="min-w-0 text-xs leading-5 text-fg-3 [overflow-wrap:anywhere]">{label}</dt>
+          <dd className="flex min-h-5 min-w-0 items-center text-sm leading-5 text-fg [overflow-wrap:anywhere]">{value}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+  const assistantRows = assistant && <>
+    <PlaceRow icon={<IconBrain />} label={t`记忆`} hint={assistant.memoryNote} onClick={go(() => assistant.setMemoryOpen(true))} />
+    <PlaceRow icon={<IconShieldCheck />} label={t`规则`} hint={assistant.instructionsNote} onClick={go(assistant.openRules)} />
+    <PlaceRow icon={<IconSparkles />} label={t`能力`} hint={assistant.abilitiesNote} onClick={go(assistant.openAbilities)} />
+    {assistant.hasFiles && <PlaceRow icon={<IconFileText />} label={t`文件`} hint={assistant.filesNote} onClick={go(() => assistant.setFilesOpen(true))} />}
+    {assistant.hasDelegations && <PlaceRow icon={<IconRepeat />} label={t`委托`} hint={assistant.delegationsNote} onClick={go(() => assistant.setDelegationsOpen(true))} />}
+    <PlaceRow icon={<IconSettings2 />} label={t`设置`} onClick={go(assistant.openSettings)} />
+  </>;
+  const projectPlaces = Boolean(project && (changesVisible || !isAssistantProject(project)));
+
+  // The phone's sheet (mobile.md §10.4): one bar of places ending in the sheet's 更多, then what runs, then the facts.
+  if (!head) {
+    return (
+      <InfoSheetContext.Provider value>
+        <div className="flex flex-col gap-4 *:shrink-0">
+          {(projectPlaces || barEnd) && (
+            <ActionBar>
+              {project && changesVisible && <ActionBarButton icon={<IconGitCompare />} label={t`变更`} active={panelTab === 'changes'} aria-pressed={panelTab === 'changes'} onClick={go(() => onTogglePanel('changes'))} />}
+              {project && !isAssistantProject(project) && <>
+                <ActionBarButton icon={<IconFolder />} label={t({ message: '文件', context: 'workbench-files-panel' })} active={panelTab === 'files'} aria-pressed={panelTab === 'files'} onClick={go(() => onTogglePanel('files'))} />
+                <ActionBarButton icon={<IconTerminal />} label={t`终端`} active={terminalOpen} aria-pressed={terminalOpen} onClick={go(onToggleTerminal)} />
+              </>}
+              {barEnd}
+            </ActionBar>
+          )}
+          {/* Six places with their own values: rows, not cells. */}
+          {assistant && <div className="rounded-xl border border-line p-1">{assistantRows}</div>}
+          {children}
+          {(facts.length > 0 || session.workItemId) && factList}
+        </div>
+      </InfoSheetContext.Provider>
+    );
+  }
   return (
     <div>
       {head && (
@@ -208,14 +292,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
           </div>
         </div>
       )}
-      <dl className={cn('grid grid-cols-[fit-content(40%)_minmax(0,1fr)] items-start gap-x-3 gap-y-1.5 pb-3', head ? 'px-4' : 'px-1 pt-1')}>
-        {facts.map(([label, value]) => (
-          <Fragment key={label}>
-            <dt className="min-w-0 text-xs leading-5 text-fg-3 [overflow-wrap:anywhere]">{label}</dt>
-            <dd className="flex min-h-5 min-w-0 items-center text-sm leading-5 text-fg [overflow-wrap:anywhere]">{value}</dd>
-          </Fragment>
-        ))}
-      </dl>
+      {factList}
       {(project || session.workItemId) && (
         <section className="edge-t p-1.5">
           {session.workItemId && <TaskPlaceRow workItemId={session.workItemId} onNavigate={onNavigate} />}
@@ -225,14 +302,7 @@ export function SessionInfo({ session, quickChat, project, projectName, model, m
             <PlaceRow icon={<IconTerminal />} label={t`终端`} hint={mobile ? undefined : '⌃`'} active={terminalOpen} onClick={go(onToggleTerminal)} />
           </>}
           {/* What the 个人助理 is made of, in place of a project's changes, files and terminal (docs/ASSISTANT.md §3). */}
-          {assistant && <>
-            <PlaceRow icon={<IconBrain />} label={t`记忆`} hint={assistant.memoryNote} onClick={go(() => assistant.setMemoryOpen(true))} />
-            <PlaceRow icon={<IconShieldCheck />} label={t`规则`} hint={assistant.instructionsNote} onClick={go(assistant.openRules)} />
-            <PlaceRow icon={<IconSparkles />} label={t`能力`} hint={assistant.abilitiesNote} onClick={go(assistant.openAbilities)} />
-            {assistant.hasFiles && <PlaceRow icon={<IconFileText />} label={t`文件`} hint={assistant.filesNote} onClick={go(() => assistant.setFilesOpen(true))} />}
-            {assistant.hasDelegations && <PlaceRow icon={<IconRepeat />} label={t`委托`} hint={assistant.delegationsNote} onClick={go(() => assistant.setDelegationsOpen(true))} />}
-            <PlaceRow icon={<IconSettings2 />} label={t`设置`} onClick={go(assistant.openSettings)} />
-          </>}
+          {assistantRows}
         </section>
       )}
       {children}

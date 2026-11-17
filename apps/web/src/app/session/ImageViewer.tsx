@@ -372,7 +372,8 @@ function ViewerBody({ src, name, thumb, closer, onClose }: {
 
   return (
     <>
-      <div ref={backdrop} className="pointer-events-none absolute inset-0 -z-10 bg-black/95" />
+      {/* Opaque: a translucent stage lets the page's text show through around the picture. */}
+      <div ref={backdrop} className="pointer-events-none absolute inset-0 -z-10 bg-black" />
       <div
         ref={bar}
         className="flex h-14 shrink-0 items-center gap-2 pl-4 pr-2 pt-[env(safe-area-inset-top,0px)]"

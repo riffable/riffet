@@ -92,3 +92,41 @@
 ### 现状
 
 - 使用处只有 `Header.tsx`、`terminal/TerminalView.tsx`、`terminal/NativeSession.tsx`；插件 SDK 未导出 `StatusPill`，只导出 `Badge` 与 `StatusDot`。
+
+## ActionBar
+
+### 用途
+
+手机面板上的一排去处或小操作：一张卡片分成二到四格，每格图标在上、一个词在下（手机 Web 会话详情的「变更 · 文件 · 终端 · 更多」）。对应 Android 的 `PaneActionBar`。超过四项时，第四格是「更多」，其余进它的菜单。只在手机布局用；桌面的同类入口是行或菜单。
+
+### 变体与尺寸
+
+无变体。格等宽；格高至少 64，图标 20，文字 `text-sm` `fg`，一行截断。卡片与面板里的其他卡片相同：`rounded-xl`、`line` 描边。
+
+### 状态
+
+| 状态 | 外观 |
+|---|---|
+| 默认 | 透明底 |
+| 按下 | `bg-active` |
+| 当前打开（`active`） | `bg-active`，同时设 `aria-pressed` |
+| 菜单展开 | `bg-active`（`data-state="open"`） |
+| 键盘焦点 | 内侧焦点环 |
+| 禁用 | 不透明度 50%，不响应 |
+
+### 键盘与无障碍
+
+容器是 `role="group"`；每格是 `<button>`，可见的文字就是名称。`ActionBarButton` 透传属性，可作 `DropdownMenuTrigger asChild`。
+
+### 文案
+
+一个词或「任务 #12」这样的短名，名词或动词都可，不加省略号；会打开确认或表单的操作同样不加。
+
+### 不要
+
+- 放进五格以上，或折成两行文字。
+- 把危险操作放进来：删除单独一张卡片。
+
+### 现状
+
+- 使用处：`app/Header.tsx`、`app/SessionInfo.tsx`（手机会话详情）。

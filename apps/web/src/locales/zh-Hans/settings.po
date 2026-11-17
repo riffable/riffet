@@ -2287,6 +2287,10 @@ msgstr "原生风格是窗口工具栏，自绘风格是 CustomPageBar"
 msgid "去哪里，用什么搭"
 msgstr "去哪里，用什么搭"
 
+#: src/app/design/components/ActionsChapter.tsx
+msgid "去处"
+msgstr "去处"
+
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "去掉"
 msgstr "去掉"
@@ -2409,6 +2413,7 @@ msgstr "取消在左，主操作在右；危险确认的焦点落在取消上"
 msgid "变体"
 msgstr "变体"
 
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
 msgid "变更"
 msgstr "变更"
@@ -3195,12 +3200,12 @@ msgstr "它所在的会话"
 msgid "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 msgstr "它的文件夹会删除，可以从个人助理目录的提交历史找回"
 
+#: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 #: src/app/design/patterns/FeedbackChapter.tsx
 msgid "安装"
 msgstr "安装"
 
-#: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "安装到当前连接的服务器"
 msgstr "安装到当前连接的服务器"
@@ -4065,6 +4070,10 @@ msgstr "强调色"
 msgid "强调色只用于焦点环、文本选区和链接"
 msgstr "强调色只用于焦点环、文本选区和链接"
 
+#: src/app/design/components/ActionsChapter.tsx
+msgid "归档"
+msgstr "归档"
+
 #. placeholder {0}: serverBuild.tag ?? serverBuild.version
 #: src/app/settings/UpdateSection.tsx
 msgid "当前 {0}"
@@ -4333,6 +4342,10 @@ msgstr "手机：先分类，再全屏"
 msgid "手机上的底部面板"
 msgstr "手机上的底部面板"
 
+#: src/app/design/components/ActionsChapter.tsx
+msgid "手机面板专用，二到四格。"
+msgstr "手机面板专用，二到四格。"
+
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/settings/TabsSection.tsx
 msgid "打开会话时"
@@ -4385,6 +4398,10 @@ msgstr "把{0}移到更多"
 msgid "把事件订阅改为长连接"
 msgstr "把事件订阅改为长连接"
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "把兼容 OpenAI 接口的网关作为模型源。"
+msgstr "把兼容 OpenAI 接口的网关作为模型源。"
+
 #: src/app/design/surfaces/SessionChapter.tsx
 msgid "把设置页的焦点顺序修一下"
 msgstr "把设置页的焦点顺序修一下"
@@ -4398,10 +4415,6 @@ msgid "把超时统一成一个常量"
 msgstr "把超时统一成一个常量"
 
 #: src/app/settings/ThemeEditor.tsx
-#: src/app/design/components/NavigationChapter.tsx
-msgid "把兼容 OpenAI 接口的网关作为模型源。"
-msgstr "把兼容 OpenAI 接口的网关作为模型源。"
-
 msgid "把配色改成画板"
 msgstr "把配色改成画板"
 
@@ -4949,6 +4962,10 @@ msgstr "整体"
 msgid "整套配色决定界面颜色，选择立即生效并只保存在这台 Mac"
 msgstr "整套配色决定界面颜色，选择立即生效并只保存在这台 Mac"
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+msgstr "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
+
 #: src/app/design/patterns/ListsChapter.tsx
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/surfaces/NewSessionChapter.tsx
@@ -4962,12 +4979,9 @@ msgstr "整理超时常量"
 
 #: src/app/settings/channels/BotDetail.tsx
 msgid "整群一个会话"
-#: src/app/design/components/NavigationChapter.tsx
-msgid "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
-msgstr "整张卡片打开详情；页脚的控件在它上面。两行说明，按正文宽度排一到三列。"
-
 msgstr "整群一个会话"
 
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/patterns/FormsChapter.tsx
 #: src/app/design/surfaces/PanelsChapter.tsx
@@ -5502,6 +5516,7 @@ msgstr "曲线"
 msgid "曲线、时长与规则"
 msgstr "曲线、时长与规则"
 
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/overview/Opening.tsx
 #: src/app/design/patterns/OverlayChapter.tsx
 #: src/app/settings/channels/BotDetail.tsx
@@ -6706,6 +6721,7 @@ msgstr "短"
 msgid "短暂反馈"
 msgstr "短暂反馈"
 
+#: src/app/design/components/NavigationChapter.tsx
 #: src/app/settings/ThemeCanvas.tsx
 msgid "石墨"
 msgstr "石墨"
@@ -6721,7 +6737,6 @@ msgstr "确定"
 
 #: src/app/design/foundations/ContentChapter.tsx
 msgid "确定要删除吗？"
-#: src/app/design/components/NavigationChapter.tsx
 msgstr "确定要删除吗？"
 
 #: src/app/design/foundations/ContentChapter.tsx
@@ -7201,6 +7216,7 @@ msgstr "细线"
 msgid "细线分隔"
 msgstr "细线分隔"
 
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/InputsChapter.tsx
 #: src/app/design/components/NavigationChapter.tsx
 #: src/app/design/mac/WindowChapter.tsx
@@ -7348,6 +7364,10 @@ msgstr "缩放与时长放大 {SLOW} 倍"
 msgid "缺少"
 msgstr "缺少"
 
+#: src/app/design/components/NavigationChapter.tsx
+msgid "网关模型"
+msgstr "网关模型"
+
 #: src/app/settings/ProviderModelList.tsx
 msgid "网关模型不在 DSH 目录时会按纯文本处理；勾选「图片」才能收到图。"
 msgstr "网关模型不在 DSH 目录时会按纯文本处理；勾选「图片」才能收到图。"
@@ -7364,11 +7384,8 @@ msgstr "网格"
 #: src/app/settings/SupportSections.tsx
 msgid "网页交互诊断"
 msgstr "网页交互诊断"
-#: src/app/design/components/NavigationChapter.tsx
-msgid "网关模型"
-msgstr "网关模型"
 
-
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/mac/StyleMiniature.tsx
 msgid "置顶"
 msgstr "置顶"
@@ -8641,6 +8658,7 @@ msgid "重启会话后生效"
 msgstr "重启会话后生效"
 
 #: src/app/design/android/TypeChapter.tsx
+#: src/app/design/components/ActionsChapter.tsx
 #: src/app/design/components/OverlaysChapter.tsx
 #: src/app/design/mac/OverlayChapter.tsx
 #: src/app/design/overview/Opening.tsx

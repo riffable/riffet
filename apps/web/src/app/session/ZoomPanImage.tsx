@@ -49,9 +49,22 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
   useLayoutEffect(() => {
     const element = frame.current;
     if (!element) return;
-    const measure = () => setBox({ w: element.clientWidth, h: element.clientHeight });
-    measure();
-    const observer = new ResizeObserver(measure);
+    // The frame's border box, floored. `clientWidth` excludes scrollbars and rounds to the nearest
+    // pixel: on a browser whose scrollbars take space, a fitted image overflowing a fractional frame
+    // by that rounding brought them in, which shrank the fit and took them away again, so the image
+    // kept switching between two sizes. The border box includes scrollbars and ignores transforms
+    // (a dialog's entrance), so neither moves the fit.
+    const measure = (width: number, height: number) => {
+      const next = { w: Math.max(0, Math.floor(width)), h: Math.max(0, Math.floor(height)) };
+      setBox((current) => current?.w === next.w && current.h === next.h ? current : next);
+    };
+    // Whole pixels until the observer reports the exact box, before the first paint.
+    measure(element.offsetWidth - 1, element.offsetHeight - 1);
+    const observer = new ResizeObserver(([entry]) => {
+      const size = entry?.borderBoxSize?.[0];
+      if (size) measure(size.inlineSize, size.blockSize);
+      else measure(element.offsetWidth - 1, element.offsetHeight - 1);
+    });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -62,7 +75,8 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
   const minScale = scales.fit;
   const width = image ? image.w * scale : 0;
   const height = image ? image.h * scale : 0;
-  const inner = box ? { w: Math.max(box.w, width + GUTTER * 2), h: Math.max(box.h, height + GUTTER * 2) } : undefined;
+  // Floored, so a fitted image a rounding error larger than the frame does not make it scroll.
+  const inner = box ? { w: Math.max(box.w, Math.floor(width + GUTTER * 2)), h: Math.max(box.h, Math.floor(height + GUTTER * 2)) } : undefined;
 
   const view = useRef({ scale, width, height, inner, minScale, fit: scales.fit, image });
   view.current = { scale, width, height, inner, minScale, fit: scales.fit, image };
@@ -223,6 +237,8 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
         aria-label={t`${alt}，可缩放`}
         className={cn(
           'min-h-0 flex-1 touch-none select-none overflow-auto overscroll-contain outline-none',
+          // The lightbox pans by dragging and gestures; scrollbars would only cover the picture.
+          overlay && 'scrollbar-none',
           dragging ? 'cursor-grabbing' : overflowing ? 'cursor-grab' : image && scales.fit < 1 ? 'cursor-zoom-in' : undefined,
         )}
         onPointerDown={onPointerDown}
@@ -244,10 +260,11 @@ export function ZoomPanImage({ src, alt, tone = 'surface', className, onError, o
           />
         </div>
       </div>
+      {/* A touch screen pinches instead; the bar would only cover the fitted image's lower edge. */}
       {image && (
         <div
           className={cn(
-            'absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg p-0.5 text-xs tabular-nums mb-[env(safe-area-inset-bottom,0px)]',
+            'absolute bottom-3 no-hover:hidden left-1/2 flex -translate-x-1/2 items-center gap-0.5 rounded-lg p-0.5 text-xs tabular-nums mb-[env(safe-area-inset-bottom,0px)]',
             overlay ? 'bg-black/70 text-white/85 ring-1 ring-white/10 backdrop-blur-md' : 'border border-line bg-popover/95 text-fg-2 shadow-soft backdrop-blur-md',
           )}
         >

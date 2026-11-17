@@ -39,13 +39,24 @@ export function SidebarUserMenu({ owner, backend, stale, mobile, onOpenProfile, 
   const tooltip = [owner?.name, label, warning].filter(Boolean).join(' · ');
   const HostIcon = local ? IconLaptop : IconServer;
   const hostLabel = local ? t`本机` : t({ message: '远端', context: 'workbench-remote-host' });
+  const avatar = <>
+    <OwnerAvatar owner={owner} size={24} />
+    {warning && <StatusDot tone="warning" className={cn('absolute right-0 bottom-0 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')} />}
+  </>;
+  // The phone's settings page leads with the profile and the theme, so the avatar goes straight there.
+  if (mobile) {
+    return (
+      <Button size="icon-sm" variant="quiet" aria-label={[owner?.name, t`设置`, warning].filter(Boolean).join(' · ')} onPointerDown={preloadSettings} onClick={onOpenSettings} className="relative rounded-full">
+        {avatar}
+      </Button>
+    );
+  }
   return (
     <DropdownMenu>
       <Tip label={tooltip} side="top">
         <DropdownMenuTrigger asChild>
           <Button size="icon-sm" variant="quiet" aria-label={tooltip} onPointerEnter={preloadSettings} onFocus={preloadSettings} className="relative rounded-full">
-            <OwnerAvatar owner={owner} size={24} />
-            {warning && <StatusDot tone="warning" className={cn('absolute right-0 bottom-0 ring-2', mobile ? 'ring-sidebar' : 'ring-canvas')} />}
+            {avatar}
           </Button>
         </DropdownMenuTrigger>
       </Tip>

@@ -157,6 +157,11 @@ msgctxt "plugin-feature"
 msgid "任务"
 msgstr "任务"
 
+#: src/app/SessionInfo.tsx
+msgctxt "session-info-task"
+msgid "任务"
+msgstr "任务"
+
 #. placeholder {0}: item.number
 #: src/app/SessionInfo.tsx
 msgid "任务 #{0}"
@@ -168,7 +173,6 @@ msgid "任务看板"
 msgstr "任务看板"
 
 #: src/app/CommandPalette.tsx
-#: src/app/Header.tsx
 #: src/app/Sidebar.tsx
 msgctxt "workbench-session-noun"
 msgid "会话"
@@ -250,10 +254,10 @@ msgstr "修改状态"
 #: src/app/Workbench.tsx
 msgid "停止当前运行"
 msgstr "停止当前运行"
+
 #: src/app/plugins/PluginSources.tsx
 msgid "停用插件源"
 msgstr "停用插件源"
-
 
 #: src/app/plugins/PluginGrantDialog.tsx
 msgid "允许插件使用 Riffet 的文件、网络和进程权限"
@@ -271,8 +275,8 @@ msgstr "全部"
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
 msgstr "全部会话"
-#: src/app/plugins/PluginsNav.tsx
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "全部插件源"
 msgstr "全部插件源"
@@ -476,8 +480,8 @@ msgid "取消"
 msgstr "取消"
 
 #: src/app/AddProjectDialog.tsx
-#: src/app/plugins/PluginSources.tsx
 #: src/app/DirectoryPicker.tsx
+#: src/app/plugins/PluginSources.tsx
 msgctxt "workbench-cancel-action"
 msgid "取消"
 msgstr "取消"
@@ -539,10 +543,10 @@ msgstr "启用插件后可打开专用配置"
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用插件后可用"
 msgstr "启用插件后可用"
+
 #: src/app/plugins/PluginSources.tsx
 msgid "启用插件源"
 msgstr "启用插件源"
-
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "启用策略"
@@ -624,8 +628,8 @@ msgstr "复制命令"
 #: src/app/ResumeInTerminalDialog.tsx
 msgid "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
 msgstr "复制命令时会停止 Riffet 中这个会话的进程，终端运行期间这里无法发送。"
-#: src/app/plugins/PluginSources.tsx
 
+#: src/app/plugins/PluginSources.tsx
 #: src/app/SidebarUserMenu.tsx
 msgid "复制地址"
 msgstr "复制地址"
@@ -728,8 +732,8 @@ msgstr "已启用"
 msgid "已复制地址"
 msgstr "已复制地址"
 
-#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "已安装"
 msgstr "已安装"
@@ -785,8 +789,8 @@ msgstr "开发包"
 #: src/app/plugins/PluginsPage.tsx
 msgid "开启"
 msgstr "开启"
-#: src/app/plugins/PluginsNav.tsx
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "异常"
 msgstr "异常"
@@ -964,6 +968,7 @@ msgstr "描述任务…"
 msgid "提供模型源"
 msgstr "提供模型源"
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
 #: src/app/sidebarDestinations.ts
 #: src/app/Workbench.tsx
@@ -973,7 +978,6 @@ msgstr "插件"
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件 ID"
 msgstr "插件 ID"
-#: src/app/plugins/PluginsNav.tsx
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "插件已不可用，当前内容会保留到关闭"
@@ -1425,17 +1429,24 @@ msgstr "暂时无法确认是否已发送，请先检查状态"
 msgid "更多"
 msgstr "更多"
 
+#: src/app/Header.tsx
+msgctxt "session-sheet-more"
+msgid "更多"
+msgstr "更多"
+
 #: src/app/Sidebar.tsx
 msgctxt "workbench-sidebar-more"
 msgid "更多"
 msgstr "更多"
 
 #: src/app/Header.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "更多操作"
 msgstr "更多操作"
 
 #: src/app/plugins/PluginMarket.tsx
+#: src/app/plugins/PluginsPage.tsx
 msgid "更新"
 msgstr "更新"
 
@@ -1443,15 +1454,18 @@ msgstr "更新"
 msgid "更早"
 msgstr "更早"
 
+#: src/app/plugins/PluginsNav.tsx
 #: src/app/plugins/PluginsPage.tsx
+msgid "有更新"
+msgstr "有更新"
+
+#: src/app/plugins/PluginMark.tsx
 msgid "服务与分享"
-#: src/app/plugins/PluginSources.tsx
 msgstr "服务与分享"
 
 #: src/app/plugins/PluginsPage.tsx
 msgid "服务器版本不兼容"
 msgstr "服务器版本不兼容"
-#: src/app/plugins/PluginsPage.tsx
 
 #: src/app/Header.tsx
 #: src/app/ProjectHome.tsx
@@ -1459,12 +1473,7 @@ msgstr "服务器版本不兼容"
 msgid "未关联项目"
 msgstr "未关联项目"
 
-#: src/app/plugins/PluginsNav.tsx
 #: src/app/Sidebar.tsx
-msgid "有更新"
-msgstr "有更新"
-
-#: src/app/plugins/PluginMark.tsx
 msgid "未读"
 msgstr "未读"
 
@@ -1489,6 +1498,11 @@ msgstr "查看"
 #: src/app/App.tsx
 msgid "查看访问令牌"
 msgstr "查看访问令牌"
+
+#: src/app/SessionInfo.tsx
+msgctxt "session-info-tags"
+msgid "标签"
+msgstr "标签"
 
 #: src/app/tabs/TabStyleSetting.tsx
 msgid "标签样式"
@@ -1593,6 +1607,11 @@ msgstr "深色"
 msgid "添加"
 msgstr "添加"
 
+#: src/app/plugins/PluginsNav.tsx
+#: src/app/plugins/PluginSources.tsx
+msgid "添加插件源"
+msgstr "添加插件源"
+
 #: src/app/ProjectHome.tsx
 msgid "添加第一个项目"
 msgstr "添加第一个项目"
@@ -1612,11 +1631,6 @@ msgstr "清空"
 #: src/plugins/ModelField.tsx
 msgid "清除"
 msgstr "清除"
-#: src/app/plugins/PluginsNav.tsx
-#: src/app/plugins/PluginSources.tsx
-msgid "添加插件源"
-msgstr "添加插件源"
-
 
 #: src/plugins/LogRecords.tsx
 msgid "清除筛选"

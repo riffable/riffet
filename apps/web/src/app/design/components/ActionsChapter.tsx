@@ -1,5 +1,6 @@
 import { useLingui } from '@lingui/react/macro';
-import { IconPlus, IconSettings2 } from '@/components/icons';
+import { IconArchive, IconEllipsis, IconFolder, IconGitCompare, IconPencilLine, IconPin, IconPlus, IconSettings2, IconTerminal } from '@/components/icons';
+import { ActionBar, ActionBarButton } from '@/components/ui/action-bar';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { StatusPill } from '@/components/ui/controls';
 import { Tip } from '@/components/ui/tooltip';
@@ -63,6 +64,23 @@ export function ActionsChapter() {
         </Specimen>
         <Specimen name={t`禁用`} prop="disabled">
           <StatusPill tone="danger" label={t`连接失败`} actionLabel={t`重试`} onAction={noop} disabled />
+        </Specimen>
+      </Family>
+      <Family title="ActionBar">
+        <Specimen name={t`去处`} prop="active" note={t`手机面板专用，二到四格。`}>
+          <ActionBar className="w-80">
+            <ActionBarButton icon={<IconGitCompare />} label={t`变更`} active aria-pressed onClick={noop} />
+            <ActionBarButton icon={<IconFolder />} label={t`文件`} aria-pressed={false} onClick={noop} />
+            <ActionBarButton icon={<IconTerminal />} label={t`终端`} aria-pressed={false} onClick={noop} />
+          </ActionBar>
+        </Specimen>
+        <Specimen name={t`操作`} prop="disabled">
+          <ActionBar className="w-80">
+            <ActionBarButton icon={<IconPin />} label={t`置顶`} onClick={noop} />
+            <ActionBarButton icon={<IconPencilLine />} label={t`重命名`} disabled />
+            <ActionBarButton icon={<IconArchive />} label={t`归档`} onClick={noop} />
+            <ActionBarButton icon={<IconEllipsis />} label={t`更多`} onClick={noop} />
+          </ActionBar>
         </Specimen>
       </Family>
     </Chapter>
