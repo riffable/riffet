@@ -83,6 +83,17 @@ function readableThinking(text: string): string {
   }).join('\n');
 }
 
+/**
+ * Whether a thinking block is the progress note the CLI shows as prose (`· summary`) rather than reasoning.
+ * Under `thinking.display: "updates"` the API returns reasoning empty and only progress notes with text;
+ * a block without a signature did not come from that API (a proxy relaying another model's raw reasoning).
+ * CLI versions that did not record the display still mark the note in its signature's header.
+ */
+function isNarration(row: ClaudeRow, signature: unknown): boolean {
+  if (typeof signature !== 'string' || !signature) return false;
+  return row.thinkingDisplay === 'updates' || Buffer.from(signature.slice(0, 64), 'base64').includes('narration');
+}
+
 export interface ClaudeRow {
   uuid?: string;
   type?: string;
@@ -742,7 +753,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
     }
     if ((part.type === 'thinking' || part.type === 'reasoning') && typeof (part.thinking ?? part.text) === 'string') {
       const text = readableThinking(string(part.thinking) ?? string(part.text)!);
-      if (text.trim()) events.push({ ...base(ordinal++), type: 'agent_thought_chunk', data: { sessionUpdate: 'agent_thought_chunk', channel: 'thinking', content: { type: 'text', text: hooks.unbounded ? text : clip(text) } } });
+      if (text.trim()) events.push({ ...base(ordinal++), type: 'agent_thought_chunk', data: { sessionUpdate: 'agent_thought_chunk', channel: isNarration(row, part.signature) ? 'narration' : 'thinking', content: { type: 'text', text: hooks.unbounded ? text : clip(text) } } });
       continue;
     }
     if (part.type === 'tool_use' && typeof part.id === 'string' && typeof part.name === 'string') {
