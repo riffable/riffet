@@ -6,11 +6,14 @@ import { readJson } from './bridge.js';
 import { sha } from './composer.js';
 import type { PreparedAgySession } from './config.js';
 import { agyRecord, type AgyRecord, type AgySnapshot } from './protocol.js';
+import type { AgyModel } from './models.js';
 import type { AgyRpc } from './rpc.js';
 import { agyStepIdentity } from './transcript.js';
 
 export interface Launch extends PreparedAgySession {
   config?: AgentConfigurePatch;
+  /** The `--model` this launch passed and the labels agy reports for it (models.ts `agyLaunchModel`). */
+  requestedModel?: { id: string; labels: string[] };
   configRevision?: number;
   command: string;
   args: string[];
@@ -27,7 +30,10 @@ export interface Runtime {
   failure?: string;
   ownershipMisses?: number;
   cancelling?: boolean;
-  models?: Array<{ value: string; name: string; configOptions: [] }>;
+  /** agy's own models, to read the label its status line reports back into an id. */
+  models?: AgyModel[];
+  /** agy started on another model than the launch asked for; said while this launch runs. */
+  modelFallback?: string;
   applying?: boolean;
   conflict?: boolean;
   host: AgentHost;
@@ -64,6 +70,8 @@ export interface Hub {
   readonly opening: Map<string, Promise<AgentOpenResult>>;
   readonly watchers: Map<string, Set<() => void>>;
   readonly lifecycle: Map<string, number>;
+  /** `agy models` per sign-in kind and executable (models.ts `nativeModels`); at most a few, each re-read after a while. */
+  readonly catalogs: Map<string, { at: number; models: Promise<AgyModel[]> }>;
   /** Set by the backend: a queued configuration relaunches through its own `open`. */
   reopen: (host: AgentHost, context: AgentContext) => Promise<AgentOpenResult>;
 }

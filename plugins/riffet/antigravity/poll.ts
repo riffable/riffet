@@ -1,7 +1,7 @@
 import { runProcess } from '@riffet/plugin-api/kit';
 import type { AgentHost } from '@riffet/plugin-api/experimental/agent';
 import { queueConfiguration } from './config-queue.js';
-import { listModels } from './models.js';
+import { launchProfile, nativeModels } from './models.js';
 import { AGY_ID, applyAgyUpdate, type AgyRecord } from './protocol.js';
 import { receipts } from './receipts.js';
 import { AgyRpc } from './rpc.js';
@@ -170,17 +170,31 @@ async function settleConfiguration(hub: Hub, runtime: Runtime, session: Session)
   await runtime.host.updateSession(session.id, { configPending: false });
 }
 
-/** Mirror the model, mode and permission the terminal reports back into the session. */
+/**
+ * Mirror the model, mode and permission the terminal reports back into the session. agy running the model its launch
+ * asked for keeps that launch's selection (its effort, a gateway id); another one - a pick in agy's `/model`, or the
+ * default agy fell back to at start - is read back into agy's id. While agy starts (`authenticating`,
+ * `initializing`) its status line shows the model saved in its settings, not the one it runs, so only a started
+ * agy is read.
+ */
 async function adoptObservedConfig(runtime: Runtime, session: Session, status: AgyRecord): Promise<void> {
-  const model =
-    runtime.models?.find(item => item.value === session.model && [status.model?.id, status.model?.display_name].includes(item.name)) ??
-    runtime.models?.find(item => [status.model?.id, status.model?.display_name].includes(item.name));
+  const started = status.agent_state === 'idle' || status.agent_state === 'working';
+  const label = started
+    ? [status.model?.display_name, status.model?.id].find((value): value is string => typeof value === 'string' && !!value)
+    : undefined;
+  const requested = runtime.launch.requestedModel;
+  const selected = runtime.launch.config?.model;
+  const asked = !!label && !!requested?.labels.includes(label);
+  // While the session still holds the selection this launch started with, another model is agy's own fallback.
+  if (label && requested && !asked && session.model === selected)
+    runtime.modelFallback = `agy 无法使用 ${requested.id}，这个会话改用了 ${label}。`;
+  const model = !label ? undefined : asked ? selected : runtime.models?.find(item => item.name === label)?.value;
   const mode =
     typeof status.cycle_mode === 'string' && ['plan', 'accept-edits', 'auto', 'agent'].includes(status.cycle_mode)
       ? status.cycle_mode
       : runtime.launch.config?.mode ?? session.mode;
   const approval = runtime.launch.config?.approval;
-  const patch = { ...(model ? { model: model.value } : {}), mode, ...(approval ? { approval } : {}) };
+  const patch = { ...(model ? { model } : {}), mode, ...(approval ? { approval } : {}) };
   runtime.status = { ...runtime.status, ...patch };
   if (Object.entries(patch).some(([key, value]) => session[key as keyof typeof session] !== value)) {
     await runtime.host.updateSession(session.id, patch, { bump: true });
@@ -201,8 +215,10 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
     }
     return;
   }
-  if (!runtime.models)
-    await listModels(hub, runtime.host, { profile: runtime.context.profile, session: runtime.context.session }).catch(() => undefined);
+  // Once per launch: a failed list is not cached by `nativeModels`, and this runs on every tick.
+  runtime.models ??= await launchProfile(runtime.host, runtime.context.profile)
+    .then(profile => nativeModels(hub, profile))
+    .catch(() => []);
   const id = typeof status.conversation_id === 'string' && AGY_ID.test(status.conversation_id) ? status.conversation_id : undefined;
   const session = runtime.host.view.session(runtime.context.session.id);
   if (!session) return;
@@ -243,11 +259,14 @@ export async function poll(hub: Hub, runtime: Runtime): Promise<void> {
     connection: { state: 'connected' },
     ...(id ? { history: { state: 'ready' as const } } : {}),
     ...(interaction ? { interaction } : {}),
-    // Answering agy's trust gate changes what runs in this directory without review, so it is never silent.
-    // Said once, on the launch that recorded it, until the conversation's first input.
-    ...(runtime.launch.trustAdded && !runtime.snapshot?.steps.some(step => step.userInput)
-      ? { notice: `已把 ${runtime.context.project.cwd} 记入这个会话的 Antigravity 受信任目录，启动时不再询问。`, noticeLevel: 'info' as const }
-      : {}),
+    // A model agy would not start with is said for as long as this launch runs: the first message usually rides on it.
+    // Answering agy's trust gate changes what runs in this directory without review, so it is never silent either;
+    // said once, on the launch that recorded it, until the conversation's first input.
+    ...(runtime.modelFallback
+      ? { notice: runtime.modelFallback, noticeLevel: 'warning' as const }
+      : runtime.launch.trustAdded && !runtime.snapshot?.steps.some(step => step.userInput)
+        ? { notice: `已把 ${runtime.context.project.cwd} 记入这个会话的 Antigravity 受信任目录，启动时不再询问。`, noticeLevel: 'info' as const }
+        : {}),
   };
   if (runtime.snapshot) await receipts(runtime);
   if (phase === 'idle' && session.configPending) await settleConfiguration(hub, runtime, session);

@@ -2,7 +2,8 @@ import { mkdtemp, mkdir, readFile, readdir, realpath, rm, stat, symlink, writeFi
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { agyModelSelector, agyProfileEnvironment, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyProfileEnvironment, agySelection, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyLaunchModel, parseAgyModels } from './models.js';
 const roots: string[] = [];
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(path => rm(path, { recursive: true, force: true })));
@@ -55,9 +56,28 @@ describe('Antigravity private launch configuration', () => {
       { sourceDir: '../native' },
     ])
       expect(() => parseAgyProfile(config)).toThrow();
-    expect(agyModelSelector('gemini-3.8-flash[effort=medium]')).toBe('gemini-3.8-flash-medium');
-    expect(agyModelSelector('custom-high')).toBe('custom-high');
-    expect(() => agyModelSelector('custom[effort=high]')).toThrow();
+    expect(() => agySelection('custom[effort=extreme]')).toThrow();
+    expect(() => agySelection('custom[speed=fast]')).toThrow();
+  });
+  it('starts agy on the selected model: a built-in variant, or a gateway id registered as a custom model', () => {
+    const native = parseAgyModels(
+      'Fetching available models...\ngemini-3.8-flash-high\tGemini 3.8 Flash (High)\ngemini-3.8-flash-medium\tGemini 3.8 Flash (Medium)\n',
+    );
+    const key = { hasApiKey: true };
+    // agy refuses --effort next to a variant id, so the effort picks the variant.
+    expect(agyLaunchModel(agySelection('gemini-3.8-flash-high[effort=medium]'), native, key)).toEqual({
+      model: 'gemini-3.8-flash-medium',
+      labels: ['Gemini 3.8 Flash (Medium)'],
+    });
+    // An id agy does not know would make it fall back to its default model; xhigh is refused for custom models.
+    expect(agyLaunchModel(agySelection('gemini-4-hydrogen-sonar[effort=high]'), native, key)).toEqual({
+      model: 'gemini-4-hydrogen-sonar',
+      effort: 'high',
+      custom: 'gemini-4-hydrogen-sonar',
+      labels: ['gemini-4-hydrogen-sonar'],
+    });
+    expect(agyLaunchModel(agySelection('gemini-4-hydrogen-sonar[effort=xhigh]'), native, key).effort).toBeUndefined();
+    expect(agyLaunchModel(agySelection('gemini-4-hydrogen-sonar'), native, { hasApiKey: false }).custom).toBeUndefined();
   });
   it('snapshots customization privately and preserves native edits on resume', async () => {
     const f = await fixture();
@@ -108,10 +128,15 @@ describe('Antigravity private launch configuration', () => {
     expect((await stat(first.settingsPath)).mode & 0o777).toBe(0o600);
     await writeFile(
       join(first.geminiDir, 'antigravity-cli', 'settings.json'),
-      JSON.stringify({ colorScheme: 'light', model: 'Native edited model', toolPermission: 'strict' }),
+      JSON.stringify({
+        colorScheme: 'light',
+        model: 'Native edited model',
+        toolPermission: 'strict',
+        customModelsConfig: { customModels: { mine: { modelName: 'mine' } } },
+      }),
     );
     await f.put('AGENTS.md', 'changed donor');
-    const second = await prepareAgySession(f.input());
+    const second = await prepareAgySession({ ...f.input(), customModel: 'gateway-model' });
     expect(second.geminiDir).toBe(first.geminiDir);
     expect(second.bridgeDir).toBe(first.bridgeDir);
     expect(second.settingsPath).not.toBe(first.settingsPath);
@@ -119,7 +144,11 @@ describe('Antigravity private launch configuration', () => {
       colorScheme: 'light',
       model: 'Native edited model',
       toolPermission: 'strict',
+      customModelsConfig: { customModels: { mine: { modelName: 'mine' }, 'gateway-model': { modelName: 'gateway-model' } } },
     });
+    expect(JSON.parse(await readFile(join(second.geminiDir, 'antigravity-cli', 'settings.json'), 'utf8')).customModelsConfig.customModels).not.toHaveProperty(
+      'gateway-model',
+    );
     expect(await readFile(join(second.geminiDir, 'AGENTS.md'), 'utf8')).toBe('global rule');
     expect(await readFile(join(f.source, 'antigravity-cli', 'settings.json'), 'utf8')).toBe(original);
     expect(process.env.HOME).toBeTruthy();

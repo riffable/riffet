@@ -4,9 +4,10 @@ import { join } from 'node:path';
 import type { AgentContext, AgentHost, AgentOpenResult } from '@riffet/plugin-api/experimental/agent';
 import { prepareBridge, readJson, writeJson } from './bridge.js';
 import { sha } from './composer.js';
-import { agyModelSelector, agyProfileEnvironment, parseAgyProfile, prepareAgySession } from './config.js';
+import { agyLaunchConfig, agyProfileEnvironment, agySelection, parseAgyProfile, prepareAgySession } from './config.js';
 import { attach } from './lifecycle.js';
 import { mcpServerName } from './mcp-scope.js';
+import { agyLaunchModel, nativeModels } from './models.js';
 import { agyConversationId, agyRecord } from './protocol.js';
 import { refresh, schedule } from './poll.js';
 import { assertCurrent, epochOf, verifyOwnership, type Hub, type Launch } from './runtime.js';
@@ -57,22 +58,17 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
   if (context.session.terminalId && host.view.terminal(context.session.terminalId)?.state !== 'exited') {
     throw host.error('AGY_LAUNCH_UNKNOWN', 'The existing Antigravity terminal could not be verified', 409);
   }
-  let config = { ...context.profile.config };
-  const endpoint = await host.modelSources.resolve(context.profile.id, 'google-generative-ai');
-  if (config.modelSource && !endpoint) throw host.error('AGY_PROVIDER_UNAVAILABLE', 'The Antigravity model source is unavailable', 409);
-  if (endpoint) {
-    if (!endpoint.credential || Object.keys(endpoint.headers ?? {}).some(key => !['x-goog-api-key'].includes(key.toLowerCase()))) {
-      throw host.error('AGY_PROVIDER_UNSUPPORTED', 'Antigravity requires a static Gemini API key without custom headers', 400);
-    }
-    config = { ...config, apiEndpoint: endpoint.baseUrl, apiKey: endpoint.credential.key, apiProtocol: 'google-generative-ai' };
-  }
+  const config = await agyLaunchConfig(host, context.profile);
   const profile = parseAgyProfile(config);
+  const selection = agySelection(context.session.model ?? (typeof config.defaultModel === 'string' ? config.defaultModel : undefined));
+  const model = agyLaunchModel(selection, selection ? await nativeModels(hub, profile) : [], profile);
   const paths = await prepareAgySession({
     stateDir: hub.stateDir,
     sessionId: context.session.id,
     projectCwd: context.project.cwd,
     profile,
     model: context.session.model,
+    ...(model.custom ? { customModel: model.custom } : {}),
     mode: context.session.mode,
     approval: context.session.approval,
   });
@@ -90,8 +86,8 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
     '--log-file',
     paths.logPath,
   ];
-  const model = agyModelSelector(context.session.model ?? (typeof config.defaultModel === 'string' ? config.defaultModel : undefined));
-  if (model) args.push('--model', model);
+  if (model.model) args.push('--model', model.model);
+  if (model.effort) args.push('--effort', model.effort);
   if (context.session.nativeSessionId) args.push('--conversation', agyConversationId(context.session.nativeSessionId));
   const marker = sha(
     JSON.stringify({ root: paths.root, nonce, command: profile.executable, project: await realpath(context.project.cwd) }),
@@ -114,7 +110,8 @@ async function openOnce(hub: Hub, host: AgentHost, context: AgentContext): Promi
       throw host.error('AGENT_BACKEND_CLOSED', 'Antigravity launch was cancelled', 409);
     }
     const launch: Launch = {
-      config: { model, mode: context.session.mode, approval: context.session.approval },
+      config: { model: context.session.model, mode: context.session.mode, approval: context.session.approval },
+      ...(model.model && model.labels.length ? { requestedModel: { id: model.model, labels: model.labels } } : {}),
       configRevision: context.session.configRevision,
       ...paths,
       command: profile.executable,

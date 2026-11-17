@@ -5,7 +5,7 @@ import {
   AGENT_PROTOCOL_VERSION, type AgentBackend, type AgentCapabilities, type AgentConfigurePatch, type AgentContext, type AgentExtensionLayout, type AgentHost, type AgentModelQuery,
   type AgentOpenResult, type AgentProfile, type AgentReport, type AgentRunRef, type AgentSendRequest, type AgentStopOptions,
 } from '@riffet/plugin-api/experimental/agent';
-import { agyMode, agyModelSelector, agyToolPermission, parseAgyProfile } from './config.js';
+import { agyMode, agySelection, agyToolPermission, parseAgyProfile } from './config.js';
 import { queueConfiguration } from './config-queue.js';
 import { interrupt, runtimeAction } from './control.js';
 import { attach } from './lifecycle.js';
@@ -22,7 +22,7 @@ export class AntigravityBackend implements AgentBackend {
   readonly id = 'antigravity' as const;
   readonly label = 'Antigravity';
   readonly protocolVersion = AGENT_PROTOCOL_VERSION;
-  readonly cliVersions = { minimum: '1.5.6', testedThrough: '1.5.7' };
+  readonly cliVersions = { minimum: '1.5.6', testedThrough: '1.5.10' };
   readonly readOnlyHistory = true;
   readonly traits = {
     survivesRestart: true,
@@ -50,6 +50,7 @@ export class AntigravityBackend implements AgentBackend {
       opening: new Map(),
       watchers: new Map(),
       lifecycle: new Map(),
+      catalogs: new Map(),
       reopen: (host, context) => this.open(host, context),
     };
     this.runtimes = this.hub.runtimes;
@@ -68,7 +69,8 @@ export class AntigravityBackend implements AgentBackend {
   }
 
   normalizeModel(model: string): string {
-    return agyModelSelector(model) ?? model;
+    agySelection(model);
+    return model.trim();
   }
 
   capabilities(): AgentCapabilities {
@@ -133,7 +135,7 @@ export class AntigravityBackend implements AgentBackend {
   }
 
   async configure(host: AgentHost, context: AgentContext, patch: AgentConfigurePatch) {
-    agyModelSelector(patch.model);
+    agySelection(patch.model);
     agyMode(patch.mode);
     agyToolPermission(patch.approval);
     await host.updateSession(context.session.id, { ...patch, configPending: true }, { bump: true });

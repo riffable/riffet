@@ -28,7 +28,7 @@ const BACKENDS: Record<string, { label: string; env?: string; command: string; i
   dsh: { label: 'DeepSeek Harness', command: 'dsh', install: `Install it with \`npm i -g @deepseek-ai/dsh@${DSH_CLI_VERSIONS.minimum}\`, or set the profile executable.`, versions: DSH_CLI_VERSIONS },
   droid: { label: 'Factory Droid', command: 'droid', install: 'Install the Factory Droid CLI (`droid`), or set the profile executable.', versions: DROID_CLI_VERSIONS },
   traex: { label: 'TRAE CLI', env: 'TRAEX_CLI', command: 'traex', install: 'Install the TRAE CLI (`traex`), or set TRAEX_CLI / the profile executable.', versions: traexFlavor.cliVersions },
-  antigravity: { label: 'Antigravity CLI', command: 'agy', install: 'Install and sign in to Antigravity CLI (`agy`), or set the profile executable.', versions: { minimum: '1.5.6', testedThrough: '1.5.7' } },
+  antigravity: { label: 'Antigravity CLI', command: 'agy', install: 'Install and sign in to Antigravity CLI (`agy`), or set the profile executable.', versions: { minimum: '1.5.6', testedThrough: '1.5.10' } },
   pi: { label: 'pi', env: 'PI_CLI', command: 'pi', install: 'Install it with `npm i -g @earendil-works/pi-coding-agent`, or set PI_CLI / the profile executable.', versions: PI_CLI_VERSIONS },
 };
 

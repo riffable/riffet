@@ -4,6 +4,7 @@ import { chmod, lstat, mkdir, open, readdir, realpath, rename, rm } from 'node:f
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { parseSelection } from '@contracts';
+import type { AgentHost, AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError, resolveCliExecutable } from '@riffet/plugin-api/kit';
 import { agyRecord } from './protocol.js';
 
@@ -61,6 +62,7 @@ const SETTINGS_KEYS = new Set([
   'historySize',
   'model',
   'modelProvider',
+  'customModelsConfig',
   'trustedWorkspaces',
   'useTerminalCursor',
   'permissions',
@@ -126,16 +128,32 @@ export function agyProfileEnvironment(profile: AgyProfile): { env: Record<string
     secretEnv: key ? { GEMINI_API_KEY: key } : {},
   };
 }
-export function agyModelSelector(value: string | undefined): string | undefined {
+/** What `agy --effort` takes. */
+export const AGY_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+export interface AgySelection {
+  model: string;
+  effort?: string;
+}
+/** A saved selection (`model` or `model[effort=…]`); `default` leaves the effort to agy. */
+export function agySelection(value: string | undefined): AgySelection | undefined {
   const selection = text(value, 'model', 1024);
   if (!selection) return undefined;
   const { model, params } = parseSelection(selection);
   if (Object.keys(params).some(key => key !== 'effort')) invalid('Antigravity model parameter is unsupported');
-  if (!params.effort) return model;
-  // Do not strip arbitrary suffixes or guess effort semantics for other model families.
-  if (!/^gemini-(?:3\.8-flash|3\.1-pro)(?:-(?:low|medium|high))?$/.test(model) || !['low', 'medium', 'high'].includes(params.effort))
-    invalid('Antigravity model effort is unsupported');
-  return `${model.replace(/-(?:low|medium|high)$/, '')}-${params.effort}`;
+  if (params.effort === undefined || params.effort === 'default') return { model };
+  if (!AGY_EFFORTS.includes(params.effort)) invalid('Antigravity model effort is unsupported');
+  return { model, effort: params.effort };
+}
+/** The profile's configuration with its model source resolved to the endpoint and key agy is started with. */
+export async function agyLaunchConfig(host: AgentHost, profile: AgentProfile): Promise<Record<string, unknown>> {
+  const config = { ...profile.config };
+  const endpoint = await host.modelSources.resolve(profile.id, 'google-generative-ai');
+  if (config.modelSource && !endpoint) throw host.error('AGY_PROVIDER_UNAVAILABLE', 'The Antigravity model source is unavailable', 409);
+  if (!endpoint) return config;
+  if (!endpoint.credential || Object.keys(endpoint.headers ?? {}).some(key => !['x-goog-api-key'].includes(key.toLowerCase()))) {
+    throw host.error('AGY_PROVIDER_UNSUPPORTED', 'Antigravity requires a static Gemini API key without custom headers', 400);
+  }
+  return { ...config, apiEndpoint: endpoint.baseUrl, apiKey: endpoint.credential.key, apiProtocol: 'google-generative-ai' };
 }
 export function agyMode(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
@@ -217,8 +235,13 @@ async function write(path: string, value: unknown): Promise<void> {
     await rm(temporary, { force: true });
   }
 }
+/** The reader's own custom models stay; the launch's model is added under its id unless they already define it. */
+function withCustomModel(value: unknown, id: string): Record<string, unknown> {
+  const config = agyRecord(value) ? value : {};
+  const models = agyRecord(config.customModels) ? config.customModels : {};
+  return { ...config, customModels: { ...models, [id]: agyRecord(models[id]) ? models[id] : { modelName: id } } };
+}
 function nativeSettings(value: Record<string, unknown> | undefined): Record<string, unknown> {
-  if (value?.customModelsConfig !== undefined) throw new Error('Antigravity custom model configuration requires native migration');
   const settings = Object.fromEntries(Object.entries(value ?? {}).filter(([key]) => SETTINGS_KEYS.has(key)));
   const check = (current: unknown): void => {
     if (Array.isArray(current)) {
@@ -354,6 +377,8 @@ export interface PrepareAgySessionInput {
   projectCwd: string;
   profile: AgyProfile;
   model?: string;
+  /** A gateway model id agy does not know by itself, registered for this launch only. */
+  customModel?: string;
   mode?: string;
   approval?: string;
 }
@@ -378,7 +403,7 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
   if (!(await lstat(project)).isDirectory()) throw new Error('Antigravity project is not a directory');
   const mode = agyMode(input.mode);
   const permission = agyToolPermission(input.approval);
-  agyModelSelector(input.model);
+  agySelection(input.model);
   // Resolve the trusted host-provided state root; session-owned descendants must never be links.
   await privateDirectory(state);
   const paths = agySessionPaths(await realpath(state), input.sessionId, randomUUID());
@@ -420,11 +445,13 @@ async function prepare(input: PrepareAgySessionInput): Promise<PreparedAgySessio
   const trustedWorkspaces = [...new Set([...trusted, resolve(input.projectCwd), project])];
   const trustAdded = !trusted.includes(project);
   if (trustAdded) await write(nativeSettingsPath, { ...(await json(nativeSettingsPath)), trustedWorkspaces });
-  // Model selection is a native --model argument; labels saved by /model remain untouched.
+  // Model selection is a native --model argument; labels saved by /model remain untouched. A custom model goes into
+  // this launch's own settings, never the session's native file, so it lasts exactly as long as the selection.
   Object.assign(
     settings,
     { queuedMessages: 'queue', altScreenMode: 'always', trustedWorkspaces },
     input.profile.hasApiKey ? { modelProvider: 'gemini' } : {},
+    input.customModel ? { customModelsConfig: withCustomModel(settings.customModelsConfig, input.customModel) } : {},
     mode !== undefined ? { agentMode: mode } : {},
     permission !== undefined ? { toolPermission: permission } : {},
   );

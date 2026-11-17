@@ -22,6 +22,7 @@
 ### 后端
 
 - 支持 Antigravity CLI。
+- Antigravity：选了网关自己提供的模型（如 `gemini-4-hydrogen-sonar`）时，会话不再在启动时被换成 agy 的默认模型；agy 仍改用其他模型时会话里会提示；模型可以选思考强度；支持 agy 1.5.10。
 - Codex 会话切换到兼容的模型提供方后可以继续；支持 Codex CLI 0.167.2。
 - Claude Code `/goal`、Codex 与 DeepSeek Harness 的目标在各端显示。
 - Cursor 新会话从预热好的 CLI 启动，实时输出 token 数进入用量统计。

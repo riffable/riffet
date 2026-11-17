@@ -22,6 +22,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Backends
 
 - Antigravity CLI is a supported agent.
+- Antigravity: a model the gateway serves under its own id (such as `gemini-4-hydrogen-sonar`) no longer turns into agy's default model when the conversation starts, and the conversation says so when agy still picks another; models offer a thinking effort; agy 1.5.10 is supported.
 - Codex conversations continue when switching to a compatible model provider; Codex CLI 0.167.2 is supported.
 - Goals from Claude Code `/goal`, Codex and DeepSeek Harness show on every client.
 - New Cursor conversations start on a warm CLI, and live output token counts reach the usage view.
