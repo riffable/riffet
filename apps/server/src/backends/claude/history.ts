@@ -194,14 +194,26 @@ export function subagentSettles(row: ClaudeRow): boolean | undefined {
 }
 
 /**
- * A subagent's report delivered to the agent that launched it (`SubagentHandback`): Claude Code writes it as a
- * hidden peer row, with the report itself beside the framing it wraps it in.
+ * A subagent's report delivered to the agent that launched it (`SubagentHandback`), with the report itself beside
+ * the framing it is wrapped in. Claude Code writes it as a hidden peer row when it opens a turn, and as a
+ * `queued_command` attachment when it reaches a turn already running.
  */
 function handbackOf(row: ClaudeRow): { taskId: string; report: string } | undefined {
-  const origin = record(row.origin);
-  if (row.type !== 'user' || origin?.kind !== 'peer' || origin.handback !== true) return undefined;
+  const attachment = row.type === 'attachment' ? record(row.attachment) : undefined;
+  const origin = row.type === 'user' ? record(row.origin) : attachment?.type === 'queued_command' ? record(attachment.origin) : undefined;
+  if (origin?.kind !== 'peer' || origin.handback !== true) return undefined;
   const taskId = string(origin.senderTaskId) ?? string(origin.from), report = string(origin.handbackReportText);
   return taskId && report?.trim() ? { taskId, report } : undefined;
+}
+
+/** A subagent's report is the notice of its end, in the turn that reads it. */
+function handbackNotice(handback: { taskId: string; report: string }, state: MapperState, hooks: ClaudeTranscriptHooks): Record<string, unknown> {
+  const agent = state.activities?.agentOf(handback.taskId);
+  return {
+    sessionUpdate: 'task_notification', kind: 'subagent', status: 'completed', title: agent?.title ?? '子 Agent', taskId: handback.taskId,
+    ...(agent?.toolCallId ? { subagentToolCallId: agent.toolCallId } : {}),
+    detail: hooks.unbounded ? handback.report : clip(handback.report),
+  };
 }
 
 /**
@@ -584,6 +596,12 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
   const type = row.type;
   // A subagent's own file is entirely sidechain rows; only the parent file has to drop them.
   if (!allowSidechain && row.isSidechain === true) return [];
+  const handback = type === 'attachment' ? handbackOf(row) : undefined;
+  if (handback) return [{
+    sessionId: session.id, nativeId: `claude:${session.nativeSessionId ?? session.id}:${uuid}:0`, nativeAliases: [uuid],
+    ...(state.turnId ? { runId: state.turnId } : {}), ...(state.nativeTurnId ? { nativeTurnId: state.nativeTurnId } : {}), createdAt,
+    type: 'task_notification', data: handbackNotice(handback, state, hooks),
+  }];
   if (type === 'attachment' && !allowSidechain && row.agentId === undefined) {
     const attachment = record(row.attachment);
     if (attachment?.type !== 'hook_additional_context' || !string(attachment.toolUseID)
@@ -684,15 +702,10 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         state.turnId = `claude-turn:${uuid}`;
         state.turnAt = createdAt;
       }
-      // A subagent's report is the notice of its end, in the turn it opens for the agent that launched it.
+      // In the turn it opens for the agent that launched the subagent.
       const handback = handbackOf(row);
       if (handback) {
-        const agent = state.activities?.agentOf(handback.taskId);
-        events.push({ ...base(0), type: 'task_notification', data: {
-          sessionUpdate: 'task_notification', kind: 'subagent', status: 'completed', title: agent?.title ?? '子 Agent', taskId: handback.taskId,
-          ...(agent?.toolCallId ? { subagentToolCallId: agent.toolCallId } : {}),
-          detail: hooks.unbounded ? handback.report : clip(handback.report),
-        } });
+        events.push({ ...base(0), type: 'task_notification', data: handbackNotice(handback, state, hooks) });
         return events;
       }
       if (peerPromptId) return events;

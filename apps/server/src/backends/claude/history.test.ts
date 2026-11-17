@@ -934,15 +934,22 @@ describe('Claude subagent notifications', () => {
       origin: { kind: 'peer', from: taskId, senderTaskId: taskId, name: 'general-purpose', handback: true, handbackReportText: '成语：抛砖引玉' },
       message: { role: 'user', content: `Another Claude session sent a message:\n<agent-message from="${taskId}">\n[Subagent hand-back] The report follows:\n  成语：抛砖引玉\n</agent-message>` },
     };
+    // A report that reaches a turn already running is an attachment, not a row of its own.
+    const midTurn = {
+      type: 'attachment', uuid: 'handback-mid-turn', timestamp: '2026-10-04T05:00:06.000Z', isSidechain: false,
+      attachment: { type: 'queued_command', commandMode: 'prompt', prompt: '<agent-message …>', origin: { ...handback.origin, handbackReportText: '第二轮：画龙点睛' } },
+    };
     const transcript = await open([
       handback,
       noticeRow(notice({ result: receipt })),
       { ...noticeRow(notice({ toolUseId: 'tool-2', result: output })), uuid: 'notice-with-report' },
+      midTurn,
     ]);
     const reports = transcript.allEvents().filter(event => event.type === 'task_notification');
-    expect(reports).toHaveLength(2);
+    expect(reports).toHaveLength(3);
     expect(reports[0]?.data).toMatchObject({ kind: 'subagent', status: 'completed', taskId, detail: '成语：抛砖引玉' });
     expect(reports[1]?.data.detail).toBe(output);
+    expect(reports[2]?.data).toMatchObject({ taskId, detail: '第二轮：画龙点睛' });
   });
 
   it('keeps a transcript-only completion on its existing turn and preserves response attribution', async () => {
