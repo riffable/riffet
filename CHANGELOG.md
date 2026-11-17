@@ -42,6 +42,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Plugins: a public plugin index, several plugin sources with installs pinned to their source, plugin pages, message-menu commands, and provider quota through model-source plugins. A Riffet browser plugin opens pages the agent can drive.
 - Selectable and customizable code highlighting themes.
 - Markdown: safe inline HTML tags, table alignment and copy, picture attachments.
+- Tables in answers on the web drop the frame and column lines for rules between rows, and a short label column no longer wraps one word per line.
 - Tabs: new conversations can open as a temporary tab, and pinning or opening another conversation no longer drops the wrong one; tabs stay in step across windows.
 - The side panel floats over the conversation and stays open per conversation. Skills and tools move into the composer's + menu; permission modes have names.
 - Settings: a storage page with a breakdown of the data directory and scheduled compaction; agent defaults separate from model providers.

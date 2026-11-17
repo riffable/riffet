@@ -1824,8 +1824,6 @@ html.dark {
   overflow-x: auto;
   border-collapse: separate;
   border-spacing: 0;
-  border: 1px solid var(--line);
-  border-radius: 10px;
   font-size: var(--text-sm);
   line-height: var(--text-sm--line-height);
   font-variant-numeric: tabular-nums;
@@ -1885,14 +1883,33 @@ html.dark {
 .md table {
   overflow-wrap: normal;
 }
-/* `.md`'s `overflow-wrap: anywhere` lets a cell's minimum width collapse to one character, which
- * squeezed a short first column to 「诊/断」. Cells break between words; code inside them not at all. */
+/*
+ * Rules between rows only, no frame, column lines or header fill: a table in an answer is prose laid
+ * out in columns, not a sheet. The outer columns drop their side padding so the text lines up with
+ * the paragraphs around it.
+ *
+ * `.md`'s `overflow-wrap: anywhere` lets a cell's minimum width collapse to one character, which
+ * squeezed a short first column to 「诊/断」. Cells break between words; code inside them not at all,
+ * and a label-length cell (`data-short`, see `Markdown.tsx`) not at all.
+ */
 .md th,
 .md td {
   overflow-wrap: break-word;
-  padding: 7px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--line);
   vertical-align: top;
+}
+.md th:first-child,
+.md td:first-child {
+  padding-left: 0;
+}
+.md th:last-child,
+.md td:last-child {
+  padding-right: 0;
+}
+.md th[data-short],
+.md td[data-short] {
+  white-space: nowrap;
 }
 .md th:not([align]),
 .md td:not([align]),
@@ -1918,7 +1935,8 @@ html.dark {
   min-width: 4em;
 }
 .md th {
-  background: var(--bg-subtle);
+  padding-top: 0;
+  border-bottom-color: var(--line-strong);
   color: var(--fg-2);
   font-weight: 500;
 }
@@ -1940,10 +1958,6 @@ html.dark {
 .md table:focus-visible {
   outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
-}
-.md th + th,
-.md td + td {
-  border-left: 1px solid var(--line);
 }
 /*
  * Footnotes: `remark-gfm` emits the section, this is its only styling. The heading is the

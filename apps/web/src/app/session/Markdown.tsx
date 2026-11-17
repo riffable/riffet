@@ -328,6 +328,8 @@ const components: Components = {
   table({ node, children }) {
     return <MarkdownTable node={node}>{children}</MarkdownTable>;
   },
+  th: ({ node, ...props }) => <th {...props} data-short={isShortCell(node) || undefined} />,
+  td: ({ node, ...props }) => <td {...props} data-short={isShortCell(node) || undefined} />,
   kbd({ children }) {
     return <Kbd className="mx-0.5 align-baseline">{children}</Kbd>;
   },
@@ -380,6 +382,29 @@ function tableCellMarkdown(node: HastNodeLike): string {
     return inlineCodeMarkdown(inner);
   }
   return inner;
+}
+
+/**
+ * A cell short enough to read as a label (about eight CJK characters) keeps to one line. Auto table
+ * layout otherwise hands a column of labels only its narrowest word while a neighbour holding one
+ * long path takes the rest, and 「判定标准」 breaks over two lines. Long cells still wrap.
+ */
+const SHORT_CELL_WIDTH = 16;
+
+function isShortCell(node: HastNodeLike | ExtraProps['node'] | undefined): boolean {
+  let width = 0;
+  const visit = (current: HastNodeLike): boolean => {
+    if (current.type === 'text') {
+      for (const char of current.value ?? '') {
+        width += char.charCodeAt(0) > 0x2e7f ? 2 : 1;
+        if (width > SHORT_CELL_WIDTH) return false;
+      }
+      return true;
+    }
+    if (current.type === 'element' && current.tagName === 'br') return false;
+    return (current.children ?? []).every(visit);
+  };
+  return node ? visit(node as unknown as HastNodeLike) : false;
 }
 
 function tableMarkdownText(table: ExtraProps['node'] | undefined): string {
