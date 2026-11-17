@@ -15,6 +15,11 @@ msgstr ""
 msgid "{0} 不可用"
 msgstr "{0} 不可用"
 
+#. placeholder {0}: source.plugins
+#: src/app/plugins/PluginSources.tsx
+msgid "{0} 个插件"
+msgstr "{0} 个插件"
+
 #. placeholder {0}: git.changes
 #: src/app/SessionInfo.tsx
 msgid "{0} 个文件"
@@ -268,6 +273,10 @@ msgstr "全部"
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
 msgstr "全部会话"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "全部插件源"
+msgstr "全部插件源"
 
 #: src/app/Sidebar.tsx
 msgid "全部标为已读"
@@ -719,6 +728,10 @@ msgstr "已复制地址"
 msgid "已安装"
 msgstr "已安装"
 
+#: src/app/plugins/PluginSources.tsx
+msgid "已安装的插件保留，不再收到更新。"
+msgstr "已安装的插件保留，不再收到更新。"
+
 #: src/app/state/listsStore.ts
 #: src/app/tabs/TabBar.tsx
 msgctxt "workbench-item-status-completed"
@@ -958,6 +971,11 @@ msgstr "插件 ID"
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr "插件已不可用，当前内容会保留到关闭"
 
+#: src/app/plugins/PluginSources.tsx
+#: src/app/plugins/PluginsPage.tsx
+msgid "插件源"
+msgstr "插件源"
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "搜索中…"
@@ -1018,6 +1036,7 @@ msgid "撤销失败"
 msgstr "撤销失败"
 
 #: src/app/plugins/PluginPageView.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr "操作失败"
@@ -1405,6 +1424,10 @@ msgstr "更多"
 msgid "更多操作"
 msgstr "更多操作"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "更新"
+msgstr "更新"
+
 #: src/app/Sidebar.tsx
 msgid "更早"
 msgstr "更早"
@@ -1553,6 +1576,7 @@ msgid "深色"
 msgstr "深色"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginSources.tsx
 msgid "添加"
 msgstr "添加"
 
@@ -1675,9 +1699,23 @@ msgstr "离线 · 显示刚刚保存的列表"
 msgid "移出标签栏"
 msgstr "移出标签栏"
 
+#: src/app/plugins/PluginSources.tsx
+msgid "移除"
+msgstr "移除"
+
 #: src/app/plugins/PluginPageView.tsx
 msgid "移除 {value}"
 msgstr "移除 {value}"
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”"
+msgstr "移除“{0}”"
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”？"
+msgstr "移除“{0}”？"
 
 #: src/app/DirectoryPicker.tsx
 msgid "移除收藏"
@@ -1739,6 +1777,10 @@ msgstr "管理插件"
 #: src/app/FolderFavorites.tsx
 msgid "管理收藏 {0}"
 msgstr "管理收藏 {0}"
+
+#: src/app/plugins/PluginSources.tsx
+msgid "索引地址"
+msgstr "索引地址"
 
 #: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx

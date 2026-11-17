@@ -783,8 +783,11 @@ export const api = {
   },
   /** The plugin index as the server reads it (docs/PLUGINS.md「插件市场」); `refresh` skips its cache. */
   marketPlugins: (refresh = false) => request<PluginMarketList>(`/api/integrations/market${refresh ? '?refresh=1' : ''}`),
-  installMarketPlugin: (id: string, version: string, grant: string[], trusted = false) =>
-    request<PluginDescriptor>('/api/integrations/install', json('POST', { market: { id, version }, grant, ...(trusted ? { trusted: true } : {}) })),
+  installMarketPlugin: (source: string, id: string, version: string, grant: string[], trusted = false) =>
+    request<PluginDescriptor>('/api/integrations/install', json('POST', { market: { source, id, version }, grant, ...(trusted ? { trusted: true } : {}) })),
+  addPluginSource: (url: string) => request<PluginMarketList>('/api/integrations/sources', json('POST', { url })),
+  setPluginSourceEnabled: (id: string, enabled: boolean) => request<PluginMarketList>(`/api/integrations/sources/${encodeURIComponent(id)}`, json('PATCH', { enabled })),
+  removePluginSource: (id: string) => request<PluginMarketList>(`/api/integrations/sources/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   selectPluginVersion: (id: string, version: string) =>
     request<PluginDescriptor>(`/api/integrations/${encodeURIComponent(id)}/versions/${encodeURIComponent(version)}/select`, json('POST', {})),
   uninstallPluginVersion: (id: string, version: string) =>

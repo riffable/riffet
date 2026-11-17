@@ -15,6 +15,11 @@ msgstr ""
 msgid "{0} 不可用"
 msgstr "{0} unavailable"
 
+#. placeholder {0}: source.plugins
+#: src/app/plugins/PluginSources.tsx
+msgid "{0} 个插件"
+msgstr "{0, plural, one {# plugin} other {# plugins}}"
+
 #. placeholder {0}: git.changes
 #: src/app/SessionInfo.tsx
 msgid "{0} 个文件"
@@ -268,6 +273,10 @@ msgstr "All"
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
 msgstr "All sessions"
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "全部插件源"
+msgstr "All sources"
 
 #: src/app/Sidebar.tsx
 msgid "全部标为已读"
@@ -719,6 +728,10 @@ msgstr "Address copied"
 msgid "已安装"
 msgstr "Installed"
 
+#: src/app/plugins/PluginSources.tsx
+msgid "已安装的插件保留，不再收到更新。"
+msgstr "Installed plugins stay but no longer receive updates."
+
 #: src/app/state/listsStore.ts
 #: src/app/tabs/TabBar.tsx
 msgctxt "workbench-item-status-completed"
@@ -958,6 +971,11 @@ msgstr "Plugin ID"
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr "This plugin is unavailable; the current content will be kept until you close it"
 
+#: src/app/plugins/PluginSources.tsx
+#: src/app/plugins/PluginsPage.tsx
+msgid "插件源"
+msgstr "Plugin sources"
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "搜索中…"
@@ -1018,6 +1036,7 @@ msgid "撤销失败"
 msgstr "Couldn't undo"
 
 #: src/app/plugins/PluginPageView.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr "Operation failed"
@@ -1405,6 +1424,10 @@ msgstr "More"
 msgid "更多操作"
 msgstr "More actions"
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "更新"
+msgstr "Update"
+
 #: src/app/Sidebar.tsx
 msgid "更早"
 msgstr "Earlier"
@@ -1553,6 +1576,7 @@ msgid "深色"
 msgstr "Dark"
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginSources.tsx
 msgid "添加"
 msgstr "Add"
 
@@ -1675,9 +1699,23 @@ msgstr "Offline · Showing the list saved just now"
 msgid "移出标签栏"
 msgstr "Remove from tab bar"
 
+#: src/app/plugins/PluginSources.tsx
+msgid "移除"
+msgstr "Remove"
+
 #: src/app/plugins/PluginPageView.tsx
 msgid "移除 {value}"
 msgstr "Remove {value}"
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”"
+msgstr "Remove “{0}”"
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”？"
+msgstr "Remove “{0}”?"
 
 #: src/app/DirectoryPicker.tsx
 msgid "移除收藏"
@@ -1739,6 +1777,10 @@ msgstr "Manage plugins"
 #: src/app/FolderFavorites.tsx
 msgid "管理收藏 {0}"
 msgstr "Manage favorite {0}"
+
+#: src/app/plugins/PluginSources.tsx
+msgid "索引地址"
+msgstr "Index address"
 
 #: src/app/hostShortcuts.ts
 #: src/app/SessionInfo.tsx

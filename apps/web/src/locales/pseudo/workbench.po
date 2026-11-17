@@ -15,6 +15,11 @@ msgstr ""
 msgid "{0} 不可用"
 msgstr ""
 
+#. placeholder {0}: source.plugins
+#: src/app/plugins/PluginSources.tsx
+msgid "{0} 个插件"
+msgstr ""
+
 #. placeholder {0}: git.changes
 #: src/app/SessionInfo.tsx
 msgid "{0} 个文件"
@@ -267,6 +272,10 @@ msgstr ""
 
 #: src/app/SessionSearchDialog.tsx
 msgid "全部会话"
+msgstr ""
+
+#: src/app/plugins/PluginsPage.tsx
+msgid "全部插件源"
 msgstr ""
 
 #: src/app/Sidebar.tsx
@@ -719,6 +728,10 @@ msgstr ""
 msgid "已安装"
 msgstr ""
 
+#: src/app/plugins/PluginSources.tsx
+msgid "已安装的插件保留，不再收到更新。"
+msgstr ""
+
 #: src/app/state/listsStore.ts
 #: src/app/tabs/TabBar.tsx
 msgctxt "workbench-item-status-completed"
@@ -958,6 +971,11 @@ msgstr ""
 msgid "插件已不可用，当前内容会保留到关闭"
 msgstr ""
 
+#: src/app/plugins/PluginSources.tsx
+#: src/app/plugins/PluginsPage.tsx
+msgid "插件源"
+msgstr ""
+
 #: src/app/ImportSessionDialog.tsx
 #: src/app/SessionSearchDialog.tsx
 msgid "搜索中…"
@@ -1018,6 +1036,7 @@ msgid "撤销失败"
 msgstr ""
 
 #: src/app/plugins/PluginPageView.tsx
+#: src/app/plugins/PluginSources.tsx
 #: src/app/plugins/PluginsPage.tsx
 msgid "操作失败"
 msgstr ""
@@ -1405,6 +1424,10 @@ msgstr ""
 msgid "更多操作"
 msgstr ""
 
+#: src/app/plugins/PluginMarket.tsx
+msgid "更新"
+msgstr ""
+
 #: src/app/Sidebar.tsx
 msgid "更早"
 msgstr ""
@@ -1553,6 +1576,7 @@ msgid "深色"
 msgstr ""
 
 #: src/app/AddProjectDialog.tsx
+#: src/app/plugins/PluginSources.tsx
 msgid "添加"
 msgstr ""
 
@@ -1675,8 +1699,22 @@ msgstr ""
 msgid "移出标签栏"
 msgstr ""
 
+#: src/app/plugins/PluginSources.tsx
+msgid "移除"
+msgstr ""
+
 #: src/app/plugins/PluginPageView.tsx
 msgid "移除 {value}"
+msgstr ""
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”"
+msgstr ""
+
+#. placeholder {0}: sourceName(source)
+#: src/app/plugins/PluginSources.tsx
+msgid "移除“{0}”？"
 msgstr ""
 
 #: src/app/DirectoryPicker.tsx
@@ -1738,6 +1776,10 @@ msgstr ""
 #. placeholder {0}: favoriteName(favorite)
 #: src/app/FolderFavorites.tsx
 msgid "管理收藏 {0}"
+msgstr ""
+
+#: src/app/plugins/PluginSources.tsx
+msgid "索引地址"
 msgstr ""
 
 #: src/app/hostShortcuts.ts
