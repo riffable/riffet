@@ -4,6 +4,53 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 
 ## Unreleased
 
+### Upgrade notes
+
+- Workbench addresses are paths now (`/c/<conversation>`, `/p/<project>`, `/tasks`, `/stats` …). Links and bookmarks in the old `#s=…` form no longer open a conversation.
+- Templates, schedules and agent wake-ups become one kind of record, Automations; existing ones are migrated on first start.
+
+### Tasks and the assistant
+
+- Task board: a conversation can belong to a task, its status changes from the sidebar menu, and the task shows in the conversation's info.
+- Assistant: one long-running personal assistant with its own page, memory, background runs and capability packs; `/new` starts it over. Available on the web, Mac, Android and iPhone.
+- Automations run a prompt by hand or on a schedule and keep the last 50 runs.
+- Work a turn delegated (subagents, background commands) stays visible after the turn ends.
+
+### Backends
+
+- Antigravity CLI is a supported agent.
+- Codex conversations continue when switching to a compatible model provider; Codex CLI 0.167.2 is supported.
+- Goals from Claude Code `/goal`, Codex and DeepSeek Harness show on every client.
+- New Cursor conversations start on a warm CLI, and live output token counts reach the usage view.
+- Fixes for Claude Code: `/clear` moving to a new session, auto-compaction placement, `!` commands sent from Riffet, fallback confirmations in auto mode, forked Skill subagents.
+- Idle CLIs are reclaimed by last use and a memory budget you can set; settings show why each one is kept.
+
+### Workbench
+
+- Find within a conversation.
+- Git panel: history, line-level staging and a live status stream, on every client.
+- Plugins: a public plugin index, several plugin sources with installs pinned to their source, plugin pages, message-menu commands, and provider quota through model-source plugins. A Riffet browser plugin opens pages the agent can drive.
+- Selectable and customizable code highlighting themes.
+- Markdown: safe inline HTML tags, table alignment and copy, picture attachments.
+- Tabs: new conversations can open as a temporary tab, and pinning or opening another conversation no longer drops the wrong one; tabs stay in step across windows.
+- The side panel floats over the conversation and stays open per conversation. Skills and tools move into the composer's + menu; permission modes have names.
+- Settings: a storage page with a breakdown of the data directory and scheduled compaction; agent defaults separate from model providers.
+- Sidebar: pinned destinations with the rest under More, and footer actions in the avatar menu.
+- The image viewer shows the image alone; on the web it grows from its thumbnail.
+
+### Clients
+
+- macOS: native conversation canvas; web parity for tabs, overview, code navigation and settings; beta updates through Sparkle (About → receive beta updates).
+- iPhone: pages rebuilt on a shared design layer, push notifications, and fixes for main-thread crashes.
+- Android: pull down for search on root pages, the full title in the details pane, and a composer that folds back when empty.
+- Unread state is shared across clients.
+
+### Performance
+
+- The server keeps process spawns and database checkpoints off the event loop, drops cold timeline rows, and syncs sidebar lists by deltas.
+- Caches on the server, web, Mac and phones have size limits; the service monitor shows each connected client's resource use.
+- A server restart keeps running turns.
+
 ## 0.7.0 - 2026-11-12
 
 First public release, open source under Apache-2.0.
