@@ -30,12 +30,14 @@ Riffet 插件可以提供模型源、分享目标、Agent 后端、视图、命�
 packages/plugin-api/src/index.ts   插件可用的全部接口（@riffet/plugin-api）
 packages/contracts/src/plugins.ts       静态声明（视图、命令）、声明 ID 规则
 plugins/index.ts                   内置插件清单，按优先级排列
-plugins/riffet/<name>/             随应用构建的插件（cursor、antigravity、canvas、browser、avatars）
+plugins/riffet/<name>/             随应用构建的插件（cursor、antigravity、canvas、browser、avatars、translate）
+official/<name>/                   官方的可选插件，不随应用构建，发布到公共插件源（android、appearance-paper）
+examples/plugins/<name>/           最小样例，发布到公共插件源
 <外部插件仓库>/<name>/           独立分发的插件，每个目录一个 manifest
 apps/server/src/plugins/           注册与生命周期、声明校验、本地开发包、存储与路由
 ```
 
-服务端插件只能导入 `@riffet/plugin-api`（含子路径）、`@contracts`、Node 内置模块、package.json 中的依赖，以及本包目录（`plugins/<vendor>/<name>/`）下的文件，不含同一 `<vendor>` 下其他包的文件；外部模型源作为独立包构建。客户端入口（`plugins/<vendor>/<name>/web/**`）只能导入 `@riffet/plugin-web`、`@contracts`、package.json 中的依赖和本包内的文件。核心只有 `apps/server/src/plugins/registry.ts` 导入 `plugins/index.ts`，Web 一侧只有 `apps/web/src/plugins/registry.ts` 导入 `plugins/web.ts`，所以替换这一处即可得到不含插件的构建。`pnpm check:plugins`（CI 同样执行）检查这些边界。
+服务端插件只能导入 `@riffet/plugin-api`（含子路径）、`@contracts`、Node 内置模块、package.json 中的依赖，以及本包目录（`plugins/<vendor>/<name>/`、`official/<name>/`）下的文件，不含同一 `<vendor>` 下其他包的文件；外部模型源作为独立包构建。客户端入口（`plugins/<vendor>/<name>/web/**`）只能导入 `@riffet/plugin-web`、`@contracts`、package.json 中的依赖和本包内的文件。核心只有 `apps/server/src/plugins/registry.ts` 导入 `plugins/index.ts`，Web 一侧只有 `apps/web/src/plugins/registry.ts` 导入 `plugins/web.ts`，所以替换这一处即可得到不含插件的构建。`pnpm check:plugins`（CI 同样执行）检查这些边界。
 
 ## 对外构建
 
@@ -65,7 +67,7 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 模型源还可声明 `role: "adapter"`，表示给提供商已存的 API 连接增加网关适配；未声明或 `"source"` 仍是连接与登录来源。客户端分别放在「网关类型」和「接入方式」，均复用 `modelSource`、`resolve/catalog/usage`。`usage: true` 可在 manifest 中静态声明，按需插件尚未激活时也能展示额度入口。普通 API 与 adapter 互换保留档案、连接与模型；未保存的模型探测只在地址相同且两端均为 API/adapter 时沿用已存 Key，切换独立来源、跨地址或显式清空不复用。额度读取失败与模型请求分开处理。插件设置视图可声明 `settingsCategory: "agent" | "providers"` 来区分两个设置入口，未声明时保留旧视图的可达性。
 
-插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`；声明了 `agentTools` 或 `channels` 的进程内插件另有 `sessions`（读会话与项目目录、往会话发一轮、发通知）。
+插件需要的核心能力只经 `PluginHost` 取得：子进程、CLI 定位、网关模型目录、私有状态目录（`<stateDir>/plugin-data/<id>/`）、密钥、刷新模型目录、`AppError`；声明了 `agentTools` 或 `channels` 的进程内插件另有 `sessions`（读会话与项目目录、往会话发一轮、发通知）。进程内插件另有 `models.complete`：做一次单轮补全，插件不保管密钥。带 `use` 时用用户为这项模型用途选的模型（见下「模型用途」），不带时用「快速对话」的默认模型（`auxiliaryModels.chat`）；都在每次调用时读取。没有可用模型时以 409 `PLUGIN_MODEL_NOT_CHOSEN` 拒绝，`maxOutputTokens` 至多 16000，超时缺省 60 秒、至多 120 秒，输出因长度截断时报错。插件交给它的文本会发给该模型的提供商；隔离安装的包没有这一项。
 
 `PLUGIN_API_VERSION` 是宿主提供的插件 API 版本，当前为 1，只做可加性变更：新增可选成员不升版本，任何会让既有插件出错的改动都要升版本。`PLUGIN_API_MIN_VERSION`（当前为 1）是宿主仍然加载的最旧版本。manifest 的 `apiVersion` 落在 [`PLUGIN_API_MIN_VERSION`, `PLUGIN_API_VERSION`] 内即被接受，区间之外的插件不会加载，在插件管理页和 doctor 中显示原因：比宿主新的写明宿主最高提供的版本，比下限旧的写明宿主不再加载该版本。提高下限是唯一的破坏性步骤，与新增版本分开进行。区间判断集中在 `apiVersionProblem`（`packages/plugin-api/src/manifest.ts`），注册表、安装和打包共用。`hostApi.server` 仍是对 `PLUGIN_API_VERSION` 求值的 semver 范围，与此区间无关。
 
@@ -219,6 +221,23 @@ apps/server/src/plugins/           注册与生命周期、声明校验、本地
 
 - 客户端：`packages/plugin-web/src/bridge-client.ts` 无依赖，随视图一起打包：`connect()` 返回连接，`call(method, params)` 带类型地调用，`on('context' | 'theme', fn)` 监听推送，主题变量默认写到文档根上，视图的 CSS 直接用 `var(--fg)`。协议类型（`BridgeMethods`、`BridgeEvents`、`BRIDGE_LIMITS`）从 `@riffet/plugin-web` 导出。样例：`examples/plugins/session-stats/`。
 - Mac：非内置包、声明 `web` 客户端、有 `webEntry`、侧栏位置的视图，在没有原生渲染器时用 `WKWebView` 承接（Mac 没有会话视图注册，只有侧栏）；内置的仅 Web 视图仍不可用。页面由 `riffet-plugin://<插件 id>/index.html` 的 scheme handler 提供，脚本经带令牌的客户端取回并校验 `integrity`；数据存储是非持久的，内容规则列表在没有 `network` 时拦截所有网络请求，除引导页外的导航一律拒绝。页内的垫片在文档开始时提供同样的端口语义（`MessageChannel` 一端留在页内，经 `WKScriptMessageHandler` 与 `evaluateJavaScript` 往返），所以同一个客户端不改就能用；引导页发请求的脚本与 Web 逐字相同，垫片只回应第一次，之后的握手不新建桥，限流与未完成计数不会被重置。请求的校验用 Swift 再实现一遍，调色板用同一套角色名推送。`navigation.*` 要求视图可见且是或包含窗口的第一响应者，否则 `denied`；长按链接预览关闭；`commands.execute` 经带令牌的客户端 POST 到命令路由。入口脚本的地址带 `?v=<入口 integrity，没有则包版本>`，升级后不会命中旧缓存。Mac 另按自己的桥协议版本（1）核对 `compatibility.web.range`（范围匹配与服务端的 `satisfies` 相同），不兼容的视图不提供，与服务端判 `ok: false` 同。
+
+## 模型用途
+
+插件在静态声明里写它要在模型上做的事：`contributes.modelUses: [{ id, title, fallback? }]`，`id` 是声明 ID（`<插件 id>/<名称>`），`title` 是这件事的名称（如「翻译」），`fallback` 目前只能是 `chat`。参考实现是 `riffet.translate`。
+
+- 设置：插件启用时，各客户端的「设置 › 辅助模型」在核心用途下面多一组「插件」，每项用途一行，选项与核心用途相同（已有密钥的网关模型）。选择存在 `AppSettings.pluginModels`，按声明 ID 保存，所有客户端同一份；插件停用或卸载时这一行不显示，选择保留，再启用时还在。更新时只改给出的用途，`null` 清除；`pluginModels` 至多 64 项。
+- 调用：`host.models.complete({ use, … })`。`use` 只能是本插件声明的用途，别的得 403 `PLUGIN_MODEL_USE_FOREIGN`。宿主先取用户为它选的模型，没有就按 `fallback` 取「快速对话」的默认模型；都没有时 409 `PLUGIN_MODEL_NOT_CHOSEN`，`details.use` 是这项用途，客户端的「选择模型」直接打开「辅助模型」。
+- 核心用途（`AUXILIARY_MODEL_PURPOSES`）不随插件增加：核心不认识任何插件的用途，宿主只按声明画行、按声明 ID 取值。隔离安装的包暂时没有 `models.complete`；开放时会配一项授权能力，安装时列出「会把内容发给你选择的模型」。
+
+## 消息菜单
+
+命令可以列在宿主的菜单里：`CommandDeclaration.menus` 取自 `COMMAND_MENUS`，目前只有 `message`（回答的更多菜单）。列在菜单里的命令只在菜单里出现，命令面板与快捷键不列它，因为那里没有它要处理的消息。界面规则见 [插件界面](design/system/plugins.md) §2.1，参考实现是内置插件 `riffet.translate`（`plugins/riffet/translate/`）。
+
+- 声明：`menus: ['message']` 要求 `scope: 'session'`；`icon` 取自 `COMMAND_ICONS`（如 `languages`），客户端按名字画自己的图标，不认识的画拼图。加载时宿主不认识的菜单值被去掉并写一条说明，全部不认识时整条命令被跳过，不会改为出现在命令面板；不认识的 `icon` 被去掉。`pack`、`check` 对两者严格报错。
+- 执行：客户端照常 `POST /api/integrations/:id/commands/:name`，另带 `message: { role, text, runId? }` 和客户端语言 `locale`。`text` 是客户端显示的 Markdown，至多 `PLUGIN_COMMAND_BUDGET.messageChars`（超过时客户端不列插件项）。列在 `message` 菜单的命令没有 `message` 时得 400 `COMMAND_ARGS_INVALID`，其他命令带了 `message` 同样拒绝；`message` 与 `locale` 计入同一 `requestId` 的幂等比较；在消息上运行的命令只在运行期间共享同一次执行，答复后不保留，避免长结果在服务端常驻十分钟。处理函数从 `CommandContext.message`、`locale` 读取；隔离安装的包经子进程协议的 `command.run` 收到同样两项。
+- 结果：除 `done`、`open`、`task` 外，在消息上运行的命令可以返回 `{ kind: 'text', text, title? }`：`text` 是 Markdown，1 到 `PLUGIN_COMMAND_BUDGET.resultChars` 个字符；`title` 是至多 16 种语言、各 40 字的标题。不是在消息上运行的命令返回 `text` 是无效结果（502 `COMMAND_FAILED`）。客户端把它显示在那条回答下方，只在内存里保留（`keptResults`），不写进会话、不同步。
+- 承载：Web 与 Mac 已实现，结果在回答页脚下方；iOS、Android 尚未列出插件项。
 
 ## 启用
 

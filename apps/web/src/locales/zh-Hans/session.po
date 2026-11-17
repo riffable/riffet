@@ -459,6 +459,7 @@ msgid "全部结束"
 msgstr "全部结束"
 
 #: src/app/session/ImageViewer.tsx
+#: src/app/session/messageCommands.tsx
 msgid "关闭"
 msgstr "关闭"
 
@@ -2114,6 +2115,10 @@ msgstr "选择 Agent"
 #: src/app/session/DirectoryMenu.tsx
 msgid "选择其他目录…"
 msgstr "选择其他目录…"
+
+#: src/app/session/messageCommands.tsx
+msgid "选择模型"
+msgstr "选择模型"
 
 #: src/app/session/ModelPicker.tsx
 msgctxt "session-model-picker-label"

@@ -14,7 +14,7 @@
     "paths": { "@/*": ["apps/web/src/*"], "@contracts": ["packages/contracts/src/index.ts"], "@riffet/contracts": ["packages/contracts/src/index.ts"], "@riffet/plugin-api/kit": ["packages/plugin-api/src/kit/index.ts"], "@riffet/plugin-api/experimental/agent": ["packages/plugin-api/src/agent.ts"], "@riffet/plugin-api": ["packages/plugin-api/src/index.ts"], "@riffet/plugin-web": ["packages/plugin-web/src/index.ts"] },
     "types": ["node", "vite/client"]
   },
-  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "plugins/**/*.ts", "plugins/**/*.tsx", "scripts/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
+  "include": ["apps/**/*.ts", "apps/**/*.tsx", "packages/**/*.ts", "plugins/**/*.ts", "plugins/**/*.tsx", "official/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "vitest.config.ts"],
   // The mobile client is a Gradle/Kotlin tree with its own toolchain; nothing there belongs to tsc.
   "exclude": ["apps/mobile", "node_modules", "dist"]
 }

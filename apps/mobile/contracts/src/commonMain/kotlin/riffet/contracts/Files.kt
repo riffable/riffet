@@ -217,6 +217,8 @@ data class AppSettings(
     val sidebarPinned: List<String>? = null,
     /** The agent and model the 助理 starts with, on every device. */
     val assistant: AssistantSettings? = null,
+    /** The model for each plugin-declared use, keyed by use id (`<pluginId>/<name>`). */
+    val pluginModels: Map<String, AuxiliaryModelRef>? = null,
 ) {
     /** The Agent new sessions start on, built-in or a plugin's; null when none was chosen. */
     val defaultAgent: String? get() = defaultAgentId ?: defaultBackendId?.let(AgentIds::wire)

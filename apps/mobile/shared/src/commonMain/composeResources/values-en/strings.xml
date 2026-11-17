@@ -326,6 +326,8 @@
     <string name="settings_auxiliary_title_off">Use CLI titles only</string>
     <string name="settings_auxiliary_handoff">Handoff summaries</string>
     <string name="settings_auxiliary_off">Off</string>
+    <string name="settings_auxiliary_plugins">Plugins</string>
+    <string name="settings_auxiliary_follow_chat">Same as Quick chat</string>
     <string name="settings_icons">Icons</string>
     <string name="settings_interface_style">Interface style</string>
     <string name="settings_style_material">Material 3</string>

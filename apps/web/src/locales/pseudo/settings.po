@@ -2758,6 +2758,10 @@ msgstr ""
 msgid "回答里的围栏"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "回答页脚下方；运行中图标换为转圈"
+msgstr ""
+
 #: src/app/settings/SidebarSection.tsx
 msgid "固定到侧栏"
 msgstr ""
@@ -4639,6 +4643,7 @@ msgstr ""
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SearchChapter.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "插件"
 msgstr ""
@@ -4682,6 +4687,10 @@ msgstr ""
 
 #: src/app/design/catalog.tsx
 msgid "插件视图能用什么、怎么画"
+msgstr ""
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "插件结果"
 msgstr ""
 
 #: src/app/design/engineering/PluginsChapter.tsx
@@ -7299,6 +7308,10 @@ msgstr ""
 msgid "群里共用一个会话，或按话题分会话"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "翻译"
+msgstr ""
+
 #: src/app/design/DesignPage.tsx
 msgid "翻页"
 msgstr ""
@@ -7748,6 +7761,10 @@ msgstr ""
 msgid "诊断记录"
 msgstr ""
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "译文"
+msgstr ""
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "试用"
 msgstr ""
@@ -7953,6 +7970,10 @@ msgstr ""
 
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "跟进任务"
+msgstr ""
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随快速对话"
 msgstr ""
 
 #: src/app/settings/PreferencesSections.tsx

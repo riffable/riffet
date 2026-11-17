@@ -31,6 +31,7 @@ import { ActivityContext, BackgroundTaskMetadata, BackgroundTaskOutcome, Backgro
 import { formatTokensPerSecond, outputRateDescription, outputTokensPerSecond, tokensPerSecond } from './speed';
 import { MessageAttachments } from './MessageAttachments';
 import { MarkedIndicator, MarkMenuItem, markBodies, type MarkTarget } from './marks';
+import { commandIcon, MessageCommandResults, useMessageCommandItems } from './messageCommands';
 import { useAnswerShare } from '../marks/ShareImage';
 import { RememberedScope, useRemembered } from './rememberedState';
 import { FailureDetails } from './FailureDetails';
@@ -78,10 +79,11 @@ export const AnswerBringBackContext = createContext<((text: string) => void) | u
  * another backend, or an archived conversation — has no Run to fork or rewind, but keeps the same
  * menu for the actions it does have: one transcript must not show two footer styles.
  */
-export function AnswerActions({ text, runId, onTurnAction, mark, at }: { text?: string; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; at?: string }) {
+export function AnswerActions({ text, runId, onTurnAction, mark, at, pluginItems: offerPlugins = false }: { text?: string; runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; at?: string; /** Plugin commands of the message menu: only where their result is drawn under the answer (`MessageCommandResults`). */ pluginItems?: boolean }) {
   const { t } = useLingui();
   const bringBack = useContext(AnswerBringBackContext);
   const share = useAnswerShare(text, at ?? mark?.at);
+  const pluginItems = useMessageCommandItems(offerPlugins ? text : undefined, runId);
   const resources = useTranscriptResources();
   if (resources) return text ? <CopyButton text={text} label={t`复制回答`} className="no-hover:h-11 no-hover:px-3" /> : null;
   const turn = runId && onTurnAction ? { runId, onTurnAction } : undefined;
@@ -97,6 +99,7 @@ export function AnswerActions({ text, runId, onTurnAction, mark, at }: { text?: 
         {text && bringBack && <DropdownMenuItem onSelect={() => bringBack(text)}><IconCornerUpRight /><Trans>带回主会话</Trans></DropdownMenuItem>}
         <MarkMenuItem target={mark} />
         {share.available && <DropdownMenuItem onSelect={share.open}><IconImageDown /><Trans>导出为图片</Trans></DropdownMenuItem>}
+        {pluginItems.map(({ command, run }) => { const Icon = commandIcon(command.icon); return <DropdownMenuItem key={command.id} onSelect={run}><Icon />{command.title}</DropdownMenuItem>; })}
         {turn && (text || mark) && <DropdownMenuSeparator />}
         {turn && <DropdownMenuItem onSelect={() => turn.onTurnAction('fork', turn.runId)}><IconGitFork /><Trans>从此处另开会话</Trans></DropdownMenuItem>}
         {turn && <DropdownMenuItem onSelect={() => turn.onTurnAction('rewind', turn.runId)}><IconRotateCcw /><Trans>回退代码到本轮开始前</Trans></DropdownMenuItem>}
@@ -214,14 +217,15 @@ export const AssistantMessage = memo(function AssistantMessage({ text, showActio
     <div className="group/message flex flex-col gap-2.5">
       {/* Always wrapped, so the body does not remount (and lose its open blocks) when the turn settles. */}
       <div ref={markBody} data-mark-ids={mark?.ids.join(' ')} data-chapter-body={chapters && !resources ? '' : undefined} className="min-w-0"><Markdown text={text} streaming={streaming} chapters={chapters && !resources} /></div>
-      <MessageFooter text={text} showActions={showActions} time={time} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} />
+      <MessageFooter text={text} showActions={showActions} time={time} stopped={stopped} footerPinned={footerPinned} metrics={metrics} runId={runId} onTurnAction={onTurnAction} mark={mark} progress={progress} pluginItems={!resources} />
+      {showActions && !resources && <MessageCommandResults text={text} {...(runId ? { runId } : {})} />}
     </div>
   );
 });
 
 /** The same turn actions and timestamp belong under an answer or the result that ended it. */
-export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false }: {
-  text?: string; showActions: boolean; time?: string; footerPinned?: boolean;
+export function MessageFooter({ text, showActions, time, footerPinned, metrics, runId, onTurnAction, mark, progress, stopped = false, pluginItems = false }: {
+  text?: string; showActions: boolean; time?: string; footerPinned?: boolean; pluginItems?: boolean;
   /** The answer ends a stopped turn: 已停止 leads the time and keeps the line on screen. */
   stopped?: boolean; metrics?: RunMetrics;
   runId?: string; onTurnAction?: (action: TurnAction, runId: string) => void; mark?: MarkTarget; progress?: ReactNode;
@@ -233,7 +237,7 @@ export function MessageFooter({ text, showActions, time, footerPinned, metrics, 
   if (!showActions && !time && progress === undefined) return null;
   return <div data-slot="message-meta" {...rest} className={cn('turn-footer -ml-1.5 flex min-h-9 cursor-default select-none flex-wrap items-center gap-1 transition-opacity can-hover:-ml-5.5 no-hover:min-h-11', (showActions || time) && !footerPinned && !stopped && !resources && revealOnOwnHover)}>
     {!showActions && !time && progress && <div className="ml-1.5 min-w-0">{progress}</div>}
-    {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} {...(time ? { at: time } : {})} />}
+    {showActions && <AnswerActions text={text} runId={runId} onTurnAction={onTurnAction} mark={mark} pluginItems={pluginItems} {...(time ? { at: time } : {})} />}
     <MarkedIndicator target={mark} />
     {stopped && <span role="status" className="shrink-0 px-1 text-2xs text-fg-3">{t`已停止`}</span>}
     {time && <time dateTime={time} className="shrink-0 px-1 text-2xs tabular-nums text-fg-3">{formatDateTime(time)}</time>}

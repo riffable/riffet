@@ -18698,6 +18698,16 @@
         }
       }
     },
+    "跟随快速对话": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Same as Quick chat"
+          }
+        }
+      }
+    },
     "跟随主题": {
       "localizations": {
         "en": {

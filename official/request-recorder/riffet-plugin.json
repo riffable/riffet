@@ -1,0 +1,37 @@
+{
+  "id": "riffet.request-recorder",
+  "vendor": "Riffet",
+  "name": "request-recorder",
+  "apiVersion": 1,
+  "defaultEnabled": false,
+  "version": "0.1.0",
+  "title": {
+    "zh-Hans": "请求记录",
+    "en": "Request Recorder"
+  },
+  "description": {
+    "zh-Hans": "记录对话发往模型网关的请求和响应",
+    "en": "Records the requests a conversation sends to its model gateway"
+  },
+  "contributes": {
+    "page": {
+      "title": {
+        "zh-Hans": "请求记录",
+        "en": "Request Recorder"
+      }
+    }
+  },
+  "entries": {
+    "server": "server/index.mjs"
+  },
+  "hostApi": {
+    "server": "^1"
+  },
+  "capabilities": [
+    "network"
+  ],
+  "activation": [
+    "startup"
+  ],
+  "requiresTrustedHost": true
+}

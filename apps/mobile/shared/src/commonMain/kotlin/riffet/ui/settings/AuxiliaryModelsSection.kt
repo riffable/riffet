@@ -10,10 +10,12 @@ import kotlinx.coroutines.CancellationException
 import org.jetbrains.compose.resources.stringResource
 import riffet.contracts.AuxiliaryModelOption
 import riffet.contracts.AuxiliaryModelRef
+import riffet.shared.ModelUseDeclaration
 import riffet.shared.RiffetApi
 import riffet.shared.auxiliaryModels
 import riffet.ui.pickers.*
 import riffet.ui.theme.LocalRiffetColors
+import riffet.ui.theme.localizedAppearanceTitle
 import riffet_mobile.shared.generated.resources.*
 
 @Composable
@@ -40,16 +42,37 @@ internal fun AuxiliaryModelsSection(controller: SettingsController, options: Lis
         AuxiliaryModelRow(controller, "title", stringResource(Res.string.settings_auxiliary_title), stringResource(Res.string.settings_auxiliary_title_off), options, error)
         AuxiliaryModelRow(controller, "handoff", stringResource(Res.string.settings_auxiliary_handoff), stringResource(Res.string.settings_auxiliary_off), options, null)
     }
+    val uses = rememberPluginModelUses(controller)
+    if (uses.isNotEmpty()) {
+        SettingsGroup(stringResource(Res.string.settings_auxiliary_plugins)) {
+            uses.forEach { use ->
+                val off = if (use.fallback == "chat") stringResource(Res.string.settings_auxiliary_follow_chat) else stringResource(Res.string.settings_auxiliary_off)
+                AuxiliaryModelRow(controller, "chat", localizedAppearanceTitle(use.title).ifBlank { use.id }, off, options, null, pluginUse = use.id)
+            }
+        }
+    }
+}
+
+/** The model uses every enabled plugin declares; empty until the list loads or when the server is older. */
+@Composable
+private fun rememberPluginModelUses(controller: SettingsController): List<ModelUseDeclaration> {
+    var uses by remember(controller) { mutableStateOf<List<ModelUseDeclaration>>(emptyList()) }
+    LaunchedEffect(controller) {
+        controller.providerPlugins().onSuccess { plugins ->
+            uses = plugins.filter { it.enabled }.flatMap { it.declared?.modelUses.orEmpty() }
+        }
+    }
+    return uses
 }
 
 @Composable
 internal fun AuxiliaryModelRow(
     controller: SettingsController, purpose: String, title: String, offLabel: String,
-    options: List<AuxiliaryModelOption>?, loadError: String?,
+    options: List<AuxiliaryModelOption>?, loadError: String?, pluginUse: String? = null,
 ) {
     val state by controller.state.collectAsState()
     val settings = state.settings ?: return
-    val current = when (purpose) { "title" -> settings.auxiliaryModels?.title; "handoff" -> settings.auxiliaryModels?.handoff; else -> settings.auxiliaryModels?.chat }
+    val current = if (pluginUse != null) settings.pluginModels?.get(pluginUse) else when (purpose) { "title" -> settings.auxiliaryModels?.title; "handoff" -> settings.auxiliaryModels?.handoff; else -> settings.auxiliaryModels?.chat }
     // The chat catalog names models `<provider> · <model>`; the saved choice repeats that.
     val currentLabel = current?.let { ref ->
         val profile = options.orEmpty()
@@ -71,7 +94,9 @@ internal fun AuxiliaryModelRow(
                 RiffetMenuItem(
                     onClick = {
                         modelOpen = false
-                        if (current != null) controller.saveAuxiliaryModel(purpose, null)
+                        if (current != null) {
+                            if (pluginUse != null) controller.savePluginModel(pluginUse, null) else controller.saveAuxiliaryModel(purpose, null)
+                        }
                     },
                     selected = current == null,
                     showCheck = true,
@@ -84,7 +109,8 @@ internal fun AuxiliaryModelRow(
                         RiffetMenuItem(
                             onClick = {
                                 modelOpen = false
-                                controller.saveAuxiliaryModel(purpose, AuxiliaryModelRef(option.backendId, option.profileId, option.model))
+                                val ref = AuxiliaryModelRef(option.backendId, option.profileId, option.model)
+                                if (pluginUse != null) controller.savePluginModel(pluginUse, ref) else controller.saveAuxiliaryModel(purpose, ref)
                             },
                             selected = current?.let { it.backendId == option.backendId && it.profileId == option.profileId && it.model == option.model } == true,
                             showCheck = true,

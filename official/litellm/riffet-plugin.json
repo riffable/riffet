@@ -1,0 +1,31 @@
+{
+  "id": "riffet.litellm",
+  "vendor": "Riffet",
+  "name": "LiteLLM",
+  "apiVersion": 1,
+  "version": "1.0.0",
+  "defaultEnabled": true,
+  "title": { "en": "LiteLLM", "zh-Hans": "LiteLLM" },
+  "description": {
+    "en": "A LiteLLM Proxy as a gateway type for Claude Code and Codex, with key budget as usage.",
+    "zh-Hans": "把 LiteLLM Proxy 作为 Claude Code 与 Codex 的网关类型，并显示 Key 预算。"
+  },
+  "activation": ["model-source"],
+  "hostApi": { "server": "^1" },
+  "capabilities": ["models.provide", "network"],
+  "settings": [
+    { "key": "baseUrl", "label": "Proxy address", "kind": "text" },
+    { "key": "apiKey", "label": "API key", "kind": "secret" }
+  ],
+  "entries": { "server": "server/index.mjs" },
+  "contributes": {
+    "modelSources": [{
+      "id": "riffet.litellm.models",
+      "role": "adapter",
+      "usage": true,
+      "title": { "en": "LiteLLM", "zh-Hans": "LiteLLM" },
+      "protocols": ["anthropic-messages", "openai-responses"],
+      "overridable": ["apiEndpoint", "apiKey"]
+    }]
+  }
+}

@@ -159,8 +159,30 @@ struct HandedOffSpec: Equatable {
     var successorId: String
 }
 
+/// What a plugin command run on an answer's ⋯ menu answered, shown as a block under that answer. [text]
+/// is nil while it runs. The runner (`PluginCommandRunner.results`) holds it; rows only draw it.
+struct CommandResultSpec: Equatable, Sendable {
+    let id: String
+    let token: UUID
+    let sessionId: String
+    /// Names the answer it was run on (`match`), so the row of that answer finds it again.
+    let match: String
+    var title: String
+    let symbol: String
+    var text: String?
+
+    /// The answer's identity: conversation, run and a hash of its text (the same text of two runs is two answers).
+    static func match(sessionId: String, runId: String?, text: String) -> String {
+        var value: UInt32 = 0x811c9dc5
+        for byte in text.utf8 { value = (value ^ UInt32(byte)) &* 0x01000193 }
+        return "\(sessionId)\0\(runId ?? "")\0\(text.utf8.count):\(value)"
+    }
+}
+
 /// What one transcript row is made from.
 enum RowSource {
+    /// A command's result under the answer row before it.
+    case commandResult(CommandResultSpec)
     /// [past]: a row before the latest user message (native style only), whose prose reads in fg2.
     case timeline(any TimelineRow, gap: RowGap, speed: SpeedTag?, past: Bool)
     case lineage(LineageSpec)
@@ -284,6 +306,34 @@ struct RowBuilder {
                 startX += part.size.width
             }
             return RowLayout(height: 20 + lineHeight, fragments: fragments)
+        case let .commandResult(spec):
+            let pad: CGFloat = 12
+            let top = style.rhythm.footer
+            let box = fragments.count
+            fragments.append(Fragment(frame: .zero, kind: .box(style.blockBox(radius: style.radii.container))))
+            let head = NSMutableAttributedString()
+            head.append(text.symbol(spec.symbol, size: 12, color: style.color(\.fg3)))
+            head.append(text.plain("  " + spec.title, size: 13, weight: .medium, color: style.color(\.fg)))
+            let title = TextLayout(head, width: w - 2 * pad)
+            let headerHeight = max(title.size.height, 24)
+            fragments.append(Fragment(frame: CGRect(x: x + pad, y: top + pad + (headerHeight - title.size.height) / 2, width: title.size.width, height: title.size.height), kind: .text(title, selectable: false)))
+            var edge = x + w - pad
+            let close = ButtonSpec(title: String(localized: "关闭"), action: .dismissCommandResult(spec.id), loading: false, compact: true)
+            let closeSize = buttonSize(close)
+            edge -= closeSize.width
+            fragments.append(Fragment(frame: CGRect(x: edge, y: top + pad + (headerHeight - closeSize.height) / 2, width: closeSize.width, height: closeSize.height), kind: .button(close)))
+            let side = spec.text.map { ButtonSpec(title: String(localized: "复制"), action: .copyText($0), loading: false, compact: true) } ?? ButtonSpec(title: "", action: nil, loading: true)
+            let sideSize = buttonSize(side)
+            edge -= sideSize.width
+            fragments.append(Fragment(frame: CGRect(x: edge, y: top + pad + (headerHeight - sideSize.height) / 2, width: sideSize.width, height: sideSize.height), kind: .button(side)))
+            var cursor = top + pad + headerHeight
+            if let body = spec.text {
+                cursor += 6
+                cursor += markdown(body, x: x + pad, y: cursor, width: w - 2 * pad, muted: false, compact: false)
+            }
+            cursor += pad
+            fragments[box].frame = CGRect(x: x, y: top, width: w, height: cursor - top)
+            return RowLayout(height: ceil(cursor), fragments: fragments, pending: pending.union(text.pending))
         case .olderFailed:
             let button = ButtonSpec(title: String(localized: "加载更早的消息失败，重试"), action: .retryHistory, loading: false)
             let size = buttonSize(button)

@@ -31,9 +31,17 @@ final class AuxiliaryModelOptions {
     workbench.store.applySavedSettings(settings: saved)
 }
 
+/// Writes one plugin-declared model use (`<pluginId>/<name>`) or clears it, and folds the answer into the store.
+@MainActor func savePluginModel(_ workbench: Workbench, use: String, ref: AuxiliaryModelRef?) async throws {
+    guard let api = workbench.api else { return }
+    let saved = try await api.setPluginModel(use: use, ref: ref)
+    workbench.store.applySavedSettings(settings: saved)
+}
+
 struct AuxiliaryModelsView: View {
     let workbench: Workbench
     @State private var catalog = AuxiliaryModelOptions()
+    @State private var uses: [ModelUseDeclaration] = []
     var body: some View {
         let models = workbench.settings?.auxiliaryModels
         RiffetForm {
@@ -43,10 +51,23 @@ struct AuxiliaryModelsView: View {
                 AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "handoff", title: String(localized: "交接摘要", bundle: .riffet),
                                   off: String(localized: "不使用", bundle: .riffet), current: models?.handoff)
             }
+            if !uses.isEmpty {
+                Section {
+                    ForEach(uses, id: \.id) { use in
+                        AuxiliaryModelRow(workbench: workbench, catalog: catalog, purpose: "chat", title: localizedText(use.title, fallback: use.id),
+                                          off: use.fallback == "chat" ? String(localized: "跟随快速对话", bundle: .riffet) : String(localized: "不使用", bundle: .riffet),
+                                          current: workbench.settings?.pluginModels?[use.id], use: use.id)
+                    }
+                } header: { RiffetSectionTitle(String(localized: "插件", bundle: .riffet)) }
+            }
             if let error = catalog.error { RiffetNotice.section(.error, error) }
         }
         .navigationTitle(String(localized: "辅助模型", bundle: .riffet)).navigationBarTitleDisplayMode(.inline)
         .task { await catalog.load(workbench) }
+        .task {
+            guard let plugins = try? await workbench.api?.plugins() else { return }
+            uses = plugins.filter { $0.enabled }.flatMap { $0.declared?.modelUses ?? [] }
+        }
     }
 }
 
@@ -92,9 +113,10 @@ private struct AuxiliaryModelRow: View {
     let title: String
     let off: String
     let current: AuxiliaryModelRef?
+    var use: String?
     var body: some View {
         NavigationLink {
-            AuxiliaryModelChoice(workbench: workbench, catalog: catalog, purpose: purpose, title: title, off: off, current: current)
+            AuxiliaryModelChoice(workbench: workbench, catalog: catalog, purpose: purpose, title: title, off: off, current: current, use: use)
         } label: {
             SettingsRowLabel(title: title, value: auxiliaryModelName(current, options: catalog.options, off: off))
         }
@@ -109,6 +131,7 @@ private struct AuxiliaryModelChoice: View {
     let title: String
     let off: String
     let current: AuxiliaryModelRef?
+    var use: String?
     @Environment(\.dismiss) private var dismiss
     @Environment(\.palette) private var palette
     @State private var saving = false
@@ -153,7 +176,10 @@ private struct AuxiliaryModelChoice: View {
         saving = true
         Task {
             defer { saving = false }
-            do { try await saveAuxiliaryModel(workbench, purpose: purpose, ref: ref); dismiss() }
+            do {
+                if let use { try await savePluginModel(workbench, use: use, ref: ref) } else { try await saveAuxiliaryModel(workbench, purpose: purpose, ref: ref) }
+                dismiss()
+            }
             catch is CancellationError {} catch { self.error = error.riffetMessage }
         }
     }

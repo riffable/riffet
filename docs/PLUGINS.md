@@ -30,6 +30,27 @@ riffet plugin unlink example.echo
 
 最小的包是一个目录：`riffet-plugin.json` 加它引用的文件。
 
+### 参考实现
+
+每个扩展点和静态声明都有至少一个公开的参考实现，写新插件时从它开始读。内置插件在 `plugins/riffet/`，随应用提供；官方可选插件在 `official/`，和样例一样发布到公共插件源。`pnpm check:plugins` 检查这张表：`Contributions` 与 `PluginDeclarations` 的每个键、`COMMAND_MENUS` 的每个值都要有一行，引用的目录要存在并且确实用到了这一项；暂无参考的写明原因。
+
+| 扩展点或静态声明 | 参考 | 先读 |
+| --- | --- | --- |
+| `agentBackends` | `plugins/riffet/cursor`、`plugins/riffet/antigravity`、`examples/plugins/echo` | `echo` 是最小形状；Cursor 是完整驱动 |
+| `modelSources` | `examples/plugins/gateway-models`、`official/litellm` | 样例的 `server/index.mjs`：异步 `prepare()` 配同步 `resolve()`；LiteLLM 是网关适配器（`role: 'adapter'`）和额度（`usage`） |
+| `views` | `plugins/riffet/canvas`、`plugins/riffet/browser`、`examples/plugins/session-stats`、`examples/plugins/declarative-tools` | 会话视图、侧栏、隔离视图、声明式渲染器各一个 |
+| `commands` | `plugins/riffet/canvas`、`examples/plugins/declarative-tools` | 命令面板与声明式视图里的命令 |
+| `commands.menus: message` | `plugins/riffet/translate` | `translator.ts`：读 `context.message`，返回 `text` |
+| `modelUses` | `plugins/riffet/translate` | `index.ts` 的声明与 `translator.ts` 里带 `use` 的调用 |
+| `tasks`、`taskProviders` | `official/android` | `gradle.ts`：识别项目、列出操作、构造命令、解析日志 |
+| `appearance` | `examples/plugins/graphite-theme`、`examples/plugins/mono-icons`、`official/appearance-paper` | 只有资源的包 |
+| `avatarStyles` | `plugins/riffet/avatars` | `seal.ts` |
+| `agentTools`、`channels`、`page` | `plugins/riffet/browser` | `activate.ts`、`page.ts` |
+| `actions` | `plugins/riffet/browser` | `run` 类操作；`device-flow` 暂无公开参考：没有不绑定某家服务的真实场景 |
+| `status`、`doctorChecks`、`services` | `plugins/riffet/cursor` | `index.ts`；`services` 只有提供方 |
+| `sharePublisher` | `official/share-s3` | `publisher.ts`：别名与过期记录如何对应到存储；需要显式信任 |
+| `runtimeHooks` | 暂无（`official/request-recorder` 已写好但未发布：核心目前只在 Codex 系运行时调用运行时钩子，Claude 驱动尚未接入，钩子也拿不到模型源解析后的地址） | — |
+
 ```
 my-plugin/
   riffet-plugin.json
@@ -92,12 +113,13 @@ Cursor 的流计量在 CLI 报告回合结束后写入状态目录的 `cursor-us
 | 种类 | 字段 | 说明 |
 | --- | --- | --- |
 | `views` | `id`、`title`、`icon?`（`{ svg?, sfSymbol? }`，`svg` 是包内路径）、`locations`、`defaultLocation?`、`clients`（`web`、`macos`）、`instances`（`single`、`per-session`、`per-project`）、`when?`、`renderer?` | 工作台视图。位置取自 `session-view`、`sidebar`、`panel`、`main`、`navigation`、`settings`。`renderer` 可为 `tasks`、`list`、`form`、`detail`；由 Web/Mac 宿主绘制，操作复用本包声明的命令，不需要自定义 Web 入口。`requires` 声明客户端能力，缺失时显示不可用原因。非内置包的自定义视图位置只能是 `session-view` 或 `sidebar` |
-| `commands` | `id`、`title`、`when?`、`keybinding?`、`scope?`（`global`、`project`、`session`，缺省 `project`）、`params?`（与任务操作相同的字段列表） | 命令面板与快捷键引用它。代码在运行时提供 `commands: { [id]: { run(context) } }`，`context` 是 `{ projectId?, sessionId?, args, confirm?, signal }`，返回 `{ kind: 'done', message? }`、`{ kind: 'open', view?, sessionId?, path? }` 或 `{ kind: 'task', taskId }`；要启动任务用 `host.tasks.start(projectId, actionId, params?, { providerId? })`，只能是自己的任务提供方。执行路径是 `POST /api/integrations/:id/commands/:name`，服务端按插件开启、声明与处理函数、作用域和项目会话归属、`when`、`params` 的顺序重新检查，同一 `requestId` 十分钟内只执行一次。隔离安装的包也能提供命令：处理函数在它自己的进程里运行，宿主逐字段检查返回的结果（不合格是协议错误），调用期限 60 秒，`signal` 在期限前 5 秒与插件关闭时中止；持有 `tasks.run` 的包可以用 `host.tasks.start` 启动自己的任务提供方的任务，每条新计划仍先经用户确认。包的视图经消息桥的 `commands.execute` 执行本包声明的命令，结果原样交给视图 |
+| `commands` | `id`、`title`、`when?`、`keybinding?`、`scope?`（`global`、`project`、`session`，缺省 `project`）、`params?`（与任务操作相同的字段列表）、`menus?`（`message`）、`icon?`（`COMMAND_ICONS` 里的名字） | 命令面板与快捷键引用它；声明了 `menus` 的只出现在那些菜单里，`message` 菜单的命令收到 `context.message` 与 `context.locale`，可以返回 `{ kind: 'text', text, title? }`，显示在那条回答下方，见 [插件架构](PLUGIN_ARCHITECTURE.md)「消息菜单」。代码在运行时提供 `commands: { [id]: { run(context) } }`，`context` 是 `{ projectId?, sessionId?, args, confirm?, signal }`，返回 `{ kind: 'done', message? }`、`{ kind: 'open', view?, sessionId?, path? }` 或 `{ kind: 'task', taskId }`；要启动任务用 `host.tasks.start(projectId, actionId, params?, { providerId? })`，只能是自己的任务提供方。执行路径是 `POST /api/integrations/:id/commands/:name`，服务端按插件开启、声明与处理函数、作用域和项目会话归属、`when`、`params` 的顺序重新检查，同一 `requestId` 十分钟内只执行一次。隔离安装的包也能提供命令：处理函数在它自己的进程里运行，宿主逐字段检查返回的结果（不合格是协议错误），调用期限 60 秒，`signal` 在期限前 5 秒与插件关闭时中止；持有 `tasks.run` 的包可以用 `host.tasks.start` 启动自己的任务提供方的任务，每条新计划仍先经用户确认。包的视图经消息桥的 `commands.execute` 执行本包声明的命令，结果原样交给视图 |
 | `appearance` | `palettes`、`fonts`、`backgrounds`、`presets`、`iconPacks` | 配色是与自定义主题同结构的 JSON（53 个角色 × 明暗 + 各 16 个 ANSI）；字体是 woff2；背景是 PNG、JPEG 或 WebP；预设引用它们的声明 ID；图标包为 Android 使用的单色矢量 JSON。细节和限制见 [THEMES.md](THEMES.md) §7 |
 | `tasks` | `[{ id, title, projectType? }]` | 项目任务提供方的声明，代码在运行时提供 `taskProviders`，见 [TASKS.md](TASKS.md) |
 | modelSources | [{ id, title, hosts? }] | 模型源的静态元数据；id 与运行时模型源相同，停用时也能列出。声明不授予 models.provide 能力。`hosts` 至多 16 项，每项是小写主机名，可带前导 `*.`（匹配任意子域，不含域名本身）和 `:端口`（缺省不限端口），格式不合法时清单被拒绝。隔离安装的包声明了 `hosts` 后，该源解析出的所有地址必须落在这些主机内，或是用户自己输入的地址：档案的 `apiEndpoint`，以及本包 `text` 类设置中可解析为 http(s) 的值；不符的解析结果返回 `reason`，不交给驱动。没有声明 `hosts` 的源不受此限（兼容已安装的包）。授权确认里显示这些主机 |
 | sharePublisher | { title } | 分享发布方的静态元数据；由内置、可信开发包与可信安装包提供运行时实现 |
 | `agentBackends` | `[{ id, title, icon? }]` | 插件提供的 Agent。`id` 是 `<插件 id>` 或 `<插件 id>.<名称>`（至多 64 字符）；内置 ID 只有官方 `riffet` 插件能声明 |
+| `modelUses` | `[{ id, title, fallback? }]` | 插件要在模型上做的事，「设置 › 辅助模型」按它多画一行，用户为它选模型；代码调用 `host.models.complete({ use: id, … })`。`fallback: 'chat'` 表示没选时用「快速对话」的默认模型。见 [插件架构](PLUGIN_ARCHITECTURE.md)「模型用途」 |
 | `avatarStyles` | `[{ id, title, credit?, needsName? }]` | 个人资料的随机头像风格，`id` 是 `<插件 id>/<名称>`，`credit`（至多 300 字）是署名。代码提供 `avatarStyles: { [id]: { generate({ seed, size, ink, paper, name? }) } }`，返回 SVG；核心校验后栅格化，见 [OWNER.md](OWNER.md)「随机头像」。隔离安装的包也能提供 |
 
 `when` 是结构化条件，不是表达式：`hasProject`、`hasSession`、`projectType`、`capability`。它只决定可见性，不授予任何权限。

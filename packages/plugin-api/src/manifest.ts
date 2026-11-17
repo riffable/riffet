@@ -1,7 +1,7 @@
 import { z } from 'zod/v4';
 import { PLUGIN_API_MIN_VERSION, PLUGIN_API_VERSION, type PluginManifest } from './index.js';
 import {
-  COMMAND_SCOPES, PLUGIN_CLIENTS, PLUGIN_ID, VIEW_INSTANCES, VIEW_LOCATIONS, isContributionOf,
+  COMMAND_ICONS, COMMAND_MENUS, COMMAND_SCOPES, MODEL_USE_FALLBACKS, PLUGIN_CLIENTS, PLUGIN_ID, VIEW_INSTANCES, VIEW_LOCATIONS, isContributionOf,
   isAgentOfPlugin, isBuiltinBackendId, PLUGIN_CAPABILITIES,
   APPEARANCE_BACKGROUND_AREAS, APPEARANCE_BACKGROUND_FITS, APPEARANCE_FONT_ROLES, APPEARANCE_FONT_STYLES,
   type CommandDeclaration, type PluginDeclarations, type TaskProviderDeclaration, type ViewDeclaration,
@@ -146,6 +146,14 @@ function channel(pluginId: string, value: unknown, path: string): string | undef
   return value.scope === 'session' ? undefined : `${path}.scope must be "session"`;
 }
 
+function modelUse(pluginId: string, value: unknown, path: string): string | undefined {
+  if (!isRecord(value)) return `${path} must be an object`;
+  if (!isContributionOf(pluginId, value.id)) return `${path}.id must be "${pluginId}/<name>"`;
+  const problem = localized(value.title, `${path}.title`, 40);
+  if (problem) return problem;
+  return value.fallback === undefined || MODEL_USE_FALLBACKS.includes(value.fallback as never) ? undefined : `${path}.fallback must be one of ${MODEL_USE_FALLBACKS.join(', ')}`;
+}
+
 /** The persisted backend id, not a `<pluginId>/<name>` contribution id: a built-in one (official `riffet` plugins only) or one under the plugin's own id. */
 function agentBackend(pluginId: string, value: unknown, path: string): string | undefined {
   if (!isRecord(value)) return `${path} must be an object`;
@@ -183,6 +191,12 @@ function command(pluginId: string, value: unknown, path: string): string | undef
   if (value.scope !== undefined && !COMMAND_SCOPES.includes(value.scope as never)) return `${path}.scope must be global, project or session`;
   const params = value.params === undefined ? undefined : paramFields(value.params, `${path}.params`);
   if (params) return params;
+  if (value.menus !== undefined) {
+    const menus = oneOf(value.menus, COMMAND_MENUS, `${path}.menus`, 'menu');
+    if (menus) return menus;
+    if ((value.menus as unknown[]).includes('message') && value.scope !== 'session') return `${path}.scope must be session for the message menu`;
+  }
+  if (value.icon !== undefined && !COMMAND_ICONS.includes(value.icon as never)) return `${path}.icon must be one of ${COMMAND_ICONS.join(', ')}`;
   return value.when === undefined ? undefined : condition(value.when, `${path}.when`);
 }
 
@@ -278,7 +292,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
     }
   }
   const seen = new Set<string>();
-  for (const [key, check] of [['views', view], ['commands', command], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle], ['agentTools', agentTools], ['channels', channel]] as const) {
+  for (const [key, check] of [['views', view], ['commands', command], ['tasks', taskProvider], ['agentBackends', agentBackend], ['avatarStyles', avatarStyle], ['agentTools', agentTools], ['channels', channel], ['modelUses', modelUse]] as const) {
     const items = declarations[key];
     if (items === undefined) continue;
     if (!Array.isArray(items)) return `contributes.${key} must be an array`;
@@ -304,7 +318,7 @@ export function checkDeclarations(pluginId: string, declarations: unknown): stri
 /** The ids a plugin declares, for the registry's check that no two plugins claim one. */
 export function declaredIds(declarations: PluginDeclarations | undefined): string[] {
   const { palettes, fonts, backgrounds, presets, iconPacks } = declarations?.appearance ?? {};
-  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
+  return [...(declarations?.views ?? []), ...(declarations?.commands ?? []), ...(declarations?.tasks ?? []), ...(declarations?.agentBackends ?? []), ...(declarations?.avatarStyles ?? []), ...(declarations?.agentTools ?? []), ...(declarations?.channels ?? []), ...(declarations?.modelUses ?? []), ...(palettes ?? []), ...(fonts ?? []), ...(backgrounds ?? []), ...(presets ?? []), ...(iconPacks ?? [])].map(item => item.id);
 }
 
 /** The members of a validated record that this version knows, in that order: whatever else a package wrote there is dropped. */
@@ -324,7 +338,8 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const { appearance } = declarations;
   const views = declarations.views?.map(pickView);
   const commands = declarations.commands?.map((item): CommandDeclaration => ({
-    ...pick(item, ['id', 'title', 'keybinding', 'scope']),
+    ...pick(item, ['id', 'title', 'keybinding', 'scope', 'icon']),
+    ...(item.menus ? { menus: [...item.menus] } : {}),
     ...(item.when ? { when: pick(item.when, CONDITION_KEYS) } : {}),
     ...(item.params ? { params: item.params.map(field => pick(field, ['key', 'label', 'kind', 'options', 'default', 'required'])) } : {}),
   }));
@@ -333,9 +348,10 @@ export function knownDeclarations(declarations: PluginDeclarations | undefined):
   const avatarStyles = declarations.avatarStyles?.map(item => pick(item, ['id', 'title', 'credit', 'needsName']));
   const agentToolGroups = declarations.agentTools?.map(item => ({ ...pick(item, ['id', 'title', 'description', 'toolPrefix']), ...(item.icon ? { icon: pick(item.icon, ['svg', 'sfSymbol']) } : {}) }));
   const channels = declarations.channels?.map(item => pick(item, ['id', 'scope']));
+  const modelUses = declarations.modelUses?.map(item => pick(item, ['id', 'title', 'fallback']));
   const { palettes, fonts, backgrounds, presets, iconPacks } = appearance ?? {};
   const known = { ...(iconPacks?.length ? { iconPacks } : {}), ...(palettes?.length ? { palettes } : {}), ...(fonts?.length ? { fonts } : {}), ...(backgrounds?.length ? { backgrounds } : {}), ...(presets?.length ? { presets } : {}) };
-  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
+  const declared = { ...(declarations.actions ? { actions: declarations.actions.map(item => pick(item, ['id', 'label', 'kind'])) } : {}), ...(declarations.modelSources ? { modelSources: declarations.modelSources.map(item => pick(item, ['id', 'role', 'usage', 'title', 'protocols', 'backends', 'defaultEndpoint', 'overridable', 'loginAction', 'hint', 'hosts'])) } : {}), ...(declarations.sharePublisher ? { sharePublisher: pick(declarations.sharePublisher, ['title']) } : {}), ...(views?.length ? { views } : {}), ...(commands?.length ? { commands } : {}), ...(tasks?.length ? { tasks } : {}), ...(agentBackends?.length ? { agentBackends } : {}), ...(avatarStyles?.length ? { avatarStyles } : {}), ...(agentToolGroups?.length ? { agentTools: agentToolGroups } : {}), ...(channels?.length ? { channels } : {}), ...(modelUses?.length ? { modelUses } : {}), ...(declarations.page ? { page: pick(declarations.page, ['title']) } : {}), ...(Object.keys(known).length ? { appearance: known } : {}) };
   return Object.keys(declared).length ? declared : undefined;
 }
 
@@ -401,13 +417,14 @@ const declarationsSchema = z.object({
   actions: z.array(z.object({ id: z.string().regex(/^[a-z0-9][a-z0-9.-]{0,63}$/), label: z.string().min(1).max(200), kind: z.enum(['run', 'device-flow']) })).max(64).optional(),
   sharePublisher: z.object({ title: titleSchema }).optional(),
   views: z.array(viewSchema).optional(),
-  commands: z.array(z.object({ ...contributionSchema, when: conditionSchema.optional(), keybinding: z.string().regex(KEYBINDING).optional(), scope: z.enum(COMMAND_SCOPES).optional(), params: paramsSchema.optional() }).passthrough()).optional(),
+  commands: z.array(z.object({ ...contributionSchema, when: conditionSchema.optional(), keybinding: z.string().regex(KEYBINDING).optional(), scope: z.enum(COMMAND_SCOPES).optional(), params: paramsSchema.optional(), menus: z.array(z.enum(COMMAND_MENUS)).min(1).optional(), icon: z.enum(COMMAND_ICONS).optional() }).passthrough()).optional(),
   tasks: z.array(z.object({ ...contributionSchema, projectType: z.string().regex(CONDITION_TOKEN).optional() }).passthrough()).optional(),
   agentBackends: z.array(z.object({ ...contributionSchema, icon: iconSchema.optional() }).passthrough()).optional(),
   avatarStyles: z.array(z.object({ ...contributionSchema, credit: z.string().max(AVATAR_CREDIT_MAX).optional(), needsName: z.boolean().optional() }).passthrough()).max(64).optional(),
   agentTools: z.array(z.object({ ...contributionSchema, description: localizedSchema(400).optional(), toolPrefix: z.string().regex(/^[a-z][a-z0-9]{1,23}_$/), icon: iconSchema.optional() }).passthrough()).max(16).optional(),
   channels: z.array(z.object({ id: z.string(), scope: z.literal('session') }).passthrough()).max(16).optional(),
   page: z.object({ title: localizedSchema(40).optional() }).passthrough().optional(),
+  modelUses: z.array(z.object({ ...contributionSchema, fallback: z.enum(MODEL_USE_FALLBACKS).optional() }).passthrough()).max(16).optional(),
   appearance: appearanceSchema.optional(),
 }).passthrough();
 
@@ -506,12 +523,26 @@ export function loadableManifest(manifest: PluginManifest): LoadedManifest {
   let commands = list(declarations?.commands);
   let views = list(declarations?.views);
   const [commandsBefore, viewsBefore] = [commands?.length ?? 0, views?.length ?? 0];
-  if (commands) commands = commands.filter(item => {
-    const key = isRecord(item) && isContributionOf(manifest.id, item.id) ? unknownKey(item.when) : undefined;
-    if (key === undefined) return true;
-    notes.push(`command "${String((item as { id: string }).id)}" skipped: unknown condition "${key}"`);
-    skipped.push((item as { id: string }).id);
-    return false;
+  if (commands) commands = commands.flatMap(item => {
+    if (!isRecord(item) || !isContributionOf(manifest.id, item.id)) return [item];
+    const id = item.id;
+    const key = unknownKey(item.when);
+    if (key !== undefined) { notes.push(`command "${id}" skipped: unknown condition "${key}"`); skipped.push(id); return []; }
+    let next: Record<string, unknown> = item;
+    // A command meant for menus this host does not have is not offered in the palette instead: it would run without the context the menu gives it.
+    const menus = list(item.menus);
+    const unknownMenus = menus?.filter(value => !(COMMAND_MENUS as readonly unknown[]).includes(value));
+    if (menus && unknownMenus?.length) {
+      if (unknownMenus.length === menus.length) { notes.push(`command "${id}" skipped: unknown menu "${String(unknownMenus[0])}"`); skipped.push(id); return []; }
+      for (const value of unknownMenus) notes.push(`command "${id}": unknown menu "${String(value)}" ignored`);
+      next = { ...next, menus: menus.filter(value => !unknownMenus.includes(value)) };
+    }
+    if (item.icon !== undefined && !(COMMAND_ICONS as readonly unknown[]).includes(item.icon)) {
+      notes.push(`command "${id}": unknown icon "${String(item.icon)}" ignored`);
+      const { icon: _, ...rest } = next;
+      next = rest;
+    }
+    return [next];
   });
   if (views) views = views.flatMap(item => {
     if (!isRecord(item) || !isContributionOf(manifest.id, item.id)) return [item];

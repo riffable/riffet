@@ -1,0 +1,14 @@
+{
+  "name": "@riffet/request-recorder",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "Apache-2.0",
+  "riffetPlugin": {
+    "build": {
+      "entries": {
+        "daemon": "daemon.ts"
+      }
+    }
+  }
+}

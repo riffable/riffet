@@ -114,6 +114,11 @@ extension Error {
         ((self as NSError).userInfo["KotlinException"] as? RiffetHttpException)?.code
     }
 
+    /// A string field of the server error's `details` (`use` on `PLUGIN_MODEL_NOT_CHOSEN`).
+    func riffetDetail(_ key: String) -> String? {
+        ((self as NSError).userInfo["KotlinException"] as? RiffetHttpException)?.detail(key: key)
+    }
+
     /// The plugin that owns the Agent behind this call is off (HTTP 503 `NATIVE_BACKEND_UNAVAILABLE`).
     var riffetBackendUnavailable: Bool { riffetCode == "NATIVE_BACKEND_UNAVAILABLE" }
 

@@ -1,0 +1,177 @@
+{
+  "id": "riffet.android",
+  "vendor": "riffet",
+  "name": "android",
+  "apiVersion": 1,
+  "defaultEnabled": true,
+  "version": "0.5.0",
+  "title": {
+    "zh-Hans": "Android 构建",
+    "en": "Android Build"
+  },
+  "contributes": {
+    "tasks": [
+      {
+        "id": "riffet.android/gradle",
+        "title": {
+          "zh-Hans": "Android",
+          "en": "Android"
+        },
+        "projectType": "android"
+      },
+      {
+        "id": "riffet.android/logcat",
+        "title": {
+          "zh-Hans": "Logcat",
+          "en": "Logcat"
+        },
+        "projectType": "android"
+      },
+      {
+        "id": "riffet.android/configs",
+        "title": {
+          "zh-Hans": "Run Configurations",
+          "en": "Run Configurations"
+        },
+        "projectType": "run-configurations"
+      }
+    ],
+    "views": [
+      {
+        "id": "riffet.android/build",
+        "title": {
+          "zh-Hans": "Android",
+          "en": "Android"
+        },
+        "icon": {
+          "sfSymbol": "iphone"
+        },
+        "locations": [
+          "sidebar"
+        ],
+        "defaultLocation": "sidebar",
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "renderer": {
+          "kind": "tasks",
+          "provider": "riffet.android/gradle"
+        },
+        "when": {
+          "hasProject": true,
+          "projectType": "android"
+        }
+      },
+      {
+        "id": "riffet.android/log",
+        "title": {
+          "zh-Hans": "Logcat",
+          "en": "Logcat"
+        },
+        "icon": {
+          "sfSymbol": "text.page"
+        },
+        "locations": [
+          "sidebar"
+        ],
+        "defaultLocation": "sidebar",
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "renderer": {
+          "kind": "tasks",
+          "provider": "riffet.android/logcat"
+        },
+        "when": {
+          "hasProject": true,
+          "projectType": "android"
+        }
+      },
+      {
+        "id": "riffet.android/configurations",
+        "title": {
+          "zh-Hans": "Configs",
+          "en": "Configs"
+        },
+        "icon": {
+          "sfSymbol": "list.bullet.rectangle"
+        },
+        "locations": [
+          "sidebar"
+        ],
+        "defaultLocation": "sidebar",
+        "clients": [
+          "web",
+          "macos"
+        ],
+        "instances": "per-project",
+        "renderer": {
+          "kind": "tasks",
+          "provider": "riffet.android/configs"
+        },
+        "when": {
+          "hasProject": true,
+          "projectType": "run-configurations"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "id": "riffet.android/assemble-debug",
+        "title": {
+          "zh-Hans": "Android: Build APK",
+          "en": "Android: Build APK"
+        },
+        "scope": "project",
+        "when": {
+          "hasProject": true,
+          "projectType": "android"
+        }
+      },
+      {
+        "id": "riffet.android/run",
+        "title": {
+          "zh-Hans": "Android: Run",
+          "en": "Android: Run"
+        },
+        "scope": "project",
+        "when": {
+          "hasProject": true,
+          "projectType": "android"
+        }
+      },
+      {
+        "id": "riffet.android/open-logcat",
+        "title": {
+          "zh-Hans": "Android: Logcat",
+          "en": "Android: Logcat"
+        },
+        "scope": "project",
+        "when": {
+          "hasProject": true,
+          "projectType": "android"
+        }
+      }
+    ]
+  },
+  "entries": {
+    "server": "server/index.mjs"
+  },
+  "hostApi": {
+    "server": "^1"
+  },
+  "capabilities": [
+    "projects.read",
+    "tasks.run"
+  ],
+  "activation": [
+    "task",
+    "command",
+    "view"
+  ],
+  "requiresTrustedHost": true
+}

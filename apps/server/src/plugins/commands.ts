@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import type { CommandHandler } from '@riffet/plugin-api';
-import type { LocalizedText, PluginCommandResult, Project, Session, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import { PLUGIN_COMMAND_BUDGET, type CommandMessage, type LocalizedText, type PluginCommandResult, type Project, type Session, type Task, type TaskParams } from '../../../../packages/contracts/src/index.js';
 import { AppError, requireString } from '../errors.js';
 import { requireProjectVisibleToClient, requireSessionVisibleToClient } from '../native/client-features.js';
 import type { RouteDeps } from '../routes/deps.js';
@@ -14,6 +14,10 @@ import type { PluginRegistry } from './registry.js';
 // is advice (`when`); every check that matters is made again here.
 
 const REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
+const LOCALE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$/;
+const RUN_ID = /^[A-Za-z0-9._:-]{1,200}$/;
+/** A message of the longest allowed length, in the widest UTF-8, with room for the rest of the body. */
+const BODY_LIMIT = PLUGIN_COMMAND_BUDGET.messageChars * 4 + 16 * 1024;
 /** How long the same request id with the same body returns the same result. */
 const IDEMPOTENCY_MS = 10 * 60_000;
 /** A command that has not answered by then is reported as failed and its signal aborts. An installed package's own call limit (60 s) comes first. */
@@ -64,6 +68,14 @@ export class CommandService {
     const invalid = (message: string) => new AppError('COMMAND_ARGS_INVALID', message);
     const given = readParams(body.args, invalid, 'args');
     const confirm = body.confirm === undefined ? undefined : requireString(body.confirm, 'confirm', 128);
+    const locale = body.locale == null ? undefined : requireString(body.locale, 'locale', 35);
+    if (locale !== undefined && !LOCALE.test(locale)) throw new AppError('INVALID_INPUT', 'locale must be a BCP-47 language tag');
+    // The message menu's context: a command listed there needs one, any other is refused one.
+    const forMessage = declaration.menus?.includes('message') ?? false;
+    // A null is no message, as some clients write an absent field.
+    if (forMessage && body.message == null) throw invalid(`${commandId} runs on a message: send message`);
+    if (!forMessage && body.message != null) throw invalid(`${commandId} does not take a message`);
+    const message = body.message == null ? undefined : readMessage(body.message, invalid);
 
     // Scope: the context the command needs exists, is visible to this caller, and is one: a session of that project.
     let session: Session | undefined;
@@ -92,7 +104,7 @@ export class CommandService {
 
     // The same request again returns what the first one answered, running or finished.
     const key = `${commandId}\0${requestId}`;
-    const fingerprint = createHash('sha256').update(JSON.stringify([project?.id ?? null, session?.id ?? null, confirm ?? null, Object.entries(given).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))])).digest('hex');
+    const fingerprint = createHash('sha256').update(JSON.stringify([project?.id ?? null, session?.id ?? null, confirm ?? null, Object.entries(given).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)), message ?? null, locale ?? null])).digest('hex');
     const now = Date.now();
     this.forget(now);
     const known = this.remembered.get(key);
@@ -100,8 +112,10 @@ export class CommandService {
       if (known.fingerprint !== fingerprint) throw new AppError('COMMAND_REQUEST_CONFLICT', 'This request id was already used for a different command', 409);
       return known.result;
     }
-    const result = this.execute(commandId, pluginId, handler, signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), args });
+    const result = this.execute(commandId, pluginId, handler, signal, { ...(project ? { projectId: project.id } : {}), ...(session ? { sessionId: session.id } : {}), ...(confirm ? { confirm } : {}), ...(message ? { message } : {}), ...(locale ? { locale } : {}), args });
     this.remembered.set(key, { fingerprint, at: now, result });
+    // A result on a message can be long and the client keeps it: a repeat while it runs shares the run, a later one runs again.
+    if (message) void result.then(() => undefined, () => undefined).then(() => { if (this.remembered.get(key)?.result === result) this.remembered.delete(key); });
     return result;
   }
 
@@ -114,7 +128,7 @@ export class CommandService {
   }
 
   private async execute(
-    commandId: string, pluginId: string, handler: CommandHandler, activation: AbortSignal, context: { projectId?: string; sessionId?: string; confirm?: string; args: TaskParams },
+    commandId: string, pluginId: string, handler: CommandHandler, activation: AbortSignal, context: { projectId?: string; sessionId?: string; confirm?: string; message?: CommandMessage; locale?: string; args: TaskParams },
   ): Promise<PluginCommandResult> {
     const controller = new AbortController();
     const stop = () => controller.abort();
@@ -126,7 +140,7 @@ export class CommandService {
         Promise.resolve().then(() => handler.run({ ...context, signal: controller.signal })),
         new Promise<never>((_, reject) => { timer = setTimeout(() => { controller.abort(); reject(new Error(`did not finish within ${ms / 1000}s`)); }, ms); timer.unref(); }),
       ]);
-      return await this.checked(commandId, pluginId, context.projectId, outcome);
+      return await this.checked(commandId, pluginId, context.projectId, Boolean(context.message), outcome);
     } catch (error) {
       if (error instanceof AppError) throw error;
       const message = `${commandId} failed: ${describe(error)}`;
@@ -138,7 +152,7 @@ export class CommandService {
   }
 
   /** The result as the client is told it: only the members this version knows, each checked. Code that is not ours does not get to hand the client anything else. */
-  private async checked(commandId: string, pluginId: string, projectId: string | undefined, outcome: unknown): Promise<PluginCommandResult> {
+  private async checked(commandId: string, pluginId: string, projectId: string | undefined, forMessage: boolean, outcome: unknown): Promise<PluginCommandResult> {
     const fail = (why: string) => new AppError('COMMAND_FAILED', `${commandId} returned an invalid result: ${why}`, 502, undefined, { message: `${commandId} returned an invalid result: ${why}` });
     if (!isRecord(outcome)) throw fail('not an object');
     const text = (value: unknown, max: number): value is string => typeof value === 'string' && value.length > 0 && value.length <= max;
@@ -162,8 +176,26 @@ export class CommandService {
       if (!task || task.pluginId !== pluginId) throw fail('taskId is not a task of this plugin');
       return { kind: 'task', taskId: outcome.taskId };
     }
-    throw fail('kind must be done, open or task');
+    if (outcome.kind === 'text') {
+      if (!forMessage) throw fail('text answers a command run on a message');
+      if (!text(outcome.text, PLUGIN_COMMAND_BUDGET.resultChars)) throw fail(`text must be 1 to ${PLUGIN_COMMAND_BUDGET.resultChars} characters`);
+      if (outcome.title === undefined) return { kind: 'text', text: outcome.text };
+      const entries = isRecord(outcome.title) ? Object.entries(outcome.title) : [];
+      if (!entries.length || entries.length > 16 || entries.some(([tag, line]) => tag.length > 32 || !text(line, 40))) throw fail('title must map language tags to short text');
+      return { kind: 'text', text: outcome.text, title: Object.fromEntries(entries) as LocalizedText };
+    }
+    throw fail('kind must be done, open, task or text');
   }
+}
+
+/** The message a command is run on, as the client sent it: a role, the text within the budget, and the run when there is one. */
+function readMessage(value: unknown, invalid: (message: string) => AppError): CommandMessage {
+  if (!isRecord(value)) throw invalid('message must be an object');
+  if (value.role !== 'assistant' && value.role !== 'user') throw invalid('message.role must be assistant or user');
+  if (typeof value.text !== 'string' || !value.text.trim()) throw invalid('message.text must be text');
+  if (value.text.length > PLUGIN_COMMAND_BUDGET.messageChars) throw invalid(`message.text is longer than ${PLUGIN_COMMAND_BUDGET.messageChars} characters`);
+  if (value.runId !== undefined && !(typeof value.runId === 'string' && RUN_ID.test(value.runId))) throw invalid('message.runId is invalid');
+  return { role: value.role, text: value.text, ...(value.runId !== undefined ? { runId: value.runId } : {}) };
 }
 
 /** `POST /api/integrations/:id/commands/:name` (design §4.3). */
@@ -176,6 +208,6 @@ export function registerCommandRoutes(app: FastifyInstance, deps: Pick<RouteDeps
     projectTypes: async projectId => (await tasks.actions(projectId)).projectTypes,
     task: id => tasks.get(id),
   });
-  app.post<{ Params: { id: string; name: string }; Body: unknown }>('/api/integrations/:id/commands/:name', { bodyLimit: 16 * 1024 },
+  app.post<{ Params: { id: string; name: string }; Body: unknown }>('/api/integrations/:id/commands/:name', { bodyLimit: BODY_LIMIT },
     async request => commands.run(request.params.id, request.params.name, request.body, request.headers));
 }

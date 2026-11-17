@@ -41,9 +41,11 @@ struct TranscriptFeed {
     /// The successor line, shown as the last row when this conversation was handed off.
     var handedOff: HandedOffSpec?
     var supportsRecovery = false
+    /// What plugin commands run on this conversation's answers have answered, drawn under those answers.
+    var commandResults: [CommandResultSpec] = []
 
     func same(as other: TranscriptFeed) -> Bool {
-        supportsRecovery == other.supportsRecovery && identity === other.identity && older == other.older && sessionWorking == other.sessionWorking && root == other.root
+        commandResults == other.commandResults && supportsRecovery == other.supportsRecovery && identity === other.identity && older == other.older && sessionWorking == other.sessionWorking && root == other.root
             && suppressesHeldFooter == other.suppressesHeldFooter
             && emptyText == other.emptyText && startingText == other.startingText && working?.step == other.working?.step && working?.since == other.working?.since
             && working?.speed?.label == other.working?.speed?.label && working?.stopping == other.working?.stopping && working?.background == other.working?.background && (working == nil) == (other.working == nil) && lineage == other.lineage && handedOff == other.handedOff
@@ -89,6 +91,12 @@ struct TranscriptActions {
     var openSession: (String) -> Void = { _ in }
     /// Opens the conversation's session info (the background line).
     var openSessionInfo: () -> Void = {}
+    /// The plugin commands an answer's menu offers, with the glyph of each; empty where answers take none.
+    var messageCommands: [(title: String, symbol: String, id: String)] = []
+    /// Runs a message command on an answer (command id, answer text, run id).
+    var runMessageCommand: (String, String, String?) -> Void = { _, _, _ in }
+    /// Closes the result of a message command, by its id.
+    var dismissCommandResult: (String) -> Void = { _ in }
 }
 
 /// Where the transcript scrolls next: a search hit's event, or a saved reply's message.
@@ -661,6 +669,10 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             let compact = index < data.compact.count && data.compact[index]
             let gap = RowGap.between(index > 0 ? data.rows[index - 1] : nil, row, compact: compact)
             sources.append((key, .timeline(row, gap: gap, speed: speeds[key], past: index < latestUser), identity))
+            if !feed.commandResults.isEmpty, let answer = Self.answer(of: row) {
+                let match = CommandResultSpec.match(sessionId: feed.sessionId ?? "", runId: answer.runId, text: answer.text)
+                for result in feed.commandResults where result.match == match { sources.append(("\(key)§result§\(result.id)", .commandResult(result), nil)) }
+            }
         }
         // After the rows, ahead of the working line: it closes the history it belongs to, and rows
         // that arrive later (the conversation can continue after a handoff) take their place above it.
@@ -732,6 +744,7 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         case let .working(spec): speed = "\(spec.step ?? "")|\(spec.since?.timeIntervalSince1970 ?? 0)|\(spec.speed?.label ?? "")|\(spec.stopping)|\(spec.background ?? "")"
         case let .lineage(spec): speed = "lineage|\(spec.forked)|\(spec.agent ?? "")|\(spec.title)|\(spec.parentId)"
         case let .handedOff(spec): speed = "handedOff|\(spec.agent ?? "")|\(spec.successorId)"
+        case let .commandResult(spec): speed = "result|\(spec.title)|\(spec.text?.hashValue ?? 0)"
         case .olderFailed, .olderLoading, .empty, .bottom: break
         }
         return LayoutKey(
@@ -1112,6 +1125,35 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
         return ShareSource(kind: kind, text: text, projectId: feed?.projectId, at: at, prompt: { [question] in question })
     }
 
+    /// The settled answer of [row] and its run: what a plugin command runs on and a result is matched by.
+    nonisolated static func answer(of row: any TimelineRow) -> (text: String, runId: String?)? {
+        switch onEnum(of: row) {
+        case let .single(single):
+            guard single.settled, !(single.item is TimelineItemUser) else { return nil }
+            let text = single.answerText ?? (single.item as? TimelineItemAssistant)?.text
+            return text.map { ($0, runIdFromTurnKey(turnKey: single.turnKey)) }
+        case let .process(process):
+            guard process.settled, let text = process.answerText else { return nil }
+            return (text, runIdFromTurnKey(turnKey: process.turnKey))
+        default:
+            return nil
+        }
+    }
+
+    /// Runs the message command [id] on the answer of row [key], when it has one a command can take.
+    func runMessageCommand(_ id: String, row key: String) {
+        guard let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _, _) = entry.source,
+              let answer = Self.answer(of: row) else { return }
+        actions.runMessageCommand(id, answer.text, answer.runId)
+    }
+
+    /// Whether the answer of row [key] can take a message command: settled, not empty, within the budget.
+    func takesMessageCommands(row key: String) -> Bool {
+        guard !actions.messageCommands.isEmpty, let entry = entries.first(where: { $0.key == key }), case let .timeline(row, _, _, _) = entry.source,
+              let answer = Self.answer(of: row) else { return false }
+        return !answer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && answer.text.utf16.count <= Int(BudgetsKt.PLUGIN_COMMAND_BUDGET_MESSAGE_CHARS)
+    }
+
     /// Opens 导出图片 once the menu that asked for it has closed.
     func exportImage(_ source: ShareSource) {
         DispatchQueue.main.async { [weak self] in self?.actions.exportImage?(source) }
@@ -1190,6 +1232,10 @@ final class TranscriptController: NSViewController, NSTableViewDataSource, NSTab
             actions.openSubagent?(id, title)
         case .openSessionInfo:
             actions.openSessionInfo()
+        case let .copyText(text):
+            copyToPasteboard(text)
+        case let .dismissCommandResult(id):
+            actions.dismissCommandResult(id)
         case .retryHistory:
             actions.retryHistory()
         case let .checkRun(run):

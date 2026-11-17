@@ -17,6 +17,7 @@ import { Store } from './store.js';
 import { startWalCheckpoints } from './wal-checkpoint.js';
 import { Auth, apiRoutePath, isApiRequest, proxiedRequest } from './auth.js';
 import { AppError, requireString } from './errors.js';
+import { completeForPlugin, type GatewayProfiles } from './auxiliary/models.js';
 import { PlanFileWriter } from './native/plan-files.js';
 import { TerminalService } from './terminal/index.js';
 import { TitleService } from './titles/service.js';
@@ -197,6 +198,8 @@ export async function createApp(options: AppOptions = {}) {
   const sessionLock=new SessionLock();
   let listening:(()=>unknown)|undefined;
   const plugins=new PluginRegistry({stateDir,serverPorts:()=>{const address=listening?.();return [...(options.port?[options.port]:[]),...(address&&typeof address==='object'&&'port' in address&&typeof address.port==='number'?[address.port]:[])];},...(options.plugins?{plugins:options.plugins}:{}),invalidateModelCatalogs:()=>nativeBackends.catalog.invalidateModelCatalogs(),savedModelSources:()=>settings.savedModelSources(),agentProfiles:backendId=>isNativeBackendId(backendId)?settings.agentProfiles(backendId):[],agentBackendProvided:(id:string):boolean=>isNativeBackendId(id)&&backendRegistry.isCore(id),versionInUse:(pluginId:string,version:string):boolean=>{try{return tasks.usesPluginVersion(pluginId,version);}catch{return true;}},runningTasks:(pluginId:string):number=>{try{return tasks.runningCount(pluginId);}catch{return 0;}},startTask:(input):ReturnType<TaskService['start']>=>tasks.start(input),
+    // docs/PLUGIN_ARCHITECTURE.md「接口与版本」: a completion on the model chosen for 快速对话, for an in-process plugin.
+    completeModel:(request,uses):Promise<string>=>completeForPlugin(request,uses,{chat:()=>settings.getSettings().auxiliaryModels?.chat,use:id=>settings.getSettings().pluginModels?.[id]},(backendId):ReturnType<GatewayProfiles>=>nativeBackends.catalog.gatewayProfiles(backendId),{error:(code,message,status,details)=>new AppError(code,message,status,details)}),
     // docs/BROWSER.md §2: what a plugin with agent tools or channels may read and do in a conversation.
     sessions:{
       get:id=>{let session;try{session=store.getSession(id);}catch{return undefined;}let projectPath:string|undefined;try{projectPath=store.getProject(session.projectId).cwd;}catch{/* removed project */}return {id:session.id,title:session.title,projectId:session.projectId,...(projectPath?{projectPath}:{}),archived:Boolean(session.archivedAt)};},

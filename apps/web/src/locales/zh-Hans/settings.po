@@ -2758,6 +2758,10 @@ msgstr "回答脚注"
 msgid "回答里的围栏"
 msgstr "回答里的围栏"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "回答页脚下方；运行中图标换为转圈"
+msgstr "回答页脚下方；运行中图标换为转圈"
+
 #: src/app/settings/SidebarSection.tsx
 msgid "固定到侧栏"
 msgstr "固定到侧栏"
@@ -4639,6 +4643,7 @@ msgstr "提示气泡用系统的"
 
 #: src/app/design/patterns/NavigationChapter.tsx
 #: src/app/design/patterns/SearchChapter.tsx
+#: src/app/settings/AuxiliaryModelsSection.tsx
 #: src/app/settings/StorageSection.tsx
 msgid "插件"
 msgstr "插件"
@@ -4683,6 +4688,10 @@ msgstr "插件视图"
 #: src/app/design/catalog.tsx
 msgid "插件视图能用什么、怎么画"
 msgstr "插件视图能用什么、怎么画"
+
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "插件结果"
+msgstr "插件结果"
 
 #: src/app/design/engineering/PluginsChapter.tsx
 msgid "插件自带的页面"
@@ -7299,6 +7308,10 @@ msgstr "置顶或有收藏的对话不会归档"
 msgid "群里共用一个会话，或按话题分会话"
 msgstr "群里共用一个会话，或按话题分会话"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "翻译"
+msgstr "翻译"
+
 #: src/app/design/DesignPage.tsx
 msgid "翻页"
 msgstr "翻页"
@@ -7748,6 +7761,10 @@ msgstr "诊断已发送到当前服务器"
 msgid "诊断记录"
 msgstr "诊断记录"
 
+#: src/app/design/surfaces/SessionChapter.tsx
+msgid "译文"
+msgstr "译文"
+
 #: src/app/settings/AuxiliaryModelsSection.tsx
 msgid "试用"
 msgstr "试用"
@@ -7954,6 +7971,10 @@ msgstr "跟平台与跟共用的规范"
 #: src/app/settings/AssistantSettingsSection.tsx
 msgid "跟进任务"
 msgstr "跟进任务"
+
+#: src/app/settings/AuxiliaryModelsSection.tsx
+msgid "跟随快速对话"
+msgstr "跟随快速对话"
 
 #: src/app/settings/PreferencesSections.tsx
 msgid "跟随界面主题"

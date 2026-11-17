@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -332,7 +332,7 @@ export class SettingsService {
   }
 
   private validateSettings(values: Record<string, unknown>): AppSettings {
-    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned']);
+    const known = new Set(['editorCommand', 'defaultModel', 'defaultMode', 'defaultBackendId', 'nativeBackendDefaults', 'notifications', 'allowOutsideRead', 'composerEnterBehavior', 'composerRunningBehavior', 'composerSendLater', 'auxiliaryModels', 'pluginModels', 'idleReclaimMinutes', 'maxAgentMemoryMb', 'maxLiveAgents', 'quickChat', 'assistant', 'cursorCli', 'taskWorkspaceRoot', 'sidebarPinned']);
     for (const key of Object.keys(values)) if (!known.has(key)) throw new AppError('INVALID_SETTINGS', `Unknown setting: ${key}`);
     const result: AppSettings = {};
     if (values.taskWorkspaceRoot !== undefined && values.taskWorkspaceRoot !== null && values.taskWorkspaceRoot !== '') {
@@ -409,17 +409,23 @@ export class SettingsService {
         if (!(AUXILIARY_MODEL_PURPOSES as readonly string[]).includes(purpose)) throw new AppError('INVALID_SETTINGS', `Unknown auxiliary model purpose: ${purpose}`);
         // `null` clears the choice; the merge in `setSettings` carries it here.
         if (raw === null) continue;
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', `auxiliaryModels.${purpose} must be an object`);
-        const item = raw as Record<string, unknown>;
-        if (Object.keys(item).some(key => !['backendId', 'profileId', 'model'].includes(key))) throw new AppError('INVALID_SETTINGS', `auxiliaryModels.${purpose} contains an unknown field`);
-        if (typeof item.backendId !== 'string' || !AUXILIARY_MODEL_BACKENDS.includes(item.backendId as NativeBackendId)) throw new AppError('INVALID_SETTINGS', `auxiliaryModels.${purpose}.backendId is invalid`);
-        for (const key of ['profileId', 'model'] as const) {
-          const value = item[key];
-          if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `auxiliaryModels.${purpose}.${key} is invalid`);
-        }
-        chosen[purpose as AuxiliaryModelPurpose] = { backendId: item.backendId as NativeBackendId, profileId: item.profileId as string, model: item.model as string };
+        chosen[purpose as AuxiliaryModelPurpose] = modelRef(raw, `auxiliaryModels.${purpose}`);
       }
       if (Object.keys(chosen).length) result.auxiliaryModels = chosen;
+    }
+    if (values.pluginModels !== undefined) {
+      const models = values.pluginModels;
+      if (!models || typeof models !== 'object' || Array.isArray(models)) throw new AppError('INVALID_SETTINGS', 'pluginModels must be an object');
+      const entries = Object.entries(models as Record<string, unknown>);
+      if (entries.length > MAX_PLUGIN_MODELS) throw new AppError('INVALID_SETTINGS', `pluginModels may hold at most ${MAX_PLUGIN_MODELS} uses`);
+      const chosen: Record<string, AuxiliaryModelRef> = {};
+      // Kept for a plugin that is off or gone: the id is checked for its shape, not against what is installed.
+      for (const [use, raw] of entries) {
+        if (!MODEL_USE_ID.test(use)) throw new AppError('INVALID_SETTINGS', `pluginModels: ${use} is not a model use id`);
+        if (raw === null) continue;
+        chosen[use] = modelRef(raw, `pluginModels.${use}`);
+      }
+      if (Object.keys(chosen).length) result.pluginModels = chosen;
     }
     if (values.quickChat !== undefined) result.quickChat = validateQuickChat(values.quickChat);
     if (values.assistant !== undefined) {
@@ -451,6 +457,7 @@ export class SettingsService {
     delete input.cursorCli;
     // One purpose at a time: a request naming only `handoff` keeps the title model as it was.
     if(input.auxiliaryModels&&typeof input.auxiliaryModels==='object'&&!Array.isArray(input.auxiliaryModels))input.auxiliaryModels={...generalCurrent.auxiliaryModels,...input.auxiliaryModels};
+    if(input.pluginModels&&typeof input.pluginModels==='object'&&!Array.isArray(input.pluginModels))input.pluginModels={...generalCurrent.pluginModels,...input.pluginModels};
     // Likewise per quick-chat field; `presets: null` goes back to the defaults by storing none.
     if(input.quickChat&&typeof input.quickChat==='object'&&!Array.isArray(input.quickChat)){
       const merged:Record<string,unknown>={...generalCurrent.quickChat,...input.quickChat};
@@ -470,6 +477,24 @@ export class SettingsService {
 }
 
 export type { AppSettings, CapabilityReport, CommandResult, ConfigFile } from '../../../../packages/contracts/src/index.js';
+
+/** A plugin's model use, `<pluginId>/<name>` (`PluginDeclarations.modelUses`). */
+const MODEL_USE_ID = /^[a-z0-9][a-z0-9-]*\.[a-z0-9][a-z0-9.-]*\/[a-z0-9][a-z0-9.-]{0,63}$/;
+/** Choices kept for plugin model uses, including those of plugins since removed. */
+const MAX_PLUGIN_MODELS = 64;
+
+/** A model choice as `auxiliaryModels` and `pluginModels` store it: a gateway model of one backend profile. */
+function modelRef(raw: unknown, path: string): AuxiliaryModelRef {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', `${path} must be an object`);
+  const item = raw as Record<string, unknown>;
+  if (Object.keys(item).some(key => !['backendId', 'profileId', 'model'].includes(key))) throw new AppError('INVALID_SETTINGS', `${path} contains an unknown field`);
+  if (typeof item.backendId !== 'string' || !AUXILIARY_MODEL_BACKENDS.includes(item.backendId as NativeBackendId)) throw new AppError('INVALID_SETTINGS', `${path}.backendId is invalid`);
+  for (const key of ['profileId', 'model'] as const) {
+    const value = item[key];
+    if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `${path}.${key} is invalid`);
+  }
+  return { backendId: item.backendId as NativeBackendId, profileId: item.profileId as string, model: item.model as string };
+}
 
 const QUICK_CHAT_PRESET_ID=/^[a-z0-9-]{1,32}$/;
 

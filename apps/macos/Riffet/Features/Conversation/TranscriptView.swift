@@ -73,7 +73,13 @@ struct TranscriptView: View {
                 workbench.notice = SessionNotice(sessionId: sessionId, text: String(localized: "没有在这段会话的历史里找到这条收藏，原文可能已被改写或删除。"))
             },
             openSession: { [workbench] id in workbench.open(sessionId: id) },
-            openSessionInfo: { [workbench] in workbench.sessionInfoRequests += 1 }
+            openSessionInfo: { [workbench] in workbench.sessionInfoRequests += 1 },
+            messageCommands: workbench.messageCommandList.map { (title: $0.title, symbol: $0.symbol, id: $0.id) },
+            runMessageCommand: { [workbench, session] id, text, runId in
+                guard let command = workbench.messageCommandList.first(where: { $0.id == id }) else { return }
+                workbench.pluginCommands.run(command, onAnswer: text, runId: runId, sessionId: session.id, in: workbench)
+            },
+            dismissCommandResult: { [workbench] id in workbench.pluginCommands.dismissResult(id) }
         )
     }
 }
@@ -220,7 +226,8 @@ struct TranscriptHost: NSViewControllerRepresentable {
             startingText: workbench.working,
             lineage: lineage(workbench, sessionId: sessionId),
             handedOff: handedOff(workbench, sessionId: sessionId),
-            supportsRecovery: workbench.list.sessions.first(where: { $0.id == sessionId }).flatMap { workbench.catalogs.cached(for: $0) }?.capabilities.supportsRecovery?.boolValue == true
+            supportsRecovery: workbench.list.sessions.first(where: { $0.id == sessionId }).flatMap { workbench.catalogs.cached(for: $0) }?.capabilities.supportsRecovery?.boolValue == true,
+            commandResults: workbench.pluginCommands.results.filter { $0.sessionId == sessionId }
         )
     }
 }

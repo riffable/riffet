@@ -57,6 +57,7 @@ import { useSlashCatalog } from '../session/useSlashCatalog';
 import { HandoffDialog, SaveAutomationDialog } from '../session/SessionHandoff';
 import { AttemptStrip } from '../session/Attempts';
 import { ShareSessionContext, type ShareSession } from '../marks/ShareImage';
+import { MessageCommandsContext } from '../session/messageCommands';
 import { useLists, useStores } from '../state/stores';
 import { ViewDots, useViewShortcuts, viewShortcut } from '../session/ViewDots';
 import { useSessionViews, useViewPrefs, visibleViews } from '../session/viewPrefs';
@@ -558,6 +559,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
       return prompt;
     },
   }), [session.title, backendId, projectName, t]);
+  const messageCommands = useMemo(() => ({ sessionId: session.id, openModelSettings: (section: 'auxiliary' | 'quickchat') => stores.ui.openSettings(section) }), [session.id, stores.ui]);
   const liveActivities = useMemo(() => native.activities ?? liveBackgroundActivities(visibleTimeline), [native.activities, visibleTimeline, native.timelineVersion]);
   // The header and the side column list these; they keep their memo while the transcript streams.
   const backgroundKey = liveActivities.map((activity) => `${activity.id}:${activity.status}:${activity.title}:${activity.startedAt ?? ''}`).join('\n');
@@ -1149,6 +1151,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
         >
         <SessionMarksContext.Provider value={marks}>
         <ShareSessionContext.Provider value={shareSession}>
+        <MessageCommandsContext.Provider value={messageCommands}>
         <TranscriptView
           scrollHandleRef={transcriptScrollRef}
           sessionId={session.id}
@@ -1242,6 +1245,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
             action={() => supportsTerminal && !drawer ? <Button size="xs" variant="secondary" onClick={() => setDrawer(true)}><Trans>打开终端</Trans></Button> : undefined} />
           {handedOff}
       </TranscriptView>
+        </MessageCommandsContext.Provider>
         </ShareSessionContext.Provider>
         </SessionMarksContext.Provider>
         </div>

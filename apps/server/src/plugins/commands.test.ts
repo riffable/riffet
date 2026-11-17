@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CommandContext, Plugin } from '@riffet/plugin-api';
-import type { CommandDeclaration } from '../../../../packages/contracts/src/index.js';
+import { PLUGIN_COMMAND_BUDGET, type CommandDeclaration } from '../../../../packages/contracts/src/index.js';
 import { createApp } from '../app.js';
 import { Store } from '../store.js';
 import { CommandService } from './commands.js';
@@ -22,6 +22,7 @@ const declared: CommandDeclaration[] = [
   { id: 'acme.cmd/talk', title, scope: 'session' },
   { id: 'acme.cmd/nohandler', title, scope: 'global' },
   { id: 'acme.cmd/task', title, scope: 'global' },
+  { id: 'acme.cmd/explain', title, scope: 'session', menus: ['message'], icon: 'sparkles' },
 ];
 
 async function harness(projectTypes: string[] = ['android']) {
@@ -30,6 +31,7 @@ async function harness(projectTypes: string[] = ['android']) {
     manifest: { id: 'acme.cmd', vendor: 'Acme', name: 'cmd', apiVersion: 1, defaultEnabled: true, contributes: { commands: declared } },
     activate: () => ({ commands: {
       'acme.cmd/global': { run }, 'acme.cmd/build': { run }, 'acme.cmd/talk': { run }, 'acme.cmd/task': { run: async () => ({ kind: 'task' as const, taskId: 'someone-elses' }) },
+      'acme.cmd/explain': { run: async (context: CommandContext) => ({ kind: 'text' as const, text: `> ${context.message?.text}`, title: { en: 'Explained' } }) },
     } }),
   };
   const stateDir = await mkdtemp(join(tmpdir(), 'riffet-commands-'));
@@ -102,6 +104,26 @@ describe('plugin commands', () => {
     await expect(call('global', { requestId: 'off', projectId: project.id })).rejects.toMatchObject({ code: 'COMMAND_UNAVAILABLE', statusCode: 409 });
     await expect(registry.update('acme.cmd', { enablement: 'on' })).resolves.toMatchObject({ enabled: true });
     await expect(call('global', { requestId: 'on-again' })).resolves.toMatchObject({ kind: 'done' });
+  });
+});
+
+describe('commands of the message menu', () => {
+  it('run on the message the client sends, and only a command run on a message may answer text', async () => {
+    const { session, call, run } = await harness();
+    const message = { role: 'assistant', text: 'Hello', runId: 'run-1' };
+    await expect(call('explain', { sessionId: session.id, message, locale: 'zh-Hans' })).resolves.toEqual({ kind: 'text', text: '> Hello', title: { en: 'Explained' } });
+    // A command of the menu needs the message, and any other refuses one.
+    await expect(call('explain', { requestId: 'req-2', sessionId: session.id })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
+    await expect(call('talk', { requestId: 'req-3', sessionId: session.id, message })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
+    await expect(call('explain', { requestId: 'req-4', sessionId: session.id, message: { role: 'assistant', text: 'x'.repeat(PLUGIN_COMMAND_BUDGET.messageChars + 1) } })).rejects.toMatchObject({ code: 'COMMAND_ARGS_INVALID' });
+    // The same request id with another message, while the first runs, is another request; once it has answered it is not kept.
+    const first = call('explain', { requestId: 'req-6', sessionId: session.id, message });
+    await expect(call('explain', { requestId: 'req-6', sessionId: session.id, message: { ...message, text: 'Other' } })).rejects.toMatchObject({ code: 'COMMAND_REQUEST_CONFLICT' });
+    await first;
+    await new Promise(resolve => setImmediate(resolve));
+    await expect(call('explain', { requestId: 'req-6', sessionId: session.id, message: { ...message, text: 'Other' } })).resolves.toMatchObject({ text: '> Other' });
+    run.mockResolvedValueOnce({ kind: 'text', text: 'not for a palette command' } as never);
+    await expect(call('talk', { requestId: 'req-5', sessionId: session.id })).rejects.toMatchObject({ code: 'COMMAND_FAILED' });
   });
 });
 

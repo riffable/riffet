@@ -1,10 +1,10 @@
-import type { AuxiliaryModelOption, AuxiliaryModelRef, ModelInfo, NativeBackendId } from '../../../../packages/contracts/src/index.js';
+import type { AuxiliaryModelOption, AuxiliaryModelRef, ModelInfo, ModelUseDeclaration, NativeBackendId } from '../../../../packages/contracts/src/index.js';
 import type { NativeBackendProfileConfig } from '../backends/types.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { launchSource, modelSourceOf, prepareSource, sourceCatalog, sourceEndpoint } from '../backends/shared/model-source.js';
 import { fetchGatewayModels, type GatewayModelsRequest } from '../backends/shared/gateway-models.js';
-import { AUXILIARY_MODEL_BACKENDS, gatewayEfforts, gatewayModelId, gatewayProtocol, type GatewayEndpoint, type GatewayProtocol } from './gateway.js';
+import { AUXILIARY_MODEL_BACKENDS, complete, gatewayEfforts, gatewayModelId, gatewayProtocol, type GatewayEndpoint, type GatewayProtocol } from './gateway.js';
 
 /** The gateway protocol a model source names for each wire format a side chat can speak. */
 const SOURCE_PROTOCOL: Record<GatewayProtocol, string> = { anthropic: 'anthropic-messages', responses: 'openai-responses', chat: 'openai-chat' };
@@ -107,4 +107,39 @@ export async function auxiliaryEndpoint(ref: AuxiliaryModelRef, gatewayProfiles:
   const endpoint = await profileModelEndpoint(ref, profile, signal);
   signal?.throwIfAborted();
   return { ...endpoint, profileName: profile.name };
+}
+
+/** What a plugin asks of `host.models.complete`, checked here: the host's own limits apply whatever the plugin sends. */
+export interface PluginCompletion { use?: string; system: string; content: string; maxOutputTokens: number; timeoutMs?: number; signal?: AbortSignal }
+/** The model choices a plugin completion reads, each read on every call so a settings change applies at once. */
+export interface PluginModelChoices { chat(): AuxiliaryModelRef | undefined; use(id: string): AuxiliaryModelRef | undefined }
+
+const PLUGIN_MAX_OUTPUT_TOKENS = 16_000;
+const PLUGIN_TIMEOUT_MS = { default: 60_000, max: 120_000 } as const;
+
+/**
+ * `host.models.complete` (docs/PLUGIN_ARCHITECTURE.md「模型用途」): one completion on the model chosen for one of the plugin's
+ * own `uses`, else on that use's fallback; without a use, on the model chosen for 快速对话. With none it refuses with 409
+ * `PLUGIN_MODEL_NOT_CHOSEN`, naming the use in its details so a client opens the right setting.
+ */
+export async function completeForPlugin(
+  request: PluginCompletion, uses: readonly ModelUseDeclaration[], choices: PluginModelChoices, gatewayProfiles: GatewayProfiles,
+  options: { complete?: typeof complete; error: (code: string, message: string, status: number, details?: unknown) => Error },
+): Promise<string> {
+  let ref: AuxiliaryModelRef | undefined;
+  if (request?.use !== undefined) {
+    const use = uses.find(item => item.id === request.use);
+    if (!use) throw options.error('PLUGIN_MODEL_USE_FOREIGN', `${String(request.use)} is not a model use this plugin declares`, 403);
+    ref = choices.use(use.id) ?? (use.fallback === 'chat' ? choices.chat() : undefined);
+    if (!ref) throw options.error('PLUGIN_MODEL_NOT_CHOSEN', 'Choose a model for this plugin in Settings › Auxiliary models', 409, { use: use.id });
+  } else {
+    ref = choices.chat();
+    if (!ref) throw options.error('PLUGIN_MODEL_NOT_CHOSEN', 'Choose a default model in Settings › Quick chat', 409);
+  }
+  if (typeof request?.system !== 'string' || typeof request.content !== 'string' || !request.content.trim()) throw options.error('INVALID_INPUT', 'system and content must be text', 400);
+  const maxOutputTokens = Math.trunc(request.maxOutputTokens);
+  if (!(maxOutputTokens > 0 && maxOutputTokens <= PLUGIN_MAX_OUTPUT_TOKENS)) throw options.error('INVALID_INPUT', `maxOutputTokens must be 1 to ${PLUGIN_MAX_OUTPUT_TOKENS}`, 400);
+  const timeoutMs = Math.min(Math.max(1_000, Math.trunc(request.timeoutMs ?? PLUGIN_TIMEOUT_MS.default)), PLUGIN_TIMEOUT_MS.max);
+  const endpoint = await auxiliaryEndpoint(ref, gatewayProfiles, request.signal);
+  return (options.complete ?? complete)({ ...endpoint, system: request.system, content: request.content, maxOutputTokens, timeoutMs, ...(request.signal ? { signal: request.signal } : {}) });
 }

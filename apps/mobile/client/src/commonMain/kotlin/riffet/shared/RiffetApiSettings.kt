@@ -224,6 +224,18 @@ suspend fun RiffetApi.setAuxiliaryModel(purpose: String, ref: AuxiliaryModelRef?
         },
     ).decode()
 
+/** Sets the model for one plugin-declared use (`<pluginId>/<name>`), or clears it with null; other uses stay as they are. */
+@Throws(Exception::class)
+suspend fun RiffetApi.setPluginModel(use: String, ref: AuxiliaryModelRef?): AppSettings =
+    patch(
+        "/api/settings",
+        buildJsonObject {
+            put("pluginModels", buildJsonObject {
+                put(use, ref?.let { WireJson.encodeToJsonElement(AuxiliaryModelRef.serializer(), it) } ?: JsonNull)
+            })
+        },
+    ).decode()
+
 /** `POST /api/system/backup`: an online snapshot of the state directory; the receipt as pretty JSON. */
 @Throws(Exception::class)
 suspend fun RiffetApi.backup(): String {

@@ -8,7 +8,8 @@ import kotlinx.serialization.json.JsonPrimitive
 
 /**
  * What a command did, by [kind]: `done` (with a [message] to show, BCP-47 tag -> text), `open` (a sidebar
- * [view], a [sessionId], a project-relative [path]; each optional) or `task` (a [taskId] it started).
+ * [view], a [sessionId], a project-relative [path]; each optional), `task` (a [taskId] it started) or, for a
+ * command run on a message, `text` (Markdown to show under that message, labelled by [title]).
  */
 @Serializable
 data class PluginCommandResult(
@@ -18,7 +19,13 @@ data class PluginCommandResult(
     val sessionId: String? = null,
     val path: String? = null,
     val taskId: String? = null,
+    val text: String? = null,
+    val title: Map<String, String>? = null,
 )
+
+/** The message a command of the `message` menu runs on: the answer's Markdown as the transcript shows it. */
+@Serializable
+data class PluginCommandMessage(val role: String, val text: String, val runId: String? = null)
 
 /** What running a command came to: its [result], or the [confirmation] of a task it starts that the reader must approve first. */
 class PluginCommandRun(val result: PluginCommandResult?, val confirmation: TaskConfirmation?)
@@ -30,6 +37,8 @@ internal data class PluginCommandBody(
     val sessionId: String? = null,
     val args: Map<String, JsonElement> = emptyMap(),
     val confirm: String? = null,
+    val message: PluginCommandMessage? = null,
+    val locale: String? = null,
 )
 
 /**
@@ -61,11 +70,13 @@ suspend fun RiffetApi.runCommand(
     values: Map<String, String>,
     params: List<TaskParamField>,
     confirm: String?,
+    message: PluginCommandMessage? = null,
+    locale: String? = null,
 ): PluginCommandRun {
     val split = commandId.indexOf('/')
     require(split > 0 && split < commandId.length - 1) { "not a command id: $commandId" }
     val path = "/api/integrations/${commandId.substring(0, split).enc()}/commands/${commandId.substring(split + 1).enc()}"
-    val body = PluginCommandBody(requestId, projectId, sessionId, commandArgs(values, params), confirm)
+    val body = PluginCommandBody(requestId, projectId, sessionId, commandArgs(values, params), confirm, message, locale)
     return try {
         PluginCommandRun(post(path, wireBody(body)).decode<PluginCommandResult>(), null)
     } catch (refused: RiffetHttpException) {

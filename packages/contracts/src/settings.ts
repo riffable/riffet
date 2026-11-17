@@ -53,6 +53,12 @@ export interface AppSettings {
    */
   auxiliaryModels?: AuxiliaryModels;
   /**
+   * The model chosen for each use a plugin declares (`PluginDeclarations.modelUses`), by its declaration ID, from the
+   * same list as `auxiliaryModels`. Kept while the plugin is off or uninstalled, so turning it on again keeps the choice.
+   * An unset use falls back to what its declaration names.
+   */
+  pluginModels?: Record<string, AuxiliaryModelRef>;
+  /**
    * Minutes a conversation's CLI may go unused, with nothing retaining it (docs/guide/performance.md
    * §3.10), before its terminal and app-server are stopped. The next message resumes it. Unset means
    * `AGENT_PROCESS_BUDGET.idleMinutes`; 0 never reclaims for idleness.
@@ -197,4 +203,6 @@ export type AuxiliaryModels = Partial<Record<AuxiliaryModelPurpose, AuxiliaryMod
 export type AuxiliaryModelsUpdate = Partial<Record<AuxiliaryModelPurpose, AuxiliaryModelRef | null>>;
 /** Each field given replaces its own; `presets: null` restores the defaults. */
 export type QuickChatSettingsUpdate = Omit<QuickChatSettings, 'presets'> & { presets?: QuickChatPreset[] | null };
-export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'quickChat' | 'assistant'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };
+/** Only the uses given change; `null` clears one. */
+export type PluginModelsUpdate = Record<string, AuxiliaryModelRef | null>;
+export type AppSettingsUpdate = (Omit<Partial<AppSettings>, 'cursorCli' | 'auxiliaryModels' | 'pluginModels' | 'quickChat' | 'assistant'> & { cursorCli?: never; auxiliaryModels?: AuxiliaryModelsUpdate; pluginModels?: PluginModelsUpdate; quickChat?: QuickChatSettingsUpdate; assistant?: AssistantSettingsUpdate }) | { cursorCli: CursorCliSettingsUpdate };

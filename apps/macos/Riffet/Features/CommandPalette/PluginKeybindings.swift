@@ -76,7 +76,7 @@ enum PluginKeybindings {
         var taken = hostChords
         for plugin in plugins.filter(\.enabled) + plugins.filter({ !$0.enabled }) {
             for command in plugin.declared?.commands ?? [] {
-                guard let binding = command.keybinding else { continue }
+                guard let binding = command.keybinding, (command.menus ?? []).isEmpty else { continue }
                 guard let shortcut = parse(binding), !taken.contains(Chord(shortcut)) else { result.rejected.insert(command.id); continue }
                 guard plugin.enabled else { continue }
                 taken.insert(Chord(shortcut))

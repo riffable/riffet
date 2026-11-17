@@ -6,6 +6,7 @@
 //   dependencies, and files of its own package directory (`plugins/<vendor>/<name>/`), not those of another
 //   package of the same vendor; a directory that exports several plugins (`acme/model-sources`) is one
 //   package, so a build can leave a package out;
+// - an installable package under `official/<name>/` follows the same rule for its own directory (the public reference plugins, published on the plugin source, not shipped inside the app);
 // - a client file (`plugins/<vendor>/<name>/web/**`) imports only `@riffet/plugin-web`,
 //   `@contracts`, npm dependencies and files of its own package, and nothing of Node or the server;
 // - the web core reaches the client entries (`plugins/web.ts`) only through
@@ -32,7 +33,7 @@ const manifest = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'))
 const packages = new Set([...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})]);
 const builtins = new Set(builtinModules);
 
-const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'apps', 'packages', 'plugins'], { cwd: root, encoding: 'utf8' })
+const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'apps', 'packages', 'plugins', 'official'], { cwd: root, encoding: 'utf8' })
   .split('\n').filter(file => /\.(?:[cm]?[jt]s|tsx)$/.test(file) && !file.startsWith('apps/mobile/') && !/(?:^|\/)(?:node_modules|dist|build)\//.test(file));
 
 const posix = path => path.split(sep).join('/');
@@ -52,10 +53,10 @@ for (const file of files) {
       } else if (specifier !== '@riffet/plugin-web' && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !packages.has(packageName(specifier))) {
         fail('client code may import only @riffet/plugin-web, @contracts and package.json dependencies');
       }
-    } else if (file.startsWith('plugins/')) {
+    } else if (file.startsWith('plugins/') || file.startsWith('official/')) {
       if (relativeTarget !== undefined) {
         // `plugins/index.ts` and `web.ts` list the packages; every other file belongs to the one directory `plugins/<vendor>/<name>/`.
-        const own = file.split('/').length > 2 ? `${file.split('/').slice(0, 3).join('/')}/` : 'plugins/';
+        const own = file.startsWith('official/') ? `${file.split('/').slice(0, 2).join('/')}/` : file.split('/').length > 2 ? `${file.split('/').slice(0, 3).join('/')}/` : 'plugins/';
         if (!relativeTarget.startsWith(own)) fail(`may only import files under ${own}`);
       } else if (specifier !== '@riffet/plugin-api' && !specifier.startsWith('@riffet/plugin-api/') && specifier !== '@contracts' && specifier !== '@riffet/contracts' && !specifier.startsWith('node:') && !builtins.has(specifier) && !packages.has(packageName(specifier))) {
         fail('may import only @riffet/plugin-api, @contracts, Node built-ins and package.json dependencies');

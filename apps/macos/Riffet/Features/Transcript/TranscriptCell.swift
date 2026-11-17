@@ -404,6 +404,14 @@ final class TranscriptCell: NSView, FragmentHost {
                 item.image = NSImage.icon("square.and.arrow.up", accessibilityDescription: nil)
                 menu.addItem(item)
             }
+            if let controller, controller.takesMessageCommands(row: key) {
+                let rowKey = key
+                for command in controller.actions.messageCommands {
+                    let item = MenuAction.item(command.title, afterMenu { [weak controller] in controller?.runMessageCommand(command.id, row: rowKey) })
+                    item.image = NSImage.icon(command.symbol, accessibilityDescription: nil)
+                    menu.addItem(item)
+                }
+            }
         }
         if let runId = turnRunId, let turn = controller?.actions.turn {
             if !menu.items.isEmpty { menu.addItem(.separator()) }

@@ -12,6 +12,7 @@ struct AuxiliaryModelSettings: View {
         if let workbench = model.workbench {
             Form {
                 AuxiliaryModelSection(workbench: workbench, state: state)
+                PluginModelSection(workbench: workbench, state: state)
                 SettingsScopeFooter()
             }
             .riffetForm()
@@ -40,6 +41,7 @@ private final class AuxiliaryModelsState {
     fileprivate(set) var options: [AuxiliaryModelOption]?
     var error: String?
     fileprivate(set) var saving: AuxiliaryPurpose?
+    fileprivate(set) var savingUse: String?
     var preview: AuxiliaryPreviewSelection?
 
     /// The choices come from the settings, which another device may have changed too.
@@ -69,9 +71,24 @@ private final class AuxiliaryModelsState {
         }
         saving = nil
     }
+
+    fileprivate func saveUse(_ workbench: Workbench, _ use: String, key: String) async {
+        guard let api = workbench.host.api else { return }
+        savingUse = use
+        error = nil
+        do {
+            let ref = options?.first(where: { modelKey($0) == key })
+                .map { AuxiliaryModelRef(backendId: $0.backendId, profileId: $0.profileId, model: $0.model) }
+            let saved = try await api.setPluginModel(use: use, ref: ref)
+            workbench.store.applySavedSettings(settings: saved)
+        } catch {
+            self.error = error.riffetMessage
+        }
+        savingUse = nil
+    }
 }
 
-/// The pane's one section: a row per purpose.
+/// The pane's sections: a row per purpose, then a row per model use an enabled plugin declares.
 private struct AuxiliaryModelSection: View {
     let workbench: Workbench
     let state: AuxiliaryModelsState
@@ -130,7 +147,48 @@ private struct AuxiliaryModelSection: View {
                     }
                 )
             )
-            .disabled(state.saving != nil)
+            .disabled(state.saving != nil || state.savingUse != nil)
+        }
+    }
+}
+
+/// The model uses enabled plugins declare (`AppSettings.pluginModels`), keyed by use id.
+private struct PluginModelSection: View {
+    let workbench: Workbench
+    let state: AuxiliaryModelsState
+
+    var body: some View {
+        let uses = workbench.plugins.filter(\.enabled).flatMap { $0.declared?.modelUses ?? [] }
+        if !uses.isEmpty {
+            let settings = workbench.settings
+            Section {
+                ForEach(uses, id: \.id) { use in
+                    let title = localizedText(use.title, fallback: use.id)
+                    let empty = use.fallback == "chat" ? String(localized: "跟随快速对话") : String(localized: "不使用")
+                    let current = settings?.pluginModels?[use.id]
+                    SettingsRow(title) {
+                        AuxiliaryModelPicker(
+                            title: title,
+                            emptyLabel: empty,
+                            current: current,
+                            options: state.options ?? [],
+                            selection: Binding(
+                                get: { current.map(modelKey) ?? "" },
+                                set: { key in
+                                    guard key != (current.map(modelKey) ?? "") else { return }
+                                    Task { await state.saveUse(workbench, use.id, key: key) }
+                                }
+                            )
+                        )
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .formPicker()
+                        .disabled(state.options == nil || state.saving != nil || state.savingUse != nil)
+                    }
+                }
+            } header: {
+                SettingsSectionHeader(title: String(localized: "插件"))
+            }
         }
     }
 }

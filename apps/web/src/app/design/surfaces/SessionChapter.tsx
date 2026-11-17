@@ -9,6 +9,7 @@ import { MIN_CONTENT_WIDTH, MAX_CONTENT_WIDTH, DEFAULT_CONTENT_WIDTH } from '@/l
 import { COLUMN_GUTTER_TOTAL, WIDTH_HANDLE_GAP, WIDTH_HANDLE_WIDTH } from '@/app/session/ContentWidthHandle';
 import { Markdown } from '@/app/session/Markdown';
 import { SESSION_ASIDE_MIN_WIDTH } from '@/app/session/sessionLayout';
+import { MessageCommandBlock } from '@/app/session/messageCommands';
 import { AssistantMessage, BackgroundWorkIndicator, CodeBlock, DiffView, Disclosure, MessageFooter, StatusRow, ThoughtRow, UserMessage, WorkingIndicator } from '@/app/session/Timeline';
 import { TurnProcess } from '@/app/session/TurnProcess';
 import { cn } from '@/lib/utils';
@@ -203,6 +204,8 @@ function Messages() {
           footerPinned
           metrics={{ outputTokens: 2300, durationMs: 41000, tokens: 'provider', window: 'stream', steps: 3 }}
         />
+        <MessageCommandBlock icon="languages" title={t`译文`} text="Focus went back to the top of the page after the dialog closed. It now returns to the button that opened the dialog, and Esc is handled too." onClose={() => {}} />
+        <MessageCommandBlock icon="languages" title={t`翻译`} onClose={() => {}} />
         <UserMessage text={resuming.prompt} attachments={[]} time={ISO} run={resuming} footerPinned onCancelNativeRun={() => {}} />
       </Frame>
       <Matrix rows={[
@@ -211,6 +214,7 @@ function Messages() {
         { label: t`回答`, cells: [<Value key="a">{t`无气泡，占满阅读列`}</Value>] },
         { label: t`回答脚注`, cells: [<Value key="a">min-h 36 · text-2xs · {t`时间 · tok/s`}</Value>, <Value key="b">{t`估算值前缀 ~，字色 fg-4`}</Value>] },
         { label: t`显示时机`, cells: [<Value key="a">{t`指针停留 500 ms，触屏常显`}</Value>] },
+        { label: t`插件结果`, cells: [<Value key="a">rounded-xl · bg-subtle · px 16 · py 12</Value>, <Value key="b">{t`回答页脚下方；运行中图标换为转圈`}</Value>] },
       ]} />
     </div>
   );

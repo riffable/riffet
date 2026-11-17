@@ -254,6 +254,8 @@ function commandResultFromChild(raw: unknown): PluginCommandResult {
       return { kind: 'open', ...(raw.view ? { view: raw.view as string } : {}), ...(raw.sessionId ? { sessionId: raw.sessionId as string } : {}), ...(raw.path ? { path: raw.path as string } : {}) };
     }
     if (raw.kind === 'task' && text(raw.taskId, 200)) return { kind: 'task', taskId: raw.taskId };
+    // The length and title are checked again by the command service, as for an in-process plugin.
+    if (raw.kind === 'text' && typeof raw.text === 'string' && optional(raw.title, isRecord)) return { kind: 'text', text: raw.text, ...(raw.title ? { title: raw.title as Record<string, string> } : {}) };
   }
   throw malformed('a command result');
 }
@@ -430,9 +432,9 @@ export function remotePlugin(options: RemoteOptions): Plugin {
       if (description.commands.length) {
         contributions.commands = Object.fromEntries(description.commands.map((id): [string, CommandHandler] => [id, {
           async run(context) {
-            const { projectId, sessionId, args } = context;
+            const { projectId, sessionId, args, message, locale } = context;
             return commandResultFromChild(await call('command.run', {
-              id, ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), args: { ...args }, timeoutMs: TIMEOUTS.command - COMMAND_GRACE_MS,
+              id, ...(projectId ? { projectId } : {}), ...(sessionId ? { sessionId } : {}), args: { ...args }, ...(message ? { message: { ...message } } : {}), ...(locale ? { locale } : {}), timeoutMs: TIMEOUTS.command - COMMAND_GRACE_MS,
             }, TIMEOUTS.command));
           },
         }]));

@@ -125,3 +125,15 @@ export const AGENT_PROCESS_BUDGET = {
   /** An unreachable tmux server or session is at least this old before it is ended: creating one saves its record after. */
   orphanGraceMinutes: 10,
 } as const;
+
+/** Plugin commands run from a message's menu (docs/PLUGIN_ARCHITECTURE.md「消息菜单」). */
+export const PLUGIN_COMMAND_BUDGET = {
+  /** Longest message a client sends with a command; a longer message lists no plugin items. */
+  messageChars: 48_000,
+  /** Longest `text` a command answers; a longer one is refused as an invalid result. */
+  resultChars: 96_000,
+  /** What `riffet.translate` keeps of its translations for reuse, counted in characters of source and result; the oldest go first. */
+  translationCacheChars: 2_000_000,
+  /** `text` results a client keeps shown under their messages, in memory and across conversations; the oldest go first. */
+  keptResults: 64,
+} as const;

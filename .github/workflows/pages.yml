@@ -5,7 +5,7 @@ on:
     branches: [main]
     # The plugin index is built from the registry records, the example packages and the built-in manifests,
     # packed and checked by the plugin tooling and the server's package reader.
-    paths: ['site/**', 'examples/plugins/**', 'plugins/**', 'packages/plugin-api/**', 'apps/server/src/plugins-host/**', 'scripts/build-site.ts', 'scripts/build-appcast.ts', '.github/workflows/pages.yml']
+    paths: ['site/**', 'examples/plugins/**', 'official/**', 'plugins/**', 'packages/plugin-api/**', 'apps/server/src/plugins-host/**', 'scripts/build-site.ts', 'scripts/build-appcast.ts', '.github/workflows/pages.yml']
   # The release workflow deploys again once a release is published, so its Mac update joins the appcast.
   workflow_call:
   workflow_dispatch:

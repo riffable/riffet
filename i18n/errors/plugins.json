@@ -23,6 +23,10 @@
     "zh": "插件配置已被修改，请重新读取后保存",
     "en": "Plugin configuration changed; reload it before saving"
   },
+  "PLUGIN_MODEL_NOT_CHOSEN": {
+    "zh": "还没有选择要用的模型",
+    "en": "No model is chosen for this yet"
+  },
   "PLUGIN_TASKS_RUNNING": {
     "zh": "请等待运行中的任务结束后再重载插件",
     "en": "Wait for running tasks before reloading this plugin"

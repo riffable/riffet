@@ -28,6 +28,10 @@ enum TranscriptAction {
     case sessionReferencePage(String, Int)
     /// Opens the session info, where the subagents and background tasks are listed.
     case openSessionInfo
+    /// Copies the text of a command's result under an answer.
+    case copyText(String)
+    /// Closes a command's result under an answer, by its id.
+    case dismissCommandResult(String)
 }
 
 /// A link to another conversation, carried in a row's text (the lineage row's parent title).

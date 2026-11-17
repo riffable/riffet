@@ -78,10 +78,11 @@ export function registerSettingsRoutes(app: FastifyInstance, deps: RouteDeps): v
       if(!capabilities.supportsModeSelection||!capabilities.modes.some(item=>item.id===mode))throw new AppError('INVALID_MODE',`Choose a mode supported by ${legacyBackend}`);
     }
     const auxiliary=body.auxiliaryModels&&typeof body.auxiliaryModels==='object'&&!Array.isArray(body.auxiliaryModels)?body.auxiliaryModels as Record<string,unknown>:{};
-    for(const [purpose,raw] of Object.entries(auxiliary)){
+    const pluginModels=body.pluginModels&&typeof body.pluginModels==='object'&&!Array.isArray(body.pluginModels)?body.pluginModels as Record<string,unknown>:{};
+    for(const [field,choices] of [['auxiliaryModels',auxiliary],['pluginModels',pluginModels]] as const)for(const [purpose,raw] of Object.entries(choices)){
       const ref=raw as Record<string,unknown>|null;
       if(ref&&typeof ref==='object'&&!Array.isArray(ref)&&AUXILIARY_MODEL_BACKENDS.includes(ref.backendId as NativeBackendId)&&!nativeBackends.catalog.gatewayProfiles(ref.backendId as NativeBackendId).some(profile=>profile.id===ref.profileId))
-        throw new AppError('INVALID_SETTINGS',`auxiliaryModels.${purpose}.profileId must name a provider with a gateway address`);
+        throw new AppError('INVALID_SETTINGS',`${field}.${purpose}.profileId must name a provider with a gateway address`);
     }
     settings.setSettings(body);
     if(auxiliary.title)void titles.backfill().catch(()=>undefined);

@@ -256,6 +256,16 @@
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Off" } }
       }
     },
+    "插件" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Plugins" } }
+      }
+    },
+    "跟随快速对话" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Same as Quick chat" } }
+      }
+    },
     "不设置" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "None" } }

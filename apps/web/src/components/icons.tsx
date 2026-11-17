@@ -1,15 +1,15 @@
 import {
   Clock, Blocks, Activity, Archive, ArchiveRestore, ArrowDown, ArrowLeft, ArrowRightLeft, ArrowUp, AtSign, Bookmark, BookmarkMinus, BookmarkPlus,
-  Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
+  BookOpen, Bot, Brain, ChartColumn, ChevronRight, Circle, CircleDashed, CircleHelp, Columns2, Copy, CornerDownLeft,
   CornerUpRight, Cpu, Database, Dices, Download, Ellipsis, ExternalLink, Eye, File, FileCode2, FileCog, FilePenLine,
   FileText, FoldHorizontal, Folder, FolderClosed, FolderOpen, FolderPlus, Gauge, GitBranch, GitCommitHorizontal, GitCompare, GitFork,
   GitMerge, GitPullRequest, Globe, GripVertical, Hand, HardDriveDownload, History, Highlighter, Home, Image, ImageDown, Infinity, Info,
-  KeyRound, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
-  MessageCircleQuestion, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
+  KeyRound, Languages, Laptop, Layers, ListChecks, ListFilter, ListTodo, Lock, LogOut, Maximize, MemoryStick, Menu, MessageCirclePlus,
+  MessageCircleQuestion, MessageSquareQuote, MessageSquareText, MessagesSquare, Minimize, Minus, Monitor, Moon, OctagonX, Package, PanelLeft, PanelRight,
   Paperclip, Pause, PencilLine, PictureInPicture2, Pin, PinOff, Play, Plus, Repeat, RotateCw, Save,
   Search, Send, Server, Settings, Settings2, ShieldCheck, Shrink, Slash, Smartphone, Sparkle,
   Sparkles, Square, SquareArrowOutUpRight, SquareKanban, List, Inbox, SwatchBook, SquareCheck, SquarePen, SquareTerminal, Star, Sun, Tag, Target, Terminal,
-  Timer, Trash2, Undo2, Unlock, Upload, User, Workflow, WrapText, Wrench, Zap,
+  Timer, Trash2, Undo2, Unlock, Upload, User, Volume2, Workflow, WrapText, Wrench, Zap,
 } from 'lucide-react';
 import { filled, icon } from './icons-base';
 
@@ -60,6 +60,10 @@ export const IconFileCode2 = icon(FileCode2);
 export const IconFileCog = icon(FileCog);
 export const IconFilePenLine = icon(FilePenLine);
 export const IconFileText = icon(FileText);
+export const IconLanguages = icon(Languages);
+export const IconBookOpen = icon(BookOpen);
+export const IconMessageSquareQuote = icon(MessageSquareQuote);
+export const IconVolume2 = icon(Volume2);
 export const IconFolder = icon(Folder);
 export const IconFolderClosed = icon(FolderClosed);
 export const IconFolderOpen = icon(FolderOpen);

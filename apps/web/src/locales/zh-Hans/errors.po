@@ -474,6 +474,11 @@ msgstr "插件配置已被修改，请重新读取后保存"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_NOT_CHOSEN"
+msgstr "还没有选择要用的模型"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_TASKS_RUNNING"
 msgstr "请等待运行中的任务结束后再重载插件"
 

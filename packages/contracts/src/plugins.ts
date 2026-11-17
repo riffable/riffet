@@ -78,6 +78,21 @@ export type DeclarativeViewRenderer =
 export const COMMAND_SCOPES = ['global', 'project', 'session'] as const;
 export type CommandScope = typeof COMMAND_SCOPES[number];
 
+/**
+ * Menus of the host a command may be listed in besides the palette (docs/PLUGIN_ARCHITECTURE.md「消息菜单」).
+ * `message` is the more menu of an answer: the command runs with that message (`CommandRunRequest.message`),
+ * needs a conversation (`scope: 'session'`), and is not listed in the palette, which has no message to give it.
+ */
+export const COMMAND_MENUS = ['message'] as const;
+export type CommandMenu = typeof COMMAND_MENUS[number];
+
+/**
+ * The glyph of a menu item, by name: each client draws its own icon for a name (Lucide on the web, SF
+ * Symbols on Apple platforms), so a plugin ships no artwork. A client draws a puzzle piece for a name it does not know.
+ */
+export const COMMAND_ICONS = ['languages', 'sparkles', 'book-open', 'file-text', 'list-checks', 'search', 'message-square-quote', 'volume-2'] as const;
+export type CommandIcon = typeof COMMAND_ICONS[number];
+
 export interface CommandDeclaration {
   /** `<pluginId>/<name>`; the run route is `POST /api/integrations/<pluginId>/commands/<name>`. */
   id: string;
@@ -89,6 +104,19 @@ export interface CommandDeclaration {
   scope?: CommandScope;
   /** The arguments the command takes, validated by the server before it runs; may be empty. */
   params?: TaskParamField[];
+  /** The host menus that list it. A command with menus is offered only there. */
+  menus?: CommandMenu[];
+  /** Drawn before the title in a menu. */
+  icon?: CommandIcon;
+}
+
+/** The message a command runs on when it is chosen from a message's menu. */
+export interface CommandMessage {
+  role: 'assistant' | 'user';
+  /** The message as Markdown, as the transcript shows it; at most `PLUGIN_COMMAND_BUDGET.messageChars`. */
+  text: string;
+  /** The run the message belongs to, when Riffet sent that turn. */
+  runId?: string;
 }
 
 /** The body of `POST /api/integrations/:id/commands/:name`. The same `requestId` with the same body within 10 minutes returns the same result and runs the command once. */
@@ -99,6 +127,10 @@ export interface CommandRunRequest {
   args?: Record<string, string | number | boolean>;
   /** The `fingerprint` of a plan the user approved after a 409 `TASK_CONFIRM_REQUIRED` from a task the command starts: post again, with a fresh `requestId`, to run it. */
   confirm?: string;
+  /** Required by a command listed in the `message` menu, refused by any other. */
+  message?: CommandMessage;
+  /** The client's language as a BCP-47 tag, such as `zh-Hans`. */
+  locale?: string;
 }
 
 /** What a plugin command answers (not the shell `CommandResult`); a client acts on `kind`. */
@@ -107,7 +139,13 @@ export type PluginCommandResult =
   /** Open a sidebar view by id, a session, or the preview of a file (`path` is project-relative). */
   | { kind: 'open'; view?: string; sessionId?: string; path?: string }
   /** A task the command started through the task service: open its view and select it. */
-  | { kind: 'task'; taskId: string };
+  | { kind: 'task'; taskId: string }
+  /**
+   * Markdown shown under the message the command ran on, for a command run from the `message` menu; at most
+   * `PLUGIN_COMMAND_BUDGET.resultChars`. `title` labels it (such as 译文). The client keeps it for as long as the
+   * conversation is open, and never stores it.
+   */
+  | { kind: 'text'; text: string; title?: LocalizedText };
 
 /** A provider of project tasks (docs/TASKS.md); the code behind it is `Contributions.taskProviders`. */
 export interface TaskProviderDeclaration {
@@ -156,6 +194,25 @@ export interface PluginDeclarations {
   channels?: Array<{ id: string; scope: 'session' }>;
   /** The plugin's own page in its details (`plugin-page.ts`), built while it is on; `title` names its tab, 设置 when absent. */
   page?: { title?: LocalizedText };
+  /** Jobs it runs on a model the user chooses for each, on the 辅助模型 settings page. */
+  modelUses?: ModelUseDeclaration[];
+}
+
+/** What a use of a model falls back to while the user has chosen none for it: the model of an `AuxiliaryModelPurpose`. */
+export const MODEL_USE_FALLBACKS = ['chat'] as const;
+export type ModelUseFallback = typeof MODEL_USE_FALLBACKS[number];
+
+/**
+ * A job a plugin runs on a model through `host.models.complete({ use })` (docs/PLUGIN_ARCHITECTURE.md「模型用途」). The host
+ * lists it on the 辅助模型 settings page while the plugin is on, and keeps the choice in `AppSettings.pluginModels` by `id`.
+ */
+export interface ModelUseDeclaration {
+  /** `<pluginId>/<name>`. */
+  id: string;
+  /** The row's title, a noun for the job, such as 翻译. */
+  title: LocalizedText;
+  /** Used while nothing is chosen for it; absent means the job does not run until a model is chosen. */
+  fallback?: ModelUseFallback;
 }
 
 export interface AgentToolsDeclaration {

@@ -21,7 +21,7 @@
     "pack:npm": "node scripts/pack-npm.mjs",
     "typecheck": "tsc --noEmit",
     "check:case": "node scripts/check-case-collisions.mjs",
-    "check:plugins": "node scripts/check-plugin-boundaries.mjs",
+    "check:plugins": "node scripts/check-plugin-boundaries.mjs && node scripts/check-plugin-references.mjs",
     "check:layers": "node scripts/check-layers.mjs",
     "check:public-artifacts": "node scripts/check-public-artifacts.mjs",
     "check:mobile-strings": "node scripts/check-mobile-strings.mjs",

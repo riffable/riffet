@@ -384,7 +384,13 @@ data class PluginDeclarations(
     val agentTools: List<AgentToolsDeclaration>? = null,
     /** The plugin builds a page of its own ([PluginPage]); [PluginPageDeclaration.title] names its tab. */
     val page: PluginPageDeclaration? = null,
+    /** Model uses the plugin asks the user to choose in Settings; see [ModelUseDeclaration]. */
+    val modelUses: List<ModelUseDeclaration>? = null,
 )
+
+/** A model choice a plugin declares: [id] is `<pluginId>/<name>`; [fallback] `chat` follows the Quick chat model when none is set. */
+@Serializable
+data class ModelUseDeclaration(val id: String, val title: Map<String, String> = emptyMap(), val fallback: String? = null)
 
 @Serializable
 data class PluginPageDeclaration(val title: Map<String, String>? = null)
@@ -529,6 +535,10 @@ data class CommandDeclaration(
     val keybinding: String? = null,
     val scope: String? = null,
     val params: List<TaskParamField>? = null,
+    /** Host menus that list it (`message`: an answer's more menu); a command with menus is not offered in the palette. */
+    val menus: List<String>? = null,
+    /** The name of its menu glyph, from `COMMAND_ICONS`; a client draws a puzzle piece for one it does not know. */
+    val icon: String? = null,
 )
 
 /** Another plugin this one builds on; an [optional] one only adds to it. */

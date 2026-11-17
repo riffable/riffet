@@ -36,6 +36,9 @@ class RiffetHttpException(
     val creationRejectedBeforeAcceptance: Boolean
         get() = (details as? JsonObject)?.get("accepted") == JsonPrimitive(false)
 
+    /** A string field of the error's `details` object, e.g. `use` on `PLUGIN_MODEL_NOT_CHOSEN`. */
+    fun detail(key: String): String? = ((details as? JsonObject)?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.content
+
     override val message: String
         get() = L10n.serverError(code, params, serverMessage)
 }

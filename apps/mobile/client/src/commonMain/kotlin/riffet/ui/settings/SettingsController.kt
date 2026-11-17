@@ -35,6 +35,7 @@ import riffet.i18n.L10n
 import riffet.shared.deleteBackendProfile
 import riffet.shared.probeBackendModels
 import riffet.shared.setAuxiliaryModel
+import riffet.shared.setPluginModel
 import riffet.shared.settings
 import riffet.shared.updateBackendProfile
 import riffet.shared.updateQuickChat
@@ -370,6 +371,24 @@ class SettingsController(
             _state.update { it.copy(error = null, notice = null) }
             try {
                 publish(api.setAuxiliaryModel(purpose, ref))
+                onSaved()
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Throwable) {
+                _state.update { it.copy(error = failure.settingsMessage(L10n.uiText("settings.saveFailed"))) }
+            } finally {
+                _state.update { it.copy(saving = false) }
+            }
+        }
+    }
+
+    /** Sets the model of one plugin-declared use (`<pluginId>/<name>`) or clears it; other uses stay as they are. */
+    fun savePluginModel(use: String, ref: AuxiliaryModelRef?, onSaved: () -> Unit = {}) {
+        if (!beginWrite()) return
+        scope.launch {
+            _state.update { it.copy(error = null, notice = null) }
+            try {
+                publish(api.setPluginModel(use, ref))
                 onSaved()
             } catch (cancellation: CancellationException) {
                 throw cancellation

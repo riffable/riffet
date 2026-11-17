@@ -14,6 +14,23 @@ struct PluginCommand: Identifiable {
     var title: String { localizedText(declaration.title, fallback: declaration.id) }
     var scope: String { declaration.scope ?? "project" }
     var params: [TaskParamField] { declaration.params ?? [] }
+    /// Offered only in the menus it names (a message's ⋯), never in the palette or by a shortcut.
+    var inMenusOnly: Bool { !(declaration.menus ?? []).isEmpty }
+    var offersOnMessages: Bool { (declaration.menus ?? []).contains("message") }
+    /// The SF Symbol of a declared icon name; a name this version does not know draws the generic plugin glyph.
+    var symbol: String {
+        switch declaration.icon {
+        case "languages": "character.bubble"
+        case "sparkles": "sparkles"
+        case "book-open": "book"
+        case "file-text": "doc.text"
+        case "list-checks": "checklist"
+        case "search": "magnifyingglass"
+        case "message-square-quote": "text.quote"
+        case "volume-2": "speaker.wave.2"
+        default: "puzzlepiece.extension"
+        }
+    }
     /// Runs at once when it takes nothing or every value has a default; otherwise the reader fills a form first.
     var needsInput: Bool { params.contains { $0.defaultText() == nil } }
 }
@@ -34,13 +51,24 @@ extension Workbench {
         let session = quickChatContext || showingHome ? nil : selected
         return plugins.filter(\.enabled).flatMap { plugin in
             (plugin.declared?.commands ?? []).compactMap { declaration -> PluginCommand? in
-                guard facts.matches(declaration.whenCondition) else { return nil }
+                guard facts.matches(declaration.whenCondition), (declaration.menus ?? []).isEmpty else { return nil }
                 switch declaration.scope ?? "project" {
                 case "global": break
                 case "session": if project == nil || session == nil { return nil }
                 default: if project == nil { return nil }
                 }
                 return PluginCommand(pluginTitle: plugin.displayTitle, declaration: declaration)
+            }
+        }
+    }
+
+    /// The enabled plugins' commands for an answer's ⋯ menu, when a conversation is open.
+    var messageCommandList: [PluginCommand] {
+        let facts = inspectorFacts
+        return plugins.filter(\.enabled).flatMap { plugin in
+            (plugin.declared?.commands ?? []).compactMap { declaration -> PluginCommand? in
+                let command = PluginCommand(pluginTitle: plugin.displayTitle, declaration: declaration)
+                return command.offersOnMessages && facts.matches(declaration.whenCondition) ? command : nil
             }
         }
     }
@@ -76,10 +104,17 @@ final class PluginCommandRunner {
         let text: String
         let failed: Bool
         let ticket: Int
+        /// The error asks for a choice made in 设置 › 快速对话.
+        var chooseModel = false
+        /// The model choice lives in 辅助模型 rather than 快速对话: the error named a plugin model use.
+        var chooseUse = false
     }
 
     var form: Form?
     var confirmation: Confirmation?
+    /// What commands run on answers have answered, oldest first, across conversations: in memory only,
+    /// at most `PLUGIN_COMMAND_BUDGET.keptResults`. The transcript lays each out under its answer.
+    private(set) var results: [CommandResultSpec] = []
     private(set) var message: Message?
     @ObservationIgnored private var running: Set<String> = []
     @ObservationIgnored private var ticket = 0
@@ -100,7 +135,7 @@ final class PluginCommandRunner {
             do {
                 let run = try await api.runCommand(
                     commandId: command.id, requestId: requestId, projectId: context.projectId, sessionId: context.sessionId,
-                    values: values, params: command.params, confirm: confirm
+                    values: values, params: command.params, confirm: confirm, message: nil, locale: nil
                 )
                 if let plan = run.confirmation {
                     self.confirmation = Confirmation(command: command, context: context, values: values, plan: plan)
@@ -111,6 +146,50 @@ final class PluginCommandRunner {
                 self.show(error.riffetMessage, failed: true)
             }
         }
+    }
+
+    /// Runs [command] on an answer. The same command on the same answer shows once, and choosing it again while it runs does nothing new.
+    func run(_ command: PluginCommand, onAnswer text: String, runId: String?, sessionId: String, in workbench: Workbench) {
+        guard let api = workbench.host.api else { return }
+        let match = CommandResultSpec.match(sessionId: sessionId, runId: runId, text: text)
+        let id = "\(command.id)\0\(match)"
+        if let known = results.first(where: { $0.id == id }) {
+            results.removeAll { $0.id == id }
+            results.append(known)
+            return
+        }
+        // Each run has its own token: a reply or error of a run that was closed, or closed and run again, is ignored.
+        let token = UUID()
+        keep(CommandResultSpec(id: id, token: token, sessionId: sessionId, match: match, title: command.title, symbol: command.symbol, text: nil))
+        Task { @MainActor in
+            do {
+                let run = try await api.runCommand(
+                    commandId: command.id, requestId: UUID().uuidString.lowercased(), projectId: nil, sessionId: sessionId,
+                    values: [:], params: [], confirm: nil,
+                    message: PluginCommandMessage(role: "assistant", text: text, runId: runId), locale: Bundle.main.preferredLocalizations.first
+                )
+                guard let index = self.results.firstIndex(where: { $0.token == token }) else { return }
+                if let result = run.result, result.kind == "text", let body = result.text {
+                    self.results[index].text = body
+                    self.results[index].title = localizedText(result.title, fallback: command.title)
+                } else {
+                    self.results.remove(at: index)
+                    if let result = run.result { await self.handle(result, context: Context(projectId: nil, sessionId: sessionId), in: workbench) }
+                }
+            } catch {
+                guard self.results.contains(where: { $0.token == token }) else { return }
+                self.results.removeAll { $0.token == token }
+                self.show(error.riffetMessage, failed: true, chooseModel: error.riffetCode == "PLUGIN_MODEL_NOT_CHOSEN", chooseUse: error.riffetDetail("use") != nil)
+            }
+        }
+    }
+
+    func dismissResult(_ id: String) { results.removeAll { $0.id == id } }
+
+    private func keep(_ spec: CommandResultSpec) {
+        results.append(spec)
+        let limit = Int(BudgetsKt.PLUGIN_COMMAND_BUDGET_KEPT_RESULTS)
+        if results.count > limit { results.removeFirst(results.count - limit) }
     }
 
     private func handle(_ result: PluginCommandResult, context: Context, in workbench: Workbench) async {
@@ -136,10 +215,10 @@ final class PluginCommandRunner {
         }
     }
 
-    func show(_ text: String, failed: Bool) {
+    func show(_ text: String, failed: Bool, chooseModel: Bool = false, chooseUse: Bool = false) {
         ticket += 1
         let current = ticket
-        message = Message(text: text, failed: failed, ticket: current)
+        message = Message(text: text, failed: failed, ticket: current, chooseModel: chooseModel, chooseUse: chooseUse)
         guard !failed else { return }
         Task {
             try? await Task.sleep(for: .seconds(2.4))
@@ -175,6 +254,14 @@ struct PluginCommandPresenter: ViewModifier {
                         HStack(alignment: .top, spacing: Space.sm) {
                             if message.failed && live { Image(icon: "exclamationmark.circle").foregroundStyle(palette.danger) }
                             Text(message.text).fixedSize(horizontal: false, vertical: true).textSelection(.enabled)
+                            if message.chooseModel {
+                                Button("选择模型") {
+                                    UserDefaults.standard.set((message.chooseUse ? SettingsSection.auxiliaryModels : SettingsSection.quickChat).rawValue, forKey: PreferenceKey.settingsSection)
+                                    WindowRouter.shared.showSettings()
+                                    runner.dismissMessage()
+                                }
+                                .buttonStyle(.plain).foregroundStyle(palette.accent)
+                            }
                             if message.failed {
                                 Button {
                                     if runner.message?.ticket == message.ticket { runner.dismissMessage() }

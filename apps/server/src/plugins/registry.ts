@@ -108,6 +108,8 @@ export interface PluginRegistryOptions {
   serverPorts?: () => readonly number[];
   /** `host.sessions` of an in-process plugin that declares agent tools or channels. */
   sessions?: NonNullable<PluginHost['sessions']>;
+  /** `host.models.complete` of an in-process plugin, given its own declared model uses. */
+  completeModel?: Parameters<typeof createPluginHost>[1]['completeModel'];
 }
 
 const MODEL_SOURCE_CLAIM = 'model-source:';
@@ -182,7 +184,7 @@ export class PluginRegistry {
     });
     this.invalidate = options.invalidateModelCatalogs ?? (() => undefined);
     this.agentBackendProvided = options.agentBackendProvided ?? (() => false);
-    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}) };
+    this.hostOptions = { stateDir: options.stateDir, store: this.store, invalidateModelCatalogs: this.invalidate, savedModelSources: options.savedModelSources ?? (() => []), ...(options.agentProfiles ? { agentProfiles: options.agentProfiles } : {}), ...(options.startTask ? { startTask: options.startTask } : {}), ...(options.sessions ? { sessions: options.sessions } : {}), ...(options.completeModel ? { completeModel: options.completeModel } : {}) };
     this.runningTasks = options.runningTasks ?? (() => 0);
     this.statusTimeoutMs = options.statusTimeoutMs ?? STATUS_TIMEOUT_MS;
     for (const plugin of options.plugins ?? builtinPlugins) this.register(plugin, 'builtin');
@@ -1172,10 +1174,11 @@ export class PluginRegistry {
   }
 
   private createHost(manifest: PluginManifest, source: Source, trusted = false): PluginHost {
-    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined, ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id) } : {
+    const host = createPluginHost(manifest.id, source === 'installed' && !trusted ? { ...this.hostOptions, agentProfiles: undefined, completeModel: undefined, ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id) } : {
       ...this.hostOptions, ownAgentBackends: (manifest.contributes?.agentBackends ?? []).map(declared => declared.id),
       ownTaskProviders: (manifest.contributes?.tasks ?? []).map(declared => declared.id),
       ownsSessionSurfaces: Boolean(manifest.contributes?.agentTools?.length || manifest.contributes?.channels?.length),
+      ownModelUses: manifest.contributes?.modelUses ?? [],
       service: (pluginId, name, range) => this.serviceOf(manifest.id, pluginId, name, range),
     });
     host.logger = Object.fromEntries((['debug', 'info', 'warn', 'error'] as const).map(level => [level, (message: string) => {

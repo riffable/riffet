@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { PluginHost, PluginManifest } from '@riffet/plugin-api';
-import type { Task, TaskParams } from '../../../../packages/contracts/src/index.js';
+import type { ModelUseDeclaration, Task, TaskParams } from '../../../../packages/contracts/src/index.js';
 import { resolveCliExecutable } from '../backends/shared/cli-resolve.js';
 import { effortOption, fetchGatewayModels, gatewayBaseUrl, gatewayRootUrl } from '../backends/shared/gateway-models.js';
 import { AppError } from '../errors.js';
@@ -26,6 +26,10 @@ export function createPluginHost(id: PluginManifest['id'], options: {
   sessions?: NonNullable<PluginHost['sessions']>;
   /** Whether this plugin declares agent tools or channels. */
   ownsSessionSurfaces?: boolean;
+  /** `host.models.complete`, given the plugin's own declared model uses; absent for an isolated installed package, which gets none. */
+  completeModel?: (request: Parameters<NonNullable<PluginHost['models']>['complete']>[0], uses: readonly ModelUseDeclaration[]) => Promise<string>;
+  /** The model uses this plugin declares: `use` may name these only. */
+  ownModelUses?: readonly ModelUseDeclaration[];
 }): PluginHost {
   const directory = join(options.stateDir, 'plugin-data', id);
   return {
@@ -64,6 +68,7 @@ export function createPluginHost(id: PluginManifest['id'], options: {
     } } : {}),
     ...(options.service ? { services: { get: ((pluginId: string, name: string, range: string) => options.service!(pluginId, name, range)) as NonNullable<PluginHost['services']>['get'] } } : {}),
     ...(options.sessions && options.ownsSessionSurfaces ? { sessions: options.sessions } : {}),
+    ...(options.completeModel ? { models: { complete: request => options.completeModel!(request, options.ownModelUses ?? []) } } : {}),
     error: (code, message, statusCode) => new AppError(code, message, statusCode),
   };
 }

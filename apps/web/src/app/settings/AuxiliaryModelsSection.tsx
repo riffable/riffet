@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { AppSettings, AuxiliaryModelOption, AuxiliaryModelPurpose, AuxiliaryModelRef } from '@contracts';
+import type { AppSettings, AppSettingsUpdate, AuxiliaryModelOption, AuxiliaryModelRef } from '@contracts';
 import { IconChevronDown } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/controls';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuLabel, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { api } from '@/lib/api';
 import { backendLabel } from '@/lib/backends';
+import { localizedText, usePlugins } from '@/lib/plugins';
 import { errorMessage } from '@/lib/utils';
 import { AuxiliaryPreviewDialog, type PreviewPurpose } from './AuxiliaryPreviewDialog';
 import { SettingsGroup, SettingsRow } from './SettingsLayout';
@@ -21,11 +22,14 @@ type SaveProps = {
 };
 
 /**
- * Models for Riffet's own small jobs (session titles, handoff summaries, canvas summaries), one per purpose. Choices
- * come from gateways a provider profile already holds a key for, so nothing new is configured here.
+ * Models for Riffet's own small jobs (session titles, handoff summaries, canvas summaries), one per purpose, and for the
+ * jobs enabled plugins declare (`modelUses`, docs/PLUGIN_ARCHITECTURE.md「模型用途」). Choices come from gateways a
+ * provider profile already holds a key for, so nothing new is configured here.
  */
 export function AuxiliaryModelsSection({ settings, onSaved, onError }: SaveProps) {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
+  const plugins = usePlugins();
+  const uses = (plugins ?? []).filter((plugin) => plugin.enabled).flatMap((plugin) => plugin.declared?.modelUses ?? []);
   const [options, setOptions] = useState<AuxiliaryModelOption[]>();
   const [loadError, setLoadError] = useState('');
   const [preview, setPreview] = useState<{ purpose: PreviewPurpose; model: AuxiliaryModelRef }>();
@@ -46,29 +50,48 @@ export function AuxiliaryModelsSection({ settings, onSaved, onError }: SaveProps
     setPreviewOpen(true);
   };
 
-  const picker = { settings, onSaved, onError, options, loading: !options && !loadError };
-  return <SettingsGroup>
+  const picker = { onSaved, onError, options, loading: !options && !loadError };
+  const purpose = (key: 'title' | 'handoff' | 'summary') => ({
+    current: settings.auxiliaryModels?.[key],
+    patch: (ref: AuxiliaryModelRef | null): AppSettingsUpdate => ({ auxiliaryModels: { [key]: ref } }),
+  });
+  return <>
+  <SettingsGroup>
     <SettingsRow title={t`会话标题`} description={loadError || undefined}>
       <div className="flex items-center gap-2 max-md:w-full">
-        <AuxiliaryModelPicker {...picker} purpose="title" label={t`会话标题`} offLabel={t`只用 CLI 标题`} />
+        <AuxiliaryModelPicker {...picker} {...purpose('title')} label={t`会话标题`} offLabel={t`只用 CLI 标题`} />
         <Button size="xs" variant="ghost" disabled={!settings.auxiliaryModels?.title} onClick={() => tryIt('title')}><Trans>试用</Trans></Button>
       </div>
     </SettingsRow>
     <SettingsRow title={t`交接摘要`}>
       <div className="flex items-center gap-2 max-md:w-full">
-        <AuxiliaryModelPicker {...picker} purpose="handoff" label={t`交接摘要`} offLabel={t`不使用`} />
+        <AuxiliaryModelPicker {...picker} {...purpose('handoff')} label={t`交接摘要`} offLabel={t`不使用`} />
         <Button size="xs" variant="ghost" disabled={!settings.auxiliaryModels?.handoff} onClick={() => tryIt('handoff')}><Trans>试用</Trans></Button>
       </div>
     </SettingsRow>
     <SettingsRow title={t`画布摘要`}>
-      <AuxiliaryModelPicker {...picker} purpose="summary" label={t`画布摘要`} offLabel={t`不使用`} />
+      <AuxiliaryModelPicker {...picker} {...purpose('summary')} label={t`画布摘要`} offLabel={t`不使用`} />
     </SettingsRow>
     {preview && <AuxiliaryPreviewDialog open={previewOpen} purpose={preview.purpose} model={preview.model} onOpenChange={setPreviewOpen} />}
-  </SettingsGroup>;
+  </SettingsGroup>
+  {uses.length > 0 && <SettingsGroup title={t`插件`}>
+    {uses.map((use) => {
+      const title = localizedText(use.title, [i18n.locale]) ?? use.id;
+      return (
+        <SettingsRow key={use.id} title={title}>
+          <AuxiliaryModelPicker {...picker} current={settings.pluginModels?.[use.id]} patch={(ref) => ({ pluginModels: { [use.id]: ref } })}
+            label={title} offLabel={use.fallback === 'chat' ? t`跟随快速对话` : t`不使用`} />
+        </SettingsRow>
+      );
+    })}
+  </SettingsGroup>}
+  </>;
 }
 
-function AuxiliaryModelPicker({ purpose, label, offLabel, options, loading, settings, onSaved, onError }: SaveProps & {
-  purpose: AuxiliaryModelPurpose;
+function AuxiliaryModelPicker({ current, patch, label, offLabel, options, loading, onSaved, onError }: Omit<SaveProps, 'settings'> & {
+  current: AuxiliaryModelRef | undefined;
+  /** The settings change that saves [ref] for this row; `null` clears it. */
+  patch(ref: AuxiliaryModelRef | null): AppSettingsUpdate;
   label: string;
   offLabel: string;
   options?: AuxiliaryModelOption[];
@@ -76,7 +99,6 @@ function AuxiliaryModelPicker({ purpose, label, offLabel, options, loading, sett
 }) {
   const { t } = useLingui();
   const [busy, setBusy] = useState(false);
-  const current = settings.auxiliaryModels?.[purpose];
 
   const select = async (key: string) => {
     if (busy || key === (current ? keyOf(current) : OFF)) return;
@@ -84,8 +106,8 @@ function AuxiliaryModelPicker({ purpose, label, offLabel, options, loading, sett
     const ref: AuxiliaryModelRef | null = choice ? { backendId: choice.backendId, profileId: choice.profileId, model: choice.model } : null;
     setBusy(true);
     try {
-      const saved = await api.updateSettings({ auxiliaryModels: { [purpose]: ref } });
-      onSaved(saved, { auxiliaryModels: saved.auxiliaryModels });
+      const saved = await api.updateSettings(patch(ref));
+      onSaved(saved, { auxiliaryModels: saved.auxiliaryModels, pluginModels: saved.pluginModels });
     } catch (error) { onError(errorMessage(error, t`无法保存辅助模型`)); }
     finally { setBusy(false); }
   };

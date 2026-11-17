@@ -474,6 +474,11 @@ msgstr "Plugin configuration changed; reload it before saving"
 
 #. js-lingui-explicit-id
 #: ../../i18n/errors/plugins.json
+msgid "error.PLUGIN_MODEL_NOT_CHOSEN"
+msgstr "No model is chosen for this yet"
+
+#. js-lingui-explicit-id
+#: ../../i18n/errors/plugins.json
 msgid "error.PLUGIN_TASKS_RUNNING"
 msgstr "Wait for running tasks before reloading this plugin"
 

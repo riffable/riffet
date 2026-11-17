@@ -8,6 +8,7 @@ import { avatars } from './riffet/avatars/index.js';
 import { browser } from './riffet/browser/index.js';
 import { canvas } from './riffet/canvas/index.js';
 import { cursor } from './riffet/cursor/index.js';
+import { translate } from './riffet/translate/index.js';
 
 export const builtinPlugins: Plugin[] = [
   cursor,
@@ -15,4 +16,5 @@ export const builtinPlugins: Plugin[] = [
   canvas,
   browser,
   avatars,
+  translate,
 ];
