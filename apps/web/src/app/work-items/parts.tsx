@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import type { WorkItemAssignee, WorkItemStatus } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { OwnerAvatar } from '@/components/OwnerAvatar';
-import { StatusDot } from '@/components/ui/controls';
+import { Spinner, StatusDot } from '@/components/ui/controls';
 import { agentMarkStyle, useBackendLabel } from '@/lib/backends';
 import { cn } from '@/lib/utils';
 import { useLists } from '../state/stores';
@@ -24,16 +24,36 @@ export function useStatusLabel(): (status: WorkItemStatus) => string {
  * A ring that fills as the work advances, each status in its own colour: blue while an agent works,
  * the warning amber while the owner is to review, green once done (docs/TASK-BOARD.md §9).
  */
-export function StatusIcon({ status, className }: { status: WorkItemStatus; className?: string }) {
-  const label = useStatusLabel()(status);
-  const ring = (stroke: string, dashed?: boolean) => <circle cx="7" cy="7" r="5.5" fill="none" stroke={stroke} strokeWidth="1.25" strokeDasharray={dashed ? '1.4 2' : undefined} />;
+const STATUS_TONE: Record<WorkItemStatus, string> = {
+  todo: 'var(--fg-4)',
+  doing: 'var(--accent)',
+  review: 'var(--warning)',
+  done: 'var(--success)',
+  cancelled: 'var(--fg-4)',
+};
+
+/**
+ * `running`: a conversation of the task is running, and the ring itself is the spinner, an open arc
+ * turning around the still fill, so a list row needs no second mark beside it.
+ */
+export function StatusIcon({ status, running, className }: { status: WorkItemStatus; running?: boolean; className?: string }) {
+  const { t } = useLingui();
+  const statusLabel = useStatusLabel()(status);
+  const tone = STATUS_TONE[status];
+  const ring = (dashArray?: string) => <circle cx="7" cy="7" r="5.5" fill="none" stroke={tone} strokeWidth="1.25" strokeLinecap={running ? 'round' : undefined} strokeDasharray={dashArray} />;
+  const check = 'M4.5 7.2 6.2 8.9 9.6 5.4';
   return (
-    <svg viewBox="0 0 14 14" role="img" aria-label={label} className={cn('size-3.5 shrink-0', className)}>
-      {status === 'todo' && ring('var(--fg-4)', true)}
-      {status === 'doing' && <>{ring('var(--accent)')}<path d="M7 7V3.6A3.4 3.4 0 0 1 7 10.4Z" fill="var(--accent)" /></>}
-      {status === 'review' && <>{ring('var(--warning)')}<path d="M7 7V3.6A3.4 3.4 0 1 1 3.6 7Z" fill="var(--warning)" /></>}
-      {status === 'done' && <><circle cx="7" cy="7" r="6.1" fill="var(--success)" /><path d="M4.5 7.2 6.2 8.9 9.6 5.4" fill="none" stroke="var(--bg)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></>}
-      {status === 'cancelled' && <>{ring('var(--fg-4)')}<path d="M4.6 9.4 9.4 4.6" stroke="var(--fg-4)" strokeWidth="1.25" /></>}
+    <svg viewBox="0 0 14 14" role="img" aria-label={running ? `${statusLabel} · ${t`运行中`}` : statusLabel} className={cn('size-3.5 shrink-0', className)}>
+      {/* motion-loop: the spinner's rotation, on the ring; `ui-spinner` fades it instead under reduced motion */}
+      {running
+        ? <g className="ui-spinner animate-spin" style={{ transformBox: 'view-box', transformOrigin: 'center' }}>{ring('24 10.6')}</g>
+        : status !== 'done' && ring(status === 'todo' ? '1.4 2' : undefined)}
+      {status === 'doing' && <path d="M7 7V3.6A3.4 3.4 0 0 1 7 10.4Z" fill={tone} />}
+      {status === 'review' && <path d="M7 7V3.6A3.4 3.4 0 1 1 3.6 7Z" fill={tone} />}
+      {status === 'done' && (running
+        ? <path d={check} fill="none" stroke={tone} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        : <><circle cx="7" cy="7" r="6.1" fill={tone} /><path d={check} fill="none" stroke="var(--bg)" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" /></>)}
+      {status === 'cancelled' && <path d="M4.6 9.4 9.4 4.6" stroke={tone} strokeWidth="1.25" />}
     </svg>
   );
 }
@@ -49,8 +69,8 @@ export function useLiveLabel(): (live: WorkItemLive) => string {
 }
 
 /**
- * The sidebar's dots (`SessionIndicator`), so one state looks the same on both. Waiting and failed
- * also say their word, as the sidebar's 待确认 does; running and new results are a dot.
+ * The sidebar's marks (`SessionIndicator`), so one state looks the same on both. Waiting and failed
+ * also say their word, as the sidebar's 待确认 does; running is a spinner, a new result a dot.
  */
 export function LiveMark({ live, words = true, className }: { live: WorkItemLive | undefined; words?: boolean; className?: string }) {
   const label = useLiveLabel();
@@ -59,7 +79,9 @@ export function LiveMark({ live, words = true, className }: { live: WorkItemLive
   const spoken = words && (live === 'waiting' || live === 'failed');
   return (
     <span className={cn('inline-flex shrink-0 items-center gap-1.5 text-2xs', live === 'waiting' ? 'text-warning' : 'text-danger', className)}>
-      <StatusDot tone={tone} pulse={live === 'running'} label={spoken ? undefined : label(live)} />
+      {live === 'running'
+        ? <span role="img" aria-label={label(live)} title={label(live)} className="inline-flex"><Spinner className="size-3 text-accent" /></span>
+        : <StatusDot tone={tone} label={spoken ? undefined : label(live)} />}
       {spoken && label(live)}
     </span>
   );

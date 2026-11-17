@@ -36,6 +36,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - The side panel floats over the conversation and stays open per conversation. Skills and tools move into the composer's + menu; permission modes have names.
 - Settings: a storage page with a breakdown of the data directory and scheduled compaction; agent defaults separate from model providers.
 - Sidebar: pinned destinations with the rest under More, and footer actions in the avatar menu.
+- Sidebar: a running conversation shows a spinner, set apart from the dot for a new result; a task conversation's status ring turns while it runs.
 - The image viewer shows the image alone; on the web it grows from its thumbnail.
 
 ### Clients

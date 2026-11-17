@@ -30,7 +30,6 @@ import { SIDEBAR_DESTINATION_META, splitSidebarDestinations, WEB_SIDEBAR_DESTINA
 import { useTabs } from './tabs/useTabs';
 import { SidebarUserMenu } from './SidebarUserMenu';
 import { StatusIcon, useStatusLabel } from './work-items/parts';
-import { TaskSessionTitle } from './work-items/TaskSessionTitle';
 
 export type EntityAction = 'rename' | 'tags' | 'archive';
 export type SessionAction = EntityAction | 'pin' | 'delete' | 'work-item';
@@ -118,19 +117,21 @@ function offlineLabel(savedAt: number): string {
   return isJustNow(new Date(savedAt).toISOString()) ? i18n._(msg`离线 · 显示刚刚保存的列表`) : i18n._(msg`离线 · 显示 ${age} 前保存的列表`);
 }
 
-export function SessionIndicator({ session, mobile, selected }: { session: Session; mobile: boolean; selected: boolean }) {
+/** `taskRing`: the row shows its task's status ring, which turns while the conversation runs, so the slot stays empty then. */
+export function SessionIndicator({ session, mobile, selected, taskRing }: { session: Session; mobile: boolean; selected: boolean; taskRing?: boolean }) {
   const { t } = useLingui();
+  const running = session.state === 'running' || session.state === 'starting';
   // Finished while nobody looked; the open conversation is being read.
   const unread = !selected && isDoneUnseen(session);
   if (session.terminalHold) return <span role="img" aria-label={t`在终端中`} title={t`在终端中`} className="inline-flex text-fg-3"><IconSquareTerminal className="size-3.5" /></span>;
   if (mobile) {
-    if (session.state === 'running' || session.state === 'starting') return <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>;
+    if (running) return taskRing ? null : <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>;
     if (session.state === 'waiting') return <StatusDot tone="warning" shape="ring" pulse label={t`等待处理`} className="size-2" />;
     if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-2" />;
     if (unread) return <StatusDot tone="accent" label={t`未读`} className="size-2" />;
     return null;
   }
-  if (session.state === 'running' || session.state === 'starting') return <StatusDot tone="accent" pulse label={t`运行中`} />;
+  if (running) return taskRing ? null : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
   if (session.state === 'waiting') return <StatusDot tone="warning" label={t`等待处理`} />;
   if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
   if (unread) return <StatusDot tone="accent" label={t`未读`} />;
@@ -203,13 +204,15 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
   const deleting = useDeletionLoading(session.id);
   const backend = sessionBackend(session);
   const label = useBackendLabel()(backend);
+  // Without the item (not loaded, or deleted) the title stands alone.
+  const taskStatus = useWorkItems((state) => session.workItemId ? state.items?.find((entry) => entry.id === session.workItemId)?.status : undefined);
   return (
     <ListRow
       title={`${label} · ${session.title}`}
       onClick={(event) => onSelect(session, event.metaKey || event.ctrlKey)}
       selected={selected}
       aria-current={selected ? 'page' : undefined}
-      leading={<SessionIndicator session={session} mobile={mobile} selected={selected} />}
+      leading={<SessionIndicator session={session} mobile={mobile} selected={selected} taskRing={Boolean(taskStatus)} />}
       // The others recede a step so the selected row reads first.
       className={cn('cursor-default', mobile && 'text-fg hover:text-fg', session.archivedAt && 'opacity-60')}
       actions={<>
@@ -250,7 +253,8 @@ export const SessionRow = memo(function SessionRow({ session, selected, mobile, 
       </span>
       </>}
     >
-      {session.workItemId ? <TaskSessionTitle workItemId={session.workItemId} title={session.title} /> : session.title}
+      {taskStatus && <StatusIcon status={taskStatus} running={session.state === 'running' || session.state === 'starting'} className="-mt-0.5 mr-1.5 inline-block align-middle" />}
+      {session.title}
     </ListRow>
   );
 });

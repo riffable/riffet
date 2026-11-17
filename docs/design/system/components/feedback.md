@@ -131,7 +131,7 @@
 
 ### 用途
 
-进行中且时长不确定的状态。实现 `controls.tsx:103`：`IconLoaderCircle`，`size-3.5`，`animate-spin`，`fg-3`。
+进行中且时长不确定的状态；会话运行中（侧栏、标签栏、页头、任务看板）用强调色；行里有任务状态环时不另放，由状态环的外圈旋转表示（`StatusIcon` 的 `running`）。实现 `controls.tsx:103`：`IconLoaderCircle`，`size-3.5`，`animate-spin`，`fg-3`。
 
 ### 变体与尺寸
 

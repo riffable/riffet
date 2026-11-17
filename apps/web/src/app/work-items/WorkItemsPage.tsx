@@ -331,7 +331,7 @@ function InboxRow({ entry, selected, onOpen, onDone }: { entry: WorkItemView; se
       onKeyDown={activate(onOpen)}
       className={cn('group/row flex min-h-9 w-full min-w-0 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-sm text-fg outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11', selected && 'bg-active')}
     >
-      <span className="grid size-4 shrink-0 place-items-center">{live ? <LiveMark live={live} words={false} /> : <StatusIcon status={item.status} />}</span>
+      <span className="grid size-4 shrink-0 place-items-center">{live && live !== 'running' ? <LiveMark live={live} words={false} /> : <StatusIcon status={item.status} running={live === 'running'} />}</span>
       <WorkItemNumber number={item.number} className="w-9" />
       <span className="min-w-0 flex-1 truncate">{title}</span>
       <span className={cn('min-w-0 max-w-[38%] shrink truncate text-xs', live === 'waiting' || stuck ? 'text-warning' : live === 'failed' ? 'text-danger' : 'text-fg-3')} title={stuck?.note}>{reason}</span>
@@ -360,11 +360,11 @@ function ListRow({ entry, selected, onOpen }: { entry: WorkItemView; selected: b
       onKeyDown={activate(onOpen)}
       className={cn('flex min-h-9 w-full min-w-0 cursor-default select-none items-center gap-2 rounded-lg px-2.5 text-sm outline-none transition-colors hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus no-hover:min-h-11', selected && 'bg-active')}
     >
-      <StatusIcon status={item.status} />
+      <StatusIcon status={item.status} running={live === 'running'} />
       <WorkItemNumber number={item.number} className="w-9" />
       <span className={cn('min-w-0 flex-1 truncate', item.status === 'done' ? 'text-fg-2' : 'text-fg')}>{title}</span>
       {item.labels.map((label) => <Badge key={label} className="max-md:hidden">{label}</Badge>)}
-      <LiveMark live={live} />
+      {live !== 'running' && <LiveMark live={live} />}
       <AssigneeMark assignee={item.assignee} />
       <span className="w-12 shrink-0 text-right text-xs tabular-nums text-fg-3">{relativeTime(item.updatedAt)}</span>
     </div>
