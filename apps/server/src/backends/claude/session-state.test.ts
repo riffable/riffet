@@ -119,8 +119,13 @@ describe('Claude session state', () => {
     expect(phase(state)).toBe('idle');
   });
 
-  it.each([false, true])('tracks a hidden peer wake through replay and hook-first delivery: %s', hookFirst => {
-    const peer = { ...human('peer-prompt', 'Another session reported back'), uuid: 'peer', isMeta: true, origin: { kind: 'peer' } };
+  it.each([
+    { hookFirst: false, wake: { origin: { kind: 'peer' } } },
+    { hookFirst: true, wake: { origin: { kind: 'peer' } } },
+    // A wake-up the agent scheduled for itself (`/loop`, ScheduleWakeup) names no origin.
+    { hookFirst: false, wake: { origin: undefined, turnOrigin: 'scheduled', wakeupSource: 'loop_wakeup' } },
+  ])('tracks a hidden wake through replay and hook-first delivery: %j', ({ hookFirst, wake }) => {
+    const peer = { ...human('peer-prompt', 'Another session reported back'), uuid: 'peer', isMeta: true, ...wake };
     const finished = fold(alive(), human('human-prompt'), assistant, duration);
     let state = hookFirst ? fold(finished, hook.prompt('peer-prompt')) : finished;
     state = fold(state, peer, assistant);

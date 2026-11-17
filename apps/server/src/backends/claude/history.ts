@@ -115,14 +115,22 @@ function promptIdOf(row: ClaudeRow): string | undefined {
   return string(row.promptId) ?? string(row.prompt_id) ?? string(record(row.message)?.prompt_id);
 }
 
-/** A peer's hidden prompt can wake the main agent; ordinary meta context cannot open a turn. */
-function hiddenPeerPrompt(row: ClaudeRow): string | undefined {
+/**
+ * A hidden prompt that wakes the main agent — a peer's message, or a wake-up the agent scheduled for
+ * itself (`/loop`, ScheduleWakeup) — opens a turn of its own; ordinary meta context cannot open one.
+ */
+function hiddenTurnPrompt(row: ClaudeRow): string | undefined {
   if (row.type !== 'user' || row.isMeta !== true || row.isSidechain === true || row.agentId !== undefined
-    || row.isCompactSummary === true || isTranscriptOnly(row) || record(row.origin)?.kind !== 'peer') return undefined;
+    || row.isCompactSummary === true || isTranscriptOnly(row) || hiddenTurnOrigin(row) === undefined) return undefined;
   const content = record(row.message)?.content;
   if (Array.isArray(content) && content.some(block => record(block)?.type === 'tool_result')) return undefined;
   const promptId = promptIdOf(row);
   return promptId?.trim() ? promptId : undefined;
+}
+
+function hiddenTurnOrigin(row: ClaudeRow): ClaudeTurnOrigin | undefined {
+  if (record(row.origin)?.kind === 'peer') return 'peer';
+  return row.turnOrigin === 'scheduled' ? 'other' : undefined;
 }
 
 /**
@@ -307,8 +315,8 @@ export function claudeRowSignals(row: ClaudeRow, parents?: Map<string, string>, 
   const content = record(row.message)?.content;
   if (Array.isArray(content) && content.some(block => record(block)?.type === 'tool_result')) return [];
   const promptId = promptIdOf(row);
-  if (hiddenPeerPrompt(row)) return [{
-    type: 'prompt', source: 'transcript', origin: 'peer', promptId,
+  if (hiddenTurnPrompt(row)) return [{
+    type: 'prompt', source: 'transcript', origin: hiddenTurnOrigin(row)!, promptId,
     ...(string(row.uuid) ? { uuid: string(row.uuid)! } : {}),
   }];
   const text = stripPastedContent(rowText(content)).trim();
@@ -703,9 +711,9 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
       // the conversation under raw markup, so it becomes the same notice row the Cursor backend
       // emits for its own task notifications.
       const notice = taskNotification(content);
-      const peerPromptId = hiddenPeerPrompt(row);
-      if (peerPromptId && state.nativeTurnId !== peerPromptId) {
-        state.nativeTurnId = peerPromptId;
+      const hiddenPromptId = hiddenTurnPrompt(row);
+      if (hiddenPromptId && state.nativeTurnId !== hiddenPromptId) {
+        state.nativeTurnId = hiddenPromptId;
         state.turnId = `claude-turn:${uuid}`;
         state.turnAt = createdAt;
       }
@@ -721,7 +729,7 @@ export function mapRow(row: ClaudeRow, line: number, session: Session, state: Ma
         events.push({ ...base(0), type: 'user_message_chunk', data: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: message.text }, from: message.from } });
         return events;
       }
-      if (peerPromptId) return events;
+      if (hiddenPromptId) return events;
       // Other injected rows ride along with a prompt — a loaded skill's whole body, the caveat in
       // front of a local command's output — and are neither prompts nor turns of their own.
       if (!notice && row.isMeta === true) return events;
@@ -960,9 +968,9 @@ class ClaudeStepMeter {
     if (row.isSidechain === true) return;
     const at = row.timestamp ? Date.parse(row.timestamp) : Number.NaN;
     const stamp = Number.isFinite(at) ? at : undefined;
-    const peerPromptId = hiddenPeerPrompt(row);
-    if (peerPromptId && peerPromptId !== this.nativeTurnId) {
-      this.nativeTurnId = peerPromptId;
+    const hiddenPromptId = hiddenTurnPrompt(row);
+    if (hiddenPromptId && hiddenPromptId !== this.nativeTurnId) {
+      this.nativeTurnId = hiddenPromptId;
       this.turnId = undefined;
       this.commandId = undefined;
       this.nativeMessageId = undefined;

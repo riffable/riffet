@@ -33,6 +33,7 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - Goals from Claude Code `/goal`, Codex and DeepSeek Harness show on every client.
 - New Cursor conversations start on a warm CLI, and live output token counts reach the usage view.
 - Fixes for Claude Code: `/clear` moving to a new session, auto-compaction placement, `!` commands sent from Riffet, fallback confirmations in auto mode, forked Skill subagents.
+- Claude Code: a turn the agent wakes itself for (`/loop`, a scheduled wake-up) shows as working while it runs, and its working time counts from that turn rather than the one before.
 - Idle CLIs are reclaimed by last use and a memory budget you can set; settings show why each one is kept.
 
 ### Workbench

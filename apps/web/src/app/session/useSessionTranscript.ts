@@ -113,16 +113,25 @@ export function useSessionTranscript(native: ReturnType<typeof useSessionSync>, 
   // answer rows, so a last-row test made the indicator blink through the entire response.
   // A compaction row in the transcript already counts its own time; the working line stands down for it.
   const showWorking = busy && turnHasVisibleOutput(visibleTimeline) && !(compacting && showsRunningCompaction(visibleTimeline));
-  /** When the turn being worked on was prompted, so the indicator can count from it. */
+  /**
+   * When the turn being worked on was prompted, so the indicator can count from it. A turn a hidden
+   * prompt opened (a peer's message, a scheduled wake-up) has no prompt row: it counts from its first
+   * row, never from an earlier turn's prompt.
+   */
   const workingSince = useMemo(() => {
     if (!showWorking) return undefined;
+    const turn = visibleTimeline.findLast(item => item.kind !== 'activity')?.turn;
+    let start: TimelineItem | undefined;
     for (let index = visibleTimeline.length - 1; index >= 0; index -= 1) {
       const item = visibleTimeline[index]!;
-      if (item.kind !== 'user' && item.kind !== 'task_notification') continue;
-      const at = Date.parse(item.event.createdAt);
-      return Number.isFinite(at) ? at : undefined;
+      if (turn && item.turn && item.turn !== turn && item.kind !== 'activity') break;
+      if (item.kind === 'activity') continue;
+      start = item;
+      if (item.kind === 'user' || item.kind === 'task_notification') break;
     }
-    return undefined;
+    if (!start || (!turn && start.kind !== 'user' && start.kind !== 'task_notification')) return undefined;
+    const at = Date.parse(start.event.createdAt);
+    return Number.isFinite(at) ? at : undefined;
   }, [showWorking, visibleTimeline, timelineVersion]);
   return { queuedRuns, todoEntries, goal, subagentBriefs, visibleTimeline, visibleTurns, showWorking, workingSince };
 }

@@ -33,6 +33,7 @@
 - Claude Code `/goal`、Codex 与 DeepSeek Harness 的目标在各端显示。
 - Cursor 新会话从预热好的 CLI 启动，实时输出 token 数进入用量统计。
 - 修复 Claude Code：`/clear` 后切到新会话、自动压缩的位置、从 Riffet 发出的 `!` 命令、自动模式的回退确认、fork 出的 Skill subagent。
+- Claude Code：Agent 自己定时唤醒（`/loop`、定时唤醒）开始的回合，运行时显示为处理中，处理时长从这一回合算起，不再从上一回合算。
 - 空闲的 CLI 按最近使用时间和可设置的内存上限回收，设置里显示每个 CLI 被保留的原因。
 
 ### 工作台
