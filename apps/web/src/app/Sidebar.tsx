@@ -124,19 +124,20 @@ function offlineLabel(savedAt: number): string {
 export function SessionIndicator({ session, mobile, selected, taskRing }: { session: Session; mobile: boolean; selected: boolean; taskRing?: boolean }) {
   const { t } = useLingui();
   const running = session.state === 'running' || session.state === 'starting';
-  // Finished while nobody looked; the open conversation is being read.
+  // Finished while nobody looked; the open conversation is being read. A failure once read is shown
+  // in the conversation itself, so the row drops its mark like any other read one.
   const unread = !selected && isDoneUnseen(session);
   if (session.terminalHold) return <span role="img" aria-label={t`在终端中`} title={t`在终端中`} className="inline-flex text-fg-3"><IconSquareTerminal className="size-3.5" /></span>;
   if (mobile) {
     if (running) return taskRing ? null : <><Spinner className="size-3.5 text-accent" /><span className="sr-only">{t`运行中`}</span></>;
     if (session.state === 'waiting') return <StatusDot tone="warning" shape="ring" pulse label={t`等待处理`} className="size-2" />;
-    if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-2" />;
+    if (unread && session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-2" />;
     if (unread) return <StatusDot tone="accent" label={t`未读`} className="size-2" />;
     return null;
   }
   if (running) return taskRing ? null : <span role="img" aria-label={t`运行中`} title={t`运行中`} className="inline-flex"><Spinner className="size-3 text-accent" /></span>;
   if (session.state === 'waiting') return <StatusDot tone="warning" label={t`等待处理`} />;
-  if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
+  if (unread && session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} />;
   if (unread) return <StatusDot tone="accent" label={t`未读`} />;
   return null;
 }

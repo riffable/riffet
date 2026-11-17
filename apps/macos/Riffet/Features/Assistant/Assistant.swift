@@ -72,7 +72,7 @@ struct AssistantStatusMark: View {
         let sessionIds = workbench.list.sessions.filter { $0.projectId == workbench.assistantProject?.id }.map(\.id)
         Group {
             if let main {
-                if SessionStatePill.shows(main.state) {
+                if SessionStatePill.shows(main.state, unread: UnreadStore.shared.isUnread(main)) {
                     SessionStatePill(state: main.state)
                 } else if SessionStatePill.running(main.state) {
                     Spinner(size: .mini).help("运行中").accessibilityLabel("运行中")

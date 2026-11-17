@@ -742,7 +742,9 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
   });
   const standingNotices: FeedbackMessage[] = [
     ...banners,
-    ...sessionNotices.filter(notice => notice.text === failureNotice).map(notice => ({ ...notice, id: `failure:${notice.text}` })),
+    // The banner above and this row are one failure: one id, so a hand-over between them is not a second
+    // notice. Only the banner offers 恢复会话; while a start or a first send is under way the row does not.
+    ...sessionNotices.filter(notice => notice.text === failureNotice).map(notice => ({ ...notice, id: `session:${notice.text}` })),
   ];
   const transientNotices: FeedbackMessage[] = sessionNotices.filter(notice => notice.text !== failureNotice)
     .map(notice => ({ ...notice, id: `native:${notice.text}` }));
@@ -1301,7 +1303,7 @@ export function NativeSession({ session, initialRun, catalog, continuations, bac
           renderMessage={message => <FailureDetails text={message.text} detail={message.detail} />}
           action={message => message.id.startsWith('connection:')
             ? <Button size="xs" variant="secondary" onClick={native.retryConnection}><IconRotateCw /><Trans>重试连接</Trans></Button>
-            : message.id.startsWith('session:') ? <Button size="xs" variant="secondary" disabled={reopenDisabled} busy={repairingNativeModel} onClick={() => void reopen()}>
+            : message.id.startsWith('session:') && banners.some(banner => banner.id === message.id) ? <Button size="xs" variant="secondary" disabled={reopenDisabled} busy={repairingNativeModel} onClick={() => void reopen()}>
               <IconRotateCw /><Trans context="terminal-resume-session">恢复会话</Trans>
             </Button> : undefined} />
         {/* The composer stays mounted, so its draft survives the hold; `contents` keeps its layout as it was. */}

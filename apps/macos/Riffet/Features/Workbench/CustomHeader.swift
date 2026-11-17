@@ -441,7 +441,8 @@ private struct SessionTab: View, Equatable {
                     .help("关闭")
                 } else if session.state == .waiting {
                     Circle().fill(palette.warning).frame(width: 6, height: 6)
-                } else if session.state == .failed {
+                } else if session.state == .failed, SidebarModelKt.isDoneUnseen(session: session) {
+                    // Only until the failure is seen, as the sidebar (docs/design/DECISIONS.md 2026-11-17).
                     Circle().fill(palette.danger).frame(width: 6, height: 6)
                 } else if unread {
                     Circle().fill(style.ink == .quiet ? palette.fg : palette.accent).frame(width: 6, height: 6)

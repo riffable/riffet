@@ -1,7 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { Session } from '@contracts';
+import { isDoneUnseen, type Session } from '@contracts';
 import { AgentLogo } from '@/components/AgentLogo';
 import { IconChevronDown, IconGitBranch, IconFolder, IconMessageSquareText, IconPencilLine, IconPin, IconPinOff, IconPlus, IconX } from '@/components/icons';
 import { Button } from '@/components/ui/button';
@@ -50,11 +50,11 @@ function TabLead({ session }: { session: Session }) {
   return <AgentLogo backend={backend} size={14} style={agentMarkStyle(backend)} />;
 }
 
-/** What needs the reader: a wait, a failure, or a result they have not seen. */
+/** What needs the reader: a wait, or a failure or result they have not seen. */
 function TabDot({ session, unread }: { session: Session; unread: boolean }) {
   const { t } = useLingui();
   if (session.state === 'waiting') return <StatusDot tone="warning" pulse label={t`等待处理`} className="size-[7px] shadow-[0_0_0_3px_var(--warning-soft)]" />;
-  if (session.state === 'failed') return <StatusDot tone="danger" label={t`运行失败`} className="size-[7px]" />;
+  if (session.state === 'failed' && isDoneUnseen(session)) return <StatusDot tone="danger" label={t`运行失败`} className="size-[7px]" />;
   if (unread) return <StatusDot tone="accent" label={t({ message: '已完成', context: 'workbench-item-status-completed' })} className="size-[7px]" />;
   return null;
 }
@@ -83,7 +83,7 @@ function Tab({ session, preview, active, stop, pinned, unread, variant, enter, o
   const id = session.id;
   const title = session.title;
   const strip = variant === 'strip';
-  const dot = session.state === 'waiting' || session.state === 'failed' || unread;
+  const dot = session.state === 'waiting' || (session.state === 'failed' && isDoneUnseen(session)) || unread;
   return (
     <div
       ref={ref}

@@ -7,6 +7,8 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 ### Fixes
 
 - Cursor: a first message with several lines, or one ending in `;`, no longer fails with "Native terminal launch command is invalid" when no warm CLI is ready.
+- A conversation that failed while its first message was sending shows the error once, not twice.
+- A failed conversation's mark on its sidebar row or tab (the red dot, "出错" on the Mac, "Failed" and the avatar mark on phones) clears once you have opened it.
 
 ## 0.8.0 - 2026-11-17
 

@@ -224,7 +224,7 @@ struct CustomSessionRow: View, Equatable {
 
     /// The state when it asks for attention, else the mark and the time.
     @ViewBuilder private var trailing: some View {
-        if SessionStateMark.shows(session.state) {
+        if SessionStateMark.shows(session.state, unread: !selected && UnreadStore.shared.isUnread(session)) {
             SessionStateMark(state: session.state)
         } else if session.terminalHold != nil {
             Image(icon: "terminal")

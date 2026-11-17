@@ -546,7 +546,7 @@ struct SessionHomeView: View {
         if scope == nil { parts.append(workbench.project(session.projectId)?.name ?? String(localized: "项目", bundle: .riffet)) }
         if !session.tags.isEmpty { parts.append(session.tags.prefix(2).map { "#" + $0 }.joined(separator: " ")) }
         if workbench.drafts.hasContent("session.\(session.id)") { parts.append(String(localized: "草稿", bundle: .riffet)) }
-        if session.state == .failed, let reason = session.error?.split(whereSeparator: \.isNewline).first.map(String.init), !reason.isEmpty { parts.append(reason) }
+        if failedUnseen(session), let reason = session.error?.split(whereSeparator: \.isNewline).first.map(String.init), !reason.isEmpty { parts.append(reason) }
         return parts.joined(separator: " · ")
     }
     /// Today the clock, yesterday its name, within a week the weekday, else month/day.
@@ -559,10 +559,15 @@ struct SessionHomeView: View {
         let parts = calendar.dateComponents([.month, .day], from: date)
         return "\(parts.month ?? 0)/\(parts.day ?? 0)"
     }
+    /// A failure is called out until it is seen; after that the conversation tells it, and the row
+    /// reads like any other (docs/design/DECISIONS.md 2026-11-17).
+    private func failedUnseen(_ session: Session) -> Bool {
+        session.state == .failed && openSessionID != session.id && SidebarModelKt.isDoneUnseen(session: session)
+    }
     private func avatarState(_ session: Session) -> AgentAvatarState {
         switch session.state {
         case .waiting: .waiting
-        case .failed: .failed
+        case .failed: failedUnseen(session) ? .failed : .idle
         default: session.state.isActive ? .running : .idle
         }
     }

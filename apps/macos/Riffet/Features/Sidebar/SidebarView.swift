@@ -385,7 +385,7 @@ struct SessionRow: View, Equatable {
                     .foregroundStyle(palette.fg4)
                     .lineLimit(1)
             }
-            if SessionStatePill.shows(session.state) {
+            if SessionStatePill.shows(session.state, unread: unread) {
                 SessionStatePill(state: session.state)
             } else if SessionStatePill.running(session.state) {
                 Spinner(size: .mini).help("运行中").accessibilityLabel("运行中")
@@ -454,14 +454,15 @@ struct SidebarSelectionBackground: View {
     }
 }
 
-/// Running spins, waiting asks for attention, a failure is red; idle conversations show nothing.
+/// Running spins, waiting asks for attention, a failure not yet seen is red; idle conversations show nothing.
 struct SessionStateMark: View {
     let state: SessionState
     @Environment(\.palette) private var palette
 
-    /// Whether the state is one the row calls out.
-    static func shows(_ state: SessionState) -> Bool {
-        [.running, .starting, .cancelling, .waiting, .failed].contains(state)
+    /// Whether the state is one the row calls out. A failure once seen is told in the conversation
+    /// itself, not on the row (docs/design/DECISIONS.md 2026-11-17).
+    static func shows(_ state: SessionState, unread: Bool) -> Bool {
+        [.running, .starting, .cancelling, .waiting].contains(state) || state == .failed && unread
     }
 
     var body: some View {
@@ -488,7 +489,8 @@ struct SessionStatePill: View {
     @Environment(\.palette) private var palette
     @Environment(\.appearsActive) private var appearsActive
 
-    static func shows(_ state: SessionState) -> Bool { state == .waiting || state == .failed }
+    /// A failure only until it is seen, as `SessionStateMark.shows`.
+    static func shows(_ state: SessionState, unread: Bool) -> Bool { state == .waiting || state == .failed && unread }
     static func running(_ state: SessionState) -> Bool { [.running, .starting, .cancelling].contains(state) }
 
     var body: some View {

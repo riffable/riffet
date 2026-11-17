@@ -873,10 +873,13 @@ internal fun SessionRow(
             animationSpec = motion.effects(),
             label = "session-row-container",
         )
+        // A failure is called out until it is seen; after that the conversation tells it, and the row
+        // reads like any other (docs/design/DECISIONS.md 2026-11-17).
+        val failedUnseen = session.state == SessionState.FAILED && !selected && isDoneUnseen(session)
         val word = when (session.state) {
             SessionState.RUNNING, SessionState.STARTING, SessionState.CANCELLING -> stringResource(Res.string.session_state_running)
             SessionState.WAITING -> stringResource(Res.string.session_waiting_for_you)
-            SessionState.FAILED -> stringResource(Res.string.session_failed)
+            SessionState.FAILED -> if (failedUnseen) stringResource(Res.string.session_failed) else null
             SessionState.IDLE, SessionState.INTERRUPTED, SessionState.ARCHIVED -> null
         }
         val wordColor = when (session.state) {
@@ -888,7 +891,7 @@ internal fun SessionRow(
         val backend = backendName(session.backendId)
         // A failure says what failed; otherwise the project, or under its own heading the agent.
         val detail = when {
-            session.state == SessionState.FAILED && failure != null -> failure
+            failedUnseen && failure != null -> failure
             showProject && projectName != null -> projectName
             else -> backend
         }
@@ -928,7 +931,7 @@ internal fun SessionRow(
             AgentAvatar(
                 backendId = backendId.name.lowercase(),
                 tint = avatarTint(backendId, colors),
-                status = avatarStatus(session.state),
+                status = avatarStatus(session.state, failedUnseen),
                 // The colour the status dot is cut out of: the page, or the selected row's fill on it.
                 ring = if (selected) container.compositeOver(page) else page,
                 size = AvatarSize,
@@ -1027,10 +1030,10 @@ internal fun SessionRow(
 }
 
 /** What a row's avatar says about the conversation's state. */
-private fun avatarStatus(state: SessionState): AvatarStatus = when (state) {
+private fun avatarStatus(state: SessionState, failedUnseen: Boolean): AvatarStatus = when (state) {
     SessionState.RUNNING, SessionState.STARTING, SessionState.CANCELLING -> AvatarStatus.RUNNING
     SessionState.WAITING -> AvatarStatus.WAITING
-    SessionState.FAILED -> AvatarStatus.FAILED
+    SessionState.FAILED -> if (failedUnseen) AvatarStatus.FAILED else AvatarStatus.NONE
     SessionState.IDLE, SessionState.INTERRUPTED, SessionState.ARCHIVED -> AvatarStatus.NONE
 }
 
