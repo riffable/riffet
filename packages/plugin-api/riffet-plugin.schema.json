@@ -448,7 +448,7 @@
                 "additionalProperties": false
               },
               "renderer": {
-                "anyOf": [
+                "oneOf": [
                   {
                     "type": "object",
                     "properties": {
@@ -518,16 +518,10 @@
                                 "type": "string"
                               },
                               "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  }
+                                "type": [
+                                  "string",
+                                  "number",
+                                  "boolean"
                                 ]
                               }
                             }
@@ -596,16 +590,10 @@
                               }
                             },
                             "default": {
-                              "anyOf": [
-                                {
-                                  "type": "string"
-                                },
-                                {
-                                  "type": "number"
-                                },
-                                {
-                                  "type": "boolean"
-                                }
+                              "type": [
+                                "string",
+                                "number",
+                                "boolean"
                               ]
                             },
                             "required": {
@@ -714,16 +702,10 @@
                                 "type": "string"
                               },
                               "additionalProperties": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  }
+                                "type": [
+                                  "string",
+                                  "number",
+                                  "boolean"
                                 ]
                               }
                             }
@@ -857,16 +839,10 @@
                       }
                     },
                     "default": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "number"
-                        },
-                        {
-                          "type": "boolean"
-                        }
+                      "type": [
+                        "string",
+                        "number",
+                        "boolean"
                       ]
                     },
                     "required": {
@@ -879,6 +855,30 @@
                     "kind"
                   ]
                 }
+              },
+              "menus": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "message",
+                    "selection"
+                  ]
+                }
+              },
+              "icon": {
+                "type": "string",
+                "enum": [
+                  "languages",
+                  "sparkles",
+                  "book-open",
+                  "file-text",
+                  "list-checks",
+                  "search",
+                  "message-square-quote",
+                  "volume-2"
+                ]
               }
             },
             "required": [
@@ -1098,6 +1098,41 @@
             }
           },
           "additionalProperties": {}
+        },
+        "modelUses": {
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "title": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8}){0,3}$"
+                },
+                "additionalProperties": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 80
+                }
+              },
+              "fallback": {
+                "type": "string",
+                "enum": [
+                  "chat"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "additionalProperties": {}
+          }
         },
         "appearance": {
           "type": "object",
