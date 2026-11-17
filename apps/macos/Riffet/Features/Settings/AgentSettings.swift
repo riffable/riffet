@@ -571,7 +571,7 @@ struct AgentSettings: View {
         let previous = map[backend]
         // A model belongs to its provider; the mode and approval are the Agent's, as `Workbench.writeDefaults` keeps them.
         let model = previous?.profileId == profile.id ? previous?.model : nil
-        map[backend] = NativeBackendDefaults(profileId: profile.id, model: model, mode: previous?.mode, approval: previous?.approval)
+        map[backend] = NativeBackendDefaults(profileId: profile.id, model: model, mode: previous?.mode, approval: previous?.approval, profileModels: nil)
         await save(workbench, SettingsPatch.make(agentDefaults: map))
         await workbench.loadBackends()
     }
@@ -626,7 +626,8 @@ struct AgentSettings: View {
                     profileId: previous?.profileId,
                     model: previous?.model,
                     mode: previous?.mode,
-                    approval: next.isEmpty ? nil : next
+                    approval: next.isEmpty ? nil : next,
+                    profileModels: nil
                 )
                 Task { await save(workbench, SettingsPatch.make(agentDefaults: map)) }
             }

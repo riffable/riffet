@@ -3,7 +3,7 @@ import { useLingui } from '@lingui/react/macro';
 import type { LaunchTarget, NativeBackendCatalogEntry, NativeBackendId } from '@contracts';
 import { api } from '@/lib/api';
 import { cachedCatalog, rememberCatalog } from '@/lib/catalog-cache';
-import { catalogParams, catalogSelection, parseSelection } from '@/lib/models';
+import { catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { cleanLabel } from '@/lib/utils';
 import { ApprovalPicker } from './ApprovalPicker';
 import { BackendPicker } from './BackendPicker';
@@ -120,7 +120,7 @@ export function LaunchTargetBar({ value, onChange, backends, catalogs, pending, 
       {entry && entry.profiles.length > 1 && (
         <ProfilePicker profiles={entry.profiles} value={value.profileId} disabled={disabled} onChange={(profileId) => onChange({ profileId, model: undefined })} />
       )}
-      <ModelPicker side="bottom" models={models} value={selectedModel} params={modelParams} placeholder={t`默认模型`} loading={pending.has(key) && !catalog} disabled={disabled || (pending.has(key) && !catalog)} refreshCatalog={() => refreshCatalog?.(backendId, value.profileId)} usageScopeKey={`${backendId}|${value.profileId ?? ''}`} onChange={(id) => onChange({ model: id ? catalogSelection(catalog?.models ?? [], id, {}) : undefined })} onParamChange={(id, next) => { if (selectedModel) onChange({ model: catalogSelection(catalog?.models ?? [], selectedModel, { ...parsedModel.params, [id]: next }, id) }); }} />
+      <ModelPicker side="bottom" models={models} value={selectedModel} params={modelParams} placeholder={t`默认模型`} loading={pending.has(key) && !catalog} disabled={disabled || (pending.has(key) && !catalog)} refreshCatalog={() => refreshCatalog?.(backendId, value.profileId)} usageScopeKey={`${backendId}|${value.profileId ?? ''}`} onChange={(id) => onChange({ model: id ? pickedSelection(catalog?.models ?? [], id, parsedModel.params) : undefined })} onParamChange={(id, next) => { if (selectedModel) onChange({ model: catalogSelection(catalog?.models ?? [], selectedModel, { ...parsedModel.params, [id]: next }, id) }); }} />
       {showMode && capabilities?.supportsModeSelection && modes.length > 0 && (
         <ModePicker modes={modes} value={value.mode ?? modes.find((mode) => mode.id === 'agent')?.id ?? modes[0]?.id} disabled={disabled} onChange={(id) => onChange({ mode: id })} />
       )}

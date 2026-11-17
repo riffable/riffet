@@ -31,6 +31,12 @@ struct ModelControls: View {
     /// The agent, provider and session these figures belong to. Two backends can share a profile
     /// id, so `activeProviderId` alone cannot tell a switch.
     var scope: String = ""
+    /// Names the stored quota reading shown before the fresh one lands; stable across launches,
+    /// unlike [scope]. Nil keeps readings in memory only.
+    var usageStoreKey: String?
+    /// Each provider's last full selection (provider id to selection): picking its remembered
+    /// model brings its parameters back.
+    var remembered: [String: String] = [:]
     /// Re-reads the catalogs as the popup opens, so model membership is as fresh as the quota read.
     var refresh: (() async -> Void)?
     let choose: (String) -> Void
@@ -56,7 +62,14 @@ struct ModelControls: View {
         let resolved = resolveModelSelection(catalog: activeModels, selection: selection)
         let params = catalogParams(catalog: activeModels, model: resolved.model, overrides: resolved.params)
         Button {
-            if !open, usage != nil { loadingUsage = true }
+            if !open, usage != nil {
+                loadingUsage = true
+                // The stored reading is on the rows from the first frame; another scope's is dropped.
+                if loadedKey != usageKey {
+                    loaded = usageStoreKey.flatMap { storedModelUsage.load(scope: $0) }
+                    loadedKey = usageKey
+                }
+            }
             open.toggle()
         } label: {
             HStack(spacing: 5) {
@@ -77,7 +90,7 @@ struct ModelControls: View {
             PopoverSurface {
                 ModelPanel(catalog: catalog, selection: selection, resolved: resolved, params: params, loaded: loadedKey == usageKey ? loaded : nil,
                            reserveAccountUsage: reserveAccountUsage, loadingUsage: loadingUsage,
-                           providers: providers, activeProviderId: activeProviderId,
+                           providers: providers, activeProviderId: activeProviderId, remembered: remembered,
                            choose: choose, chooseInProvider: chooseInProvider, retryProvider: retryProvider)
             }
         }
@@ -94,13 +107,16 @@ struct ModelControls: View {
             // Drop another provider's figures before awaiting the new read; this one's stay until
             // their replacement lands.
             if loadedKey != key {
-                loaded = nil
+                loaded = usageStoreKey.flatMap { storedModelUsage.load(scope: $0) }
                 loadedKey = key
             }
             guard !Task.isCancelled, let usage else { loadingUsage = false; return }
             let snapshot = await usage()
             guard !Task.isCancelled else { return }
-            if let snapshot { loaded = snapshot }
+            if let snapshot {
+                loaded = snapshot
+                if let usageStoreKey { storedModelUsage.save(scope: usageStoreKey, usage: snapshot) }
+            }
             loadingUsage = false
         }
     }
@@ -127,6 +143,19 @@ struct ModelControls: View {
     }
 }
 
+/// Quota readings kept across launches, so a picker shows the last figures before its read lands (shared client).
+let storedModelUsage = ModelUsageStore(preferences: createAppPreferences())
+
+/// `pickedSelection` of the shared contract: the provider's remembered selection when it names the
+/// picked model, else the parameters in force ([current]) wherever the picked model accepts them.
+private func pickedSelection(catalog: [ModelInfo], model: String, current: [String: String], remembered: String?) -> String {
+    if let remembered, !remembered.isEmpty,
+       resolveModelSelection(catalog: catalog, selection: remembered).model == resolveModelSelection(catalog: catalog, selection: model).model {
+        return remembered
+    }
+    return catalogSelection(catalog: catalog, model: model, overrides: current, preferredParam: nil)
+}
+
 struct ModelPanel: View {
     let catalog: [ModelInfo]
     let selection: String?
@@ -137,6 +166,7 @@ struct ModelPanel: View {
     let loadingUsage: Bool
     var providers: [ProviderModels] = []
     var activeProviderId: String?
+    var remembered: [String: String] = [:]
     let choose: (String) -> Void
     var chooseInProvider: ((String, String) -> Void)?
     var retryProvider: ((String) -> Void)?
@@ -366,7 +396,7 @@ struct ModelPanel: View {
     /// the choice of provider and model is one write and a preview never resets mode or approval.
     private func chooseModel(_ info: ModelInfo) {
         guard !isActiveProvider || info.value != resolved.model else { return }
-        let value = selectionForModel(catalog: shownModels, model: info.value)
+        let value = pickedSelection(catalog: shownModels, model: info.value, current: resolved.params, remembered: remembered[shownProvider?.id ?? activeProviderId ?? ""])
         if let provider = shownProvider, provider.id != activeProviderId, let chooseInProvider {
             chooseInProvider(provider.id, value)
         } else {

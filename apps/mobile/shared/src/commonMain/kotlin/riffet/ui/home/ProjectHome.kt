@@ -192,6 +192,7 @@ import riffet.ui.theme.LocalRiffetColors
 import riffet.ui.theme.LocalRiffetTypography
 import riffet.shared.backendCatalog
 import riffet.shared.backendUsage
+import riffet.shared.updateSettings
 import riffet.shared.backends
 import riffet.shared.isAssistant
 import riffet.shared.isQuickChat
@@ -269,7 +270,7 @@ fun rememberHomeConfigs(api: RiffetApi?, preferences: AppPreferences? = null): H
     val providerNotRead = stringResource(Res.string.session_provider_not_read)
     return remember(api, preferences, catalogReadFailed, providerNotRead) {
         HomeConfigs(
-            task = HomeConfig(api, scope, catalogReadFailed, providerNotRead, preferences = preferences),
+            task = HomeConfig(api, scope, catalogReadFailed, providerNotRead, preferences = preferences, remembersPicks = true),
             chat = HomeConfig(api, scope, catalogReadFailed, providerNotRead, quickChat = true),
             assistant = HomeConfig(api, scope, catalogReadFailed, providerNotRead, offers = { it in ASSISTANT_BACKENDS }),
         )
@@ -1161,14 +1162,15 @@ private fun HomeContent(
                     selection = config.model,
                     switching = false,
                     disabledReason = null,
-                    onSelect = { config.model = it },
-                    onParamChange = { config.model = it },
+                    onSelect = { config.model = it; config.rememberPick(store::applySavedSettings) },
+                    onParamChange = { config.model = it; config.rememberPick(store::applySavedSettings) },
                     onRetryCatalog = { config.load(target.id, list.settings, force = true) },
                     loadUsage = config.usageLoader(target.id),
+                    remembered = config.rememberedModels,
                     groups = providerGroups,
                     activeProfileId = config.profileId,
                     usageScopeKey = "${config.backendId}|${target.id}|${config.profileId ?: ""}",
-                    onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection) },
+                    onSelectChoice = { profileId, selection -> config.selectProviderModel(profileId, selection); config.rememberPick(store::applySavedSettings) },
                     onRetryGroup = { profileId -> config.retryProviderCatalog(target.id, profileId) },
                     showSubtitle = !chat,
                     onBack = back,
@@ -1295,9 +1297,9 @@ internal data class ProviderCatalog(
  * profile, then the backend's own default).
  *
  * When the agent has several providers, each one's catalog is loaded and the model sheet groups by
- * provider. Picking a model from another provider points the next session at that provider. The
- * choice stays on this composer, the same way a model draft does; it does not rewrite the saved
- * default. An open session keeps the provider it was created with.
+ * provider. Picking a model from another provider points the next session at that provider. On the
+ * task composer a pick is also saved as the agent's default (`rememberPick`), as on the web, so the
+ * server keeps each provider's last model. An open session keeps the provider it was created with.
  */
 internal class HomeConfig(
     private val api: RiffetApi?,
@@ -1312,6 +1314,8 @@ internal class HomeConfig(
     private val preferences: AppPreferences? = null,
     /** The agents this composer offers; the assistant's are only those that isolate it. */
     private val offers: (NativeBackendId) -> Boolean = { true },
+    /** Saves a pick as the agent's default so the next conversation starts on it; only the task composer does. */
+    private val remembersPicks: Boolean = false,
 ) {
     /** The phones the next session may control: what the last one on this device was given, read before the first frame. */
     var toolGroups by mutableStateOf(ToolGroups.decode(preferences?.string(PreferenceKeys.TOOL_GROUPS)))
@@ -1351,6 +1355,34 @@ internal class HomeConfig(
     private fun pick(next: NewSessionDraft) {
         picks = next
         settle()
+    }
+
+    /** The last selection picked on each provider of this agent (`""` for an agent without providers). */
+    val rememberedModels: Map<String, String>
+        get() = settings?.nativeBackendDefaults?.get(backendId)?.profileModels.orEmpty()
+
+    /**
+     * Saves the provider and full selection now in force as the agent's default, through the same
+     * settings write as the settings page; the server records it per provider. [onSaved] gets the
+     * effective settings. A failed write leaves the pick on this composer only.
+     */
+    fun rememberPick(onSaved: (riffet.contracts.AppSettings) -> Unit) {
+        val api = api ?: return
+        if (!remembersPicks || quickChat) return
+        val backend = backendId
+        val profile = choice.profileId
+        val model = choice.model
+        if (model.isBlank()) return
+        val previous = settings?.nativeBackendDefaults?.get(backend)
+        if (previous?.model == model && previous.profileId == profile) return
+        val update = riffet.contracts.AppSettingsUpdate(
+            nativeBackendDefaults = settings?.nativeBackendDefaults.orEmpty() + (backend to (previous ?: riffet.contracts.NativeBackendDefaults()).copy(profileId = profile, model = model, profileModels = null)),
+        )
+        scope.launch {
+            try { onSaved(api.updateSettings(update)) }
+            catch (cancellation: CancellationException) { throw cancellation }
+            catch (_: Throwable) { }
+        }
     }
 
     /** Resolves the picks against the loaded catalog: a pick it still offers stays, the rest follow the defaults. */

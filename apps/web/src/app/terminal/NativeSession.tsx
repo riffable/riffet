@@ -12,7 +12,7 @@ import { Tip } from '@/components/ui/tooltip';
 import { api, HttpError, restoreContext, type NativeSessionCreateResult, type PromptContextReference } from '@/lib/api';
 import { confirmDialog } from '@/lib/dialogs';
 import { toast } from '@/lib/toast';
-import { catalogParams, catalogSelection, parseSelection } from '@/lib/models';
+import { catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { cn, cleanLabel, errorMessage, newId } from '@/lib/utils';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { useOverlayState } from '@/lib/overlay-navigation';
@@ -204,8 +204,9 @@ function NativeModelPicker({ session, catalog, continuations, profiles, provider
   const choose = (id: string) => {
     const chosen = splitChoice(id);
     const target = chosen.profileId && chosen.profileId !== profileId ? continuations?.find((item) => item.profile.id === chosen.profileId) : undefined;
-    if (target) switchProfile(target, catalogSelection(target.models, chosen.model, {}));
-    else apply(catalogSelection(catalog, chosen.model, {}));
+    // Effort, Fast and the context window carry over to the new model wherever it accepts them.
+    if (target) switchProfile(target, pickedSelection(target.models, chosen.model, selection.params));
+    else apply(pickedSelection(catalog, chosen.model, selection.params));
   };
 
   return (

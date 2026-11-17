@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
+import { ASSISTANT_BUDGET, AUXILIARY_MODEL_PURPOSES, MODEL_PICKER_BUDGET, rememberProfileModel, isAssistantBackend, DEFAULT_QUICK_CHAT_PRESETS, NATIVE_MODEL_API_PROTOCOLS, SIDEBAR_PINNED_MAX, type NativeModelApiProtocol, type QuickChatSettings, type AssistantSettings, type WorkItemSettings, type AppSettings, type AppSettingsUpdate, type AuxiliaryModelPurpose, type AuxiliaryModelRef, type AuxiliaryModels, type ModelContextWindows, type ModelInputModalities, type ModelInputModality, type NativeBackendDefaults, type NativeBackendId, type NativeBackendProfileSettings, type NativeBackendProfileSettingsUpdate, type NativeBackendProfilesResponse, type NativeModelSource } from '../../../../packages/contracts/src/index.js';
 import type { AgentProfile } from '@riffet/plugin-api/experimental/agent';
 import { AppError } from '../errors.js';
 import { isNativeBackendId } from '../backends/registry.js';
@@ -357,13 +357,14 @@ export class SettingsService {
       for (const [backend, raw] of Object.entries(values.nativeBackendDefaults as Record<string, unknown>)) {
         if (!isNativeBackendId(backend) || backend === 'chat' || !raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults contains an invalid backend profile');
         const config = raw as Record<string, unknown>, normalized: NativeBackendDefaults = {};
-        for (const key of Object.keys(config)) if (!['profileId', 'model', 'mode', 'approval'].includes(key)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults contains an unknown field');
+        for (const key of Object.keys(config)) if (!['profileId', 'model', 'mode', 'approval', 'profileModels'].includes(key)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults contains an unknown field');
         for (const key of ['profileId', 'model', 'mode', 'approval'] as const) {
           const value = config[key];
           if (value === undefined) continue;
           if (typeof value !== 'string' || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults value is invalid');
           normalized[key] = value;
         }
+        if (config.profileModels !== undefined) normalized.profileModels = validateProfileModels(config.profileModels);
         defaults[backend as NativeBackendId] = normalized;
       }
       result.nativeBackendDefaults = defaults;
@@ -481,6 +482,11 @@ export class SettingsService {
       for(const key of Object.keys(merged))if(merged[key]===null)delete merged[key];
       input.workItems=merged;
     }
+    // The provider→model record is the server's: rebuilt from what is stored and the pair in this save.
+    if(input.nativeBackendDefaults&&typeof input.nativeBackendDefaults==='object'&&!Array.isArray(input.nativeBackendDefaults)){
+      input.nativeBackendDefaults=Object.fromEntries(Object.entries(input.nativeBackendDefaults as Record<string,unknown>).map(([backendId,raw])=>[backendId,raw&&typeof raw==='object'&&!Array.isArray(raw)
+        ?rememberProfileModel(generalCurrent.nativeBackendDefaults?.[backendId as NativeBackendId],raw as NativeBackendDefaults,MODEL_PICKER_BUDGET.rememberedProviders):raw]));
+    }
     const next=this.validateSettings({...generalCurrent,...input});
     this.cursor.mirrorDefaults(input,next);
     this.persistSettings(!nextStoredCli&&legacyCli?{...next,cursorCli:legacyCli}:next,nextStoredCli);
@@ -506,6 +512,16 @@ function modelRef(raw: unknown, path: string): AuxiliaryModelRef {
     if (typeof value !== 'string' || !value || value.length > 200 || /[\0\r\n]/.test(value)) throw new AppError('INVALID_SETTINGS', `${path}.${key} is invalid`);
   }
   return { backendId: item.backendId as NativeBackendId, profileId: item.profileId as string, model: item.model as string };
+}
+
+function validateProfileModels(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults.profileModels must be an object');
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length > MODEL_PICKER_BUDGET.rememberedProviders) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults.profileModels has too many entries');
+  for (const [profileId, model] of entries) {
+    if (!profileId || profileId.length > 200 || typeof model !== 'string' || !model || model.length > 200 || /[\0\r\n]/.test(model)) throw new AppError('INVALID_SETTINGS', 'nativeBackendDefaults.profileModels is invalid');
+  }
+  return Object.fromEntries(entries) as Record<string, string>;
 }
 
 const QUICK_CHAT_PRESET_ID=/^[a-z0-9-]{1,32}$/;

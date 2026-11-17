@@ -20,6 +20,8 @@ const MODEL_LIST_FRESH_MS = 5 * 60_000;
 const MAX_MODEL_LISTINGS = 64;
 /** Load moves by the minute, so a usage read is only reused briefly; it still spares a CLI spawn per open picker. */
 const USAGE_FRESH_MS = 30_000;
+/** Past fresh, a reading this young answers at once while the next read runs behind it; an older one waits for that read. */
+const USAGE_STALE_MS = 5 * 60_000;
 /** Availability probes spawn a CLI; this is short enough to notice an install and long enough to poll. */
 const AVAILABILITY_FRESH_MS = 30_000;
 const MAX_AVAILABILITY_ENTRIES = 32;
@@ -498,6 +500,7 @@ export class BackendCatalog {
     const key = createHash('sha256').update(JSON.stringify([driver.id, profile.id, profile.config, project?.cwd ?? null])).digest('hex');
     let read = this.usageReads.get(key);
     if (read?.value && read.freshUntil > Date.now()) return read.value;
+    const stale = read?.value && read.freshUntil - USAGE_FRESH_MS + USAGE_STALE_MS > Date.now() ? read.value : undefined;
     if (!read) {
       read = { freshUntil: 0 };
       this.usageReads.set(key, read);
@@ -507,6 +510,7 @@ export class BackendCatalog {
     entry.request ??= (source ? sourceUsage(source, profile.config) : driver.usage!(this.host, project, profile, session))
       .then(value => { entry.value = value; entry.freshUntil = value ? Date.now() + USAGE_FRESH_MS : 0; return value; })
       .finally(() => { entry.request = undefined; });
+    if (stale) { entry.request.catch(() => undefined); return stale; }
     return await entry.request;
   }
 

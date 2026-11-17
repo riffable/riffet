@@ -766,6 +766,7 @@ struct AgentProviderEditor: View {
             let saved = try await api.updateBackendProfile(backendId: backend, profileId: profile.id, body: body)
             current = saved
             applyDraft(saved)
+            storedModelUsage.clear()
             apiKey = ""
             clearKey = false
             reload += 1
@@ -829,6 +830,7 @@ struct AgentProviderEditor: View {
         error = nil
         do {
             _ = try await api.deleteBackendProfile(backendId: backend, profileId: profile.id)
+            storedModelUsage.clear()
             let agent = backendWire(backend)
             let defaults = workbench.settings?.defaultsFor(agent: agent)
             if defaults?.profileId == profile.id || (defaults?.profileId == nil && isDefault) {
@@ -838,7 +840,8 @@ struct AgentProviderEditor: View {
                     profileId: nil,
                     model: nil,
                     mode: previous?.mode,
-                    approval: previous?.approval
+                    approval: previous?.approval,
+                    profileModels: nil
                 )
                 try await SettingsStore.save(workbench, SettingsPatch.make(agentDefaults: map))
             }
@@ -862,7 +865,8 @@ struct AgentProviderEditor: View {
             profileId: profile.id,
             model: previous?.profileId == profile.id ? previous?.model : nil,
             mode: previous?.mode,
-            approval: previous?.approval
+            approval: previous?.approval,
+            profileModels: nil
         )
         saving = true
         error = nil

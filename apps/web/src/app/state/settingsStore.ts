@@ -1,4 +1,4 @@
-import type { AppSettings, AssistantSettings, AssistantSettingsUpdate, NativeBackendDefaults, NativeBackendId, WorkItemSettings, WorkItemSettingsUpdate } from '@contracts';
+import { MODEL_PICKER_BUDGET, rememberProfileModel, type AppSettings, type AssistantSettings, type AssistantSettingsUpdate, type NativeBackendDefaults, type NativeBackendId, type WorkItemSettings, type WorkItemSettingsUpdate } from '@contracts';
 import { api } from '@/lib/api';
 import { mergeSavedSettings, preserveNewerDefaultModel } from '@/lib/reconcile';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
@@ -99,10 +99,13 @@ export function createSettingsStore(initial: AppSettings, hooks: SettingsHooks =
      */
     remember(backendId: NativeBackendId, patch: { profileId?: string; model?: string }, makeDefault = false): void {
       const latest = get();
-      const entry = { ...latest.nativeBackendDefaults?.[backendId], ...patch };
+      const previous = latest.nativeBackendDefaults?.[backendId];
+      const requested = { ...previous, ...patch };
       // An empty model means “use this profile’s configured default”. Do not persist it as an
       // override when clearing a selection during a profile switch.
-      if (patch.model === '') delete entry.model;
+      if (patch.model === '') delete requested.model;
+      // As the server will: a provider switched to without a model starts on the one last used there.
+      const entry = rememberProfileModel(previous, requested, MODEL_PICKER_BUDGET.rememberedProviders);
       revision += 1;
       put({
         ...latest,

@@ -165,7 +165,7 @@ struct NativeProvidersView: View {
         do {
             var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
             let old = defaults[requested]
-            defaults[requested] = NativeBackendDefaults(profileId: old?.profileId, model: old?.model, mode: old?.mode, approval: approval.isEmpty ? nil : approval)
+            defaults[requested] = NativeBackendDefaults(profileId: old?.profileId, model: old?.model, mode: old?.mode, approval: approval.isEmpty ? nil : approval, profileModels: nil)
             let saved = try await api.updateSettings(body: managementSettingsPatch(defaults: defaults))
             workbench.store.applySavedSettings(settings: saved)
             if backend == requested { actionError = nil }
@@ -252,7 +252,7 @@ private struct AgentLaunchDefaults: View {
         do {
             var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
             let old = defaults[backend]
-            defaults[backend] = NativeBackendDefaults(profileId: profile, model: value, mode: old?.mode, approval: old?.approval)
+            defaults[backend] = NativeBackendDefaults(profileId: profile, model: value, mode: old?.mode, approval: old?.approval, profileModels: nil)
             let saved = try await api.updateSettings(body: managementSettingsPatch(defaults: defaults))
             workbench.store.applySavedSettings(settings: saved); error = nil
         } catch { self.error = error.riffetMessage }

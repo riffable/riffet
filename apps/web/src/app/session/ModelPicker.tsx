@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLingui } from '@lingui/react/macro';
-import type { ModelStatus, NativeBackendUsage } from '@contracts';
+import { MODEL_PICKER_BUDGET, type ModelStatus, type NativeBackendUsage } from '@contracts';
+import { cachedUsage, forgetUsage, rememberUsage } from '@/lib/catalog-cache';
 import { IconCheck, IconChevronDown, IconRotateCw, IconSearch } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -137,13 +138,20 @@ function ParamControl({ param, onChange, disabled, mobile = false }: { param: Mo
   );
 }
 
-/** The last successful figures per usage scope, kept while the next read runs or fails. */
+/**
+ * The last successful figures per usage scope, kept while the next read runs or fails, and across
+ * reloads (`catalog-cache.ts`) so a picker opened after one shows them before its first read lands.
+ */
 const lastUsage = new Map<string, NativeBackendUsage>();
-const LAST_USAGE_LIMIT = 32;
 const usageRevision = createStore({ value: 0 });
+const storedUsageKey = (scope: string) => scope.slice(scope.indexOf('|') + 1);
+function previousUsage(scope: string): NativeBackendUsage | undefined {
+  return lastUsage.get(scope) ?? cachedUsage(storedUsageKey(scope));
+}
 /** Credentials are write-only, so a provider save explicitly expires client quota scopes. */
 export function invalidateModelUsage(): void {
   lastUsage.clear();
+  forgetUsage();
   usageRevision.set((current) => ({ value: current.value + 1 }));
 }
 
@@ -302,7 +310,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
   const [usageRead, setUsageRead] = useState<{ scope: string; usage?: NativeBackendUsage; loading: boolean }>();
   // A scope read before keeps its figures while this open re-reads them, so the account row is
   // there from the first frame rather than pushing the search and the list down when it lands.
-  const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined;
+  const usage = !loadUsage ? undefined : usageRead?.scope === usageScope ? usageRead.usage : usageScopeKey ? previousUsage(usageScope) : undefined;
   const usageLoading = Boolean(loadUsage) && usageRead?.scope === usageScope && usageRead.loading;
   const usageFigures = usage?.account ? accountFigures(usage.account) : [];
   const hasUsageLoader = Boolean(loadUsage);
@@ -351,7 +359,7 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
       pending = controller;
       setUsageRead(previous => ({
         scope: usageScope,
-        usage: previous?.scope === usageScope ? previous.usage : usageScopeKey ? lastUsage.get(usageScope) : undefined,
+        usage: previous?.scope === usageScope ? previous.usage : usageScopeKey ? previousUsage(usageScope) : undefined,
         loading: true,
       }));
       void load(AbortSignal.any([controller.signal, AbortSignal.timeout(30_000)])).then(next => {
@@ -359,7 +367,8 @@ export function ModelPicker({ models, value, params = [], onChange, onParamChang
         if (usageScopeKey) {
           lastUsage.delete(usageScope);
           lastUsage.set(usageScope, next);
-          if (lastUsage.size > LAST_USAGE_LIMIT) lastUsage.delete(lastUsage.keys().next().value!);
+          if (lastUsage.size > MODEL_PICKER_BUDGET.storedScopes) lastUsage.delete(lastUsage.keys().next().value!);
+          rememberUsage(storedUsageKey(usageScope), next);
         }
         setUsageRead({ scope: usageScope, usage: next, loading: false });
       }, () => {

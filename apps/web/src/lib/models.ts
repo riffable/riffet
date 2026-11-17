@@ -2,7 +2,7 @@ import { MAX_VALUE, paramKind, type ModelParam } from '@contracts';
 
 export {
   MAX_VALUE, catalogEntry, catalogParams, catalogSelection, contextChoices, isOn, maxOption, nativeFastUnavailable,
-  normalizeNativeFastSelection, paramKind, paramsFromOptions, parseSelection, serializeSelection, toggledValue,
+  normalizeNativeFastSelection, paramKind, paramsFromOptions, parseSelection, pickedSelection, serializeSelection, toggledValue,
 } from '@contracts';
 export type { ModelParam, ParamKind } from '@contracts';
 

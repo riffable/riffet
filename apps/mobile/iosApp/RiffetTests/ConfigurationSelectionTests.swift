@@ -17,7 +17,7 @@ final class ConfigurationSelectionTests: XCTestCase {
     }
     func testCreationDefaultsMatchTheDisplayedModeAndValidSavedPermission() {
         func resolve(_ draft: NewSessionDraft = NewSessionDraft(profileId: nil, model: nil, mode: nil, approval: nil), approval: String? = nil) -> NewSessionChoice {
-            draft.resolve(catalog: catalog(), saved: NativeBackendDefaults(profileId: nil, model: nil, mode: nil, approval: approval), cursorModel: nil, listed: nil)
+            draft.resolve(catalog: catalog(), saved: NativeBackendDefaults(profileId: nil, model: nil, mode: nil, approval: approval, profileModels: nil), cursorModel: nil, listed: nil)
         }
         XCTAssertEqual(resolve().mode, "agent")
         XCTAssertEqual(resolve(NewSessionDraft(profileId: nil, model: nil, mode: "plan", approval: nil)).mode, "plan")
@@ -32,7 +32,7 @@ final class ConfigurationSelectionTests: XCTestCase {
         XCTAssertEqual(NativeConfigurationSummary.approval(status: status(permission: "YOLO"), backend: .codex, sessionApproval: "read-only"), "read-only")
     }
     func testSavedModelAndPermissionBelongOnlyToTheirProvider() {
-        let saved = NativeBackendDefaults(profileId: "new-profile", model: "saved-model?reasoning=high", mode: nil, approval: "auto-review")
+        let saved = NativeBackendDefaults(profileId: "new-profile", model: "saved-model?reasoning=high", mode: nil, approval: "auto-review", profileModels: nil)
         func model(_ profile: String?, saved: NativeBackendDefaults?, cursor: String?) -> String {
             let catalog = catalog(profiles: [NativeBackendProfile(id: "new-profile", backendId: .cursor, name: "Gateway", description: nil, isDefault: true, agentId: nil),
                                              NativeBackendProfile(id: "another-profile", backendId: .cursor, name: "Other", description: nil, isDefault: nil, agentId: nil)])

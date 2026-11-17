@@ -167,3 +167,13 @@ export const PLUGIN_MARKET_BUDGET = {
   /** How long listing every source may take; a source not read by then is reported as not read, the others are listed. Below the clients' market timeout. */
   listMs: 15_000,
 } as const;
+
+/** The model picker's memory: the provider→model record in settings and what a client keeps to paint at once. */
+export const MODEL_PICKER_BUDGET = {
+  /** Providers per agent whose last model the server remembers (`NativeBackendDefaults.profileModels`); the oldest goes first. */
+  rememberedProviders: 32,
+  /** Model lists and quota readings a client keeps across restarts, each; the least recently read goes first. */
+  storedScopes: 32,
+  /** A kept model list or quota reading older than this is not shown; a newer one shows while the fresh read runs. */
+  storedMaxAgeMs: 24 * 60 * 60_000,
+} as const;

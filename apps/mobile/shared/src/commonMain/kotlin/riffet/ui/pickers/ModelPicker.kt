@@ -48,6 +48,7 @@ import androidx.compose.ui.unit.dp
 import riffet.contracts.ModelInfo
 import riffet.contracts.NativeBackendProfile
 import riffet.contracts.NativeBackendUsage
+import riffet.shared.createAppPreferences
 import riffet.contracts.NativeProfileContinuation
 import riffet.ui.icons.RiffetIcons
 import riffet.ui.theme.LocalRiffetColors
@@ -130,6 +131,8 @@ internal fun ModelPickerSheet(
     /** Model plus the provider it belongs to. Called instead of [onSelect] while [groups] are shown. */
     onSelectChoice: ((profileId: String, selection: String) -> Unit)? = null,
     onRetryGroup: ((profileId: String) -> Unit)? = null,
+    /** Each provider's last picked selection (`profileModels`, "" for a flat list); picking the same model again restores it whole. */
+    remembered: Map<String, String> = emptyMap(),
     /** False for the chat picker, whose title already says everything the subtitle would repeat. */
     showSubtitle: Boolean = true,
 ) {
@@ -151,6 +154,7 @@ internal fun ModelPickerSheet(
             usageScopeKey = usageScopeKey,
             onSelectChoice = onSelectChoice,
             onRetryGroup = onRetryGroup,
+            remembered = remembered,
             showSubtitle = showSubtitle,
             modifier = Modifier.weight(1f, fill = false),
         )
@@ -183,6 +187,8 @@ internal fun ModelPickerPages(
     /** Model plus the provider it belongs to. Called instead of [onSelect] while [groups] are shown. */
     onSelectChoice: ((profileId: String, selection: String) -> Unit)? = null,
     onRetryGroup: ((profileId: String) -> Unit)? = null,
+    /** Each provider's last picked selection (`profileModels`, "" for a flat list); picking the same model again restores it whole. */
+    remembered: Map<String, String> = emptyMap(),
     /** False for the chat picker, whose title already says everything the subtitle would repeat. */
     showSubtitle: Boolean = true,
     modifier: Modifier = Modifier,
@@ -191,11 +197,16 @@ internal fun ModelPickerPages(
     // Quota and load move by the minute, so they are read each time the sheet opens; a failed read
     // leaves the figures out and never holds up the list. A provider switch writes a new read, so
     // the previous provider's figures are dropped first instead of being mislabelled.
-    var usage by remember { mutableStateOf<NativeBackendUsage?>(null) }
+    // The last read of this scope is shown at once and replaced by the fresh one; a failed read keeps it.
+    val usageStore = remember { ModelUsageStore(createAppPreferences()) }
+    var usage by remember(usageScopeKey, activeProfileId) { mutableStateOf(usageScopeKey?.let(usageStore::load)) }
     LaunchedEffect(loadUsage != null, usageScopeKey, activeProfileId) {
-        usage = null
         val load = loadUsage ?: return@LaunchedEffect
-        usage = try { load() } catch (cancellation: kotlinx.coroutines.CancellationException) { throw cancellation } catch (_: Throwable) { null }
+        val fresh = try { load() } catch (cancellation: kotlinx.coroutines.CancellationException) { throw cancellation } catch (_: Throwable) { null }
+        if (fresh != null) {
+            usage = fresh
+            usageScopeKey?.let { usageStore.save(it, fresh) }
+        }
     }
     // The catalog moves too, and the list is only as fresh as the open that shows it. The retry
     // path already knows how to re-read without disturbing the current selection.
@@ -374,7 +385,7 @@ internal fun ModelPickerPages(
                                             label = cleanLabel(model.name.ifEmpty { model.value }),
                                             selected = group.profileId == activeProfileId && model.value == parsed.model,
                                             onClick = {
-                                                val next = selectionForModel(models, model.value)
+                                                val next = pickedSelection(models, model.value, selection, remembered[group.profileId])
                                                 val choose = onSelectChoice
                                                 if (choose != null) choose(group.profileId, next) else onSelect(next)
                                                 dismiss()
@@ -396,7 +407,7 @@ internal fun ModelPickerPages(
                                 label = cleanLabel(model.name.ifEmpty { model.value }),
                                 selected = model.value == parsed.model,
                                 onClick = {
-                                    onSelect(selectionForModel(catalog, model.value))
+                                    onSelect(pickedSelection(catalog, model.value, selection, remembered[activeProfileId.orEmpty()]))
                                     dismiss()
                                 },
                                 disabledReason = disabledReason,

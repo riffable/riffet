@@ -1613,7 +1613,8 @@ final class Workbench {
             profileId: profileId ?? previous?.profileId,
             model: nextModel,
             mode: previous?.mode,
-            approval: previous?.approval
+            approval: previous?.approval,
+            profileModels: nil
         )
         let patch = SettingsPatch.make(
             defaultAgentId: makeDefault ? agent : nil,

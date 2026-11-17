@@ -57,6 +57,10 @@ data class NewSessionDraft(
         val models = catalog.models
         val model = this.model?.takeIf { pick -> models.isEmpty() || models.any { it.value == resolveModelSelection(models, pick).model } }
             ?: savedHere?.model?.takeIf { it.isNotBlank() }
+            // A provider switched to without a model starts on the one last picked there, while its catalog still has it.
+            ?: saved?.profileModels?.get(profile ?: defaultProfile ?: "")?.takeIf { remembered ->
+                remembered.isNotBlank() && models.any { it.value == resolveModelSelection(models, remembered).model }
+            }
             ?: cursorModel?.takeIf { catalog.backendId == NativeBackendId.CURSOR && (profile == null || profile == "default") && it.isNotBlank() }
             ?: catalog.defaultModel
             ?: listed?.defaultModel

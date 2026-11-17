@@ -11,6 +11,10 @@ User-visible changes only. [简体中文](CHANGELOG.zh-CN.md)
 - An agent that fails at startup (a wrong model, an invalid key) before Riffet has attached to its terminal now shows as failed with its reason, instead of going idle with no explanation.
 - A failed conversation's mark on its sidebar row or tab (the red dot, "出错" on the Mac, "Failed" and the avatar mark on phones) clears once you have opened it.
 
+### Workbench
+
+- The model menu remembers each provider's last model with its effort and Fast settings: switching back to a provider starts on it, and picking another model keeps effort, Fast and the context window where that model offers them. Quota figures from the last reading show as soon as the menu opens, also after a reload, while a fresh reading loads.
+
 ## 0.8.0 - 2026-11-17
 
 ### Upgrade notes

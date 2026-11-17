@@ -24,7 +24,15 @@ export interface CursorCliSettings {
   hasApiKey?: boolean;
 }
 export type CursorCliSettingsUpdate = Omit<CursorCliSettings, 'hasApiKey'> & { apiKey?: string | null; hasApiKey?: never };
-export interface NativeBackendDefaults { profileId?: string; model?: string; mode?: string; approval?: string; }
+export interface NativeBackendDefaults {
+  profileId?: string; model?: string; mode?: string; approval?: string;
+  /**
+   * The model last picked on each provider, by profile id, with its parameters (`model[effort=high]`).
+   * The server keeps it from the `profileId`/`model` pairs it is sent and ignores this field in a
+   * save; switching to a provider without naming a model starts on its entry here.
+   */
+  profileModels?: Record<string, string>;
+}
 export interface AppSettings {
   editorCommand?: string; defaultModel?: string; defaultMode?: string; notifications?: boolean; allowOutsideRead?: boolean; cursorCli?: CursorCliSettings;
   /** Server-side root for new task workspaces. An empty value restores the platform default. */

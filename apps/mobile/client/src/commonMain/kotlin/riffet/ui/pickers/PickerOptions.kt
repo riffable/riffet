@@ -487,8 +487,28 @@ fun selectionWithParam(
     return catalogSelection(catalog, parsed.model, overrides, preferredParam = paramId)
 }
 
-/** Switching models keeps nothing from the previous model: its options may not even exist. */
+/** Switching models without a selection to carry: the model's own options only. */
 fun selectionForModel(catalog: List<ModelInfo>, model: String): String = catalogSelection(catalog, model)
+
+/**
+ * Port of `pickedSelection`: [model] picked from [catalog]. When it is the same model as the
+ * provider's [remembered] selection, that selection is returned as it was; otherwise the
+ * parameters in force in [currentSelection] (effort, Fast, context window...) carry over to every
+ * option the new model accepts, and [catalogSelection] drops the rest.
+ */
+fun pickedSelection(
+    catalog: List<ModelInfo>,
+    model: String,
+    currentSelection: String?,
+    remembered: String?,
+): String {
+    if (!remembered.isNullOrBlank()) {
+        val last = resolveModelSelection(catalog, remembered).model
+        if (last.isNotEmpty() && last == resolveModelSelection(catalog, model).model) return remembered
+    }
+    val current = if (currentSelection.isNullOrBlank()) emptyMap() else resolveModelSelection(catalog, currentSelection).params
+    return catalogSelection(catalog, model, current)
+}
 
 /** Fixing the inherited model as a default keeps its parameters; another model starts with its own. */
 fun selectionForDefaultModel(catalog: List<ModelInfo>, currentSelection: String?, model: String): String? {

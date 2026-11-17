@@ -99,8 +99,17 @@ struct NewTaskOptions: View {
             selectedProfileID: draft.profileID, selection: selectedModel ?? draft.model ?? catalog.defaultModel) { selectedCatalog, profileID, value in
             if !NativeConfigurationSummary.chooseModel(catalog: selectedCatalog, projectID: projectID, profileID: profileID, value: value, draft: draft) {
                 draft.error = String(localized: "项目或 Agent 配置已改变，请重新选择模型。", bundle: .riffet)
-            }
+            } else { rememberPick(profileID: profileID, value: value) }
         }
+    }
+    /// Saves a pick as the agent's default, so the next conversation starts on it; the server records it per provider.
+    private func rememberPick(profileID: String?, value: String) {
+        guard !quickChat, !assistant, let api = workbench.api else { return }
+        var defaults = workbench.settings?.nativeBackendDefaults ?? [:]
+        let old = defaults[backend]
+        if old?.model == value && old?.profileId == profileID { return }
+        defaults[backend] = NativeBackendDefaults(profileId: profileID, model: value, mode: old?.mode, approval: old?.approval, profileModels: nil)
+        Task { if let saved = try? await api.updateSettings(body: managementSettingsPatch(defaults: defaults)) { workbench.store.applySavedSettings(settings: saved) } }
     }
     private var optionsForm: some View {
         RiffetForm {
@@ -203,7 +212,7 @@ struct NewTaskModelPicker: View {
                         ForEach(models, id: \.value) { model in
                             Button {
                                 guard catalog.available else { return }
-                                choose(catalog, key.isEmpty ? nil : key, selectionForModel(catalog: catalog.models, model: model.value)); dismiss()
+                                choose(catalog, key.isEmpty ? nil : key, pickedSelection(catalog: catalog.models, model: model.value, currentSelection: selection, remembered: workbench.settings?.nativeBackendDefaults?[backend]?.profileModels?[key])); dismiss()
                             } label: {
                                 ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: key == effectiveProfile && resolveModelSelection(catalog: catalog.models, selection: selection ?? catalog.defaultModel).model == model.value, trailing: modelUsageLabel(usages[key]?.models[model.value]))
                             }.foregroundStyle(palette.fg).disabled(!catalog.available).accessibilityIdentifier("modelChoice.\(key).\(model.value)")
@@ -219,7 +228,10 @@ struct NewTaskModelPicker: View {
             .task(id: usageScope) { await loadUsage(usageScope) }
     }
     @MainActor private func loadUsage(_ scope: ModelUsageScope) async {
-        usageRead = (scope, [:])
+        // The last read of each provider shows at once and is replaced by the fresh one; a failed read keeps it.
+        let store = ModelUsageStore(preferences: createAppPreferences())
+        func storeKey(_ key: String) -> String { "\(backend.name)|\(projectID)|\(key)" }
+        usageRead = (scope, Dictionary(uniqueKeysWithValues: keys.compactMap { key in store.load(scope: storeKey(key)).map { (key, $0) } }))
         guard let api = workbench.api else { return }
         // The selected provider answers first; other groups keep their own figures and failures.
         for key in [effectiveProfile] + keys.filter({ $0 != effectiveProfile }) {
@@ -228,6 +240,7 @@ struct NewTaskModelPicker: View {
                 try Task.checkCancellation()
                 guard usageRead?.scope == scope else { return }
                 usageRead?.values[key] = value
+                store.save(scope: storeKey(key), usage: value)
             } catch is CancellationError { return }
             catch { if Task.isCancelled { return } }
         }
@@ -651,7 +664,7 @@ private struct ModelOptions: View {
             if inlineList && providers.isEmpty {
                 TextField(String(localized: "搜索模型", bundle: .riffet), text: $query).textInputAutocapitalization(.never).autocorrectionDisabled()
                 ForEach(catalog.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
-                    Button { choose(selectionForModel(catalog: catalog, model: model.value)) } label: {
+                    Button { choose(pickedSelection(catalog: catalog, model: model.value, currentSelection: selection, remembered: nil)) } label: {
                         ConfigurationChoiceRow(title: cleanLabel(value: model.name), detail: nil, selected: resolveModelSelection(catalog: catalog, selection: selection).model == model.value, trailing: modelUsageLabel(usage?.models[model.value]))
                     }.foregroundStyle(palette.fg).accessibilityIdentifier("sessionModelChoice.\(model.value)")
                 }
@@ -717,7 +730,7 @@ private struct ProviderModelRows: View {
     var body: some View {
         ForEach(provider.models.filter { query.isEmpty || ($0.name + " " + $0.value).localizedCaseInsensitiveContains(query) }, id: \.value) { model in
             Button {
-                let value = selectionForModel(catalog: provider.models, model: model.value)
+                let value = pickedSelection(catalog: provider.models, model: model.value, currentSelection: selection, remembered: nil)
                 if provider.isCurrent { choose(value) } else { switchTo(provider.id, value) }
                 if dismisses { dismiss() }
             } label: {

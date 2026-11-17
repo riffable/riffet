@@ -1,4 +1,4 @@
-import type { ModelInfo } from './index.js';
+import type { ModelInfo, NativeBackendDefaults } from './index.js';
 
 /*
  * Model selections (`model[k=v,…]`) and the catalog parameters behind them: pure and language-free,
@@ -267,4 +267,40 @@ export function resolveCatalogSelection(catalog: ModelInfo[], value?: string): s
   const aliased = catalog.find((item) => item.aliases?.includes(parsed.model));
   if (aliased) return serializeSelection(aliased.value, parsed.params);
   return undefined;
+}
+
+/**
+ * The selection a model starts with when it is picked. The model last used on this provider
+ * (`remembered`, a full selection) comes back as it was; any other model takes on the parameters in
+ * force (`current`) wherever it accepts them, so effort, Fast and the context window survive a switch.
+ */
+export function pickedSelection(catalog: ModelInfo[], model: string, current: Record<string, string> = {}, remembered?: string): string {
+  const canonical = (id: string) => catalogEntry(catalog, id)?.value ?? id;
+  const last = parseSelection(remembered).model;
+  if (remembered && last && canonical(last) === canonical(model)) return remembered;
+  return catalogSelection(catalog, model, current);
+}
+
+/**
+ * A backend's defaults after a save of `next` over `stored`: the provider/model pair in force is
+ * remembered under its provider, and a switch to a provider that names no model starts on the one last
+ * used there. `profileModels` is the server's own record; a value sent for it is ignored.
+ */
+export function rememberProfileModel(stored: NativeBackendDefaults | undefined, next: NativeBackendDefaults, limit: number): NativeBackendDefaults {
+  const { profileModels: _sent, ...entry } = next;
+  const models: Record<string, string> = { ...stored?.profileModels };
+  const record = (profileId: string | undefined, model: string | undefined) => {
+    if (!profileId || !model) return;
+    delete models[profileId];
+    models[profileId] = model;
+  };
+  // A pair saved before this record existed is kept too, so a provider switched away from comes back.
+  if (stored?.profileModels?.[stored.profileId ?? ''] === undefined) record(stored?.profileId, stored?.model);
+  const switched = entry.profileId !== undefined && entry.profileId !== stored?.profileId;
+  if (switched && entry.model === undefined && models[entry.profileId!]) entry.model = models[entry.profileId!];
+  // The same provider saved without a model is a return to its configured default.
+  if (!switched && entry.profileId && entry.model === undefined && stored?.model !== undefined) delete models[entry.profileId];
+  record(entry.profileId, entry.model);
+  const kept = Object.entries(models).slice(-limit);
+  return kept.length ? { ...entry, profileModels: Object.fromEntries(kept) } : entry;
 }

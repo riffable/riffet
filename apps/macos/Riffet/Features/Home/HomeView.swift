@@ -275,6 +275,8 @@ struct HomeView: View {
                         chooseInProvider: { provider, value in chooseModel(value, inProvider: provider) },
                         retryProvider: { provider in Task { await loadProfileCatalog(provider, reload: true) } },
                         scope: "\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")|\(workbench.catalogs.connectionRevision)",
+                        usageStoreKey: "\(workbench.baseURL.absoluteString)|\(backend)|\(resolvedProfileId ?? "")|\(project?.id ?? "")",
+                        remembered: workbench.settings?.defaultsFor(agent: backend)?.profileModels ?? [:],
                         refresh: { await loadCatalog(reload: true, quietly: true); await loadProfileCatalogs() }
                     ) { value in
                         chooseModel(value, inProvider: resolvedProfileId)
@@ -674,7 +676,11 @@ struct HomeView: View {
         let defaults = workbench.settings?.defaultsFor(agent: backend)
         let defaultProfile = providerProfiles.first { $0.isDefault?.boolValue == true }?.id ?? providerProfiles.first?.id
         let saved = (defaults?.profileId ?? defaultProfile) == resolvedProfileId ? nonEmpty(defaults?.model) : nil
-        return saved ?? workbench.recentModel(agent: backend, profileId: resolvedProfileId)
+        // A provider switched to starts on what was last picked there, not on its default.
+        let models = currentCatalog?.models ?? []
+        let remembered = resolvedProfileId.flatMap { nonEmpty(defaults?.profileModels?[$0]) }
+            .flatMap { value in models.isEmpty || models.contains { $0.value == resolveModelSelection(catalog: models, selection: value).model } ? value : nil }
+        return saved ?? remembered ?? workbench.recentModel(agent: backend, profileId: resolvedProfileId)
             ?? nonEmpty(currentCatalog?.defaultModel)
     }
 

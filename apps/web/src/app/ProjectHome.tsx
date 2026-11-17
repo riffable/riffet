@@ -9,7 +9,7 @@ import { FeedbackNotices, type FeedbackMessage } from '@/components/ui/feedback-
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { MOBILE_LAYOUT_QUERY, useMediaQuery } from '@/lib/use-media-query';
 import { api, type NativeSessionCreateInput, type ProjectRecord, type PromptContextReference } from '@/lib/api';
-import { catalogEntry, catalogParams, catalogSelection, parseSelection } from '@/lib/models';
+import { catalogEntry, catalogParams, catalogSelection, parseSelection, pickedSelection } from '@/lib/models';
 import { agentMarkStyle, backendSelection, launchSelection, sessionBackend, useBackendLabel } from '@/lib/backends';
 import { LEGACY_DEFAULT_BACKEND_ID } from '@/lib/legacy-identity';
 import { isAssistantProject } from '@/lib/project-family';
@@ -442,11 +442,15 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
         usageScopeKey={`${backendId}|${project?.id ?? 'global'}|${activeProfileId ?? ''}`}
         model={model ? modelChoice : undefined}
         onModelChange={(id) => {
+          // A model picked again on a provider comes back as last used there; another one keeps the
+          // effort, Fast and context in force wherever it accepts them. The 助理 keeps a choice of its own.
+          const inForce = parseSelection(effectiveSelection).params;
+          const lastOn = (agent: NativeBackendId, profile: string | undefined) => assistant || !profile ? undefined : settings.nativeBackendDefaults?.[agent]?.profileModels?.[profile];
           const other = splitOther(id);
           if (other) {
             // Another agent's model: the agent, its provider and the model are saved together.
             // An empty model is that agent's default, for one that lists nothing.
-            const next = other.model ? catalogSelection(agentModels.read(other.backendId, other.profileId) ?? [], other.model) : '';
+            const next = other.model ? pickedSelection(agentModels.read(other.backendId, other.profileId) ?? [], other.model, inForce, lastOn(other.backendId, other.profileId)) : '';
             const scope = `${assistant ? `assistant${CHOICE_SEPARATOR}` : ''}${other.backendId}${CHOICE_SEPARATOR}${other.profileId ?? ''}`;
             const previous = choices.current.get(scope);
             if (previous) choices.current.set(scope, { ...previous, selection: next, edited: true });
@@ -455,7 +459,7 @@ export function NewSessionComposer({ project, referenceProjectId, recentModel, d
           }
           const chosen = splitChoice(id);
           const chosenCatalog = (chosen.profileId && grouped?.find((entry) => entry.profile.id === chosen.profileId)?.models) || activeCatalog;
-          const next = catalogSelection(chosenCatalog, chosen.model);
+          const next = pickedSelection(chosenCatalog, chosen.model, inForce, lastOn(backendId, chosen.profileId ?? activeProfileId));
           // Picking another provider's model is also how that provider gets selected, and the
           // two have to be saved together or the model would be dropped as a stale override.
           if (chosen.profileId && chosen.profileId !== activeProfileId) {

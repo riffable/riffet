@@ -1223,7 +1223,8 @@ describe('app route surface after ACP removal', () => {
 
     const saved = await call('PATCH', '/api/settings', { nativeBackendDefaults: { codex: { ...codex, approval: 'read-only' }, cursor } });
     expect(saved.statusCode).toBe(200);
-    expect(saved.json().nativeBackendDefaults).toEqual({ codex: { ...codex, approval: 'read-only' }, cursor });
+    const remembered = { profileModels: { local: 'codex-model' } };
+    expect(saved.json().nativeBackendDefaults).toEqual({ codex: { ...codex, approval: 'read-only', ...remembered }, cursor });
     expect(JSON.parse(await readFile(join(stateDir, 'settings.json'), 'utf8')).nativeBackendDefaults.codex.approval).toBe('read-only');
     const created = await call('POST', '/api/sessions', input);
     expect(created.statusCode).toBe(200);
@@ -1237,7 +1238,7 @@ describe('app route surface after ACP removal', () => {
     expect(invalid.json().error.code).toBe('INVALID_APPROVAL_MODE');
     const cleared = await call('PATCH', '/api/settings', { nativeBackendDefaults: { codex, cursor } });
     expect(cleared.statusCode).toBe(200);
-    expect(cleared.json().nativeBackendDefaults).toEqual({ codex, cursor });
+    expect(cleared.json().nativeBackendDefaults).toEqual({ codex: { ...codex, ...remembered }, cursor });
     const cliDefault = await call('POST', '/api/sessions', input);
     expect(cliDefault.statusCode).toBe(200);
     expect(cliDefault.json()).not.toHaveProperty('approval');
@@ -1258,12 +1259,19 @@ describe('app route surface after ACP removal', () => {
 
     settings.setSettings({ nativeBackendDefaults: { codex: { profileId: 'team', model: 'team-saved-model', approval: 'read-only' } } });
     expect((await call('PATCH', '/api/backends/codex/profiles/local', { defaultModel: 'local-only-model' })).statusCode).toBe(200);
-    expect(defaults()).toEqual({ profileId: 'team', model: 'team-saved-model', approval: 'read-only' });
+    expect(defaults()).toEqual({ profileId: 'team', model: 'team-saved-model', approval: 'read-only', profileModels: { team: 'team-saved-model' } });
     expect((await call('PATCH', '/api/backends/codex/profiles/team', { defaultModel: 'team-next-model' })).statusCode).toBe(200);
-    expect(defaults()).toEqual({ profileId: 'team', model: 'team-next-model', approval: 'read-only' });
+    expect(defaults()).toEqual({ profileId: 'team', model: 'team-next-model', approval: 'read-only', profileModels: { team: 'team-next-model' } });
     expect((await call('PATCH', '/api/backends/codex/profiles/team', { defaultModel: null })).statusCode).toBe(200);
     expect(defaults()).toEqual({ profileId: 'team', approval: 'read-only' });
     expect(JSON.parse(await readFile(join(stateDir, 'settings.json'), 'utf8')).nativeBackendDefaults.codex).toEqual({ profileId: 'team', approval: 'read-only' });
+
+    // Each provider's last model is the server's record: a switch naming no model starts on it, and a
+    // client that sends a stale copy of the record (or none) does not overwrite it.
+    settings.setSettings({ nativeBackendDefaults: { codex: { profileId: 'team', model: 'team-picked[effort=high]', approval: 'read-only' } } });
+    expect((await call('PATCH', '/api/settings', { nativeBackendDefaults: { codex: { profileId: 'local', model: 'local-picked', approval: 'read-only', profileModels: { team: 'stale' } } } })).statusCode).toBe(200);
+    const back = await call('PATCH', '/api/settings', { nativeBackendDefaults: { codex: { profileId: 'team', approval: 'read-only' } } });
+    expect(back.json().nativeBackendDefaults.codex).toEqual({ profileId: 'team', model: 'team-picked[effort=high]', approval: 'read-only', profileModels: { local: 'local-picked', team: 'team-picked[effort=high]' } });
   });
 
   it('keeps backend defaults scoped to the selected profile and rejects unsupported modes', async () => {

@@ -287,6 +287,8 @@ data class NativeBackendDefaults(
     val model: String? = null,
     val mode: String? = null,
     val approval: String? = null,
+    /** Read-only: provider id to the last full selection picked on it. The server keeps it and ignores a sent value. */
+    val profileModels: Map<String, String>? = null,
 )
 
 /** `GET /api/sessions/:id/native/models` returns the CLI's own model list. */

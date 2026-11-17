@@ -797,7 +797,9 @@ struct SessionModelControls: View {
                     try? await workbench.host.api?.agentUsage(agentId: session.agentID, projectId: nil, profileId: nil, sessionId: session.id, global: false)
                 }, reserveAccountUsage: !quickChat && session.agentID == "codex", loading: loading, providers: providers, activeProviderId: session.backendProfileId, chooseInProvider: { provider, value in
                     Task { await workbench.switchProfile(provider, model: value, for: session.id) }
-                }, scope: "\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")|\(workbench.catalogs.connectionRevision)", refresh: refresh) { value in
+                }, scope: "\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")|\(workbench.catalogs.connectionRevision)",
+                   usageStoreKey: "\(workbench.baseURL.absoluteString)|\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")",
+                   remembered: workbench.settings?.defaultsFor(agent: session.agentID)?.profileModels ?? [:], refresh: refresh) { value in
                     Task { await workbench.setModel(value, for: session.id) }
                 }
                 .id("\(session.id)|\(session.agentID)|\(session.backendProfileId ?? "")")
